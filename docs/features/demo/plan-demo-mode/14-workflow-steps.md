@@ -1,6 +1,6 @@
 # 14 — Workflow steps
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: deep · `showSample` holds per-session state across a rows-slot listener, a handle's dispose order and chat's headless flag (async, through chat main), and task 17 marks checks 36 and 38 on these steps `low-confidence`
 Wave: 2 · Depends on: 01
@@ -292,3 +292,5 @@ Done when: `npm run typecheck` and the tests above pass; `npm run lint` passes a
 Commit: one commit for the group.
 
 ## Proof
+
+Commit c0b932931 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: workflow main's guard checks the profile, so a user profile named demo gets no flow; leadingDone copied into 3 tests; level page tests fake workflowPageKey without showSample; workflow-large-main.test.ts edited outside Files

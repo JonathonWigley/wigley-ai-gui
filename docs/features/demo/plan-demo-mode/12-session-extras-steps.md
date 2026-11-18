@@ -1,6 +1,6 @@
 # 12 — Session extras steps
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: deep · changes what session-log and session-stash save, and what usage publishes to its slot across the poller's life
 Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/usage/main/start.ts`: 02 makes the poller skip unlisted profiles, this task adds the sample snapshot), 03 (both modify `src/plugins/session-log/main/start.ts` and `src/plugins/session-stash/main/session-stash.ts`: 03's `ephemeral` skip keeps demo sessions out of both, this task adds the sample sections)
@@ -217,3 +217,5 @@ Done when: compiles (`npm run typecheck`); `npm run lint` passes apart from the 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 9ffeb6167 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: start prompt isOpen reads scope chat.picker, may misread under chat.resume or filter focus (live check 17); live-view reads process.pid directly; Unity title regex; three plugins' page tests reach sessionsPageKey

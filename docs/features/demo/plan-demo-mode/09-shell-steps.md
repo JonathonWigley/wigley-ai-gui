@@ -1,6 +1,6 @@
 # 09 — Shell steps and skips
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: hard · the reference pattern (`page/demo-steps.ts` over `services.demoSteps`) has no instance in the tree yet, and three page parts change shape to hand their internals to the step
 Wave: 2 · Depends on: 01
@@ -212,3 +212,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass; `grep -
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 7253d0055 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: gallery transparency checked through toggleTransparency logs, a user override before enter not covered; keys test table rows each carry their own act; returnToPlace row leans on the keymap row key p.saveAll

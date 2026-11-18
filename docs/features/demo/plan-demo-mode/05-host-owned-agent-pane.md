@@ -1,6 +1,6 @@
 # 05 — Host-owned agent pane
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · changes how the core right bar ends a held stop's turn, across async scope changes and focus moves
 Wave: 2 · Depends on: 01
@@ -146,3 +146,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 06db26107 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: send test checks activeElement at mountChat instead of a focusout (fake DOM has none); holdsKeys added to three AgentPane fakes outside Files; host-owned toggle reads the session twice; stale docs: followups.md:659-668 line cites, scoped-agents/design.md:104-107, AGENTS.md:701 lacks keepsTurn (task 16)

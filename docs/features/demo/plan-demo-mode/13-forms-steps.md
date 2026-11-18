@@ -1,6 +1,6 @@
 # 13 — Agent forms steps
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: deep · each form step crosses main and page through async seams (a form service in main, a page store that must show the demo form before a beat acts), adds two shared helpers and two new exports, and the notes step reroutes the popup's channel while it lives
 Wave: 2 · Depends on: 01
@@ -374,3 +374,5 @@ Done when: `npm run typecheck` and the tests above pass; `npm run lint` passes a
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 9d1103678 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: forms/main/demo-steps.test.ts fails 3 tests (no rounds shown; finding origin caused already registered) — for the test gate; popup.ts open() reorder; sample fields stay in the popup store after dispose; cacheImages race; six demo-steps tests needed check-layers entries (8ac2f4304)

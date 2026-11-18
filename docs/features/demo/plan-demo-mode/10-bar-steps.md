@@ -1,6 +1,6 @@
 # 10 — Bar steps
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · overlays four main slots that async writers also write (the pool watch, the stats poller, the updater, the retro chain), and the auto-retro guard must hold on a close whose row is already gone
 Wave: 2 · Depends on: 01, 03 (auto-retro's guard reads the `ephemeral` key 03 adds to chat's `sessionClosed` and `sessionCleared`), 04 (auto-retro's page half holds `SessionsPageExports.showOnly`, and relies on 04's stack rule: the latest hold wins, and only the shown section claims rows)
@@ -255,3 +255,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass, with ea
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 870ee86ed · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: a stage dispose after a part stop writes to a stopped slot (unity-pool, system-stats, auto-retro not reset at stop); auto-retro keeps the demo row until its queue loads; unity-pool test refactor writeSelfTestPool

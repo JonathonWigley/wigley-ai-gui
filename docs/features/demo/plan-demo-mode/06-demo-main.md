@@ -1,6 +1,6 @@
 # 06 — Demo main: the run, the demo harness, the step agents and the real-session step
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses lifecycle and async: registers and disposes a harness, holds the plugin switch, launches and closes chat sessions, and serializes page requests against Stop
 Wave: 2 · Depends on: 01, 02, 03
@@ -183,3 +183,5 @@ Done when: `npm run typecheck`, `npm test` and `npm run lint` pass. The live che
 Commit: one commit for the group: "Demo main: the run, the unlisted demo harness, step agents per step and the real-session step"
 
 ## Proof
+
+Commit 720cf9f14 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: createStepAgentStore copies backlog's createAssistantStore (shared store a follow-up); isRunning is false from a stop's first await

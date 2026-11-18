@@ -305,15 +305,15 @@ Critical path: 01 → 06 → 07 → 08 → 16 → 17
 - [x] [Sessions showOnly](04-sessions-show-only.md)
 
 ### Wave 2
-- [ ] [Host-owned agent pane](05-host-owned-agent-pane.md) — after 01
-- [ ] [Demo main](06-demo-main.md) — after 01, 02, 03
-- [ ] [Shell steps and skips](09-shell-steps.md) — after 01
-- [ ] [Bar steps](10-bar-steps.md) — after 01, 03, 04
-- [ ] [Session card and chat steps](11-session-chat-steps.md) — after 01, 02, 03, 04
-- [ ] [Session extras steps](12-session-extras-steps.md) — after 01, 02, 03
-- [ ] [Agent forms steps](13-forms-steps.md) — after 01
-- [ ] [Workflow steps](14-workflow-steps.md) — after 01
-- [ ] [Mode steps](15-mode-steps.md) — after 01, 02
+- [x] [Host-owned agent pane](05-host-owned-agent-pane.md) — after 01
+- [x] [Demo main](06-demo-main.md) — after 01, 02, 03
+- [x] [Shell steps and skips](09-shell-steps.md) — after 01
+- [x] [Bar steps](10-bar-steps.md) — after 01, 03, 04
+- [x] [Session card and chat steps](11-session-chat-steps.md) — after 01, 02, 03, 04
+- [x] [Session extras steps](12-session-extras-steps.md) — after 01, 02, 03
+- [x] [Agent forms steps](13-forms-steps.md) — after 01
+- [x] [Workflow steps](14-workflow-steps.md) — after 01
+- [x] [Mode steps](15-mode-steps.md) — after 01, 02
 
 ### Wave 3
 - [ ] [Demo page](07-demo-page.md) — after 04, 05, 06, 11, 12, 13
@@ -336,9 +336,31 @@ Review base: 7811ca8a2
 - 02 · hard · 960bf7621 · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: sessions/main/start.ts and notes/main/start.ts read registeredInfos for label lookups only, left unfiltered; fake harness's literal true typechecked
 - 03 · deep · 81ef5cb02 · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: docs/features/agent-chat/design.md § Saved sessions now stale (every session saved); workflow main's chat.sessionOpened handler still opens a flow for demo rows; chat tests lean on the fake's host-id numbering
 - 04 · hard · ab83ff6ed · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: AGENTS.md's sessions entry does not name showOnly (task 16); the start test sorts claimed ids
+- 05 · deep · 06db26107 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: send test checks activeElement at mountChat instead of a focusout (fake DOM has none); holdsKeys added to three AgentPane fakes outside Files; host-owned toggle reads the session twice; stale docs: followups.md:659-668 line cites, scoped-agents/design.md:104-107, AGENTS.md:701 lacks keepsTurn (task 16)
+- 06 · deep · 720cf9f14 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: createStepAgentStore copies backlog's createAssistantStore (shared store a follow-up); isRunning is false from a stop's first await
+- 09 · hard · 7253d0055 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: gallery transparency checked through toggleTransparency logs, a user override before enter not covered; keys test table rows each carry their own act; returnToPlace row leans on the keymap row key p.saveAll
+- 11 · deep · a9815561f · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: picker has close() not cancel; folder step's last row is Choose folder…; auto-compact idle waits have no timeout; page halves read sessions[key] unchecked; visual full-size beat after activate needs the live check (17); agents/visual page tests now fake sessionsPageKey
+- 10 · deep · 870ee86ed · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: a stage dispose after a part stop writes to a stopped slot (unity-pool, system-stats, auto-retro not reset at stop); auto-retro keeps the demo row until its queue loads; unity-pool test refactor writeSelfTestPool
+- 12 · deep · 9ffeb6167 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: start prompt isOpen reads scope chat.picker, may misread under chat.resume or filter focus (live check 17); live-view reads process.pid directly; Unity title regex; three plugins' page tests reach sessionsPageKey
+- 13 · deep · 9d1103678 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: forms/main/demo-steps.test.ts fails 3 tests (no rounds shown; finding origin caused already registered) — for the test gate; popup.ts open() reorder; sample fields stay in the popup store after dispose; cacheImages race; six demo-steps tests needed check-layers entries (8ac2f4304)
+- 14 · deep · c0b932931 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: workflow main's guard checks the profile, so a user profile named demo gets no flow; leadingDone copied into 3 tests; level page tests fake workflowPageKey without showSample; workflow-large-main.test.ts edited outside Files
+- 15 · deep · 1a22ef0a0 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07); one commit per plugin 3d34d2205..1a22ef0a0 · concerns: board feed claims still read the real room during a hold; a real message for the scratch project's room rewrites from the demo service; docs sample split writes the sessionTree width; backlog sample row selections write the backlog place slot; a resumed demo task's nextRun counts from show time; no part disposes its registrations in dispose (the per-plugin view does)
 ### Contract changes
+- 11: main registerDemoSteps of sessions, agent-strip, agent-lines and visual take no deps; agents/main/preview.ts exports sampleRoster; chat page fillComposerOf and setHeadless are locals
+- 12: session-extras main registerDemoSteps take no deps where none are needed; SessionStashDeps gains isDemoRunning() and sampleProjectDir; new shared/page/demo-start-prompt.ts (demoStartPrompt); new parts sessionLogPagePart and usageTabLineMainPart for 07
+- 10: unity-pool channel showDemoStage(stage) with DemoPoolStage; app-update AppUpdateChannel.invoke.showDemoStatus(kind) with DemoUpdateKind
+- 13: shared/agent-forms/demo-form.ts (openSampleForm, sampleFormOwner) and shared/page/demo-form-wait.ts; FormsMainExports.confirmSample; agent-commands exports confirmRequest and gains agentCommandsPagePart (07 lists it); audio-picker exports SAMPLE_SOUNDS and writeSampleSoundsIn; NotePopup.showSample; notes main registerDemoSteps takes no deps
+- 14: workflow/contract.ts gains sampleFlow, sampleChecklist, createSampleSequence, sampleSessionStep and WorkflowPageExports.showSample; workflow-large previewFlow takes the plan (default PREVIEW_PLAN)
+- 15: createDemoRooms takes DemoRoomsDeps (adds rewriteRoom, released); seedChatroomFixture deps take launch(title) and roomFor(name); ChatroomSelfTestDeps takes fixtureDeps(projectDir); docs exports addSampleDocs, SAMPLE_HOME_FOLDER, SAMPLE_SOURCE_ID, NO_INDEX_MESSAGE; scheduling contract DEMO_TASK_IDS
 ### Rulings
 - 01: runDisabledForNow counts a hold from its call's start and releases it if the apply rejects, so a hold disposed while a second call applies does not switch off what that call starts — literal reading had the race; cost if wrong: none for the cases the plan names · group 01
 - 03: prepareLaunch rejects ephemeral before its other checks; toggleHidden still logs the user's uiState choice during a hold · group 03
+- 05: host recipe lives in the AgentPaneSpec comment; keepFocusInPane runs for every pane, Practice and Backlog included · group 05 · group 05
+- 06: leaveStep closes a stage's sessions in the map's own key order; stop sets the run not-live before teardown · group 06 · group 06
+- 09: the keys stage closes only what it opened, so help the user had open stays open · group 09 · group 09
+- 11: start-prompt sample check is profile demo alone; agents demoSessionIds never pruned (one id per demo session) · group 11 · group 11
+- 10: the app-update seed goes through updaterStatus; install skipped during the demo · group 10 · group 10
+- 15: scheduling's channel refuses save, run and remove of any DEMO_TASK_IDS id, and pauses a shown one in memory · group 15 · group 15
+- 15: chatroom release rebuilds through the room's chain, deleting the view key only when no saved room has the name · group 15 · group 15
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 11 — Session card and chat steps
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: deep · crosses chat, sessions and agents through the async session lifecycle (turn ends, held compactions, held rosters) and changes what agents writes to its log
 Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/chat/page/start-prompt.ts`, its test and `src/plugins/chat/main/start.ts`), 03 (both modify `src/plugins/chat/page/start.ts`: 03 adds the `showHubForNow` export, this task registers chat's demo steps), 04 (both modify `src/plugins/sessions/page/start.ts`)
@@ -235,3 +235,5 @@ Done when: compiles (`npm run typecheck`); `npm run lint` passes; the test gate 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit a9815561f · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: picker has close() not cancel; folder step's last row is Choose folder…; auto-compact idle waits have no timeout; page halves read sessions[key] unchecked; visual full-size beat after activate needs the live check (17); agents/visual page tests now fake sessionsPageKey

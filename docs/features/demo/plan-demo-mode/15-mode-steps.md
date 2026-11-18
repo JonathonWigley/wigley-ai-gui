@@ -1,6 +1,6 @@
 # 15 — Mode steps: docs, backlog, practice, scheduling, chatroom
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: deep · each plugin holds a sample beside the user's real state and routes its channel, store or room between the two for a step's lifetime (lifecycle, async, saved data)
 Wave: 2 · Depends on: 01 (the demo contract, `services.demoSteps` and `demoSkip`), 02 (02 also lists `src/plugins/scheduling/main/start.ts`)
@@ -479,3 +479,5 @@ One commit per plugin, in this order: docs and docs-session-tab (backlog consume
 `addSampleDocs`), backlog, practice, scheduling, chatroom.
 
 ## Proof
+
+Commit 1a22ef0a0 · proof: diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07); one commit per plugin 3d34d2205..1a22ef0a0 · concerns: board feed claims still read the real room during a hold; a real message for the scratch project's room rewrites from the demo service; docs sample split writes the sessionTree width; backlog sample row selections write the backlog place slot; a resumed demo task's nextRun counts from show time; no part disposes its registrations in dispose (the per-plugin view does)
