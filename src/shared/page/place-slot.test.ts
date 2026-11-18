@@ -40,6 +40,21 @@ describe('placeWrites', () => {
 
     expect(written).toEqual(['draft', 'draft']);
   });
+
+  it('held_writes_drop_until_released', () => {
+    const written: string[] = [];
+    const writes = placeWrites((value: string) => written.push(value));
+
+    writes.write('saved');
+    const hold = writes.hold();
+    writes.write('sample');
+    hold.dispose();
+    hold.dispose();
+    writes.write('saved');
+    writes.write('next');
+
+    expect(written).toEqual(['saved', 'next']);
+  });
 });
 
 describe('pruneKeys', () => {

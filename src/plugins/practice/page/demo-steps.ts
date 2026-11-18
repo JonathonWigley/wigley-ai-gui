@@ -3,15 +3,21 @@ import type { DemoStage } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices, PluginCommands } from '../../../contracts/plugin';
 
-// `openProblemRow` is the view's click on a problem's list row.
+// `openProblemRow` is the view's click on a problem's list row. `holdPlace`
+// stops `practice.place` writes until its dispose. `saveDrafts` saves every
+// unsaved draft now, to the folder main serves.
 export interface PracticeDemoPageDeps {
   commands: Pick<PluginCommands, 'run'>;
   openProblemRow(slug: string): void;
+  holdPlace(): Disposable;
+  saveDrafts(): Promise<void>;
 }
 
 // The Practice step: Practice mode over the sample folder main serves while
 // the step holds it, a problem, then a run of its solution. It never starts
-// the interviewer or an import.
+// the interviewer or an import. It holds the place so the user's saved one
+// outlasts the sample, and its dispose saves the sample's drafts before main
+// serves the real folder again.
 export function registerDemoSteps(
   services: PageServices,
   deps: PracticeDemoPageDeps,
@@ -35,6 +41,7 @@ export function registerDemoSteps(
 
 function practiceStage(deps: PracticeDemoPageDeps): DemoStage {
   const { commands } = deps;
+  const placeHold = deps.holdPlace();
   const showMode = () => commands.run(MODES_SHOW, 'practice.main');
   const openTwoSum = async () => {
     await showMode();
@@ -54,6 +61,12 @@ function practiceStage(deps: PracticeDemoPageDeps): DemoStage {
         },
       },
     ],
-    dispose: () => undefined,
+    async dispose() {
+      try {
+        await deps.saveDrafts();
+      } finally {
+        placeHold.dispose();
+      }
+    },
   };
 }

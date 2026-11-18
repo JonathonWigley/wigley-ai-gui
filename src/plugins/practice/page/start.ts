@@ -113,6 +113,8 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
     registerDemoSteps(services, {
       commands: api.commands,
       openProblemRow: (slug) => view.openProblemRow(slug),
+      holdPlace: () => place.hold(),
+      saveDrafts: () => view.saveDrafts(),
     });
 
     // The core logs the side bar's hiding and showing.

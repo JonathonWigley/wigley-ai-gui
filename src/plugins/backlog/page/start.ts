@@ -119,7 +119,10 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
     );
     api.channel.on('chunksChanged', ({ chunks }) => view.chunksChanged(chunks));
     view.load();
-    registerDemoSteps(services, { commands: api.commands });
+    registerDemoSteps(services, {
+      commands: api.commands,
+      holdPlace: () => place.hold(),
+    });
 
     return {
       commands: {

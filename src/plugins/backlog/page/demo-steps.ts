@@ -8,12 +8,15 @@ import { rowKey } from '../row-key';
 // The sample repo's name in the table.
 const SAMPLE_REPO = 'backlog-repo';
 
+// `holdPlace` stops `backlog.place` writes until its dispose.
 export interface BacklogDemoPageDeps {
   commands: Pick<PluginCommands, 'run'>;
+  holdPlace(): Disposable;
 }
 
 // The Backlog step: Backlog mode over the sample repo main serves while the
-// step holds it, then two of its follow-ups. It never runs the assistant.
+// step holds it, then two of its follow-ups. It never runs the assistant, and
+// holds the place so the user's saved one outlasts the sample.
 export function registerDemoSteps(
   services: PageServices,
   deps: BacklogDemoPageDeps,
@@ -36,6 +39,7 @@ export function registerDemoSteps(
 
 function backlogStage(deps: BacklogDemoPageDeps): DemoStage {
   const { commands } = deps;
+  const placeHold = deps.holdPlace();
   const showMode = () => commands.run(MODES_SHOW, 'backlog.main');
   const selectRow = async (title: string) => {
     await showMode();
@@ -47,6 +51,6 @@ function backlogStage(deps: BacklogDemoPageDeps): DemoStage {
       { name: 'ready follow-up', show: () => selectRow('Ready item') },
       { name: 'moved since written', show: () => selectRow('Moved item') },
     ],
-    dispose: () => undefined,
+    dispose: () => placeHold.dispose(),
   };
 }

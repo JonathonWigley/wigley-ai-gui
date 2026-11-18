@@ -542,7 +542,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       const added = createAddedView(
         SAMPLE_VIEW_ID,
         sourceId,
-        { write: () => undefined, reset: () => undefined },
+        {
+          write: () => undefined,
+          reset: () => undefined,
+          hold: () => ({ dispose: () => undefined }),
+        },
         () => isDocsModeShown,
       );
       const held = { added, didHideSideBar: false };

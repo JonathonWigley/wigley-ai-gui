@@ -222,6 +222,8 @@ export interface PracticeView {
   openSubmissionRow(time: string): void;
   // Why the page may not stop now: a draft still unsaved; else null.
   mayStop(): string | null;
+  // Saves every unsaved draft now, to the folder main serves.
+  saveDrafts(): Promise<void>;
 }
 
 export function createPracticeView(deps: PracticeViewDeps): PracticeView {
@@ -956,5 +958,6 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     showTab: (tab) => workspace.showTab(tab),
     openSubmissionRow: (time) => workspace.openSubmissionRow(time),
     mayStop: () => workspace.mayStop(),
+    saveDrafts: () => workspace.saveDrafts(),
   };
 }

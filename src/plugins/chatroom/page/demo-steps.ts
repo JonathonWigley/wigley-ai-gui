@@ -8,13 +8,16 @@ const openRowRoomCommand: CommandKey<string, 'chatroom.openRowRoom'> = {
   id: 'chatroom.openRowRoom',
 };
 
+// `holdPlace` stops `chatroom.place` writes until its dispose.
 export interface ChatroomDemoPageDeps {
   commands: Pick<PluginCommands, 'run'>;
+  holdPlace(): Disposable;
 }
 
 // The Chatroom step: the lead's row with the peer's question to the user as
 // its badge, Chatroom mode on the demo room main holds, then the lead's room
-// opened at the question's thread, which marks it read.
+// opened at the question's thread, which marks it read. It holds the place so
+// the user's saved one outlasts the demo room.
 export function registerDemoSteps(
   services: PageServices,
   deps: ChatroomDemoPageDeps,
@@ -42,6 +45,7 @@ function chatroomStage(
 ): DemoStage {
   const { commands } = deps;
   const { lead } = context.sessions;
+  const placeHold = deps.holdPlace();
   return {
     beats: [
       {
@@ -54,6 +58,6 @@ function chatroomStage(
         show: () => commands.run(openRowRoomCommand, lead),
       },
     ],
-    dispose: () => undefined,
+    dispose: () => placeHold.dispose(),
   };
 }

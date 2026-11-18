@@ -291,7 +291,10 @@ export const chatroomPagePart: PagePart<typeof chatroomManifest> = {
       view.openRoomThread(row.project, thread);
     };
 
-    registerDemoSteps(services, { commands: api.commands });
+    registerDemoSteps(services, {
+      commands: api.commands,
+      holdPlace: () => place.hold(),
+    });
 
     return {
       commands: {

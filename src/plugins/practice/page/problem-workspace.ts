@@ -273,6 +273,9 @@ export interface ProblemWorkspace {
   openSubmissionRow(time: string): void;
   // Why the page may not stop now: a draft still unsaved; else null.
   mayStop(): string | null;
+  // Saves every unsaved draft now, before its timer, to the folder main
+  // serves; a failed save is toasted.
+  saveDrafts(): Promise<void>;
   dispose(): void;
 }
 
@@ -1346,6 +1349,11 @@ export function createProblemWorkspace(
       return state.problem === null || unsaved === undefined
         ? null
         : `Practice is still saving ${DRAFT_FILES[unsaved]}`;
+    },
+    async saveDrafts() {
+      if (store.get().problem !== null) {
+        await saveAllNow(DRAFT_IDS);
+      }
     },
     dispose() {
       isDisposed = true;
