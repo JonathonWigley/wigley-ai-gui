@@ -98,9 +98,9 @@ describe('keys page part', () => {
   });
 
   it("stop disposes every anchor of the title bar button in the part's own dispose", async () => {
-    // The host disposes the registrations after the part's dispose, so an anchor
-    // disposed only there would pass a count; this records the ones disposed
-    // while the part's own `dispose` runs.
+    // The host disposes the registrations after the part's dispose, so an
+    // anchor disposed only there would pass a count; this records the ones
+    // disposed while the part's own `dispose` runs.
     let isInOwnDispose = false;
     let disposedInOwn = 0;
     const harness = startKeys({

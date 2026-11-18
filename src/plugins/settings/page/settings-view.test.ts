@@ -144,6 +144,9 @@ interface ShownViewOptions {
   // Answers an invoke in place of the channel's own answer; undefined leaves
   // it to the channel.
   held?: (method: string) => Promise<unknown> | undefined;
+  // Leaves the load running instead of awaiting it, and skips the shown view's
+  // first focus; `loading` is the pending load.
+  isLoadUnawaited?: boolean;
 }
 
 const builtInKind = (id: string) =>
@@ -167,6 +170,7 @@ async function shownView({
   controlKind = builtInKind,
   beforeLoad = () => undefined,
   held,
+  isLoadUnawaited = false,
 }: ShownViewOptions = {}) {
   const { channel, written, writtenKeymaps, asked, read } = fakeChannel(
     schema,
@@ -232,8 +236,11 @@ async function shownView({
     view.restorePlace(restored);
   }
   beforeLoad(view);
-  await view.load();
-  view.shown();
+  const loading = view.load();
+  if (!isLoadUnawaited) {
+    await loading;
+    view.shown();
+  }
   const move = (direction: PaneDirection): boolean => {
     const target = handed.at(-1);
     if (typeof target !== 'object') {
@@ -241,9 +248,12 @@ async function shownView({
     }
     return target.move(direction);
   };
-  move('right');
+  if (!isLoadUnawaited) {
+    move('right');
+  }
   picked.count = 0;
   return {
+    loading,
     view,
     overlay,
     read,
@@ -1234,6 +1244,35 @@ describe('createSettingsView', () => {
       expect(findAll(setup.sheet, 'settings-box')).toEqual([]);
     },
   );
+
+  it('the schema reply of a load that lands after dispose draws, logs and toasts nothing', async () => {
+    const reply = deferred<unknown>();
+    let isSchemaAsked = false;
+    const setup = await shownView({
+      isLoadUnawaited: true,
+      held(method) {
+        if (method === 'schema') {
+          isSchemaAsked = true;
+          return reply.promise;
+        }
+        return undefined;
+      },
+    });
+    await settle();
+    expect(isSchemaAsked).toBe(true);
+    setup.view.dispose();
+    const handedBefore = setup.handed.length;
+
+    reply.resolve(SCHEMA);
+    await setup.loading;
+    await settle();
+
+    expect(setup.logs).toEqual([]);
+    expect(setup.toasts).toEqual([]);
+    expect(setup.places).toEqual([]);
+    expect(setup.handed).toHaveLength(handedBefore);
+    expect(findAll(setup.sheet, 'settings-box')).toEqual([]);
+  });
 
   it('pluginRow_PickTrue_WritesWithoutAsking', async () => {
     const { view, written, asked } = await pickerOnPlugin('gallery', {

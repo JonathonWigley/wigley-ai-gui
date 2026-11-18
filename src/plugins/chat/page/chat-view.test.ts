@@ -171,8 +171,8 @@ const returnedTwo: ReturnedMessage = {
 // subscriptions to its layouts and part stores still held, by store. `owners`
 // holds each session's row owner as `ownerOf` reads it, null for a session it
 // does not name and undefined for a row not yet arrived; `rowAdded` sets a
-// row's owner and tells the view the row arrived. `addTabs` records each `addTab` session id and `otherShown.count`
-// each `otherSessionShown` call.
+// row's owner and tells the view the row arrived. `addTabs` records each
+// `addTab` session id and `otherShown.count` each `otherSessionShown` call.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,

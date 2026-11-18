@@ -815,3 +815,36 @@ because the earlier items rewrite many of these tests anyway.
   `seedChatroomFixture` (`src/plugins/chatroom/main/selftest-fixture.ts:46`) creates its two rows without looking for
   rows a failed earlier seed left, so a retry adds a second pair. Reuse the rows by title, or remove them before
   seeding. Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **A step's duration ends at any entry no agent wrote** — *needs a feature plan*: `stepDurationMs`
+  (`src/plugins/chat/page/activity-runs.ts:113`) skips only entries of another agent, so an entry with no `agentId`
+  (a raw entry or a permission entry) ends every step before it. A raw entry ends a subagent's step, against the
+  function's comment, and a permission entry ends the tool step it asks about, so a tool waiting on permission shows
+  its time only up to the prompt. Options: end a step only at an entry of its own agent, or exempt permission and raw
+  entries from ending one.
+- **A refused invoke to a stopped plugin rejects in the renderer** — *needs a feature plan*: once `dropParked` ran
+  while a plugin's main part had no handlers, `plugin-channel.ts` (`src/main/plugins/plugin-channel.ts:107`) throws
+  `Plugin "<id>" has stopped` for each later invoke, and a page caller with no `.catch` logs an unhandled rejection.
+  Options: resolve a sentinel the page channel swallows once the caller's part has stopped, or wrap the page channel
+  so a stopped part's invoke never settles, which would also close the whole task 24 Rule 1 class (no continuation
+  runs after stop) at once.
+- **Docs draft restore reaches only some open paths** — *needs a feature plan*: `applyDraft`
+  (`src/plugins/docs/page/docs-view.ts:839`) runs from `openAndTell` (:888), the tree search's open (:687) and the
+  place restore (:1946). An open inside the doc view (a link, history, the recent list) skips it, so a restorable draft
+  drops as "not restored" once the user types. The saved place also holds one `edits` (`writePlace`, :832): editing
+  another doc while a draft is held drops the draft from the saved place, though it stays in memory.
+- **The pane tree's draw pass drops stale boxes in a plain loop** — *agent-ready*: in
+  `src/shared/page/pane-tree/pane-tree-view.ts:304-310` a throwing `box.divider.dispose()` leaves that box in `boxes`
+  and skips the rest, so the next pass disposes it again. Hold the stale boxes, delete them from the map, then run
+  their disposes through `callEach` (task 24 Rule 3); add a table row with a throwing divider.
+- **Forms' main start logs a late layouts failure after stop** — *agent-ready*: `registerLayoutsAfter`
+  (`src/plugins/forms/main/start.ts`) attaches `registration.catch(log)` at once, so a fixture write that rejects after
+  `dispose` still logs `layouts not registered`, after the plugin stopped (task 24 Rule 1). It happens only in the
+  self-test, where `fixtureWritten` is a real write. Check `isDisposed` before logging, with a table row in the
+  `registerLayoutsAfter` test. The rest of that file holds no continuation that logs or toasts after stop.
+- **Teardowns and guards still without a test row** — task 24 Rule 1 and Rule 3 coverage left over: no throwing-dispose
+  row for chatroom-view, settings-view (`disposeEntries`), the Settings page start, problem-workspace, forms-view and
+  round-view (reached only through the forms start row); no `disposeDraws`-throws row for schedules-view,
+  task-editor and backlog-view, whose harnesses lack a throwing drawn-part fake; no guard row for problem-workspace's
+  `writeQuit` (`src/plugins/practice/page/problem-workspace.ts:1066`); the audio-picker and primer main teardowns
+  cannot make their first step (`service.detach()`) throw without a fake form service; and
+  `src/plugins/scheduling/page/task-editor.ts` has no test file.

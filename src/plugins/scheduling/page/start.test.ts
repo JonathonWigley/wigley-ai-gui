@@ -65,10 +65,12 @@ interface FakeBox {
   type(text: string): void;
 }
 
-// The Schedules page on the harness, drawing its layout for real, with `state` published to
-// `scheduling.state`. `saveTask` answers with `save`, else `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
-// `activated` each row sessions' `activate` got, `sections` each section sessions' `addSection` got, and
-// `sessionsShows` one entry per run of sessions' `showMode`.
+// The Schedules page on the harness, drawing its layout for real, with `state`
+// published to `scheduling.state`. `saveTask` answers with `save`, else
+// `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
+// `activated` each row sessions' `activate` got, `sections` each section
+// sessions' `addSection` got, and `sessionsShows` one entry per run of
+// sessions' `showMode`.
 function startSchedulesPage(
   state: SchedulingState | undefined,
   save: () => Promise<string> = async () => 'bbbb2222',
@@ -501,9 +503,9 @@ describe('scheduling page part', () => {
       true,
       { sectionDisposeError: new Error('section dispose failed') },
     );
-    // The view disposes after the runs section: it destroys the open editor's boxes.
-    // The host destroys what a part leaves, so the count is read inside the part's own
-    // dispose.
+    // The view disposes after the runs section: it destroys the open editor's
+    // boxes. The host destroys what a part leaves, so the count is read inside
+    // the part's own dispose.
     page.run('showMode');
     page.run('newTask');
     await settle();

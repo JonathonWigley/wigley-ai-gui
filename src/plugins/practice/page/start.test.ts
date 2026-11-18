@@ -1165,8 +1165,9 @@ describe('practicePagePart', () => {
   it('stop with the interviewer pane dispose throwing still disposes the workspace after it', async () => {
     const page = await startWithProblemOpen();
     page.pane.disposeError = new Error('pane dispose failed');
-    // The workspace disposes after the pane and destroys its box editors. The host
-    // destroys what a part leaves, so the state is read inside the part's own dispose.
+    // The workspace disposes after the pane and destroys its box editors. The
+    // host destroys what a part leaves, so the state is read inside the part's
+    // own dispose.
     expect(page.boxEditors.length).toBeGreaterThan(0);
     const started = page.harness.started();
     const ownDispose = started.dispose?.bind(started);
