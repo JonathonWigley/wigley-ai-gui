@@ -41,7 +41,7 @@ function foldText(groups) {
 }
 
 /**
- * A group's title over its items, each with its mark.
+ * A group's title over its items, each with its number and mark.
  * @param {HTMLElement} parent
  * @param {SideGroupInput} group
  * @param {WorkflowKit} kit
@@ -50,12 +50,14 @@ function drawGroup(parent, group, kit) {
   kit.sectionHeader(parent, group.title);
   const items = kit.el(parent, 'ul', 'workflow-side-tasks');
   for (const item of group.items) {
-    const mark = kit.statusMark(items, item.state);
+    const lead = kit.el(items, 'span', 'workflow-side-lead');
+    kit.el(lead, 'span', 'workflow-side-number', String(item.number));
+    kit.statusMark(lead, item.state);
     kit.row(items, {
       density: 'list',
       tag: 'li',
       label: item.text,
-      leading: mark,
+      leading: lead,
     });
   }
 }

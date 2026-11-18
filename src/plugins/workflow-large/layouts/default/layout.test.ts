@@ -130,6 +130,7 @@ function doneWave(title: string, tasks: number): SideGroupInput {
   return {
     title,
     items: Array.from({ length: tasks }, (_, index) => ({
+      number: index + 1,
       text: `${title} task ${index + 1}`,
       state: 'done' as const,
     })),
@@ -356,7 +357,7 @@ describe('default layout sidePane', () => {
       finishedGroups: [doneWave('Wave 1', 1)],
       currentGroup: {
         title: 'Wave 2',
-        items: [{ text: 'open task', state: 'running' }],
+        items: [{ number: 2, text: 'open task', state: 'running' }],
       },
       laterGroups: [doneWave('Wave 3', 2)],
     });
@@ -371,12 +372,18 @@ describe('default layout sidePane', () => {
       'fold:1 wave · 1 done:false',
       'section:Wave 2',
       'el:workflow-side-tasks',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
       'mark:running',
       'row:open task',
       'section:Wave 3',
       'el:workflow-side-tasks',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
       'mark:done',
       'row:Wave 3 task 1',
+      'el:workflow-side-lead',
+      'el:workflow-side-number',
       'mark:done',
       'row:Wave 3 task 2',
       'el:workflow-side-actions',

@@ -92,9 +92,12 @@ export interface StripInput {
   headless: boolean;
 }
 
-// One item of the checklist in the side pane: its text and its mark. A done item is `done`; an open item in the current
-// group shows the stage's status while the stage runs tasks; every other open item is `pending`.
+// One item of the checklist in the side pane: its number, its text and its mark. `number` is the item's place in the
+// whole checklist, counted from 1 across every group in order, so an agent's "task 3" names one row. A done item is
+// `done`; an open item in the current group shows the stage's status while the stage runs tasks; every other open item
+// is `pending`.
 export interface SideItemInput {
+  number: number;
   text: string;
   state: MarkState;
 }

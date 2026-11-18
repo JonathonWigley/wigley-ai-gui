@@ -843,19 +843,31 @@ describe('Large over the engine page part', () => {
         [5, false],
       ]),
       finishedGroups: [
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'done' }] },
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 1, text: 'w1.1', state: 'done' }],
+        },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: {
         title: 'Wave 3',
         items: [
-          { text: 'w3.1', state: 'done' },
-          { text: 'w3.2', state: 'pending' },
+          { number: 3, text: 'w3.1', state: 'done' },
+          { number: 4, text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
-        { title: 'Wave 5', items: [{ text: 'w5.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 5, text: 'w4.1', state: 'pending' }],
+        },
+        {
+          title: 'Wave 5',
+          items: [{ number: 6, text: 'w5.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -871,12 +883,15 @@ describe('Large over the engine page part', () => {
       currentGroup: {
         title: 'Wave 3',
         items: [
-          { text: 'w3.1', state: 'running' },
-          { text: 'w3.2', state: 'pending' },
+          { number: 1, text: 'w3.1', state: 'running' },
+          { number: 2, text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 3, text: 'w4.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -890,10 +905,13 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
-        items: [{ text: 'w3.1', state: 'paused' }],
+        items: [{ number: 1, text: 'w3.1', state: 'paused' }],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 2, text: 'w4.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -904,7 +922,7 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
-        items: [{ text: 'w3.1', state: 'pending' }],
+        items: [{ number: 1, text: 'w3.1', state: 'pending' }],
       },
       laterGroups: [],
     },
@@ -919,18 +937,21 @@ describe('Large over the engine page part', () => {
         [3, true],
       ]),
       finishedGroups: [
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: {
         title: 'Wave 1',
-        items: [{ text: 'w1.1', state: 'pending' }],
+        items: [{ number: 1, text: 'w1.1', state: 'pending' }],
       },
       laterGroups: [
         {
           title: 'Wave 3',
           items: [
-            { text: 'w3.1', state: 'pending' },
-            { text: 'w3.2', state: 'done' },
+            { number: 3, text: 'w3.1', state: 'pending' },
+            { number: 4, text: 'w3.2', state: 'done' },
           ],
         },
       ],
@@ -947,8 +968,8 @@ describe('Large over the engine page part', () => {
       currentGroup: {
         title: 'Tasks',
         items: [
-          { text: 't.1', state: 'done' },
-          { text: 't.2', state: 'pending' },
+          { number: 1, text: 't.1', state: 'done' },
+          { number: 2, text: 't.2', state: 'pending' },
         ],
       },
       laterGroups: [],
@@ -966,17 +987,20 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Tasks',
-        items: [{ text: 't.1', state: 'pending' }],
+        items: [{ number: 1, text: 't.1', state: 'pending' }],
       },
       laterGroups: [
         {
           title: 'Wave 2',
           items: [
-            { text: 'w2.1', state: 'pending' },
-            { text: 'w2.2', state: 'done' },
+            { number: 2, text: 'w2.1', state: 'pending' },
+            { number: 3, text: 'w2.2', state: 'done' },
           ],
         },
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'pending' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 4, text: 'w1.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -988,8 +1012,14 @@ describe('Large over the engine page part', () => {
         [2, true],
       ]),
       finishedGroups: [
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'done' }] },
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 1, text: 'w1.1', state: 'done' }],
+        },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: null,
       laterGroups: [],

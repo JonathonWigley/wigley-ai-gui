@@ -338,6 +338,8 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
     A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
   - Small's, Medium's and Spike's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
+  - Each checklist row leads with its number, counted from 1 down the whole list across every group, then its mark, so
+    an agent's "task 3" names one row. A plan's tasks, numbered `01`, `02`… in plan order, keep the same numbers.
   - The trail stays on the strip alone.
 
   `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides with

@@ -730,8 +730,8 @@ describe('workflow view over several workflows', () => {
     put(flowOf('large'));
 
     expect(large.sidePanes.at(-1)?.currentGroup?.items).toEqual([
-      { text: 'a', state },
-      { text: 'b', state: 'pending' },
+      { number: 1, text: 'a', state },
+      { number: 2, text: 'b', state: 'pending' },
     ]);
   });
 
