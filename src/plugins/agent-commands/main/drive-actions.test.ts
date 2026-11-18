@@ -21,7 +21,11 @@ function startActions() {
     reject(error: Error): void;
   } = { resolve: () => undefined, reject: () => undefined };
   const call = vi.fn<
-    (name: string, args: unknown, context: ToolCallContext) => Promise<ToolResult>
+    (
+      name: string,
+      args: unknown,
+      context: ToolCallContext,
+    ) => Promise<ToolResult>
   >(
     () =>
       new Promise((resolve, reject) => {

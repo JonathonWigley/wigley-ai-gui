@@ -1324,10 +1324,7 @@ describe('default chat layout queuedMessage', () => {
     },
     {
       from: null,
-      children: [
-        'div.chat-queued-label:pending',
-        'div.chat-queued-text:go',
-      ],
+      children: ['div.chat-queued-label:pending', 'div.chat-queued-text:go'],
     },
   ])(
     'a queued message draws the from Tag only for a framed message ($from)',

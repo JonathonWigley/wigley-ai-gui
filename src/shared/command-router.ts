@@ -20,11 +20,7 @@ export interface CommandRouterDeps<Context extends { arg: unknown }> {
   process: ProcessName;
   registry: CommandRegistry<Context>;
   infoOf(id: CommandId): CommandInfo | undefined;
-  remote(
-    id: CommandId,
-    arg: unknown,
-    hop: CommandHop,
-  ): Promise<CommandOutcome>;
+  remote(id: CommandId, arg: unknown, hop: CommandHop): Promise<CommandOutcome>;
 }
 
 // The one path a run takes. `run` throws at the call for an unknown id, for a bad

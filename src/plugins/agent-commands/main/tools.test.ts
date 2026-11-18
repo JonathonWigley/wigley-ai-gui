@@ -334,9 +334,7 @@ describe('createAgentCommandTools', () => {
       runFor: () => Promise.resolve('skipped'),
       ran: ['window.summon', undefined, { callerSessionId: CALLER }],
       confirmed: null,
-      result: textResult(
-        'Skipped window.summon: an intercept did not run it.',
-      ),
+      result: textResult('Skipped window.summon: an intercept did not run it.'),
     },
     {
       given: 'a run that rejects',
@@ -435,37 +433,37 @@ describe('createAgentCommandTools', () => {
       args: 'x',
       result: errorResult('arguments must be an object'),
     },
-  ])('list_commands filters by id, label or group, or refuses its input: $given', async ({
-    args,
-    result,
-  }) => {
-    const { caller } = startTools({
-      list: () => [
-        {
-          id: 'a.x',
-          plugin: 'a',
-          label: 'alpha',
-          group: 'one',
-          runsIn: 'main',
-        },
-        {
-          id: 'b.y',
-          plugin: 'b',
-          label: 'beta',
-          group: 'two',
-          runsIn: 'page',
-          arg: 'string',
-          risky: true,
-          targets: true,
-          runtime: true,
-        },
-      ],
-    });
+  ])(
+    'list_commands filters by id, label or group, or refuses its input: $given',
+    async ({ args, result }) => {
+      const { caller } = startTools({
+        list: () => [
+          {
+            id: 'a.x',
+            plugin: 'a',
+            label: 'alpha',
+            group: 'one',
+            runsIn: 'main',
+          },
+          {
+            id: 'b.y',
+            plugin: 'b',
+            label: 'beta',
+            group: 'two',
+            runsIn: 'page',
+            arg: 'string',
+            risky: true,
+            targets: true,
+            runtime: true,
+          },
+        ],
+      });
 
-    expect(await caller.call('list_commands', args, context())).toEqual(
-      result,
-    );
-  });
+      expect(await caller.call('list_commands', args, context())).toEqual(
+        result,
+      );
+    },
+  );
 
   it.each<{ given: string; args: unknown; result: ToolResult }>([
     {
@@ -488,9 +486,7 @@ describe('createAgentCommandTools', () => {
     {
       given: 'a keyed slot',
       args: { slot: 'sessions.rows' },
-      result: textResult(
-        '{"s2":{"label":"gamma 2"},"c1":{"label":"gamma 1"}}',
-      ),
+      result: textResult('{"s2":{"label":"gamma 2"},"c1":{"label":"gamma 1"}}'),
     },
     {
       given: 'a list slot',
@@ -546,14 +542,14 @@ describe('createAgentCommandTools', () => {
       args: 'x',
       result: errorResult('arguments must be an object'),
     },
-  ])('read_state reads ids, a slot or one entry, or refuses its input: $given', async ({
-    args,
-    result,
-  }) => {
-    const { caller } = startTools();
+  ])(
+    'read_state reads ids, a slot or one entry, or refuses its input: $given',
+    async ({ args, result }) => {
+      const { caller } = startTools();
 
-    expect(await caller.call('read_state', args, context())).toEqual(result);
-  });
+      expect(await caller.call('read_state', args, context())).toEqual(result);
+    },
+  );
 
   it('the three tool definitions are the pinned literals', async () => {
     const validArgs: Record<string, Record<string, unknown>> = {

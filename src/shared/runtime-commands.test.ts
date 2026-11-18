@@ -17,7 +17,10 @@ import {
 } from './runtime-commands';
 import { createSlotStore } from './state/slot-store';
 
-function info(id: CommandId, overrides: Partial<CommandInfo> = {}): CommandInfo {
+function info(
+  id: CommandId,
+  overrides: Partial<CommandInfo> = {},
+): CommandInfo {
   return {
     id,
     plugin: id.split('.')[0],

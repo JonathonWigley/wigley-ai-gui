@@ -307,9 +307,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       confirm: (sessionId, request, signal, toolUseId) => {
         const formSession = formSessions.get(sessionId);
         if (formSession === undefined) {
-          return Promise.reject(
-            new Error(`no forms session for ${sessionId}`),
-          );
+          return Promise.reject(new Error(`no forms session for ${sessionId}`));
         }
         return askConfirm(
           formSession,

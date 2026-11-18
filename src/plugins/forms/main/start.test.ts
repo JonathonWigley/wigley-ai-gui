@@ -197,9 +197,9 @@ function startWithToolSessions() {
       git: { originRepoName: () => Promise.resolve(null) } as never,
     },
   });
-  const forms = harness.started().exports?.(
-    createRegistrations(),
-  ) as FormsMainExports;
+  const forms = harness
+    .started()
+    .exports?.(createRegistrations()) as FormsMainExports;
   return { harness, sessions, forms };
 }
 
@@ -498,30 +498,29 @@ describe('forms main part', () => {
       endsFirst: true,
       sessionId: 'app-a',
     },
-  ])("confirm opens the round in the caller's live forms session: $case", async ({
-    connects,
-    endsFirst,
-    sessionId,
-  }) => {
-    const { harness, sessions, forms } = startWithToolSessions();
-    const [first] = connects.map((id) => sessions.connect(id));
-    if (endsFirst) {
-      first?.end();
-    }
+  ])(
+    "confirm opens the round in the caller's live forms session: $case",
+    async ({ connects, endsFirst, sessionId }) => {
+      const { harness, sessions, forms } = startWithToolSessions();
+      const [first] = connects.map((id) => sessions.connect(id));
+      if (endsFirst) {
+        first?.end();
+      }
 
-    const allowed = forms.confirm(sessionId, CONFIRM_REQUEST, live(), null);
-    await flush();
-    const shown = shownRounds(harness.sent);
-    expect(shown.map((round) => round.sessionId)).toEqual([sessionId]);
-    expect(shown[0]?.form.heading).toBe(CONFIRM_REQUEST.title);
-    harness.invoke('finish', shown[0]?.formId, {
-      kind: 'submitted',
-      body: ALLOW_BODY,
-    });
+      const allowed = forms.confirm(sessionId, CONFIRM_REQUEST, live(), null);
+      await flush();
+      const shown = shownRounds(harness.sent);
+      expect(shown.map((round) => round.sessionId)).toEqual([sessionId]);
+      expect(shown[0]?.form.heading).toBe(CONFIRM_REQUEST.title);
+      harness.invoke('finish', shown[0]?.formId, {
+        kind: 'submitted',
+        body: ALLOW_BODY,
+      });
 
-    await expect(allowed).resolves.toBe(true);
-    await harness.stop();
-  });
+      await expect(allowed).resolves.toBe(true);
+      await harness.stop();
+    },
+  );
 
   it.each([
     { case: 'an unknown id', sessionId: 'app-unknown', endsFirst: false },

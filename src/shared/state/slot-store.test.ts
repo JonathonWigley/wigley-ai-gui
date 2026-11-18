@@ -624,9 +624,7 @@ describe('snapshotOf and ids', () => {
   it('ids_EverySlotOnce_InCodeUnitOrder', () => {
     const { store } = storeWithLogs();
     for (const name of ['B', 'a', 'A']) {
-      store
-        .publish({ id: `p.${name}`, process: 'main', kind: 'value' })
-        .set(1);
+      store.publish({ id: `p.${name}`, process: 'main', kind: 'value' }).set(1);
     }
     store.applyRemote({ id: 'p.a', kind: 'value', value: 2 });
 

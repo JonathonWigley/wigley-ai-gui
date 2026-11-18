@@ -300,8 +300,10 @@ export interface PluginState<M extends PluginManifest, P extends ProcessName> {
 // snapshot, or `undefined` for an id main holds no slot for. `slotIds` lists every
 // slot id in code-unit order. For any other manifest each throws
 // `Plugin "<id>" does not declare readsEverySlot`.
-export interface MainPluginState<M extends PluginManifest>
-  extends PluginState<M, 'main'> {
+export interface MainPluginState<M extends PluginManifest> extends PluginState<
+  M,
+  'main'
+> {
   readAny(id: string): SlotSnapshot | undefined;
   slotIds(): readonly string[];
 }

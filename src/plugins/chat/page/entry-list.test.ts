@@ -1970,34 +1970,37 @@ describe('slots and focus', () => {
       from: null,
       text: 'go',
     },
-  ])("a framed message's input carries the sender and the body ($case)", (row) => {
-    const seen: [string | null, string][] = [];
-    const shown = withUser<ChatLayout>(
-      defaultLayout,
-      {
-        entries: {
-          user(parent, input, kit) {
+  ])(
+    "a framed message's input carries the sender and the body ($case)",
+    (row) => {
+      const seen: [string | null, string][] = [];
+      const shown = withUser<ChatLayout>(
+        defaultLayout,
+        {
+          entries: {
+            user(parent, input, kit) {
+              seen.push([input.from, input.text]);
+              return { element: kit.el(parent, 'div', 'recorded') };
+            },
+          },
+          queuedMessage(parent, input, kit) {
             seen.push([input.from, input.text]);
             return { element: kit.el(parent, 'div', 'recorded') };
           },
         },
-        queuedMessage(parent, input, kit) {
-          seen.push([input.from, input.text]);
-          return { element: kit.el(parent, 'div', 'recorded') };
-        },
-      },
-      'recording',
-    );
-    const { list, put } = setUpList(shown);
+        'recording',
+      );
+      const { list, put } = setUpList(shown);
 
-    if (row.entry !== undefined) {
-      put(row.entry);
-    } else {
-      list.setQueued([row.queued]);
-    }
+      if (row.entry !== undefined) {
+        put(row.entry);
+      } else {
+        list.setQueued([row.queued]);
+      }
 
-    expect(seen).toEqual([[row.from, row.text]]);
-  });
+      expect(seen).toEqual([[row.from, row.text]]);
+    },
+  );
 
   it.each([
     { case: 'following', scrollsUp: false, scrollTop: 500 },
@@ -2662,9 +2665,7 @@ describe('block stops', () => {
     {
       case: 'a pending framed row gives its message without its frame line',
       puts: [userText('u', 'ask')],
-      queued: [
-        { ...queued('q1'), text: frameAgentMessage('Planner', 'ask') },
-      ],
+      queued: [{ ...queued('q1'), text: frameAgentMessage('Planner', 'ask') }],
       act: () => undefined,
       source: { text: 'ask', blockCount: 1 },
     },

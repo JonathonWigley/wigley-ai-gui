@@ -28,7 +28,12 @@ describe('agent frame', () => {
       text: 'one\ntwo\n\nthree',
       from: 'Planner',
     },
-    { given: 'an empty-line body', title: 'Planner', text: '', from: 'Planner' },
+    {
+      given: 'an empty-line body',
+      title: 'Planner',
+      text: '',
+      from: 'Planner',
+    },
   ])(
     'readAgentFrame reads back what frameAgentMessage writes: $given',
     ({ title, text, from }) => {

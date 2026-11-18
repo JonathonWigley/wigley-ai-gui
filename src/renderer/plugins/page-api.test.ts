@@ -159,9 +159,8 @@ function liveConfig(initial: AppConfig = appConfig()) {
 function pageCommandsOver(
   state: SlotStore,
   served: AppConfig['commands'] = {},
-  remote: RuntimeCommandsDeps<
-    PageCommandContext<any>
-  >['remote'] = async () => 'ran',
+  remote: RuntimeCommandsDeps<PageCommandContext<any>>['remote'] = async () =>
+    'ran',
 ) {
   return createRuntimeCommands<PageCommandContext<any>>({
     process: 'page',

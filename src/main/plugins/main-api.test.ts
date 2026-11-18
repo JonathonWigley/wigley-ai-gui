@@ -89,9 +89,8 @@ function liveSettings(initial: Record<string, object>) {
 // Main's commands over `state`, sending remote runs to `remote`.
 function mainCommandsOver(
   state: SlotStore,
-  remote: RuntimeCommandsDeps<
-    MainCommandContext<any>
-  >['remote'] = async () => 'ran',
+  remote: RuntimeCommandsDeps<MainCommandContext<any>>['remote'] = async () =>
+    'ran',
 ) {
   return createRuntimeCommands<MainCommandContext<any>>({
     process: 'main',

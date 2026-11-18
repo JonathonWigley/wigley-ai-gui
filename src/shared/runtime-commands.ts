@@ -42,11 +42,7 @@ export interface RuntimeCommandsDeps<Context extends { arg: unknown }> {
   other: SlotReader<RuntimeCatalog>;
   served(): Readonly<Record<CommandId, CommandInfo>>;
   leader(): string;
-  remote(
-    id: CommandId,
-    arg: unknown,
-    hop: CommandHop,
-  ): Promise<CommandOutcome>;
+  remote(id: CommandId, arg: unknown, hop: CommandHop): Promise<CommandOutcome>;
 }
 
 // One process's commands: the registry of its handlers, the router every run takes,

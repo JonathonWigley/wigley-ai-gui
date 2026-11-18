@@ -22,10 +22,7 @@ import {
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
 import type { RuntimeCommands } from '../../shared/runtime-commands';
-import {
-  mainPluginState,
-  type SlotStore,
-} from '../../shared/state/slot-store';
+import { mainPluginState, type SlotStore } from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
