@@ -12,12 +12,42 @@ import { createListeners } from '../../shared/listeners';
 // hidden.
 export type SideBarLayout = 'beside' | 'over' | 'hidden';
 
-// The media query of a narrow window, below 680 px wide, where a mode's side
-// bar lies over the content instead of beside it.
+// The media query of a window below 680 px wide, one of the two ways the
+// window is narrow: the side bar has no room beside the content, so it lies
+// over the content instead; the left bar crowding the side bar is the other.
 export const SIDE_BAR_OVER_QUERY = '(max-width: 679px)';
 
+// Whether the window is narrow: `isNarrowWindow` (`SIDE_BAR_OVER_QUERY`) or
+// `isCrowded` (the left bar crowding the side bar). `update` reads both again
+// after either may have changed and tells `changed` only when their union
+// did, so neither cause widens the side bar while the other holds.
+export interface SideBarRoom {
+  isNarrow(): boolean;
+  update(): void;
+}
+
+export function watchSideBarRoom(
+  isNarrowWindow: () => boolean,
+  isCrowded: () => boolean,
+  changed: (isNarrow: boolean) => void,
+): SideBarRoom {
+  const read = () => isNarrowWindow() || isCrowded();
+  let isNarrow = read();
+  return {
+    isNarrow: () => isNarrow,
+    update() {
+      const next = read();
+      if (next !== isNarrow) {
+        isNarrow = next;
+        changed(next);
+      }
+    },
+  };
+}
+
 // A mode's side bar choice: hidden by the user while the window is wide, and
-// open over the content while it is narrow (`SIDE_BAR_OVER_QUERY`).
+// open over the content while it is narrow (`SIDE_BAR_OVER_QUERY`, or the
+// left bar crowding the side bar).
 export interface SideBarState {
   isHiddenWide: boolean;
   isOverlayOpen: boolean;
@@ -43,8 +73,8 @@ function toggledSideBar(state: SideBarState, isNarrow: boolean): SideBarState {
     : { ...state, isHiddenWide: !state.isHiddenWide };
 }
 
-// The window widening ends the overlay; the user's hidden choice always
-// stays.
+// The window widening, or the left bar's crowding ending, ends the overlay;
+// the user's hidden choice always stays.
 function sideBarAfterResize(
   state: SideBarState,
   isNarrow: boolean,
@@ -86,15 +116,14 @@ export interface ModesDeps {
 // The core's own view of the registry: `narrowChanged` hears the side bar lose
 // or regain its room beside the content (the window crossing the 680 px
 // breakpoint, or the shell's left bar crowding it), closing every mode's
-// overlay on widening and laying
-// out the shown mode's side bar again. It tells the mode `sideBarHidden` only
-// when widening closes its open overlay onto a side bar the user hid, and
-// `sideBarNarrowed` only when narrowing hides its side bar from beside the
-// content. `focusSideBar` calls the shown mode's `focusSideBar` and returns
-// true when the mode has one and its side bar lies beside or over the
-// content; otherwise it calls nothing and returns false, with no mode shown
-// too. `focusMain` calls the shown mode's `focusMain`, and does nothing with
-// no mode shown.
+// overlay on widening and laying out the shown mode's side bar again. It
+// tells the mode `sideBarHidden` only when widening closes its open overlay
+// onto a side bar the user hid, and `sideBarNarrowed` only when narrowing
+// hides its side bar from beside the content. `focusSideBar` calls the shown
+// mode's `focusSideBar` and returns true when the mode has one and its side
+// bar lies beside or over the content; otherwise it calls nothing and returns
+// false, with no mode shown too. `focusMain` calls the shown mode's
+// `focusMain`, and does nothing with no mode shown.
 export interface CoreModes extends Modes {
   narrowChanged(isNarrow: boolean): void;
   focusSideBar(): boolean;

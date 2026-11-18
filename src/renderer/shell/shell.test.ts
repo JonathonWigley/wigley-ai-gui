@@ -1399,6 +1399,18 @@ describe('mountShell', () => {
       isCrowded: false,
     },
     {
+      // Breaks when a hidden left bar is measured as if shown.
+      row: 'crowded at main ending at 600, then the left bar hidden',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('hidden');
+        const leftBar = shell.showLeftBar();
+        resizeTo(shell, 600);
+        leftBar.dispose();
+      },
+      heard: [true, false],
+      isCrowded: false,
+    },
+    {
       row: 'the left bar hidden, main ending at 400',
       steps: (shell: NarrowingShell) => {
         shell.shell.layOutSideBar('beside');

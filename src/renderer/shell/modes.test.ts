@@ -1,5 +1,77 @@
 import { describe, expect, it } from 'vitest';
-import { createModes } from './modes';
+import { createModes, watchSideBarRoom } from './modes';
+
+// Breaks when either cause is forwarded on its own, which widens the side bar
+// beside the left bar while the other cause still holds.
+describe('watchSideBarRoom', () => {
+  it.each<{
+    row: string;
+    start: [boolean, boolean];
+    steps: [boolean, boolean][];
+    heard: boolean[];
+    isNarrow: boolean;
+  }>([
+    {
+      row: 'crowding starts in a wide window',
+      start: [false, false],
+      steps: [[false, true]],
+      heard: [true],
+      isNarrow: true,
+    },
+    {
+      row: 'crowding ends in a narrow window',
+      start: [true, true],
+      steps: [[true, false]],
+      heard: [],
+      isNarrow: true,
+    },
+    {
+      row: 'the window widens while crowded',
+      start: [true, true],
+      steps: [[false, true]],
+      heard: [],
+      isNarrow: true,
+    },
+    {
+      row: 'the window widens, then crowding ends',
+      start: [true, true],
+      steps: [
+        [false, true],
+        [false, false],
+      ],
+      heard: [false],
+      isNarrow: false,
+    },
+    {
+      row: 'the window narrows, then crowding starts and ends',
+      start: [false, false],
+      steps: [
+        [true, false],
+        [true, true],
+        [true, false],
+      ],
+      heard: [true],
+      isNarrow: true,
+    },
+  ])('tells only changes of either cause: $row', (row) => {
+    const { start, steps, heard, isNarrow } = row;
+    let [isNarrowWindow, isCrowded] = start;
+    const told: boolean[] = [];
+    const room = watchSideBarRoom(
+      () => isNarrowWindow,
+      () => isCrowded,
+      (next) => told.push(next),
+    );
+
+    for (const [isWindowNarrow, isNowCrowded] of steps) {
+      isNarrowWindow = isWindowNarrow;
+      isCrowded = isNowCrowded;
+      room.update();
+    }
+
+    expect([told, room.isNarrow()]).toEqual([heard, isNarrow]);
+  });
+});
 
 // The test environment has no DOM, so each mode's element and side bar are
 // plain objects holding `hidden`; `calls` records the deps the registry drives,

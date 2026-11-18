@@ -96,15 +96,14 @@ hjkl is the direction in every layer; the modifier picks the verb.
   Practice's interviewer pane under its editor and console, reached with Alt+j from the console and left with Alt+k, from the chat box after a first Alt+k to its transcript), then, at main's edge, to the shown mode's side bar on the left (the
   Sessions list, the docs tree, the Settings sections, the Schedules list from its details or editor), past it to the left bar
   (between the activity bar and the side bar; from main itself while the side bar is hidden or the mode gives it no
-  stop), and the right bar on the right
-  (in each bar, each part of it that has rows, Alt+j/k between them). Backlog has no side bar;
+  stop), and the right bar on the right (in each bar, each part of it that has rows, Alt+j/k between them). Backlog
+  has no side bar;
   Alt+h/l move between its table and review pane, Alt+j from the table or review pane to the chunk strip and Alt+k
   back to the table, and Alt+l from the review pane or the strip into the assistant pane while it shows (its outer
   pane). From the side bar Alt+l, and from the right bar Alt+h, return to main's last
   pane; from the left bar Alt+l goes to the side bar, or to main's last pane while the side bar is hidden or no
-  stop. A hidden side
-  bar, left bar or right bar is no stop: focus stops at the outer edge, and stays put while any scope is
-  pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the core's
+  stop. A hidden side bar, left bar or right bar is no stop: focus stops at the outer edge, and stays put while any
+  scope is pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the core's
   `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every scope; a view takes part
   through its focus target, a mode's side bar through the mode, and a left or right bar part through its contribution (AGENTS.md
   § Architecture), never a bind of its own. Each move takes the keyboard with it: the box or list of the pane left

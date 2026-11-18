@@ -87,7 +87,11 @@ import {
 import defaultChromeLayout from './shell/layouts/default/layout.js';
 import defaultChromeStylesheet from './shell/layouts/default/layout.css?url';
 import type { Layout as ChromeLayout } from './shell/layouts/layout';
-import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
+import {
+  createModes,
+  SIDE_BAR_OVER_QUERY,
+  watchSideBarRoom,
+} from './shell/modes';
 import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
 import { shellCommands } from './shell/shell-commands';
@@ -269,15 +273,11 @@ async function start() {
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
   // A side bar crowded by the left bar lays out as in a narrow window, so it
   // never lies beside under the left bar.
-  const hasNoSideBarRoom = () => narrow.matches || shell.isSideBarCrowded();
-  let wasNoSideBarRoom = hasNoSideBarRoom();
-  const sideBarRoomChanged = () => {
-    const isNoRoom = hasNoSideBarRoom();
-    if (isNoRoom !== wasNoSideBarRoom) {
-      wasNoSideBarRoom = isNoRoom;
-      modes.narrowChanged(isNoRoom);
-    }
-  };
+  const sideBarRoom = watchSideBarRoom(
+    () => narrow.matches,
+    () => shell.isSideBarCrowded(),
+    (isNarrow) => modes.narrowChanged(isNarrow),
+  );
   const modes = createModes({
     place(mode, handle) {
       const placement = createRegistrations();
@@ -293,11 +293,11 @@ async function start() {
     showContext: (context) => chrome.showContext(context),
     // `paneTargets` is made below; no mode is added before it.
     sideBarOpened: () => paneTargets.sideBarOpened(),
-    isNarrow: wasNoSideBarRoom,
+    isNarrow: sideBarRoom.isNarrow(),
     log,
   });
-  narrow.addEventListener('change', sideBarRoomChanged);
-  shell.onSideBarCrowdedChanged(sideBarRoomChanged);
+  narrow.addEventListener('change', () => sideBarRoom.update());
+  shell.onSideBarCrowdedChanged(() => sideBarRoom.update());
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);

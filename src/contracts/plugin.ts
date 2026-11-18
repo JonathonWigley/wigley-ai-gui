@@ -454,24 +454,24 @@ export interface Area {
 // bar's drawn order: the core calls it when the focus keys enter the bar and
 // this is the bar's first stop (the right bar by Alt+l past main's right
 // edge; the left bar by Alt+h past the side bar's left edge, or main's while
-// the side bar is no stop: hidden, or the shown mode gives no `focusSideBar`),
-// or Alt+j/Alt+k reach it from the stop before or after.
+// the side bar is no stop: hidden, or the shown mode gives no
+// `focusSideBar`), or Alt+j/Alt+k reach it from the stop before or after.
 // It sets the contribution's own key scope, draws its cursor and moves the DOM
 // focus into the contribution's element. The turn ends when the DOM focus
 // leaves the bar (a click into main, on a focusable spot or not, a mode
 // change), the bar's exit key moves out of it (Alt+h from the right bar to
 // main; Alt+l from the left bar to the side bar, or to main while the side
-// bar is no stop), a base scope change the core did not make runs while `keepsTurn` is
-// absent or returns false, or the contribution is disposed; the core calls
-// `left` each time, then blurs the focused element if the contribution's
-// element still holds it. The core calls the shown mode's `focusMain` on an
-// exit key that lands in main, when the DOM focus left for no element, when
-// it landed on an element whose view set no base scope of its own, and on a
-// disposal holding the keys. While a scope is pushed (a dialog, a picker,
-// help) the DOM focus moving into its overlay leaves the turn running, and a
-// disposal ends it but holds `focusMain` until no scope is pushed. `keepsTurn`
-// lets a contribution keep its turn through base scope changes it makes
-// itself, such as an agent pane inside it taking the keys.
+// bar is no stop), a base scope change the core did not make runs while
+// `keepsTurn` is absent or returns false, or the contribution is disposed;
+// the core calls `left` each time, then blurs the focused element if the
+// contribution's element still holds it. The core calls the shown mode's
+// `focusMain` on an exit key that lands in main, when the DOM focus left for
+// no element, when it landed on an element whose view set no base scope of
+// its own, and on a disposal holding the keys. While a scope is pushed (a
+// dialog, a picker, help) the DOM focus moving into its overlay leaves the
+// turn running, and a disposal ends it but holds `focusMain` until no scope
+// is pushed. `keepsTurn` lets a contribution keep its turn through base scope
+// changes it makes itself, such as an agent pane inside it taking the keys.
 export interface BarOptions extends ContributeOptions {
   focus?(): void;
   left?(): void;
@@ -511,19 +511,22 @@ export interface ModeContext {
 // its base key scope there, so a hidden view never keeps the scope. `hidden`
 // runs each time another mode's `show` hides this one, after its element and
 // side bar are hidden and before the other mode's `shown`.
+// The window is narrow while the side bar has no room beside the content:
+// below 680 px wide, or with the shell's left bar crowding it (the left bar
+// would lie over a side bar beside it at its least width); it narrows and
+// widens as either changes, the Demo panel opening or closing included.
 // `sideBarHidden` runs each time this mode's side bar hides while the mode
 // shows: by `toggleSideBar`, `picked`, or the window widening with its
 // overlay open, and after `shown` when the mode shows with its side bar
-// hidden; the plugin moves focus out of the side bar there. A window
-// narrowing hides the side bar without it. `sideBarNarrowed` runs instead when
-// a window narrowing hides this shown mode's side bar from beside the content;
-// the plugin closes what the side bar held open there, moving no focus, so
-// focus survives a narrow-and-widen round trip. `sideBarOpenedOver` runs each
-// time the side bar opens over the content while the mode shows, by
+// hidden; the plugin moves focus out of the side bar there. The window
+// narrowing hides the side bar without it. `sideBarNarrowed` runs instead
+// when the window narrowing hides this shown mode's side bar from beside the
+// content; the plugin closes what the side bar held open there, moving no
+// focus, so focus survives a narrow-and-widen round trip. `sideBarOpenedOver`
+// runs each time the side bar opens over the content while the mode shows, by
 // `toggleSideBar` or after `shown`; the plugin moves focus into the side bar
-// there. None of the three
-// runs for a hidden mode, a mode without a side bar, or a side bar already
-// in that state.
+// there. None of the three runs for a hidden mode, a mode without a side bar,
+// or a side bar already in that state.
 // `focusSideBar` runs when the core's Alt+h leaves main's left edge, or Alt+l
 // leaves the left bar, while this mode shows with its side bar beside or over
 // the content: it sets the side bar's key scope, focuses the side bar's list
@@ -557,7 +560,8 @@ export interface Mode {
 // nothing. `setContext` keeps the mode's title bar context, starting null, and
 // shows it while the mode shows. `toggleSideBar` flips the mode's side bar
 // choice: while the window is wide it hides or shows the side bar beside the
-// content, while narrow it opens or closes it over the content; each mode keeps
+// content, while narrow (as `Mode` defines it, the left bar's crowding
+// included) it opens or closes it over the content; each mode keeps
 // its own choice, and a hidden mode's toggle applies at its next show. It
 // throws `Mode "<id>" has no side bar` on a mode without one. `picked` tells
 // the core the user picked something in the mode's side bar: in a narrow window

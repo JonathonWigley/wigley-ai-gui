@@ -708,22 +708,24 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   hidden while empty, and takes contributions through `api.areas.leftBar` or `api.areas.rightBar` (a `BarArea`); a
   contribution with rows to act on passes `focus` with it, which sets its own key scope and cursor, and `left`, which
   the core calls when its turn ends, and becomes a stop for the core's focus keys (`BarOptions`). In a window too
-  narrow for every bar beside `main`, the side bar narrows to its least width first; once even that would put the left
-  bar over, the side bar is crowded (`isSideBarCrowded`) and lays out as in a narrow window, hidden or opened over
-  the content, so it never lies beside under the left bar. Then the left bar narrows, then the right bar; the left or
-  right bar lies over when the room left for it is less than its least width and `main`'s, the right bar over
-  `main`'s end and the left bar against the activity bar over `main`'s start (a side bar over `main` is laid past
-  it). Only the side bar resizes by keys; the left and right bars by drag alone.
+  narrow for every bar beside `main`, the side bar narrows to its least width first, then the left bar, then the right
+  bar. Once the left bar would go over beside a side bar at its least width, the side bar is crowded
+  (`isSideBarCrowded`) and lays out as in a narrow window, hidden or opened over the content, so it never lies beside
+  under the left bar; the left and right bars then widen into the room it gave up and narrow again, in that order.
+  The left or right bar lies over when the room left for it is less than its least width and `main`'s, the right bar
+  over `main`'s end and the left bar against the activity bar over `main`'s start (a side bar over `main` is laid
+  past it). Only the side bar resizes by keys; the left and right bars by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
   side bar). The activity bar lists every mode, the side bar slot shows the shown mode's side bar, and the mode's
-  handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
+  handle sets the title bar's context. In a narrow window — below 680 px, or with the left bar crowding the side bar,
+  as the Demo panel opening can — the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin
-  moves focus out of or into the side bar there. A window narrowing that hides the side bar from beside the content
-  tells the shown mode only through `sideBarNarrowed`, which moves no focus (Docs closes its filter box there), so
-  focus survives a narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
+  moves focus out of or into the side bar there. A narrowing (by either cause) that hides the side bar from beside the
+  content tells the shown mode only through `sideBarNarrowed`, which moves no focus (Docs closes its filter box
+  there), so focus survives a narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
   focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
   core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode, each session tab and each session popup is told when it becomes
