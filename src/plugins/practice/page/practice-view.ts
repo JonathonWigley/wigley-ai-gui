@@ -449,7 +449,9 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
 
   const drawRows = (state: PracticeState) => {
     const rows = visibleProblems(state, matcher);
-    rowDraws = disposeDraws(rowDraws);
+    const heldRowDraws = rowDraws;
+    rowDraws = [];
+    disposeDraws(heldRowDraws);
     rowsList.replaceChildren();
     for (const problem of rows) {
       const drawn = parts.draw(

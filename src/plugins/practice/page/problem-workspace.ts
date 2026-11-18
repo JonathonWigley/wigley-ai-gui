@@ -870,7 +870,9 @@ export function createProblemWorkspace(
     keepFocusedBox(boxes, FORM_ID, () => {
       if (problemKey !== drawnProblemKey) {
         drawnProblemKey = problemKey;
-        problemDraws = disposeDraws(problemDraws);
+        const heldProblemDraws = problemDraws;
+        problemDraws = [];
+        disposeDraws(heldProblemDraws);
         problemBody.replaceChildren();
         if (problem !== null) {
           drawProblemTab(state, problem);
@@ -878,7 +880,9 @@ export function createProblemWorkspace(
       }
       if (consoleKey !== drawnConsoleKey) {
         drawnConsoleKey = consoleKey;
-        consoleDraws = disposeDraws(consoleDraws);
+        const heldConsoleDraws = consoleDraws;
+        consoleDraws = [];
+        disposeDraws(heldConsoleDraws);
         consoleBody.replaceChildren();
         if (problem !== null) {
           drawConsoleTab(state, problem);

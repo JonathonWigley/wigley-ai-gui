@@ -124,6 +124,8 @@ interface PageOptions {
   messages?: Record<string, RoomMessage[]>;
   holdsReads?: boolean;
   postResult?: UserPostResult;
+  // Holds the post's reply until the test settles it.
+  heldPost?: ReturnType<typeof deferred<UserPostResult>>;
   place?: ChatroomPlace;
 }
 
@@ -199,6 +201,9 @@ function startChatroomPage(options: PageOptions = {}) {
         return held.promise;
       }
       if (method === 'postAsUser') {
+        if (options.heldPost !== undefined) {
+          return options.heldPost.promise;
+        }
         return options.postResult ?? { ok: true, id: 40 };
       }
       return undefined;
@@ -329,6 +334,38 @@ describe('chatroomPagePart', () => {
       expect.arrayContaining(['post refused: room is closed']),
     ]);
   });
+
+  it.each([
+    { case: 'accepts', outcome: 'resolve' },
+    { case: 'refuses', outcome: 'refuse' },
+    { case: 'rejects', outcome: 'reject' },
+  ] as const)(
+    'a post reply that $case after the page stops logs nothing and keeps the draft',
+    async ({ outcome }) => {
+      const heldPost = deferred<UserPostResult>();
+      const page = startChatroomPage({ heldPost });
+      show(page);
+      page.open();
+      await settle();
+      page.commands.compose({ arg: undefined });
+      const box = page.box();
+      box.value = 'a note';
+      page.commands.send({ arg: undefined });
+      await page.harness.stop();
+      const loggedBefore = page.logged();
+
+      if (outcome === 'resolve') {
+        heldPost.resolve({ ok: true, id: 40 });
+      } else if (outcome === 'refuse') {
+        heldPost.resolve({ ok: false, reason: 'room is closed' });
+      } else {
+        heldPost.reject(new Error('channel closed'));
+      }
+      await settle();
+
+      expect([box.value, page.logged()]).toEqual(['a note', loggedBefore]);
+    },
+  );
 
   it('roomChanged_TwiceBeforeTheFirstReadLands_ShowsEachMessageOnce', async () => {
     const page = startChatroomPage({

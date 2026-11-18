@@ -354,7 +354,9 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     );
     if (always || key !== drawnRowsKey) {
       drawnRowsKey = key;
-      rowDraws = disposeDraws(rowDraws);
+      const heldRowDraws = rowDraws;
+      rowDraws = [];
+      disposeDraws(heldRowDraws);
       rowsList.replaceChildren();
       for (const row of rows) {
         const drawn =
@@ -416,7 +418,9 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       return;
     }
     drawnNoticesKey = key;
-    noticeDraws = disposeDraws(noticeDraws);
+    const heldNoticeDraws = noticeDraws;
+    noticeDraws = [];
+    disposeDraws(heldNoticeDraws);
     noticesSlot.replaceChildren();
     noticeDraws = lines.map((line) =>
       parts.draw('notice', noticesSlot, (notice, into, rollback) => ({
@@ -503,7 +507,9 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     const key = JSON.stringify([view?.task.id ?? null, inputs]);
     if (key !== drawnHistoryKey) {
       drawnHistoryKey = key;
-      historyDraws = disposeDraws(historyDraws);
+      const heldHistoryDraws = historyDraws;
+      historyDraws = [];
+      disposeDraws(heldHistoryDraws);
       historyRows.replaceChildren();
       history.forEach((entry, index) => {
         const input = inputs[index];

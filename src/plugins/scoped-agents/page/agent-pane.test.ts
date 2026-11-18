@@ -71,6 +71,8 @@ function fakeEditorHost() {
 function paneSetup(
   options: {
     mountError?: string;
+    // Makes every mount's `dispose` throw it, after recording it.
+    mountDisposeError?: string;
     hostAnswersLeave?: boolean;
     isAlwaysShown?: boolean;
     entersFrom?: PaneDirection;
@@ -79,6 +81,8 @@ function paneSetup(
   const logs: string[] = [];
   const toasts: [string, string][] = [];
   const events: string[] = [];
+  // Each `heldKeys` call: `held`, or `null` as the pane gives the keys up.
+  const heldKeysCalls: string[] = [];
   const calls: string[] = [];
   const asks: [string, string][] = [];
   const drawnInputs: AskBoxInput[] = [];
@@ -153,6 +157,9 @@ function paneSetup(
           dispose: () => {
             mount.disposed += 1;
             events.push(`dispose ${sessionId}`);
+            if (options.mountDisposeError !== undefined) {
+              throw new Error(options.mountDisposeError);
+            }
           },
         };
       },
@@ -166,7 +173,7 @@ function paneSetup(
           dispose: () => undefined,
         };
       },
-      heldKeys: () => undefined,
+      heldKeys: (held) => heldKeysCalls.push(held === null ? 'null' : 'held'),
     },
     spec,
   );
@@ -175,6 +182,7 @@ function paneSetup(
     logs,
     toasts,
     events,
+    heldKeysCalls,
     calls,
     asks,
     drawnInputs,
@@ -338,6 +346,38 @@ describe('createAgentPane', () => {
     });
     expect(setup.logs).toContain(row.line);
     expect(setup.toasts).toEqual(row.toasts);
+  });
+
+  it.each([
+    { case: 'resolves', outcome: 'resolve' },
+    { case: 'rejects', outcome: 'reject' },
+  ] as const)(
+    'an ask that $case after dispose mounts, logs and toasts nothing',
+    async ({ outcome }) => {
+      const setup = paneSetup();
+      await setup.openTwoSum(null);
+      setup.boxes[0]!.text = 'hint please';
+      setup.pane.send();
+      setup.pane.dispose();
+      const logsBefore = [...setup.logs];
+
+      await setup.answerAsk(
+        outcome === 'resolve' ? { sessionId: 's2' } : { error: 'late' },
+      );
+
+      expect(setup.mounts).toEqual([]);
+      expect(setup.logs).toEqual(logsBefore);
+      expect(setup.toasts).toEqual([]);
+    },
+  );
+
+  it('dispose destroys the ask box and gives the keys up when a mount dispose throws, then rethrows', async () => {
+    const setup = paneSetup({ mountDisposeError: 'mount dispose failed' });
+    await setup.openTwoSum('s1');
+
+    expect(() => setup.pane.dispose()).toThrow('mount dispose failed');
+
+    expect(setup.heldKeysCalls.at(-1)).toBe('null');
   });
 
   it('keeps the focus in the ask box across a redraw', async () => {

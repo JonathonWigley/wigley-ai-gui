@@ -532,7 +532,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     });
 
   const drawRows = (state: BacklogState) => {
-    rowDraws = disposeDraws(rowDraws);
+    const heldRowDraws = rowDraws;
+    rowDraws = [];
+    disposeDraws(heldRowDraws);
     rowsList.replaceChildren();
     for (const shown of visibleRows(state, matcher)) {
       const drawn = drawRow(state, shown);
@@ -640,7 +642,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     reviewDrawKey = drawKey;
     reviewRowKey = rowKeyShown;
     keptReviewScroll = null;
-    reviewDraws = disposeDraws(reviewDraws);
+    const heldReviewDraws = reviewDraws;
+    reviewDraws = [];
+    disposeDraws(heldReviewDraws);
     reviewBody.replaceChildren();
     if (row !== null) {
       reviewDraws.push(drawReviewItem(row, staleness));
@@ -688,7 +692,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // Draws one card per shown chunk, then New chunk, into the scroller's
   // track; reveals the cursor card when the cursor moved since the last draw.
   const drawStrip = (state: BacklogState) => {
-    stripDraws = disposeDraws(stripDraws);
+    const heldStripDraws = stripDraws;
+    stripDraws = [];
+    disposeDraws(heldStripDraws);
     scroller.track.replaceChildren();
     let cursorCard: HTMLElement | null = null;
     for (const chunk of shownChunks(state)) {

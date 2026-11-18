@@ -213,6 +213,8 @@ type ScopeCall =
 interface FakePane {
   spec: AgentPaneSpec | null;
   calls: string[];
+  // Set to make the pane's `dispose` throw it.
+  disposeError?: Error;
   outerPanes: OuterPanes;
 }
 
@@ -262,6 +264,9 @@ function fakeAgentPane(record: FakePane, spec: AgentPaneSpec): AgentPane {
     },
     dispose() {
       record.calls.push('dispose');
+      if (record.disposeError !== undefined) {
+        throw record.disposeError;
+      }
     },
   };
 }
@@ -1266,6 +1271,132 @@ describe('backlog strip', () => {
 
     expect(chunkCards(setup)).toHaveLength(cardsBefore);
     expect(setup.logs).toEqual(logsBefore);
+  });
+
+  it.each([
+    {
+      case: 'commitsSince resolves',
+      method: 'commitsSince',
+      outcome: 'resolve',
+      value: [],
+      act: (setup: Setup) => setup.view.commands.toggleCommits(),
+    },
+    {
+      case: 'commitsSince rejects',
+      method: 'commitsSince',
+      outcome: 'reject',
+      value: undefined,
+      act: (setup: Setup) => setup.view.commands.toggleCommits(),
+    },
+    {
+      case: 'staleness rejects',
+      method: 'staleness',
+      outcome: 'reject',
+      value: undefined,
+      act: () => undefined,
+    },
+    {
+      case: 'editChunks resolves',
+      method: 'editChunks',
+      outcome: 'resolve',
+      value: CHUNKS,
+      act: (setup: Setup) => {
+        setup.view.commands.mark();
+        setup.view.commands.addToChunk();
+      },
+    },
+    {
+      case: 'editChunks rejects',
+      method: 'editChunks',
+      outcome: 'reject',
+      value: undefined,
+      act: (setup: Setup) => {
+        setup.view.commands.mark();
+        setup.view.commands.addToChunk();
+      },
+    },
+    {
+      case: 'startChunks resolves',
+      method: 'startChunks',
+      outcome: 'resolve',
+      value: [{ chunkId: 'c1', sessionId: 's9' }],
+      act: (setup: Setup) => setup.view.commands.startAllChunks(),
+    },
+    {
+      case: 'startChunks rejects',
+      method: 'startChunks',
+      outcome: 'reject',
+      value: undefined,
+      act: (setup: Setup) => setup.view.commands.startAllChunks(),
+    },
+    {
+      case: 'sweep resolves',
+      method: 'sweep',
+      outcome: 'resolve',
+      value: 'assistant-session',
+      act: (setup: Setup) => setup.view.commands.sweep(),
+    },
+    {
+      case: 'sweep rejects',
+      method: 'sweep',
+      outcome: 'reject',
+      value: undefined,
+      act: (setup: Setup) => setup.view.commands.sweep(),
+    },
+    {
+      case: 'rescan rejects',
+      method: 'rescan',
+      outcome: 'reject',
+      value: undefined,
+      act: (setup: Setup) => setup.view.commands.rescan(),
+    },
+  ] as const)(
+    'a $case reply landing after dispose logs, toasts and draws nothing',
+    async ({ method, outcome, value, act }) => {
+      const reply = deferred<unknown>();
+      const setup = await backlogSetup({
+        savedPlace: place({ repo: 'app' }),
+        answers: { [method]: () => reply.promise },
+      });
+      act(setup);
+      await settle();
+      setup.view.dispose();
+      const logsBefore = [...setup.logs];
+      const toastsBefore = [...setup.toasts];
+      const callsBefore = [...setup.pane.calls];
+      const invokesBefore = setup.invokes.length;
+
+      if (outcome === 'resolve') {
+        reply.resolve(value);
+      } else {
+        reply.reject(new Error('late'));
+      }
+      await settle();
+
+      expect(setup.logs).toEqual(logsBefore);
+      expect(setup.toasts).toEqual(toastsBefore);
+      expect(setup.pane.calls).toEqual(callsBefore);
+      expect(setup.invokes).toHaveLength(invokesBefore);
+    },
+  );
+
+  it('dispose still disposes the scroller, splits and pane when one dispose throws, then rethrows', async () => {
+    const setup = await backlogSetup();
+    const error = new Error('pane dispose failed');
+    setup.pane.disposeError = error;
+    scroller.calls.length = 0;
+    splitCalls.length = 0;
+
+    expect(() => setup.view.dispose()).toThrow(error);
+
+    expect(scroller.calls).toContain('dispose');
+    expect(splitCalls).toEqual(
+      expect.arrayContaining([
+        'tableWidth dispose',
+        'stripHeight dispose',
+        'assistantWidth dispose',
+      ]),
+    );
   });
 
   it('dispose_DisposesTheScroller', async () => {

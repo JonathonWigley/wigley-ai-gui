@@ -98,6 +98,8 @@ type HeldAnswer = (
 interface FakePane {
   spec: AgentPaneSpec | null;
   calls: string[];
+  // Set to make the pane's `dispose` throw it.
+  disposeError?: Error;
 }
 
 function fakeAgentPane(pane: FakePane): AgentPane {
@@ -129,6 +131,9 @@ function fakeAgentPane(pane: FakePane): AgentPane {
     redraw: () => undefined,
     dispose() {
       pane.calls.push('dispose');
+      if (pane.disposeError !== undefined) {
+        throw pane.disposeError;
+      }
     },
   };
 }
@@ -881,20 +886,23 @@ describe('practicePagePart', () => {
       case: 'FilterBox',
       act: (commands) => commands.filter({ arg: undefined }),
     },
-  ])('layoutChange_KeepsFocus ($case)', async ({ act }) => {
-    const { harness, commands } = await startWithProblemOpen();
-    act(commands);
-    const focused = focusedElement();
+  ])(
+    'a layout change keeps the focus on the same element ($case)',
+    async ({ act }) => {
+      const { harness, commands } = await startWithProblemOpen();
+      act(commands);
+      const focused = focusedElement();
 
-    harness.showLayouts(
-      withUser(defaultLayout, defaultLayout) as Parameters<
-        typeof harness.showLayouts
-      >[0],
-    );
+      harness.showLayouts(
+        withUser(defaultLayout, defaultLayout) as Parameters<
+          typeof harness.showLayouts
+        >[0],
+      );
 
-    expect(focused).not.toBeNull();
-    expect(focusedElement()).toBe(focused);
-  });
+      expect(focused).not.toBeNull();
+      expect(focusedElement()).toBe(focused);
+    },
+  );
 
   it('layoutChange_UserNotesTabPlacingTheBoxTwice_DrawsWithDefault', async () => {
     const { harness, commands, boxEditors } = await startWithProblemOpen();
@@ -1039,6 +1047,121 @@ describe('practicePagePart', () => {
     expect(rest).toEqual([]);
     expect(earlier.isDestroyed).toBe(true);
     expect(live).toMatchObject({ doc: '[1, 2]', isDestroyed: false });
+  });
+
+  it.each<{
+    case: string;
+    held: string[];
+    outcome: 'resolve' | 'reject';
+    value: unknown;
+    act: (page: Awaited<ReturnType<typeof startWithProblemOpen>>) => void;
+  }>([
+    {
+      case: 'open rejects',
+      held: ['open'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ commands }) => {
+        commands.listUp({ arg: undefined });
+        commands.openProblem({ arg: undefined });
+      },
+    },
+    {
+      case: 'the list and open reads of a changed reject',
+      held: ['list', 'open'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ harness }) => harness.send('changed', { slug: null }),
+    },
+    {
+      case: 'the save before a run rejects',
+      held: ['saveCode'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ editors, commands }) => {
+        editors.typeDocument('int solve() { return 1; }');
+        commands.run({ arg: undefined });
+      },
+    },
+    {
+      case: 'the save before switching resolves',
+      held: ['saveCode'],
+      outcome: 'resolve',
+      value: undefined,
+      act: ({ editors, commands }) => {
+        editors.typeDocument('int solve() { return 1; }');
+        commands.listUp({ arg: undefined });
+        commands.openProblem({ arg: undefined });
+      },
+    },
+    {
+      case: 'a run resolves',
+      held: ['run'],
+      outcome: 'resolve',
+      value: ACCEPTED,
+      act: ({ commands }) => commands.run({ arg: undefined }),
+    },
+    {
+      case: 'a run rejects',
+      held: ['run'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ commands }) => commands.run({ arg: undefined }),
+    },
+    {
+      case: 'the read after a submit rejects',
+      held: ['open'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ commands }) => commands.submit({ arg: undefined }),
+    },
+    {
+      case: 'a peek rejects',
+      held: ['peek'],
+      outcome: 'reject',
+      value: undefined,
+      act: ({ commands }) => {
+        commands.showTab({ arg: 'solution' });
+        commands.confirmYes({ arg: undefined });
+      },
+    },
+  ])(
+    'a reply landing after the page stops logs, toasts and sends nothing: $case',
+    async ({ held, outcome, value, act }) => {
+      const reply = deferred<unknown>();
+      let isArmed = false;
+      const page = await startWithProblemOpen((method) =>
+        isArmed && held.includes(method) ? reply.promise : undefined,
+      );
+      isArmed = true;
+      act(page);
+      await settle();
+      await settle();
+      await page.harness.stop();
+      const messagesBefore = messagesOf(page.harness);
+      const callsBefore = page.calls.length;
+      const editorsBefore = page.editors.made();
+
+      if (outcome === 'resolve') {
+        reply.resolve(value);
+      } else {
+        reply.reject(new Error('late'));
+      }
+      await settle();
+
+      expect(messagesOf(page.harness)).toEqual(messagesBefore);
+      expect(page.calls).toHaveLength(callsBefore);
+      expect(page.editors.made()).toBe(editorsBefore);
+    },
+  );
+
+  it('stops with nothing live when a dispose throws', async () => {
+    const page = await startWithProblemOpen();
+    page.pane.disposeError = new Error('pane dispose failed');
+
+    await page.harness.stop().catch(() => undefined);
+
+    expect(page.harness.counts()).toEqual(noCounts);
   });
 
   it('stops with nothing live', async () => {
