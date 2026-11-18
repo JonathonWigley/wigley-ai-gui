@@ -202,7 +202,7 @@ async function lookUpPick(
 }
 
 // What a pick's log line names.
-function pickText(pick: LivePick): string {
+export function pickText(pick: LivePick): string {
   return pick.kind === 'stream' ? pick.summary : 'Screen Recording off';
 }
 

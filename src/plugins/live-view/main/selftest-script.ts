@@ -10,7 +10,7 @@ import {
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
 import type { LivePick } from '../contract';
-import type { LiveTools } from './live-tools';
+import { pickText, type LiveTools } from './live-tools';
 
 // The self-test's Unity project folder, made under the self-test's home. Its
 // name names the session in every page line and the stream's summary.
@@ -185,11 +185,9 @@ export function liveViewSelfTestScript(
           playtestPick.kind === 'stream' &&
           playtestPick.summary === PLAYTEST_PICK_SUMMARY;
         if (!isEditorStream) {
-          const shows =
-            playtestPick.kind === 'stream'
-              ? playtestPick.summary
-              : 'Screen Recording off';
-          found.push(`the playtest command's Live view shows ${shows}`);
+          found.push(
+            `the playtest command's Live view shows ${pickText(playtestPick)}`,
+          );
         }
       }
       if (shown.isError === true) {
