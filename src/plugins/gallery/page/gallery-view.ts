@@ -51,6 +51,7 @@ import {
   type GalleryPartsDeps,
   type SampleCell,
 } from './layout/gallery-parts';
+import { callEach } from '../../../shared/call-each';
 
 // What the view reads: the sample primitives' platform, the split sample's
 // saved width and the timers its resize prompt lingers on, and what the
@@ -189,11 +190,18 @@ export function createGalleryView(
       return kept.split;
     },
     dispose() {
-      disposeHScrollers(keptHScrollers);
-      kept.split?.dispose();
+      const split = kept.split;
+      const reorder = keptDragReorder.reorder;
       kept.split = null;
-      keptDragReorder.reorder?.dispose();
       keptDragReorder.reorder = null;
+      callEach<() => void>(
+        [
+          () => disposeHScrollers(keptHScrollers),
+          () => split?.dispose(),
+          () => reorder?.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

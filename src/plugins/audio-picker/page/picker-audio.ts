@@ -2,6 +2,7 @@ import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { formById } from '../../../shared/page/session-forms';
 import type {
@@ -381,10 +382,12 @@ export function createPickerAudio(deps: PickerAudioDeps): PickerAudio {
     dispose() {
       isDisposed = true;
       latestToggle += 1;
-      stopCurrent();
-      subscription.dispose();
       queue = [];
       loads.clear();
+      callEach<() => void>(
+        [stopCurrent, () => subscription.dispose()],
+        (step) => step(),
+      );
     },
   };
 }

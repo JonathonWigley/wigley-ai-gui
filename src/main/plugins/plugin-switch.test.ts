@@ -171,6 +171,7 @@ function setup({
     refusals: {} as Record<string, string>,
   };
   const configDisabled = { list: disabled };
+  const dropped: string[] = [];
   const applied = createAppliedPlugins(initial);
   const fakeTimers: Timers = {
     set(run, ms) {
@@ -274,6 +275,9 @@ function setup({
         problems,
       };
     },
+    dropParked: (id) => {
+      dropped.push(id);
+    },
     applied: {
       disabled: () => applied.disabled(),
       set(disabled) {
@@ -351,6 +355,7 @@ function setup({
     configDisabled,
     handed,
     handedProblems,
+    dropped,
   };
 }
 
@@ -469,6 +474,15 @@ describe('createPluginSwitch', () => {
     await pluginSwitch.apply(['forms']);
 
     expect(problems).toEqual([PROBLEM, null]);
+  });
+
+  it('drops the parked calls of each id a page stop reply names as stopped', async () => {
+    const switched = setup({ manifests: GALLERY });
+    switched.page.stopReply = ['gallery', 'notes'];
+
+    await switched.pluginSwitch.apply(['gallery']);
+
+    expect(switched.dropped).toEqual(['gallery', 'notes']);
   });
 
   it('apply_OffAndOn_RunsStepsTwoToFive', async () => {

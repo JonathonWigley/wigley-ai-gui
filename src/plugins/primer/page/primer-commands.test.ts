@@ -131,6 +131,7 @@ function setup(
         : Promise.reject(previewFailure),
     toast,
     log,
+    isStopped: () => false,
   };
   const handlers = primerCommandHandlers(deps);
   const focusTarget = primerFocusTarget(deps);

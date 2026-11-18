@@ -51,13 +51,12 @@ export interface DrawnPart<R> {
   dispose(): void;
 }
 
-// Disposes each of `draws`; returns the empty list that replaces them.
+// Disposes each of `draws`, a throw skipping none, then throws the first
+// error; returns the empty list that replaces them.
 export function disposeDraws<R>(
   draws: readonly DrawnPart<R>[],
 ): DrawnPart<R>[] {
-  for (const draw of draws) {
-    draw.dispose();
-  }
+  callEach(draws, (draw) => draw.dispose());
   return [];
 }
 

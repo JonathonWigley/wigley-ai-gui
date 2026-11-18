@@ -95,6 +95,7 @@ function startModel(uiState: UiState = fakeUiState()) {
       activated.push(sessionId);
       return Promise.resolve(true);
     },
+    isStopped: () => false,
     restores: {
       track(restore) {
         const record = { isSettled: false };

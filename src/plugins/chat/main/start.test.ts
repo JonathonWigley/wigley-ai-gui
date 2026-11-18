@@ -1511,6 +1511,29 @@ describe('chat main part', () => {
     expect(chat.processKill).not.toHaveBeenCalled();
   });
 
+  it('still cancels the sign-in and resolves the end waits when detachAll rejects, and returns its promise', async () => {
+    const chat = startChatPart();
+    chat.invoke('logIn', 1, 'work');
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    chat.holdProcessEnds();
+    const closing = chat.exports.closeSessionsIn('/p');
+    const refused = () => {
+      throw new Error('process refused');
+    };
+    chat.processDetach.mockImplementation(refused);
+    chat.processKill.mockImplementation(refused);
+
+    const disposed = Promise.resolve(chat.part.dispose?.('end'));
+
+    await expect(disposed).rejects.toThrow('process refused');
+    expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+    await closing;
+  });
+
   it('stopAll_Channel_StopsEveryProcess', () => {
     const chat = startChatPart();
     chat.invoke('start', {

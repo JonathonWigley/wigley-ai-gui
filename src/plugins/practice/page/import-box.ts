@@ -22,6 +22,9 @@ export interface ImportBoxDeps extends Pick<
   PracticeViewDeps,
   'channel' | 'log' | 'toast'
 > {
+  // True once the owning view was disposed: a late `startImport` answer
+  // then toasts and logs nothing.
+  isStopped(): boolean;
   pushScope(): PushedScope;
   drawFrame: DrawDialogFrame;
   drawBody(
@@ -140,6 +143,9 @@ export function createImportBox(deps: ImportBoxDeps): ImportBox {
       isAccepting = true;
       deps.channel.invoke('startImport', request).then(
         () => {
+          if (deps.isStopped()) {
+            return;
+          }
           if (importing === shown) {
             hide();
           }
@@ -150,6 +156,9 @@ export function createImportBox(deps: ImportBoxDeps): ImportBox {
           log(`import started: ${request}`);
         },
         (error: unknown) => {
+          if (deps.isStopped()) {
+            return;
+          }
           log(`import failed: ${errorText(error)}`);
           if (importing !== shown) {
             return;

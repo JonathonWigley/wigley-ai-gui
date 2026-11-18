@@ -15,6 +15,7 @@ import type { ChatKit } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import { type SurfaceKitDeps, surfaceBaseKit } from './chat-layouts';
 import type { PermissionEntry } from './chat-state';
+import { callEach } from '../../../shared/call-each';
 
 // What a click on Allow once, Deny, a thumbnail or an expander's head calls:
 // `allow` and `deny` with the permission entry, `openImages` with the user
@@ -128,10 +129,13 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       }
     },
     dispose() {
-      disposeAnchors(anchors);
-      for (const part of permissionParts) {
-        part.dispose();
-      }
+      callEach<() => void>(
+        [
+          () => disposeAnchors(anchors),
+          ...[...permissionParts].map((part) => () => part.dispose()),
+        ],
+        (step) => step(),
+      );
     },
     expanders: {
       count: () => expanders.length,

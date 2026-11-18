@@ -7,6 +7,7 @@ import type {
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { KeyHints, ToastTone } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
@@ -451,12 +452,19 @@ export function createAgentPane(
       isDisposed = true;
       open = null;
       takesKeysOnAnswer = false;
-      dropMount();
-      destroyAskBox();
-      if (hasKeys) {
-        hasKeys = false;
-        deps.heldKeys(null);
-      }
+      callEach<() => void>(
+        [
+          dropMount,
+          destroyAskBox,
+          () => {
+            if (hasKeys) {
+              hasKeys = false;
+              deps.heldKeys(null);
+            }
+          },
+        ],
+        (step) => step(),
+      );
     },
   };
   body.addEventListener('focusin', () => {

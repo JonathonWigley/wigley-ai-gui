@@ -7,6 +7,7 @@ import {
 import type { PluginLog } from '../../../contracts/log';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
@@ -1101,10 +1102,15 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         deps.timers.clear(tick);
         tick = null;
       }
-      disposeSlots(slots);
-      disposePartSlots(runSlots);
-      disposePartSlots(queuedSlots);
-      openRuns.clear();
+      callEach<() => void>(
+        [
+          () => disposeSlots(slots),
+          () => disposePartSlots(runSlots),
+          () => disposePartSlots(queuedSlots),
+          () => openRuns.clear(),
+        ],
+        (step) => step(),
+      );
     },
     place() {
       if (savedPlace !== null) {

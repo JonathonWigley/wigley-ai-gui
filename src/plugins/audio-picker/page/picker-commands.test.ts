@@ -105,6 +105,7 @@ function setup(cursor?: PickerCursor) {
     openPreview: () => Promise.resolve(),
     toast: (text, tone) => toasts.push([text, tone]),
     log: (message) => logs.push(message),
+    isStopped: () => false,
   };
   const handlers = pickerCommandHandlers(deps);
   const run = (

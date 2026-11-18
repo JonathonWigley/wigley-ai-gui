@@ -99,6 +99,8 @@ export interface ChatCommandDeps {
   writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 type Handler = (context: PageCommandContext) => void;
@@ -494,7 +496,9 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   void deps.channel
     .invoke('send', session.sessionId, message)
     .then(() => {
-      deps.tabs.markSent(session.sessionId);
+      if (!deps.isStopped()) {
+        deps.tabs.markSent(session.sessionId);
+      }
     })
     .catch(refused(deps, session, 'send', message));
   clearBox(session);
@@ -533,7 +537,7 @@ function sendNow(deps: ChatCommandDeps, session: ChatSession) {
   void deps.channel
     .invoke('sendAllNow', session.sessionId, message)
     .then(() => {
-      if (message !== null) {
+      if (message !== null && !deps.isStopped()) {
         deps.tabs.markSent(session.sessionId);
       }
     })
@@ -584,6 +588,9 @@ function refused(
   message: UserMessage | null,
 ) {
   return (error: unknown) => {
+    if (deps.isStopped()) {
+      return;
+    }
     deps.log(`${method} failed: ${errorText(error)}`);
     deps.toast(`Message not sent: ${errorText(error)}`, 'error');
     if (message !== null && putBack(deps, session, [message])) {
@@ -777,11 +784,17 @@ function copySelection(deps: ChatCommandDeps, session: ChatSession) {
   const blocks = blockCount === 1 ? '1 block' : `${blockCount} blocks`;
   void deps.writeClipboard(text).then(
     () => {
+      if (deps.isStopped()) {
+        return;
+      }
       session.entries.cancelRange();
       log(`copied ${blocks} in ${session.name}`);
       deps.toast(`Copied ${blocks}`, 'success');
     },
     (error: unknown) => {
+      if (deps.isStopped()) {
+        return;
+      }
       log(`copy failed: ${errorText(error)}`);
       deps.toast('Copy failed', 'error');
     },
@@ -826,8 +839,15 @@ function openChoices(
       void deps.channel
         .invoke('setControl', session.sessionId, control.id, choice.value)
         .then(
-          () => log(`set ${control.id} to ${choice.value} in ${session.name}`),
+          () => {
+            if (!deps.isStopped()) {
+              log(`set ${control.id} to ${choice.value} in ${session.name}`);
+            }
+          },
           (error: unknown) => {
+            if (deps.isStopped()) {
+              return;
+            }
             log(`setControl failed: ${errorText(error)}`);
             deps.toast(errorText(error), 'error');
           },

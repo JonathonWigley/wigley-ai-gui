@@ -57,6 +57,8 @@ export interface PickerCommandDeps {
   openPreview(): Promise<unknown>;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // Whether the page part stopped.
+  isStopped(): boolean;
 }
 
 // A handler's body, run once the box it fired in has its moment shown; `box`

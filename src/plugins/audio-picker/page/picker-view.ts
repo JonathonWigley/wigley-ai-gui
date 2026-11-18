@@ -12,6 +12,7 @@ import type {
   ShownLayouts,
 } from '../../../contracts/plugin';
 import type { LayoutState } from '../../../contracts/state';
+import { callEach } from '../../../shared/call-each';
 import { scrollContent } from '../../../shared/content-scroll';
 import { saveLabel, saveState } from '../../../shared/page/autosave';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
@@ -397,13 +398,16 @@ export function mountPickerPopups(deps: PickerViewDeps): PickerPopups {
     },
     isShown: () => popups.isShown(),
     dispose() {
-      statusPart.dispose();
-      storeSubscription.dispose();
-      drawnPromptBody?.dispose();
-      drawnPromptFrame?.dispose();
-      for (const formId of views.keys()) {
-        destroyView(formId);
-      }
+      callEach<() => void>(
+        [
+          () => statusPart.dispose(),
+          () => storeSubscription.dispose(),
+          () => drawnPromptBody?.dispose(),
+          () => drawnPromptFrame?.dispose(),
+          ...[...views.keys()].map((formId) => () => destroyView(formId)),
+        ],
+        (step) => step(),
+      );
     },
   };
 }
@@ -501,18 +505,20 @@ function createPickerFormView(
       );
     },
     dispose() {
-      head.drawn?.dispose();
-      for (const section of sections) {
-        for (const slot of [
-          section.moment,
-          ...section.candidates,
-          section.none,
-          section.notes,
-        ]) {
-          slot.drawn?.dispose();
-        }
-      }
-      disposeAnchors(anchors);
+      const slots = sections.flatMap((section) => [
+        section.moment,
+        ...section.candidates,
+        section.none,
+        section.notes,
+      ]);
+      callEach<() => void>(
+        [
+          () => head.drawn?.dispose(),
+          ...slots.map((slot) => () => slot.drawn?.dispose()),
+          () => disposeAnchors(anchors),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

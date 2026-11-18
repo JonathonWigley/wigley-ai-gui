@@ -3,6 +3,7 @@ import type {
   AgentFormEnd,
   AgentFormEndKind,
 } from '../../contracts/agent-forms';
+import type { Disposable } from '../../contracts/disposable';
 import type { PluginLog } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
 import { errorText } from '../error-text';
@@ -395,19 +396,21 @@ export function mayCloseSessionForm<Form extends SessionForm>(
 }
 
 // `finish` hands the finished form to main and rejects with the reason when
-// main keeps the form open.
+// main keeps the form open; `isStopped` says whether the page part stopped.
 export interface FinishFormDeps<
   Form extends SessionForm,
   Body,
 > extends SessionFormCommandDeps<Form> {
   finish(formId: string, end: AgentFormEnd<Body>): Promise<void>;
   bodyOf(form: Form): Body;
+  isStopped(): boolean;
 }
 
 // Marks the active form sending and hands main its body, when the view is
 // `from` and the form is not sending already; main's `formClosed` then closes
 // it through closeFormFromMain. A rejected finish clears the mark, keeping
-// the form as it was, and toasts the reason.
+// the form as it was, and toasts the reason; once the part stopped, it does
+// nothing.
 export function finishActiveForm<Form extends SessionForm, Body>(
   deps: FinishFormDeps<Form, Body>,
   from: string,
@@ -423,6 +426,9 @@ export function finishActiveForm<Form extends SessionForm, Body>(
   const body = deps.bodyOf(form);
   deps.store.dispatch({ type: 'sendStarted', formId, kind });
   void deps.finish(formId, { kind, body }).catch((error) => {
+    if (deps.isStopped()) {
+      return;
+    }
     deps.store.dispatch({ type: 'sendFailed', formId });
     deps.log(`${words.noun} ${formId} not finished: ${errorText(error)}`);
     deps.toast(
@@ -467,16 +473,16 @@ export function closeFormFromMain<Form extends SessionForm>(
 // the state the last change left (the store's state at start for the first).
 // A change a listener's own dispatch makes is diffed at once but queued, and
 // its events go out after the events already queued, in change order, so the
-// last event a host hears matches the state.
+// last event a host hears matches the state. Disposing it stops the events.
 export function startFormEvents<State, Event>(
   store: Pick<ReducerStore<State, never>, 'get' | 'subscribe'>,
   eventsBetween: (previous: State, next: State) => Event[],
   emit: (event: Event) => void,
-): void {
+): Disposable {
   let previous = store.get();
   const queued: Event[] = [];
   let isEmitting = false;
-  store.subscribe(() => {
+  return store.subscribe(() => {
     const next = store.get();
     queued.push(...eventsBetween(previous, next));
     previous = next;

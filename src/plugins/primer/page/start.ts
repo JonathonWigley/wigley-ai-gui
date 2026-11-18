@@ -2,6 +2,7 @@ import '../../../shared/page/markdown.css';
 import './primer.css';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { startAutosave } from '../../../shared/page/autosave';
 import { onPageHide } from '../../../shared/page/page-hide';
@@ -225,7 +226,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       log: services.log,
     });
     const logEvent = createPrimerEventLog(services.log);
-    startPrimerEvents(store, (event) => {
+    const primerEvents = startPrimerEvents(store, (event) => {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
@@ -236,13 +237,15 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         return primer === null ? null : presentedOf(primer);
       },
     };
+    let isStopped = false;
     return {
       exports: () => exports,
       dispose() {
-        primersRead.dispose();
-        places.dispose();
-        autosave.dispose();
-        view.dispose();
+        isStopped = true;
+        callEach<Disposable>(
+          [primersRead, places, autosave, primerEvents, view],
+          (each) => each.dispose(),
+        );
       },
       commands: primerCommandHandlers({
         store,
@@ -252,6 +255,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         openPreview: () => api.channel.invoke('openPreview'),
         toast: services.toast,
         log: services.log,
+        isStopped: () => isStopped,
       }),
     };
   },

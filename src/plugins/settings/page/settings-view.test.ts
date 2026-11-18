@@ -329,6 +329,18 @@ describe('createSettingsView', () => {
     vi.restoreAllMocks();
   });
 
+  it('draws and logs nothing when a read lands after dispose', async () => {
+    const setup = await shownView();
+    const logsBefore = [...setup.logs];
+
+    setup.view.reread();
+    setup.view.dispose();
+    await settle();
+
+    expect(setup.logs).toEqual(logsBefore);
+    expect(setup.toasts).toEqual([]);
+  });
+
   it.each([
     { from: 'sections', direction: 'right', after: 'rows', moved: true },
     { from: 'rows', direction: 'left', after: 'rows', moved: false },

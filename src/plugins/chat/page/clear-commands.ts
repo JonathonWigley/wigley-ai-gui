@@ -3,6 +3,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { PageChannel } from '../../../contracts/plugin';
 import type { KeyedSlotReader } from '../../../contracts/state';
+import { callEach } from '../../../shared/call-each';
 import type { AppSlashCommand, ChatChannel } from '../contract';
 import type { SlashCommands } from './slash-commands';
 
@@ -56,11 +57,9 @@ export function addClearCommands(deps: ClearCommandDeps): Disposable {
   const listener = harnesses.on(registerAliases);
   return {
     dispose() {
-      listener.dispose();
-      for (const alias of aliases) {
-        alias.dispose();
-      }
-      clear.dispose();
+      callEach<Disposable>([listener, ...aliases, clear], (each) =>
+        each.dispose(),
+      );
     },
   };
 }

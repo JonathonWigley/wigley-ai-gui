@@ -18,6 +18,7 @@ import {
 } from './chat-layouts';
 import { modelEffortText } from './composer-input';
 import { displayPath } from './start-prompt-items';
+import { callEach } from '../../../shared/call-each';
 
 // A session's facts for the Session section, read live.
 export interface SessionFactsSource {
@@ -101,8 +102,10 @@ export function createSessionPart(
       });
       return {
         dispose() {
-          subscription.dispose();
-          clear(drawn);
+          callEach<() => void>(
+            [() => subscription.dispose(), () => clear(drawn)],
+            (step) => step(),
+          );
         },
       };
     },

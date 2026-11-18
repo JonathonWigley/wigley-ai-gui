@@ -162,7 +162,10 @@ import {
   type AppliedPlugins,
   createAppliedPlugins,
 } from './plugins/applied-plugins';
-import { createPluginChannels } from './plugins/plugin-channel';
+import {
+  createPluginChannels,
+  type PluginChannels,
+} from './plugins/plugin-channel';
 import {
   createPluginSwitch,
   heldAtStart,
@@ -1003,8 +1006,7 @@ function serveLayouts(
 }
 
 // Starts the main part of every plugin `store` admitted that `disabled` does
-// not name, each with its own API over one plugin channel router to the
-// window's page, the settings
+// not name, each with its own API over `channels`, the settings
 // `store` serves with no self-test layer, one event bus, the shared
 // `services`, its own host from `selfTest` (null outside the self-test, and
 // for a part started once `isLaunchStartDone` is true, since the handover has
@@ -1016,7 +1018,7 @@ function serveLayouts(
 // CLI keeps in the run's `app.log`, as the page has gone by the time a quit
 // stops the parts.
 function startMainParts(
-  window: BrowserWindow,
+  channels: PluginChannels,
   store: ConfigStore,
   dataRoot: string,
   layouts: LayoutService,
@@ -1028,11 +1030,6 @@ function startMainParts(
   commands: RuntimeCommands<MainCommandContext<any>>,
   state: SlotStore,
 ): PluginHost<MainStart<PluginManifest>, MainPart> {
-  // The stops a quit runs end the rows the next start restores, and a page told
-  // of it would save them as gone: panes, recency.
-  const channels = createPluginChannels(ipcMain, () =>
-    hasQuitStarted ? null : livePage(window),
-  );
   const bus = createEventBus();
   return startPlugins(
     store
@@ -1259,8 +1256,13 @@ function createWindow(
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
   let isLaunchStartDone = false;
+  // The stops a quit runs end the rows the next start restores, and a page told
+  // of it would save them as gone: panes, recency.
+  const channels = createPluginChannels(ipcMain, () =>
+    hasQuitStarted ? null : livePage(window),
+  );
   const host = startMainParts(
-    window,
+    channels,
     store,
     inputs.dataRoot,
     layouts,
@@ -1432,6 +1434,7 @@ function createWindow(
   const liveSwitch = createPluginSwitch({
     main: host,
     page: pageParts.request,
+    dropParked: channels.dropParked,
     applied,
     slots: holder,
     status: slots.publish(corePluginsSlot),

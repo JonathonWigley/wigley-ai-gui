@@ -24,6 +24,7 @@ import {
   swapToward,
   withSplitRatio,
 } from './pane-tree';
+import { callEach } from '../../call-each';
 
 // The least width of a pane beside another, in pixels.
 const LEAST_PANE_WIDTH = 280;
@@ -469,10 +470,9 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       window.removeEventListener('pointerup', focusOnRelease, true);
       window.removeEventListener('pointercancel', forgetPress, true);
       observer.disconnect();
-      for (const box of boxes.values()) {
-        box.divider.dispose();
-      }
+      const held = [...boxes.values()];
       boxes.clear();
+      callEach(held, (box) => box.divider.dispose());
     },
   };
 }

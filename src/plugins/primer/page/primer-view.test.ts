@@ -303,6 +303,7 @@ function primerPopupSetup(
     openPreview: () => Promise.resolve(),
     toast: () => undefined,
     log,
+    isStopped: () => false,
   });
   return {
     view,

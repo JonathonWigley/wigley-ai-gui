@@ -17,6 +17,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element } from '../../../shared/page/dom';
@@ -188,6 +189,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
 
   // The choices the last editor open read, which label the details' controls; null before the first open.
   let loadedChoices: EditorChoices | null = null;
+  let isDisposed = false;
 
   // ── Elements ───────────────────────────────────────────────────────────
   // The containers stay app-owned; the panes draw inside them and place the slots below.
@@ -731,6 +733,9 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       await send();
       return true;
     } catch (error) {
+      if (isDisposed) {
+        return false;
+      }
       log(`${what} failed: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
       return false;
@@ -742,7 +747,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     const isSent = await sendFor(paused ? 'pause' : 'resume', () =>
       channel.invoke('setPaused', view.task.id, paused),
     );
-    if (isSent) {
+    if (isSent && !isDisposed) {
       log(`${paused ? 'paused' : 'resumed'}: ${view.task.name}`);
       deps.toast(paused ? 'Task paused' : 'Task resumed', 'success');
     }
@@ -752,7 +757,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     const isSent = await sendFor('run now', () =>
       channel.invoke('runNow', view.task.id),
     );
-    if (isSent) {
+    if (isSent && !isDisposed) {
       log(`run now: ${view.task.name}`);
       deps.toast('Run queued', 'success');
     }
@@ -769,7 +774,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     const isSent = await sendFor('remove', () =>
       channel.invoke('removeTask', taskId),
     );
-    if (isSent) {
+    if (isSent && !isDisposed) {
       log(`removed: ${name}`);
       deps.toast('Task removed', 'success');
     }
@@ -794,11 +799,16 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     try {
       choices = await channel.invoke('editorChoices');
     } catch (error) {
-      log(`editor not opened: ${errorText(error)}`);
-      deps.toast(`Could not open the editor: ${errorText(error)}`, 'error');
+      if (!isDisposed) {
+        log(`editor not opened: ${errorText(error)}`);
+        deps.toast(`Could not open the editor: ${errorText(error)}`, 'error');
+      }
       return;
     } finally {
       isOpening = false;
+    }
+    if (isDisposed) {
+      return;
     }
     loadedChoices = choices;
     const opener = store.get().focus === 'detail' ? 'detail' : 'list';
@@ -836,6 +846,9 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     try {
       id = await channel.invoke('saveTask', draft);
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
       const reason = errorText(error);
       dispatch({ type: 'problem', problem: reason });
       log(`save refused: ${reason}`);
@@ -843,7 +856,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     } finally {
       isSaving = false;
     }
-    if (store.get().editor === null) {
+    if (isDisposed || store.get().editor === null) {
       return;
     }
     taskEditorView.leave();
@@ -1075,13 +1088,20 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       render(isFocusLost);
     },
     dispose() {
-      rowDraws = disposeDraws(rowDraws);
-      noticeDraws = disposeDraws(noticeDraws);
-      historyDraws = disposeDraws(historyDraws);
-      bodyDraw?.dispose();
+      isDisposed = true;
+      const draws = [
+        ...rowDraws,
+        ...noticeDraws,
+        ...historyDraws,
+        ...(bodyDraw === null ? [] : [bodyDraw]),
+      ];
+      rowDraws = [];
+      noticeDraws = [];
+      historyDraws = [];
       bodyDraw = null;
-      taskEditorView.dispose();
-      parts.dispose();
+      callEach<{ dispose(): void }>([...draws, taskEditorView, parts], (each) =>
+        each.dispose(),
+      );
     },
     commands,
     selectTask(arg) {

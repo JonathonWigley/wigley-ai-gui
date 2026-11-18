@@ -1,6 +1,7 @@
 import type { Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import type { PluginLog } from '../../contracts/log';
+import { callEach } from '../call-each';
 import { errorText } from '../error-text';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved';
@@ -151,8 +152,7 @@ export function startAutosave<Draft extends DraftRevisions, Body>(
         cancel(deps.timers, entry);
       }
       pending.clear();
-      subscription.dispose();
-      pageHide.dispose();
+      callEach([subscription, pageHide], (each) => each.dispose());
     },
   };
 }
@@ -173,11 +173,11 @@ async function saveDraft<Draft extends DraftRevisions, Body>(
   try {
     await deps.save(id, deps.bodyOf(draft));
   } catch (error) {
-    const message = errorText(error);
-    deps.log(`draft not saved for ${id}: ${message}`);
     if (isDisposed()) {
       return;
     }
+    const message = errorText(error);
+    deps.log(`draft not saved for ${id}: ${message}`);
     // An edit made during the save has its own save scheduled already.
     if (!pending.has(id)) {
       pending.set(id, { revision, handle: null });

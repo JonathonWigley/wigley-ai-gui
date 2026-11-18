@@ -12,6 +12,7 @@ import type {
   ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
 import { layoutUrl } from '../../layout-url';
 import { createLayoutLoader, type LayoutLoader } from './layout-loader';
@@ -162,9 +163,11 @@ function showLayouts<L>(
     lastQueued = queued;
     queue = queue
       .then(() => loadAndShow(queued))
-      .catch((error: unknown) =>
-        log(owner, `layouts not shown: ${errorText(error)}`),
-      );
+      .catch((error: unknown) => {
+        if (!isDisposed) {
+          log(owner, `layouts not shown: ${errorText(error)}`);
+        }
+      });
   };
 
   const stopHearing = hear(owner, (set) => {
@@ -181,16 +184,19 @@ function showLayouts<L>(
         update();
       }
     })
-    .catch((error: unknown) =>
-      log(owner, `layout not read: ${errorText(error)}`),
-    );
+    .catch((error: unknown) => {
+      if (!isDisposed) {
+        log(owner, `layout not read: ${errorText(error)}`);
+      }
+    });
   return {
     refresh: update,
     dispose() {
       isDisposed = true;
-      stopHearing();
-      configHeard.dispose();
-      loader.dispose();
+      callEach<() => void>(
+        [stopHearing, () => configHeard.dispose(), () => loader.dispose()],
+        (step) => step(),
+      );
     },
   };
 }

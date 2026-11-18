@@ -35,6 +35,7 @@ import type {
   PipeLine,
   SessionHost,
 } from '../../../contracts/session-host';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { programNotFoundMessage } from '../../../shared/program-lookup';
 import {
@@ -745,12 +746,20 @@ function createClaudeSession(
         return;
       }
       isDetached = true;
-      pipe.detach();
-      stopTimers();
-      cancelWaitingPermissions(false);
-      releaseRoute();
-      for (const resolve of closeWaiters.splice(0)) {
-        resolve();
+      try {
+        callEach<() => void>(
+          [
+            () => pipe.detach(),
+            stopTimers,
+            () => cancelWaitingPermissions(false),
+            releaseRoute,
+          ],
+          (step) => step(),
+        );
+      } finally {
+        for (const resolve of closeWaiters.splice(0)) {
+          resolve();
+        }
       }
     },
     answerPermission(requestId, decision) {

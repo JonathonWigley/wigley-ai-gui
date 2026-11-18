@@ -376,6 +376,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => layouts.set(shown),
     });
+    let isStopped = false;
     const startPrompt = createStartPrompt({
       picker,
       signIn,
@@ -388,6 +389,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       homeDir: services.homeDir,
       log: services.log,
       toast: services.toast,
+      isStopped: () => isStopped,
     });
     completionRows.add(
       descriptionDraw({
@@ -432,6 +434,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           writeClipboard,
           toast: services.toast,
           log: services.log,
+          isStopped: () => isStopped,
         }),
         newSession: () => startPrompt.open(),
         startNewSession: () => startPrompt.openForNewSession(),
@@ -458,7 +461,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         view.ready();
       },
       mayStop: () => view.mayStop(rows.all().values()),
-      dispose: () => view.dispose(),
+      dispose: () => {
+        isStopped = true;
+        view.dispose();
+      },
     };
   },
 };

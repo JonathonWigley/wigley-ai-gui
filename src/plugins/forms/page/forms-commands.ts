@@ -69,6 +69,8 @@ export interface FormsCommandDeps {
   scrollForm(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // Whether the page part stopped.
+  isStopped(): boolean;
 }
 
 // How the forms page's log and toasts name a round.

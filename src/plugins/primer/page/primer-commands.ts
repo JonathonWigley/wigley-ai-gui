@@ -64,6 +64,8 @@ export interface PrimerCommandDeps {
   openPreview(): Promise<unknown>;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // Whether the page part stopped.
+  isStopped(): boolean;
 }
 
 // A handler's body, run once the box it fired in has its row shown; `box` is

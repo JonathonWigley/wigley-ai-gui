@@ -9,6 +9,7 @@ import {
   type LayoutSet,
 } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
+import { callEach } from '../call-each';
 import { errorText } from '../error-text';
 import { createSerialQueue } from '../serial-queue';
 
@@ -509,8 +510,10 @@ export async function startLayoutRegistry(
     current: setOf,
     names: () => [DEFAULT_LAYOUT_NAME, ...listed.map((layout) => layout.name)],
     dispose: () => {
-      watch.dispose();
-      defaultWatch?.dispose();
+      callEach<() => void>(
+        [() => watch.dispose(), () => defaultWatch?.dispose()],
+        (step) => step(),
+      );
     },
   };
 }

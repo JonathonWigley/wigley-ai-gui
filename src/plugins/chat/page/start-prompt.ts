@@ -65,6 +65,8 @@ export interface StartPromptDeps {
   homeDir: string;
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 // `open` asks for a project — or, through `Other folder…` or with no
@@ -642,7 +644,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       () => {
         shown.isWriting = false;
         shown.rows = withArchived(shown.rows, hostSessionId, archived);
-        if (shownStep() !== shown) {
+        if (deps.isStopped() || shownStep() !== shown) {
           return;
         }
         reopenSessionStep(shown, shown.items, deps.picker.cursorIndex());
@@ -650,6 +652,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       },
       (error: unknown) => {
         shown.isWriting = false;
+        if (deps.isStopped()) {
+          return;
+        }
         log(`archive failed: ${errorText(error)}`);
         deps.toast(`Archive failed: ${errorText(error)}`, 'error');
       },
@@ -706,8 +711,15 @@ function resumeSession(
       headless,
     })
     .then(
-      (sessionId) => deps.reveal(sessionId),
+      (sessionId) => {
+        if (!deps.isStopped()) {
+          deps.reveal(sessionId);
+        }
+      },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         deps.log(`session not resumed: ${errorText(error)}`);
         deps.toast(`Session not resumed: ${errorText(error)}`, 'error');
       },
@@ -731,8 +743,15 @@ function startSession(
       profile: profile.name,
     })
     .then(
-      (sessionId) => deps.reveal(sessionId),
+      (sessionId) => {
+        if (!deps.isStopped()) {
+          deps.reveal(sessionId);
+        }
+      },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         deps.log(`session not started: ${errorText(error)}`);
         deps.toast(`Session not started: ${errorText(error)}`, 'error');
       },

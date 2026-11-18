@@ -230,11 +230,16 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return roundView?.scrollBy(step, direction) ?? null;
     },
     dispose() {
-      statusPart.dispose();
-      storeSubscription.dispose();
-      for (const roundId of roundViews.keys()) {
-        destroyRoundView(roundId, shownRounds, deps);
-      }
+      callEach<() => void>(
+        [
+          () => statusPart.dispose(),
+          () => storeSubscription.dispose(),
+          ...[...roundViews.keys()].map(
+            (roundId) => () => destroyRoundView(roundId, shownRounds, deps),
+          ),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

@@ -112,20 +112,22 @@ const PLAIN_CLOSE: CloseAsk = { viewsAtOnce: false, cancelsHolds: false };
 
 // Asks the session's tabs in order, then its popups, then main, to close it,
 // as `ask` says, resolving to whether the row closed. Main's refusal is logged
-// and toasted, and a failed ask logged.
+// and toasted, and a failed ask logged; once `isStopped`, a settled ask asks
+// main nothing and logs nothing.
 async function closeSession(
   api: SessionsApi,
   view: SessionsView,
   labelOf: (sessionId: string) => string,
   sessionId: string,
   ask: CloseAsk,
+  isStopped: () => boolean,
 ): Promise<boolean> {
   const { log } = api.services;
   const viewsNow = () => [
     ...view.tabs.tabsOf(sessionId),
     ...view.tabs.popupsOf(sessionId),
   ];
-  if (!(await mayClose(viewsNow, ask.viewsAtOnce))) {
+  if (!(await mayClose(viewsNow, ask.viewsAtOnce)) || isStopped()) {
     return false;
   }
   try {
@@ -134,13 +136,15 @@ async function closeSession(
       sessionId,
       ask.cancelsHolds,
     );
-    if (refusal !== null) {
+    if (refusal !== null && !isStopped()) {
       log(`session close kept by main: ${labelOf(sessionId)}`);
       api.services.toast(refusal, 'info');
     }
     return refusal === null;
   } catch (error) {
-    log(`session not closed: ${errorText(error)}`);
+    if (!isStopped()) {
+      log(`session not closed: ${errorText(error)}`);
+    }
     return false;
   }
 }
@@ -154,6 +158,7 @@ function createExports(
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
   shownSessionId: () => string | null,
+  isStopped: () => boolean,
 ): SessionsPageExports {
   return {
     addTab(sessionId, tab) {
@@ -175,7 +180,7 @@ function createExports(
     },
     activate,
     closeSession: (sessionId) =>
-      closeSession(api, view, labelOf, sessionId, PLAIN_CLOSE),
+      closeSession(api, view, labelOf, sessionId, PLAIN_CLOSE, isStopped),
     shownSessionId,
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
@@ -233,6 +238,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
     const { log } = api.services;
+    let isStopped = false;
     const { uiState } = api.services;
     const rows = api.state.read(sessionsRowsSlot);
     const selection = api.state.read(sessionsSelectionSlot);
@@ -343,6 +349,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       readSelection: () => selection.get() ?? null,
       active,
       activateInMain: (sessionId) => api.channel.invoke('activate', sessionId),
+      isStopped: () => isStopped,
       restores: api.restores,
       setContext: (focused) =>
         mode.setContext(
@@ -392,6 +399,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       model.activate,
       model.labelOf,
       () => (model.isModeShown() ? view.panes.focusedSessionId() : null),
+      () => isStopped,
     );
 
     // Gives the Sessions list the keys, the cursor on the selected row.
@@ -794,10 +802,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
                 ...view.tabs.tabsOf(sessionId),
                 ...view.tabs.popupsOf(sessionId),
               ]);
-            void closeSession(api, view, model.labelOf, sessionId, {
-              viewsAtOnce: isTargeted || isKeyAtOnce,
-              cancelsHolds: isKeyAtOnce,
-            });
+            void closeSession(
+              api,
+              view,
+              model.labelOf,
+              sessionId,
+              {
+                viewsAtOnce: isTargeted || isKeyAtOnce,
+                cancelsHolds: isKeyAtOnce,
+              },
+              () => isStopped,
+            );
           }
         },
         splitDown: paneKey(unlessPicking(() => split('column'))),
@@ -841,9 +856,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         listMoveDown: cursorRowKey((row) => view.moveFavorite(row.project, 1)),
         listRename: cursorRowKey((row) => renameDialog.open(row)),
         listClose: cursorRowKey((row) => {
-          void exports
-            .closeSession(row.sessionId)
-            .then(() => view.list.refocus());
+          void exports.closeSession(row.sessionId).then(() => {
+            if (!isStopped) {
+              view.list.refocus();
+            }
+          });
         }),
       },
       exports: (consumer) =>
@@ -854,6 +871,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         model.ready();
       },
       dispose() {
+        isStopped = true;
         window.removeEventListener('pointerdown', noteSelectionAtPress, true);
         view.dispose();
       },

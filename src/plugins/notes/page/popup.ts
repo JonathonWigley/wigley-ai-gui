@@ -15,6 +15,7 @@ import type {
   PushedScope,
   ShownLayouts,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { IMAGE_TYPES } from '../../../shared/image-types';
 import { saveState, startAutosave } from '../../../shared/page/autosave';
@@ -179,6 +180,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     dispatch({ type: 'edited', fields: { ...store.get().fields, ...change } });
 
   let phase: 'closed' | 'loading' | 'open' = 'closed';
+  let isDisposed = false;
   let popupScope: PushedScope | null = null;
   let titleScope: PushedScope | null = null;
   let focusedBox: 'title' | 'body' | null = null;
@@ -474,7 +476,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // ── Saving ────────────────────────────────────────────────────────────────
   const saveFields = async (fields: NoteFields) => {
     await channel.invoke('saveDraft', fields);
-    log('draft saved');
+    if (!isDisposed) {
+      log('draft saved');
+    }
   };
 
   const autosave = startAutosave({
@@ -504,12 +508,17 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     try {
       await saveFields(fields);
     } catch (error) {
+      if (isDisposed) {
+        throw error;
+      }
       const message = errorText(error);
       dispatch({ type: 'saveFinished', revision, error: message });
       log(`draft not saved for note: ${message}`);
       throw error;
     }
-    dispatch({ type: 'saveFinished', revision, error: null });
+    if (!isDisposed) {
+      dispatch({ type: 'saveFinished', revision, error: null });
+    }
   };
 
   // ── The draft operation in flight ─────────────────────────────────────────
@@ -535,6 +544,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Saves the edits typed during the operation, which autosave skipped, and
   // focuses the body an open() during it could not.
   const draftFreed = () => {
+    if (isDisposed) {
+      return;
+    }
     if (saveState(store.get()) === 'unsaved') {
       void saveNow().catch(() => undefined);
     }
@@ -576,6 +588,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // Main's draft after an image was added: the new image is the last.
   const imageAdded = async (draft: NoteDraft, how: 'capture' | 'file') => {
     await cacheImages(draft);
+    if (isDisposed) {
+      return;
+    }
     const pos = draft.images.length;
     dispatch({
       type: 'imagesChanged',
@@ -597,6 +612,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
           { bytes: png, mediaType: 'image/png' },
           deps.encoder,
         );
+        if (isDisposed) {
+          return;
+        }
         if (fitted === null) {
           toast(SHRINK_REFUSED, 'error');
           log(`image refused: ${SHRINK_REFUSED}`);
@@ -605,6 +623,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         const draft = await channel.invoke('addImage', fitted.bytes);
         await imageAdded(draft, 'file');
       } catch (error) {
+        if (isDisposed) {
+          return;
+        }
         const message = `Image not attached: ${errorText(error)}`;
         toast(message, 'error');
         log(message);
@@ -621,6 +642,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       try {
         const draft = await channel.invoke('removeImage', image.id);
         await cacheImages(draft);
+        if (isDisposed) {
+          return;
+        }
         dispatch({
           type: 'imagesChanged',
           images: draft.images,
@@ -628,6 +652,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         });
         log(`image ${index + 1} removed`);
       } catch (error) {
+        if (isDisposed) {
+          return;
+        }
         const message = `Image not removed: ${errorText(error)}`;
         toast(message, 'error');
         log(message);
@@ -869,8 +896,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         const draft = await channel.invoke('capture');
         await imageAdded(draft, 'capture');
       } catch (error) {
-        toast(`Capture failed: ${errorText(error)}`, 'error');
-        log(`capture failed: ${errorText(error)}`);
+        if (!isDisposed) {
+          toast(`Capture failed: ${errorText(error)}`, 'error');
+          log(`capture failed: ${errorText(error)}`);
+        }
       } finally {
         if (phase === 'open') {
           dialog.show();
@@ -903,6 +932,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // the target.
   const targetHome = async (): Promise<NoteHome | null> => {
     homes = (await channel.invoke('homes')).homes;
+    if (isDisposed) {
+      return null;
+    }
     const target = store.get().fields.target;
     const home = homeOf(target);
     if (home === null) {
@@ -963,9 +995,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         }
         await saveNow();
         await markupView.savesSettled();
-        finishSend(await deliver(await flattenImages()));
+        const result = await deliver(await flattenImages());
+        if (!isDisposed) {
+          finishSend(result);
+        }
       } catch (error) {
-        refuse(errorText(error));
+        if (!isDisposed) {
+          refuse(errorText(error));
+        }
       }
     });
     if (startedIn !== null && mayEdit()) {
@@ -1047,7 +1084,12 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     try {
       found = await channel.invoke('homes');
     } catch (error) {
-      toast(`Homes not read: ${errorText(error)}`, 'error');
+      if (!isDisposed) {
+        toast(`Homes not read: ${errorText(error)}`, 'error');
+      }
+      return;
+    }
+    if (isDisposed) {
       return;
     }
     homes = found.homes;
@@ -1077,7 +1119,12 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     try {
       tags = await channel.invoke('tags');
     } catch (error) {
-      toast(`Tags not read: ${errorText(error)}`, 'error');
+      if (!isDisposed) {
+        toast(`Tags not read: ${errorText(error)}`, 'error');
+      }
+      return;
+    }
+    if (isDisposed) {
       return;
     }
     if (tags.length === 0) {
@@ -1197,10 +1244,16 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         await markupView.savesSettled();
         const draft = await channel.invoke('discard');
         await cacheImages(draft);
+        if (isDisposed) {
+          return;
+        }
         showDraft(draft);
         dispatch({ type: 'fieldMoved', field: 'body' });
         log('draft discarded');
       } catch (error) {
+        if (isDisposed) {
+          return;
+        }
         const message = `Draft not discarded: ${errorText(error)}`;
         toast(message, 'error');
         log(message);
@@ -1211,6 +1264,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // ── Dropped and pasted files ──────────────────────────────────────────────
   // A file whose save failed is toasted and logged.
   const saveFailed = (file: DroppedFile, error: string) => {
+    if (isDisposed) {
+      return;
+    }
     const message = `${file.name} not saved: ${error}`;
     toast(message, 'error');
     log(message);
@@ -1229,7 +1285,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         filePaths.push(path);
       }
     }
-    if (filePaths.length === 0) {
+    if (isDisposed || filePaths.length === 0) {
       return;
     }
     const isBodyFree = inFlight === null || inFlight === 'attach';
@@ -1393,12 +1449,20 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         : `The note did not save: ${state.saveError}; edit or close it to save again`;
     },
     dispose() {
-      markupView.close();
-      blurBoxes();
-      phase = 'closed';
-      rendering.dispose();
-      writingPlace.dispose();
-      autosave.dispose();
+      isDisposed = true;
+      callEach<() => void>(
+        [
+          () => markupView.close(),
+          blurBoxes,
+          () => {
+            phase = 'closed';
+          },
+          () => rendering.dispose(),
+          () => writingPlace.dispose(),
+          () => autosave.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

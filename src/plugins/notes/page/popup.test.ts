@@ -1033,7 +1033,7 @@ describe('note popup', () => {
     expect(harness.saved).toHaveLength(savedBefore);
   });
 
-  it('dispose_SendInFlight_LateSentPopsNoScopeAndWritesNoPlace', async () => {
+  it('dispose_SendInFlight_LateSentPopsNoScopeWritesNoPlaceAndToastsNothing', async () => {
     const harness = await openPopup({
       ...DRAFT,
       target: '/home/me/a',
@@ -1055,7 +1055,7 @@ describe('note popup', () => {
 
     expect(harness.pops()).toBe(popsAtDispose);
     expect(harness.places).toHaveLength(placesAtDispose);
-    expect(harness.toasts).toEqual([['Follow-up added', 'success']]);
+    expect(harness.toasts).toEqual([]);
   });
 
   it.each([

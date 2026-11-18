@@ -327,6 +327,42 @@ describe('session tabs view', () => {
     expect(pickHint.parentNode).toBeNull();
   });
 
+  it("a dropped session whose tab's dispose throws still disposes the rest, leaves the page and redraws", () => {
+    const { view, area, anchors } = sessionsViewSetup();
+    area.isPageRoot = true;
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        tab: (parent, _input, kit) => {
+          const element = kit.el(parent, 'button', 'ui-tab');
+          kit.keyHint(element, 'selectTab');
+          return { element };
+        },
+      }),
+    );
+    const a = tabView('a');
+    view.tabs.add('s', a);
+    view.tabs.add('s', tabView('b'));
+    view.render(stateOf(['s'], 's'));
+    view.panes.restore(TWO_PANES, new Map([['pane-2', 's']]));
+    const frame = frameOf(a);
+    const frameAnchors = anchors.filter(
+      (anchor) => !anchor.isDisposed && frame.contains(asFake(anchor.element)),
+    );
+    const tabAnchors = frameAnchors.filter((anchor) =>
+      anchor.command.endsWith('selectTab'),
+    );
+    expect(tabAnchors).toHaveLength(2);
+    tabAnchors[0]!.disposeError = new Error('tab refused');
+    const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
+
+    expect(() => view.tabs.drop('s')).toThrow('tab refused');
+
+    expect(frameAnchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
+    expect(frame.isConnected).toBe(false);
+    expect(view.tabs.tabsOf('s')).toEqual([]);
+    expect(pickHint.parentNode).toBeNull();
+  });
+
   it.each<{ case: string; pane: Layout['pane']; keepsPart: boolean }>([
     { case: 'an update', pane: undefined, keepsPart: true },
     {

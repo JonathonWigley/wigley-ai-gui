@@ -1252,6 +1252,22 @@ describe('backlog strip', () => {
     expect(asFake(revealed).textContent).toContain('Lib work');
   });
 
+  it('draws and logs nothing when a chunks reply lands after dispose', async () => {
+    const reply = deferred<unknown>();
+    const setup = await backlogSetup({
+      answers: { chunks: () => reply.promise },
+    });
+    setup.view.dispose();
+    const cardsBefore = chunkCards(setup).length;
+    const logsBefore = [...setup.logs];
+
+    reply.resolve(CHUNKS);
+    await settle();
+
+    expect(chunkCards(setup)).toHaveLength(cardsBefore);
+    expect(setup.logs).toEqual(logsBefore);
+  });
+
   it('dispose_DisposesTheScroller', async () => {
     const setup = await backlogSetup();
 

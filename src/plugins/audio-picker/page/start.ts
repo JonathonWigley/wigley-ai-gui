@@ -2,6 +2,7 @@ import '../../../shared/page/markdown.css';
 import './picker.css';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { startAutosave } from '../../../shared/page/autosave';
 import {
@@ -241,15 +242,15 @@ export function createAudioPickerPagePart(
               };
         },
       };
+      let isStopped = false;
       return {
         exports: () => exports,
         dispose() {
-          pickersRead.dispose();
-          places.dispose();
-          autosave.dispose();
-          popups.dispose();
-          audio.dispose();
-          output.dispose();
+          isStopped = true;
+          callEach<Disposable>(
+            [pickersRead, places, autosave, popups, audio, output],
+            (each) => each.dispose(),
+          );
         },
         commands: pickerCommandHandlers({
           store,
@@ -260,6 +261,7 @@ export function createAudioPickerPagePart(
           openPreview: () => api.channel.invoke('openPreview'),
           toast: services.toast,
           log: services.log,
+          isStopped: () => isStopped,
         }),
       };
     },

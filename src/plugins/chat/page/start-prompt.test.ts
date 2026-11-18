@@ -214,6 +214,7 @@ function setUp(
     homeDir: HOME,
     log: (message) => logs.push(message),
     toast: (text, tone) => toasts.push({ text, tone }),
+    isStopped: () => false,
   });
   prompt.open();
   return {

@@ -9,6 +9,7 @@ import { resolveScriptPath, runPoolCommand } from './pool-cli';
 import { createPoolProvider } from './pool-provider';
 import { createPoolWatch } from './pool-watch';
 import { unityPoolSelfTestScript } from './selftest-script';
+import { callEach } from '../../../shared/call-each';
 
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 
@@ -87,8 +88,9 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     return {
       commands: {},
       dispose: () => {
-        registration.dispose();
-        watch.dispose();
+        callEach<{ dispose(): void }>([registration, watch], (each) =>
+          each.dispose(),
+        );
       },
     };
   },

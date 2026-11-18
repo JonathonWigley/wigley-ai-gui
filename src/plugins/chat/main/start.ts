@@ -20,6 +20,7 @@ import {
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createFakeAgentHarness,
@@ -745,8 +746,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           },
           dispose() {
             isRegistered = false;
-            registration.dispose();
-            namer.changed();
+            callEach<() => void>(
+              [() => registration.dispose(), () => namer.changed()],
+              (step) => step(),
+            );
           },
         });
       },
@@ -775,18 +778,33 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         },
       },
       exports,
+      // A step that throws skips none of the rest; the end waits resolve
+      // whatever throws, and the quit awaits the final save.
       dispose: (stop) => {
         isDisposed = true;
-        if (stop === 'restart') {
-          chat.keepRows();
+        let lastSave: Promise<void> = Promise.resolve();
+        try {
+          callEach<() => void>(
+            [
+              () => {
+                if (stop === 'restart') {
+                  chat.keepRows();
+                }
+              },
+              () => {
+                lastSave = chat.detachAll();
+              },
+              () => toolCallers.stop(),
+              () => accounts.cancelRunning(),
+            ],
+            (step) => step(),
+          );
+        } finally {
+          for (const resolveWait of endWaits.values()) {
+            resolveWait();
+          }
+          endWaits.clear();
         }
-        const lastSave = chat.detachAll();
-        toolCallers.stop();
-        accounts.cancelRunning();
-        for (const resolveWait of endWaits.values()) {
-          resolveWait();
-        }
-        endWaits.clear();
         return lastSave;
       },
     };

@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import { formById, startFormEvents } from '../../../shared/page/session-forms';
 import type { AnswerStatus, FormsPageEvents, OpenRound } from '../contract';
@@ -57,12 +58,12 @@ export function formsEventsBetween(
 }
 
 // Emits the events of each store change, queued as startFormEvents queues
-// them.
+// them, until disposed.
 export function startFormsEvents(
   store: FormsStore,
   emit: (event: FormsPageEvent) => void,
-): void {
-  startFormEvents(store, formsEventsBetween, emit);
+): Disposable {
+  return startFormEvents(store, formsEventsBetween, emit);
 }
 
 // Logs each event's line, source `forms`: `event roundShown <roundId>`,

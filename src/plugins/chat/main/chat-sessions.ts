@@ -33,6 +33,7 @@ import {
   startActiveTime,
   stopActiveTime,
 } from '../../../shared/active-time';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { createListeners } from '../../../shared/listeners';
@@ -405,7 +406,9 @@ export interface ChatSessions {
   // write's promise, which never rejects: a write that fails or is cut short
   // leaves the last saved total. Nothing is saved or started after it, and
   // every later process event is ignored. Every `hostSessionIdSettled` call
-  // still waiting rejects.
+  // still waiting rejects. A detach or kill that throws skips none of the
+  // rest, and the returned promise rejects with the first such error once the
+  // save settles; `detachAll` itself never throws.
   detachAll(): Promise<void>;
   // Keeps every held row's owned session through chat's restart
   // (`OwnedSession.keep`), so the restarted chat's restore adopts the rows.
@@ -4573,21 +4576,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
-      const heldProcesses = new Set<AgentProcess>();
-      for (const session of held.values()) {
-        rejectHostIdWaiters(
-          session,
-          `session ${session.sessionId} not settled: chat is stopping`,
+      const sessions = [...held.values()];
+      const heldProcesses = new Set(
+        sessions.flatMap((session) =>
+          session.process === null ? [] : [session.process],
+        ),
+      );
+      const unheld = [...running].filter(
+        (process) => !heldProcesses.has(process),
+      );
+      try {
+        callEach<() => void>(
+          [
+            () =>
+              callEach(sessions, (session) => {
+                rejectHostIdWaiters(
+                  session,
+                  `session ${session.sessionId} not settled: chat is stopping`,
+                );
+                session.process?.detach();
+              }),
+            () => callEach(unheld, (process) => process.kill()),
+          ],
+          (step) => step(),
         );
-        if (session.process !== null) {
-          heldProcesses.add(session.process);
-          session.process.detach();
-        }
-      }
-      for (const process of running) {
-        if (!heldProcesses.has(process)) {
-          process.kill();
-        }
+      } catch (error) {
+        return lastSave.then(() => {
+          throw error;
+        });
       }
       return lastSave;
     },

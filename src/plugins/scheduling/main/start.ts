@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { HostedRun, PendingSpawn } from '../../../contracts/session-host';
 import { registeredInfos } from '../../../shared/agent-harness-label';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { registeredProfiles } from '../../../shared/harness-profiles';
 import {
@@ -762,16 +763,20 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       commands: {},
       async dispose(stop) {
         isDisposing = true;
-        for (const subscription of subscriptions) {
-          subscription.dispose();
+        try {
+          callEach(subscriptions, (subscription) => subscription.dispose());
+        } finally {
+          await chain;
+          try {
+            if (stop === 'end' && fires) {
+              sessionHost.setPending([]);
+              await services.loginStart.set(false);
+            }
+          } finally {
+            taskStore.dispose();
+            await Promise.all([taskStore.settled(), history.settled()]);
+          }
         }
-        await chain;
-        if (stop === 'end' && fires) {
-          sessionHost.setPending([]);
-          await services.loginStart.set(false);
-        }
-        taskStore.dispose();
-        await Promise.all([taskStore.settled(), history.settled()]);
       },
     };
   },

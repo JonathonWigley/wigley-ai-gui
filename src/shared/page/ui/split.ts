@@ -21,6 +21,7 @@ import {
   type SplitLimits,
   storedSplitWidth,
 } from './split-width';
+import { callEach } from '../../call-each';
 
 // How long the handle's resize prompt shows after a keyboard nudge.
 const NUDGE_PROMPT_MS = 1000;
@@ -355,8 +356,9 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         return;
       }
       isDisposed = true;
-      subscription.dispose();
-      handle.dispose();
+      callEach<{ dispose(): void }>([subscription, handle], (each) =>
+        each.dispose(),
+      );
     },
   };
 }

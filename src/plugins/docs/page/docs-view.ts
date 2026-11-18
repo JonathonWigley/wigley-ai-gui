@@ -440,6 +440,7 @@ function namedEntryId(node: TreeNode): string | null {
 export function createDocsView(deps: DocsViewDeps): DocsView {
   const { log, toast } = deps;
   const isMachine = deps.sourceId === MACHINE_SOURCE_ID;
+  let isDisposed = false;
   let document: IndexDocument | null = null;
   let entriesById = new Map<string, IndexEntry>();
   let changeSeq = 0;
@@ -535,6 +536,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       harness === null
         ? null
         : await deps.channel.invoke('pluginConfigFile', entry.title, harness);
+    if (isDisposed) {
+      return null;
+    }
     if (found === null) {
       toast(`No config file lists ${entry.title}`, 'info');
       return null;
@@ -655,7 +659,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       askedOpens++;
       void openAndTell(targetFor(entry.path, entry, entry.line, null)).then(
         (opened) => {
-          if (opened) {
+          if (opened && !isDisposed) {
             openedFromTree(focusesDoc);
           }
         },
@@ -670,7 +674,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       void doc
         .open(targetFor(entry.path, entry, match.line, null))
         .then((opened) => {
-          if (opened) {
+          if (opened && !isDisposed) {
             openedFromTree(focusesDoc);
           }
         });
@@ -829,6 +833,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     options?: Parameters<DocView['open']>[1],
   ): Promise<boolean> => {
     const opened = await doc.open(target, options);
+    if (isDisposed) {
+      return false;
+    }
     if (opened) {
       deps.docOpened(target.path);
     }
@@ -848,7 +855,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (!isListed(path) && awaitedRebuild !== null) {
       await awaitedRebuild;
     }
-    if (number !== askedOpens) {
+    if (isDisposed || number !== askedOpens) {
       return false;
     }
     return openListed(path, line, null);
@@ -1275,7 +1282,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           openAndTell(targetFor(path, entryAt(path), null, null)),
         )
           .then((opened) => {
-            if (opened) {
+            if (opened && !isDisposed) {
               log('opened the Main page');
               mainReady();
             }
@@ -1290,7 +1297,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const showOwedMain = () => {
-    if (wikiMain === null) {
+    if (wikiMain === null || isDisposed) {
       return;
     }
     const isDue = isFirstShowDue({
@@ -1323,6 +1330,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         MAIN_STARTER_TEXT,
         '',
       );
+      if (isDisposed) {
+        return;
+      }
       const entry = provisionalEntry(
         created.path,
         'reference',
@@ -1332,8 +1342,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       applyDocChange({ type: 'created', entry }, null);
       await wikiMain.reread();
       await openInEditor(entry, created.line);
+      if (isDisposed) {
+        return;
+      }
       log('created Main.md');
     } catch (error) {
+      if (isDisposed) {
+        return;
+      }
       toast(errorText(error), 'error');
       log(`Main.md not created: ${errorText(error)}`);
     } finally {
@@ -1385,6 +1401,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       .invoke(run, deps.sourceId)
       .then((result) => {
         firstRead.resolve();
+        if (isDisposed) {
+          return result;
+        }
         void wikiMain?.reread();
         if (number < shownLoad) {
           return result;
@@ -1411,6 +1430,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       })
       .catch((error: unknown) => {
         firstRead.resolve();
+        if (isDisposed) {
+          return null;
+        }
         log(`${deps.sourceId}: ${errorText(error)}`);
         if (number === startedLoads) {
           tree.setStatus(errorText(error));
@@ -1429,7 +1451,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return deps.channel
       .invoke('pluginStatus', deps.sourceId, fetch)
       .then((read) => {
-        if (number < shownStatusRead) {
+        if (isDisposed || number < shownStatusRead) {
           return;
         }
         shownStatusRead = number;
@@ -1441,7 +1463,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         doc.refreshChips();
       })
       .catch((error: unknown) => {
-        log(`plugin status: ${errorText(error)}`);
+        if (!isDisposed) {
+          log(`plugin status: ${errorText(error)}`);
+        }
       })
       .finally(() => {
         if (fetch) {
@@ -1456,7 +1480,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // carries what that fetch brought.
   const readStatuses = (fetches: boolean) => {
     void readStatus(runningFetchReads > 0).then(() => {
-      if (fetches) {
+      if (fetches && !isDisposed) {
         void readStatus(true);
       }
     });
@@ -1472,7 +1496,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       if (runningRebuild === started) {
         runningRebuild = null;
       }
-      readStatuses(fetches);
+      if (!isDisposed) {
+        readStatuses(fetches);
+      }
     });
     return started;
   };
@@ -1792,6 +1818,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       }
       void wikiMain?.start();
       const runs = runIndex('loadIndex').then((result) => {
+        if (isDisposed) {
+          return null;
+        }
         readStatuses(true);
         return result?.canRebuild === true ? rebuild(false) : null;
       });
@@ -1845,6 +1874,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       };
       restoringOpen = openOnceRead(openPath, null, number)
         .then((opened) => {
+          if (isDisposed) {
+            return;
+          }
           if (!opened) {
             toastEditsDropped();
           } else if (edits !== null) {
@@ -1852,6 +1884,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           }
         })
         .catch((error) => {
+          if (isDisposed) {
+            return;
+          }
           log(`place not restored: ${errorText(error)}`);
           toastEditsDropped();
         })
@@ -1888,7 +1923,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       runningMainOpens++;
       void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
         runningMainOpens--;
-        if (number === askedOpens) {
+        if (!isDisposed && number === askedOpens) {
           showMain('picked');
         }
       });
@@ -1934,6 +1969,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     unsavedPath: () =>
       doc.hasUnsavedEdits() ? doc.openPath() : (restoring?.edits?.path ?? null),
     dispose() {
+      isDisposed = true;
       callEach<() => void>(
         [
           () => view.closeOverlays(),

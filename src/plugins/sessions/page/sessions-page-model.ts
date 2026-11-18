@@ -121,6 +121,9 @@ export interface SessionsPageModelDeps {
   setIdleScope(): void;
   tabShown(sessionId: string, tabId: string): void;
   log: PluginLog;
+  // Whether the page part stopped: main's later reply to an activation then
+  // changes and logs nothing.
+  isStopped(): boolean;
 }
 
 // `ready` applies the first state; `applyNotice` applies the state now once
@@ -298,9 +301,15 @@ export function createSessionsPageModel(
     deps
       .activateInMain(sessionId)
       .then((sentState) => {
+        if (deps.isStopped()) {
+          return;
+        }
         pendingEchoes = echoesAfterReply(pendingEchoes, echo, sentState);
       })
       .catch((error) => {
+        if (deps.isStopped()) {
+          return;
+        }
         pendingEchoes = [];
         log(`session not activated: ${errorText(error)}`);
       });

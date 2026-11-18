@@ -17,6 +17,7 @@ import type {
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent } from '../../../shared/content-scroll';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element } from '../../../shared/page/dom';
@@ -501,13 +502,18 @@ export function mountPrimerPopups(deps: PrimerViewDeps): PrimerPopups {
       render();
     },
     dispose() {
-      statusPart.dispose();
-      drawnBody?.dispose();
-      drawnFrame?.dispose();
-      storeSubscription.dispose();
-      for (const primerId of primerViews.keys()) {
-        destroyPrimerView(primerId, shownPrimers, deps);
-      }
+      callEach<() => void>(
+        [
+          () => statusPart.dispose(),
+          () => drawnBody?.dispose(),
+          () => drawnFrame?.dispose(),
+          () => storeSubscription.dispose(),
+          ...[...primerViews.keys()].map(
+            (primerId) => () => destroyPrimerView(primerId, shownPrimers, deps),
+          ),
+        ],
+        (step) => step(),
+      );
     },
     scrollBy(step, direction) {
       const state = store.get();
@@ -788,15 +794,18 @@ function createPrimerFormView(
     },
     resizeTarget: (pane) => (pane === 'tasks' ? outer : inner),
     dispose() {
-      card.dispose();
-      tasks.drawn?.dispose();
-      items.drawn?.dispose();
-      reviewPart?.dispose();
-      for (const strip of Object.values(strips)) {
-        strip.drawn?.dispose();
-      }
-      inner.dispose();
-      outer.dispose();
+      callEach<() => void>(
+        [
+          () => card.dispose(),
+          () => tasks.drawn?.dispose(),
+          () => items.drawn?.dispose(),
+          () => reviewPart?.dispose(),
+          ...Object.values(strips).map((strip) => () => strip.drawn?.dispose()),
+          () => inner.dispose(),
+          () => outer.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }

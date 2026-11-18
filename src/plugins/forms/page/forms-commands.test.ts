@@ -137,6 +137,7 @@ function setup(
     },
     toast,
     log,
+    isStopped: () => false,
   });
   const run = (
     command: FormsCommand,

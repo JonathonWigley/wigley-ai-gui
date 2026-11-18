@@ -257,6 +257,7 @@ function setUp(
   const revealed: string[] = [];
   const marked: string[] = [];
   let isOpen = true;
+  let isStopped = false;
   const tabs = {
     reveal: (sessionId: string) => revealed.push(sessionId),
     markSent: (sessionId: string) => marked.push(sessionId),
@@ -318,9 +319,13 @@ function setUp(
       toastTones.push(tone);
     },
     log: (message) => logs.push(message),
+    isStopped: () => isStopped,
   };
   return {
     handlers: chatCommandHandlers(deps),
+    stop: () => {
+      isStopped = true;
+    },
     deps,
     allowed,
     denied,
@@ -1405,6 +1410,26 @@ describe('chat commands', () => {
       expect(run.marked).toEqual([]);
     },
   );
+
+  it('logs, toasts and puts back nothing when a send is refused after the part stopped', async () => {
+    const message = box('hi');
+    const entries = focusedOnStop({ kind: 'entry', entry: userEntry });
+    const shown = Object.assign(session(false), {
+      box: message,
+      entries: Object.assign(entries, { latest: () => undefined }),
+      isBoxFocused: () => true,
+    });
+    const run = setUp(shown, new Error('profile gone'));
+
+    run.handlers.send({ arg: undefined });
+    const logsAtStop = [...run.logs];
+    run.stop();
+    await flush();
+
+    expect(run.toasts).toEqual([]);
+    expect(run.logs).toEqual(logsAtStop);
+    expect(message.held.text).toBe('');
+  });
 
   it('send_ImagesOnly_Sends', async () => {
     const shown = Object.assign(session(true), { box: box('') });

@@ -5789,6 +5789,71 @@ describe('createChatSessions active time', () => {
     expect(test.logged).toContain('open sessions not saved: disk full');
   });
 
+  it('still detaches and kills the rest when a detach throws, and rejects with it once the save settles', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    let starts = 0;
+    const firstDetachThrows: FakeAgentHarness = {
+      ...fake,
+      start: (request, events) => {
+        const process = fake.start(request, events);
+        starts += 1;
+        return starts > 1
+          ? process
+          : {
+              ...process,
+              detach: () => {
+                throw new Error('detach refused');
+              },
+            };
+      },
+    };
+    const test = setUp({ harnesses: [firstDetachThrows] });
+    for (let count = 0; count < 3; count++) {
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
+    }
+    await flush();
+    test.chat.restore(NOTHING_SAVED, []);
+    const [, secondHeld, closedStillEnding] = fake.processes;
+    fake.holdEnd();
+    test.chat.closed('row-3', 'user');
+    let saves = 0;
+    let finishWrite = () => {};
+    test.saved.store.save = () =>
+      new Promise((resolve) => {
+        saves += 1;
+        finishWrite = resolve;
+      });
+    let outcome: unknown = 'pending';
+
+    const detached = test.chat.detachAll();
+    void detached.then(
+      () => {
+        outcome = 'resolved';
+      },
+      (error: unknown) => {
+        outcome = error;
+      },
+    );
+    await flush();
+    const outcomeBeforeTheWrite = outcome;
+    finishWrite();
+    await flush();
+
+    expect(secondHeld.calls).toContainEqual({ method: 'detach' });
+    expect(closedStillEnding.calls).toContainEqual({ method: 'kill' });
+    expect(saves).toBeGreaterThan(0);
+    expect(outcomeBeforeTheWrite).toBe('pending');
+    expect(outcome).toEqual(new Error('detach refused'));
+  });
+
   // Restores `host-a` with 42 s saved, its attach replaying `replay` at 7000.
   async function restoredAfterReplay(
     replay: (events: AgentProcessEvents) => void,

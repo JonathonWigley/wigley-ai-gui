@@ -114,6 +114,8 @@ interface StartOptions {
   part?: typeof sessionsPagePart;
   // The list picker service; a fake with no place for its lists when left out.
   picker?: ListPickerService;
+  // What main's `activate` answers; true when left out.
+  activateReply?: () => Promise<unknown>;
 }
 
 // `part` on the harness, its rows and selection written, up to the first
@@ -129,6 +131,7 @@ async function startApplied(
     parts = [],
     part = sessionsPagePart,
     picker = fakeListPickerService(),
+    activateReply = async () => true,
   }: StartOptions = {},
 ) {
   const activations: unknown[] = [];
@@ -138,6 +141,7 @@ async function startApplied(
     invoke: async (method, ...args) => {
       if (method === 'activate') {
         activations.push(args[0]);
+        return activateReply();
       }
       if (method === 'closeSession') {
         closes.push(args);
@@ -1298,6 +1302,30 @@ describe('sessions page part', () => {
 
     expect(await setup.exports.closeSession('s1')).toBe(false);
     await setup.harness.stop();
+  });
+
+  it('logs nothing when an activate reply rejects after the part stopped', async () => {
+    const rejects: ((error: Error) => void)[] = [];
+    const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+      activateReply: () =>
+        new Promise((_resolve, reject) => {
+          rejects.push(reject);
+        }),
+    });
+    setup.exports.activate('s2');
+    const logCount = setup.harness.logs.length;
+
+    await setup.harness.stop();
+    for (const reject of rejects) {
+      reject(new Error('main stopped'));
+    }
+    await settle();
+
+    expect(
+      setup
+        .logsSince(logCount)
+        .filter((line) => line.startsWith('session not activated')),
+    ).toEqual([]);
   });
 });
 

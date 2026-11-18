@@ -1,5 +1,6 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
@@ -107,12 +108,14 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
       clock,
       fire: (sessionId) => fireCountdown(sessionId),
     });
+    let isStopped = false;
     const actions = createWorkflowActions({
       chat,
       log,
       flowOf: (sessionId) => workflow.flowOf(sessionId),
       signal: (sessionId, signal) => workflow.signal(sessionId, signal, 'live'),
       cancelCountdown: (sessionId) => cancelCountdown(sessionId),
+      isStopped: () => isStopped,
     });
 
     const syncCountdown = (sessionId: string) => {
@@ -156,12 +159,14 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
         sessions.label(sessionId) ?? services.paths.base(flow.projectDir);
       actions.run(sessionId, command).then(
         (ran) => {
-          if (ran) {
+          if (ran && !isStopped) {
             log(`ran ${command} in ${name}`);
           }
         },
         (error: unknown) => {
-          log(`auto-start failed: ${errorText(error)}`);
+          if (!isStopped) {
+            log(`auto-start failed: ${errorText(error)}`);
+          }
         },
       );
     }
@@ -270,6 +275,9 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
 
     api.onSettingsChanged((settings) => {
       void workflow.ready.then(() => {
+        if (isStopped) {
+          return;
+        }
         const onOff = settings.autoClearAndMake ? 'on' : 'off';
         const seconds = Math.max(1, settings.autoStartSeconds);
         log(
@@ -285,6 +293,9 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
 
     channel.handle('runAction', ({ sessionId, command }) =>
       workflow.ready.then(async () => {
+        if (isStopped) {
+          return;
+        }
         await actions.run(sessionId, command);
       }),
     );
@@ -306,8 +317,8 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     return {
       commands: {},
       dispose: () => {
-        planReports.dispose();
-        planWatch.dispose();
+        isStopped = true;
+        callEach([planReports, planWatch], (each) => each.dispose());
       },
     };
   },

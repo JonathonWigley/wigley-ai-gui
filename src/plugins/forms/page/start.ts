@@ -2,6 +2,7 @@ import '../../../shared/page/markdown.css';
 import './forms.css';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageApi, PagePart, PageStart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createEditorBoxes,
@@ -253,7 +254,7 @@ function startOverOrigins(
   const originsChange = findingOrigins.onChanged(() => view.rebuild());
   originsHolds.push(originsChange);
   const logEvent = createFormsEventLog(store.get, services.log);
-  startFormsEvents(store, (event) => {
+  const formEvents = startFormsEvents(store, (event) => {
     logEvent(event);
     api.events.emit(event.name, event.data);
   });
@@ -269,6 +270,7 @@ function startOverOrigins(
     setLayouts: (shown) => view.setLayouts(shown),
   });
   const layoutRefresh = store.subscribe(() => layoutShow.refresh());
+  let isStopped = false;
   return {
     exports: (consumer): FormsPageExports => ({
       activeRound() {
@@ -289,17 +291,23 @@ function startOverOrigins(
     // The kinds and origins listeners go first, so removing the built-in
     // kinds and origins after the view re-derives and redraws no round.
     dispose() {
-      kindsChange.dispose();
-      originsChange.dispose();
-      kindsWatch.dispose();
-      roundsRead.dispose();
-      places.dispose();
-      autosave.dispose();
-      layoutRefresh.dispose();
-      view.dispose();
-      for (const registration of [...builtInKinds, ...builtInOrigins]) {
-        registration.dispose();
-      }
+      isStopped = true;
+      callEach<Disposable>(
+        [
+          kindsChange,
+          originsChange,
+          kindsWatch,
+          roundsRead,
+          places,
+          autosave,
+          formEvents,
+          layoutRefresh,
+          view,
+          ...builtInKinds,
+          ...builtInOrigins,
+        ],
+        (each) => each.dispose(),
+      );
     },
     commands: formsCommandHandlers({
       store,
@@ -311,6 +319,7 @@ function startOverOrigins(
       scrollForm: (step, direction) => view.scrollBy(step, direction),
       toast: services.toast,
       log: services.log,
+      isStopped: () => isStopped,
     }),
   };
 }

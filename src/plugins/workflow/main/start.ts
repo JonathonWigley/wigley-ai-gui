@@ -100,6 +100,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const ready = store.load().catch((error: unknown) => {
       log(`flows.json not read: ${errorText(error)}; starting with no flows`);
     });
+    let isStopped = false;
+    // Runs `work` once the flows load, unless the part stopped by then;
+    // resolves to its result, else to `onceStopped`.
+    const whenReady = <T>(work: () => T, onceStopped: T): Promise<T> =>
+      ready.then(() => (isStopped ? onceStopped : work()));
     const turnEndedListeners = new Set<(sessionId: string) => void>();
     const turnWork = createTurnWork();
     const runLog = createRunLog({ files: api.data, log });
@@ -223,10 +228,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       workflowOf(store.get(sessionId));
 
     // Folds a reported step as a live event; resolves whether the flow is now in
-    // the stage its own workflow reports as `step`. No such stage, or a stage rule
-    // that ignores it, resolves false.
+    // the stage its own workflow reports as `step`. No such stage, a stage rule
+    // that ignores it, or a stopped part resolves false.
     const reportStep = (sessionId: string, step: string) =>
-      ready.then(() => {
+      whenReady(() => {
         const stage = heldWorkflowOf(sessionId)?.stages.find(
           (held) => held.reportedAs === step,
         );
@@ -235,7 +240,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         }
         apply(sessionId, { type: 'stepReported', step: stage.id }, 'live');
         return store.get(sessionId)?.stage === stage.id;
-      });
+      }, false);
     // One headless-line state per session, shared by both workflow tools.
     const headlessLines = createHeadlessLines({
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
@@ -248,18 +253,18 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     });
 
     // Folds a reported checklist as a live event; resolves whether a registered
-    // workflow holds the flow.
+    // workflow holds the flow, false once the part stopped.
     const reportChecklist = (
       sessionId: string,
       items: readonly ChecklistItem[],
     ) =>
-      ready.then(() => {
+      whenReady(() => {
         if (heldWorkflowOf(sessionId) === undefined) {
           return false;
         }
         apply(sessionId, { type: 'checklistReported', items }, 'live');
         return true;
-      });
+      }, false);
     const startChecklistToolSession = startChecklistTool({
       reportChecklist,
       lines: headlessLines,
@@ -303,8 +308,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       contributeStepTool();
       return {
         dispose() {
-          added.dispose();
-          contributeStepTool();
+          callEach<() => void>(
+            [() => added.dispose(), contributeStepTool],
+            (step) => step(),
+          );
         },
       };
     };
@@ -359,37 +366,37 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     events.on(
       'chat.sessionOpened',
       ({ sessionId, hostSessionId, projectDir }) => {
-        void ready.then(() => {
+        void whenReady(() => {
           if (store.hostIdOf(sessionId) === hostSessionId) {
             return;
           }
           openFlow(sessionId, hostSessionId, projectDir);
-        });
+        }, undefined);
       },
     );
     events.on('sessions.hostSessionChanged', ({ id, info }) => {
       const hostSessionId = info.sessionId;
-      void ready.then(() => {
+      void whenReady(() => {
         if (hostSessionId !== null) {
           store.rekey(id, hostSessionId);
         }
         turnWork.forget(id);
         runMeter.cleared(id);
         apply(id, { type: 'cleared' }, 'live');
-      });
+      }, undefined);
     });
     events.on('sessions.ended', ({ sessionId }) => {
-      void ready.then(() => {
+      void whenReady(() => {
         turnWork.forget(sessionId);
         runMeter.forget(sessionId);
         tellObservers((observer) => observer.closed(sessionId));
         store.drop(sessionId);
-      });
+      }, undefined);
     });
     events.on(
       'chat.agentEvent',
       ({ sessionId, hostSessionId, event, replayed }) => {
-        void ready.then(() => {
+        void whenReady(() => {
           const flow = store.get(sessionId);
           if (flow === null) {
             return;
@@ -421,7 +428,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
               }
             }
           }
-        });
+        }, undefined);
       },
     );
 
@@ -466,9 +473,12 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     return {
       commands: {},
       ready() {
-        void ready.then(openRowsAlreadyOpen);
+        void whenReady(openRowsAlreadyOpen, undefined);
       },
-      dispose: () => store.flushed(),
+      dispose: () => {
+        isStopped = true;
+        return store.flushed();
+      },
       exports: (consumer): WorkflowMainExports => ({
         signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
         flowOf: (sessionId) => store.get(sessionId),

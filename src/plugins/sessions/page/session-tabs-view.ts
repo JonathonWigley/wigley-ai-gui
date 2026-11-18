@@ -320,17 +320,23 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     return created;
   };
 
+  // Cleared first, so a later redraw never disposes the same tabs again.
   const disposeTabs = (frame: Frame) => {
-    for (const tab of frame.drawnTabs.values()) {
-      tab.part.dispose();
-    }
+    const held = [...frame.drawnTabs.values()];
     frame.drawnTabs.clear();
+    callEach(held, (tab) => tab.part.dispose());
   };
 
   const disposeText = (drawn: { text: DrawnPart<SessionsPart> | null }) => {
-    drawn.text?.dispose();
-    drawn.text?.built.element.remove();
+    const { text } = drawn;
     drawn.text = null;
+    if (text === null) {
+      return;
+    }
+    callEach<() => void>(
+      [() => text.dispose(), () => text.built.element.remove()],
+      (step) => step(),
+    );
   };
 
   // Draws the popup's `popup` part into the frame's layer, its element moved
@@ -722,21 +728,29 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     changed();
   };
 
+  // The frame leaves the map and the page first, so a throwing dispose
+  // leaves no half-disposed frame, and the bar still redraws.
   const drop = (sessionId: string) => {
     const frame = frames.get(sessionId);
     if (frame === undefined) {
       return;
     }
-    disposeTabs(frame);
-    disposeText(frame);
-    frame.bar.dispose();
-    for (const popup of frame.popups) {
-      popup.part.dispose();
-    }
-    frame.popupBar?.dispose();
-    frame.element.remove();
     frames.delete(sessionId);
-    draw();
+    frame.element.remove();
+    try {
+      callEach<() => void>(
+        [
+          () => disposeTabs(frame),
+          () => disposeText(frame),
+          () => frame.bar.dispose(),
+          ...frame.popups.map((popup) => () => popup.part.dispose()),
+          () => frame.popupBar?.dispose(),
+        ],
+        (step) => step(),
+      );
+    } finally {
+      draw();
+    }
   };
 
   return {

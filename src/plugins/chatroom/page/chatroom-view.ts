@@ -1,6 +1,7 @@
 import type { PluginLog } from '../../../contracts/log';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type { CommandsRunIn, PageChannel } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
@@ -666,6 +667,9 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
       .invoke('postAsUser', room, thread.thread, post)
       .then(
         (result) => {
+          if (isDisposed) {
+            return;
+          }
           if (result.ok) {
             composerBox.value = '';
             resetComposer();
@@ -676,6 +680,9 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
           }
         },
         (error: unknown) => {
+          if (isDisposed) {
+            return;
+          }
           composerError = errorText(error);
           log(`post failed: ${composerError}`);
         },
@@ -800,11 +807,15 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
     },
     dispose() {
       isDisposed = true;
-      for (const slot of messageSlots.values()) {
-        slot.drawn?.dispose();
-      }
+      const slots = [...messageSlots.values()];
       messageSlots.clear();
-      parts.dispose();
+      callEach<() => void>(
+        [
+          ...slots.map((slot) => () => slot.drawn?.dispose()),
+          () => parts.dispose(),
+        ],
+        (step) => step(),
+      );
     },
   };
 }
