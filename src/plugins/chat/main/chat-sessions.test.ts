@@ -6138,6 +6138,8 @@ describe('createChatSessions titles', () => {
   it('titles the row from the first message after a local command', async () => {
     const test = await startedSilent();
     const [process] = test.processes;
+    // Saves start once the saved rows are restored.
+    test.chat.restore(NOTHING_SAVED, []);
 
     await test.chat.send(ROW_ID, { text: '/effort auto', images: [] });
     process.events.entry(userEntry('user-1', '/effort auto', 'sent'));

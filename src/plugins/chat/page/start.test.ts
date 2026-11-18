@@ -308,6 +308,9 @@ describe('chat page part', () => {
   });
 
   it('stop_OneTabsDestroyThrows_TearsDownEveryTab', async () => {
+    // A tab whose entries hold a stop settles its cursor on its first draw,
+    // which reads the list's scroll padding.
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
     const destroyEditor = vi.fn<() => void>();
     destroyEditor.mockImplementationOnce(() => {
       throw new Error('box gone');

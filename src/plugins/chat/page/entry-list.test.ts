@@ -273,7 +273,9 @@ const rows: Row[] = [
     fancy: { assistant: undefined },
     defaultUpdateThrows: 'assistant',
     puts: [assistant('one'), assistant('two'), assistant('three')],
-    slots: [['chat-entry chat-assistant@default']],
+    // `updateThrows` stands in for the bundled default's assistant builder,
+    // so its `div.fancy` draws under the `default` name.
+    slots: [['fancy@default']],
     logs: [
       'default layout assistant entry update failed: broken update',
       'default layout assistant entry update failed: broken update',

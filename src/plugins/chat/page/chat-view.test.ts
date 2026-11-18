@@ -167,7 +167,8 @@ const returnedTwo: ReturnedMessage = {
 // tab's `shown` before it returns, as the sessions plugin may, and
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
 // session of each tab handle's `select`; `hasSavedPlace` answers whether
-// `savedPlaces` holds the session. `liveSubscriptions` counts the view's own
+// `savedPlaces` holds the session. `boxDestroy.error`, once set, is thrown by
+// the next box `destroy` alone. `liveSubscriptions` counts the view's own
 // subscriptions to its layouts and part stores still held, by store. `owners`
 // holds each session's row owner as `ownerOf` reads it, null for a session it
 // does not name and undefined for a row not yet arrived; `rowAdded` sets a
@@ -180,6 +181,9 @@ function mounted(
   ) => void = () => undefined,
 ) {
   listCalls.length = 0;
+  // A tab's entry list reads its scroll padding when it settles a following
+  // cursor on a redraw; each describe's `afterEach` unstubs it.
+  vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
@@ -187,6 +191,7 @@ function mounted(
   const toasts: [string, string][] = [];
   const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
+  const boxDestroy = { error: null as Error | null };
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const keyCalls: [string, unknown][] = [];
@@ -358,7 +363,13 @@ function mounted(
             boxCalls.push(['blur', options]);
             events.blurred();
           },
-          destroy: noEvent,
+          destroy: () => {
+            const error = boxDestroy.error;
+            boxDestroy.error = null;
+            if (error !== null) {
+              throw error;
+            }
+          },
         } as unknown as TextEditor;
       },
     },
@@ -474,6 +485,7 @@ function mounted(
       activeSessionId = sessionId;
     },
     box,
+    boxDestroy,
     tab,
     tabElements,
     layouts,
@@ -2347,7 +2359,9 @@ describe('mountChatView dispose', () => {
   });
 
   // Breaks: a dispose that stops at the first tab whose teardown throws.
-  it('dispose tears down every tab when one tab side part dispose throws', () => {
+  // A side part's throwing dispose is logged where it is placed, so the first
+  // tab's box destroy is what throws.
+  it('dispose tears down every tab when the first tab box destroy throws', () => {
     const mount = mounted();
     mount.pageLoad([
       stateOf([], { sessionId: 'row-1' }),
@@ -2359,16 +2373,12 @@ describe('mountChatView dispose', () => {
       title: 'Part',
       order: 10,
       build: (_parent, sessionId) => ({
-        dispose: () => {
-          disposed.push(sessionId);
-          if (sessionId === 'row-1') {
-            throw new Error('part refused');
-          }
-        },
+        dispose: () => disposed.push(sessionId),
       }),
     });
+    mount.boxDestroy.error = new Error('box refused');
 
-    expect(() => mount.view.dispose()).toThrow('part refused');
+    expect(() => mount.view.dispose()).toThrow('box refused');
 
     expect(disposed).toEqual(['row-1', 'row-2']);
     expect(mount.liveSubscriptions.get('sideParts')).toBe(0);
