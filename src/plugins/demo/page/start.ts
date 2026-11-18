@@ -127,26 +127,28 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     // The live run's failed step ids, once each in first-failure order.
     const failedSteps: string[] = [];
 
-    // Runs `work`, then gives up the DOM focus when `work` moved it into a text box outside the panel (the message
-    // box, a form's answer, a note), which would take the demo keys as text. A box focused before `work`, such as one
-    // the user is typing in, keeps the focus, and so does the step agent's pane in the panel.
+    // Gives up the DOM focus held by a text box outside the panel (the message box, a form's answer, a note), whose
+    // insert mode would type the demo's `<Leader>d` keys as text; the step agent's pane in the panel keeps its own.
+    const takeKeysFromTextBox = () => {
+      const focused = document.activeElement;
+      if (
+        focused instanceof HTMLElement &&
+        !panelSlot.contains(focused) &&
+        (services.editor.contains(focused) ||
+          focused.isContentEditable ||
+          focused.matches('input, textarea'))
+      ) {
+        focused.blur();
+        log('took the keys back from a text box');
+      }
+    };
+
+    // Runs `work`, then takes the keys back from a text box, whether `work` focused it or the user was typing in it.
     const keepingKeys = async <T>(work: () => T | Promise<T>): Promise<T> => {
-      const before = document.activeElement;
       try {
         return await work();
       } finally {
-        const focused = document.activeElement;
-        if (
-          focused !== before &&
-          focused instanceof HTMLElement &&
-          !panelSlot.contains(focused) &&
-          (services.editor.contains(focused) ||
-            focused.isContentEditable ||
-            focused.matches('input, textarea'))
-        ) {
-          focused.blur();
-          log('took the keys back from a text box');
-        }
+        takeKeysFromTextBox();
       }
     };
 
@@ -423,6 +425,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       publish();
       draw();
       log('run started');
+      takeKeysFromTextBox();
       await enterFirst();
     };
 

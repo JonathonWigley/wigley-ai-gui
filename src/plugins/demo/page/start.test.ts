@@ -171,7 +171,7 @@ function startDemo({
   };
   const harness = startPagePart(part, {
     dependencies: [sessions, scopedAgents],
-    services: { demoSteps },
+    services: { demoSteps, editor: { contains: () => false } },
     async invoke(method, ...args) {
       if (method !== 'describeStep') {
         const stepId = typeof args[0] === 'string' ? ` ${args[0]}` : '';
@@ -496,7 +496,8 @@ describe('demoPagePart', () => {
     expect(demo.messages().slice(mark)).toEqual(expectedLogs);
   });
 
-  // Breaks on a demo that takes the focus from a box the user was typing in, though no beat or leave moved it.
+  // Breaks on a demo that leaves a box the user was typing in holding the focus, whose insert mode types the next
+  // `<Leader>d` keys as text.
   it.each<{ name: string; act(demo: Demo): void | Promise<void> }>([
     {
       name: 'the next beat',
@@ -506,19 +507,27 @@ describe('demoPagePart', () => {
       name: 'leaving one step and entering another',
       act: (demo) => demo.commands().goTo({ arg: 'p.two' }),
     },
-  ])('beatOrLeave_BoxFocusedBefore_KeepsTheFocus: $name', async ({ act }) => {
-    const demo = startDemo();
-    await startRun(demo);
-    const box = document.createElement('textarea');
-    box.focus();
+  ])(
+    'beatOrLeave_BoxFocusedBefore_TakesTheKeysBack: $name',
+    async ({ act }) => {
+      const demo = startDemo();
+      await startRun(demo);
+      // The fake DOM has no `matches`, so the box reads as a text box by `isContentEditable`.
+      const box = Object.assign(document.createElement('div'), {
+        isContentEditable: true,
+      });
+      box.focus();
 
-    await act(demo);
+      await act(demo);
 
-    expect({
-      isFocused: document.activeElement === box,
-      tookKeys: demo.messages().includes('took the keys back from a text box'),
-    }).toEqual({ isFocused: true, tookKeys: false });
-  });
+      expect({
+        isFocused: document.activeElement === box,
+        tookKeys: demo
+          .messages()
+          .includes('took the keys back from a text box'),
+      }).toEqual({ isFocused: false, tookKeys: true });
+    },
+  );
 
   it('stop_FailedStep_ReportsCoverageAndFailures', async () => {
     const demo = startDemo();

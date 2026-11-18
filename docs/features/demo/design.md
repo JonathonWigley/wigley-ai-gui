@@ -34,6 +34,10 @@ scratch. It runs inside the everyday app, over whatever mode is shown:
   Inside the focused panel (scope `demo.panel`), `j`/`k` move through the step list, `Enter` goes to
   the step, `i` moves the keys into the step agent's pane, and `Esc` there gives them back.
 
+  A text box in insert mode types `Space` as a space, so the leader keys never reach the demo from
+  one. The demo takes the keys back from any text box outside its panel as it starts, after each
+  beat shows and after each step leaves, whether the step or the user put the cursor there.
+
 **Autoplay** shows each beat for `demo.autoplaySeconds` (default 5, at least 1), or for a beat's own
 longer dwell, then moves on. It stops on the last beat before the real-session step, which only a
 key or a jump enters, since it starts a real Claude session, and on the last beat of the last step.
