@@ -1,6 +1,6 @@
 # 12 — Window adapter hears page load 1
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · reorders one synchronous composition root, the window's first load after the self-test's and the drive run's load counting, with no async crossing and no unit test able to pin it
 Wave: 1 · Depends on: none

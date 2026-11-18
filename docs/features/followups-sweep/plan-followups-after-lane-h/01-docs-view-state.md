@@ -1,6 +1,6 @@
 # 01 — Docs view state
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · an async open race and the `docs.place` data format, with a core mode-registry change
 Wave: 1 · Depends on: none

@@ -1,6 +1,6 @@
 # 07 — Step and tool-call durations
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds a field to the chat layout contract and an option to the shared collapsible, and the entry list must redraw a step whose end arrives later
 Wave: 1 · Depends on: none

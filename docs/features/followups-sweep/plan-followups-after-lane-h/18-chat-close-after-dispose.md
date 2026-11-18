@@ -1,6 +1,6 @@
 # 18 — Chat close after dispose
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · a disposed flag changes how two async exports behave across the part's stop
 Wave: 1 · Depends on: none
