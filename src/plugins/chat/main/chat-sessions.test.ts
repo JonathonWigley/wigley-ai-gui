@@ -1068,6 +1068,56 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  // Breaks if an ephemeral row is saved or records its folder, or if the flag
+  // is lost across a clear or a process relaunch.
+  it('launch_Ephemeral_SavesNoRowRecordsNoFolderAndFlagsItsEvents', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    const launchedId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      ephemeral: true,
+    });
+    await flush();
+    await test.chat.send(launchedId, IDLE_SEND);
+    await flush();
+    test.chat.clear(launchedId);
+    await flush();
+    test.harness.processes[1].events.ended({ code: 0, error: null });
+    await test.chat.send(launchedId, IDLE_SEND);
+    await flush();
+    test.harness.processes[2].events.ended({ code: 0, error: null });
+    test.chat.closed(launchedId, 'user');
+    await flush();
+
+    expect(test.harness.processes).toHaveLength(3);
+    expect(test.saved.last()).toEqual({
+      sessions: [],
+      selectedHostSessionId: null,
+    });
+    expect(await test.data.stat(RECENT_FOLDERS_FILE)).toBeNull();
+    const flagsOf = (
+      event:
+        | 'sessionOpened'
+        | 'sessionCleared'
+        | 'processEnded'
+        | 'sessionClosed',
+    ) => emittedOf(test, event).map((data) => data.ephemeral);
+    expect({
+      sessionOpened: flagsOf('sessionOpened'),
+      sessionCleared: flagsOf('sessionCleared'),
+      processEnded: flagsOf('processEnded'),
+      sessionClosed: flagsOf('sessionClosed'),
+    }).toEqual({
+      sessionOpened: [true],
+      sessionCleared: [true],
+      processEnded: [true, true],
+      sessionClosed: [true],
+    });
+  });
+
   it('pastSessions_LeavesOutOpenAndMarksArchived', async () => {
     const test = setUp();
     await test.archived.set(PAST_ONE.sessionId, true);
@@ -9843,6 +9893,30 @@ describe('createChatSessions host session ids', () => {
 
     expect(test.saved.last()?.selectedHostSessionId).toBe('fake-session-1');
   });
+
+  // Breaks if the selection names an ephemeral row's host id, which no saved
+  // row holds, or if the other rows drop out with it.
+  it('snapshot_EphemeralRowSelected_SavesNullSelection', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    test.chat.start(START);
+    await flush();
+    const ephemeralId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: IDLE_SEND,
+      ephemeral: true,
+    });
+    await flush();
+
+    test.chat.selected(ephemeralId);
+
+    expect(test.chat.hostSessionIdOf(ephemeralId)).toBe('fake-session-2');
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
+    ).toEqual(['fake-session-1']);
+    expect(test.saved.last()?.selectedHostSessionId).toBeNull();
+  });
 });
 
 const WAITING_NOTICE =
@@ -10434,6 +10508,17 @@ describe('createChatSessions prepare and adopt', () => {
     ]);
 
     expect(new Set(ids).size).toBe(6);
+  });
+
+  // Breaks if a prepared run hands the host a row it would restore as a saved
+  // one.
+  it('prepareLaunch_Ephemeral_Rejects', async () => {
+    const test = setUp();
+
+    await expect(
+      test.chat.prepareLaunch({ ...LAUNCH, ephemeral: true }, {}),
+    ).rejects.toThrow('chat cannot prepare an ephemeral launch');
+    expect(test.harness.preparedRuns).toEqual([]);
   });
 
   it('prepareLaunch_PoolProject_StartsInTheLowestClone', async () => {

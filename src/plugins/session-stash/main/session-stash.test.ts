@@ -192,6 +192,14 @@ describe('createSessionStash', () => {
       },
       logged: ['closed without a stash, never sent a message: "s1 title"'],
     },
+    {
+      given: 'an ephemeral user close',
+      run: (test: ReturnType<typeof setUp>) => {
+        test.stash.request({ sessionId: 's1', note: 'n' });
+        test.stash.closed(closed('s1', { ephemeral: true }));
+      },
+      logged: ['stash dropped: s1 is ephemeral'],
+    },
   ])('closed_NotAStash_WritesNothing given $given', async (test) => {
     const setup = setUp();
 

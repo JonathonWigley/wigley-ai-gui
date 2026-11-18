@@ -609,8 +609,12 @@ interface HeldSession {
   // Saved with the row, kept across a clear.
   owner: string | null;
   // A process start records the row's folder in the recent folders; false for
-  // a row started from a project, whose folder the Project step already offers.
+  // a row started from a project, whose folder the Project step already offers,
+  // and for an ephemeral row.
   recordsRecentFolder: boolean;
+  // The row leaves no trace a later app run shows: it is never saved, and its
+  // events carry `ephemeral: true`. Kept across a clear and a relaunch.
+  ephemeral: boolean;
 }
 
 // Where a start resolved to: a folder, from a folder, a folder project or a
@@ -628,6 +632,7 @@ interface StartFlags {
   instructions: readonly string[];
   owner: string | null;
   controls: Readonly<Record<string, string>>;
+  ephemeral: boolean;
 }
 
 // What one guard step on an unheld process leaves its caller to do: whether a
@@ -895,6 +900,11 @@ function processEndReasonOf(
   return isCleanExit ? 'clean' : 'crash';
 }
 
+// The `ephemeral` key a row's events carry: present only for an ephemeral row.
+function ephemeralKeyOf(ephemeral: boolean): { ephemeral?: true } {
+  return ephemeral ? { ephemeral: true } : {};
+}
+
 // `sent` as listeners and the saved file know it: the row's before a pending
 // clear.
 function reportedSent(session: HeldSession): boolean {
@@ -1010,11 +1020,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const resumeSectionRegistrations = new Set<{ section: ResumeSection }>();
 
   // A row whose harness has not reported a host id yet is left out: a start
-  // that fails leaves no record.
+  // that fails leaves no record. An ephemeral row is left out, and when it is
+  // selected the saved selection is null.
   function snapshot(): SavedSessions {
     const now = deps.clock.now();
     const records = [...held.values()].flatMap((session) =>
-      session.hostId === null
+      session.hostId === null || session.ephemeral
         ? []
         : [
             savedSessionOf(
@@ -1025,8 +1036,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             ),
           ],
     );
+    const selected =
+      selectedRowId === null ? undefined : held.get(selectedRowId);
     const selectedHostSessionId =
-      selectedRowId === null ? null : (held.get(selectedRowId)?.hostId ?? null);
+      selected === undefined || selected.ephemeral ? null : selected.hostId;
     return {
       sessions: [...records, ...skippedRecords],
       selectedHostSessionId,
@@ -1583,6 +1596,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sent: reportedSent(session),
       headless: session.headless,
       reason,
+      ...ephemeralKeyOf(session.ephemeral),
     });
   }
 
@@ -1816,6 +1830,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             reason: processEndReasonOf(session.isStopRequested, isCleanExit),
             code,
             error,
+            ...ephemeralKeyOf(session.ephemeral),
           });
         }
       },
@@ -1870,6 +1885,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       instructions: readonly string[];
       owner: string | null;
       recordsRecentFolder: boolean;
+      ephemeral: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1897,6 +1913,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         profileName,
         profileDir,
         opening.origin,
+        opening.ephemeral,
       );
     }
     const pendingOpened =
@@ -1976,6 +1993,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       instructions: opening.instructions,
       owner,
       recordsRecentFolder: opening.recordsRecentFolder,
+      ephemeral: opening.ephemeral,
     };
     held.set(sessionId, session);
     takeOverSkipped(session);
@@ -2023,6 +2041,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         profile,
         profileDir,
         origin,
+        session.ephemeral,
       );
     }
     if (pendingClear !== null && oldHostId !== null) {
@@ -2034,6 +2053,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         profile,
         titles: sessions.titles(sessionId) ?? NO_TITLES,
         sent: pendingClear.sent,
+        ...ephemeralKeyOf(session.ephemeral),
       });
     }
     for (const waiter of session.hostIdWaiters.splice(0)) {
@@ -2047,12 +2067,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     profileName: string,
     profileDir: string,
     origin: SessionOrigin,
+    ephemeral: boolean,
   ) {
     deps.emit('sessionOpened', {
       ...row,
       profileDir,
       profile: profileName,
       origin,
+      ...ephemeralKeyOf(ephemeral),
     });
   }
 
@@ -2860,6 +2882,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       owner: string | null;
       controls: Readonly<Record<string, string>>;
       recordsRecentFolder: boolean;
+      ephemeral: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -2893,6 +2916,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         instructions: opening.instructions,
         owner: opening.owner,
         recordsRecentFolder: opening.recordsRecentFolder,
+        ephemeral: opening.ephemeral,
       },
       options,
     );
@@ -2964,6 +2988,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         instructions: opening.instructions,
         owner: opening.owner,
         recordsRecentFolder: true,
+        ephemeral: false,
       },
       { select },
     );
@@ -3050,7 +3075,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles: NO_TITLES,
         origin,
         ...flags,
-        recordsRecentFolder: !target.isProject,
+        recordsRecentFolder: !target.isProject && !flags.ephemeral,
       },
       options,
     );
@@ -3419,6 +3444,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         instructions: request.instructions ?? [],
         owner: request.owner ?? null,
         controls: request.controls ?? {},
+        ephemeral: request.ephemeral === true,
       },
       request.message,
     );
@@ -3431,11 +3457,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Each check runs where `launch` runs it, so a prepared run fails where a
-  // live launch would. `requireNotDetached` is left out: it opens nothing.
+  // live launch would. `requireNotDetached` is left out: it opens nothing. A
+  // prepared run's row is restored from its record, which an ephemeral row
+  // never has.
   async function prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
   ): Promise<PreparedLaunch> {
+    if (request.ephemeral === true) {
+      throw new Error('chat cannot prepare an ephemeral launch');
+    }
     requireAttachableImages(request.message);
     const harness = requireHarnessOfProfile(deps.harnesses, request.profile);
     const profile = requireProfile(
@@ -3610,6 +3641,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           instructions: record.instructions,
           owner: record.owner,
           recordsRecentFolder: true,
+          ephemeral: false,
         },
         options,
       );
@@ -4169,6 +4201,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         owner,
         controls: {},
         recordsRecentFolder: true,
+        ephemeral: false,
       },
       { select },
     );
@@ -4339,6 +4372,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           instructions: [],
           owner: null,
           controls: {},
+          ephemeral: false,
         },
         null,
       ).sessionId,

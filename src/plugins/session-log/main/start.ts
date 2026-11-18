@@ -25,7 +25,8 @@ type SessionLogApi = MainApi<
 // Writes one log line for each lifecycle event, gives chat the Recently closed
 // section over the log, which reads the file and `recentlyClosedCount` at each
 // ask, and hands the self-test its script. A quit writes no close: this part
-// stops before chat, and chat's stop closes nothing.
+// stops before chat, and chat's stop closes nothing. An ephemeral row's events
+// write nothing, so a later run's Recently closed never lists it.
 export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
   manifest: sessionLogManifest,
   start(api: SessionLogApi) {
@@ -37,6 +38,9 @@ export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
     const now = () => api.services.clock.now();
 
     api.events.on('chat.sessionOpened', (opened) => {
+      if (opened.ephemeral === true) {
+        return;
+      }
       void eventLog.append({
         at: now(),
         event: 'opened',
@@ -48,12 +52,21 @@ export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
       });
     });
     api.events.on('chat.sessionClosed', (closed) => {
+      if (closed.ephemeral === true) {
+        return;
+      }
       void eventLog.append({ at: now(), event: 'closed', ...closed });
     });
     api.events.on('chat.sessionCleared', (cleared) => {
+      if (cleared.ephemeral === true) {
+        return;
+      }
       void eventLog.append({ at: now(), event: 'cleared', ...cleared });
     });
     api.events.on('chat.processEnded', (ended) => {
+      if (ended.ephemeral === true) {
+        return;
+      }
       void eventLog.append({ at: now(), event: 'processEnded', ...ended });
     });
     api.events.on('chat.sessionArchived', (archived) => {

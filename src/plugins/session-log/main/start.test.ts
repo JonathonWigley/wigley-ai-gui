@@ -201,6 +201,57 @@ describe('sessionLogMainPart', () => {
     expect(await stopAndReadLines(part)).toEqual([{ at: 5000, ...test.line }]);
   });
 
+  // Breaks if a demo session's lifecycle reaches the log, where a later run's
+  // Recently closed would list it.
+  it.each([
+    {
+      name: 'chat.sessionOpened',
+      data: {
+        sessionId: 'row-1',
+        profileDir: '~/.claude-work',
+        hostSessionId: 'h1',
+        projectDir: '/projects/one',
+        profile: 'work',
+        origin: 'launched',
+        ephemeral: true,
+      },
+    },
+    {
+      name: 'chat.sessionClosed',
+      data: { ...closedEvent('h1'), ephemeral: true },
+    },
+    {
+      name: 'chat.sessionCleared',
+      data: {
+        sessionId: 'row-1',
+        oldHostSessionId: 'h1',
+        newHostSessionId: 'h2',
+        projectDir: '/projects/one',
+        profile: 'work',
+        titles: TITLES,
+        sent: true,
+        ephemeral: true,
+      },
+    },
+    {
+      name: 'chat.processEnded',
+      data: {
+        sessionId: 'row-1',
+        hostSessionId: 'h1',
+        reason: 'clean',
+        code: 0,
+        error: null,
+        ephemeral: true,
+      },
+    },
+  ])('chatEvents_Ephemeral_WritesNothing: $name', async (test) => {
+    const part = startPart();
+
+    part.harness.emit(test.name, test.data);
+
+    expect(await stopAndReadLines(part)).toEqual([]);
+  });
+
   it('section_CountSetting_ReadAtEachAsk', async () => {
     const part = startPart();
     for (const host of ['h1', 'h2', 'h3']) {

@@ -1,6 +1,6 @@
 # 03 — Ephemeral chat launch
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · changes what chat saves to `open-sessions.json` and recent folders, and what session-log and session-stash write to disk, across a clear and a process relaunch; adds a session hub hold that must leave the user's hub uiState untouched
 Wave: 1 · Depends on: none

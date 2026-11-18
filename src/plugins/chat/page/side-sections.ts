@@ -1,4 +1,5 @@
 import type { Timers } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { ResizeTarget } from '../../../contracts/panes';
@@ -117,14 +118,22 @@ export interface SideTab {
 // apply to every tab and session and are kept in `uiState`; a frame change
 // updates the frame in place and never rebuilds the part. A `shrinksLast`
 // part's wrapper carries `data-shrinks-last`, which the hub's height rules read.
+// The hub is hidden while `uiState` hides it and no hold lives; a section is
+// collapsed while `uiState` collapses it and no live hold names its part.
 export interface SideSections {
   // Appends the hub's holder to `root`, which takes `is-side-hidden` while the
   // hub is hidden. Builds no part: the caller runs `sync`.
   openTab(root: HTMLElement, sessionId: string): SideTab;
+  // Flips the hub's hide in `uiState`; a live hold keeps the hub shown.
   toggleHidden(): void;
   // Collapses or expands the section of the held part `partId` in every tab; a
-  // part no longer held is logged and changes nothing.
+  // part no longer held is logged and changes nothing. A live hold on `partId`
+  // keeps the section expanded.
   toggleSection(partId: string): void;
+  // Holds the hub shown and the section of `partId` expanded in every tab until
+  // the handle's first dispose, writing no `uiState`; a part added during the
+  // hold draws expanded. Holds stack.
+  showForNow(partId: string): Disposable;
 }
 
 interface BuiltFrame {
@@ -165,6 +174,15 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
   const { log, uiState } = deps;
   const draws = chatPartDraws(deps.layouts, 'sideSection', log);
   const openTabs = new Set<OpenTab>();
+  // One entry per `showForNow` call until its handle's first dispose.
+  const holds = new Set<{ partId: string }>();
+
+  const isHubHidden = () =>
+    uiState.get(HUB_HIDDEN_KEY) === true && holds.size === 0;
+  const isHeld = (partId: string) =>
+    [...holds].some((hold) => hold.partId === partId);
+  const isCollapsed = (partId: string) =>
+    readCollapsed(uiState).includes(partId) && !isHeld(partId);
 
   // Every tab's divider writes through this, so one drag moves every tab's hub.
   const sharedWidthState: UiState = {
@@ -182,7 +200,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
     partId: frame.part.id,
     title: frame.part.title,
     summary: frame.summary,
-    collapsed: readCollapsed(uiState).includes(frame.part.id),
+    collapsed: isCollapsed(frame.part.id),
   });
 
   const toggleCollapsed = (part: ChatSidePart) => {
@@ -251,6 +269,18 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
     }
   };
 
+  // Shows every tab's hub and its `partId` section as the holds and `uiState`
+  // say now.
+  const redrawHubAndSection = (partId: string) => {
+    for (const tab of openTabs) {
+      tab.root.classList.toggle('is-side-hidden', isHubHidden());
+      const frame = tab.frames.get(partId);
+      if (frame !== undefined) {
+        showFrame(frame);
+      }
+    }
+  };
+
   // `part` as `placeContributedPart` builds it: the frame into the wrapper, then
   // the part into the frame's body.
   const framedPart = (part: ChatSidePart, tab: OpenTab): ContributedPart => ({
@@ -302,10 +332,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
   return {
     openTab(root, sessionId) {
       const holder = appended(root, element('div', SIDE_PARTS.holderClass));
-      root.classList.toggle(
-        'is-side-hidden',
-        uiState.get(HUB_HIDDEN_KEY) === true,
-      );
+      root.classList.toggle('is-side-hidden', isHubHidden());
       holder.style.setProperty('--chat-side-end-min', String(HUB_WIDTH.endMin));
       const widthDivider = createSplitDivider({
         ...HUB_WIDTH,
@@ -381,7 +408,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         divider: widthDivider,
         cursor: sectionCursor(opened, holder, {
           parts: deps.parts,
-          uiState,
+          isHubHidden,
           toggleCollapsed,
         }),
         sync,
@@ -400,7 +427,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
       const isHidden = uiState.get(HUB_HIDDEN_KEY) !== true;
       uiState.set(HUB_HIDDEN_KEY, isHidden);
       for (const tab of openTabs) {
-        tab.root.classList.toggle('is-side-hidden', isHidden);
+        tab.root.classList.toggle('is-side-hidden', isHubHidden());
       }
       log(`session hub ${isHidden ? 'hidden' : 'shown'}`);
     },
@@ -411,6 +438,21 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         return;
       }
       toggleCollapsed(part);
+    },
+    showForNow(partId) {
+      const hold = { partId };
+      holds.add(hold);
+      redrawHubAndSection(partId);
+      log(`session hub held for ${partId}`);
+      return {
+        dispose() {
+          if (!holds.delete(hold)) {
+            return;
+          }
+          redrawHubAndSection(partId);
+          log(`session hub hold for ${partId} ended`);
+        },
+      };
     },
   };
 }
@@ -432,7 +474,7 @@ function sectionCursor(
   holder: HTMLElement,
   deps: {
     parts: Pick<PartStore<ChatSidePart>, 'parts'>;
-    uiState: UiState;
+    isHubHidden(): boolean;
     toggleCollapsed(part: ChatSidePart): void;
   },
 ): SectionCursor {
@@ -469,9 +511,8 @@ function sectionCursor(
   };
   return {
     isReachable() {
-      const isHidden = deps.uiState.get(HUB_HIDDEN_KEY) === true;
       const holderHasLayoutBox = holder.getClientRects().length > 0;
-      return !isHidden && holderHasLayoutBox && shown().length > 0;
+      return !deps.isHubHidden() && holderHasLayoutBox && shown().length > 0;
     },
     enter() {
       const frame = cursorFrame();

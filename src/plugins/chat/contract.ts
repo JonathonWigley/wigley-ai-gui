@@ -93,6 +93,10 @@ export type StartRequest = StartTarget & { harness: string; profile: string };
 // with the row across a clear and a relaunch.
 // `controls`: the first process's values, by control id; each later start in
 // the row passes them again. An id the harness does not declare is refused.
+// `ephemeral`: the session leaves no trace a later app run shows — chat writes
+// no `open-sessions.json` row and records no recent folder, and its events
+// carry `ephemeral: true` so listeners that write to disk skip it. An app
+// restart loses the row. Kept with the row across a clear and a relaunch.
 export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
@@ -100,6 +104,7 @@ export type LaunchRequest = StartTarget & {
   headless?: boolean;
   instructions?: readonly string[];
   owner?: string;
+  ephemeral?: true;
   // The first process's controls, by control id; the row keeps them as its
   // picks. Left out, the harness defaults.
   controls?: Readonly<Record<string, string>>;
@@ -610,6 +615,9 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // none.
 // `processEnded`: a row's live process exiting, outside a replay;
 // `hostSessionId` is the id it started under.
+// `sessionOpened`, `sessionClosed`, `sessionCleared` and `processEnded` carry
+// `ephemeral: true` for a row launched `ephemeral`, and no `ephemeral` key for
+// any other row: a listener that writes to disk skips such a row.
 // `sessionArchived`: a saved session's archived flag, once written.
 // `messageSent`: a message written to the row's process, at the write: a queued
 // message fires when it goes out, not when it queues. `entryId` is the id in
@@ -632,6 +640,7 @@ export interface ChatMainEvents extends EventShape {
     projectDir: string;
     profile: string;
     origin: SessionOrigin;
+    ephemeral?: true;
   };
   sessionClosed: {
     sessionId: string;
@@ -642,6 +651,7 @@ export interface ChatMainEvents extends EventShape {
     sent: boolean;
     headless: boolean;
     reason: SessionCloseReason;
+    ephemeral?: true;
   };
   sessionCleared: {
     sessionId: string;
@@ -651,6 +661,7 @@ export interface ChatMainEvents extends EventShape {
     profile: string;
     titles: SessionTitles;
     sent: boolean;
+    ephemeral?: true;
   };
   processEnded: {
     sessionId: string;
@@ -658,6 +669,7 @@ export interface ChatMainEvents extends EventShape {
     reason: ProcessEndReason;
     code: number | null;
     error: string | null;
+    ephemeral?: true;
   };
   sessionArchived: { hostSessionId: string; archived: boolean };
   messageSent: { sessionId: string; entryId: string };
@@ -678,14 +690,16 @@ export interface ChatMainExports {
   // project, a profile other than the project's, no pool provider, a pool
   // with no clones, or an unknown control id. A pool project's session starts
   // in the pool's lowest-numbered clone. It runs on the harness that declares
-  // its profile.
+  // its profile. With `ephemeral` the row is never saved, its folder never
+  // joins the recent folders, and its events carry `ephemeral: true`.
   launch(request: LaunchRequest): Promise<string>;
   // A launch the session host starts later: chat's instructions as they stand
   // now, the headless note when `request.headless`, `request.controls` as the
   // first process's, `env` added to the run's environment, and fresh ids (host
   // session id, process id, row id, message uuid), on the harness that
   // declares its profile. Opens nothing. Rejects where `launch` rejects, an
-  // unknown control id included.
+  // unknown control id included, and on `ephemeral` (`chat cannot prepare an
+  // ephemeral launch`).
   prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
@@ -958,6 +972,11 @@ export type CompletionRowDraw = (
 // else with the latest-added renderer whose `kind` matches and whose `match`
 // passes, else with `default`; adding or disposing one redraws every Chat
 // tab's entries.
+// `showHubForNow` shows the session hub in every Chat tab and expands the
+// section of side part `sectionId` until the returned handle's dispose,
+// without writing `uiState`. Holds stack: the hub stays shown while any hold
+// lives. Each dispose after the first does nothing. The last dispose shows the
+// hub and the section as `uiState` holds them then.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
@@ -971,6 +990,7 @@ export interface ChatPageExports {
   addEntryRenderer<K extends AnyEntryKind>(
     renderer: ChatEntryRenderer<K>,
   ): Disposable;
+  showHubForNow(sectionId: string): Disposable;
 }
 
 // Draws entries of `kind`, a known kind or a harness's own

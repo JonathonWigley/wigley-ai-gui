@@ -416,6 +416,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         consumer.track(view.mount(element, sessionId)),
       addEntryRenderer: (renderer) =>
         consumer.track(entryRenderers.add(renderer)),
+      showHubForNow: (sectionId) =>
+        consumer.track(sideSections.showForNow(sectionId)),
     });
     return {
       commands: {

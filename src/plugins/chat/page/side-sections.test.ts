@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Disposable } from '../../../contracts/disposable';
 import type { UiState } from '../../../contracts/ui-state';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
@@ -22,6 +23,7 @@ import { createChatLayouts } from './chat-layouts';
 import {
   createSideSections,
   type SectionCursor,
+  type SideSections,
   type SideTab,
 } from './side-sections';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
@@ -521,7 +523,127 @@ describe('createSideSections', () => {
     expect(part.disposes).toBe(2);
     expect(root.classList.contains('is-side-hidden')).toBe(false);
   });
+
+  // Breaks if a hold writes the user's hub or section choice, or leaves the hub
+  // or the section shown after its last dispose.
+  it.each<{
+    case: string;
+    initial: Record<string, unknown>;
+    hold(sections: SideSections): Disposable;
+    during?(sections: SideSections): void;
+    expected: {
+      during: { hidden: boolean; collapsed: boolean };
+      after: { hidden: boolean; collapsed: boolean };
+      sets: [string, unknown][];
+    };
+  }>([
+    {
+      case: 'one hold on a hidden hub and a collapsed a',
+      initial: { [HIDDEN]: true, [COLLAPSED]: ['a'] },
+      hold: (sections) => sections.showForNow('a'),
+      expected: {
+        during: { hidden: false, collapsed: false },
+        after: { hidden: true, collapsed: true },
+        sets: [],
+      },
+    },
+    {
+      case: 'two holds on a, the first disposed twice',
+      initial: { [HIDDEN]: true, [COLLAPSED]: ['a'] },
+      hold: (sections) => {
+        const first = sections.showForNow('a');
+        const second = sections.showForNow('a');
+        first.dispose();
+        first.dispose();
+        return second;
+      },
+      expected: {
+        during: { hidden: false, collapsed: false },
+        after: { hidden: true, collapsed: true },
+        sets: [],
+      },
+    },
+    {
+      case: 'a hold on b with a collapsed',
+      initial: { [HIDDEN]: true, [COLLAPSED]: ['a'] },
+      hold: (sections) => sections.showForNow('b'),
+      expected: {
+        during: { hidden: false, collapsed: true },
+        after: { hidden: true, collapsed: true },
+        sets: [],
+      },
+    },
+    {
+      case: 'a user toggleHidden during the hold',
+      initial: { [HIDDEN]: false },
+      hold: (sections) => sections.showForNow('a'),
+      during: (sections) => sections.toggleHidden(),
+      expected: {
+        during: { hidden: false, collapsed: false },
+        after: { hidden: true, collapsed: false },
+        sets: [[HIDDEN, true]],
+      },
+    },
+    {
+      case: "a user toggleSection('a') during the hold",
+      initial: { [HIDDEN]: false, [COLLAPSED]: [] },
+      hold: (sections) => sections.showForNow('a'),
+      during: (sections) => sections.toggleSection('a'),
+      expected: {
+        during: { hidden: false, collapsed: false },
+        after: { hidden: false, collapsed: true },
+        sets: [[COLLAPSED, ['a']]],
+      },
+    },
+  ])(
+    'showForNow_Hold_ShowsTheHubAndSectionAndRestores: $case',
+    ({ initial, hold, during, expected }) => {
+      const { uiState, sets } = recordingUiState(initial);
+      const { parts, sections, openTab } = setUp(uiState);
+      parts.add(recordingPart('a', 10).part);
+      parts.add(recordingPart('b', 20).part);
+      const { root } = openTab();
+      const shownState = () => ({
+        hidden: root.classList.contains('is-side-hidden'),
+        collapsed: sectionFrameOf(root, 'a').classList.contains('is-collapsed'),
+      });
+
+      const handle = hold(sections);
+      during?.(sections);
+      const whileHeld = shownState();
+      handle.dispose();
+
+      expect({ during: whileHeld, after: shownState(), sets }).toEqual(
+        expected,
+      );
+    },
+  );
 });
+
+// A fake `uiState` that records each `set`, in order.
+function recordingUiState(initial: Record<string, unknown>) {
+  const held = fakeUiState(initial);
+  const sets: [string, unknown][] = [];
+  const uiState: UiState = {
+    get: (key) => held.get(key),
+    set: (key, value) => {
+      sets.push([key, value]);
+      held.set(key, value);
+    },
+  };
+  return { uiState, sets };
+}
+
+// The section frame of part `partId` in `root`.
+function sectionFrameOf(root: FakeElement, partId: string) {
+  const wrapper = findAll(root, 'chat-side-part').find(
+    (each) => each.dataset.part === partId,
+  );
+  if (wrapper === undefined) {
+    throw new Error(`no wrapper for part ${partId}`);
+  }
+  return findAll(wrapper, 'chat-side-section')[0];
+}
 
 // The heads whose section is in `ids` get a layout box, as a drawn head has,
 // and the holder gets one too.

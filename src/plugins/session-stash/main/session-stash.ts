@@ -23,7 +23,8 @@ export interface SessionStashDeps {
 // keeps nothing, logs the refusal and returns false. `drop` forgets a kept note
 // whose close did not happen; `forgetKept` forgets every kept note, for a page
 // that started again. `closed` writes the stash of a kept session the
-// user closed after sending it a message, and drops the kept note of any close.
+// user closed after sending it a message, and drops the kept note of any close;
+// an ephemeral session's kept note is dropped with a log line, never written.
 // A headless session's stash keeps the flag, and its row resumes it headless.
 // `opened` removes the stash of a session resumed from the start prompt.
 // `rows` is the Stashed section's rows: the resumable stashes, newest last. A
@@ -106,6 +107,10 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
         return;
       }
       pending.delete(closed.sessionId);
+      if (closed.ephemeral === true) {
+        log(`stash dropped: ${closed.sessionId} is ephemeral`);
+        return;
+      }
       if (!isUserClose(closed.reason)) {
         return;
       }
