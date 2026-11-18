@@ -264,7 +264,8 @@ it writes no more after the drain. The new host imports every older protocol's r
 before each `setPending` and `listRuns`: it adds each run its own record lacks by id, gives each one still running the
 host-death exit (§ Pending runs), saves, and deletes the older file. So no run the old host fired is lost, and the app
 adopts it like any other. A known limit: a run still running in a draining older host is recorded as ended by its
-host, and its later exit is not read.
+host, and its later exit is not read: its history entry reads finished while that turn runs, and a message sent on
+its resting row resumes the session while the older host's process may still be running.
 
 ## Platforms
 
