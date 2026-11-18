@@ -104,7 +104,7 @@ describe('createDriveCommands', () => {
 
   it.each([
     {
-      case: 'Transparency_SetsItAtItsDottedPathKeepsTheRestAndIsApplied',
+      case: 'transparency is set at its dotted path, the rest kept, and applied',
       name: 'transparency',
       value: 'reduced',
       written: {
@@ -113,7 +113,7 @@ describe('createDriveCommands', () => {
       },
     },
     {
-      case: 'NestedNewKey_SetsItAtItsDottedPathKeepsTheRestAndIsApplied',
+      case: 'a nested new key is set at its dotted path, the rest kept, and applied',
       name: 'workflow-large.autoStartSeconds',
       value: 5,
       written: {
@@ -122,7 +122,7 @@ describe('createDriveCommands', () => {
       },
     },
     {
-      case: 'NewObject_SetsItAtItsDottedPathKeepsTheRestAndIsApplied',
+      case: 'a new object is set at its dotted path, the rest kept, and applied',
       name: 'keys.whichKeyTimeoutMs',
       value: 50,
       written: {
@@ -131,7 +131,7 @@ describe('createDriveCommands', () => {
         keys: { whichKeyTimeoutMs: 50 },
       },
     },
-  ])('setting_$case', async ({ name, value, written }) => {
+  ])('setting: $case', async ({ name, value, written }) => {
     const { files, commands, changeConfigOnWrite } = setUp(() => []);
     await files.write(
       SETTINGS,
@@ -147,21 +147,21 @@ describe('createDriveCommands', () => {
 
   it.each([
     {
-      case: 'TrailingDot_IsRefusedAndTheFileIsUnchanged',
+      case: 'a trailing dot is refused and the file is unchanged',
       name: 'workflow.',
       error: '"workflow."',
     },
     {
-      case: 'LeadingDot_IsRefusedAndTheFileIsUnchanged',
+      case: 'a leading dot is refused and the file is unchanged',
       name: '.autoStartSeconds',
       error: '".autoStartSeconds"',
     },
     {
-      case: 'ParentNotAnObject_IsRefusedAndTheFileIsUnchanged',
+      case: 'a parent that is not an object is refused and the file is unchanged',
       name: 'transparency.level',
       error: 'transparency is not a JSON object',
     },
-  ])('setting_$case', async ({ name, error }) => {
+  ])('setting: $case', async ({ name, error }) => {
     const { files, commands } = setUp(() => []);
     const before = '{ "transparency": "full" }';
     await files.write(SETTINGS, before);
@@ -265,7 +265,7 @@ describe('createDriveCommands', () => {
     expect(result).toEqual({ found: true });
   });
 
-  it('waitLog_SinceZeroLineAlreadyLogged_ResolvesFound', async () => {
+  it('wait-log with a since of zero finds a line already logged', async () => {
     const { commands } = setUp(() => ['[a] done']);
 
     const result = await commands.run('wait-log', {
@@ -277,7 +277,7 @@ describe('createDriveCommands', () => {
     expect(result).toEqual({ found: true });
   });
 
-  it('waitLog_SinceAfterTheMatchingLine_ResolvesNotFound', async () => {
+  it('wait-log with a since after the matching line does not find it', async () => {
     const { commands } = setUp(() => ['[a] other', '[a] done']);
 
     const result = await commands.run('wait-log', {
@@ -324,7 +324,7 @@ describe('createDriveCommands', () => {
     { since: 1.5, error: 'wait-log since must be a whole number of 0 or more' },
     { since: 'two', error: 'since must be a number' },
   ])(
-    'waitLog_SinceNotAWholeNumber_Rejects ($since)',
+    'wait-log rejects a since that is not a whole number ($since)',
     async ({ since, error }) => {
       const { commands } = setUp(() => []);
 

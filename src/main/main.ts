@@ -1145,7 +1145,7 @@ function createWindow(
     runMode === 'selfTest'
       ? startSelfTest(
           window,
-          drivenWindow,
+          requireDrivenWindow(drivenWindow, 'self-test run'),
           scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),

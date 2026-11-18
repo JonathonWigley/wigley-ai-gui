@@ -46,7 +46,7 @@ import {
   sessionThread,
   type UserPostResult,
 } from '../contract';
-import { GIT_READ_WINDOW_MS } from './board-feed';
+import { type BoardFeed, GIT_READ_WINDOW_MS } from './board-feed';
 import { chatInfo, cloneClaim, flow, poolClone } from './board.test-support';
 import { chatroomMainPart, STANDING_NOTE } from './start';
 
@@ -56,6 +56,10 @@ const FINISHING_STAGE = 'land';
 // resolves, so one room rebuild can be held while a later one runs.
 const userUnreadGate = vi.hoisted(() => ({
   next: null as Promise<void> | null,
+}));
+const heldReads = vi.hoisted(() => ({
+  rooms: null as Promise<string[]> | null,
+  endClaimsOf: null as Promise<{ room: string }[]> | null,
 }));
 vi.mock('./room-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./room-service')>();
@@ -71,6 +75,62 @@ vi.mock('./room-service', async (importOriginal) => {
           const unread = await service.userUnread(room);
           await gate;
           return unread;
+        },
+        // Once armed, the next call settles as the held promise does, so a
+        // read can outlive the part that asked for it.
+        rooms() {
+          const held = heldReads.rooms;
+          heldReads.rooms = null;
+          return held ?? service.rooms();
+        },
+        endClaimsOf(rowId: string) {
+          const held = heldReads.endClaimsOf;
+          heldReads.endClaimsOf = null;
+          return held ?? service.endClaimsOf(rowId);
+        },
+      };
+    },
+  };
+});
+
+// A teardown step that throws once armed, and every step the part ran, so a
+// throwing step can be told apart from a skipped one.
+const teardown = vi.hoisted(() => ({
+  fails: null as 'boardFeed' | 'delivery' | null,
+  ran: [] as string[],
+}));
+vi.mock('./board-feed', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./board-feed')>();
+  return {
+    ...actual,
+    createBoardFeed(...args: Parameters<typeof actual.createBoardFeed>) {
+      const feed = actual.createBoardFeed(...args);
+      return {
+        ...feed,
+        stop() {
+          teardown.ran.push('boardFeed');
+          feed.stop();
+          if (teardown.fails === 'boardFeed') {
+            throw new Error('board feed refused');
+          }
+        },
+      } satisfies BoardFeed;
+    },
+  };
+});
+vi.mock('./delivery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./delivery')>();
+  return {
+    ...actual,
+    startDelivery(...args: Parameters<typeof actual.startDelivery>) {
+      const delivery = actual.startDelivery(...args);
+      return {
+        dispose() {
+          teardown.ran.push('delivery');
+          delivery.dispose();
+          if (teardown.fails === 'delivery') {
+            throw new Error('delivery refused');
+          }
         },
       };
     },
@@ -96,7 +156,10 @@ function agentSession(id: string): AgentSession {
 }
 
 function startChatroom(
-  options: { state?: ReturnType<typeof createSlotStore> } = {},
+  options: {
+    state?: ReturnType<typeof createSlotStore>;
+    heldRooms?: Promise<string[]>;
+  } = {},
 ) {
   const projects: Record<string, string | null> = {
     rA: 'game',
@@ -112,6 +175,11 @@ function startChatroom(
   const hooks = new Map<string, HookHandler>();
   const instructions: string[] = [];
   userUnreadGate.next = null;
+  heldReads.rooms = null;
+  heldReads.rooms = options.heldRooms ?? null;
+  heldReads.endClaimsOf = null;
+  teardown.fails = null;
+  teardown.ran.length = 0;
   const sends: [string, UserMessage][] = [];
   const flows: SessionFlow[] = [];
   // Root → its changed files, `/`-separated below it.
@@ -646,6 +714,100 @@ describe('chatroomMainPart', () => {
     expect(git.changedPaths).toHaveBeenCalledTimes(1);
     expect(writes).toEqual([]);
   });
+
+  // Breaks if a read that fails after the part stopped still logs, a line the
+  // stopped part has no business writing.
+  it.each(
+    [false, true].flatMap((isStopped) =>
+      (['rooms', 'endClaimsOf'] as const).map((read) => ({
+        read,
+        isStopped,
+        logged: isStopped ? 0 : 1,
+      })),
+    ),
+  )(
+    'a failed $read read logs $logged lines when stopped is $isStopped',
+    async ({ read, isStopped, logged }) => {
+      let refuse = (_error: Error) => {};
+      const held = new Promise<never>((_resolve, reject) => {
+        refuse = reject;
+      });
+      const { harness, callTool } = startChatroom(
+        read === 'rooms' ? { heldRooms: held } : {},
+      );
+      if (read === 'endClaimsOf') {
+        await callTool('rA', 'chatroom_post', { kind: 'note', body: 'hi' });
+        await settle();
+        heldReads.endClaimsOf = held;
+        harness.emit('sessions.ended', { sessionId: 'rA' });
+        await settle();
+      }
+      if (isStopped) {
+        await harness.stop();
+      }
+
+      refuse(new Error('read refused'));
+      await settle();
+
+      expect(
+        harness.logs.filter(({ message }) => message.includes('read refused')),
+      ).toHaveLength(logged);
+    },
+  );
+
+  // Breaks if a claim end that replies after the stop rewrites the room.
+  it('a claim end that replies after the stop writes no room', async () => {
+    const { harness, callTool } = startChatroom();
+    await callTool('rA', 'chatroom_post', { kind: 'note', body: 'hi' });
+    await settle();
+    let reply = (_claims: { room: string }[]) => {};
+    heldReads.endClaimsOf = new Promise((resolve) => {
+      reply = resolve;
+    });
+    harness.emit('sessions.ended', { sessionId: 'rA' });
+    await settle();
+    await harness.stop();
+    const writes: SlotChange[] = [];
+    harness.state.onWrite((change) => writes.push(change));
+
+    reply([{ room: 'game' }]);
+    await settle();
+
+    expect(writes).toEqual([]);
+  });
+
+  // Breaks if a rebuild held across the stop writes its room view after it.
+  it('a room rebuild held across the stop writes no room', async () => {
+    const { harness, postAsUser } = startChatroom();
+    await settle();
+    let release = () => undefined as void;
+    userUnreadGate.next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await postAsUser('plan-x', { body: 'first' });
+    await settle();
+    const writes: SlotChange[] = [];
+    harness.state.onWrite((change) => writes.push(change));
+
+    const stopped = harness.stop();
+    release();
+    await stopped;
+
+    expect(writes).toEqual([]);
+  });
+
+  // Breaks if a teardown step that throws skips the steps after it.
+  it.each(['boardFeed', 'delivery'] as const)(
+    'a %s stop that throws still runs every other step and rejects',
+    async (fails) => {
+      const { harness } = startChatroom();
+      teardown.fails = fails;
+
+      await expect(harness.stop()).rejects.toThrow('refused');
+
+      expect(teardown.ran).toEqual(['boardFeed', 'delivery']);
+    },
+  );
 
   it('addMirror_ReachesTheRoomService', async () => {
     const { harness, postAsUser } = startChatroom();

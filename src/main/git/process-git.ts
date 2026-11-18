@@ -9,8 +9,8 @@ interface ProcessGitDeps {
   paths: Paths;
 }
 
-// `Git` over the `git` on the PATH, one run per call (two for `fileAtHead`, up to two for
-// `currentBranch`), each as `git -C <root> …`.
+// `Git` over the `git` on the PATH, one run per call (two for `fileAtHead`, up
+// to two for `currentBranch`), each as `git -C <root> …`.
 export function createProcessGit(deps: ProcessGitDeps): Git {
   const { processes } = deps;
   return {

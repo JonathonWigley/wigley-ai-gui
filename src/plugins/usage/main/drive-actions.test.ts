@@ -98,16 +98,16 @@ describe('usage drive actions', () => {
 
   it.each([
     {
-      name: 'MessageGiven_NextPlanUsageRejects',
+      name: 'the next plan usage rejects with the message given',
       args: { message: 'quota' },
       expected: 'quota',
     },
     {
-      name: 'NoMessage_NextPlanUsageRejects',
+      name: 'the next plan usage rejects with a default message when none is given',
       args: {},
       expected: 'fake poll failed',
     },
-  ])('failNextPoll_$name', async ({ args, expected }) => {
+  ])('failNextPoll: $name', async ({ args, expected }) => {
     const realHarness = { id: 'other' } as AgentHarness;
     const fake = createFakeAgentHarness(
       { now: () => NOW },

@@ -1111,7 +1111,7 @@ const ATTACHMENTS_STEPS: SelfTestStep[] = [
       '[chat] Chat tab shown in chat-images',
       CHAT_STEP_TO_ROW_PRESSES_MAX,
     ),
-    why: 'The Sessions list shows chat-selftest, chat-images, then chat-second, so chat-images is the next session down.',
+    why: 'The Sessions list shows chat-selftest, chat-images, then chat-second, so the press repeats until the Chat tab shows chat-images.',
   },
   {
     keys: [' ', 'c', 'i'],

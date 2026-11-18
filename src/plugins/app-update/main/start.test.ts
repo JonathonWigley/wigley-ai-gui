@@ -187,7 +187,7 @@ describe('appUpdateMainPart', () => {
       status: { kind: 'available', sha: '2222222' },
     },
   ])(
-    'install_ExitCodeWritten_SetsTheResult ($case)',
+    'a written exit code sets the install result ($case)',
     async ({ code, status }) => {
       const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
       await test.install();

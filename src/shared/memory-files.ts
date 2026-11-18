@@ -3,11 +3,10 @@ import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report each
-// changed file's and folder's path to the watches over it at once, with no
+// `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report
+// each changed file's and folder's path to the watches over it at once, with no
 // debounce, so a test drives a save by writing; a rename reports each moved
-// file's and folder's old path and its new one. A
-// watch with `recursive: false` reports a change under a subfolder as the
+// file's and folder's old path and its new one. A watch with `recursive: false` reports a change under a subfolder as the
 // subfolder's name, once per call. A watch never fails or misses a change, so
 // it never calls its `onError` or `onMissed`. There are no links, so `stat`
 // reports none and `realPath` returns the path's stored spelling. Names are
@@ -103,7 +102,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
   };
 
   // Every folder at or under `target` that `statKey` reads as a folder,
-  // implicit ones included, shallowest first.
+  // implicit ones included, each folder before the folders under it.
   const foldersAtOrUnder = (target: string): string[] => {
     const folders = new Set<string>();
     if (target !== '' && statKey(target)?.isFolder) {

@@ -380,6 +380,37 @@ describe('audio-picker main part', () => {
     ).toEqual([]);
   });
 
+  // Breaks if the sample write settling after the stop still adds drive
+  // actions to the stopped part.
+  it('a stop before the sample write settles adds no drive actions', async () => {
+    const written = Promise.withResolvers<void>();
+    sampleWrite.gate = written.promise;
+    const harness = startWithSessions({ homeDir });
+    await harness.stop();
+
+    written.resolve();
+    await flush();
+
+    expect(harness.drive?.actions.has('openPicker')).toBe(false);
+  });
+
+  // Breaks if a preview that refuses to end is swallowed on a quit.
+  it('a quit whose preview refuses to end still rejects once stopped', async () => {
+    const sessions = previewSessions();
+    sessions.end.mockImplementation(() => {
+      throw new Error('end refused');
+    });
+    const harness = startMainPart(audioPickerMainPart, {
+      dependencies: [fakeChat(), sessions.dependency],
+      services: { homeDir },
+    });
+    harness.invoke('openPreview');
+
+    await expect(harness.stop('quit')).rejects.toThrow('end refused');
+
+    expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
   it("stop ends the open preview's session", async () => {
     const sessions = previewSessions();
     const harness = startMainPart(audioPickerMainPart, {

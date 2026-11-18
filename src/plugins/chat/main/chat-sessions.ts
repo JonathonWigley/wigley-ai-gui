@@ -4576,9 +4576,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
-      const sessions = [...held.values()];
+      const heldSessions = [...held.values()];
       const heldProcesses = new Set(
-        sessions.flatMap((session) =>
+        heldSessions.flatMap((session) =>
           session.process === null ? [] : [session.process],
         ),
       );
@@ -4589,7 +4589,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         callEach<() => void>(
           [
             () =>
-              callEach(sessions, (session) => {
+              callEach(heldSessions, (session) => {
                 rejectHostIdWaiters(
                   session,
                   `session ${session.sessionId} not settled: chat is stopping`,

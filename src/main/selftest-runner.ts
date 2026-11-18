@@ -39,8 +39,10 @@ import type { ScriptRun } from './selftest-config';
 //
 // A run belongs to one page load, numbered by the window's navigation count,
 // and stands down once the page has navigated past it: every press, click,
-// resize, file write, report line and fixture open checks `isCurrent` with no
-// await between the check and the act.
+// resize, file write, report line and fixture open checks `isCurrent` just
+// before the act, with no await between the two, except a click, which checks
+// before it awaits its point and presses, so a navigation in between goes
+// unseen.
 
 // The `isCurrent` of a run started on page load `load`: true while the window
 // is still on that load and `hasExited` is false.

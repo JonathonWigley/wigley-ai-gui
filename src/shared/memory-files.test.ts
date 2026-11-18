@@ -68,7 +68,7 @@ describe('createMemoryFiles', () => {
     ]);
   });
 
-  it('makeFolder_NewNestedFolder_ReportsEachMadeFolder', async () => {
+  it('makeFolder reports each folder a new nested folder made', async () => {
     const recursive: string[] = [];
     const topOnly: string[] = [];
     files.watch('/h', (changed) => recursive.push(changed));
@@ -80,7 +80,7 @@ describe('createMemoryFiles', () => {
     expect(topOnly).toEqual(['a']);
   });
 
-  it('makeFolder_ExistingFolder_ReportsNothing', async () => {
+  it('makeFolder reports nothing for a folder that already exists', async () => {
     await files.makeFolder('/h/a');
     const reports: string[] = [];
     files.watch('/h', (changed) => reports.push(changed));
@@ -91,7 +91,7 @@ describe('createMemoryFiles', () => {
   });
 
   it.each(['trash', 'remove'] as const)(
-    'removeEmptyFolder_%s',
+    '%s reports an empty folder once',
     async (method) => {
       await files.makeFolder('/h/e');
       const reports: string[] = [];
@@ -103,7 +103,7 @@ describe('createMemoryFiles', () => {
     },
   );
 
-  it('rename_EmptyFolder_ReportsBothNames', async () => {
+  it('rename reports both names of an empty folder', async () => {
     await files.makeFolder('/h/e');
     const reports: string[] = [];
     files.watch('/h', (changed) => reports.push(changed));

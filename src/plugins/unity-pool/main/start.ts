@@ -1,4 +1,5 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
@@ -9,7 +10,6 @@ import { resolveScriptPath, runPoolCommand } from './pool-cli';
 import { createPoolProvider } from './pool-provider';
 import { createPoolWatch } from './pool-watch';
 import { unityPoolSelfTestScript } from './selftest-script';
-import { callEach } from '../../../shared/call-each';
 
 type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 

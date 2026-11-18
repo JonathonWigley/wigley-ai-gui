@@ -220,15 +220,12 @@ export interface SelfTestDriver {
 // width every script starts and ends on.
 export function startSelfTest(
   window: BrowserWindow,
-  drivenWindow: DrivenWindow | null,
+  drivenWindow: DrivenWindow,
   homeFiles: Files,
   cleanUp: () => Promise<void>,
   screenshotFolder: string,
   filter: SelfTestFilter,
 ): SelfTestDriver {
-  if (drivenWindow === null) {
-    throw new Error('driven window missing in self-test run');
-  }
   emptyFolder(screenshotFolder);
   const startWidth = drivenWindow.contentSize().width;
   const handed: HandedScript[] = [];

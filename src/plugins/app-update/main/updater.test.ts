@@ -107,19 +107,16 @@ describe('createUpdater', () => {
   it.each([
     { case: 'within the gap', afterMs: FOCUS_CHECK_GAP_MS - 1, fetches: 1 },
     { case: 'past the gap', afterMs: FOCUS_CHECK_GAP_MS, fetches: 2 },
-  ])(
-    'focused_Fetches ($case, $fetches fetches)',
-    async ({ afterMs, fetches }) => {
-      const test = setUp();
-      await settle();
+  ])('a focus fetches $fetches times ($case)', async ({ afterMs, fetches }) => {
+    const test = setUp();
+    await settle();
 
-      test.time.advance(afterMs);
-      test.updater.focused();
-      await settle();
+    test.time.advance(afterMs);
+    test.updater.focused();
+    await settle();
 
-      expect(test.git.fetch).toHaveBeenCalledTimes(fetches);
-    },
-  );
+    expect(test.git.fetch).toHaveBeenCalledTimes(fetches);
+  });
 
   it('check_InstallStartedWhileItRan_KeepsInstalling', async () => {
     const test = setUp();

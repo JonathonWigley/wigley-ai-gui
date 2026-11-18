@@ -26,7 +26,10 @@ import { unityPoolMainPart } from './start';
 
 // The fake chat records each provider `addPoolProvider` registers, counts each registration's dispose, and records
 // the self-test pool's folders as the provider gave them at each `changed()`.
-function startOnHarness(os: OsName = 'macos') {
+function startOnHarness(
+  os: OsName = 'macos',
+  options: { registrationRefusesDispose?: boolean } = {},
+) {
   const providers: PoolProvider[] = [];
   const foldersAtChanges: (readonly string[])[] = [];
   let disposed = 0;
@@ -39,6 +42,9 @@ function startOnHarness(os: OsName = 'macos') {
         },
         dispose: () => {
           disposed++;
+          if (options.registrationRefusesDispose === true) {
+            throw new Error('registration refused');
+          }
         },
       };
     },
@@ -67,6 +73,18 @@ describe('unityPoolMainPart', () => {
     expect(harness.counts().registrations).toBeGreaterThan(0);
 
     await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
+  // Breaks if a provider registration that throws on dispose skips the watch's.
+  it('a provider registration that throws on dispose still lets the watch stop, and the stop rejects', async () => {
+    const harness = startOnHarness('macos', {
+      registrationRefusesDispose: true,
+    });
+    await vi.waitFor(() => expect(harness.counts().timers).toBe(1));
+
+    await expect(harness.stop()).rejects.toThrow('registration refused');
 
     expect(harness.counts()).toEqual(noCounts);
   });

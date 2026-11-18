@@ -2950,7 +2950,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     { profileDir: '~/.claude-personal', folder: '/Users/u/.claude-personal' },
     { profileDir: '/p', folder: '/p' },
   ])(
-    'configFolder_IgnoresTheAppsConfigDir ($profileDir)',
+    'the config folder ignores the app config dir ($profileDir)',
     ({ profileDir, folder }) => {
       const harness = createClaudeCodeHarness({
         command: async () => ({ command: '/bin/claude', args: [] }),
@@ -4970,8 +4970,20 @@ describe('createClaudeCodeHarness on the session host', () => {
   });
 
   describe('detach', () => {
-    async function startedOnHost() {
+    async function startedOnHost(
+      options: { pipeRefusesDetach?: boolean } = {},
+    ) {
       const host = createFakeSessionHost(clock);
+      if (options.pipeRefusesDetach === true) {
+        const spawn = host.spawn.bind(host);
+        host.spawn = (spawnRequest, events) => {
+          const pipe = spawn(spawnRequest, events);
+          pipe.detach = () => {
+            throw new Error('pipe refused');
+          };
+          return pipe;
+        };
+      }
       const recording = recordingEvents();
       const agent = hostHarness(host, clock).start(request, recording.events);
       await settle();
@@ -5035,6 +5047,19 @@ describe('createClaudeCodeHarness on the session host', () => {
 
       expect(heard.filter(([name]) => name === 'ended')).toEqual([]);
       expect(record.kills).toEqual([]);
+    });
+
+    // Breaks if a pipe that throws on detach leaves the end timers running or
+    // a pending end unsettled.
+    it('a pipe that throws on detach still stops the timers and settles a pending end, then throws', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const { agent } = await startedOnHost({ pipeRefusesDetach: true });
+      const ending = agent.end();
+
+      expect(() => agent.detach()).toThrow('pipe refused');
+
+      await ending;
+      expect(vi.getTimerCount()).toBe(0);
     });
 
     it('detach_QueuedEmission_Dropped', async () => {
