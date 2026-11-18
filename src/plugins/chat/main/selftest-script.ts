@@ -1295,7 +1295,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'session hub',
-    why: 'Space b h hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box. A first click on the other pane's hub head folds its section and focuses that pane.',
+    why: "Space b h hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box. A first click on the other pane's hub head folds its section and focuses that pane.",
     steps: [
       {
         keys: ['Escape', ' ', 'b', 'h'],
