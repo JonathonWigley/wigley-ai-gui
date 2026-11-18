@@ -234,6 +234,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   ⌘↩ (send now), key presses did nothing until `<A-h>`/`<A-l>` moved focus to another pane and back. Not yet known
   whether Lane H caused it or whether it reproduces on a fake run. A first step is a fake drive run of resume, then
   ⌘↩, then a key that logs, reading `app.log` for the key.
+- **Chatroom: an ended session's thread shows its raw `session:<row id>` label** — *agent-ready*: the side bar names a
+  `session:<row id>` thread after its row (`src/plugins/chatroom/page/chatroom-state.ts:86`), and once the row is gone
+  from the sessions list the thread falls back to the raw id. Fix: keep the last title seen for a row id (in the
+  thread's record or the page's state) and show it, marked ended. Source session: Claude Code
+  ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
 
 ## Harness seams
 
@@ -530,6 +535,15 @@ User-facing features, those other work builds on first.
   against many agents on coding work is vendor evidence, and the log gives the user's own.
 - **An image, video, HTML and artifact viewer** — *needs a feature plan*: a viewer in the app, so a render or page
   the agent asks the user to look at is visible inside the gui.
+- **Chatroom: resolve a thread from the viewer** — *needs a feature plan*: the room service has `resolveThread`
+  (`src/plugins/chatroom/main/room-service.ts:1147`) but nothing calls it, so a thread stays open for good. Plan the
+  viewer action (key, confirm, how a resolved thread lists and whether a new post reopens it) and an agent tool if
+  agents should resolve their own. Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Chatroom: wake a restored session that has not started** — *needs a feature plan*: delivery counts a row as idle
+  only when its process runs (`src/plugins/chatroom/main/delivery.ts`), so a row restored at app start and never
+  started rests, and a message to it waits until the user starts it. Waking it means starting its process, which needs
+  chat to expose "never started since the app opened" apart from "stopped by the user" (a stopped row must stay
+  resting). Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
 
 ## Code cleanup
 
@@ -615,6 +629,11 @@ Duplication and drift with no user-visible defect.
   before then, move it into the shared ui primitives, add its gallery entry and its `DESIGN.md` § Primitives row, and
   point the audio picker at it; its size stays a `calc` of space tokens. `audio-picker/page/audio/waveform.ts` is an unrelated peaks module and stays. Source session: Claude Code
   6c8ae463-d34c-4c99-ae9e-8a92d1952360 in new-games-prototypes.
+- **One `isStringOrNull` in `src/shared/json.ts`** — *agent-ready*: four copies exist —
+  `src/plugins/chatroom/contract.ts:56` (exported type guard), `src/plugins/notes/draft.ts:33` (type guard),
+  `src/plugins/workflow-large/contract.ts:197` and `src/plugins/workflow/main/flow-store.ts:278` (both `boolean`).
+  Move the type guard into `src/shared/json.ts` beside `isJsonObject` and point every copy at it. Source session:
+  Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
 
 ## Latent defects and tests
 
@@ -994,3 +1013,17 @@ because the earlier items rewrite many of these tests anyway.
   also leaves one detached fake record in the fake's records (`record.detached`,
   `src/shared/fake-agent-harness.ts:2063`). Add an end API to `fake-agent-harness.ts` for the self-test to call, and
   host the fake's processes on the session host so the return attaches.
+- **Chatroom: room names past the file-name limit** — *agent-ready*: a room's file name is its name with each unsafe
+  character written as `%XX` per UTF-8 byte (`src/plugins/chatroom/main/room-store.ts:15`), so a long or non-ASCII
+  name passes 255 bytes and the write fails with `ENAMETOOLONG`. Cap the encoded length where a name is accepted (a
+  refusal the tool reports) or hash the tail of a long name; add a table row for a 300-byte name. Source session:
+  Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Chatroom: the board keeps an expired claim until something else refreshes it** — *agent-ready*: the board drops a
+  claim past `expiresAt` only when it is next built (`src/plugins/chatroom/main/board.ts:120`), so an open viewer
+  shows an expired claim until a post or session event. Arm one timer per room at the earliest live `expiresAt` and
+  refresh the room's board when it fires; test it with the harness's fake clock. Source session: Claude Code
+  ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Chatroom self-test fixture: a re-seed after a failed seed duplicates its sessions** — *agent-ready*:
+  `seedChatroomFixture` (`src/plugins/chatroom/main/selftest-fixture.ts:46`) creates its two rows without looking for
+  rows a failed earlier seed left, so a retry adds a second pair. Reuse the rows by title, or remove them before
+  seeding. Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
