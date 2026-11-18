@@ -66,7 +66,7 @@ describe('createDocsParts', () => {
     { next: 'new object for the drawn part', redraws: 2 },
     { next: 'new object for a layout no drawn part picks', redraws: 1 },
   ])(
-    'redrawIfChanged_After_$next_Redraws_$redraws_Times',
+    'redrawIfChanged_Redraws (after $next, $redraws times)',
     ({ next, redraws }) => {
       let shown = withUser(defaultLayout, bannerLayout('a'));
       const { parts } = fakeDocsParts(() => shown);

@@ -97,9 +97,17 @@ describe('usage drive actions', () => {
   });
 
   it.each([
-    { name: 'MessageGiven', args: { message: 'quota' }, expected: 'quota' },
-    { name: 'NoMessage', args: {}, expected: 'fake poll failed' },
-  ])('failNextPoll_$name_NextPlanUsageRejects', async ({ args, expected }) => {
+    {
+      name: 'MessageGiven_NextPlanUsageRejects',
+      args: { message: 'quota' },
+      expected: 'quota',
+    },
+    {
+      name: 'NoMessage_NextPlanUsageRejects',
+      args: {},
+      expected: 'fake poll failed',
+    },
+  ])('failNextPoll_$name', async ({ args, expected }) => {
     const realHarness = { id: 'other' } as AgentHarness;
     const fake = createFakeAgentHarness(
       { now: () => NOW },

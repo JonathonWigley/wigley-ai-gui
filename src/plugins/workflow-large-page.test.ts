@@ -667,7 +667,7 @@ describe('Large over the engine page part', () => {
     { stage: 'closed', fields: BUSY.subagent, word: null, tag: true },
     { stage: 'make', fields: {}, word: null, tag: true },
     { stage: 'make', fields: BUSY.turn, word: null, tag: true },
-  ])('setFlow_$stage_RowLabelReads$word', ({ stage, fields, word, tag }) => {
+  ])('setFlow_RowLabelReadsItsWord ($stage, word $word)', ({ stage, fields, word, tag }) => {
     const { view, put, rowActivities } = setUp();
     const wrapper = new FakeElement('div');
 
@@ -779,7 +779,7 @@ describe('Large over the engine page part', () => {
       steps: trail(7, 'Close', 'done'),
     },
   ])(
-    'steps_FlowIn_$stage_$busy_CarryThePinnedStates',
+    'steps_FlowIn_CarryThePinnedStates ($stage, $busy)',
     ({ stage, busy, steps }) => {
       const { view, put, setLayouts } = setUp();
       const recording = recordingLayout();

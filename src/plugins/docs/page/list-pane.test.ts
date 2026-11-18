@@ -138,7 +138,7 @@ describe('createListPane', () => {
   it.each([
     { edge: 'top' as const, expected: 'a' },
     { edge: 'end' as const, expected: 'c' },
-  ])('moveToEdge_$edge_PutsTheCursorOnThatRow', ({ edge, expected }) => {
+  ])('moveToEdge_PutsTheCursorOnThatRow ($edge)', ({ edge, expected }) => {
     const { pane, cursor } = setUp();
     pane.show(THREE_ROWS);
     pane.move(1);

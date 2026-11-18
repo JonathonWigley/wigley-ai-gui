@@ -149,7 +149,7 @@ Conventions:
   the lines it caused. Until `release`, another `drag` or a `click` rejects with `A drag from
   <selector> is held; release it first`; `release` with nothing held rejects with `No drag is
   held; drag --hold first`.
-- `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
+- `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count unless `since` is given: `{"since":n}` with the `next` an earlier `log` returned counts every line from there on, so a driver reads a line a page start already logged with `log` once, then `wait-log` from its `next`; a `since` past the log's end (the page reloaded) counts every line, as `log` does.
 - `chat.askPermission` under the fake harness returns a `toolUseId` at once; `chat.permissionAnswer`
   with that id answers `{ pending: true }` until the card is answered, then the decision
   `{ allowed, reason }`, as `forms.answers` does for a round.

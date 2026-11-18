@@ -868,7 +868,7 @@ describe('workflow kit', () => {
     { state: 'ready', icon: 'codicon-play-circle' },
     { state: 'paused', icon: 'codicon-debug-pause' },
     { state: 'done', icon: 'codicon-pass-filled' },
-  ])('statusMark_$state_DrawsItsCodiconAtTheClock', ({ state, icon }) => {
+  ])('statusMark_DrawsItsCodiconAtTheClock ($state)', ({ state, icon }) => {
     const { kit } = smallKit();
     const parent = new FakeElement('div');
 
@@ -897,7 +897,7 @@ describe('workflow kit', () => {
   it.each([
     { main: false, command: 'workflow-small.go' },
     { main: true, command: 'workflow.mainAction' },
-  ])('actionButton_main$main_Anchors $command', ({ main, command }) => {
+  ])('actionButton_Anchors (main $main, $command)', ({ main, command }) => {
     const { kit, anchors } = smallKit();
 
     kit.actionButton(asHtml(new FakeElement('div')), {
@@ -1152,7 +1152,7 @@ describe('workflow view unseen word', () => {
       word: null,
     },
   ])(
-    'setFlow_$name_RowReads$word',
+    'setFlow_RowReadsItsWord ($name, word $word)',
     ({ stage, flows, activeAtEnd, viewed, word }) => {
       const { view, put, stages, rowActivities, active } = setUp();
       stages.add(

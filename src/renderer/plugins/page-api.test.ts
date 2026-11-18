@@ -1228,7 +1228,7 @@ describe('createPageApi recording', () => {
     { settles: 'resolves', restore: () => Promise.resolve() },
     { settles: 'rejects', restore: () => Promise.reject(new Error('gone')) },
   ])(
-    'restores.track_RestoreThat$settles_DisposesItsHandleOnce',
+    'restores.track_SettledRestore_DisposesItsHandleOnce ($settles)',
     async ({ restore }) => {
       let disposes = 0;
       const registrations = createRegistrations();

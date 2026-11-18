@@ -765,13 +765,17 @@ describe('mountChatView session facts source', () => {
   };
 
   it.each<{ case: string; user: ChatLayout; composerRedrawn: boolean }>([
-    { case: 'StatusLineDraws', user: {}, composerRedrawn: false },
     {
-      case: 'ComposerUpdateThrows',
+      case: 'StatusLineDraws_ListenerRunsOnce',
+      user: {},
+      composerRedrawn: false,
+    },
+    {
+      case: 'ComposerUpdateThrows_ListenerRunsOnce',
       user: COMPOSER_UPDATE_THROWS,
       composerRedrawn: true,
     },
-  ])('branchWrite_$case_ListenerRunsOnce', ({ user, composerRedrawn }) => {
+  ])('branchWrite_$case', ({ user, composerRedrawn }) => {
     const mount = mounted();
     mount.layouts.set({
       user: 'mine',

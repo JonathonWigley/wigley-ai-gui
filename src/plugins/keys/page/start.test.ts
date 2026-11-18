@@ -185,7 +185,7 @@ describe('keys page part', () => {
     },
     { command: 'scrollTop', line: 'scrolled the key help to the top' },
     { command: 'scrollEnd', line: 'scrolled the key help to the end' },
-  ] as const)('helpScroll_$command_LogsItsLine', async ({ command, line }) => {
+  ] as const)('helpScroll_LogsItsLine ($command)', async ({ command, line }) => {
     helpScroller.scrollTop = 100;
     const harness = startKeys();
 

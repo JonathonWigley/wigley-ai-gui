@@ -2950,7 +2950,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     { profileDir: '~/.claude-personal', folder: '/Users/u/.claude-personal' },
     { profileDir: '/p', folder: '/p' },
   ])(
-    'configFolder_$profileDir_IgnoresTheAppsConfigDir',
+    'configFolder_IgnoresTheAppsConfigDir ($profileDir)',
     ({ profileDir, folder }) => {
       const harness = createClaudeCodeHarness({
         command: async () => ({ command: '/bin/claude', args: [] }),

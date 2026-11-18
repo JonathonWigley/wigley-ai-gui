@@ -585,7 +585,7 @@ describe('notices pane', () => {
     { case: 'index 1.5', index: 1.5, twice: false },
     { case: 'index 3', index: 3, twice: false },
     { case: 'line 1 twice', index: 1, twice: true },
-  ])('noticesKit_BadLine_$case_FallsBackToDefault', ({ index, twice }) => {
+  ])('noticesKit_BadLine_FallsBackToDefault ($case)', ({ index, twice }) => {
     const { pane, log } = drawNoticesPane({
       name: 'test',
       layout: {

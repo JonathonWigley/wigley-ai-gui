@@ -984,7 +984,7 @@ describe('createChatSessions', () => {
       expected: null,
     },
   ])(
-    'hostSessionIdOf_$row_ReturnsItsHostId',
+    'hostSessionIdOf_ReturnsItsHostId ($row)',
     async ({ reported, sessionId, expected }) => {
       const test = setUp();
       test.chat.start({
@@ -5109,7 +5109,7 @@ describe('createChatSessions usage forwarding', () => {
       close: true,
       event: { type: 'sessionEnded', at: 1000 } satisfies AgentEvent,
     },
-  ])('agentEvent_$case_ReachesTheBusWithBothIds', async ({ close, event }) => {
+  ])('agentEvent_ReachesTheBusWithBothIds ($case)', async ({ close, event }) => {
     const test = await started();
     if (close) {
       test.chat.closed(ROW_ID, 'user');
@@ -7934,7 +7934,7 @@ describe('createChatSessions send gate and hold', () => {
       given: 'a clear',
       end: (test) => test.chat.clear(ROW_ID),
     },
-  ])('hold_$given_ReturnsRowsAndClears', async ({ end }) => {
+  ])('hold_ReturnsRowsAndClears ($given)', async ({ end }) => {
     const test = await startedAndHeld();
     await test.chat.send(ROW_ID, LATER);
 

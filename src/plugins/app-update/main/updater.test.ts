@@ -107,7 +107,7 @@ describe('createUpdater', () => {
   it.each([
     { case: 'within the gap', afterMs: FOCUS_CHECK_GAP_MS - 1, fetches: 1 },
     { case: 'past the gap', afterMs: FOCUS_CHECK_GAP_MS, fetches: 2 },
-  ])('focused_$case_Fetches$fetches', async ({ afterMs, fetches }) => {
+  ])('focused_Fetches ($case, $fetches fetches)', async ({ afterMs, fetches }) => {
     const test = setUp();
     await settle();
 

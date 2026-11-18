@@ -881,7 +881,7 @@ describe('practicePagePart', () => {
       case: 'FilterBox',
       act: (commands) => commands.filter({ arg: undefined }),
     },
-  ])('layoutChange_FocusOn$case_KeepsIt', async ({ act }) => {
+  ])('layoutChange_KeepsFocus ($case)', async ({ act }) => {
     const { harness, commands } = await startWithProblemOpen();
     act(commands);
     const focused = focusedElement();

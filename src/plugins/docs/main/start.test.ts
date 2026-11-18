@@ -388,7 +388,7 @@ describe('docs main part', () => {
       newPath: '/p/notes.md',
     },
   ])(
-    'sessionSource_$event_RebuildAllowsOnlyTheNewRunsDocWrites',
+    'sessionSource_RebuildAllowsOnlyTheNewRunsDocWrites ($event)',
     async ({ event, info, changed, oldRun, oldPath, newRun, newPath }) => {
       const docs = startDocsPart();
       for (const [run, path] of [

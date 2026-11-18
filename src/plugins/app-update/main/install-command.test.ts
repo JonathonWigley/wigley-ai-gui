@@ -25,7 +25,7 @@ describe('installCommandFor', () => {
       ],
     },
   ])(
-    'installCommandFor_$os_QuotesTheExitCodePath',
+    'installCommandFor_QuotesTheExitCodePath ($os)',
     ({ os, exitCodePath, command, args }) => {
       expect(installCommandFor(os, exitCodePath)).toEqual({ command, args });
     },
