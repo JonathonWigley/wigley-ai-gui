@@ -532,34 +532,6 @@ describe('createProcessGit', () => {
     expect(await test.git.fileAtHead(ROOT, 'docs/followups.md')).toBeNull();
   });
 
-  it('commitPaths_Paths_AddThenCommitOnly', async () => {
-    const test = setUp();
-    const add = git('--literal-pathspecs', 'add', '--', 'a.md', 'b.md');
-    const commit = git(
-      '--literal-pathspecs',
-      'commit',
-      '--only',
-      '-m',
-      'm',
-      '--',
-      'a.md',
-      'b.md',
-    );
-    test.processes.script('git', add, exited(0));
-    test.processes.script('git', commit, exited(0));
-
-    await test.git.commitPaths(ROOT, ['a.md', 'b.md'], 'm');
-
-    expect(test.processes.runs.map((run) => run.args)).toEqual([add, commit]);
-  });
-
-  it('commitPaths_NoPaths_RejectsWithoutRunning', async () => {
-    const test = setUp();
-
-    await expect(test.git.commitPaths(ROOT, [], 'm')).rejects.toThrow();
-    expect(test.processes.runs).toEqual([]);
-  });
-
   function logArgs(limit: number, ...paths: string[]): string[] {
     return git(
       '--literal-pathspecs',
@@ -769,55 +741,6 @@ describe('createProcessGit over a real clone', () => {
       expect(await adapter.resolveCommit(root, 'origin/main')).toBeNull();
       expect(await adapter.isAncestor(root, first, second ?? '')).toBe(true);
       expect(await adapter.isAncestor(root, second ?? '', first)).toBe(false);
-    },
-  );
-
-  it.skipIf(!gitOnPath)(
-    'commitPaths_UnrelatedFileStaged_CommitsOnlyPathsAndKeepsItStaged',
-    async () => {
-      isolateGitConfig();
-      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
-      const followups = 'docs/features/followups.md';
-      await run('init', '--quiet');
-      mkdirSync(path.join(root, 'docs/features'), { recursive: true });
-      writeFileSync(path.join(root, followups), '');
-      writeFileSync(path.join(root, 'other.txt'), '');
-      await run('add', '--', followups, 'other.txt');
-      await run('commit', '--quiet', '-m', 'first');
-      writeFileSync(path.join(root, followups), 'changed\n');
-      writeFileSync(path.join(root, 'other.txt'), 'staged\n');
-      await run('add', '--', 'other.txt');
-
-      await adapter.commitPaths(root, [followups], 'Edit follow-ups');
-
-      expect(await run('show', '--name-only', '--format=%s', 'HEAD')).toBe(
-        `Edit follow-ups\n\n${followups}\n`,
-      );
-      expect(await run('diff', '--cached', '--name-only')).toBe('other.txt\n');
-    },
-  );
-
-  it.skipIf(!gitOnPath)(
-    'commitPaths_PathWithGlobCharacter_CommitsOnlyThatFile',
-    async () => {
-      isolateGitConfig();
-      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
-      await run('init', '--quiet');
-      // `a[b].md` is a glob matching `ab.md` too, and a name Windows takes,
-      // where it refuses `*`.
-      writeFileSync(path.join(root, 'a[b].md'), '');
-      writeFileSync(path.join(root, 'ab.md'), '');
-      await run('add', '--', ':(literal)a[b].md', 'ab.md');
-      await run('commit', '--quiet', '-m', 'first');
-      writeFileSync(path.join(root, 'a[b].md'), 'changed\n');
-      writeFileSync(path.join(root, 'ab.md'), 'changed\n');
-
-      await adapter.commitPaths(root, ['a[b].md'], 'Edit glob file');
-
-      expect(await run('show', '--name-only', '--format=%s', 'HEAD')).toBe(
-        'Edit glob file\n\na[b].md\n',
-      );
-      expect(await run('status', '--porcelain=v1')).toBe(' M ab.md\n');
     },
   );
 

@@ -1,6 +1,6 @@
 # 15 — Git.commitPaths removed
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · removes one contract member, its adapter, its tests and two fakes; no behaviour changes
 Wave: 3 · Depends on: 01, 05 (each lists `AGENTS.md`)

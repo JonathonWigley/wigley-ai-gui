@@ -235,8 +235,7 @@ src/main/        core main process; main.ts is its composition root
                  but not wired in, for a Mac where the login item does not work; and a no-op for every other platform
                  and run
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), and a commit of named paths
-                 only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
+                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and the commit that first added a text to a file (`firstAdded`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and two commits, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page

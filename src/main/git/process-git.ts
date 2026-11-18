@@ -9,8 +9,8 @@ interface ProcessGitDeps {
   paths: Paths;
 }
 
-// `Git` over the `git` on the PATH, one run per call (two for `fileAtHead` and
-// `commitPaths`, up to two for `currentBranch`), each as `git -C <root> …`.
+// `Git` over the `git` on the PATH, one run per call (two for `fileAtHead`, up to two for
+// `currentBranch`), each as `git -C <root> …`.
 export function createProcessGit(deps: ProcessGitDeps): Git {
   const { processes } = deps;
   return {
@@ -215,32 +215,6 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         'cat-file',
         'blob',
         sha,
-      ]);
-    },
-    commitPaths: async (root, paths, message) => {
-      if (paths.length === 0) {
-        throw new Error(`commitPaths in ${root}: no paths to commit`);
-      }
-      // `--literal-pathspecs` keeps a `*`, `?`, `[` or leading `:` in a path
-      // from matching other files.
-      await gitOutput(processes, 'add', [
-        '-C',
-        root,
-        '--literal-pathspecs',
-        'add',
-        '--',
-        ...paths,
-      ]);
-      await gitOutput(processes, 'commit', [
-        '-C',
-        root,
-        '--literal-pathspecs',
-        'commit',
-        '--only',
-        '-m',
-        message,
-        '--',
-        ...paths,
       ]);
     },
     log: async (root, paths, limit) => {

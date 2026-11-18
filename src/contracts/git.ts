@@ -72,9 +72,6 @@ export interface Git {
   // The file's text at HEAD; null when HEAD does not hold it. Rejects when
   // HEAD has no commit yet.
   fileAtHead(root: string, path: string): Promise<string | null>;
-  // Stages `paths` and commits only them with `message`; anything else staged
-  // stays staged. Rejects on an empty `paths`, committing nothing.
-  commitPaths(root: string, paths: string[], message: string): Promise<void>;
   // The newest `limit` non-merge commits touching any of `paths`, newest first;
   // `[]` for a path with no history, and for an empty `paths`, running nothing.
   // Rejects when HEAD has no commit yet.
