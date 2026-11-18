@@ -847,6 +847,15 @@ describe('process table', () => {
       steps: [[DRAIN_REPORT_GRACE_MS / 2, DRAIN]],
       endsAt: DRAIN_REPORT_GRACE_MS,
     },
+    {
+      label: 'a second drain after a main line re-armed the grace',
+      steps: [
+        [0, DRAIN],
+        [DRAIN_REPORT_GRACE_MS - 1000, INIT],
+        [DRAIN_REPORT_GRACE_MS + 2000, DRAIN],
+      ],
+      endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
+    },
   ])(
     'drain_BackgroundWorkEnds_EndsAfterTheGraceOrAtTheReportTurnEnd: $label',
     async ({ steps, endsAt }) => {

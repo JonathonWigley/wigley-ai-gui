@@ -570,11 +570,56 @@ Duplication and drift with no user-visible defect.
   before then, move it into the shared ui primitives, add its gallery entry and its `DESIGN.md` § Primitives row, and
   point the audio picker at it; its size stays a `calc` of space tokens. Source session: Claude Code
   6c8ae463-d34c-4c99-ae9e-8a92d1952360 in new-games-prototypes.
+- **The LaunchAgent login adapter has no caller** — *needs a feature plan*:
+  `src/main/login-start/launch-agent-login-start.ts` is built and tested, but `main.ts` picks only the agentService
+  adapter. Either wire it as a runtime fallback when agentService reports not-found or a failure (the scheduled-tasks
+  design's § Login start's intent), or delete it. Source: the scheduled-tasks review, lane p2 finding 1.
+- **Scheduling's main part holds its queue rules in one closure** — *needs a feature plan*:
+  `src/plugins/scheduling/main/start.ts` holds queue building, adoption outcomes and run-row marks together, and they
+  are testable only through the whole part with six fakes. The proposal is to carve `main/run-queue.ts` with `prepare`
+  passed in, tested by table. Source: the scheduled-tasks review, lane p3 finding 4.
 
 ## Latent defects and tests
 
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
+
+- **The hosted busy rule lacks the adapter's interrupt rescues** — *needs a feature plan*: the host's busy reading
+  (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE` in `src/main/claude-code/claude-launch.ts`) now has
+  turn-tracker's no-lifecycle fallback. It still lacks the close of every open message on an interrupt reply when no
+  turn is open, and the 5 s interrupt abandon (`claude-stream.md` § Interrupt; `turn-tracker.ts`). Source: the
+  scheduled-tasks review, lane c1 finding 2 and lane p1 finding 3.
+- **A drain can still cut a late report turn** — *needs a feature plan*: the drain grace (`DRAIN_REPORT_GRACE_MS`,
+  10 s, re-armed by each main stdout line) counts from Claude's last line before the first token. A first token later
+  than 10 s still closes stdin before the turn reads busy. Whether Claude finishes a turn it has begun after stdin
+  closes is unchecked. Source: the review's round-3 report, finding 1 (`process-table.ts`).
+- **A run in a draining older host loses its real exit** — *needs a feature plan*: after a protocol bump, an imported
+  run still running in the older host gets the host-death exit. Its history reads finished while its turn runs, and a
+  message on its resting row resumes beside the running process. Tracking the older host by pid was tried and stepped
+  back, because forgotten runs came back through the kept runs file (the in-memory `importedIds`). A fix needs the
+  forgotten ids persisted, or `forgetRuns` sent to the older host. Source: review lane c1 finding 5, lane r2-c1
+  finding 1; `session-host/design.md` § Older hosts.
+- **A listed run can be marked finished while its first turn runs** — *needs a feature plan*: in the adoption of
+  `src/plugins/scheduling/main/start.ts`, a run handled as `listed` on an attached row that reads idle counts as
+  finished at adoption. Chat opens an adopted row idle (`busy: false`, `chat-sessions.ts` around :723, :1742, :1762)
+  until a replayed activity event (:1546). A run fired during a re-plan's read can therefore get its done mark early.
+  It is unchecked whether Claude's replay of a near-empty pipe log emits `working`. Source: the fix-X2 worker report.
+- **A run on an unheld row stays running** — *needs a feature plan*: a scheduled run whose row rests unheld (the host
+  list rejected, or a process in an older host) stays `running` in history until the row is re-attached and its turn
+  ends, the row is removed, or the app restarts. The evidence does not show a clear rule for when such a run counts as
+  done, so the fix starts with that choice. Source: review lane r2-c2 finding 2 (`scheduling/main/start.ts`).
+- **Offline calls are dropped on a row whose callers are not noted** — *needs a feature plan*: on an unheld row, or a
+  row with an unknown profile, adopt reads no history. Each replayed main-agent-only call is skipped, and
+  `replayCalls` then deletes the calls file (`src/plugins/sessions/main/offline-calls.ts`). Source: review lane c5a
+  finding 8.
+- **Pool watch's missed-change read can drop a new pool** — *agent-ready*: in
+  `src/plugins/unity-pool/main/pool-watch.ts`, an `onMissed` `readPools` can settle after a newer per-folder read and
+  drop the pool that read added. A per-folder read number checked before `drop` would close it. Source: review lane
+  c5b finding 3.
+- **The Schedules page's pending title-context replay may be dead** — *agent-ready*: in
+  `src/plugins/scheduling/page/start.ts`, the `pending.context` replay after `modes.add` never sees a non-null context
+  in today's start order, so its test (`page/start.test.ts`, the F17 assertion) cannot fail. Prove it dead and remove
+  it, or make the test reach it. Source: the review's round-3 report, finding 4.
 
 - **A deferred built-in page part that page-depends on a user plugin withheld at launch stays unstarted** —
   *agent-ready*: the page defers a built-in Y whose `dependsOn.page` names a user plugin X (`deferredPageIds`), and its
