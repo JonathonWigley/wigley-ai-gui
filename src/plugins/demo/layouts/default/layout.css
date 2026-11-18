@@ -1,0 +1,59 @@
+/* The default demo look: the Demo panel's step list and the status bar caption. */
+
+[data-layout-owner='demo'][data-layout='default'].demo-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+  padding: var(--wg-space-2);
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-hints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wg-space-1_5);
+  padding-inline: var(--wg-space-1);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-step.is-current {
+  background: var(--wg-list-active-background);
+  color: var(--wg-list-active-foreground);
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-beat {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-beat.is-current {
+  color: var(--wg-fg);
+}
+
+/* One line in the status bar's centre: the number, the title, then the caption
+   cut with an ellipsis where the bar runs out. */
+[data-layout-owner='demo'][data-layout='default'].demo-caption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-caption-number {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-caption-title {
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='demo'][data-layout='default'] .demo-caption-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--wg-fg-secondary);
+}

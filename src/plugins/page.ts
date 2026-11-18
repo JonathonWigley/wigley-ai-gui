@@ -1,4 +1,5 @@
 import type { PagePart } from '../contracts/plugin';
+import { agentCommandsPagePart } from './agent-commands/page/start';
 import { agentLinesPagePart } from './agent-lines/page/start';
 import { appUpdatePagePart } from './app-update/page/start';
 import { audioPickerPagePart } from './audio-picker/page/start';
@@ -7,10 +8,12 @@ import { contextSourcesPagePart } from './context-sources/page/start';
 import { liveViewPagePart } from './live-view/page/start';
 import { agentStripPagePart } from './agent-strip/page/start';
 import { agentsPagePart } from './agents/page/start';
+import { autoCompactPagePart } from './auto-compact/page/start';
 import { autoRetroPagePart } from './auto-retro/page/start';
 import { backlogPagePart } from './backlog/page/start';
 import { chatPagePart } from './chat/page/start';
 import { chatroomPagePart } from './chatroom/page/start';
+import { demoPagePart } from './demo/page/start';
 import { docsPagePart } from './docs/page/start';
 import { docsSessionTabPagePart } from './docs-session-tab/page/start';
 import { formsPagePart } from './forms/page/start';
@@ -22,6 +25,7 @@ import { practicePagePart } from './practice/page/start';
 import { primerPagePart } from './primer/page/start';
 import { schedulingPagePart } from './scheduling/page/start';
 import { scopedAgentsPagePart } from './scoped-agents/page/start';
+import { sessionLogPagePart } from './session-log/page/start';
 import { sessionStashPagePart } from './session-stash/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
@@ -45,11 +49,14 @@ export const pageParts: readonly PagePart[] = [
   markdownBlocksPagePart,
   sessionsPagePart,
   sessionStashPagePart,
+  sessionLogPagePart,
   chatPagePart,
   formsPagePart,
   primerPagePart,
   audioPickerPagePart,
+  agentCommandsPagePart,
   agentsPagePart,
+  autoCompactPagePart,
   agentLinesPagePart,
   workflowPagePart,
   workflowLargePagePart,
@@ -76,5 +83,6 @@ export const pageParts: readonly PagePart[] = [
   usagePagePart,
   usageTabLinePagePart,
   visualPagePart,
+  demoPagePart,
   appUpdatePagePart,
 ];

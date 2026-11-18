@@ -227,6 +227,7 @@ export const defaultKeymap = {
     '<Leader>b': 'session',
     '<Leader>k': 'go to',
     '<Leader>v': 'view',
+    '<Leader>d': 'demo',
     '<Leader>z': 'debug',
     '<Leader>zl': 'layout previews',
     '<Leader>c': 'chat controls',
@@ -1277,6 +1278,39 @@ export const defaultKeymap = {
       scope: 'gallery.gallery',
       command: 'gallery.halfPageUp',
     },
+
+    // ── Demo ───────────────────────────────────────────────────────────────
+    {
+      keys: '<Leader>dd',
+      scope: 'any',
+      command: 'demo.togglePanel',
+      where: 'page',
+    },
+    { keys: '<Leader>dn', scope: 'any', command: 'demo.next', where: 'page' },
+    {
+      keys: '<Leader>dp',
+      scope: 'any',
+      command: 'demo.previous',
+      where: 'page',
+    },
+    {
+      keys: '<Leader>da',
+      scope: 'any',
+      command: 'demo.autoplay',
+      where: 'page',
+    },
+    { keys: '<Leader>dr', scope: 'any', command: 'demo.reset', where: 'page' },
+    {
+      keys: '<Leader>dh',
+      scope: 'any',
+      command: 'demo.showReal',
+      where: 'page',
+    },
+    { keys: '<Leader>dx', scope: 'any', command: 'demo.stop', where: 'page' },
+    { keys: 'j', scope: 'demo.panel', command: 'demo.cursorDown' },
+    { keys: 'k', scope: 'demo.panel', command: 'demo.cursorUp' },
+    { keys: '<CR>', scope: 'demo.panel', command: 'demo.goToCursor' },
+    { keys: 'i', scope: 'demo.panel', command: 'demo.askAgent' },
 
     // ── Debug and testing ──────────────────────────────────────────────────
     {

@@ -9,6 +9,7 @@ import {
   demoRunSlot,
   STEP_AGENT_ID,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { demoManifest } from '../manifest';
 import { createDemoRun, PROFILE_FOLDER, SCRATCH_FOLDER } from './demo-run';
 import { realSessionMainStep } from './real-session-step';
@@ -20,7 +21,8 @@ import {
 
 type DemoApi = MainApi<typeof demoManifest, DemoChannel>;
 
-// Serves the page's run over the channel: the scratch and profile folders in
+// Registers the layouts the page's panel and caption draw with. Serves the
+// page's run over the channel: the scratch and profile folders in
 // plugin data, the unlisted demo harness on the fake agent harness, the
 // plugin switch's hold, and each step's main half. Registers the step agent
 // with scoped-agents, one per step id, in the app's own clone (the home
@@ -31,6 +33,7 @@ export const demoMainPart: MainPart<typeof demoManifest> = {
   manifest: demoManifest,
   start(api: DemoApi) {
     const { services, channel } = api;
+    api.layouts.register({ layoutTypes });
     const chat = api.dependency(chatMainKey);
     const run = createDemoRun({
       chat,
