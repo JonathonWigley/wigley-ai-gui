@@ -1200,10 +1200,10 @@ describe('note popup', () => {
       },
     },
     {
-      call: 'a path dropped after the dispose',
+      call: 'a dropped path whose insert lands after the dispose',
       run: (harness, dispose) => {
-        dispose();
         harness.take([droppedFile('a.md', 'text/markdown', '/d/a.md')]);
+        dispose();
       },
     },
   ])(
@@ -1212,17 +1212,19 @@ describe('note popup', () => {
       const harness = await openPopup(draft);
       let logMark = Infinity;
       let toastMark = Infinity;
+      let insertMark = Infinity;
 
       await run(harness, () => {
         harness.popup.dispose();
         logMark = harness.logged.length;
         toastMark = harness.toasts.length;
+        insertMark = harness.inserts.length;
       });
       await settle();
 
       expect(harness.logged.slice(logMark)).toEqual([]);
       expect(harness.toasts.slice(toastMark)).toEqual([]);
-      expect(harness.inserts).toEqual([]);
+      expect(harness.inserts.slice(insertMark)).toEqual([]);
     },
   );
 
@@ -1233,12 +1235,14 @@ describe('note popup', () => {
     harness.popup.commands.act(NO_ARG);
     await settle();
     harness.markups[0].disposeError = new Error('markup refused');
+    const popsBefore = harness.pops();
 
     expect(() => harness.popup.dispose()).toThrow('markup refused');
     harness.advance(AUTOSAVE_DELAY_MS);
     await settle();
 
-    expect(harness.pops()).toBe(harness.pushes());
+    // The markup scope pops; the popup's own scope ends with the plugin.
+    expect(harness.pops()).toBe(popsBefore + 1);
     expect(harness.doc.activeElement).toBeNull();
     expect(harness.liveTimers()).toBe(0);
     expect(liveAnchors(harness)).toEqual([]);

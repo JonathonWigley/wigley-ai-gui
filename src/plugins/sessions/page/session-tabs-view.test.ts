@@ -365,14 +365,19 @@ describe('session tabs view', () => {
     );
     expect(tabAnchors).toHaveLength(2);
     tabAnchors[0]!.disposeError = new Error('tab refused');
+    // The focused empty pane-1's text holds the pick hint; the redraw draws
+    // that text again and moves the hint into the new one.
+    const [emptyText] = findAll(area, 'sessions-empty');
     const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
+    expect(emptyText!.contains(pickHint)).toBe(true);
 
     expect(() => view.tabs.drop('s')).toThrow('tab refused');
 
     expect(frameAnchors.filter((anchor) => !anchor.isDisposed)).toEqual([]);
     expect(frame.isConnected).toBe(false);
     expect(view.tabs.tabsOf('s')).toEqual([]);
-    expect(pickHint.parentNode).toBeNull();
+    expect(emptyText!.parentNode).toBeNull();
+    expect(findAll(area, 'sessions-empty')[0]!.contains(pickHint)).toBe(true);
   });
 
   it.each<{ case: string; pane: Layout['pane']; keepsPart: boolean }>([
