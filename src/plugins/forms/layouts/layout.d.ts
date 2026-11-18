@@ -304,8 +304,8 @@ export interface Layout {
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
-  // The round's one notices page, the last stop after every finding and question, shown in place of the cards while
-  // its stop is focused, built once per round.
+  // The round's one notices page, the last stop after every other rail stop, plugin kinds' included, shown in place of
+  // the cards while its stop is focused, built once per round.
   notices?(
     parent: HTMLElement,
     input: NoticesInput,

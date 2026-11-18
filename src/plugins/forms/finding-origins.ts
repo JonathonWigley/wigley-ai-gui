@@ -1,5 +1,6 @@
 import type { Disposable } from '../../contracts/disposable';
 import { isSameJson } from '../../shared/json';
+import { createListeners } from '../../shared/listeners';
 import {
   type FindingAction,
   type FindingOriginSpec,
@@ -68,8 +69,8 @@ export const FINDING_ORIGIN_SPECS: readonly FindingOriginSpec[] = [
 ];
 
 export interface FindingOriginRegistry {
-  // Throws, registering nothing, on a spec that breaks a registration rule;
-  // the handle's first `dispose` retires the spec, and a second does nothing.
+  // Throws, registering nothing, on a spec that breaks a registration rule
+  // or when an `onChanged` listener throws; the handle's first `dispose` retires the spec, and a second does nothing.
   register(spec: FindingOriginSpec): Disposable;
   // The registered spec, else the retired one, else undefined: a round
   // parsed before its origin left keeps reading it.
@@ -145,21 +146,25 @@ function registrationProblem(
 export function createFindingOriginRegistry(): FindingOriginRegistry {
   let specs: readonly FindingOriginSpec[] = [];
   const retired = new Map<string, FindingOriginSpec>();
-  const listeners = new Set<() => void>();
-  const changed = () => {
-    for (const listener of listeners) {
-      listener();
-    }
-  };
+  const listeners = createListeners<void>();
   return {
     register(spec) {
       const problem = registrationProblem(spec, specs);
       if (problem !== null) {
         throw new Error(problem);
       }
+      const before = { specs, retiredSpec: retired.get(spec.id) };
       retired.delete(spec.id);
       specs = [...specs, spec];
-      changed();
+      try {
+        listeners.tell();
+      } catch (error) {
+        specs = before.specs;
+        if (before.retiredSpec !== undefined) {
+          retired.set(spec.id, before.retiredSpec);
+        }
+        throw error;
+      }
       let isDisposed = false;
       return {
         dispose() {
@@ -169,17 +174,14 @@ export function createFindingOriginRegistry(): FindingOriginRegistry {
           isDisposed = true;
           specs = specs.filter((each) => each !== spec);
           retired.set(spec.id, spec);
-          changed();
+          listeners.tell();
         },
       };
     },
     spec: (origin) =>
       specs.find((each) => each.id === origin) ?? retired.get(origin),
     list: () => specs,
-    onChanged(listener) {
-      listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
-    },
+    onChanged: (listener) => listeners.add(listener),
   };
 }
 

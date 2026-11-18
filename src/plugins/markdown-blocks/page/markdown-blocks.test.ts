@@ -138,6 +138,17 @@ describe(':::tree', () => {
   });
 });
 
+describe('an empty body', () => {
+  it.each([
+    { text: ':::changes\n:::', html: '<ul class="md-changes"></ul>\n' },
+    { text: ':::changes\n\n:::', html: '<ul class="md-changes"></ul>\n' },
+    { text: ':::changes', html: '<ul class="md-changes"></ul>\n' },
+    { text: ':::tree\n:::', html: '<ul class="md-tree"></ul>\n' },
+  ])('draws $text as one empty list', ({ text, html }) => {
+    expect(block(text)).toBe(html);
+  });
+});
+
 describe(':::details', () => {
   it('renders its body as markdown and escapes once', () => {
     const html = block(':::details Sum\nbody **bold** a<b\n:::');

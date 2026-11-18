@@ -16,13 +16,24 @@ export interface FindingEntry {
 // What the entry rules read of a finding.
 export type PickableFinding = Pick<Finding, 'origin' | 'choices'>;
 
+// The card's word for an origin's action, or null when the origin does not
+// offer it. The rules below read the registered spec (`actionLabel`) unless
+// the caller passes the lookup it draws the card with.
+export type ActionWord = (
+  origin: string,
+  action: FindingAction,
+) => string | null;
+
 // The finding's entries in card order: each action its origin offers, in
 // FINDING_ACTIONS order, then that action's choices in wire order, or its
 // header alone when it has none. Entry N is the card's number N, 1-based.
-export function findingEntries(finding: PickableFinding): FindingEntry[] {
+export function findingEntries(
+  finding: PickableFinding,
+  actionWord: ActionWord = actionLabel,
+): FindingEntry[] {
   const entries: FindingEntry[] = [];
   for (const action of FINDING_ACTIONS) {
-    if (actionLabel(finding.origin, action) === null) {
+    if (actionWord(finding.origin, action) === null) {
       continue;
     }
     const before = entries.length;
@@ -44,8 +55,9 @@ export function findingEntryNumber(
   finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
+  actionWord: ActionWord = actionLabel,
 ): number {
-  const index = findingEntries(finding).findIndex(
+  const index = findingEntries(finding, actionWord).findIndex(
     (entry) => entry.choice === choice && entry.action === action,
   );
   return index + 1;
@@ -57,8 +69,9 @@ export function findingPickIsComplete(
   finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
+  actionWord: ActionWord = actionLabel,
 ): boolean {
-  return findingEntryNumber(finding, choice, action) > 0;
+  return findingEntryNumber(finding, choice, action, actionWord) > 0;
 }
 
 // The picked choice's 1-based number when the pick is complete, else 0; a
@@ -67,8 +80,11 @@ export function findingSolution(
   finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
+  actionWord: ActionWord = actionLabel,
 ): number {
-  return findingPickIsComplete(finding, choice, action) ? choice : 0;
+  return findingPickIsComplete(finding, choice, action, actionWord)
+    ? choice
+    : 0;
 }
 
 // The finding's pick, or null when `{ choice, action }` is none of its
@@ -77,8 +93,12 @@ export function completeFindingPick(
   finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
+  actionWord: ActionWord = actionLabel,
 ): { choice: number; action: FindingAction } | null {
-  if (action === '' || !findingPickIsComplete(finding, choice, action)) {
+  if (
+    action === '' ||
+    !findingPickIsComplete(finding, choice, action, actionWord)
+  ) {
     return null;
   }
   return { choice, action };
@@ -90,7 +110,8 @@ export function findingActionLabel(
   finding: PickableFinding,
   choice: number,
   action: FindingAction | '',
+  actionWord: ActionWord = actionLabel,
 ): string {
-  const pick = completeFindingPick(finding, choice, action);
-  return pick === null ? '' : (actionLabel(finding.origin, pick.action) ?? '');
+  const pick = completeFindingPick(finding, choice, action, actionWord);
+  return pick === null ? '' : (actionWord(finding.origin, pick.action) ?? '');
 }

@@ -32,7 +32,7 @@ import {
   holdsPick,
   NO_PICK,
 } from './finding-answer';
-import { drawnOriginSpec, verdictOf } from './verdict';
+import { drawnActionWord, drawnOriginSpec, verdictOf } from './verdict';
 
 const RAIL_PREFIX = 'F';
 
@@ -50,7 +50,8 @@ function restoreFindingAnswer(
   }
   const answer = restoreAnswer(entry, finding.choices.length);
   const action = isFindingAction(entry.action) ? entry.action : '';
-  const isEntry = findingEntryNumber(finding, entry.choice, action) > 0;
+  const isEntry =
+    findingEntryNumber(finding, entry.choice, action, drawnActionWord) > 0;
   return isEntry
     ? { ...answer, choice: entry.choice, action }
     : { ...answer, choice: 0, action: '' };
@@ -107,17 +108,31 @@ export const findingPageKind: PageKind<
           : { ...answer, ...recommended };
       },
       isComplete: (finding, answer) =>
-        findingPickIsComplete(finding, answer.choice, answer.action),
+        findingPickIsComplete(
+          finding,
+          answer.choice,
+          answer.action,
+          drawnActionWord,
+        ),
       number: (finding, answer) =>
-        findingEntryNumber(finding, answer.choice, answer.action),
+        findingEntryNumber(
+          finding,
+          answer.choice,
+          answer.action,
+          drawnActionWord,
+        ),
       choice: (finding, answer) =>
-        findingSolution(finding, answer.choice, answer.action),
+        findingSolution(finding, answer.choice, answer.action, drawnActionWord),
       choiceText: (finding, choice) => finding.choices[choice - 1].text,
       recommend: (finding) => finding.recommend ?? 0,
       isRecommended: (finding, answer) =>
         answer.action === finding.recommend_action &&
-        findingSolution(finding, answer.choice, answer.action) ===
-          (finding.recommend ?? 0),
+        findingSolution(
+          finding,
+          answer.choice,
+          answer.action,
+          drawnActionWord,
+        ) === (finding.recommend ?? 0),
     },
   },
   boxes: ANSWER_BOXES,
@@ -146,7 +161,7 @@ export const findingPageKind: PageKind<
           reason,
           action,
         })),
-        entries: findingEntries(finding).map((entry, i) => ({
+        entries: findingEntries(finding, drawnActionWord).map((entry, i) => ({
           number: i + 1,
           ...entry,
         })),

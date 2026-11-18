@@ -183,6 +183,50 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
+  // The stop-order ruling: the kinds and origins listeners leave before the
+  // built-ins do.
+  it('stop throws nothing and rebuilds nothing', async () => {
+    const editors = countingEditors();
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart],
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
+    });
+    harness.send('formShown', openForm());
+    const anchored = harness.anchors.length;
+    const made = editors.made();
+    const emitted = harness.emitted.length;
+
+    await harness.stop();
+
+    expect(harness.anchors.length).toBe(anchored);
+    expect(editors.made()).toBe(made);
+    expect(harness.emitted).toHaveLength(emitted);
+  });
+
+  // A built-in origin left registered makes the next start throw "already
+  // registered".
+  it('a start that throws after registering the built-in origins takes them back out', async () => {
+    expect(() =>
+      startPagePart(formsPagePart, {
+        parts: [sessionsPagePart],
+        services: { picker: fakeListPickerService() },
+        layoutShow: () => {
+          throw new Error('show refused');
+        },
+      }),
+    ).toThrow('show refused');
+
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart],
+      services: { picker: fakeListPickerService() },
+    });
+    await harness.stop();
+  });
+
   it('an open-rounds read that lands after stop shows nothing', async () => {
     const read = deferred<ReturnType<typeof openForm>[]>();
     const editors = countingEditors();
@@ -569,7 +613,7 @@ describe('forms page part', () => {
     });
     const messages = () => harness.logs.map((line) => line.message);
     expect(messages()).toContain(
-      'round r2 holds 1 poll items with no page kind',
+      'round r2 holds 1 poll item with no page kind',
     );
     expect(messages()).toContain(
       'round r2 holds 2 vote items with no page kind',

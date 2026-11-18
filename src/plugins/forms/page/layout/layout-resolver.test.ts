@@ -100,7 +100,13 @@ describe('pickLayout', () => {
     expect(pick).toEqual({ name: 'theirs', layout: byKind });
   });
 
-  it.each<{ case: string; mine: Layout; theirs: Layout; picked: string }>([
+  it.each<{
+    case: string;
+    kind?: string;
+    mine: Layout;
+    theirs: Layout;
+    picked: string;
+  }>([
     {
       case: 'the first layout defining other',
       mine: { cards: { kinds: { vote: card } } },
@@ -113,9 +119,16 @@ describe('pickLayout', () => {
       theirs: { rail: pane },
       picked: 'default',
     },
+    {
+      case: 'an inherited kinds member is no builder',
+      kind: 'constructor',
+      mine: { cards: { kinds: { vote: card } } },
+      theirs: { cards: { other: card } },
+      picked: 'theirs',
+    },
   ])(
     'pickCard_PluginKind_NoKindsBuilder_TakesFirstOther: $case',
-    ({ mine, theirs, picked }) => {
+    ({ kind = 'poll', mine, theirs, picked }) => {
       const loaded = new Map<string, Layout>([
         ['mine', mine],
         ['theirs', theirs],
@@ -123,7 +136,7 @@ describe('pickLayout', () => {
       ]);
 
       const pick = pickLayout(
-        { card: 'poll' },
+        { card: kind },
         ['mine', 'theirs', 'default'],
         loaded,
       );

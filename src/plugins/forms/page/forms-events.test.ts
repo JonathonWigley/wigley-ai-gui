@@ -11,7 +11,7 @@ import { createPageKinds } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { createFormsState } from './form-state';
 import { buildBody } from './round-draft';
-import { apply, initialState, presentedRound } from './test-rounds';
+import { apply, initialState, NO_LOG, presentedRound } from './test-rounds';
 
 const presented = presentedRound('r1');
 
@@ -183,7 +183,7 @@ describe('formsEventsBetween across a kind change', () => {
       kinds.register(kind);
     }
     let registration = kinds.register(pollPageKind('poll'));
-    const forms = createFormsState(() => kinds.table());
+    const forms = createFormsState(() => kinds.table(), NO_LOG);
     const shown = forms.initialState(
       [
         presentedRound('r1', {

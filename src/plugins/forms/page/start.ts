@@ -1,7 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './forms.css';
 import type { Disposable } from '../../../contracts/disposable';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type { PageApi, PagePart, PageStart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   createEditorBoxes,
@@ -22,6 +22,7 @@ import {
   followRows,
   sessionsActiveSlot,
   sessionsPageKey,
+  type SessionsPageExports,
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
@@ -160,133 +161,156 @@ function listenForRounds(
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
-    const { services } = api;
     const sessions = api.dependency(sessionsPageKey);
-    const builtInOrigins = FINDING_ORIGIN_SPECS.map((spec) =>
-      findingOrigins.register(spec),
-    );
-    const kinds = createPageKinds();
-    const builtInKinds = BUILT_IN_PAGE_KINDS.map((kind) =>
-      kinds.register(kind),
-    );
-    const { apply, initialState } = createFormsState(() => kinds.table());
-    const store = createReducerStore(
-      initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
-      apply,
-    );
-    const kindsChange = kinds.onChanged(() =>
-      store.dispatch({ type: 'kindsChanged', kinds: kinds.table() }),
-    );
-    const boxes = createBoxes(api, store);
-    const places = followSessionFormPlaces({
-      writer: api.state.publish(formsPlaceSlot),
-      store,
-      placeOf: roundPlace,
-      restore: (formId, place) =>
-        store.dispatch({ type: 'placeRestored', formId, place }),
-    });
-    const contributions = createFormsContributions();
-    const view = mountFormsView({
-      areas: api.areas,
-      sessions,
-      closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),
-      beforeClose: (sessionId) =>
-        mayCloseRound(
-          { store, toast: services.toast, log: services.log },
-          sessionId,
-        ),
-      setScope: (formsView) => api.keys.setScope(formsView),
-      setResizeTarget: (target) => api.panes.setResizeTarget(target),
-      pushConfirmScope: () => api.keys.pushScope('confirm'),
-      store,
-      boxes,
-      markdown: services.markdown,
-      keys: api.keys,
-      run: (command) => api.commands.run(command),
-      commands: kitCommandsOf(api),
-      contributions,
-      platform: api.platform.os,
-      state: api.state.forLayouts,
-      uiState: services.uiState,
-      timers: services.timers,
-      drops: api.drops,
-      toast: services.toast,
-      log: services.log,
-      savedPlaces: places.saved,
-    });
-    followRows(api.state.read(sessionsRowsSlot), {
-      removed: (sessionId) => view.forgetSession(sessionId),
-    });
-    const autosave = startRoundAutosave({
-      store,
-      save: (roundId, body) => api.channel.invoke('draft', roundId, body),
-      delayMs: () => api.settings().autosaveDelayMs,
-      onPageHide,
-      timers: services.timers,
-      log: services.log,
-    });
-    contributions.onChanged(() => view.rebuild());
-    const originsChange = findingOrigins.onChanged(() => view.rebuild());
-    const logEvent = createFormsEventLog(store.get, services.log);
-    startFormsEvents(store, (event) => {
-      logEvent(event);
-      api.events.emit(event.name, event.data);
-    });
-    const kindsWatch = watchRoundKinds(store, services.log, services.toast);
-    const roundsRead = listenForRounds(api, store, places);
-    const layoutShow = api.layouts.show<Layout>({
-      defaultLayout,
-      defaultStylesheet,
-      read: readLayout,
-      userLayout: () => api.settings().layout,
-      namesInUse: () =>
-        store.get().forms.flatMap((round) => roundLayoutNames(round)),
-      setLayouts: (shown) => view.setLayouts(shown),
-    });
-    const layoutRefresh = store.subscribe(() => layoutShow.refresh());
-    return {
-      exports: (consumer): FormsPageExports => ({
-        activeRound() {
-          const round = activeForm(store.get());
-          return round === null ? null : openRoundOf(round);
-        },
-        answers(roundId) {
-          const round = formById(store.get(), roundId);
-          return round === undefined ? null : buildBody(round);
-        },
-        addCardPart: (part) => consumer.track(contributions.addCardPart(part)),
-        addReviewColumn: (column) =>
-          consumer.track(contributions.addReviewColumn(column)),
-        registerKind: (kind) => consumer.track(kinds.register(kind)),
-        registerFindingOrigin: (spec) =>
-          consumer.track(findingOrigins.register(spec)),
-      }),
-      // The kinds and origins listeners go first, so removing the built-in
-      // kinds and origins after the view re-derives and redraws no round.
-      dispose() {
-        kindsChange.dispose();
-        originsChange.dispose();
-        kindsWatch.dispose();
-        roundsRead.dispose();
-        places.dispose();
-        autosave.dispose();
-        layoutRefresh.dispose();
-        view.dispose();
-        for (const registration of [...builtInKinds, ...builtInOrigins]) {
-          registration.dispose();
-        }
-      },
-      commands: formsCommandHandlers({
-        store,
-        boxes,
-        finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
-        layouts: {
-          openPreview: () => api.channel.invoke('openPreview'),
-        },
-        scrollForm: (step, direction) => view.scrollBy(step, direction),
-        toast: services.toast,
-        log: services.log,
-      }),
-    };
+    // The origins registry is a module's, which the host does not undo, so a
+    // start that throws partway takes its holds on it back out.
+    const originsHolds: Disposable[] = [];
+    try {
+      for (const spec of FINDING_ORIGIN_SPECS) {
+        originsHolds.push(findingOrigins.register(spec));
+      }
+      return startOverOrigins(api, sessions, originsHolds);
+    } catch (error) {
+      for (const hold of originsHolds.toReversed()) {
+        hold.dispose();
+      }
+      throw error;
+    }
   },
 };
+
+// The rest of forms' page start, once `originsHolds` holds the built-in
+// origins' registrations; it pushes its own origins listener onto it.
+function startOverOrigins(
+  api: FormsApi,
+  sessions: SessionsPageExports,
+  originsHolds: Disposable[],
+): PageStart<typeof formsManifest> {
+  const { services } = api;
+  const builtInOrigins = [...originsHolds];
+  const kinds = createPageKinds();
+  const builtInKinds = BUILT_IN_PAGE_KINDS.map((kind) => kinds.register(kind));
+  const { apply, initialState } = createFormsState(
+    () => kinds.table(),
+    services.log,
+  );
+  const store = createReducerStore(
+    initialState([], api.state.read(sessionsActiveSlot).get() ?? null),
+    apply,
+  );
+  const kindsChange = kinds.onChanged(() =>
+    store.dispatch({ type: 'kindsChanged', kinds: kinds.table() }),
+  );
+  const boxes = createBoxes(api, store);
+  const places = followSessionFormPlaces({
+    writer: api.state.publish(formsPlaceSlot),
+    store,
+    placeOf: roundPlace,
+    restore: (formId, place) =>
+      store.dispatch({ type: 'placeRestored', formId, place }),
+  });
+  const contributions = createFormsContributions();
+  const view = mountFormsView({
+    areas: api.areas,
+    sessions,
+    closesAtOnce: (sessionId) => formClosesAtOnce(store, sessionId),
+    beforeClose: (sessionId) =>
+      mayCloseRound(
+        { store, toast: services.toast, log: services.log },
+        sessionId,
+      ),
+    setScope: (formsView) => api.keys.setScope(formsView),
+    setResizeTarget: (target) => api.panes.setResizeTarget(target),
+    pushConfirmScope: () => api.keys.pushScope('confirm'),
+    store,
+    boxes,
+    markdown: services.markdown,
+    keys: api.keys,
+    run: (command) => api.commands.run(command),
+    commands: kitCommandsOf(api),
+    contributions,
+    platform: api.platform.os,
+    state: api.state.forLayouts,
+    uiState: services.uiState,
+    timers: services.timers,
+    drops: api.drops,
+    toast: services.toast,
+    log: services.log,
+    savedPlaces: places.saved,
+  });
+  followRows(api.state.read(sessionsRowsSlot), {
+    removed: (sessionId) => view.forgetSession(sessionId),
+  });
+  const autosave = startRoundAutosave({
+    store,
+    save: (roundId, body) => api.channel.invoke('draft', roundId, body),
+    delayMs: () => api.settings().autosaveDelayMs,
+    onPageHide,
+    timers: services.timers,
+    log: services.log,
+  });
+  contributions.onChanged(() => view.rebuild());
+  const originsChange = findingOrigins.onChanged(() => view.rebuild());
+  originsHolds.push(originsChange);
+  const logEvent = createFormsEventLog(store.get, services.log);
+  startFormsEvents(store, (event) => {
+    logEvent(event);
+    api.events.emit(event.name, event.data);
+  });
+  const kindsWatch = watchRoundKinds(store, services.log, services.toast);
+  const roundsRead = listenForRounds(api, store, places);
+  const layoutShow = api.layouts.show<Layout>({
+    defaultLayout,
+    defaultStylesheet,
+    read: readLayout,
+    userLayout: () => api.settings().layout,
+    namesInUse: () =>
+      store.get().forms.flatMap((round) => roundLayoutNames(round)),
+    setLayouts: (shown) => view.setLayouts(shown),
+  });
+  const layoutRefresh = store.subscribe(() => layoutShow.refresh());
+  return {
+    exports: (consumer): FormsPageExports => ({
+      activeRound() {
+        const round = activeForm(store.get());
+        return round === null ? null : openRoundOf(round);
+      },
+      answers(roundId) {
+        const round = formById(store.get(), roundId);
+        return round === undefined ? null : buildBody(round);
+      },
+      addCardPart: (part) => consumer.track(contributions.addCardPart(part)),
+      addReviewColumn: (column) =>
+        consumer.track(contributions.addReviewColumn(column)),
+      registerKind: (kind) => consumer.track(kinds.register(kind)),
+      registerFindingOrigin: (spec) =>
+        consumer.track(findingOrigins.register(spec)),
+    }),
+    // The kinds and origins listeners go first, so removing the built-in
+    // kinds and origins after the view re-derives and redraws no round.
+    dispose() {
+      kindsChange.dispose();
+      originsChange.dispose();
+      kindsWatch.dispose();
+      roundsRead.dispose();
+      places.dispose();
+      autosave.dispose();
+      layoutRefresh.dispose();
+      view.dispose();
+      for (const registration of [...builtInKinds, ...builtInOrigins]) {
+        registration.dispose();
+      }
+    },
+    commands: formsCommandHandlers({
+      store,
+      boxes,
+      finish: (roundId, end) => api.channel.invoke('finish', roundId, end),
+      layouts: {
+        openPreview: () => api.channel.invoke('openPreview'),
+      },
+      scrollForm: (step, direction) => view.scrollBy(step, direction),
+      toast: services.toast,
+      log: services.log,
+    }),
+  };
+}

@@ -64,6 +64,16 @@ describe('createKindRegistry', () => {
     expect(changes).toBe(0);
   });
 
+  it('registers nothing and rethrows when a listener throws', () => {
+    const registry = builtInRegistry();
+    registry.onChanged(() => {
+      throw new Error('listener broke');
+    });
+
+    expect(() => registry.register(pollKind)).toThrow('listener broke');
+    expect(ids(registry.kinds())).toEqual(['notice', 'finding', 'question']);
+  });
+
   it('lists the kinds in registration order', () => {
     const registry = builtInRegistry();
 

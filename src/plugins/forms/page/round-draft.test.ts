@@ -26,13 +26,15 @@ import { createPageKinds } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { answerStatus } from './round-answers';
 import { buildBody } from './round-draft';
-import { focusedItem, railItems } from './round-model';
+import { answerableItems, focusedItem, railItems } from './round-model';
 import {
   apply,
   finding,
   findingAnswers,
+  formsWith,
   initialState,
   nit,
+  NO_LOG,
   noticeComments,
   questionAnswers,
 } from './test-rounds';
@@ -236,6 +238,39 @@ describe('restoring a draft', () => {
       mixedRound(draft({ answers: [entry(5, { choice: 1 })] })),
     );
     expect(questionAnswers(round)).toEqual([untouched, untouched]);
+  });
+
+  it("logs a plugin kind's decode of the wrong count and starts its draft empty", () => {
+    const base = pollPageKind('poll');
+    const short = {
+      ...base,
+      restore: {
+        ...base.restore,
+        decode: (
+          polls: Parameters<typeof base.restore.decode>[0],
+          entries: readonly unknown[],
+        ) => (entries.length > 0 ? [] : base.restore.decode(polls, entries)),
+      },
+    };
+    const lines: string[] = [];
+    const forms = formsWith([short], (line) => lines.push(line));
+
+    const round = active(
+      forms.initialState(
+        [
+          presented('r1', POLL_PARTS, {
+            ...draft({}),
+            poll_answers: [entry(1, { choice: 2 })],
+          }),
+        ],
+        'r1-session',
+      ),
+    );
+
+    expect(round.itemAnswers.poll).toEqual([untouched]);
+    expect(lines).toEqual([
+      'round r1: page kind poll decoded 0 answers where its items need 1; its draft starts empty',
+    ]);
   });
 
   it('starts saved', () => {
@@ -446,7 +481,7 @@ describe('kindsChanged', () => {
       kinds.register(kind);
     }
     const pollRegistration = kinds.register(pollPageKind('poll'));
-    const forms = createFormsState(() => kinds.table());
+    const forms = createFormsState(() => kinds.table(), NO_LOG);
     let state = forms.initialState(
       [
         presented('r1', {
@@ -542,6 +577,54 @@ describe('kindsChanged', () => {
     expect(after.focus).toBe(1);
     expect(focusedItem(after)).toEqual({ kind: 'question', index: 1 });
   });
+
+  it.each([
+    {
+      case: 'stays on its item when a kind arrives ahead of it',
+      row: 3,
+      arrives: true,
+      leaves: false,
+      kept: 4,
+      item: { kind: 'question', index: 2 },
+    },
+    {
+      case: 'clamps to its old row, held to the last, when its item left',
+      row: 1,
+      arrives: false,
+      leaves: true,
+      kept: 1,
+      item: { kind: 'question', index: 1 },
+    },
+  ])(
+    'keeps or clamps the review row: $case',
+    ({ row, arrives, leaves, kept, item }) => {
+      const { kinds, pollRegistration, state, changed } = answeredRound();
+      let current: FormsState = {
+        ...state,
+        forms: state.forms.map((round) => ({ ...round, reviewRow: row })),
+      };
+      if (arrives) {
+        kinds.register(pollPageKind('early', { railOrder: 5 }));
+        current = {
+          ...current,
+          forms: current.forms.map((round) => ({
+            ...round,
+            round: {
+              ...round.round,
+              items: { ...round.round.items, early: [poll('E1')] },
+            },
+          })),
+        };
+      }
+      if (leaves) {
+        pollRegistration.dispose();
+      }
+      const after = active(changed(current));
+
+      expect(after.reviewRow).toBe(kept);
+      expect(answerableItems(after)[after.reviewRow]).toEqual(item);
+    },
+  );
 });
 
 function runWith(

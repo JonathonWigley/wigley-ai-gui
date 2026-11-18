@@ -458,9 +458,9 @@ function closesFence(
 }
 
 // `md_block_open` holds the HTML before the first marker and `md_block_close`
-// the HTML after the last; between two markers an `md_block_html` holds the
-// HTML between them. Each marker pushes its request's tokens, a marker that
-// names no request nothing.
+// the HTML after the last, or nothing when the HTML holds no marker; between
+// two markers an `md_block_html` holds the HTML between them. Each marker
+// pushes its request's tokens, a marker that names no request nothing.
 function pushBlockTokens(
   state: StateBlock,
   html: string,
@@ -483,7 +483,10 @@ function pushBlockTokens(
       state.push('md_block_html', '', 0).content = parts[place + 1];
     }
   }
-  state.push('md_block_close', '', -1).content = parts[parts.length - 1];
+  const hasMarker = parts.length > 1;
+  state.push('md_block_close', '', -1).content = hasMarker
+    ? parts[parts.length - 1]
+    : '';
 }
 
 // A `block` request for a run of whole body lines tokenizes those source lines
@@ -541,15 +544,17 @@ function pushLinesInPlace(state: StateBlock, from: number, to: number): void {
   state.lineMax = lineMax;
 }
 
-// markdown-it 15.0.3: `ParserBlock.parse(src, md, env, outTokens)` runs the
-// block rules alone over a new state, so each inline token's children stay
-// empty for the core inline pass to fill once.
+// markdown-it 15.0.3: `ParserBlock.tokenize` runs the block rules alone, so
+// each inline token's children stay empty for the core inline pass to fill
+// once, and stops at `maxNesting` by its state's level, which the new state
+// takes from the outer one so a block nesting its own opener ends there.
 function pushParsedBlock(state: StateBlock, text: string): void {
   const tokens: Token[] = [];
-  state.md.block.parse(text, state.md, state.env, tokens);
+  const inner = new state.md.block.State(text, state.md, state.env, tokens);
+  inner.level = state.level;
+  state.md.block.tokenize(inner, inner.line, inner.lineMax);
   for (const token of tokens) {
     token.map = null;
-    token.level += state.level;
     state.tokens.push(token);
   }
 }

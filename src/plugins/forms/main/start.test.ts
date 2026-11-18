@@ -19,9 +19,14 @@ import {
   previewSessions,
   SUBMITTED,
 } from '../../agent-form-fakes.test-support';
-import { sessionsMainKey, type ToolDefinition } from '../../sessions/contract';
+import {
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolDefinition,
+} from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
 import { type FormsMainExports, SAVED_ROUNDS_FOLDER } from '../contract';
+import { findingOrigins } from '../finding-origins';
 import type { formsManifest } from '../manifest';
 import { pollKind } from './kinds/poll-kind.test-support';
 import {
@@ -148,6 +153,24 @@ describe('forms main part', () => {
     // The real sessions part throws on a tool name still contributed.
     await harness.restart();
     await harness.stop();
+  });
+
+  it('a start that throws after registering the built-in origins takes them back out', () => {
+    const { dependency } = previewSessions();
+    const refusing = {
+      ...dependency,
+      exports: (consumer: Registrations) => ({
+        ...(dependency.exports(consumer) as SessionsMainExports),
+        contributeTools: () => {
+          throw new Error('tools refused');
+        },
+      }),
+    };
+
+    expect(() =>
+      startMainPart(formsMainPart, { dependencies: [fakeChat(), refusing] }),
+    ).toThrow('tools refused');
+    expect(findingOrigins.list()).toEqual([]);
   });
 
   it("stop ends the open preview's session", async () => {

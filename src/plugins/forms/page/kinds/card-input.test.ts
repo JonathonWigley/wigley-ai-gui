@@ -100,6 +100,26 @@ describe('cardInput', () => {
     ]);
   });
 
+  it('findingCardInput_OriginMainAloneHolds_EntriesAndPicksTakeTheCausedActions', () => {
+    const license = finding('Delta', { origin: 'license' });
+    const { round } = presentedRound('r1', { findings: [license] });
+
+    const input = cardInputOf(findingPageKind, round, 1);
+    const pick = findingPageKind.reduce.pick;
+    const untouched = findingPageKind.reduce.untouched(license);
+    const chosen = pick?.choose(license, untouched, 1);
+
+    expect(input.actions.map(({ action }) => action)).toEqual([
+      'fix_now',
+      'follow_up',
+      'leave_it',
+    ]);
+    expect(input.entries.map(({ action }) => action)).toEqual(
+      expect.arrayContaining(['fix_now', 'follow_up', 'leave_it']),
+    );
+    expect(chosen && pick?.isComplete(license, chosen)).toBe(true);
+  });
+
   it('findingCardInput_ActionReasonsAndNullRecommend', () => {
     const { round } = presentedRound('r1', {
       findings: [

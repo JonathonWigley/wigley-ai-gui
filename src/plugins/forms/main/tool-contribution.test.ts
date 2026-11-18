@@ -137,23 +137,46 @@ describe('contributeFormsTools', () => {
     expect(formsSessions[0].end).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the forms sessions and contributes the last good list when a refresh fails', () => {
-    let names = ['ask_round'];
-    const { handle, contributions, formsSessions, failNext, logLines } = setup(
-      () => names.map(tool),
-    );
+  it.each([
+    {
+      case: 'the contribution throws',
+      toolsThrow: false,
+      log: 'forms tools: bad tools (tools ask_round, bad)',
+    },
+    {
+      case: 'tools() throws',
+      toolsThrow: true,
+      log: 'forms tools: bad describe',
+    },
+  ])(
+    'keeps the forms sessions and contributes the last good list when a refresh fails: $case',
+    ({ toolsThrow, log }) => {
+      let names = ['ask_round'];
+      let toolsThrows = false;
+      const { handle, contributions, formsSessions, failNext, logLines } =
+        setup(() => {
+          if (toolsThrows) {
+            throw new Error('bad describe');
+          }
+          return names.map(tool);
+        });
 
-    names = ['ask_round', 'bad'];
-    failNext();
-    handle.refresh();
+      names = ['ask_round', 'bad'];
+      if (toolsThrow) {
+        toolsThrows = true;
+      } else {
+        failNext();
+      }
+      handle.refresh();
 
-    expect(contributions.at(-1)?.tools.map((t) => t.name)).toEqual([
-      'ask_round',
-    ]);
-    expect(formsSessions).toHaveLength(1);
-    expect(formsSessions[0].end).not.toHaveBeenCalled();
-    expect(logLines).toEqual(['forms tools: bad tools (tools ask_round, bad)']);
-  });
+      expect(contributions.at(-1)?.tools.map((t) => t.name)).toEqual([
+        'ask_round',
+      ]);
+      expect(formsSessions).toHaveLength(1);
+      expect(formsSessions[0].end).not.toHaveBeenCalled();
+      expect(logLines).toEqual([log]);
+    },
+  );
 
   it('contributes nothing more on a refresh after dispose', () => {
     const { handle, sessions } = setup();

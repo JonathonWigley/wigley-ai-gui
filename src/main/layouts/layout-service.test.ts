@@ -358,6 +358,26 @@ describe('createLayoutService', () => {
     });
   });
 
+  // Breaks if a first listing of only `default` tells, or if one that adds a
+  // name does not.
+  it.each<{ event: string; layouts: string[]; calls: number }>([
+    { event: 'an owner with no layouts', layouts: [], calls: 0 },
+    { event: 'an owner listing wide', layouts: ['wide'], calls: 1 },
+  ])(
+    'namesChanged_FirstListing_TellsOnlyWhenItDiffersFromDefault: $event',
+    async ({ layouts, calls }) => {
+      for (const name of layouts) {
+        await files.write(`${FOLDER}/docs/${name}/layout.js`, `// ${name}`);
+      }
+      let told = 0;
+      const service = createService(null, null, () => told++);
+
+      await registered(service, 'docs');
+
+      expect(told).toBe(calls);
+    },
+  );
+
   // Breaks if a revision of a held layout tells, if an add or remove does not,
   // or if a dispose by the service tells as a registration's dispose does.
   it.each<{

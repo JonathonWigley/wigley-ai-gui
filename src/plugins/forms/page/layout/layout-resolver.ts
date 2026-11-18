@@ -1,8 +1,12 @@
 import type { PartPick } from '../../../../shared/page/layout-host/draw-part';
 import { pickLayout as pickHostLayout } from '../../../../shared/page/layout-host/pick';
-import type { ItemKind } from '../../contract';
+import type { BuiltInItemKind, ItemKind } from '../../contract';
 import { isBuiltInItemKind } from '../../item-kinds';
-import type { Layout } from '../../layouts/layout';
+import type {
+  KindCardBuilder,
+  Layout,
+  LayoutCards,
+} from '../../layouts/layout';
 import {
   isNoticesStop,
   kindItems,
@@ -20,6 +24,22 @@ export type LayoutPart = { card: ItemKind } | { pane: LayoutPane };
 
 // The layout that draws a part, and its name.
 export type LayoutPick = PartPick<Layout>;
+
+// The builder a layout draws an item's card with, and the input it takes: a
+// built-in kind's own card and its card input; a plugin kind's `kinds` builder
+// and its kind's card input; or the `other` card and an OtherCard.
+export type CardBuilder =
+  | { input: 'builtIn'; build: LayoutCards[BuiltInItemKind] }
+  | { input: 'kind'; build: KindCardBuilder }
+  | { input: 'other'; build: LayoutCards['other'] };
+
+// Where a layout's card for a kind comes from.
+type CardSource = CardBuilder['input'];
+
+// The sources a card of each kind reads, in order: a built-in kind its own
+// card; a plugin kind its `cards.kinds` builder, then `cards.other`.
+const BUILT_IN_CARD_SOURCES: readonly CardSource[] = ['builtIn'];
+const PLUGIN_CARD_SOURCES: readonly CardSource[] = ['kind', 'other'];
 
 // The pick for the card of each stop but the notices stop, in rail order
 // (rail positions 0 to n - 1), for each notice's card, by notice index - 1,
@@ -55,42 +75,80 @@ export function layoutChain(
 
 // The host's pick of the first layout in `chain` that defines `part`, its
 // read being a function; a part `default` lacks resolves to it and draws
-// nothing. A built-in kind's card reads `cards.<kind>`. A plugin kind's card
-// takes two passes: the first layout whose `cards.kinds[kind]` is a function;
-// when none is, the first whose `cards.other` is.
+// nothing. A card takes one pass per source of its kind (`cardSources`): a
+// built-in kind's reads `cards.<kind>`; a plugin kind's takes the first layout
+// whose own `cards.kinds[kind]` is a function, and when none is, the first
+// whose `cards.other` is.
 export function pickLayout(
   part: LayoutPart,
   chain: readonly string[],
   loaded: ReadonlyMap<string, Layout>,
 ): LayoutPick {
   if ('pane' in part) {
-    return pickDefining(chain, loaded, PANE_READS[part.pane]);
+    const read = PANE_READS[part.pane];
+    return pickHostLayout(
+      chain,
+      loaded,
+      (layout) => typeof read(layout) === 'function',
+    );
   }
   const kind = part.card;
-  if (isBuiltInItemKind(kind)) {
-    return pickDefining(chain, loaded, (layout) => layout.cards?.[kind]);
-  }
-  const byKind = pickDefining(
-    chain,
-    loaded,
-    (layout) => layout.cards?.kinds?.[kind],
+  const picks = cardSources(kind).map((source) =>
+    pickHostLayout(
+      chain,
+      loaded,
+      (layout) => cardBuilderFrom(layout, kind, source) !== undefined,
+    ),
   );
-  return byKind.name !== DEFAULT_NAME
-    ? byKind
-    : pickDefining(chain, loaded, (layout) => layout.cards?.other);
+  return (
+    picks.find((pick) => pick.name !== DEFAULT_NAME) ?? picks[picks.length - 1]
+  );
 }
 
-// The host's pick of the first layout in `chain` whose `read` is a function.
-function pickDefining(
-  chain: readonly string[],
-  loaded: ReadonlyMap<string, Layout>,
-  read: (layout: Layout) => unknown,
-): LayoutPick {
-  return pickHostLayout(
-    chain,
-    loaded,
-    (layout) => typeof read(layout) === 'function',
-  );
+// The layout's builder for a card of `kind`, from the first of the kind's
+// sources it defines; undefined when it defines none.
+export function cardBuilderOf(
+  layout: Layout,
+  kind: ItemKind,
+): CardBuilder | undefined {
+  for (const source of cardSources(kind)) {
+    const builder = cardBuilderFrom(layout, kind, source);
+    if (builder !== undefined) {
+      return builder;
+    }
+  }
+  return undefined;
+}
+
+function cardSources(kind: ItemKind): readonly CardSource[] {
+  return isBuiltInItemKind(kind) ? BUILT_IN_CARD_SOURCES : PLUGIN_CARD_SOURCES;
+}
+
+// The layout's builder for a card of `kind` from `source` when it is a
+// function; `cards.kinds` counts its own keys alone, so an inherited member
+// such as `constructor` is no builder.
+function cardBuilderFrom(
+  layout: Layout,
+  kind: ItemKind,
+  source: CardSource,
+): CardBuilder | undefined {
+  const cards = layout.cards;
+  if (source === 'builtIn') {
+    const build = isBuiltInItemKind(kind) ? cards?.[kind] : undefined;
+    return typeof build === 'function'
+      ? { input: 'builtIn', build }
+      : undefined;
+  }
+  if (source === 'kind') {
+    const kinds = cards?.kinds;
+    const build =
+      kinds !== undefined && Object.hasOwn(kinds, kind)
+        ? kinds[kind]
+        : undefined;
+    return typeof build === 'function' ? { input: 'kind', build } : undefined;
+  }
+  const build = cards?.other;
+  return typeof build === 'function' ? { input: 'other', build } : undefined;
 }
 
 // The layout the item itself names, through its kind's `cardInput.layout`;

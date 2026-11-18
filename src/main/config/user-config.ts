@@ -40,11 +40,11 @@ import { settingsFileDefaults } from './user-settings';
 
 // `folder` is the absolute user config folder `store` watches; `settingInfo`
 // declares each core setting by its dotted path; `settingControls` binds a core
-// setting, by its dotted path, to a control kind id; the schema lists no command
-// or scope of a plugin in `applied`'s list. Every check reads `store.checks()`
-// at its call, so it follows the plugins the store admits. `layoutNames` serves
-// every registered layout owner's names now, and `onLayoutNamesChanged` hears
-// each change to them.
+// setting, by its dotted path, to a control kind id; the schema lists no
+// command or scope of a plugin in `applied`'s list. Every check reads
+// `store.checks()` at its call, so it follows the plugins the store admits.
+// `layoutNames` serves every registered layout owner's names now, and
+// `onLayoutNamesChanged` hears each change to them.
 export interface UserConfigDeps {
   files: Files;
   folder: string;

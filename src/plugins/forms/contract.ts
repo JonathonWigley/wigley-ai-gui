@@ -158,16 +158,14 @@ export const SEVERITIES: readonly Severity[] = [
   'minor',
 ];
 
-// The card a finding draws as. Known: 'defect', 'decision', 'nit'.
-export type FindingCard = string;
-
 // One finding origin, registered unchanged in main and on the page. Card-level
 // fields (card, words, choiceNoun, minChoices, maxChoices, actions) are equal
-// across every origin that shares a card.
+// across every origin that shares a card. `id` and `card` are plain strings:
+// a plugin registers its own origins and cards.
 export interface FindingOriginSpec {
   // The wire `origin` value: 'caused'.
   id: string;
-  // The card it draws as: 'defect'.
+  // The card it draws as. Built-in: 'defect', 'decision', 'nit'.
   card: string;
   // The card's kind label and its two section titles.
   words: { kind: string; finding: string; proof: string };
@@ -333,27 +331,69 @@ export type RoundErrorPath =
 
 export type RoundItemPath = Extract<RoundErrorPath, { at: 'item' }>;
 
+// What a RoundError carries: where the call is wrong, what is wrong, and the
+// repair when `problem` alone does not name it.
+export interface RoundErrorFields {
+  path: RoundErrorPath;
+  problem: string;
+  detail?: string;
+}
+
 // A malformed round call, thrown by every kind's `parse`, built-in or
-// registered: where it is wrong, what is wrong, and the repair when `problem`
-// alone does not name it. It is the calling model's only repair signal,
-// worded by main's `roundErrorText`; `message` is for logs.
+// registered. It is the calling model's only repair signal, worded by main's
+// `roundErrorText`; `message` is for logs. A user-folder plugin has this
+// type but not the class, so its kind's `parse` throws the fields with
+// `name: 'RoundError'` (ROUND_ERROR_NAME) in its place:
+//   throw { name: 'RoundError', path: at, problem: 'each poll needs a title.' };
 export class RoundError extends Error {
   readonly path: RoundErrorPath;
   readonly problem: string;
   // '' when there is none.
   readonly detail: string;
 
-  constructor(fields: {
-    path: RoundErrorPath;
-    problem: string;
-    detail?: string;
-  }) {
+  constructor(fields: RoundErrorFields) {
     const detail = fields.detail ?? '';
     super(detail === '' ? fields.problem : `${fields.problem} ${detail}`);
     this.name = ROUND_ERROR_NAME;
     this.path = fields.path;
     this.problem = fields.problem;
     this.detail = detail;
+  }
+}
+
+// `error` as a RoundError: itself when it is one, a RoundError over its
+// fields when it is named ROUND_ERROR_NAME and holds a RoundErrorPath and a
+// string problem, else null.
+export function roundErrorOf(error: unknown): RoundError | null {
+  if (error instanceof RoundError) {
+    return error;
+  }
+  if (typeof error !== 'object' || error === null) {
+    return null;
+  }
+  const { name, path, problem, detail } = error as Record<string, unknown>;
+  const isShaped =
+    name === ROUND_ERROR_NAME &&
+    isRoundErrorPath(path) &&
+    typeof problem === 'string' &&
+    (detail === undefined || typeof detail === 'string');
+  return isShaped ? new RoundError({ path, problem, detail }) : null;
+}
+
+function isRoundErrorPath(path: unknown): path is RoundErrorPath {
+  if (typeof path !== 'object' || path === null) {
+    return false;
+  }
+  const { at, field, kind, number } = path as Record<string, unknown>;
+  switch (at) {
+    case 'call':
+      return true;
+    case 'field':
+      return typeof field === 'string';
+    case 'item':
+      return typeof kind === 'string' && typeof number === 'number';
+    default:
+      return false;
   }
 }
 

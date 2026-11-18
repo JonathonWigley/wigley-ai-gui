@@ -1,3 +1,4 @@
+import type { PluginLog } from '../../../contracts/log';
 import type {
   Finding,
   FindingChoice,
@@ -147,16 +148,21 @@ export function presentedRound(
   };
 }
 
+// A log that drops every line.
+export const NO_LOG: PluginLog = () => undefined;
+
 // The forms reducer over the built-in kinds, as tests drive it.
-export const { apply, initialState } = createFormsState(() =>
-  pageKindTable(BUILT_IN_PAGE_KINDS),
+export const { apply, initialState } = createFormsState(
+  () => pageKindTable(BUILT_IN_PAGE_KINDS),
+  NO_LOG,
 );
 
 // The forms reducer over the built-in kinds and `extra`, registered after
-// them.
-export function formsWith(extra: readonly PageKind[]) {
-  return createFormsState(() =>
-    pageKindTable([...BUILT_IN_PAGE_KINDS, ...extra]),
+// them, logging through `log`.
+export function formsWith(extra: readonly PageKind[], log = NO_LOG) {
+  return createFormsState(
+    () => pageKindTable([...BUILT_IN_PAGE_KINDS, ...extra]),
+    log,
   );
 }
 

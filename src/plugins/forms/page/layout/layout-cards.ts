@@ -7,17 +7,8 @@ import {
 } from '../../../../shared/page/layout-host/draw-part';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 import type { KeyHints } from '../../../../contracts/plugin';
-import type { ItemKind } from '../../contract';
-import { isBuiltInItemKind } from '../../item-kinds';
 import defaultLayout from '../../layouts/default/layout.js';
-import type {
-  CardAnswer,
-  KindCardBuilder,
-  Layout,
-  LayoutCard,
-  LayoutCards,
-  OtherCard,
-} from '../../layouts/layout';
+import type { CardAnswer, LayoutCard, OtherCard } from '../../layouts/layout';
 import { answerStatus, findingActionOf, itemAnswer } from '../round-answers';
 import {
   type AnswerableItem,
@@ -36,24 +27,13 @@ import type {
 } from '../kinds/item-format';
 import { roundInfo } from '../kinds/card-parts';
 import { itemLabel } from '../kinds/formats';
+import { requireKind } from '../view-model';
 import { type CardKit, createCardKit, createKindKit } from './card-kit';
-import type { LayoutPick } from './layout-resolver';
-
-type CardBuilders = {
-  [K in BuiltInCard]: (
-    parent: HTMLElement,
-    input: CardInputs[K],
-    kit: CardKits[K],
-  ) => LayoutCard;
-};
-
-// The builder a layout draws an item's card with, and the input it takes: a
-// built-in kind's own card and its card input; a plugin kind's `kinds` builder
-// and its kind's card input; or the `other` card and an OtherCard.
-type CardBuilder =
-  | { input: 'builtIn'; build: CardBuilders[BuiltInCard] }
-  | { input: 'kind'; build: KindCardBuilder }
-  | { input: 'other'; build: LayoutCards['other'] };
+import {
+  type CardBuilder,
+  cardBuilderOf,
+  type LayoutPick,
+} from './layout-resolver';
 
 // A card a layout built, its element, and the kit it built it from.
 interface BuiltCard {
@@ -117,24 +97,6 @@ export function buildLayoutCard(
   return hostCard(built, layoutName, item, isAnswerable(round, item), deps);
 }
 
-// The layout's builder for a card of `kind`; undefined when it has none.
-function cardBuilderOf(
-  layout: Layout,
-  kind: ItemKind,
-): CardBuilder | undefined {
-  const cards = layout.cards;
-  if (isBuiltInItemKind(kind)) {
-    const build: CardBuilders[BuiltInCard] | undefined = cards?.[kind];
-    return build === undefined ? undefined : { input: 'builtIn', build };
-  }
-  const byKind = cards?.kinds?.[kind];
-  if (typeof byKind === 'function') {
-    return { input: 'kind', build: byKind };
-  }
-  const other = cards?.other;
-  return other === undefined ? undefined : { input: 'other', build: other };
-}
-
 // What a layout's card or pane mounts its text boxes and anchors its keys
 // through, and where it records each anchor the kit names and each slot
 // subscription and markdown mount it makes.
@@ -191,10 +153,7 @@ function buildCard(
   position: number,
   deps: CardDeps,
 ): BuiltCard {
-  const kind = round.kinds.get(item.kind);
-  if (kind === undefined) {
-    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
-  }
+  const kind = requireKind(round, item);
   const kindItem = kindItems(round.round, item.kind)[item.index - 1];
   const kindInput = () =>
     kind.cardInput.input(kindItem, item.index, round.round);

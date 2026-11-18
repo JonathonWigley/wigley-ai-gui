@@ -401,7 +401,8 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
   settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
-  reload changes a layout it draws with, and by a card part or review column added or disposed) destroys and
+  reload changes a layout it draws with, by a card part or review column added or disposed, and by a page kind
+  registered or disposed) destroys and
   remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
   was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes to
   `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio picker

@@ -5,7 +5,7 @@ import {
   type FormsService,
   type MainItemKind,
   type Round,
-  RoundError,
+  roundErrorOf,
 } from '../contract';
 import {
   ROUND_COLLECT_TOOL,
@@ -67,8 +67,10 @@ export function createRoundType(
     openTool: ROUND_OPEN_TOOL,
     collectTool: ROUND_COLLECT_TOOL,
     noun: 'round',
-    argsErrorText: (error) =>
-      error instanceof RoundError ? roundErrorText(kinds(), error) : null,
+    argsErrorText: (error) => {
+      const roundError = roundErrorOf(error);
+      return roundError === null ? null : roundErrorText(kinds(), roundError);
+    },
     parse: (args) => parseRound(kinds(), args),
     fingerprint: (round) => fingerprint(kinds(), round),
     heading: (round) => round.heading,

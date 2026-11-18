@@ -57,6 +57,7 @@ import type {
   CardInputs,
   CardKits,
 } from '../kinds/item-format';
+import { requireKind } from '../view-model';
 import type { KeyHints } from '../../../../contracts/plugin';
 
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -307,10 +308,7 @@ function cardContext(
   position: number,
   deps: CardDeps,
 ): CardContext {
-  const pageKind = round.kinds.get(item.kind);
-  if (pageKind === undefined) {
-    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
-  }
+  const pageKind = requireKind(round, item);
   const mount = createMarkdownMount(deps.markdown, deps.log);
   deps.recordMount(mount);
   return {

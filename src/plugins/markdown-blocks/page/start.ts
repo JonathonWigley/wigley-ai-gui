@@ -1,3 +1,4 @@
+import '../../../shared/page/markdown.css';
 import './markdown-blocks.css';
 import type {
   ChannelShape,

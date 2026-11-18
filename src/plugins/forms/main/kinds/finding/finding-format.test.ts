@@ -169,34 +169,60 @@ describe('findingKind.parse', () => {
     expect(findingKind.parse(raw, FINDING_1).proof).toBe('');
   });
 
-  it('refuses a nit finding with no proof, naming proof', () => {
-    const { proof: _proof, ...raw } = nitFinding();
+  const PROOF_NOT_TEXT =
+    'Finding 1: proof must be a non-empty string. Give it the text you would have written in the reply.';
 
-    expect(parseError(raw)).toBe('Finding 1: a nit finding needs proof.');
-  });
+  it.each([
+    {
+      name: 'no',
+      raw: () => {
+        const { proof: _proof, ...raw } = nitFinding();
+        return raw;
+      },
+      message: 'Finding 1: a nit finding needs proof.',
+    },
+    {
+      name: 'a null',
+      raw: () => nitFinding({ proof: null }),
+      message: PROOF_NOT_TEXT,
+    },
+    {
+      name: 'a blank',
+      raw: () => nitFinding({ proof: '  ' }),
+      message: PROOF_NOT_TEXT,
+    },
+  ])(
+    'refuses a nit finding with $name proof, naming proof',
+    ({ raw, message }) => {
+      expect(parseError(raw())).toBe(message);
+    },
+  );
 
   it.each([
     { name: 'null', proof: null },
     { name: 'blank', proof: '  ' },
-  ])('reads a null or blank proof off a Nit as none: $name', ({ proof }) => {
-    const design = (overrides: Record<string, unknown>) =>
-      findingWithoutSeverity({
-        origin: 'design',
-        choices: TWO_ACTION_CHOICES,
-        ...overrides,
-      });
-    const { proof: _proof, ...withoutProof } = design({});
-    const parsed = findingKind.parse(design({ proof }), FINDING_1);
+  ])(
+    'reads a null or blank proof off a design finding as none: $name',
+    ({ proof }) => {
+      const design = (overrides: Record<string, unknown>) =>
+        findingWithoutSeverity({
+          origin: 'design',
+          choices: TWO_ACTION_CHOICES,
+          ...overrides,
+        });
+      const { proof: _proof, ...withoutProof } = design({});
+      const parsed = findingKind.parse(design({ proof }), FINDING_1);
 
-    expect(parsed.proof).toBe('');
-    expect(JSON.stringify(findingKind.fingerprintContent(parsed))).toBe(
-      JSON.stringify(
-        findingKind.fingerprintContent(
-          findingKind.parse(withoutProof, FINDING_1),
+      expect(parsed.proof).toBe('');
+      expect(JSON.stringify(findingKind.fingerprintContent(parsed))).toBe(
+        JSON.stringify(
+          findingKind.fingerprintContent(
+            findingKind.parse(withoutProof, FINDING_1),
+          ),
         ),
-      ),
-    );
-  });
+      );
+    },
+  );
 
   it('refuses a proof that is not a string', () => {
     expect(parseError(finding({ proof: 3 }))).toBe(

@@ -152,8 +152,8 @@ export interface ScopeInfo {
 // binds name commands `PageC`, run in the page; app, global and intercept keys
 // name commands `MainC`, run in main. Binds, groups and remaps take the default
 // keymap's shape; a remap acts in every editor and names no command or scope.
-// The built-in plugins keep their keys in the default keymap
-// and declare none; a plugin from outside the app brings its own here.
+// The built-in plugins keep their keys in the default keymap and declare none;
+// a plugin from outside the app brings its own here.
 export interface PluginKeys<
   PageC extends string,
   MainC extends string,
@@ -205,14 +205,13 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // declares each leaf setting's label and description by its dotted path, as
 // `SettingPath` names the leaves (`definePlugin` checks the paths);
 // `settingControls` binds a leaf setting, by the same dotted path, to the id of
-// the control kind its row draws with; `themeTokens`
-// declares the plugin's own theme tokens by their unqualified names
-// (`origin-caused`), each with its kind and default; each `dependsOn` list names
-// the plugins whose exports that process reads or whose events it hears there;
-// they start before this plugin's part in that process; each `reads` list names
-// the plugins whose slots that process reads or whose events it hears with no
-// start order, so a disabled or unlisted plugin there is no problem and reads
-// `undefined`.
+// the control kind its row draws with; `themeTokens` declares the plugin's own
+// theme tokens by their unqualified names (`origin-caused`), each with its kind
+// and default; each `dependsOn` list names the plugins whose exports that
+// process reads or whose events it hears there; they start before this plugin's
+// part in that process; each `reads` list names the plugins whose slots that
+// process reads or whose events it hears with no start order, so a disabled or
+// unlisted plugin there is no problem and reads `undefined`.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,

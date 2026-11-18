@@ -1,6 +1,7 @@
 import type { Finding } from '../../../contract';
 import { findingEntries } from '../../../finding-pick';
 import type { FindingAnswer } from '../../round-model';
+import { drawnActionWord } from './verdict';
 
 // A finding answer's pick alone.
 export type FindingPick = Pick<FindingAnswer, 'choice' | 'action'>;
@@ -15,7 +16,7 @@ export function chooseEntry(
   finding: Finding,
   number: number,
 ): FindingAnswer {
-  const entry = findingEntries(finding)[number - 1];
+  const entry = findingEntries(finding, drawnActionWord)[number - 1];
   if (answer.notApplicable || entry === undefined) {
     return answer;
   }

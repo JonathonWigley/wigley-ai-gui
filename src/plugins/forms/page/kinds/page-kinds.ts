@@ -1,4 +1,5 @@
 import type { Disposable } from '../../../../contracts/disposable';
+import { createListeners } from '../../../../shared/listeners';
 import type { ItemKind, PageKind } from '../../contract';
 
 // The id of the notices stop, which no kind may take.
@@ -18,8 +19,8 @@ export interface PageKindTable {
 }
 
 // `register` throws, registering nothing, on a kind `requireRegistrable`
-// rejects; its `Disposable` removes the kind and notifies once, a second
-// dispose doing nothing. `table()` is the same object until the next change.
+// rejects or when an `onChanged` listener throws; its `Disposable` removes
+// the kind and notifies once, a second dispose doing nothing. `table()` is the same object until the next change.
 // `onChanged` hears each register and each removal.
 export interface PageKinds {
   register(kind: PageKind): Disposable;
@@ -30,18 +31,22 @@ export interface PageKinds {
 export function createPageKinds(): PageKinds {
   let registered: PageKind[] = [];
   let table = pageKindTable(registered);
-  const listeners = new Set<() => void>();
+  const listeners = createListeners<void>();
   const changed = (next: PageKind[]) => {
     registered = next;
     table = pageKindTable(registered);
-    for (const listener of listeners) {
-      listener();
-    }
+    listeners.tell();
   };
   return {
     register(kind) {
       requireRegistrable(registered, kind);
-      changed([...registered, kind]);
+      const before = { registered, table };
+      try {
+        changed([...registered, kind]);
+      } catch (error) {
+        ({ registered, table } = before);
+        throw error;
+      }
       let isRemoved = false;
       return {
         dispose() {
@@ -54,10 +59,7 @@ export function createPageKinds(): PageKinds {
       };
     },
     table: () => table,
-    onChanged(listener) {
-      listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
-    },
+    onChanged: (listener) => listeners.add(listener),
   };
 }
 

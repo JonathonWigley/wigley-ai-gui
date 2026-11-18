@@ -1,4 +1,9 @@
-import type { Finding, FindingOriginSpec, Severity } from '../../../contract';
+import type {
+  Finding,
+  FindingAction,
+  FindingOriginSpec,
+  Severity,
+} from '../../../contract';
 import { FINDING_ORIGIN_SPECS, findingOrigins } from '../../../finding-origins';
 import { themeVariable } from '../../../../../shared/theme-variables';
 
@@ -37,6 +42,16 @@ export function drawnOriginSpec(origin: string): FindingOriginSpec {
     throw new Error('the built-in finding origins hold no caused origin');
   }
   return { ...FALLBACK_SPEC, id: origin, chip: origin, themeToken: '' };
+}
+
+// The card's word for `action` on `origin` as the page draws the origin
+// (`drawnOriginSpec`), or null when that spec does not offer it: the lookup
+// the finding card's entries, picks and action words all read.
+export function drawnActionWord(
+  origin: string,
+  action: FindingAction,
+): string | null {
+  return drawnOriginSpec(origin).actions[action] ?? null;
 }
 
 export function verdictOf(finding: Finding): Verdict {

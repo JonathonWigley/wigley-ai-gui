@@ -1,10 +1,11 @@
 import type { Disposable } from '../../../../contracts/disposable';
+import { createListeners } from '../../../../shared/listeners';
 import type { ItemKindSpec, MainItemKind } from '../../contract';
 import { BUILT_IN_KIND_SPECS } from '../../item-kinds';
 
 export interface KindRegistry {
-  // Throws, registering nothing, on a kind that breaks a registration rule;
-  // the handle's first `dispose` removes the kind, and a second does nothing.
+  // Throws, registering nothing, on a kind that breaks a registration rule
+  // or when an `onChanged` listener throws; the handle's first `dispose` removes the kind, and a second does nothing.
   register(kind: MainItemKind): Disposable;
   // The registered kinds in registration order.
   kinds(): readonly MainItemKind[];
@@ -79,20 +80,21 @@ function wireKeyProblem(
 // The item kinds forms' main reads, in registration order.
 export function createKindRegistry(): KindRegistry {
   let kinds: readonly MainItemKind[] = [];
-  const listeners = new Set<() => void>();
-  const changed = () => {
-    for (const listener of listeners) {
-      listener();
-    }
-  };
+  const listeners = createListeners<void>();
   return {
     register(kind) {
       const problem = registrationProblem(kind, kinds);
       if (problem !== null) {
         throw new Error(`Item kind "${kind.spec.id}": ${problem}.`);
       }
+      const before = kinds;
       kinds = [...kinds, kind];
-      changed();
+      try {
+        listeners.tell();
+      } catch (error) {
+        kinds = before;
+        throw error;
+      }
       let isDisposed = false;
       return {
         dispose() {
@@ -101,14 +103,11 @@ export function createKindRegistry(): KindRegistry {
           }
           isDisposed = true;
           kinds = kinds.filter((each) => each !== kind);
-          changed();
+          listeners.tell();
         },
       };
     },
     kinds: () => kinds,
-    onChanged(listener) {
-      listeners.add(listener);
-      return { dispose: () => listeners.delete(listener) };
-    },
+    onChanged: (listener) => listeners.add(listener),
   };
 }

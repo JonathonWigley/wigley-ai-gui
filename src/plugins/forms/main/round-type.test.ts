@@ -234,6 +234,41 @@ describe('roundType', () => {
       'another round is still open in the app.',
     );
   });
+
+  // Breaks if a user-folder plugin, which cannot construct the class, loses
+  // its worded error.
+  it.each([
+    {
+      case: 'a RoundError',
+      error: new RoundError({
+        path: { at: 'item', kind: 'notice', number: 2 },
+        problem: 'needs a title.',
+      }),
+      text: 'Notice 2: needs a title.',
+    },
+    {
+      case: 'a plain object named RoundError',
+      error: {
+        name: 'RoundError',
+        path: { at: 'item', kind: 'notice', number: 2 },
+        problem: 'needs a title.',
+        detail: 'Give it one.',
+      },
+      text: 'Notice 2: needs a title. Give it one.',
+    },
+    {
+      case: 'a plain object with a malformed path',
+      error: { name: 'RoundError', path: { at: 'item' }, problem: 'x.' },
+      text: null,
+    },
+    {
+      case: 'another error',
+      error: new Error('needs a title.'),
+      text: null,
+    },
+  ])('argsErrorText words $case', ({ error, text }) => {
+    expect(roundType.argsErrorText(error)).toBe(text);
+  });
 });
 
 describe('open', () => {

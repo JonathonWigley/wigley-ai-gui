@@ -4,6 +4,7 @@ import type {
   DriveHost,
   MainApi,
   MainPart,
+  MainStart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import {
@@ -289,93 +290,105 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const builtInOrigins = FINDING_ORIGIN_SPECS.map((spec) =>
-      findingOrigins.register(spec),
-    );
-    const registry = createKindRegistry();
-    for (const kind of BUILT_IN_KINDS) {
-      registry.register(kind);
-    }
-    const kinds = () => registry.kinds();
-    const roundType = createRoundType(kinds);
-    const { forms, preview, presenter, flushed, shown } = createForms(
-      api,
-      sessions,
-      chat,
-      roundType,
-      kinds,
-      layoutNames,
-    );
-    api.channel.handle('openPreview', () => preview.open());
-    // The origins live in a module registry the host does not undo, so a
-    // first contribution that throws takes them back out.
-    let tools: ReturnType<typeof contributeFormsTools>;
+    // The origins registry is a module's, which the host does not undo, so a
+    // start that throws partway takes its holds on it back out.
+    const originsHolds: Disposable[] = [];
     try {
-      tools = contributeFormsTools({
-        sessions,
-        tools: () => formsTools(kinds()),
-        startSession: (session) => forms.startSession(session),
-        type: roundType,
-        log: api.services.log,
-      });
+      for (const spec of FINDING_ORIGIN_SPECS) {
+        originsHolds.push(findingOrigins.register(spec));
+      }
+      return startOverOrigins(api, sessions, chat, layoutNames, originsHolds);
     } catch (error) {
-      for (const registration of builtInOrigins) {
-        registration.dispose();
+      for (const hold of originsHolds.toReversed()) {
+        hold.dispose();
       }
       throw error;
     }
-    const kindsChanged = registry.onChanged(() => tools.refresh());
-    const originsChanged = findingOrigins.onChanged(() => tools.refresh());
-    const { selfTest } = api.services;
-    // Written before forms registers, so its first set lists every self-test
-    // layout.
-    const fixtureWritten =
-      api.services.runMode === 'selfTest'
-        ? writeSelfTestLayouts(api)
-        : Promise.resolve();
-    const layouts = registerLayoutsAfter(
-      fixtureWritten,
-      () => api.layouts.register({ layoutTypes }),
-      api.services.log,
-    );
-    selfTest?.run(
-      formsSelfTestScript(
-        sessions,
-        api.services.userConfig,
-        api.services.platform.os,
-        shown,
-      ),
-    );
-    if (api.drive !== null) {
-      addDriveActions(api.drive, sessions, (listener) =>
-        api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),
-      );
-    }
-    return {
-      commands: {},
-      mayStop: () => presenter.mayStop(),
-      exports: (consumer): FormsMainExports => ({
-        registerKind: (kind) => consumer.track(registry.register(kind)),
-        registerFindingOrigin: (spec) =>
-          consumer.track(findingOrigins.register(spec)),
-      }),
-      // The origins listener goes first, so removing the built-in origins
-      // republishes no tool.
-      dispose: (stop) => {
-        if (stop === 'quit') {
-          forms.detach();
-        }
-        originsChanged.dispose();
-        for (const registration of builtInOrigins) {
-          registration.dispose();
-        }
-        kindsChanged.dispose();
-        tools.dispose();
-        preview.dispose();
-        return Promise.all([layouts.dispose(), flushed()]).then(
-          () => undefined,
-        );
-      },
-    };
   },
 };
+
+// The rest of forms' main start, once `originsHolds` holds the built-in
+// origins' registrations; it pushes its own origins listener onto it.
+function startOverOrigins(
+  api: FormsApi,
+  sessions: SessionsMainExports,
+  chat: ChatMainExports,
+  layoutNames: () => readonly string[],
+  originsHolds: Disposable[],
+): MainStart<typeof formsManifest> {
+  const builtInOrigins = [...originsHolds];
+  const registry = createKindRegistry();
+  for (const kind of BUILT_IN_KINDS) {
+    registry.register(kind);
+  }
+  const kinds = () => registry.kinds();
+  const roundType = createRoundType(kinds);
+  const { forms, preview, presenter, flushed, shown } = createForms(
+    api,
+    sessions,
+    chat,
+    roundType,
+    kinds,
+    layoutNames,
+  );
+  api.channel.handle('openPreview', () => preview.open());
+  const tools = contributeFormsTools({
+    sessions,
+    tools: () => formsTools(kinds()),
+    startSession: (session) => forms.startSession(session),
+    type: roundType,
+    log: api.services.log,
+  });
+  const kindsChanged = registry.onChanged(() => tools.refresh());
+  const originsChanged = findingOrigins.onChanged(() => tools.refresh());
+  originsHolds.push(originsChanged);
+  const { selfTest } = api.services;
+  // Written before forms registers, so its first set lists every self-test
+  // layout.
+  const fixtureWritten =
+    api.services.runMode === 'selfTest'
+      ? writeSelfTestLayouts(api)
+      : Promise.resolve();
+  const layouts = registerLayoutsAfter(
+    fixtureWritten,
+    () => api.layouts.register({ layoutTypes }),
+    api.services.log,
+  );
+  selfTest?.run(
+    formsSelfTestScript(
+      sessions,
+      api.services.userConfig,
+      api.services.platform.os,
+      shown,
+    ),
+  );
+  if (api.drive !== null) {
+    addDriveActions(api.drive, sessions, (listener) =>
+      api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),
+    );
+  }
+  return {
+    commands: {},
+    mayStop: () => presenter.mayStop(),
+    exports: (consumer): FormsMainExports => ({
+      registerKind: (kind) => consumer.track(registry.register(kind)),
+      registerFindingOrigin: (spec) =>
+        consumer.track(findingOrigins.register(spec)),
+    }),
+    // The origins listener goes first, so removing the built-in origins
+    // republishes no tool.
+    dispose: (stop) => {
+      if (stop === 'quit') {
+        forms.detach();
+      }
+      originsChanged.dispose();
+      for (const registration of builtInOrigins) {
+        registration.dispose();
+      }
+      kindsChanged.dispose();
+      tools.dispose();
+      preview.dispose();
+      return Promise.all([layouts.dispose(), flushed()]).then(() => undefined);
+    },
+  };
+}

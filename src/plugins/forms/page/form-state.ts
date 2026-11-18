@@ -1,3 +1,4 @@
+import type { PluginLog } from '../../../contracts/log';
 import type { PresentedRound, RoundPlace } from '../contract';
 import type { ReducerStore } from '../../../shared/page/reducer-store';
 import {
@@ -73,8 +74,12 @@ export type FormsReducer = (
 ) => FormsState;
 
 // The reducer over the kinds `kinds()` returns as each round shows, and the
-// state it starts from: `rounds` shown in order.
-export function createFormsState(kinds: () => PageKindTable): {
+// state it starts from: `rounds` shown in order. A kind's draft that decodes
+// to the wrong count is logged through `log`.
+export function createFormsState(
+  kinds: () => PageKindTable,
+  log: PluginLog,
+): {
   apply: FormsReducer;
   initialState(
     rounds: PresentedRound[],
@@ -88,9 +93,9 @@ export function createFormsState(kinds: () => PageKindTable): {
     FormsOwnAction
   >({
     formView: 'forms',
-    restore: (presented) => restoreRound(presented, kinds()),
+    restore: (presented) => restoreRound(presented, kinds(), log),
     sendingActions: new Set(['setText', 'kindsChanged']),
-    applyOwn,
+    applyOwn: (state, action) => applyOwn(state, action, log),
   });
   return {
     apply,
@@ -105,7 +110,11 @@ export function createFormsState(kinds: () => PageKindTable): {
 // The forms page's store, over a `FormsReducer`.
 export type FormsStore = ReducerStore<FormsState, FormsAction>;
 
-function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
+function applyOwn(
+  state: FormsState,
+  action: FormsOwnAction,
+  log: PluginLog,
+): FormsState {
   switch (action.type) {
     case 'openReview':
       return openReview(state);
@@ -128,7 +137,7 @@ function applyOwn(state: FormsState, action: FormsOwnAction): FormsState {
     case 'placeRestored':
       return restorePlace(state, action.formId, action.place);
     case 'kindsChanged':
-      return changeKinds(state, action.kinds);
+      return changeKinds(state, action.kinds, log);
     default:
       return state.view === 'forms'
         ? updateForm(state, state.activeFormId, (round) =>
@@ -162,8 +171,12 @@ export function roundPlace(state: FormsState, round: RoundState): RoundPlace {
 
 // Every open round re-derived with `kinds`; `state` itself when every round
 // already holds it.
-function changeKinds(state: FormsState, kinds: PageKindTable): FormsState {
-  const forms = state.forms.map((round) => rederiveRound(round, kinds));
+function changeKinds(
+  state: FormsState,
+  kinds: PageKindTable,
+  log: PluginLog,
+): FormsState {
+  const forms = state.forms.map((round) => rederiveRound(round, kinds, log));
   const isUnchanged = forms.every((round, i) => round === state.forms[i]);
   return isUnchanged ? state : { ...state, forms };
 }

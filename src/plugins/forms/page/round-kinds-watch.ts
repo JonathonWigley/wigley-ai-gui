@@ -55,7 +55,10 @@ export function watchRoundKinds(
 
 function logFirstShow(round: RoundState, log: PluginLog): void {
   for (const { kind, count } of unregisteredKinds(round)) {
-    log(`round ${round.formId} holds ${count} ${kind} items with no page kind`);
+    const items = count === 1 ? 'item' : 'items';
+    log(
+      `round ${round.formId} holds ${count} ${kind} ${items} with no page kind`,
+    );
   }
   for (const kind of round.kinds.kinds()) {
     const mainKey = round.round.bodyKeys[kind.spec.id];

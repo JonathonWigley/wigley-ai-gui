@@ -8,7 +8,7 @@ import type {
   PageKind,
 } from '../contract';
 import { isResponded } from '../item-response';
-import { drawnOriginSpec } from './kinds/finding/verdict';
+import { drawnActionWord } from './kinds/finding/verdict';
 import {
   type AnswerableItem,
   answerableItems,
@@ -115,7 +115,7 @@ export function findingActionWord(
   action: FindingAction,
 ): string | null {
   const finding = kindItem(round, item) as Finding;
-  return drawnOriginSpec(finding.origin).actions[action] ?? null;
+  return drawnActionWord(finding.origin, action);
 }
 
 // Whether the item's picks alone answer it, notes aside: the kind's

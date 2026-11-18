@@ -46,6 +46,13 @@ const fixedBlock: BlockContribution = {
   render: (_block, helpers) => helpers.block('para'),
 };
 
+// Draws its own opener again, as text no body line holds.
+const selfBlock: BlockContribution = {
+  name: 'self',
+  render: (_block, helpers) =>
+    `<div class="self">${helpers.block(':::self\nx\n:::')}</div>\n`,
+};
+
 const brokenBlock: BlockContribution = {
   name: 'broken',
   render: () => {
@@ -54,7 +61,13 @@ const brokenBlock: BlockContribution = {
 };
 
 const markdown = createMarkdownItRenderer(highlighter);
-for (const contribution of [noteBlock, linesBlock, fixedBlock, brokenBlock]) {
+for (const contribution of [
+  noteBlock,
+  linesBlock,
+  fixedBlock,
+  selfBlock,
+  brokenBlock,
+]) {
   markdown.addBlock(contribution);
 }
 
@@ -457,6 +470,11 @@ describe('block contributions', () => {
       name: 'a block whose render throws draws its opener and body as text',
       text: ':::broken H\na <b>\n\n:::\nafter',
       html: '<p>:::broken H</p>\n<p>a &lt;b&gt;</p>\n<p>after</p>\n',
+    },
+    {
+      name: 'a block that draws its own opener stops at markdown-it’s maxNesting of 100',
+      text: ':::self\nx\n:::',
+      html: '<div class="self">'.repeat(100) + '</div>\n'.repeat(100),
     },
   ])('block_drawsContributedBlocks: $name', ({ text, html }) => {
     expect(block(text)).toBe(html);

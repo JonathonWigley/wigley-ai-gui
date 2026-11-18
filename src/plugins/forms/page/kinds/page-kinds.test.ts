@@ -51,6 +51,20 @@ describe('createPageKinds', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it('register_ListenerThrows_RegistersNothingAndRethrows', () => {
+    const kinds = createPageKinds();
+    const before = kinds.table();
+    kinds.onChanged(() => {
+      throw new Error('listener broke');
+    });
+
+    expect(() => kinds.register(pollPageKind('poll'))).toThrow(
+      'listener broke',
+    );
+    expect(kinds.table()).toBe(before);
+    expect(kinds.table().get('poll')).toBeUndefined();
+  });
+
   it('register_Dispose_RemovesOnceAndNotifiesOnce', () => {
     const kinds = createPageKinds();
     const registration = kinds.register(pollPageKind('poll'));

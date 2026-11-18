@@ -9,7 +9,7 @@ import type {
 import {
   type FormsService,
   type MainItemKind,
-  RoundError,
+  roundErrorOf,
 } from '../../contract';
 import { roundErrorText } from '../mcp-wording';
 import { parseRound, requireKnownLayouts } from '../round';
@@ -43,10 +43,11 @@ function nextRound(
       return { cursor: index, args: saved[index] };
     } catch (error) {
       // A RoundError's message drops the item location its round text names.
+      const roundError = roundErrorOf(error);
       const text =
-        error instanceof RoundError
-          ? roundErrorText(kinds, error)
-          : errorText(error);
+        roundError === null
+          ? errorText(error)
+          : roundErrorText(kinds, roundError);
       log(`preview skipped a saved round: ${text}`);
     }
   }

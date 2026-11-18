@@ -157,7 +157,7 @@ interface ItemPager {
 
 // One open round's DOM, built with its editors: a split with the rail header,
 // the rail pane and the Review button in its start pane, and the layout's
-// head, the item pager, every finding's and question's card, the notices
+// head, the item pager, every rail stop's card, the notices
 // pane and the review pane, which holds the round note, in its end pane, each
 // card and pane drawn by the layout `pickRoundLayouts` picks for it from
 // `shown`. A render only updates it, the

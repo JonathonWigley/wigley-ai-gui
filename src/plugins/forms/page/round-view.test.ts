@@ -21,6 +21,7 @@ import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-com
 import { formsManifest } from '../manifest';
 import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
 import { pageKindTable } from './kinds/page-kinds';
+import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { createRoundView } from './round-view';
 import {
   apply,
@@ -177,6 +178,35 @@ describe('round view rebuild', () => {
 
     expect(() => view.update(left, 'forms')).not.toThrow();
     expect(findAll(asFake(view.element), 'bare')).toHaveLength(0);
+  });
+
+  it('update_KindArrivesForItemsTheRoundHolds_RebuildsWithItsCards', () => {
+    const presented = presentedRound('r1', { items: { poll: [poll('P1')] } });
+    const pollLayout: Layout = {
+      ...bareLayout,
+      cards: {
+        ...bareLayout.cards,
+        kinds: {
+          poll: (cardParent, _input, kit) => ({
+            element: kit.card(cardParent, 'poll-card'),
+          }),
+        },
+      },
+    };
+    const { view } = roundViewSetup(pollLayout, undefined, presented);
+    expect(findAll(asFake(view.element), 'poll-card')).toHaveLength(0);
+    const shown = apply(initialState([], presented.sessionId), {
+      type: 'formShown',
+      form: presented,
+    });
+    const arrived = apply(shown, {
+      type: 'kindsChanged',
+      kinds: pageKindTable([...BUILT_IN_PAGE_KINDS, pollPageKind('poll')]),
+    }).forms[0];
+
+    view.update(arrived, 'forms');
+
+    expect(findAll(asFake(view.element), 'poll-card')).toHaveLength(1);
   });
 
   it('keeps the main column scroll while the round shows the same item', () => {

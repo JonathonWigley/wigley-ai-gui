@@ -8,24 +8,46 @@ import {
   exDefinitionProblem,
 } from './ex-definitions';
 
-// Each name and short name in the installed engine's `defaultExCommandMap`,
-// with the command it names.
-function engineExCommandNames(): { typed: string; name: string }[] {
-  const list = /var defaultExCommandMap = \[([\s\S]*?)\];/.exec(vimSource);
-  if (list === null) {
-    throw new Error('vim.js holds no defaultExCommandMap to read');
+// The text of the installed engine's `pattern` match, which must exist.
+function engineText(pattern: RegExp, what: string): string {
+  const match = pattern.exec(vimSource);
+  if (match === null) {
+    throw new Error(`vim.js holds no ${what} to read`);
   }
-  const entries = list[1].matchAll(
-    /\{\s*name:\s*'(\w+)'(?:,\s*shortName:\s*'(\w+)')?/g,
+  return match[1];
+}
+
+// Each name and short name the installed engine defines an ex command under,
+// with the command it names: `defaultExCommandMap`'s entries, the
+// `vimApi.defineEx` calls and every key of `exCommands`.
+function engineExCommandNames(): { typed: string; name: string }[] {
+  const list = engineText(
+    /var defaultExCommandMap = \[([\s\S]*?)\];/,
+    'defaultExCommandMap',
   );
-  return [...entries].flatMap(([, name, shortName]) =>
-    shortName === undefined
-      ? [{ typed: name, name }]
-      : [
-          { typed: name, name },
-          { typed: shortName, name },
-        ],
+  const listed = [
+    ...list.matchAll(/\{\s*name:\s*'(\w+)'(?:,\s*shortName:\s*'(\w+)')?/g),
+    ...vimSource.matchAll(/vimApi\.defineEx\("(\w+)",\s*"(\w+)"/g),
+  ];
+  const commands = engineText(
+    /var exCommands = \{([\s\S]*?)\n {2}\};/,
+    'exCommands',
   );
+  const listedNames = new Set(listed.map(([, name]) => name));
+  const unlisted = [...commands.matchAll(/^ {4}(\w+)\s*:/gm)]
+    .map(([, name]) => name)
+    .filter((name) => !listedNames.has(name));
+  return [
+    ...listed.flatMap(([, name, shortName]) =>
+      shortName === undefined
+        ? [{ typed: name, name }]
+        : [
+            { typed: name, name },
+            { typed: shortName, name },
+          ],
+    ),
+    ...unlisted.map((name) => ({ typed: name, name })),
+  ];
 }
 
 describe('exCallOf', () => {
@@ -47,6 +69,7 @@ describe('exCallOf', () => {
 
 describe('exDefinitionProblem', () => {
   const hello = new Map<string, ExDefinition>([['hello', { prefix: 'he' }]]);
+  const quit = new Map<string, ExDefinition>([['quit', { prefix: 'q' }]]);
   const none = new Map<string, ExDefinition>();
 
   it.each<{
@@ -109,9 +132,46 @@ describe('exDefinitionProblem', () => {
       defined: none,
       problem: 'ex command prefix "sub" would shadow vim\'s command substitute',
     },
+    {
+      name: 'mover',
+      prefix: 'mo',
+      defined: none,
+      problem: null,
+    },
+    {
+      name: 'move',
+      prefix: 'mov',
+      defined: none,
+      problem: 'ex command name "move" names vim\'s command move',
+    },
+    {
+      name: 'verbose',
+      prefix: 've',
+      defined: none,
+      problem: 'ex command prefix "ve" would shadow vim\'s command version',
+    },
+    {
+      name: 'help',
+      prefix: 'hel',
+      defined: hello,
+      problem: 'ex command prefix "hel" would shadow ex command hello',
+    },
+    {
+      name: 'quiet',
+      prefix: 'qu',
+      defined: quit,
+      problem: 'ex command prefix "qu" would shadow ex command quit',
+    },
+    {
+      name: 'wrap',
+      prefix: 'wr',
+      defined: none,
+      problem: 'ex command prefix "wr" would shadow vim\'s command write',
+    },
+    { name: 'quack', prefix: 'qua', defined: quit, problem: null },
     { name: 'wonder', prefix: 'wo', defined: none, problem: null },
     { name: 'mything', prefix: 'm', defined: none, problem: null },
-    { name: 'help', prefix: 'hel', defined: hello, problem: null },
+    { name: 'hotel', prefix: 'ho', defined: hello, problem: null },
     { name: 'hello', prefix: 'he', defined: none, problem: null },
   ])(
     'exDefinitionProblem_NamesTheFirstProblem: $name, $prefix → $problem',

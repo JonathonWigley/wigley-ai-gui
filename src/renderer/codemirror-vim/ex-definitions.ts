@@ -10,9 +10,10 @@ interface VimExCommand {
   shortName?: string;
 }
 
-// Vim's own ex commands, from `defaultExCommandMap` in
-// @replit/codemirror-vim-core 0.1.0's vim.js: each one's name, and the short
-// name vim keys it by when it has one.
+// Vim's own ex commands that typed text reaches, from `defaultExCommandMap`
+// and the `vimApi.defineEx` calls in @replit/codemirror-vim-core 0.1.0's
+// vim.js: each one's name, and the short name vim keys it by when it has one.
+// @replit/codemirror-vim 6.4.0 defines none of its own.
 const VIM_EX_COMMANDS: readonly VimExCommand[] = [
   { name: 'colorscheme', shortName: 'colo' },
   { name: 'map' },
@@ -51,24 +52,45 @@ const VIM_EX_COMMANDS: readonly VimExCommand[] = [
   { name: 'join', shortName: 'j' },
   { name: 'normal', shortName: 'norm' },
   { name: 'global', shortName: 'g' },
+  { name: 'version', shortName: 've' },
 ];
+
+// The rest of vim.js's `exCommands`, which no typed name reaches: vim runs
+// `move` for a line number alone (`:42`).
+const VIM_UNTYPED_EX_COMMANDS: readonly string[] = ['move', 'iput'];
 
 const LETTERS_ONLY = /^[A-Za-z]+$/;
 
 // The start of every `exBindName`.
 const BIND_NAME_START = 'wigleybind';
 
-// The vim command typed `text` runs, as core 0.1.0's `matchCommand_` resolves
-// it: from the longest start of `text` down, the first that keys a command
-// whose name starts with `text`.
-function vimCommandTyped(text: string): VimExCommand | undefined {
+// The name of each command vim files under each key: vim's own, with each
+// live definition's name under its prefix over them, as `defineEx` writes vim's
+// `commandMap_`.
+function commandNamesByKey(
+  defined: ReadonlyMap<string, ExDefinition>,
+): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const command of VIM_EX_COMMANDS) {
+    names.set(command.shortName ?? command.name, command.name);
+  }
+  for (const [name, definition] of defined) {
+    names.set(definition.prefix, name);
+  }
+  return names;
+}
+
+// The command typed `text` runs, as core 0.1.0's `matchCommand_` resolves it:
+// from the longest start of `text` down, the first that keys a command whose
+// name starts with `text`.
+function commandTyped(
+  text: string,
+  namesByKey: ReadonlyMap<string, string>,
+): string | undefined {
   for (let length = text.length; length > 0; length--) {
-    const key = text.slice(0, length);
-    const command = VIM_EX_COMMANDS.find(
-      (each) => (each.shortName ?? each.name) === key,
-    );
-    if (command?.name.startsWith(text) === true) {
-      return command;
+    const name = namesByKey.get(text.slice(0, length));
+    if (name?.startsWith(text) === true) {
+      return name;
     }
   }
   return undefined;
@@ -82,9 +104,10 @@ export function exCallOf(argString: string | undefined): ExCall {
 }
 
 // The first reason `name` and `prefix` cannot be defined beside `defined`, the
-// live definitions by name, or null. A prefix shadows one of vim's commands
-// exactly when vim runs that command for the prefix typed alone: only then
-// would the prefix overwrite the command's key or catch a typed name ahead of it.
+// live definitions by name, or null. A prefix shadows one of vim's commands or
+// a live definition exactly when vim runs that command for the prefix typed
+// alone: only then would the prefix overwrite the command's key or catch a
+// typed name ahead of it.
 export function exDefinitionProblem(
   name: string,
   prefix: string,
@@ -114,9 +137,13 @@ export function exDefinitionProblem(
   if (named !== undefined) {
     return `ex command name "${name}" names vim's command ${named.name}`;
   }
-  const shadowed = vimCommandTyped(prefix);
-  if (shadowed !== undefined) {
-    return `ex command prefix "${prefix}" would shadow vim's command ${shadowed.name}`;
+  if (VIM_UNTYPED_EX_COMMANDS.includes(name)) {
+    return `ex command name "${name}" names vim's command ${name}`;
   }
-  return null;
+  const shadowed = commandTyped(prefix, commandNamesByKey(defined));
+  if (shadowed === undefined) {
+    return null;
+  }
+  const owner = defined.has(shadowed) ? 'ex command' : "vim's command";
+  return `ex command prefix "${prefix}" would shadow ${owner} ${shadowed}`;
 }

@@ -415,8 +415,8 @@ describe('mergeKeymap', () => {
     {
       case: "the user's remap replaces the plugin's",
       manifests: [remapper('p', [toBracket])],
-      user: { remaps: [toEsc] },
-      expected: [toEsc],
+      user: { remaps: [toCtrlC] },
+      expected: [toCtrlC],
     },
     {
       case: 'another mode appends',

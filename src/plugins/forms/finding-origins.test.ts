@@ -104,6 +104,21 @@ describe('findingOrigins registry', () => {
     expect(registry.list().at(-1)).toBe(replacement);
   });
 
+  it('register_ListenerThrows_RegistersNothingKeepsRetired', () => {
+    const registry = builtInRegistry();
+    registry.register(SECURITY_ORIGIN).dispose();
+    const before = registry.list();
+    registry.onChanged(() => {
+      throw new Error('listener broke');
+    });
+
+    expect(() =>
+      registry.register({ ...SECURITY_ORIGIN, chip: 'Security risk' }),
+    ).toThrow('listener broke');
+    expect(registry.list()).toBe(before);
+    expect(registry.spec('security')).toBe(SECURITY_ORIGIN);
+  });
+
   it('onChanged_FiresOnRegisterAndDispose_OnceEach', () => {
     const registry = builtInRegistry();
     const listener = vi.fn();

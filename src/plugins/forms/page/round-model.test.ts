@@ -21,7 +21,7 @@ import { pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { progress } from './round-answers';
 import { buildBody } from './round-draft';
 import { answerableItems, railItems } from './round-model';
-import { finding, initialState, type RoundParts } from './test-rounds';
+import { finding, initialState, NO_LOG, type RoundParts } from './test-rounds';
 
 useBuiltInFindingOrigins();
 
@@ -68,8 +68,9 @@ function kindsState(
   parts: RoundParts = {},
   body: FormBody | null = null,
 ): { state: FormsState; apply: FormsReducer } {
-  const forms = createFormsState(() =>
-    pageKindTable([...BUILT_IN_PAGE_KINDS, ...extra]),
+  const forms = createFormsState(
+    () => pageKindTable([...BUILT_IN_PAGE_KINDS, ...extra]),
+    NO_LOG,
   );
   return {
     state: forms.initialState([presented('r1', parts, body)], 'r1-session'),

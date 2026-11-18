@@ -1053,8 +1053,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A forms layout** draws the forms view: the three named cards (`question`, `finding`, `notice`), `cards.kinds` (a
   builder per plugin kind id), `cards.other` (the card of a plugin kind no layout in the chain has a `kinds` builder
   for) and the `head`, `rail`, `review` and `notices` panes. A finding's card, origin, action and severity are strings,
-  since a plugin may register more. The `notices` pane is the round's one notices page, after every finding and
-  question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
+  since a plugin may register more. The `notices` pane is the round's one notices page, after every other rail
+  stop, plugin kinds' included: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
   `kbd`, `button` — a command id with its `arg`, variant and `keys` — and `sectionHeader`, and

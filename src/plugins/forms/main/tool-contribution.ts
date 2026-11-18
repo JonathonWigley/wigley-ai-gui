@@ -14,8 +14,8 @@ import type { FormsSession } from '../contract';
 // Forms' tools contributed to every agent session, over one forms session per
 // agent session id. The first contribution is made at once, and a throw from
 // it propagates. `refresh` contributes `tools()` again, keeping every forms
-// session and its open round; a refresh whose contribution throws logs it and
-// contributes the last good list once more. `dispose` ends every forms
+// session and its open round; a refresh whose `tools()` or contribution throws
+// logs it and contributes the last good list once more. `dispose` ends every forms
 // session, and a `refresh` after it does nothing.
 export function contributeFormsTools(deps: {
   sessions: Pick<SessionsMainExports, 'contributeTools'>;
@@ -78,13 +78,17 @@ export function contributeFormsTools(deps: {
       try {
         contribution?.dispose();
         contribution = null;
-        const tools = deps.tools();
+        let tools: ToolDefinition[] | null = null;
         try {
+          tools = deps.tools();
           contribution = deps.sessions.contributeTools(tools, start);
           goodTools = tools;
         } catch (error) {
-          const names = tools.map((tool) => tool.name).join(', ');
-          deps.log(`forms tools: ${errorText(error)} (tools ${names})`);
+          const names =
+            tools === null
+              ? ''
+              : ` (tools ${tools.map((tool) => tool.name).join(', ')})`;
+          deps.log(`forms tools: ${errorText(error)}${names}`);
           contributeLastGood();
         }
       } finally {

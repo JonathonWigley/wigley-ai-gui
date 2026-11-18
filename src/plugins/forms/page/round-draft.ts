@@ -1,4 +1,5 @@
-import type { FormBody, ItemKind, PresentedRound } from '../contract';
+import type { PluginLog } from '../../../contracts/log';
+import type { FormBody, ItemKind, PageKind, PresentedRound } from '../contract';
 import type { PageKindTable } from './kinds/page-kinds';
 import {
   answerableItems,
@@ -43,20 +44,51 @@ function draftEntries(
   return Array.isArray(entries) ? entries : [];
 }
 
+// The kind's answers to round `formId`'s `items` as its `restore.decode` reads
+// them from `entries`. A decode that gives a count other than the items' is
+// logged, and the kind's empty draft takes its place.
+function decodeAnswers(
+  kind: PageKind,
+  items: readonly unknown[],
+  entries: readonly unknown[],
+  formId: string,
+  log: PluginLog,
+): readonly unknown[] {
+  const answers = kind.restore.decode(items, entries);
+  if (answers.length === items.length) {
+    return answers;
+  }
+  log(
+    `round ${formId}: page kind ${kind.spec.id} decoded ${answers.length} answers where its items need ${items.length}; its draft starts empty`,
+  );
+  const empty = kind.restore.decode(items, []);
+  if (empty.length !== items.length) {
+    throw new Error(
+      `page kind ${kind.spec.id} decodes no entries to ${empty.length} answers where its items need ${items.length}`,
+    );
+  }
+  return empty;
+}
+
 // Each registered kind's answers restore from main's bodyKey for it, its own
 // spec's when main gave none; each kind main gave a bodyKey and the page no
-// registration holds its entries.
+// registration holds its entries. A kind's decode of the wrong count is
+// logged through `log` (`decodeAnswers`).
 export function restoreRound(
   presented: PresentedRound,
   kinds: PageKindTable,
+  log: PluginLog,
 ): RoundState {
   const { roundId, sessionId, label, round, draft } = presented;
   const itemAnswers: Record<ItemKind, readonly unknown[]> = {};
   for (const kind of kinds.kinds()) {
     const { id, bodyKey } = kind.spec;
-    itemAnswers[id] = kind.restore.decode(
+    itemAnswers[id] = decodeAnswers(
+      kind,
       kindItems(round, id),
       draftEntries(draft, round.bodyKeys[id] ?? bodyKey),
+      roundId,
+      log,
     );
   }
   const heldEntries: Record<ItemKind, HeldEntries> = {};
@@ -92,13 +124,16 @@ export function restoreRound(
 }
 
 // The round with `next` in place of the kinds it was derived with: a kind that
-// left encodes its answers into `heldEntries`, a kind that arrived decodes its
-// held entries, and a kind replaced under its id encodes with the old and
-// decodes with the new. Focus and the review cursor stay on their item while
-// it is still there, else clamp to the last stop or row. Not an edit.
+// left encodes its answers into `heldEntries` when main gave a bodyKey for it,
+// and drops them otherwise; a kind that arrived decodes its held entries; and
+// a kind replaced under its id encodes with the old and decodes with the new,
+// each decode checked as `decodeAnswers` checks it. Focus and the review
+// cursor stay on their item while it is still there, else clamp to their old
+// position held to the last stop or row. Not an edit.
 export function rederiveRound(
   round: RoundState,
   next: PageKindTable,
+  log: PluginLog,
 ): RoundState {
   if (round.kinds === next) {
     return round;
@@ -116,7 +151,13 @@ export function rederiveRound(
     const entries = old.restore.encode(answers);
     const bodyKey = round.round.bodyKeys[id];
     if (now !== undefined) {
-      itemAnswers[id] = now.restore.decode(kindItems(round.round, id), entries);
+      itemAnswers[id] = decodeAnswers(
+        now,
+        kindItems(round.round, id),
+        entries,
+        round.formId,
+        log,
+      );
     } else if (bodyKey !== undefined) {
       heldEntries[id] = { bodyKey, entries };
     }
@@ -124,9 +165,12 @@ export function rederiveRound(
   for (const kind of next.kinds()) {
     const { id } = kind.spec;
     if (itemAnswers[id] === undefined) {
-      itemAnswers[id] = kind.restore.decode(
+      itemAnswers[id] = decodeAnswers(
+        kind,
         kindItems(round.round, id),
         heldEntries[id]?.entries ?? [],
+        round.formId,
+        log,
       );
       delete heldEntries[id];
     }

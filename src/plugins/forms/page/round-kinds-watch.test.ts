@@ -5,7 +5,7 @@ import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
 import { createPageKinds } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { watchRoundKinds } from './round-kinds-watch';
-import { presentedRound, question } from './test-rounds';
+import { NO_LOG, presentedRound, question } from './test-rounds';
 
 // A store over the built-in kinds and whatever `kinds` registers later,
 // re-derived on each change as start does, watched into `lines`.
@@ -14,7 +14,7 @@ function watched() {
   for (const kind of BUILT_IN_PAGE_KINDS) {
     kinds.register(kind);
   }
-  const forms = createFormsState(() => kinds.table());
+  const forms = createFormsState(() => kinds.table(), NO_LOG);
   const store = createReducerStore(
     forms.initialState([], 'r1-session'),
     forms.apply,
@@ -48,7 +48,7 @@ describe('watchRoundKinds', () => {
     show();
 
     expect(lines).toEqual([
-      'round r1 holds 1 poll items with no page kind',
+      'round r1 holds 1 poll item with no page kind',
       'round r1 holds 2 vote items with no page kind',
     ]);
   });

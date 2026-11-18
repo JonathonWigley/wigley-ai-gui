@@ -11,8 +11,8 @@ import type { CommandInfo, ScopeInfo } from './plugin';
 
 // How a row edits a leaf setting. `kind` is the id of a control kind the
 // settings page registers: a built-in (`number`, `string`, `boolean`,
-// `choice`, `theme`, `json`, `layout`) or a plugin's. `choices` holds the only strings
-// a closed setting takes, null for any other.
+// `choice`, `theme`, `json`, `layout`) or a plugin's. `choices` holds the only
+// strings a closed setting takes, null for any other.
 export interface SettingControl {
   kind: string;
   choices: readonly string[] | null;
