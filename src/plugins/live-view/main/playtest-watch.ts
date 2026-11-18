@@ -1,6 +1,7 @@
 import type { ChatEntry } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { ListSlotReader } from '../../../contracts/state';
+import { bashCommandOf } from '../../../shared/bash-command';
 import { CHAT_PREVIEW_HOST_ID, type ChatAgentEvent } from '../../chat/contract';
 import { parsePlaytestCommand } from '../playtest-command';
 import type { LiveTools } from './live-tools';
@@ -24,15 +25,6 @@ export interface PlaytestWatch {
 interface RowCalls {
   readonly live: Set<string>;
   readonly done: Set<string>;
-}
-
-// A Bash call input's `command`, when it holds a string.
-function commandOf(input: unknown): string | null {
-  const command =
-    typeof input === 'object' && input !== null && 'command' in input
-      ? input.command
-      : null;
-  return typeof command === 'string' ? command : null;
 }
 
 // Opens and closes a session's Live view on its live Bash calls that succeed:
@@ -79,7 +71,7 @@ export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch {
     const calls = callsOf(sessionId);
     calls.live.delete(toolUseId);
     calls.done.add(toolUseId);
-    const command = commandOf(input);
+    const command = bashCommandOf(input);
     const succeeded = result !== null && !result.isError;
     if (succeeded && command !== null) {
       act(sessionId, command);

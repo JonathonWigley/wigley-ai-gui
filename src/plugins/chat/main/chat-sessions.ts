@@ -32,6 +32,7 @@ import {
   startActiveTime,
   stopActiveTime,
 } from '../../../shared/active-time';
+import { bashCommandOf } from '../../../shared/bash-command';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { createListeners } from '../../../shared/listeners';
@@ -648,15 +649,6 @@ const OLDER_HOST_REFUSAL_TEXT =
   'This session is still finishing in another app version. Send again once it ends.';
 
 const STOPPED_TEXT = 'Session stopped. Your next message resumes this session.';
-
-// A Bash call input's `command`, when it holds a string.
-function commandOf(input: unknown): string | null {
-  const command =
-    typeof input === 'object' && input !== null && 'command' in input
-      ? input.command
-      : null;
-  return typeof command === 'string' ? command : null;
-}
 
 // The notice a row waiting on the harness labelled `harnessLabel` shows.
 export function harnessWaitingText(harnessLabel: string): string {
@@ -2140,7 +2132,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (entry.kind !== 'tool' || entry.name !== 'Bash') {
       return;
     }
-    const command = commandOf(entry.input);
+    const command = bashCommandOf(entry.input);
     if (command === null) {
       return;
     }

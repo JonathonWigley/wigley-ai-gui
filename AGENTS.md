@@ -102,6 +102,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
+                 `bash-command.ts`: `bashCommandOf`, a Bash call input's command, which chat and live-view read,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,

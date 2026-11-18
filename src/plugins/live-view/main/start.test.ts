@@ -494,7 +494,7 @@ describe('liveViewMainPart', () => {
 
   it.each<{
     given: string;
-    run: (parts: Parts) => void;
+    run: (parts: Parts) => unknown;
     list?: () => Promise<WindowList>;
     pick?: LivePick;
     logs: string[];
@@ -538,6 +538,19 @@ describe('liveViewMainPart', () => {
         parts.emitStarted(1);
       },
       logs: [],
+    },
+    {
+      given: 'a second live start of a settled call',
+      run: async (parts) => {
+        parts.runCall(1, PLAY);
+        await settle();
+        await parts.call('hide_live_view', {});
+        parts.emitStarted(1);
+      },
+      logs: [
+        'row-1 shows Editor · Game for a playtest',
+        'row-1 hid its Live section',
+      ],
     },
     {
       given: 'a denied or failed call',
@@ -609,7 +622,7 @@ describe('liveViewMainPart', () => {
         parts.capture.list = list;
       }
 
-      run(parts);
+      await run(parts);
       await settle();
 
       expect(parts.pickOf(SESSION)).toEqual(pick);
@@ -808,10 +821,7 @@ describe('liveViewMainPart', () => {
 
   it.each<{
     given: string;
-    stop: (
-      parts: Awaited<ReturnType<typeof startPart>>,
-      abort: AbortController,
-    ) => unknown;
+    stop: (parts: Parts, abort: AbortController) => unknown;
     text: string;
   }>([
     {
