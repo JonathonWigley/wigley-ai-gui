@@ -984,8 +984,13 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // the file or folder at `path` (relative to the self-test's temp home, as
 // `writeFile`'s path is) after the write and before the keys, as an outside
 // program deleting it would; one that resolves outside the home fails the
-// self-test. `expect` is a line the page logs once the write, the removal and
-// the keys have run, and `alsoExpect`, when set, holds
+// self-test. `click`, when set, is a CSS selector whose first match is
+// clicked once with the left button after the write and the removal and
+// before the keys; a repeating step clicks once, before its first press, and
+// a click that cannot land (no match, no size, outside the window, covered at
+// its centre) fails the step without pressing its keys. `expect` is a line the
+// page logs once the write, the removal, the click and the keys have run, and
+// `alsoExpect`, when set, holds
 // patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
 // a random id, or a second line the step's keys cause, in either order; a
@@ -1009,6 +1014,7 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   remove?: string;
+  click?: string;
   keys: string[];
   expect: string;
   alsoExpect?: RegExp[];

@@ -1,6 +1,6 @@
 # 23 — Self-test click step and step helpers
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · rests on two low-confidence claims the worker checks in a filtered self-test run: a runtime main command bound by a script's page bind crosses page → main → page through the Bridge, and a click on an unfocused pane's hub head reaches the head on the first press
 Wave: 4 · Depends on: 15 (each lists `AGENTS.md`)

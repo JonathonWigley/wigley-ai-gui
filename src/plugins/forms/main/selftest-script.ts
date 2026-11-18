@@ -4,7 +4,11 @@ import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { UserConfig } from '../../../contracts/user-config';
 import { emptyUserFiles } from '../../../shared/empty-user-files';
-import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
+import {
+  type SessionsMainExports,
+  stepToSessionRow,
+  type ToolResult,
+} from '../../sessions/contract';
 import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import { askFixtureRound } from './fixtures';
@@ -176,29 +180,6 @@ function layoutSave(
 // the rows earlier scripts left open, once round the list.
 const STEP_TO_ROW_PRESSES_MAX = 13;
 
-const SESSION_STEP_COMMANDS = {
-  '<A-S-o>': 'sessions.nextSession',
-  '<A-S-i>': 'sessions.prevSession',
-} as const;
-
-// A step to `label`'s row however the rows draw, pressing `key` again past each
-// row on the way. A press logs its command's line and the activation's in one
-// task.
-function stepToRow(
-  key: keyof typeof SESSION_STEP_COMMANDS,
-  label: string,
-): SelfTestStep {
-  return {
-    keys: [key],
-    expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
-    repeat: {
-      until: `[sessions] activated ${label}`,
-      max: STEP_TO_ROW_PRESSES_MAX,
-    },
-    why: "Rows opened together can tie on their stamps and earlier scripts can leave rows open, so this script's rows draw in no fixed order.",
-  };
-}
-
 // The preview steps run first, before any step raises a toast, so no toast
 // covers their screenshots.
 const PREVIEW_ROUND_STEPS: SelfTestStep[] = [
@@ -322,7 +303,11 @@ const GALLERY_STEPS: SelfTestStep[] = [
     expect: '[gallery] shell layout restored',
     screenshot: 'shell-layout-restored',
   },
-  stepToRow('<A-S-o>', 'selftest'),
+  stepToSessionRow(
+    '<A-S-o>',
+    '[sessions] activated selftest',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 const FINDING_PICKS_STEPS: SelfTestStep[] = [
@@ -719,7 +704,14 @@ const PANE_RESIZE_STEPS: SelfTestStep[] = [
 ];
 
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
-  { ...stepToRow('<A-S-o>', 'selftest 2'), checksFit: true },
+  {
+    ...stepToSessionRow(
+      '<A-S-o>',
+      '[sessions] activated selftest 2',
+      STEP_TO_ROW_PRESSES_MAX,
+    ),
+    checksFit: true,
+  },
   {
     keys: [' ', 'b', 'p'],
     expect: '[sessions] hid Form popup in selftest 2',
@@ -738,7 +730,11 @@ const SECOND_SESSION_STEPS: SelfTestStep[] = [
   },
   { keys: ['j'], expect: '[page] j ran forms.nextLine' },
   { keys: ['<A-p>'], expect: '[forms] jumped to question 1' },
-  stepToRow('<A-S-i>', 'selftest'),
+  stepToSessionRow(
+    '<A-S-i>',
+    '[sessions] activated selftest',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
@@ -764,7 +760,11 @@ const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
 ];
 
 const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
-  stepToRow('<A-S-i>', 'Layout preview'),
+  stepToSessionRow(
+    '<A-S-i>',
+    '[sessions] activated Layout preview',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: ['<D-w>'],
     expect: '[sessions] activated Codex session',
@@ -782,12 +782,20 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
     expect: '[sessions] no other tab in Codex session',
     why: 'Its Docs tab is its only tab.',
   },
-  stepToRow('<A-S-o>', 'selftest'),
+  stepToSessionRow(
+    '<A-S-o>',
+    '[sessions] activated selftest',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
   {
-    ...stepToRow('<A-S-o>', 'selftest 3'),
+    ...stepToSessionRow(
+      '<A-S-o>',
+      '[sessions] activated selftest 3',
+      STEP_TO_ROW_PRESSES_MAX,
+    ),
     checksFit: true,
     why: 'The round opens on its first finding, the Nit.',
   },
@@ -842,7 +850,11 @@ const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [
     expect:
       '[forms] layout selftest notice card failed: notice card has no notes box',
   },
-  stepToRow('<A-S-i>', 'selftest'),
+  stepToSessionRow(
+    '<A-S-i>',
+    '[sessions] activated selftest',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     writeFile: {
       path: USER_SETTINGS_FILE,

@@ -14,6 +14,7 @@ import {
 import type { DrivenWindow } from './drive/driven-window';
 import {
   capturePng,
+  click,
   cutOffAtWidth,
   type LogMark,
   markLog,
@@ -29,16 +30,17 @@ import type { ScriptRun } from './selftest-config';
 
 // Runs one plugin's self-test script over a driven window: opens its fixture,
 // walks its groups of steps, sets and holds the widths steps set, writes the
-// files a step writes, drives its keys (again and again for a repeating step),
+// files a step writes, clicks what it clicks, drives its keys (again and again
+// for a repeating step),
 // and checks the lines the page logs, that the page fits the window's minimum
 // width, and the result the script checks, saving the screenshots steps ask
 // for. Imports no `electron`: the window is a `DrivenWindow`, so tests drive it
 // over a fake.
 //
 // A run belongs to one page load, numbered by the window's navigation count,
-// and stands down once the page has navigated past it: every press, resize,
-// file write, report line and fixture open checks `isCurrent` with no await
-// between the check and the act.
+// and stands down once the page has navigated past it: every press, click,
+// resize, file write, report line and fixture open checks `isCurrent` with no
+// await between the check and the act.
 
 // The `isCurrent` of a run started on page load `load`: true while the window
 // is still on that load and `hasExited` is false.
@@ -293,11 +295,12 @@ async function repeatStep(
   return outcome;
 }
 
-// The step's write, removal and keys as its report line names them.
+// The step's write, removal, click and keys as its report line names them.
 function stepLabel(step: SelfTestStep): string {
   return [
     ...(step.writeFile ? [`write ${step.writeFile.path}`] : []),
     ...(step.remove === undefined ? [] : [`remove ${step.remove}`]),
+    ...(step.click === undefined ? [] : [`click ${step.click}`]),
     step.keys.join('').replaceAll(' ', '␣'),
   ]
     .filter((part) => part !== '')
@@ -306,12 +309,14 @@ function stepLabel(step: SelfTestStep): string {
 
 // Sets the step's `width` (`'start'` being `startWidth`) when it has one,
 // writes its file and then removes its `remove` path through `homeFiles`
-// (rooted at the self-test's temp home, so a path outside it rejects), presses
-// its keys, and waits for its line; a repeating step presses again after each
-// `expect` until its `until` line, each line waited for up to the step's own
-// `timeoutMs`, else `runTimeoutMs`. The log is marked before the resize, the
-// write and the removal, so a line any of them alone causes counts. A width
-// that never lands fails the step before its write and keys. Then, whether the
+// (rooted at the self-test's temp home, so a path outside it rejects), clicks
+// its `click` selector once, presses its keys, and waits for its line; a
+// repeating step presses again after each `expect` until its `until` line,
+// each line waited for up to the step's own `timeoutMs`, else `runTimeoutMs`.
+// The log is marked before the resize, the write, the removal and the click,
+// so a line any of them alone causes counts. A width that never lands fails
+// the step before its write and keys, and a click that cannot land fails it,
+// naming why, before its keys. Then, whether the
 // line came or not, saves the window to each of `pngs` the presses reached,
 // and, when the step passed, runs its fit check, at the minimum width or the
 // held one, which resizes the window, so it comes after the screenshots, and
@@ -355,6 +360,19 @@ async function runStep(
       return false;
     }
     await homeFiles.trash(step.remove);
+  }
+  if (step.click !== undefined) {
+    if (!isCurrent()) {
+      return false;
+    }
+    try {
+      await click(window, step.click, 'left', 1);
+    } catch (error) {
+      if (isCurrent()) {
+        report(false, `${label} -> ${step.expect}: ${errorText(error)}`);
+      }
+      return false;
+    }
   }
   if (!(await pressKeys(window, step.keys, isCurrent))) {
     return false;

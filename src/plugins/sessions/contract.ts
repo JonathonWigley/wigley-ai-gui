@@ -4,6 +4,7 @@ import type {
   ChannelShape,
   DependencyKey,
   EventShape,
+  SelfTestStep,
 } from '../../contracts/plugin';
 import type {
   KeyedSlotKey,
@@ -40,6 +41,29 @@ export const DRIVE_SESSION_DEFAULTS: { projectDir: string; harness: string } = {
   projectDir: 'drive',
   harness: 'claude',
 };
+
+// The command each session row key runs.
+const SESSION_STEP_COMMANDS = {
+  '<A-S-o>': 'sessions.nextSession',
+  '<A-S-i>': 'sessions.prevSession',
+} as const;
+
+// A self-test step to a session row however the rows draw: presses `key`
+// again past each row on the way until the `until` line is logged, at most
+// `max` presses. A press logs its command's line, the row's activation and the
+// shown tab's line in one task.
+export function stepToSessionRow(
+  key: keyof typeof SESSION_STEP_COMMANDS,
+  until: string,
+  max: number,
+): SelfTestStep {
+  return {
+    keys: [key],
+    expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
+    repeat: { until, max },
+    why: "Rows opened together can tie on their stamps and earlier scripts can leave rows open, so this script's rows draw in no fixed order.",
+  };
+}
 
 // Every source a session title comes from, in the order the row prefers them:
 // the user's rename, the agent's `set_session_title`, the first message.

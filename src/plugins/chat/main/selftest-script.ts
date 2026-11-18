@@ -37,11 +37,12 @@ import {
   SAMPLE_FLOWCHART_VISUAL,
   SAMPLE_MOCKUP_VISUAL,
 } from '../../../shared/sample-visuals';
-import type {
-  ConnectedSession,
-  SessionsMainExports,
-  ToolCallContext,
-  ToolResult,
+import {
+  type ConnectedSession,
+  type SessionsMainExports,
+  stepToSessionRow,
+  type ToolCallContext,
+  type ToolResult,
 } from '../../sessions/contract';
 import {
   type ChatSessions,
@@ -163,21 +164,37 @@ const SIGN_IN_LINK_LINE = '[chat] sign-in link shown for work';
 // The dialog's line for a sign-in that ended with no error, signed in.
 const SIGNED_IN_LINE = '[chat] signed in to work';
 
+// The most presses a step to a row takes: past this script's other rows and
+// the rows earlier scripts left open, once round the list.
+const CHAT_STEP_TO_ROW_PRESSES_MAX = 13;
+
 // Each step expects the last line its keys cause: the fake emits in microtasks,
 // so an earlier line can land before the step's wait begins. Each session opens
 // on its Chat tab, and the first session holds the fixture's pending
 // permission.
 const TWO_SESSIONS_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: ['y'],
     expect: '[chat] nothing to copy',
     why: "The first session's pending permission stays pending.",
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   { keys: ['e'], expect: '[chat] picker shown: Effort' },
   { keys: ['<A-S-i>'], expect: '[chat] picker closed: Effort' },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   { keys: [' ', 'b', 'n'], expect: '[chat] picker shown: Folder' },
   {
     keys: ['<A-S-i>'],
@@ -185,12 +202,20 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
     why: "The start prompt stays open over the second session's Chat tab.",
   },
   { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: ['i', ...'hi', 'Escape', 'v', '<A-S-i>'],
     expect: '[chat] Chat tab shown in chat-second',
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: ['i', ...'ok', 'Escape', 'Enter'],
     expect: '[chat] assistant entry added in chat-selftest',
@@ -208,7 +233,11 @@ const rowActivityPattern = (name: string, word: string) =>
 // The fake's visual turn holds for a second and a half, so the second
 // session's turn ends after the first session's Chat tab shows.
 const ROW_ACTIVITY_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: [...sendKeys(FAKE_VISUAL_TEXT), '<A-S-o>'],
     expect: rowActivityLine('chat-second', 'done'),
@@ -242,13 +271,21 @@ const ROW_ACTIVITY_STEPS: SelfTestStep[] = [
     alsoExpect: [/^\[chat\] allowed Bash in chat-second$/],
     why: 'Allowing it lets the turn end in the focused session.',
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 // The second session's process ends here, leaving its row resting until the
 // next message there starts it again; its processes' calls are not checked.
 const RESTING_SESSION_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: sendKeys(FAKE_END_TEXT),
     expect: '[chat] chat-second rested',
@@ -272,7 +309,11 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
     alsoExpect: [rowActivityPattern('chat-second', 'none')],
     why: 'The send starts the process again in the same row and clears its error.',
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 // A host id the fake harness mints for a start with none
@@ -286,17 +327,38 @@ const NOTES_MOVED_TO_NEW_HOST = new RegExp(
   `^\\[notes\\] session moved to ${HOST_ID}$`,
 );
 
+// The line a session's Docs tab logs as it reads or rebuilds its index: docs'
+// `resultLine` under `SESSION_SOURCE_TITLE`, written out since chat main may
+// not import docs.
+const SESSION_INDEX_LINE = /^\[docs\] session index( rebuilt| read)?: /;
+
 // Clears the second session: a clear in the first would replace the process
 // whose calls the run checks at its end.
 const CLEAR_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
+  {
+    keys: ['<A-i>'],
+    expect: '[docs] Docs tab shown',
+    alsoExpect: [SESSION_INDEX_LINE],
+    why: "chat-second's Docs tab shows, so the clear's new host id rebuilds it.",
+  },
+  { keys: ['<A-o>'], expect: '[chat] Chat tab shown in chat-second' },
   {
     keys: sendKeys('/reset'),
     expect: '[chat] conversation cleared in chat-second',
-    alsoExpect: [NOTES_MOVED_TO_NEW_HOST],
+    alsoExpect: [NOTES_MOVED_TO_NEW_HOST, SESSION_INDEX_LINE],
     checksFit: true,
+    why: 'The new host id rebuilds the Docs tab that has shown.',
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 // The line the visual frames service logs when the frame of `source`
@@ -321,7 +383,11 @@ const FRAMES_LOADED = [SAMPLE_MOCKUP_VISUAL, SAMPLE_FLOWCHART_VISUAL].map(
 // The fake's visual reply in the second session, whose calls the run does not
 // check. The screenshot waits for both frames to load.
 const VISUAL_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: sendKeys(FAKE_VISUAL_TEXT),
     expect: '[chat] result entry added in chat-second',
@@ -362,14 +428,22 @@ const VISUAL_STEPS: SelfTestStep[] = [
   { keys: ['h'], expect: '[visual] visual overlay showing 1 of 2' },
   { keys: ['h'], expect: '[visual] no previous visual' },
   { keys: ['Escape'], expect: '[visual] visual overlay closed' },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 // The fake's blocks reply in the second session, whose calls the run does not
 // check. Every move logs its stop's entry kind, so a step tells a block move
 // from a message move by the kind it lands on.
 const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   {
     keys: sendKeys(FAKE_BLOCKS_TEXT),
     expect: '[chat] result entry added in chat-second',
@@ -434,12 +508,20 @@ const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
     expect: '[chat] copied 2 blocks in chat-second',
     why: "y copies the range's two blocks, through the self-test's clipboard, which leaves the system clipboard alone.",
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 // Back in chat-second, G rests on the reply's last block, the details block.
 const BLOCK_EXPANDER_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-second',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
   { keys: ['Escape', 'G'], expect: '[chat] following the latest entry' },
   {
     keys: ['Enter'],
@@ -456,7 +538,11 @@ const BLOCK_EXPANDER_STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[chat] assistant entry has nothing to expand',
   },
-  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+  stepToSessionRow(
+    '<A-S-o>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 const SENDING_STEPS: SelfTestStep[] = [
@@ -1020,8 +1106,11 @@ const IMAGES_STEPS: SelfTestStep[] = [
 // chat-images' box holds the two images its fixture returned there.
 const ATTACHMENTS_STEPS: SelfTestStep[] = [
   {
-    keys: ['<A-S-o>'],
-    expect: '[chat] Chat tab shown in chat-images',
+    ...stepToSessionRow(
+      '<A-S-o>',
+      '[chat] Chat tab shown in chat-images',
+      CHAT_STEP_TO_ROW_PRESSES_MAX,
+    ),
     why: 'The Sessions list shows chat-selftest, chat-images, then chat-second, so chat-images is the next session down.',
   },
   {
@@ -1042,10 +1131,11 @@ const ATTACHMENTS_STEPS: SelfTestStep[] = [
     alsoExpect: [/^\[chat\] removed attached image 1 of 1$/],
   },
   { keys: [' ', 'c', 'i'], expect: '[chat] no attached image' },
-  {
-    keys: ['<A-S-i>'],
-    expect: '[chat] Chat tab shown in chat-selftest',
-  },
+  stepToSessionRow(
+    '<A-S-i>',
+    '[chat] Chat tab shown in chat-selftest',
+    CHAT_STEP_TO_ROW_PRESSES_MAX,
+  ),
 ];
 
 const IDLE_CLOSE_STEPS: SelfTestStep[] = [
@@ -1205,7 +1295,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'session hub',
-    why: 'Space b h hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box.',
+    why: 'Space b h hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box. A first click on the other pane's hub head folds its section and focuses that pane.',
     steps: [
       {
         keys: ['Escape', ' ', 'b', 'h'],
@@ -1226,9 +1316,22 @@ const GROUPS: SelfTestGroup[] = [
         expect: '[page] Enter ran sessions.pickerChoose',
       },
       {
+        click: '.pane-tree-slot:not(.is-focused) .chat-side-section-head',
+        keys: [],
+        expect: '[chat] section Main agent collapsed',
+        why: 'The first click in an unfocused pane reaches the hub head it lands on.',
+      },
+      {
+        click: '.pane-tree-slot.is-focused .chat-side-section-head',
+        keys: [],
+        expect: '[chat] section Main agent expanded',
+        why: 'The click focused that pane, and its head expands the section again for the groups after.',
+      },
+      {
         keys: ['<A-w>'],
         expect: '[sessions] pane closed',
         width: 'start',
+        why: 'The clicks left the left pane focused, so it closes.',
       },
     ],
   },

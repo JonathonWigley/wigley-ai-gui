@@ -1247,7 +1247,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
   Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
-  write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
+  write and before the keys, a step's `click` (a CSS selector) clicks its first match once with the left button
+  after the removal and before the keys, failing the step without pressing them when the click cannot land, and a
+  step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
   `.selftest/screenshots/<plugin>-<name>.png` (git-ignored, emptied when the self-test starts)
   for the agent to check against `DESIGN.md`. A script's steps sit in named groups, each with a `why` saying what
@@ -1261,7 +1263,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   next run resizes back on opening. A step's `repeat: { until, max }` presses its keys again after each `expect` line
   until the `until` line is logged; the first press counts toward `max` (a whole number of at least 2), and passing
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
-  PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
+  PNG per press, `<plugin>-<name>-<n>.png`, file n after press n; its `click` lands once, before the first press. A
+  step to a session row uses sessions' `stepToSessionRow(key, until, max)`, which repeats `Alt+Shift+o` or
+  `Alt+Shift+i` until `until`, since rows can draw in any order. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
   know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
   cause, in either order. A line the fixture's opening causes goes in `open`'s `alsoShown` patterns, waited for with

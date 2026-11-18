@@ -14,8 +14,8 @@ const line = (text: string) => `[app-update] ${text}`;
 const SHORT_ORIGIN = FIXTURE_ORIGIN_COMMIT.slice(0, 7);
 // The plugin's data folder under the self-test's home, `/`-separated.
 const DATA_FOLDER = 'plugin-data/app-update';
-// The keys that press the button, for the self-test alone: it cannot click,
-// and the command has no key.
+// The keys that press the button, for the self-test alone: the button has no
+// key.
 const PRESS_KEYS = [' ', 'z', 'a', 'u'];
 const PAGE_BINDS: PageBind[] = [
   { keys: PRESS_KEYS, scope: 'any', command: 'app-update.pressButton' },

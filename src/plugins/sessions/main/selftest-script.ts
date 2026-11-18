@@ -4,6 +4,7 @@ import {
   type OwnedSession,
   type SessionsMainExports,
   type SessionsState,
+  stepToSessionRow,
 } from '../contract';
 
 // The project dirs of the three fixture sessions, in main's row order; each
@@ -14,27 +15,26 @@ const PROJECT_DIRS = ['panes-a', 'panes-b', 'panes-c'] as const;
 // side by side.
 const WIDE_WIDTH = 1800;
 
-// `Alt+Shift+o` to `label`'s row, however the rows draw, with one pane showing
-// them. A press logs its command's line and the activation's in one task.
-function stepNextTo(label: string): SelfTestStep {
-  return {
-    keys: ['<A-S-o>'],
-    expect: '[page] <A-S-o> ran sessions.nextSession',
-    repeat: {
-      until: `[sessions] activated ${label}`,
-      max: PROJECT_DIRS.length - 1,
-    },
-  };
-}
+// The most presses a step to a row takes with one pane showing the fixture's
+// rows: past the other two.
+const STEP_TO_ROW_PRESSES_MAX = PROJECT_DIRS.length - 1;
 
 // The fixture's rows arrive in separate states and can tie on their millisecond
 // stamps, so Recent's order among them is unknown here. Favoriting panes-b lists
 // it above panes-c. `Alt+;` then splits panes-a's pane, and the picker's first
 // row, panes-b, loads into the new pane on the right and is unfavorited again.
 const SPLIT_AND_PICK_STEPS: SelfTestStep[] = [
-  stepNextTo('panes-b'),
+  stepToSessionRow(
+    '<A-S-o>',
+    '[sessions] activated panes-b',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
   { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-b' },
-  stepNextTo('panes-a'),
+  stepToSessionRow(
+    '<A-S-o>',
+    '[sessions] activated panes-a',
+    STEP_TO_ROW_PRESSES_MAX,
+  ),
   { keys: ['<A-;>'], expect: '[sessions] pane split right' },
   {
     keys: ['Enter'],

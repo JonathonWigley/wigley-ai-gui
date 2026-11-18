@@ -109,6 +109,6 @@ and the off-`main` warning. `process-git` and `node-processes` test the new seam
 including the detached child's own process group. The self-test
 (`main/selftest-script.ts`) seeds a fixture build, a fixture git one commit behind, and an install
 that starts no program (`app-update.seed`, also a drive action). The page command
-`app-update.pressButton` clicks the drawn button, since the self-test cannot click; the script
+`app-update.pressButton` clicks the drawn button, since the button has no key; the script
 binds a key to it, checks Updating… and the disabled second press, then writes the log and exit-code
 files the real line would write to reach Update failed and the re-check.
