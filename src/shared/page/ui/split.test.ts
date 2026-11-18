@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../fake-timers.test-support';
 import type { UiState } from '../../../contracts/ui-state';
 import { uiStateOver } from '../../fake-ui-state.test-support';
 import type { AnchorNamer } from './key-anchors';
@@ -89,32 +89,6 @@ function fakeElement(): FakeElement {
 
 const limits = { initial: 240, min: 160, endMin: 200 };
 let created: FakeElement[];
-
-// Every armed run with its delay, by handle; a clear removes it and is
-// recorded.
-function fakeTimers() {
-  let nextHandle = 1;
-  const armed = new Map<number, { run: () => void; ms: number }>();
-  const cleared: number[] = [];
-  const timers: Timers = {
-    set: (run, ms) => {
-      armed.set(nextHandle, { run, ms });
-      return nextHandle++;
-    },
-    clear: (handle) => {
-      cleared.push(handle);
-      armed.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    const runs = [...armed.values()];
-    armed.clear();
-    for (const { run } of runs) {
-      run();
-    }
-  };
-  return { timers, armed, cleared, fireAll };
-}
 
 // Each anchor named, with its command and options, and whether it was
 // disposed.

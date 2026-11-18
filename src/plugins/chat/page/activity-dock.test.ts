@@ -1,34 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { SessionCompaction } from '../contract';
 import type { StepInput, WorkingInput } from '../layouts/layout';
 import { createActivityDock } from './activity-dock';
 
 const NOW = 5000;
-
-// Timers that run only when the test fires them.
-function fakeTimers() {
-  let nextHandle = 1;
-  const armed = new Map<number, () => void>();
-  const timers: Timers = {
-    set: (run) => {
-      armed.set(nextHandle, run);
-      return nextHandle++;
-    },
-    clear: (handle) => {
-      armed.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    const runs = [...armed.values()];
-    armed.clear();
-    for (const run of runs) {
-      run();
-    }
-  };
-  return { timers, armed, fireAll };
-}
 
 // A dock over fake timers and a clock whose `time` the test sets, and every
 // input it sent.

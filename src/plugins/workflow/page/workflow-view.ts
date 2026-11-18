@@ -5,6 +5,7 @@ import type { ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { tag } from '../../../shared/page/ui/tag';
+import { createPendingTick } from '../../../shared/pending-tick';
 import type {
   ChatComposerPart,
   ChatSidePart,
@@ -165,7 +166,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const busyDrawn = new Map<string, boolean>();
   const unseen = new Set<string>();
   let isSidePaneHidden = false;
-  let pendingTick: number | null = null;
+  const ticker = createPendingTick(timers, TICK_MS, () => tick());
 
   // The workflow that draws `flow`; null for a flow of none, or of one no plugin
   // holds.
@@ -431,15 +432,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
 
   // Sets the tick while a countdown shows and none is pending; clears a
   // pending one once none shows.
-  const updateTicker = () => {
-    const isShown = isCountdownShown();
-    if (isShown && pendingTick === null) {
-      pendingTick = timers.set(tick, TICK_MS);
-    } else if (!isShown && pendingTick !== null) {
-      timers.clear(pendingTick);
-      pendingTick = null;
-    }
-  };
+  const updateTicker = () => ticker.setNeeded(isCountdownShown());
 
   const drawEach = (chosen: readonly HeldPart[]) => {
     try {
@@ -455,7 +448,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     drawEach([...held].filter((part) => part.sessionId === sessionId));
 
   const tick = () => {
-    pendingTick = null;
     drawEach([...held].filter((part) => part.showsCountdown));
   };
 

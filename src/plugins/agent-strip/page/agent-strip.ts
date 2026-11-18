@@ -18,6 +18,7 @@ import type {
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import { textLineHeightPx } from '../../../shared/page/text-line';
+import { createPendingTick } from '../../../shared/pending-tick';
 import type {
   Roster,
   RosterAgent,
@@ -165,7 +166,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const openKeys = new Map<string, string>();
   const loggedBoxes = new Map<string, string>();
   let selection: Selection | null = null;
-  let pendingTick: number | null = null;
+  const ticker = createPendingTick(timers, TICK_MS, () => tick());
   // The layouts shown when each part's `update` threw; while they are still
   // the shown ones, the tick draws that part's boxes again instead.
   const updateFailedUnder: Record<
@@ -497,15 +498,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
 
   // Sets the tick while a box shows and none is pending; clears a pending one
   // once none shows.
-  const updateTicker = () => {
-    const isShown = isBoxShown();
-    if (isShown && pendingTick === null) {
-      pendingTick = timers.set(tick, TICK_MS);
-    } else if (!isShown && pendingTick !== null) {
-      timers.clear(pendingTick);
-      pendingTick = null;
-    }
-  };
+  const updateTicker = () => ticker.setNeeded(isBoxShown());
 
   const redraw = (sessionId: string) => {
     const holder = held.get(sessionId);
@@ -528,7 +521,6 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   };
 
   const tick = () => {
-    pendingTick = null;
     try {
       callEach([...held], ([sessionId, holder]) =>
         tickStrip(sessionId, holder),

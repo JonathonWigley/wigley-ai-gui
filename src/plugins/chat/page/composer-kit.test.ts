@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../contracts/agent';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import type { CommandId } from '../../../contracts/commands';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
@@ -29,28 +29,12 @@ import { createSignInPart } from './dialog-kits';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 
-// Timers that run only when the test fires them, each armed one kept in
-// `armed`.
-function fakeTimers() {
-  let nextHandle = 1;
-  const armed = new Map<number, () => void>();
-  const timers: Timers = {
-    set: (run) => {
-      armed.set(nextHandle, run);
-      return nextHandle++;
-    },
-    clear: (handle) => {
-      armed.delete(handle);
-    },
-  };
-  return { timers, armed };
-}
-
 // The deps every surface takes, drawing with `user` as the user's layout,
 // or with `default` alone when `user` is null, and no composer or status part
 // until one is added to `deps.composerParts` or `deps.statusParts`; each
 // anchor is kept in `anchors`, each command run in `ran`, each log line in
-// `logs` and each armed timer in `armed`, over a clock fixed at 5000.
+// `logs` and each armed timer in `armed`, fired by `fireAll`, over a clock
+// fixed at 5000.
 function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
   const log = (message: string) => logs.push(message);
@@ -60,7 +44,7 @@ function surfaceDeps(user: ChatLayout | null) {
   }
   const { anchors, keys } = recordingAnchors();
   const ran: CommandId[] = [];
-  const { timers, armed } = fakeTimers();
+  const { timers, armed, fireAll } = fakeTimers();
   const deps = {
     layouts,
     markdown: {
@@ -86,7 +70,7 @@ function surfaceDeps(user: ChatLayout | null) {
     clock: { now: () => 5000 },
     timers,
   };
-  return { deps, anchors, ran, logs, armed };
+  return { deps, anchors, ran, logs, armed, fireAll };
 }
 
 function composerInput(
@@ -885,7 +869,7 @@ describe('composer surface activity dock', () => {
         element: rootIn(parent),
         update: (input) => calls.push([name, input]),
       });
-    const { deps, surface, armed } = setUpSurface({
+    const { deps, surface, fireAll } = setUpSurface({
       working: recordingPart('working'),
       workingLine: recordingPart('workingLine'),
     });
@@ -893,7 +877,7 @@ describe('composer surface activity dock', () => {
     surface.onDockChanged((input) => calls.push(['listener', input]));
     deps.clock.now = () => 7000;
 
-    [...armed.values()].forEach((run) => run());
+    fireAll();
 
     expect(calls.map(([name]) => name)).toEqual([
       'working',
@@ -993,14 +977,15 @@ describe('composer surface activity dock', () => {
       vi.spyOn(defaultLayout, part).mockImplementation(() => {
         throw new Error('broken default');
       });
-      const { surface, slotOf, logs, armed, drawComposer } = setUpSurface(null);
+      const { surface, slotOf, logs, fireAll, drawComposer } =
+        setUpSurface(null);
       const failures = () =>
         logs.filter(
           (line) => line === `default layout ${part} failed: broken default`,
         ).length;
 
       surface.setTurn(LIVE_TURN, true, null);
-      [...armed.values()].forEach((run) => run());
+      fireAll();
       const failuresBeforeComposerDraw = failures();
       drawComposer();
 

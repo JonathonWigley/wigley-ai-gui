@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Timers } from '../../../contracts/ambient';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import {
   type ChatEntry,
   type HarnessEntryKind,
@@ -494,29 +494,6 @@ function activityShown(
     { ...user, activityInTranscript: true },
     name,
   );
-}
-
-// Timers that run only when the test fires them.
-function fakeTimers() {
-  let nextHandle = 1;
-  const armed = new Map<number, () => void>();
-  const timers: Timers = {
-    set: (run) => {
-      armed.set(nextHandle, run);
-      return nextHandle++;
-    },
-    clear: (handle) => {
-      armed.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    const runs = [...armed.values()];
-    armed.clear();
-    for (const run of runs) {
-      run();
-    }
-  };
-  return { timers, armed, fireAll };
 }
 
 // A list over `shown`, its layouts, entry renderers, logs, toasts, disposed

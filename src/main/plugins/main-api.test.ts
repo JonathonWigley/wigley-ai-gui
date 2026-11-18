@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHarness, AgentHarnessRegistry } from '../../contracts/agent';
 import type { AlertNoun, Alerts } from '../../contracts/alerts';
-import type { Timers } from '../../contracts/ambient';
+import { fakeTimers } from '../../shared/fake-timers.test-support';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
 import type {
@@ -134,30 +134,6 @@ function apiWithServices(services: Partial<MainApiServices>) {
   return apiOver(liveSettings({ p: {} }), undefined, undefined, {
     services: { paths: posixPaths, ...services } as MainApiServices,
   });
-}
-
-// Timers a test fires by hand; `clear` drops the timer and records its handle.
-function fakeTimers() {
-  const cleared: number[] = [];
-  const scheduled = new Map<number, () => void>();
-  let last = 0;
-  const timers: Timers = {
-    set: (run) => {
-      last += 1;
-      scheduled.set(last, run);
-      return last;
-    },
-    clear: (handle) => {
-      cleared.push(handle);
-      scheduled.delete(handle);
-    },
-  };
-  const fireAll = () => {
-    for (const run of Array.from(scheduled.values())) {
-      run();
-    }
-  };
-  return { timers, cleared, fireAll };
 }
 
 const F: AlertNoun = {

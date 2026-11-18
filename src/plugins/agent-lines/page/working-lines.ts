@@ -9,6 +9,7 @@ import {
 } from '../../../shared/page/layout-host/base-kit';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
+import { createPendingTick } from '../../../shared/pending-tick';
 import type { SessionPart } from '../../sessions/contract';
 import type { Roster } from '../../agents/contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -63,7 +64,7 @@ export function createWorkingLines(deps: WorkingLinesDeps): WorkingLines {
   const works = new Map<string, RunningWork>();
   const held = new Map<string, HeldWrapper>();
   const loggedCounts = new Map<string, number>();
-  let pendingTick: number | null = null;
+  const ticker = createPendingTick(timers, TICK_MS, () => tick());
 
   const disposeLine = (holder: HeldWrapper) => {
     const line = holder.line;
@@ -102,15 +103,7 @@ export function createWorkingLines(deps: WorkingLinesDeps): WorkingLines {
 
   // Sets the tick while a line shows and none is pending; clears a pending
   // one once no line shows.
-  const updateTicker = () => {
-    const isShown = isLineShown();
-    if (isShown && pendingTick === null) {
-      pendingTick = timers.set(tick, TICK_MS);
-    } else if (!isShown && pendingTick !== null) {
-      timers.clear(pendingTick);
-      pendingTick = null;
-    }
-  };
+  const updateTicker = () => ticker.setNeeded(isLineShown());
 
   const draw = (sessionId: string, holder: HeldWrapper) => {
     try {
@@ -137,7 +130,6 @@ export function createWorkingLines(deps: WorkingLinesDeps): WorkingLines {
   };
 
   const tick = () => {
-    pendingTick = null;
     drawAll();
   };
 

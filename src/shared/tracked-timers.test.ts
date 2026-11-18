@@ -6,7 +6,7 @@ import { trackedTimers } from './tracked-timers';
 // Timers numbering their handles from 1. `fire` runs one timer's run, and
 // `fireAll` every timer's, cleared or not, as a clear that came too late would.
 // `delays` holds each timer's delay in the order they were set.
-function fakeTimers() {
+function lateClearTimers() {
   const runs = new Map<number, () => void>();
   const cleared: number[] = [];
   const delays: number[] = [];
@@ -30,7 +30,7 @@ function fakeTimers() {
 
 describe('trackedTimers', () => {
   it('clears only the timers still pending when its registrations are disposed', () => {
-    const { timers, cleared, fire } = fakeTimers();
+    const { timers, cleared, fire } = lateClearTimers();
     const registrations = createRegistrations();
     const tracked = trackedTimers(timers, registrations);
     const ran: number[] = [];
@@ -47,7 +47,7 @@ describe('trackedTimers', () => {
   });
 
   it('runs nothing set after its registrations are disposed', () => {
-    const { timers, fireAll } = fakeTimers();
+    const { timers, fireAll } = lateClearTimers();
     const registrations = createRegistrations();
     const tracked = trackedTimers(timers, registrations);
     registrations.dispose();
@@ -60,7 +60,7 @@ describe('trackedTimers', () => {
   });
 
   it('caps a delay past the 32-bit limit at the longest delay a timer takes', () => {
-    const { timers, delays } = fakeTimers();
+    const { timers, delays } = lateClearTimers();
     const tracked = trackedTimers(timers, createRegistrations());
 
     tracked.set(() => {}, 2 ** 31);

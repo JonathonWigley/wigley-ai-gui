@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Timers } from '../../contracts/ambient';
+import { fakeTimers } from '../../shared/fake-timers.test-support';
 import type { Bridge } from '../../contracts/bridge';
 import type { Disposable } from '../../contracts/disposable';
 import type {
@@ -838,20 +838,6 @@ const HEARING_ROWS: {
       ),
   },
 ];
-
-// Timers numbering their handles from 1, recording each clear.
-function fakeTimers() {
-  const cleared: number[] = [];
-  let last = 0;
-  const timers: Timers = {
-    set: () => {
-      last += 1;
-      return last;
-    },
-    clear: (handle) => cleared.push(handle),
-  };
-  return { timers, cleared };
-}
 
 // An editor host whose editors count their `destroy`, in creation order.
 function countingEditors() {
