@@ -103,11 +103,7 @@ import {
   type MainShowCause,
 } from './main-page';
 import type { StarredDocs } from './starred-docs';
-import {
-  createTreeView,
-  type LeafMarks,
-  type SidebarView,
-} from './tree-view';
+import { createTreeView, type LeafMarks, type SidebarView } from './tree-view';
 import { createWikiMainSource, type MainFileState } from './wiki-main-source';
 
 // The scopes a docs view pushes over its pane's scope.
