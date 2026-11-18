@@ -31,6 +31,7 @@ import {
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   FAKE_PERMISSION_TEXT,
+  FAKE_PLAYTEST_TEXT,
   FAKE_PROFILES,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
@@ -489,6 +490,63 @@ describe('createFakeAgentHarness', () => {
         },
       ],
       ['activity', 'working'],
+    ]);
+  });
+
+  it('send_PlaytestText_EmitsTheEditorPlayCall', async () => {
+    const { agent, heard } = await startedProcess();
+
+    agent.send({ text: FAKE_PLAYTEST_TEXT, images: [] });
+    await flush();
+
+    const command = `unity command editor_play --result-only --project-path '${request.projectDir}'`;
+    const tool = {
+      kind: 'tool',
+      id: 'tool-1',
+      at: 1000,
+      agentId: MAIN_AGENT_ID,
+      toolUseId: 'fake-tool-1',
+      name: 'Bash',
+      input: { command },
+      summary: command,
+    };
+    expect(heard.slice(2)).toEqual([
+      ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
+      [
+        'entry',
+        {
+          ...tool,
+          result: { text: 'Entered Play Mode.', isError: false },
+          raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
+        },
+      ],
+      [
+        'entry',
+        {
+          kind: 'assistant',
+          id: 'assistant-1',
+          at: 1000,
+          agentId: MAIN_AGENT_ID,
+          text: 'fake agent entered Play Mode',
+          streaming: false,
+          raw: [{ fake: 'assistant', text: 'fake agent entered Play Mode' }],
+        },
+      ],
+      [
+        'entry',
+        {
+          kind: 'result',
+          id: 'result-1',
+          at: 1000,
+          stopReason: 'end_turn',
+          costUsd: null,
+          durationMs: null,
+          raw: [{ fake: 'result' }],
+        },
+      ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
+      ['activity', 'idle'],
     ]);
   });
 

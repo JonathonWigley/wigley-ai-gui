@@ -108,6 +108,7 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
         chat: api.dependency(chatMainKey),
         sessions,
         show: liveTools.show,
+        picks: api.state.read(livePicksSlot),
       }),
     );
 
