@@ -1,4 +1,5 @@
 import type { MainPart, PluginManifest } from '../contracts/plugin';
+import { agentCommandsManifest } from './agent-commands/manifest';
 import { agentLinesManifest } from './agent-lines/manifest';
 import { appUpdateManifest } from './app-update/manifest';
 import { audioPickerManifest } from './audio-picker/manifest';
@@ -10,6 +11,7 @@ import { autoCompactManifest } from './auto-compact/manifest';
 import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
+import { chatroomManifest } from './chatroom/manifest';
 import { claudeCodeManifest } from './claude-code/manifest';
 import { docsManifest } from './docs/manifest';
 import { docsSessionTabManifest } from './docs-session-tab/manifest';
@@ -21,6 +23,7 @@ import { markdownBlocksManifest } from './markdown-blocks/manifest';
 import { notesManifest } from './notes/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
+import { schedulingManifest } from './scheduling/manifest';
 import { scopedAgentsManifest } from './scoped-agents/manifest';
 import { sessionLogManifest } from './session-log/manifest';
 import { sessionStashManifest } from './session-stash/manifest';
@@ -48,6 +51,7 @@ export const builtInManifests = [
   sessionsManifest,
   claudeCodeManifest,
   formsManifest,
+  agentCommandsManifest,
   primerManifest,
   audioPickerManifest,
   chatManifest,
@@ -61,6 +65,7 @@ export const builtInManifests = [
   agentSkillsManifest,
   contextSourcesManifest,
   liveViewManifest,
+  chatroomManifest,
   keysManifest,
   docsManifest,
   docsSessionTabManifest,
@@ -81,6 +86,9 @@ export const builtInManifests = [
   systemStatsManifest,
   visualManifest,
   markdownBlocksManifest,
+  // After every plugin that calls chat's `addInstructions`, so at quit it stops
+  // first and never re-prepares its runs without their text.
+  schedulingManifest,
   windowManifest,
   appUpdateManifest,
 ] as const;

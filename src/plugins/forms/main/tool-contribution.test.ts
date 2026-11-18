@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentSession,
+  ContributeToolsOptions,
   ToolDefinition,
   ToolSession,
 } from '../../sessions/contract';
@@ -20,6 +21,7 @@ function agentSession(id: string): AgentSession {
 
 interface Contribution {
   tools: ToolDefinition[];
+  options: ContributeToolsOptions | undefined;
   started: ToolSession[];
 }
 
@@ -36,13 +38,18 @@ function recordingSessions(live: AgentSession[]) {
     },
     sessions: {
       contributeTools: vi.fn(
-        (tools: ToolDefinition[], start: (s: AgentSession) => ToolSession) => {
+        (
+          tools: ToolDefinition[],
+          start: (s: AgentSession) => ToolSession,
+          options?: ContributeToolsOptions,
+        ) => {
           if (failsNext) {
             failsNext = false;
             throw new Error('bad tools');
           }
           const contribution = {
             tools,
+            options,
             started: live.map((session) => start(session)),
           };
           contributions.push(contribution);
@@ -72,6 +79,8 @@ function fakeFormsSession(): FormsSession {
   };
 }
 
+const OPTIONS: ContributeToolsOptions = { mainAgentOnly: true };
+
 // The contribution over one live session `a`, its tool list read from
 // `toolList`, recording each forms session it starts.
 function setup(toolList: () => ToolDefinition[] = () => [tool('ask_round')]) {
@@ -81,6 +90,7 @@ function setup(toolList: () => ToolDefinition[] = () => [tool('ask_round')]) {
   const handle = contributeFormsTools({
     sessions: recorded.sessions,
     tools: toolList,
+    options: OPTIONS,
     startSession: () => {
       const forms = fakeFormsSession();
       formsSessions.push(forms);
@@ -97,7 +107,7 @@ function setup(toolList: () => ToolDefinition[] = () => [tool('ask_round')]) {
 }
 
 describe('contributeFormsTools', () => {
-  it('refresh disposes the old contribution and contributes the tools again', () => {
+  it('refresh disposes the old contribution and contributes the tools again with the same options', () => {
     let names = ['ask_round'];
     const { handle, contributions } = setup(() => names.map(tool));
 
@@ -107,6 +117,10 @@ describe('contributeFormsTools', () => {
     expect(contributions.map((each) => each.tools.map((t) => t.name))).toEqual([
       ['ask_round'],
       ['ask_round', 'collect_last_round'],
+    ]);
+    expect(contributions.map((each) => each.options)).toEqual([
+      OPTIONS,
+      OPTIONS,
     ]);
   });
 

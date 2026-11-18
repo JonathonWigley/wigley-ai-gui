@@ -16,6 +16,7 @@ import {
   createFakeAgentHarness,
   type FakeAgentHarness,
   type FakeAttachScript,
+  FAKE_AGENT_COMMAND,
   FAKE_AGENT_PID,
   FAKE_AGENTS_TEXT,
   FAKE_BLOCKS_REPLY,
@@ -279,7 +280,7 @@ describe('createFakeAgentHarness', () => {
     ]);
   });
 
-  it('failNextStart_ThrowsOnce', () => {
+  it('failNextStart_ThrowsOnce', async () => {
     const harness = createFakeAgentHarness(
       clock,
       createMemoryFiles(),
@@ -293,6 +294,62 @@ describe('createFakeAgentHarness', () => {
     expect(harness.processes).toHaveLength(0);
     harness.start(request, recordingEvents().events);
     expect(harness.processes).toHaveLength(1);
+    harness.failNextStart('no agent');
+    const message = { text: 'go', images: [] };
+    await expect(harness.prepareRun(request, message, {})).rejects.toThrow(
+      'no agent',
+    );
+    expect((await harness.prepareRun(request, message, {})).id).toBe('p-1');
+  });
+
+  it('prepareRun_ReturnsTheSpecAndRecordsIt_StartsNothing', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const message = { text: 'go', images: [] };
+    const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
+
+    const spawn = await harness.prepareRun(request, message, env);
+
+    expect(spawn.command).toBe(FAKE_AGENT_COMMAND);
+    expect(spawn.env).toEqual({
+      WIGLEY_FORMS_OFFLINE: '/calls',
+      WIGLEY_SESSION_ROW: 'row-1',
+    });
+    expect(spawn.inheritEnv).toBe(true);
+    const lines = spawn.stdin.map(
+      (line) => JSON.parse(line) as Record<string, unknown>,
+    );
+    expect(lines).toEqual([{ type: 'user', text: 'go', images: [] }]);
+    expect(spawn.idleRule.busyStdinValues).toContain(
+      lines[0][spawn.idleRule.key],
+    );
+    expect(harness.preparedRuns).toEqual([
+      { request, firstMessage: message, env, spawn },
+    ]);
+    expect(harness.processes).toEqual([]);
+  });
+
+  it('startControls_AllValuesNull_CapControlsLowersModeToPlan', () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+
+    const controls = harness.startControls();
+
+    expect(controls.map((control) => [control.id, control.value])).toEqual([
+      ['mode', null],
+      ['effort', null],
+      ['model', null],
+      ['verbosity', null],
+    ]);
+    expect(harness.capControls({ mode: 'auto' }, { mode: 'plan' })).toEqual({
+      mode: 'plan',
+    });
   });
 
   it('send_PlainText_StreamsReplyThenResult', async () => {

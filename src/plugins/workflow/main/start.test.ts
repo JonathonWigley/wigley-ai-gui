@@ -45,6 +45,7 @@ import {
   workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowSignal,
+  WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
@@ -752,10 +753,19 @@ describe('workflowMainPart', () => {
       })),
     ).toEqual(
       expect.arrayContaining([
-        { tools: [SET_WORKFLOW_STEP_TOOL], options: { mainAgentOnly: true } },
+        {
+          tools: [SET_WORKFLOW_STEP_TOOL],
+          options: {
+            mainAgentOnly: true,
+            offline: { [SET_WORKFLOW_STEP_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+          },
+        },
         {
           tools: [SET_WORKFLOW_CHECKLIST_TOOL],
-          options: { mainAgentOnly: true },
+          options: {
+            mainAgentOnly: true,
+            offline: { [SET_WORKFLOW_CHECKLIST_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+          },
         },
       ]),
     );
@@ -800,7 +810,12 @@ describe('workflowMainPart', () => {
           tools.some((tool) => tool.name === SET_WORKFLOW_STEP_TOOL),
         )
         .map(({ options }) => options),
-    ).toEqual([{ mainAgentOnly: true }]);
+    ).toEqual([
+      {
+        mainAgentOnly: true,
+        offline: { [SET_WORKFLOW_STEP_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+      },
+    ]);
     await workflow.openS1();
     await workflow.agentEvent(skill('x:stub', ''));
     await workflow.callStepTool('s1', 'extra');
@@ -1497,5 +1512,28 @@ describe('workflowMainPart', () => {
     expect(await runLogLines(workflow)).toMatchObject([
       { activeMs: 0, costUsd: null },
     ]);
+  });
+
+  it.each([
+    {
+      name: 'a stage with finishes',
+      workflow: 'stub',
+      stage: 'done',
+      expected: true,
+    },
+    {
+      name: 'another stage',
+      workflow: 'stub',
+      stage: 'scope',
+      expected: false,
+    },
+    { name: 'no workflow', workflow: null, stage: 'done', expected: false },
+  ])('stageFinishes ($name)', ({ workflow: workflowId, stage, expected }) => {
+    const workflow = startWorkflowPart();
+    workflow.exported().addWorkflow(finishingWorkflow());
+
+    const flow = { ...newFlow('s1', '/r'), workflow: workflowId, stage };
+
+    expect(workflow.exported().stageFinishes(flow)).toBe(expected);
   });
 });

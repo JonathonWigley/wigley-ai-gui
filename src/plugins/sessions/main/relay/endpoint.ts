@@ -5,7 +5,11 @@ import type { Paths } from '../../../../contracts/paths';
 import type { OsName } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { createSerialQueue } from '../../../../shared/serial-queue';
-import type { RelayEndpoint, ToolDefinition } from '../../contract';
+import type {
+  OfflineAnswer,
+  RelayEndpoint,
+  ToolDefinition,
+} from '../../contract';
 
 // How a relay that finds a drive run gone "starts" it: a shell that exits 1
 // with the run's home named in the command's text, which the relay reports,
@@ -30,13 +34,19 @@ export function endedDriveRunLaunch(
 }
 
 // Writes `endpoint.json`, which tells relays where the app is and how to
-// start it, and `tools.json`, the tool list a relay serves while the app is
-// away, into `dir`, making it. Each write runs once every earlier one has
-// settled; a failed one is logged, and the next still runs. `Files.write` is
-// atomic, so a relay never reads half a file.
+// start it, `tools.json`, the tool list a relay serves while the app is
+// away, and `offline.json`, each tool's answer while the app is closed, into
+// `dir`, making it. Each write runs once every earlier one has settled; a
+// failed one is logged, and the next still runs. `Files.write` is atomic, so a
+// relay never reads half a file.
 export interface EndpointWriter {
-  // Queues one write of both files with this endpoint and tool list; returns at once.
-  write(endpoint: RelayEndpoint, tools: ToolDefinition[]): void;
+  // Queues one write of the three files with this endpoint, tool list and
+  // offline table; returns at once.
+  write(
+    endpoint: RelayEndpoint,
+    tools: ToolDefinition[],
+    offline: Readonly<Record<string, OfflineAnswer>>,
+  ): void;
   // Settles once every write queued before the call has settled.
   flushed(): Promise<void>;
 }
@@ -51,11 +61,12 @@ export function createEndpointWriter(
   const writeJson = (name: string, value: unknown) =>
     files.write(paths.join(dir, name), `${JSON.stringify(value, null, 2)}\n`);
   return {
-    write(endpoint, tools) {
+    write(endpoint, tools, offline) {
       queue
         .run(async () => {
           await writeJson('endpoint.json', endpoint);
           await writeJson('tools.json', { tools });
+          await writeJson('offline.json', { tools: offline });
         })
         .catch((error: unknown) =>
           log(`endpoint files not written: ${errorText(error)}`),

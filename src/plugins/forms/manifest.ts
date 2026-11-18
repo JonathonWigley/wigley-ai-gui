@@ -168,12 +168,18 @@ export const formsManifest = definePlugin({
       group: 'review',
       runsIn: 'page',
     },
-    submit: { label: 'send answers', group: 'review', runsIn: 'page' },
+    submit: {
+      label: 'send answers',
+      group: 'review',
+      runsIn: 'page',
+      risky: true,
+    },
     askCancel: { label: 'cancel the round', group: 'review', runsIn: 'page' },
     confirmCancel: {
       label: 'yes, cancel the round',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     dismissConfirm: {
       label: 'keep the round',

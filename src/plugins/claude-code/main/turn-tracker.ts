@@ -21,6 +21,9 @@ import type { DecodedLine } from './stream-decoder';
 //   turn's result and its own init is closed too, so activity reads idle in
 //   that gap until the init reopens the turn.
 // - `abandon` closes the turn and every uuid.
+//
+// The session host reads busy from the same lines through `CLAUDE_IDLE_RULE`
+// (claude-launch.ts): a change to either reading reaches the other.
 
 export interface ControlCommand {
   id: 'effort' | 'model' | 'compact';

@@ -18,7 +18,9 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
+import type { HostedSpawn } from '../../contracts/session-host';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
+import { isJsonObject, isStringArray } from '../../shared/json';
 import type { SessionTitles } from '../sessions/contract';
 import type { AnyEntryKind, EntryBuilder, EntryInput } from './layouts/layout';
 
@@ -89,6 +91,8 @@ export type StartRequest = StartTarget & { harness: string; profile: string };
 // relaunch.
 // `owner`: the plugin the row belongs to (sessions' `OpenOptions.owner`). Kept
 // with the row across a clear and a relaunch.
+// `controls`: the first process's values, by control id; each later start in
+// the row passes them again. An id the harness does not declare is refused.
 export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
@@ -96,7 +100,66 @@ export type LaunchRequest = StartTarget & {
   headless?: boolean;
   instructions?: readonly string[];
   owner?: string;
+  // The first process's controls, by control id; the row keeps them as its
+  // picks. Left out, the harness defaults.
+  controls?: Readonly<Record<string, string>>;
 };
+
+// What `adopt` opens a row from. JSON, so a `PendingSpawn.record` can carry it.
+export interface AdoptRequest {
+  hostSessionId: string;
+  processId: string; // `<hostSessionId>-1-<epoch ms>`, chat's process id form
+  rowId: string;
+  projectDir: string;
+  harness: string; // the id of the harness that prepared the run
+  profile: string;
+  headless: boolean;
+  unattended: boolean;
+  instructions: readonly string[]; // the run's own, as `LaunchRequest.instructions`
+  owner: string | null;
+  controls: Readonly<Record<string, string>>;
+  titles: SessionTitles; // `firstMessage` from the prompt, the others null
+}
+
+// The request `value` holds, or null when it is not one: a field missing or of
+// another type.
+export function readAdoptRequest(value: unknown): AdoptRequest | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  const hasStrings = [
+    'hostSessionId',
+    'processId',
+    'rowId',
+    'projectDir',
+    'harness',
+    'profile',
+  ].every((key) => typeof value[key] === 'string');
+  const hasFlags =
+    typeof value.headless === 'boolean' &&
+    typeof value.unattended === 'boolean';
+  const hasOwner = value.owner === null || typeof value.owner === 'string';
+  const isRequest =
+    hasStrings &&
+    hasFlags &&
+    hasOwner &&
+    isStringArray(value.instructions) &&
+    isStringRecord(value.controls) &&
+    isJsonObject(value.titles);
+  return isRequest ? (value as unknown as AdoptRequest) : null;
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    Object.values(value).every((field) => typeof field === 'string')
+  );
+}
+
+export interface PreparedLaunch {
+  spawn: HostedSpawn;
+  adopt: AdoptRequest;
+}
 
 // `hostSessionId` is the harness's id for the saved session.
 export interface PastSessionRow {
@@ -612,10 +675,34 @@ export interface ChatMainExports {
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
   // refusal text), a profile no registered harness declares, an unknown
-  // project, a profile other than the project's, no pool provider, or a pool
-  // with no clones. A pool project's session starts in the pool's
-  // lowest-numbered clone. It runs on the harness that declares its profile.
+  // project, a profile other than the project's, no pool provider, a pool
+  // with no clones, or an unknown control id. A pool project's session starts
+  // in the pool's lowest-numbered clone. It runs on the harness that declares
+  // its profile.
   launch(request: LaunchRequest): Promise<string>;
+  // A launch the session host starts later: chat's instructions as they stand
+  // now, the headless note when `request.headless`, `request.controls` as the
+  // first process's, `env` added to the run's environment, and fresh ids (host
+  // session id, process id, row id, message uuid), on the harness that
+  // declares its profile. Opens nothing. Rejects where `launch` rejects, an
+  // unknown control id included.
+  prepareLaunch(
+    request: LaunchRequest,
+    env: Readonly<Record<string, string>>,
+  ): Promise<PreparedLaunch>;
+  // Chat's checked projects, in settings order, as the channel's `projects`
+  // gives the page.
+  projects(): readonly ChatProject[];
+  // Opens the row of a run the session host started from a `prepareLaunch`,
+  // inside a sessions connect hold: attached when the host still runs its
+  // process, else resting with its history pending. Resolves to the row's
+  // sessionId once the attach settled and, for a resting row, its history was
+  // read. When a row already holds the host session id, opens nothing and
+  // resolves to that row's sessionId, once a resting row chat holds has its
+  // history read. Never rejects over controls: an id the harness no longer
+  // declares is dropped and logged. Rejects after `detachAll` and when the row
+  // cannot open.
+  adopt(run: AdoptRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner
   // is the request's (none when absent), activated only when it has no owner;
@@ -628,8 +715,20 @@ export interface ChatMainExports {
   profileOf(sessionId: string): string | null;
   // The clock of a session chat owns; null for any other session id.
   activeTime(sessionId: string): ActiveTime | null;
+  // The agent that made a tool call, by its host tool-use id: MAIN_AGENT_ID or
+  // a subagent's id, as the session's stream names it. For a call the stream
+  // has not named yet it waits a short while, then resolves null; for a
+  // session chat does not hold it resolves null at once.
+  toolCaller(sessionId: string, toolUseId: string): Promise<string | null>;
   // Whether a session chat owns is headless; false for any other session id.
   isHeadless(sessionId: string): boolean;
+  // Whether a session chat owns is unattended (launched with `unattended`
+  // true); false for any other session id.
+  isUnattended(sessionId: string): boolean;
+  // The name a frame line from this session's agent gives it, by
+  // `frameSenderName`: its title as a rename starts from, else its side-bar
+  // label, else its id.
+  senderName(sessionId: string): string;
   // Whether the harness process of a session chat owns started with the
   // headless note, which is the flag at its last process start (a `/clear`
   // included), or its saved flag when it has not started one in this app run;
@@ -669,6 +768,10 @@ export interface ChatMainExports {
   // with. Disposing it leaves later starts without it. A session's own
   // `instructions` follow these texts.
   addInstructions(text: string): Disposable;
+  // Hears each `addInstructions` registration and each disposal of one, so a
+  // prepared run can be prepared again with the texts a live start would get.
+  // A listener that throws is logged and breaks no registration.
+  onInstructionsChanged(listener: () => void): Disposable;
   // Gates are asked in registration order before a write to an idle session; the
   // first non-null verdict holds the send, and no later gate is asked. A gate
   // that throws is logged and counts as null. Disposing the handle removes the
@@ -984,3 +1087,11 @@ export const chatMoveFocusCommand: CommandKey<
   { sessionId: string; stopId: string },
   'chat.moveFocus'
 > = { id: 'chat.moveFocus' };
+
+// Sends `text` to the chat session `sessionId`, framed as the calling agent's
+// message when an agent runs it; the one command that names its target
+// session in its argument.
+export const chatSendToCommand: CommandKey<
+  { sessionId: string; text: string },
+  'chat.sendTo'
+> = { id: 'chat.sendTo' };

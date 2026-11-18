@@ -7,6 +7,7 @@ import { errorText } from '../../../shared/error-text';
 import {
   type AgentSession,
   errorResult,
+  type OfflineAnswer,
   textResult,
   type ToolDefinition,
   type ToolResult,
@@ -47,6 +48,21 @@ const HIDE_TOOL: ToolDefinition = {
 };
 
 const LIVE_TOOLS: readonly ToolDefinition[] = [SHOW_TOOL, HIDE_TOOL];
+
+// Each live tool's answer while the app is closed: a non-error "carry on", so
+// a playtest does not retry the stream. Neither call replays.
+export const LIVE_VIEW_OFFLINE: Readonly<Record<string, OfflineAnswer>> = {
+  [SHOW_TOOL.name]: {
+    result: textResult(
+      'The app is closed, so no Live section streams. Carry on without the stream.',
+    ),
+    replay: false,
+  },
+  [HIDE_TOOL.name]: {
+    result: textResult('The app is closed: no Live section was streaming.'),
+    replay: false,
+  },
+};
 
 const PROJECT_PATH_REQUIRED = 'projectPath is required.';
 const GAME_RECT_INVALID =

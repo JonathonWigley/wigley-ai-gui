@@ -19,6 +19,9 @@ import { createPipeLog, type PipeLog } from './pipe-log';
 
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 const MS_PER_MINUTE = 60_000;
+// Claude prints the `system/init` of the turn that reports a finished background subagent a few ms after the line that
+// lists none, and that turn's first busy line only at the API's first token.
+export const DRAIN_REPORT_GRACE_MS = 10_000;
 
 export type HostSpawn = (
   command: string,
@@ -35,17 +38,20 @@ export interface ProcessSubscriber {
 
 export interface ProcessTableDeps {
   spawn: HostSpawn;
+  // The host's own environment, which a spawn with `inheritEnv` lays its `env` over.
+  env: NodeJS.ProcessEnv;
   clock: Clock;
   timers: Timers;
   logsFolder: string;
   diagnostics: DiagnosticLog;
-  // After a process has left the table.
-  processClosed(): void;
+  // After a process has left the table, with the exit its subscriber got.
+  processClosed(id: string, exit: HostedExit): void;
 }
 
 export interface ProcessTable {
-  // Subscribes `subscriber`, and calls its `spawned` before returning when the OS started the process. A refused or
-  // failed spawn calls its `closed`, with no other process touched.
+  // Subscribes `subscriber`, and calls its `spawned` before returning when the OS started the process, then writes
+  // the spawn's `stdin` lines as `write` does. A refused or failed spawn calls its `closed`, with no other process
+  // touched.
   spawn(request: HostedSpawn, subscriber: ProcessSubscriber): void;
   // `write`, `endInput` and `kill` do nothing for an id the table does not hold.
   write(id: string, text: string): void;
@@ -62,19 +68,27 @@ export interface ProcessTable {
   unsubscribe(id: string, subscriber: ProcessSubscriber): void;
   dropSubscriber(subscriber: ProcessSubscriber): void;
   list(): ListedProcess[];
+  // True when the table holds process `id`, it is not ending, and its idle rule reads it busy.
+  isBusy(id: string): boolean;
   // Refuses a value that is not finite, keeping the window it has.
   setKeepIdleMinutes(minutes: number): void;
   // The keep window runs only while this is false, the state the table starts in.
   setClientConnected(connected: boolean): void;
-  // Ends each idle process now and each other when it turns idle; every later spawn is refused.
+  // Ends each idle process now and each other when it turns idle; every later spawn is refused. A process the end of
+  // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first;
+  // each main stdout line in that time starts the grace over.
   drain(): void;
   // Calls `done` once the table is empty, at once when it already is.
   stopAll(done: () => void): void;
 }
 
-interface DroppedKey {
-  path: KeyPath;
-  quotedKey: string;
+// The parts the idle rule reads busy from; a process is idle when none holds.
+interface TurnState {
+  isTurnOpen: boolean;
+  openMessages: Set<string>;
+  backgroundCount: number;
+  // True once a stdout line whose `key` equals `messageEnd.value` has arrived, whatever its state.
+  printsMessageEnds: boolean;
 }
 
 interface TableProcess {
@@ -83,29 +97,184 @@ interface TableProcess {
   pid: number | null;
   log: PipeLog;
   idleRule: IdleRule;
-  droppedOutKeys: readonly DroppedKey[];
+  droppedOutKeys: readonly KeyPath[];
   startedAt: number;
   subscriber: ProcessSubscriber | null;
+  turnState: TurnState;
+  // True while no part of `turnState` holds.
   isIdle: boolean;
   idleSince: number;
+  // True when the line that turned the process idle ended its background work.
+  isIdleFromBackgroundEnd: boolean;
   keepTimer: number | null;
+  drainGraceTimer: number | null;
   signalTimers: number[];
   isEnding: boolean;
 }
 
-function valueAtKey(text: string, key: string): unknown {
+// The line's JSON value when it is an object, else null.
+function lineObject(text: string): Record<string, unknown> | null {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(text);
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)[key]
-      : undefined;
+    parsed = JSON.parse(text);
   } catch {
-    return undefined;
+    return null;
+  }
+  return typeof parsed === 'object' && parsed !== null
+    ? (parsed as Record<string, unknown>)
+    : null;
+}
+
+function isOneOf(value: unknown, values: readonly string[]): boolean {
+  return typeof value === 'string' && values.includes(value);
+}
+
+function isTurnStateBusy(state: TurnState): boolean {
+  return (
+    state.isTurnOpen || state.openMessages.size > 0 || state.backgroundCount > 0
+  );
+}
+
+function isSideLine(
+  line: Record<string, unknown>,
+  sideKey: string | null,
+): boolean {
+  return (
+    sideKey !== null && line[sideKey] !== undefined && line[sideKey] !== null
+  );
+}
+
+function countOfKinds(
+  list: unknown,
+  kindKey: string,
+  kinds: readonly string[],
+): number {
+  if (!Array.isArray(list)) {
+    return 0;
+  }
+  return list.filter(
+    (item: unknown) => isRecord(item) && isOneOf(item[kindKey], kinds),
+  ).length;
+}
+
+// The messages the turn-end `line` lists, or every open message while the process has printed no message-end line,
+// as a CLI without message ends needs.
+function closeTurnEndMessages(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  if (!state.printsMessageEnds) {
+    state.openMessages.clear();
+    return;
+  }
+  const listedIds =
+    rule.turnEndIdsKey === null ? undefined : line[rule.turnEndIdsKey];
+  if (Array.isArray(listedIds)) {
+    for (const id of listedIds) {
+      if (typeof id === 'string') {
+        state.openMessages.delete(id);
+      }
+    }
   }
 }
 
-function isBusyValue(value: unknown, busyValues: readonly string[]): boolean {
-  return typeof value === 'string' && busyValues.includes(value);
+// A turn end closes the main turn and its messages, a main busy line opens the turn, a message end closes its
+// message, and a background line sets the count.
+function readStdoutLine(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  const value = line[rule.key];
+  const { messageEnd, background } = rule;
+  const isMessageEndLine = messageEnd !== null && value === messageEnd.value;
+  if (isMessageEndLine) {
+    state.printsMessageEnds = true;
+  }
+  if (value === rule.value) {
+    state.isTurnOpen = false;
+    closeTurnEndMessages(line, rule, state);
+  } else if (
+    isOneOf(value, rule.busyStdoutValues) &&
+    !isSideLine(line, rule.sideKey)
+  ) {
+    state.isTurnOpen = true;
+  }
+  const endedMessageId =
+    isMessageEndLine && isOneOf(line[messageEnd.stateKey], messageEnd.endStates)
+      ? line[messageEnd.idKey]
+      : undefined;
+  if (typeof endedMessageId === 'string') {
+    state.openMessages.delete(endedMessageId);
+  }
+  const isBackgroundLine =
+    background !== null &&
+    Object.entries(background.match).every(
+      ([key, matchValue]) => line[key] === matchValue,
+    );
+  if (isBackgroundLine) {
+    state.backgroundCount = countOfKinds(
+      line[background.listKey],
+      background.kindKey,
+      background.kinds,
+    );
+  }
+}
+
+// A busy stdin line opens its message when it carries an id, else the main turn.
+function readStdinLine(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  if (!isOneOf(line[rule.key], rule.busyStdinValues)) {
+    return;
+  }
+  const messageId =
+    rule.messageIdKey === null ? undefined : line[rule.messageIdKey];
+  if (typeof messageId === 'string') {
+    state.openMessages.add(messageId);
+  } else {
+    state.isTurnOpen = true;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
+}
+
+function isNullOrString(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+
+function isMessageEndShape(value: unknown): boolean {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      typeof value.value === 'string' &&
+      typeof value.idKey === 'string' &&
+      typeof value.stateKey === 'string' &&
+      isStringArray(value.endStates))
+  );
+}
+
+function isBackgroundShape(value: unknown): boolean {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      isStringRecord(value.match) &&
+      typeof value.listKey === 'string' &&
+      typeof value.kindKey === 'string' &&
+      isStringArray(value.kinds))
+  );
 }
 
 // Every line reads the rule, so a bad one would otherwise throw far from the request that carried it.
@@ -114,7 +283,12 @@ function requireIdleRule({ id, idleRule }: HostedSpawn) {
     typeof idleRule?.key === 'string' &&
     typeof idleRule.value === 'string' &&
     Array.isArray(idleRule.busyStdoutValues) &&
-    Array.isArray(idleRule.busyStdinValues);
+    Array.isArray(idleRule.busyStdinValues) &&
+    isNullOrString(idleRule.sideKey) &&
+    isNullOrString(idleRule.messageIdKey) &&
+    isNullOrString(idleRule.turnEndIdsKey) &&
+    isMessageEndShape(idleRule.messageEnd) &&
+    isBackgroundShape(idleRule.background);
   if (!isWellFormed) {
     throw new Error(`process ${id} has no well-formed idle rule`);
   }
@@ -135,11 +309,55 @@ function requireDroppedOutKeys({ id, droppedOutKeys }: HostedSpawn) {
   }
 }
 
-function droppedKeysOf(paths: readonly KeyPath[]): DroppedKey[] {
-  return paths.map((path) => ({
-    path,
-    quotedKey: JSON.stringify(path[path.length - 1]),
-  }));
+function isStringArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
+}
+
+// A bad one would otherwise build the child's environment, or write its stdin, from a field nothing checked.
+function requireSpawnShape({
+  id,
+  env,
+  inheritEnv,
+  unsetEnv,
+  stdin,
+}: HostedSpawn) {
+  if (!isStringRecord(env)) {
+    throw new Error(`process ${id} has no well-formed env`);
+  }
+  if (typeof inheritEnv !== 'boolean') {
+    throw new Error(`process ${id} has no well-formed inheritEnv`);
+  }
+  if (!isStringArray(unsetEnv)) {
+    throw new Error(`process ${id} has no well-formed unset names`);
+  }
+  if (!isStringArray(stdin)) {
+    throw new Error(`process ${id} has no well-formed stdin lines`);
+  }
+}
+
+// With `inheritEnv`: `hostEnv` less `ELECTRON_RUN_AS_NODE` and the unset names, under the spawn's `env`. Without it:
+// the spawn's `env` alone.
+function childEnvOf(
+  { env, inheritEnv, unsetEnv }: HostedSpawn,
+  hostEnv: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  if (!inheritEnv) {
+    return { ...env };
+  }
+  const childEnv: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(hostEnv)) {
+    if (value !== undefined) {
+      childEnv[name] = value;
+    }
+  }
+  // The host runs as Node through this name; a child Electron binary would too.
+  delete childEnv.ELECTRON_RUN_AS_NODE;
+  for (const name of unsetEnv) {
+    delete childEnv[name];
+  }
+  return { ...childEnv, ...env };
 }
 
 // True when `root` held the value at `path`, now gone.
@@ -163,25 +381,15 @@ function deleteAtPath(root: unknown, path: KeyPath): boolean {
   return true;
 }
 
+// `text` less the dropped keys that `parsed`, its parse, holds, deleting them from `parsed`; `text` itself when it
+// holds none.
 function withoutDroppedKeys(
   text: string,
-  droppedKeys: readonly DroppedKey[],
+  parsed: Record<string, unknown>,
+  droppedKeys: readonly KeyPath[],
 ): string {
-  // Every stdout line comes here; only a line naming a dropped key is worth parsing.
-  const mayHoldKey = droppedKeys.some(({ quotedKey }) =>
-    text.includes(quotedKey),
-  );
-  if (!mayHoldKey) {
-    return text;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return text;
-  }
   let droppedAny = false;
-  for (const { path } of droppedKeys) {
+  for (const path of droppedKeys) {
     droppedAny = deleteAtPath(parsed, path) || droppedAny;
   }
   return droppedAny ? JSON.stringify(parsed) : text;
@@ -224,12 +432,20 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     );
   }
 
+  function cancelDrainGraceTimer(hosted: TableProcess) {
+    if (hosted.drainGraceTimer !== null) {
+      timers.clear(hosted.drainGraceTimer);
+      hosted.drainGraceTimer = null;
+    }
+  }
+
   function endProcess(hosted: TableProcess) {
     if (hosted.isEnding) {
       return;
     }
     hosted.isEnding = true;
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
     hosted.child.stdin.end();
     hosted.signalTimers.push(
       timers.set(() => {
@@ -241,14 +457,36 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     );
   }
 
-  function turnIdle(hosted: TableProcess) {
+  function armDrainGraceTimer(hosted: TableProcess, ms: number) {
+    cancelDrainGraceTimer(hosted);
+    hosted.drainGraceTimer = timers.set(() => endProcess(hosted), ms);
+  }
+
+  // Ends an idle process for the drain: at once, or at the end of the report grace when the end of its background
+  // work turned it idle. A grace already running stays as it is.
+  function endIdleForDrain(hosted: TableProcess) {
+    if (hosted.drainGraceTimer !== null) {
+      return;
+    }
+    const graceLeft = hosted.isIdleFromBackgroundEnd
+      ? hosted.idleSince + DRAIN_REPORT_GRACE_MS - clock.now()
+      : 0;
+    if (graceLeft > 0) {
+      armDrainGraceTimer(hosted, graceLeft);
+    } else {
+      endProcess(hosted);
+    }
+  }
+
+  function turnIdle(hosted: TableProcess, endedBackgroundWork: boolean) {
     if (hosted.isIdle) {
       return;
     }
     hosted.isIdle = true;
     hosted.idleSince = clock.now();
+    hosted.isIdleFromBackgroundEnd = endedBackgroundWork;
     if (draining) {
-      endProcess(hosted);
+      endIdleForDrain(hosted);
     } else {
       armKeepTimer(hosted);
     }
@@ -257,22 +495,45 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   function turnBusy(hosted: TableProcess) {
     hosted.isIdle = false;
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
+  }
+
+  // Turns the process busy or idle when its turn state changed what it reads; `endedBackgroundWork` when the line
+  // read took the background count to 0.
+  function settleIdle(hosted: TableProcess, endedBackgroundWork: boolean) {
+    const isBusy = isTurnStateBusy(hosted.turnState);
+    if (isBusy && hosted.isIdle) {
+      turnBusy(hosted);
+    } else if (!isBusy) {
+      turnIdle(hosted, endedBackgroundWork);
+    }
   }
 
   function childLine(hosted: TableProcess, dir: PipeDirection, text: string) {
+    // Only stdout reads the idle rule; its line is parsed once.
+    const parsed = dir === 'out' ? lineObject(text) : null;
+    const hadBackgroundWork = hosted.turnState.backgroundCount > 0;
+    // Both before the drop, which may delete a key the rule reads.
+    const isMainLine =
+      parsed !== null && !isSideLine(parsed, hosted.idleRule.sideKey);
+    if (parsed !== null) {
+      readStdoutLine(parsed, hosted.idleRule, hosted.turnState);
+    }
     const delivered =
-      dir === 'out' ? withoutDroppedKeys(text, hosted.droppedOutKeys) : text;
+      parsed === null
+        ? text
+        : withoutDroppedKeys(text, parsed, hosted.droppedOutKeys);
     const line = hosted.log.append(dir, delivered);
     hosted.subscriber?.line(hosted.id, line);
-    if (dir !== 'out') {
-      return;
+    if (parsed !== null) {
+      settleIdle(
+        hosted,
+        hadBackgroundWork && hosted.turnState.backgroundCount === 0,
+      );
     }
-    const rule = hosted.idleRule;
-    const value = valueAtKey(text, rule.key);
-    if (value === rule.value) {
-      turnIdle(hosted);
-    } else if (isBusyValue(value, rule.busyStdoutValues)) {
-      turnBusy(hosted);
+    // A busy line cancelled the grace in `settleIdle`; any other main line shows the report turn on its way.
+    if (isMainLine && hosted.drainGraceTimer !== null) {
+      armDrainGraceTimer(hosted, DRAIN_REPORT_GRACE_MS);
     }
   }
 
@@ -282,6 +543,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       return;
     }
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
     for (const timer of hosted.signalTimers) {
       timers.clear(timer);
     }
@@ -293,7 +555,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         done();
       }
     }
-    deps.processClosed();
+    deps.processClosed(hosted.id, exit);
   }
 
   function logStreamErrors(
@@ -344,6 +606,17 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     });
   }
 
+  // Logs `text` as `in`, reads the idle rule on it, then writes it with its newline.
+  function writeLine(hosted: TableProcess, text: string) {
+    hosted.log.append('in', text);
+    const parsed = lineObject(text);
+    if (parsed !== null) {
+      readStdinLine(parsed, hosted.idleRule, hosted.turnState);
+      settleIdle(hosted, false);
+    }
+    hosted.child.stdin.write(`${text}\n`);
+  }
+
   function refusalOf(id: string): string | null {
     if (draining) {
       return 'the session host is draining';
@@ -364,12 +637,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       try {
         requireIdleRule(request);
         requireDroppedOutKeys(request);
+        requireSpawnShape(request);
         log = createPipeLog(deps.logsFolder, request.id, clock, (message) =>
           diagnostics.append(message),
         );
         const child = deps.spawn(request.command, request.args, {
           cwd: request.cwd,
-          env: request.env,
+          env: childEnvOf(request, deps.env),
         });
         const startedAt = clock.now();
         const hosted: TableProcess = {
@@ -378,12 +652,20 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
           pid: child.pid ?? null,
           log,
           idleRule: request.idleRule,
-          droppedOutKeys: droppedKeysOf(request.droppedOutKeys),
+          droppedOutKeys: request.droppedOutKeys,
           startedAt,
           subscriber,
+          turnState: {
+            isTurnOpen: false,
+            openMessages: new Set(),
+            backgroundCount: 0,
+            printsMessageEnds: false,
+          },
           isIdle: true,
           idleSince: startedAt,
+          isIdleFromBackgroundEnd: false,
           keepTimer: null,
+          drainGraceTimer: null,
           signalTimers: [],
           isEnding: false,
         };
@@ -393,6 +675,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         // Node sets `pid` at once when the OS started the child; a child with none never ran, and its `error` follows.
         if (hosted.pid !== null) {
           subscriber.spawned(request.id, hosted.pid);
+          for (const line of request.stdin) {
+            writeLine(hosted, line);
+          }
         }
       } catch (error) {
         log?.remove();
@@ -401,15 +686,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     },
     write(id, text) {
       const hosted = processes.get(id);
-      if (hosted === undefined) {
-        return;
+      if (hosted !== undefined) {
+        writeLine(hosted, text);
       }
-      hosted.log.append('in', text);
-      const value = valueAtKey(text, hosted.idleRule.key);
-      if (isBusyValue(value, hosted.idleRule.busyStdinValues)) {
-        turnBusy(hosted);
-      }
-      hosted.child.stdin.write(`${text}\n`);
     },
     endInput(id) {
       processes.get(id)?.child.stdin.end();
@@ -451,6 +730,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         log: hosted.log.file,
       }));
     },
+    isBusy(id) {
+      const hosted = processes.get(id);
+      return hosted !== undefined && !hosted.isEnding && !hosted.isIdle;
+    },
     setKeepIdleMinutes(minutes) {
       if (!Number.isFinite(minutes)) {
         diagnostics.append(`refused keep window: ${minutes}`);
@@ -474,7 +757,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       draining = true;
       for (const hosted of processes.values()) {
         if (hosted.isIdle) {
-          endProcess(hosted);
+          endIdleForDrain(hosted);
         }
       }
     },

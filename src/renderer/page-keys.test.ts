@@ -413,9 +413,9 @@ describe('installPageKeys', () => {
         ...editors,
       } as unknown as EditorHost,
       {
-        run: (...args) => {
+        run: async (...args) => {
           runs.push(args);
-          return Promise.resolve();
+          return 'ran';
         },
         has: () => has,
         requireRegistered: () => {},

@@ -229,7 +229,7 @@ describe('createBaseKit', () => {
       other: store.read(coreRuntimeMainSlot, 'core'),
       served: () => served,
       leader: () => ' ',
-      remote: () => Promise.resolve(),
+      remote: async () => 'ran',
     });
     const logged: string[] = [];
     const commands = kitCommandsOf({

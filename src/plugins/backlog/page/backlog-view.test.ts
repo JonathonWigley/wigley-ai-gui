@@ -17,6 +17,7 @@ import {
 } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
+  type FakeElement,
   type FocusFakeDocument,
   type FocusFakeElement,
   findAll,
@@ -678,7 +679,97 @@ describe('backlog view layouts', () => {
   });
 });
 
+// Focuses `target`, then fires the `focusin` a browser fires, on it and each
+// parent.
+function focusIn(target: FakeElement) {
+  (target as FocusFakeElement).focus();
+  for (let node: FakeElement | null = target; node; node = node.parentNode) {
+    node.fire('focusin', { target });
+  }
+}
+
 describe('backlog pane targets', () => {
+  // `target` is what a click focuses. A click in the strip focuses the strip
+  // pane itself: a chunk card is no focus target (its `mousedown` is
+  // prevented), and each render redraws the cards.
+  it.each<{
+    pane: 'table' | 'review' | 'strip';
+    from: 'table' | 'review';
+    target: string;
+  }>([
+    { pane: 'review', from: 'table', target: 'backlog-review-body' },
+    { pane: 'strip', from: 'table', target: 'backlog-strip' },
+    { pane: 'table', from: 'review', target: 'backlog-rows' },
+  ])(
+    "a click inside a pane hands it the keys and keeps the click's focus: $pane",
+    async ({ pane, from, target }) => {
+      const setup = await backlogSetup();
+      if (from === 'review') {
+        setup.move('right');
+      }
+      const [clicked] = findAll(setup.sheet, target);
+
+      focusIn(clicked);
+
+      expect({
+        scope: lastScope(setup),
+        isLogged: setup.logs.includes(`${pane} focused`),
+        isKept: fakeDocument.activeElement === clicked,
+      }).toEqual({ scope: pane, isLogged: true, isKept: true });
+    },
+  );
+
+  it('focusMain after a click in the review gives the review the keys', async () => {
+    const setup = await backlogSetup();
+    const [body] = findAll(setup.sheet, 'backlog-review-body');
+    focusIn(body);
+
+    setup.view.focusMain();
+
+    expect(lastScope(setup)).toBe('review');
+  });
+
+  // `holder` is the pane holding the keys before the click; `focused` finds
+  // the element that holds the DOM focus after it. The assistant sets no
+  // scope, so the scope stays the table's in both.
+  it.each<{
+    holder: 'table' | 'assistant';
+    focused: (setup: Setup) => FakeElement;
+  }>([
+    {
+      holder: 'table',
+      focused: (setup) => findAll(setup.sheet, 'backlog-table')[0],
+    },
+    {
+      holder: 'assistant',
+      focused: (setup) =>
+        findAll(setup.sheet, 'backlog-assistant')[0].children[0],
+    },
+  ])(
+    'a click into the review with no row selected leaves the keys and the focus on the pane that holds them: $holder',
+    async ({ holder, focused }) => {
+      const setup = await backlogSetup({
+        answers: { load: async () => ({ homes: [], message: null }) },
+      });
+      if (holder === 'assistant') {
+        setup.view.commands.toggleAssistant();
+      }
+      const [body] = findAll(setup.sheet, 'backlog-review-body');
+
+      focusIn(body);
+
+      expect({
+        scope: lastScope(setup),
+        keys: setup.logs.filter((line) => line.endsWith(' focused')).at(-1),
+        isHolderFocused: fakeDocument.activeElement === focused(setup),
+      }).toEqual({
+        scope: 'table',
+        keys: `${holder} focused`,
+        isHolderFocused: true,
+      });
+    },
+  );
+
   // `to` is the scope the move sets; false for a move the view turns down.
   it.each<{
     from: 'table' | 'review' | 'strip';
@@ -932,6 +1023,20 @@ describe('backlog chunk commands', () => {
     ]);
     expect(setup.logs).toContain('renaming Fixes');
     expect(setup.logs).toContain('renamed Better fixes');
+  });
+
+  it('a focus landing in the rename box opened from the table keeps the box open and the keys on the table', async () => {
+    const setup = await renameSetup('Fixes');
+    const [input] = findAll(setup.sheet, 'backlog-rename-input');
+    const [frame] = findAll(setup.sheet, 'backlog-rename');
+
+    focusIn(input);
+
+    expect({
+      scope: lastScope(setup),
+      isOpen: !frame.hidden,
+      isInputFocused: fakeDocument.activeElement === input,
+    }).toEqual({ scope: 'table', isOpen: true, isInputFocused: true });
   });
 
   it('rename_EmptyText_SendsNothing', async () => {

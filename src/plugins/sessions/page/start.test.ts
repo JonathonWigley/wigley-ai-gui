@@ -28,6 +28,7 @@ import {
   followRows,
   sessionsActiveSlot,
   sessionsActivitySlot,
+  sessionsClaimedSlot,
   type SessionsPageExports,
   sessionsPageKey,
   type SessionsPlace,
@@ -390,6 +391,21 @@ describe('sessions page part', () => {
     await settle();
 
     expect(claims).not.toHaveBeenCalled();
+    await setup.harness.stop();
+  });
+
+  it('addSection_ClaimsARow_WritesItToClaimed', async () => {
+    const setup = await startApplied(['s1', 's2'], 's1');
+    const claimed = setup.harness.state.read(sessionsClaimedSlot, 'test');
+
+    setup.exports.addSection({
+      id: 'retro',
+      label: 'Retro',
+      order: 0,
+      claims: (row) => row.sessionId === 's2',
+    });
+
+    expect(claimed.get()).toEqual(['s2']);
     await setup.harness.stop();
   });
 
@@ -875,6 +891,125 @@ describe('sessions page part', () => {
     expect(setup.closes).toEqual([]);
     await setup.harness.stop();
   });
+
+  // Breaks: a targeted run stopped by the hidden mode's guard, or acting on
+  // the focused pane's session instead of the target. An accept with the box
+  // left empty clears the user title of the dialog's session, so its line
+  // names the row the dialog opened for. Breaks: a targeted close of a busy
+  // target asking its end-session confirm, a second ask after the Allow; the
+  // busy target's tab refuses any close that is not at once. Breaks: a
+  // targeted close telling main to cancel the holds of a target whose open
+  // form popup asks for an instant close, dropping answers the Allow did not
+  // cover.
+  it.each<{
+    case: string;
+    command: 'closeSession' | 'renameSession';
+    targetSessionId?: string;
+    busyTarget?: boolean;
+    heldTarget?: boolean;
+    closes: unknown[][];
+    logged: string[];
+    isShown: boolean;
+  }>([
+    {
+      case: 'closeSession asks main to close the target',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      closes: [['s2', false]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: 'closeSession closes a busy target with no second confirm',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      busyTarget: true,
+      closes: [['s2', false]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: 'closeSession cancels no hold of a target a form holds',
+      command: 'closeSession',
+      targetSessionId: 's2',
+      heldTarget: true,
+      closes: [['s2', false]],
+      logged: [],
+      isShown: false,
+    },
+    {
+      case: "renameSession shows the mode and opens the target's dialog",
+      command: 'renameSession',
+      targetSessionId: 's2',
+      closes: [],
+      logged: ['cleared the user title of label s2'],
+      isShown: true,
+    },
+    {
+      case: 'renameSession with an unknown target',
+      command: 'renameSession',
+      targetSessionId: 'gone',
+      closes: [],
+      logged: ['no session to rename'],
+      isShown: false,
+    },
+    {
+      case: 'closeSession with no target',
+      command: 'closeSession',
+      closes: [],
+      logged: ['close ignored: Sessions mode is hidden'],
+      isShown: false,
+    },
+  ])(
+    'a target passes the hidden mode guard: $case',
+    async ({
+      command,
+      targetSessionId,
+      busyTarget,
+      heldTarget,
+      closes,
+      logged,
+      isShown,
+    }) => {
+      // The rename dialog focuses its input and sets its selection on open.
+      installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+      const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+        withOtherMode: true,
+      });
+      if (busyTarget) {
+        setup.exports.addTab('s2', {
+          id: 'chat',
+          title: 'Chat',
+          icon: 'book',
+          element: document.createElement('div'),
+          beforeClose: (atOnce) => atOnce,
+          shown: () => undefined,
+        });
+      }
+      if (heldTarget) {
+        setup.exports.addPopup('s2', {
+          id: 'forms',
+          title: 'Forms',
+          icon: 'bell',
+          element: document.createElement('div'),
+          closesAtOnce: () => true,
+          beforeClose: () => true,
+          shown: () => undefined,
+        });
+      }
+      const { commands } = setup.harness.started();
+      const before = setup.harness.logs.length;
+
+      commands[command]({ arg: undefined, targetSessionId });
+      commands.renameAccept({ arg: undefined });
+      await settle();
+
+      expect(setup.closes).toEqual(closes);
+      expect(setup.logsSince(before)).toEqual(expect.arrayContaining(logged));
+      expect(setup.exports.shownSessionId() !== null).toBe(isShown);
+      await setup.harness.stop();
+    },
+  );
 
   it('tab_shown_and_hidden_run_on_a_switch_and_on_mode_hide', async () => {
     const setup = await startApplied(['s1'], 's1', fakeUiState(), {

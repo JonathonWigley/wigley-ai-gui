@@ -1,0 +1,73 @@
+/* Schedules mode's side bar, which holds the layout's list pane. */
+.scheduling-list {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.scheduling-rows,
+.scheduling-history-rows,
+.scheduling-fields {
+  list-style: none;
+  margin: 0;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.scheduling-rows {
+  overflow-y: auto;
+}
+
+/* The sheet holds the details pane, which scrolls. The sheet is the main cell's
+   direct child: its margins lie outside the box, so it takes the cell's height
+   less its two gutters. */
+.scheduling-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .scheduling-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.scheduling-main {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+.scheduling-notices {
+  display: grid;
+  gap: var(--wg-space-1);
+}
+
+.scheduling-notices:empty {
+  display: none;
+}
+
+.scheduling-no-runs {
+  color: var(--wg-fg-tertiary);
+  margin: 0;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+/* A row's key prompts show on the cursor row only. */
+.scheduling-row-actions {
+  display: none;
+  gap: var(--wg-space-2);
+}
+
+.is-cursor .scheduling-row-actions {
+  display: inline-flex;
+}
+
+.scheduling-box {
+  min-width: 0;
+}
+
+.scheduling-box--multiline {
+  min-height: calc(var(--wg-space-8) * 3);
+}

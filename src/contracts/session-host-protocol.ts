@@ -1,8 +1,14 @@
-import type { HostedExit, HostedSpawn, PipeLine } from './session-host';
+import type {
+  HostedExit,
+  HostedRun,
+  HostedSpawn,
+  PendingSpawn,
+  PipeLine,
+} from './session-host';
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.
-export const SESSION_HOST_PROTOCOL = 3;
+export const SESSION_HOST_PROTOCOL = 4;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
 export interface HelloMessage {
@@ -138,6 +144,32 @@ export interface SpawnedEvent {
   id: string;
   pid: number;
 }
+// Replaces every pending entry the app sent before.
+export interface SetPendingMessage {
+  type: 'setPending';
+  entries: PendingSpawn[];
+}
+// Asks for every run the host started or skipped that no `forgetRuns` dropped.
+export interface ListRunsMessage {
+  type: 'listRuns';
+  requestId: number;
+}
+// Answers the `listRuns` with `requestId`, oldest run first.
+export interface ListRunsReply {
+  type: 'listRuns';
+  requestId: number;
+  runs: HostedRun[];
+}
+// Drops the runs with these ids from the host's runs record.
+export interface ForgetRunsMessage {
+  type: 'forgetRuns';
+  ids: string[];
+}
+// Pushed to every connected client when the host starts or skips a pending entry.
+export interface RunStartedEvent {
+  type: 'runStarted';
+  run: HostedRun;
+}
 
 // Every message an app sends a host.
 export type ClientMessage =
@@ -151,7 +183,10 @@ export type ClientMessage =
   | SubscribeMessage
   | UnsubscribeMessage
   | SetKeepIdleMessage
-  | StopAllMessage;
+  | StopAllMessage
+  | SetPendingMessage
+  | ListRunsMessage
+  | ForgetRunsMessage;
 // Every message a host sends an app.
 export type HostMessage =
   | HelloReply
@@ -160,9 +195,12 @@ export type HostMessage =
   | StopAllReply
   | LineEvent
   | ClosedEvent
-  | SpawnedEvent;
+  | SpawnedEvent
+  | ListRunsReply
+  | RunStartedEvent;
 
 const HOST_RECORD_NAME = /^host-v(\d+)\.json$/;
+const RUNS_FILE_NAME = /^runs-v(\d+)\.json$/;
 const HOST_CHILDREN_NAME = /^host-v\d+\.\d+\.children\.json$/;
 const PIPE_LOG_NAME_CHARACTER = /[a-z0-9._-]/;
 
@@ -212,6 +250,23 @@ export interface HostChildrenRecord {
 // Frozen: never change this shape. The protocol a `hostRecordFile` name holds; null for any other name.
 export function hostRecordProtocol(fileName: string): number | null {
   const match = HOST_RECORD_NAME.exec(fileName);
+  return match === null ? null : Number(match[1]);
+}
+
+// The host folder's pending table of host protocol `protocol`, holding `PendingSpawn[]`. Not frozen: a drain drops it.
+export function pendingFile(protocol: number): string {
+  return `pending-v${protocol}.json`;
+}
+
+// Frozen: never change this name; a newer host imports an older host's runs. The host folder's runs record of host
+// protocol `protocol`, holding `HostedRun[]`.
+export function runsFile(protocol: number): string {
+  return `runs-v${protocol}.json`;
+}
+
+// Frozen: never change this shape. The protocol a `runsFile` name holds; null for any other name.
+export function runsFileProtocol(fileName: string): number | null {
+  const match = RUNS_FILE_NAME.exec(fileName);
   return match === null ? null : Number(match[1]);
 }
 

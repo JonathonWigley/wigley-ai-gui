@@ -117,8 +117,9 @@ The panel redraws on each state change, each change of the shown session, and on
   handoff or stranded mark for the user first, so the pool's idle close and an agent's claim leave the editor alone,
   then brings the clone's running editor to the front or starts one. A clone someone else has keeps its holder.
 
-Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the `unity-pool.pythonCommand` setting
-(`python3` by default; `py` or `python` on a Windows install with no `python3`) and the script the
+Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the one `resolveProgram('python')` gives (the
+core `programs.python` setting, else the first found of `py -3`, `python`, `python3` on Windows and `python3`,
+`python` elsewhere; a missing Python answers `no-python` and runs nothing) and the script the
 `unity-pool.scriptPath` setting. Empty, `scriptPath` is `~/.local/bin/unity-pool`, and on Windows
 `~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
 run; `resolveScriptPath` picks it from the platform main reads. A run drops every session variable from the app's

@@ -30,6 +30,7 @@ import {
   workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowSignal,
+  WORKFLOW_OFFLINE_ANSWER,
 } from './workflow/contract';
 import { newFlow } from './workflow/flow';
 import {
@@ -986,6 +987,7 @@ describe('workflowLargeMainPart', () => {
 
     expect(workflow.contributionOf(SET_WORKFLOW_PLAN_TOOL).options).toEqual({
       mainAgentOnly: true,
+      offline: { [SET_WORKFLOW_PLAN_TOOL]: WORKFLOW_OFFLINE_ANSWER },
     });
   });
 

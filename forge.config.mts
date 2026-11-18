@@ -8,6 +8,7 @@ import type {
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { writeLoginItemPlist } from './scripts/login-item-plist.mts';
 import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
 import {
   copyDeclarationInputs,
@@ -175,6 +176,7 @@ function showMacBundleAs(
     CFBundleName: displayName,
     CFBundleDisplayName: displayName,
   });
+  writeLoginItemPlist(appPath, packagedName);
   const signingIdentity = macSigningIdentity();
   if (signingIdentity === AD_HOC_IDENTITY) {
     console.warn(

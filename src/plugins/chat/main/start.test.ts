@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentEvent,
-  AgentHarness,
-  AgentStart,
-  PermissionRequest,
+import {
+  type AgentEvent,
+  type AgentHarness,
+  type AgentStart,
+  MAIN_AGENT_ID,
+  type PermissionRequest,
+  type ProcessActivity,
+  type UserMessage,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
@@ -38,6 +41,7 @@ import {
   sessionsMainKey,
   sessionsSelectionSlot,
   type SessionTitles,
+  textResult,
   type TitleSource,
   type ToolCallGuard,
   type ToolDefinition,
@@ -284,7 +288,8 @@ describe('chat drive actions', () => {
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
 // and an owned session's end emits `sessions.ended`, recorded in `ended`,
 // and its `keep` is recorded in `kept`;
-// each row holds its titles as sessions would, starting with none.
+// each row holds its titles as sessions would, starting with none, in
+// `titles`, and its side-bar label as `labels` holds it, else none.
 // `options.profiles` replaces the profiles the harness `claude` declares (and
 // of its `core.agentHarnesses` entry); null registers no harness.
 // `options.publishedProfiles` replaces the entry's profiles alone, as the
@@ -308,6 +313,8 @@ describe('chat drive actions', () => {
 // `processDetach` and `processKill` record their process calls.
 // `options.projects` is the `projects` setting; `namers` holds each namer
 // `addProjectNamer` got, and `namerChanges.count` each `changed()` call.
+// `preparedRuns` holds each `prepareRun` call's arguments and the spec it
+// returned; the harness declares no start controls.
 function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
@@ -346,6 +353,7 @@ function startChatPart(
     sessionId: (id: string) => void;
     ended: (exit: { code: number; error: string | null }) => void;
     agentEvent: (event: AgentEvent) => void;
+    activity: (activity: ProcessActivity) => void;
   }[] = [];
   let processEnd = Promise.resolve();
   const holdProcessEnds = () => {
@@ -356,6 +364,12 @@ function startChatPart(
     return release;
   };
   const harnessAttaches: AgentStart[] = [];
+  const preparedRuns: {
+    request: AgentStart;
+    firstMessage: UserMessage;
+    env: Readonly<Record<string, string>>;
+    spawn: { id: string };
+  }[] = [];
   const harness = {
     id: 'claude',
     info: () => {
@@ -364,6 +378,16 @@ function startChatPart(
       }
       return harnessInfo({ profiles: profiles ?? [] });
     },
+    prepareRun: async (
+      request: AgentStart,
+      firstMessage: UserMessage,
+      env: Readonly<Record<string, string>>,
+    ) => {
+      const spawn = { id: request.processId };
+      preparedRuns.push({ request, firstMessage, env, spawn });
+      return spawn;
+    },
+    startControls: () => [],
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
     attach: (request: AgentStart) => {
       harnessAttaches.push(request);
@@ -414,6 +438,7 @@ function startChatPart(
   const kept: string[] = [];
   let rows = 0;
   const titles = new Map<string, SessionTitles>();
+  const labels = new Map<string, string>();
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -473,6 +498,7 @@ function startChatPart(
       const held = titles.get(sessionId);
       return held === undefined ? null : { ...held };
     },
+    label: (sessionId: string) => labels.get(sessionId) ?? null,
   };
   const startSettings = {
     keepIdleMinutes: 60,
@@ -510,6 +536,7 @@ function startChatPart(
       clock,
       timers,
       sessionHost,
+      window: { isFocused: () => true },
       files: {
         stat: () => Promise.resolve({ isFolder: true, isLink: false }),
       },
@@ -587,12 +614,15 @@ function startChatPart(
     timerDelays,
     heldConnects,
     harnessAttaches,
+    preparedRuns,
     contributions,
     toolCallGuards,
     settingsChange: (settings: object) =>
       settingsListener({ ...startSettings, ...settings }),
     namers,
     namerChanges,
+    titles,
+    labels,
   };
 }
 
@@ -747,6 +777,43 @@ describe('chat main part', () => {
     expect(chat.exports.activeTime('none')).toBeNull();
   });
 
+  it.each([
+    { name: 'a subagent', agentId: 'subagent-1' },
+    { name: 'the main agent', agentId: MAIN_AGENT_ID },
+  ])('toolCaller_NamesStreamAgent ($name)', async ({ agentId }) => {
+    const chat = startChatPart();
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
+    chat.processEvents[0].agentEvent({
+      type: 'toolStarted',
+      at: 0,
+      agentId,
+      toolUseId: 't1',
+      tool: 'mcp__wigley-forms__chatroom_post',
+      summary: '',
+    });
+
+    await expect(chat.exports.toolCaller('row-1', 't1')).resolves.toBe(agentId);
+  });
+
+  it('toolCaller_NamesStreamAgent (a row chat does not hold)', async () => {
+    const chat = startChatPart();
+    const timersBefore = new Set(chat.timerDelays.keys());
+
+    await expect(
+      chat.exports.toolCaller('terminal-1', 't1'),
+    ).resolves.toBeNull();
+    expect(
+      [...chat.timerDelays.keys()].filter(
+        (handle) => !timersBefore.has(handle),
+      ),
+    ).toEqual([]);
+  });
+
   // Breaks if chat main reads a harness's own `info()` profiles again rather
   // than the ones the registry publishes, which leave out a clashing name.
   it('start_ProfileTheRegistryLeftOut_ThrowsNamingIt', () => {
@@ -781,6 +848,128 @@ describe('chat main part', () => {
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
   });
+
+  // Rows `row-1` (the caller) and `row-2` (the target) are open; `relay-row`
+  // stands for a terminal row, which chat does not hold.
+  it.each<{
+    given: string;
+    callerSessionId?: string;
+    callerTitle?: string;
+    callerLabel?: string;
+    target: string;
+    text: string;
+    isTargetRunning?: true;
+    sent?: string;
+    error?: string;
+  }>([
+    {
+      given: 'a titled caller',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'an untitled caller',
+      callerSessionId: 'row-1',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "alpha 2" — not typed by the user]\ngo',
+    },
+    { given: 'no caller', target: 'row-2', text: ' go ', sent: ' go ' },
+    {
+      given: 'no caller and a slash text',
+      target: 'row-2',
+      text: '/clear',
+      sent: '/clear',
+    },
+    {
+      given: 'a running target',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      target: 'row-2',
+      text: 'go',
+      isTargetRunning: true,
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'a self-send',
+      callerSessionId: 'row-2',
+      target: 'row-2',
+      text: 'go',
+      error: 'chat.sendTo: a session cannot send to itself',
+    },
+    {
+      given: 'blank text',
+      callerSessionId: 'row-1',
+      target: 'row-2',
+      text: ' \n ',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: 'blank text to an unknown target',
+      callerSessionId: 'row-1',
+      target: 'row-9',
+      text: '',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: "a terminal row's id",
+      callerSessionId: 'row-1',
+      target: 'relay-row',
+      text: 'go',
+      error: 'chat.sendTo: no chat session relay-row',
+    },
+  ])(
+    'sendTo sends the framed text to the target or refuses: $given',
+    async (row) => {
+      const chat = startChatPart();
+      for (let opened = 0; opened < 2; opened++) {
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
+      }
+      await flushMicrotasks();
+      const callerTitles = chat.titles.get('row-1');
+      if (callerTitles !== undefined && row.callerTitle !== undefined) {
+        callerTitles.agent = row.callerTitle;
+      }
+      if (row.callerLabel !== undefined) {
+        chat.labels.set('row-1', row.callerLabel);
+      }
+      if (row.isTargetRunning === true) {
+        chat.processEvents[1].activity('working');
+      }
+
+      const run = Promise.resolve(
+        chat.part.commands.sendTo({
+          arg: { sessionId: row.target, text: row.text },
+          callerSessionId: row.callerSessionId,
+        }),
+      );
+
+      if (row.error !== undefined) {
+        await expect(run).rejects.toThrow(row.error);
+        expect(chat.processSends).not.toHaveBeenCalled();
+        return;
+      }
+      await run;
+      if (row.isTargetRunning === true) {
+        expect(chat.processSends).not.toHaveBeenCalled();
+        chat.processEvents[1].activity('idle');
+      }
+      expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
+        text: row.sent,
+        images: [],
+      });
+      expect(chat.starts.count).toBe(2);
+    },
+  );
 
   it.each([
     {
@@ -930,10 +1119,31 @@ describe('chat main part', () => {
         { toolUseId: null, signal: new AbortController().signal },
       );
 
-    expect(contribution?.options).toEqual({ mainAgentOnly: true });
+    expect(contribution?.options).toEqual({
+      mainAgentOnly: true,
+      offline: {
+        set_headless: {
+          result: textResult('The app is closed: the session stays headless.'),
+          replay: false,
+        },
+      },
+    });
     expect(result?.isError ?? false).toBe(false);
     expect(chat.exports.isHeadless('row-1')).toBe(true);
   });
+
+  it.each([{ tool: 'start_session', offline: undefined }])(
+    'offlineAnswers_EachChatContribution_AnswersAsPinned: $tool',
+    ({ tool, offline }) => {
+      const chat = startChatPart();
+      const contribution = chat.contributions.find(({ tools }) =>
+        tools.some((definition) => definition.name === tool),
+      );
+
+      expect(contribution).toBeDefined();
+      expect(contribution?.options?.offline).toEqual(offline);
+    },
+  );
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();
@@ -1028,6 +1238,7 @@ describe('chat main part', () => {
       tool: 'set_workflow_step',
       toolUseId: 't1',
       mainAgentOnly: true,
+      replayed: false,
     };
 
     await expect(guard(call)).resolves.toEqual({
@@ -1379,6 +1590,80 @@ describe('chat main part', () => {
       await expect(restored).resolves.toBeUndefined();
     },
   );
+
+  it('exports_Adopt_HoldsRelayConnectsAfterTheRestore', async () => {
+    // The restore's list waits for the test; every later list resolves empty.
+    let releaseRestoreList: (hosted: HostedProcessInfo[]) => void = () =>
+      undefined;
+    let lists = 0;
+    const list = () => {
+      lists += 1;
+      if (lists > 1) {
+        return Promise.resolve([]);
+      }
+      return new Promise<HostedProcessInfo[]>((resolve) => {
+        releaseRestoreList = resolve;
+      });
+    };
+    const chat = startChatPart({ list, data: await dataWithSavedRow() });
+
+    const adopting = chat.exports.adopt({
+      hostSessionId: 'host-a',
+      processId: 'host-a-1-4000',
+      rowId: 'row-adopted',
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+      headless: true,
+      unattended: true,
+      instructions: [],
+      owner: 'scheduling',
+      controls: {},
+      titles: { user: null, agent: null, firstMessage: 'run' },
+    });
+    await settle();
+
+    expect(chat.heldConnects).toContain(adopting);
+    expect(chat.sessionsInSlots()).toEqual([]);
+    releaseRestoreList([]);
+    await expect(adopting).resolves.toBe('row-1');
+    expect(chat.sessionsInSlots().map((state) => state.sessionId)).toEqual([
+      'row-1',
+    ]);
+  });
+
+  it('exports_PrepareLaunch_PassesTheEnvToTheHarness', async () => {
+    const chat = startChatPart();
+    const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
+    const message = { text: 'run the task', images: [] };
+
+    const prepared = await chat.exports.prepareLaunch(
+      { projectDir: '/p', profile: 'work', message },
+      env,
+    );
+
+    expect(chat.preparedRuns).toHaveLength(1);
+    expect(chat.preparedRuns[0].env).toEqual(env);
+    expect(chat.preparedRuns[0].firstMessage).toEqual(message);
+    expect(prepared.spawn).toBe(chat.preparedRuns[0].spawn);
+    expect(chat.starts.count).toBe(0);
+  });
+
+  it('exports_Projects_EqualsTheChannelsList', () => {
+    const aiDev = { name: 'AI Dev', folder: '/home/me/ai-dev' };
+    const chat = startChatPart({ projects: [aiDev] });
+    const before = chat.exports.projects();
+    expect(before).toEqual(chat.invoke('projects'));
+    expect(before.map((project) => project.name)).toEqual(['AI Dev']);
+
+    chat.settingsChange({
+      projects: [aiDev, { name: 'Other', folder: '/home/me/other' }],
+    });
+
+    const after = chat.exports.projects();
+    expect(after).toEqual(chat.invoke('projects'));
+    expect(after.map((project) => project.name)).toEqual(['AI Dev', 'Other']);
+  });
 
   it('restore_SessionHostListFails_LogsAndRestsEveryRow given a list that resolves first', async () => {
     const chat = startChatPart({ list: () => Promise.resolve([]) });

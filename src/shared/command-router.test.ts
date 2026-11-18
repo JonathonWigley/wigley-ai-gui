@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CommandKey } from '../contracts/commands';
+import type {
+  CommandHop,
+  CommandKey,
+  CommandOutcome,
+} from '../contracts/commands';
 import type { CommandInfo, PageCommandContext } from '../contracts/plugin';
 import { CommandRegistry } from './command-registry';
 import { createCommandRouter } from './command-router';
@@ -17,7 +21,13 @@ function info(id: string, overrides: Partial<CommandInfo> = {}): CommandInfo {
 
 function setup(infos: CommandInfo[]) {
   const registry = new CommandRegistry<PageCommandContext<any>>(() => {});
-  const remote = vi.fn((_id: string, _arg: unknown) => Promise.resolve());
+  const remote = vi.fn(
+    async (
+      _id: string,
+      _arg: unknown,
+      _hop: CommandHop,
+    ): Promise<CommandOutcome> => 'ran',
+  );
   const router = createCommandRouter<PageCommandContext<any>>({
     process: 'page',
     registry,
@@ -55,9 +65,21 @@ describe('createCommandRouter', () => {
     const wrap = vi.fn();
     registry.intercept('p.m', wrap, 'p');
 
-    await router.run('p.m', 4);
+    await router.run(
+      'p.m',
+      4,
+      { editor: undefined, targetSessionId: 's1', callerSessionId: 'c1' },
+      { reportErrors: true },
+    );
 
-    expect(remote).toHaveBeenCalledWith('p.m', 4);
+    // Strict: the hop holds no `editor` key, set or undefined.
+    expect(remote.mock.calls).toStrictEqual([
+      [
+        'p.m',
+        4,
+        { targetSessionId: 's1', callerSessionId: 'c1', reportErrors: true },
+      ],
+    ]);
     expect(wrap).not.toHaveBeenCalled();
   });
 
@@ -77,9 +99,20 @@ describe('createCommandRouter', () => {
     const contexts: unknown[] = [];
     registry.register('p.n', (context) => void contexts.push(context), 'p');
 
-    await router.run('p.n', 7, { editor: undefined });
+    await router.run('p.n', 7, {
+      editor: undefined,
+      targetSessionId: 's1',
+      callerSessionId: 'c1',
+    });
 
-    expect(contexts).toEqual([{ editor: undefined, arg: 7 }]);
+    expect(contexts).toEqual([
+      {
+        editor: undefined,
+        targetSessionId: 's1',
+        callerSessionId: 'c1',
+        arg: 7,
+      },
+    ]);
   });
 
   it('intercept_OtherProcessCommand_Throws', () => {

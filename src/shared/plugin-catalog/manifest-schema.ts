@@ -42,6 +42,8 @@ const COMMAND = {
         { type: 'object', additionalProperties: { enum: ARG_KINDS } },
       ],
     },
+    risky: { const: true },
+    targets: { const: true },
   },
   additionalProperties: false,
 };
@@ -165,6 +167,7 @@ export const manifestSchema: object = {
         additionalProperties: false,
       },
     },
+    readsEverySlot: { const: true },
   },
   additionalProperties: false,
 };

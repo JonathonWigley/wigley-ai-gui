@@ -109,6 +109,8 @@ function setUp(
   // Each pending timer by handle, with its delay.
   const timers = new Map<number, { run(): void; ms: number }>();
   let timerHandles = 0;
+  // The rows a side bar section claims, as the page last wrote them.
+  const claimed: string[] = [];
   const list = createSessionList({
     timers: {
       set(run, ms) {
@@ -136,6 +138,7 @@ function setUp(
     projectName,
     hostSessionName,
     configFolder: resolvedFolder,
+    claimed: () => claimed,
     // As the real registry: claude registered, codex unregistered and labelled
     // by the shared helper's stand-in.
     harnessLabel: (id) =>
@@ -157,6 +160,7 @@ function setUp(
     activated,
     calls,
     selections,
+    claimed,
   };
 }
 
@@ -540,6 +544,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't1',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
     {
@@ -553,6 +558,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: null,
         mainAgentOnly: false,
+        replayed: false,
       },
     },
     {
@@ -572,6 +578,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't1',
         mainAgentOnly: false,
+        replayed: false,
       },
     },
     {
@@ -590,6 +597,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't2',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
     {
@@ -609,6 +617,7 @@ describe('createSessionList', () => {
         tool: 'a',
         toolUseId: 't3',
         mainAgentOnly: true,
+        replayed: false,
       },
     },
   ])(
@@ -649,6 +658,92 @@ describe('createSessionList', () => {
       list.contributeTools([tool('a'), tool('a')], fakeContribution().start),
     ).toThrow(/"a"/);
     expect(list.tools().map((each) => each.name)).toEqual(['x']);
+  });
+
+  it('throws on an offline answer naming a tool the contribution does not list, adding none of it', async () => {
+    const { list } = setUp();
+    list.contributeTools([tool('x')], fakeContribution().start);
+    const connected = list.connect(info('/work/x'));
+    const handler = fakeContribution();
+
+    expect(() =>
+      list.contributeTools([tool('a')], handler.start, {
+        offline: { b: { result: RESULT, replay: false } },
+      }),
+    ).toThrow('Offline answer names the tool "b"');
+    expect(list.tools().map((each) => each.name)).toEqual(['x']);
+    expect(handler.started).toEqual([]);
+    await expect(connected.call('a', {}, CONTEXT)).rejects.toThrow(
+      'Unknown tool: a',
+    );
+  });
+
+  it("offlineTable lists each live contribution's offline answers by tool name", () => {
+    const { list } = setUp();
+    const asked: ToolResult = { content: [{ type: 'text', text: 'closed' }] };
+    const first = list.contributeTools(
+      [tool('a'), tool('b'), tool('c')],
+      fakeContribution().start,
+      {
+        offline: {
+          a: { result: asked, replay: false },
+          b: { result: RESULT, replay: true },
+        },
+      },
+    );
+    list.contributeTools([tool('d')], fakeContribution().start);
+
+    expect(list.offlineTable()).toEqual({
+      a: { result: asked, replay: false },
+      b: { result: RESULT, replay: true },
+    });
+
+    first.dispose();
+
+    expect(list.offlineTable()).toEqual({});
+  });
+
+  it("replayCall routes through every guard with the line's toolUseId", async () => {
+    const { list } = setUp();
+    const handler = fakeContribution();
+    list.contributeTools([tool('a')], handler.start, { mainAgentOnly: true });
+    const ownedSession = list.open(owned('host-1'));
+    const relay = list.connect(owned('host-1'));
+    const seen: GuardedToolCall[] = [];
+    let verdict: ToolCallVerdict = { kind: 'run' };
+    list.addToolCallGuard(async (call) => {
+      seen.push(call);
+      return verdict;
+    });
+    const call = {
+      tool: 'a',
+      arguments: { step: 'x' },
+      toolUseId: 'toolu_sub',
+      at: 1,
+      replay: true,
+    };
+
+    await list.replayCall('host-1', call);
+    await relay.call('a', {}, { ...CONTEXT, toolUseId: 'toolu_live' });
+    verdict = { kind: 'skip', text: 'not the main agent' };
+    await list.replayCall('host-1', call);
+
+    const replayed: GuardedToolCall = {
+      sessionId: ownedSession.session.id,
+      tool: 'a',
+      toolUseId: 'toolu_sub',
+      mainAgentOnly: true,
+      replayed: true,
+    };
+    expect(seen).toEqual([
+      replayed,
+      { ...replayed, toolUseId: 'toolu_live', replayed: false },
+      replayed,
+    ]);
+    expect(handler.calls.map((each) => each.args)).toEqual([{ step: 'x' }, {}]);
+    await expect(list.replayCall('host-2', call)).rejects.toThrow(
+      'No session holds host host-2',
+    );
   });
 
   it('lists contributed tools in contribution order', () => {
@@ -722,6 +817,15 @@ describe('createSessionList', () => {
     second.end();
     expect(list.label(id)).toBeNull();
     expect(list.label('unknown')).toBeNull();
+  });
+
+  it('project_ConnectedWithoutRow_ReturnsEntryProject', () => {
+    const { list } = setUp();
+    const { session } = list.connect(info('/work/alpha'));
+
+    expect(list.state().rows).toEqual([]);
+    expect(list.project(session.id)).toBe('alpha');
+    expect(list.project('unknown')).toBeNull();
   });
 
   it('numbers two folders with one name as one group', () => {
@@ -933,6 +1037,77 @@ describe('createSessionList', () => {
     list.closeSession(b.session.id, false);
     expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
   });
+
+  // Each row in order: `plain`, `claimed` by a side bar section, or `owned` by
+  // a plugin; the row at `closing` is selected, then closed.
+  it.each<{
+    case: string;
+    kinds: ('plain' | 'claimed' | 'owned')[];
+    closing: number;
+    selected: number | null;
+  }>([
+    {
+      case: 'claimed rows to the right are skipped',
+      kinds: ['plain', 'claimed', 'claimed', 'plain'],
+      closing: 0,
+      selected: 3,
+    },
+    {
+      case: 'every other row claimed leaves none selected',
+      kinds: ['claimed', 'plain', 'claimed'],
+      closing: 1,
+      selected: null,
+    },
+    {
+      case: 'claimed and owned rows mixed fall to the first plain one',
+      kinds: ['plain', 'owned', 'claimed', 'plain', 'plain'],
+      closing: 0,
+      selected: 3,
+    },
+    {
+      case: 'claimed and owned rows to the left fall to the plain one past them',
+      kinds: ['plain', 'claimed', 'owned', 'plain'],
+      closing: 3,
+      selected: 0,
+    },
+    {
+      case: 'a claimed row closing takes the same pick',
+      kinds: ['plain', 'claimed', 'claimed', 'plain'],
+      closing: 1,
+      selected: 3,
+    },
+    {
+      case: 'nothing claimed keeps the right neighbour',
+      kinds: ['plain', 'plain', 'plain'],
+      closing: 1,
+      selected: 2,
+    },
+  ])(
+    'passes the selection past claimed rows when the selected row closes: $case',
+    ({ kinds, closing, selected }) => {
+      const { list, claimed } = setUp();
+      const ids = kinds.map((kind, index) => {
+        if (kind === 'owned') {
+          const hostId = `host-${index}`;
+          return list.open(owned(hostId), { select: false, owner: 'retro' })
+            .session.id;
+        }
+        const { session } = list.connect(info('/work/x'));
+        list.mark(session.id, MARK);
+        if (kind === 'claimed') {
+          claimed.push(session.id);
+        }
+        return session.id;
+      });
+      list.activate(ids[closing]);
+
+      list.closeSession(ids[closing], false);
+
+      expect(list.state().selectedSessionId).toBe(
+        selected === null ? null : ids[selected],
+      );
+    },
+  );
 
   it('ends tool sessions, drops the row and emits ended when a session ends', () => {
     const { list, emitted, states } = setUp();
@@ -1448,6 +1623,7 @@ describe('createSessionList', () => {
       projectName: async () => null,
       hostSessionName: async () => null,
       configFolder: () => null,
+      claimed: () => [],
       harnessLabel: (id) => id,
     });
 
@@ -1793,6 +1969,66 @@ describe('createSessionList', () => {
     expect(second.session.id).not.toBe(first.session.id);
   });
 
+  // Ids run 00000001, 00000002, … in the order `arrange` opens or connects.
+  it.each<{
+    case: string;
+    arrange(list: SessionList): void;
+    query: SessionInfo;
+    expected: string | null;
+  }>([
+    {
+      case: 'a row id naming an owned entry with no host id',
+      arrange: (list) => list.open(owned(null)),
+      query: { ...owned('host-7'), rowId: '00000001' },
+      expected: '00000001',
+    },
+    {
+      case: 'a row id naming an owned entry whose host id differs',
+      arrange(list) {
+        list.open(owned('host-1'));
+        list.open(owned('host-2'));
+      },
+      query: { ...owned('host-2'), rowId: '00000001' },
+      expected: '00000002',
+    },
+    {
+      case: 'a row id naming an owned entry over a connected one holding the host id',
+      arrange(list) {
+        list.open(owned(null));
+        list.connect(owned('host-1'));
+      },
+      query: { ...owned('host-1'), rowId: '00000001' },
+      expected: '00000001',
+    },
+    {
+      case: 'a row id naming a connected entry counts as none',
+      arrange(list) {
+        list.connect(owned('host-1'));
+        list.connect(owned('host-2'));
+      },
+      query: { ...owned('host-2'), rowId: '00000001' },
+      expected: '00000002',
+    },
+    {
+      case: 'unknown row id and host id',
+      arrange(list) {
+        list.open(owned('host-1'));
+        list.connect(owned('host-2'));
+      },
+      query: { ...owned('host-9'), rowId: 'ffffffff' },
+      expected: null,
+    },
+  ])('sessionOf_ConnectOrder: $case', ({ arrange, query, expected }) => {
+    const { list, emitted } = setUp();
+    arrange(list);
+    const emittedBefore = emitted.length;
+
+    const found = list.sessionOf(query);
+
+    expect(found?.id ?? null).toBe(expected);
+    expect(emitted).toHaveLength(emittedBefore);
+  });
+
   it('join_NoHostIdAtJoin_CallsRunUntilMovedOff', async () => {
     const { list } = setUp();
     const contribution = fakeContribution();
@@ -1885,6 +2121,22 @@ describe('createSessionList', () => {
     expect(states).toHaveLength(sentBefore);
     expect(emitted.filter(([event]) => event === 'connected')).toHaveLength(1);
     expect(logged).toEqual([expect.stringContaining('00000001')]);
+  });
+
+  it("takes a joining relay's host fields into the owned session's info, and keeps them through a hello with none", () => {
+    const { list } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-1'));
+
+    list.connect({ ...owned('host-1'), host: { deadline_seconds: 300 } });
+    const joined = contribution.startedInfos[0].host;
+    list.connect(owned('host-1'));
+
+    expect([joined, ownedSession.session.info.host]).toEqual([
+      { deadline_seconds: 300 },
+      { deadline_seconds: 300 },
+    ]);
   });
 
   it("routes a joined relay's calls to the owned session's tool sessions", async () => {

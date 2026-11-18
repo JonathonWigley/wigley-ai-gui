@@ -84,8 +84,15 @@ export interface ToolDefinition {
 
 export const RELAY_PROTOCOL = 1;
 
+// A hook hello's own protocol, so an app that knows no hook calls refuses one
+// at once rather than opening a session for it.
+export const HOOK_PROTOCOL = 2;
+
 // The first line the relay sends, before any MCP message. Every other field
-// is the host's own, and lands in `SessionInfo.host`.
+// is the host's own, and lands in `SessionInfo.host`. A hook hello carries
+// HOOK_PROTOCOL and a string `hook`, and only it does: one request line
+// follows, and the app answers it with one `HookReply` line and closes,
+// opening no session.
 export interface RelayHello {
   protocol: number;
   session_id: string | null;
@@ -96,11 +103,25 @@ export interface RelayHello {
   config_dir?: string | null;
   // Absent reads as null.
   row_id?: string | null;
+  // Absent reads as null.
+  hook?: string | null;
   [field: string]: unknown;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
 export type RelayHelloReply = { ok: true } | { ok: false; error: string };
+
+// Answers one hook request from the session it came from; the request is the
+// parsed request line, which the handler checks itself.
+export type HookHandler = (
+  session: AgentSession,
+  request: unknown,
+) => Promise<Record<string, unknown>>;
+
+// The app's one-line answer to a hook hello and its request line.
+export type HookReply =
+  | { ok: true; reply: Record<string, unknown> }
+  | { ok: false; error: string };
 
 // `~/.agents/<instance id>/endpoint.json`.
 export interface RelayEndpoint {
@@ -199,6 +220,8 @@ export interface GuardedToolCall {
   readonly tool: string;
   readonly toolUseId: string | null;
   readonly mainAgentOnly: boolean;
+  // True for a call `replayCalls` routes from a calls file; false for every live call.
+  readonly replayed: boolean;
 }
 
 export type ToolCallVerdict =
@@ -207,8 +230,16 @@ export type ToolCallVerdict =
 
 export type ToolCallGuard = (call: GuardedToolCall) => Promise<ToolCallVerdict>;
 
+// A tool's answer while the app is closed, and whether the call replays onto its row when the app adopts the run.
+export interface OfflineAnswer {
+  readonly result: ToolResult;
+  readonly replay: boolean;
+}
+
 export interface ContributeToolsOptions {
   readonly mainAgentOnly?: boolean;
+  // Each listed tool's offline answer, by tool name. A tool left out answers that it did not run, and does not replay.
+  readonly offline?: Readonly<Record<string, OfflineAnswer>>;
 }
 
 // A project name for a session folder, or null when the namer names none.
@@ -224,12 +255,14 @@ export interface SessionsMainExports {
   // Starts the contribution's tool session in every live session, and in each
   // session that connects later. The handle's `dispose` ends those tool
   // sessions and frees the tool names; a second `dispose` does nothing. Throws
-  // on a tool name another contribution already holds, or one this contribution
-  // lists twice. A `start` that throws for a live session ends the tool sessions
+  // on a tool name another contribution already holds, one this contribution
+  // lists twice, or an `offline` key naming a tool this contribution does not
+  // list. A `start` that throws for a live session ends the tool sessions
   // already started, leaves no contribution, and rethrows. `mainAgentOnly` true
   // marks each of the contribution's tools main-agent-only, which every
-  // tool-call guard reads from the call; absent or false marks none. The marks
-  // go with the tool names when the handle disposes.
+  // tool-call guard reads from the call; absent or false marks none. `offline`
+  // joins the offline table written beside the tool list. The marks and the
+  // offline answers go with the tool names when the handle disposes.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
@@ -242,7 +275,8 @@ export interface SessionsMainExports {
   // the session's host id; else an owned session holding `info.sessionId`
   // is joined; else a host id an owned session moved away from throws; else
   // the session connects as its own, keeping `info.rowId`. A row id naming a
-  // connected session, or none, counts as none. A newer relay takes the join
+  // connected session, or none, counts as none. A join takes the info's `host`
+  // into the session's own info when it has one. A newer relay takes the join
   // from an older one still connected, whichever way each joined; the older
   // handle's `end` then leaves the join alone.
   connect(info: SessionInfo): ConnectedSession;
@@ -326,10 +360,31 @@ export interface SessionsMainExports {
   // namer and re-asks every session; `changed()` after that does nothing. Each
   // call is its own registration, so one function added twice is two namers.
   addProjectNamer(namer: ProjectNamer): ProjectNamerHandle;
+  // Answers each hook request named `name` with `handler`, given the live
+  // session the hook hello names, found as `connect` finds the session it
+  // joins; a hook opens no session. A handler that rejects answers the hook
+  // with its error. Throws on a name another live registration holds. The
+  // handle's `dispose` frees the name; a second `dispose` does nothing.
+  addHookHandler(name: string, handler: HookHandler): Disposable;
+  // The session's project, as its row shows it, also for a connected session
+  // with no row; null for a session not connected. It can change at a namer's
+  // `changed()` and when the origin lookup lands, so a caller reads it at each
+  // use.
+  project(sessionId: string): string | null;
   // Holds each relay's connect until `until` settles, up to a bound, so a
   // relaunched relay joins the row a plugin is about to open rather than
-  // opening its own. Only a relay's hello waits: `connect` does not.
+  // opening its own. Only a relay's hello waits: a hook hello and `connect`
+  // do not.
   holdConnects(until: Promise<unknown>): void;
+  // The environment a run the host may start while the app is closed carries: `WIGLEY_FORMS_OFFLINE` set to the
+  // calls folder. Empty in the self-test, which writes no endpoint files.
+  offlineEnv(): Readonly<Record<string, string>>;
+  // Routes each replayable call the relay logged for `hostSessionId` to that session's tool sessions, in order,
+  // through the guards, results dropped; then deletes the calls file. Resolves to the count routed; 0 with no file.
+  // A main-agent-only call replays only once the row's tool callers are noted, which chat's `adopt` resolving
+  // guarantees; before that it is skipped as a subagent's. Rejects when the claim or the read of the calls file fails
+  // for any reason but a missing file; the file is then left on disk, and nothing replays it again.
+  replayCalls(hostSessionId: string): Promise<number>;
 }
 
 export const sessionsMainKey: DependencyKey<
@@ -421,14 +476,15 @@ export interface SessionsChannel extends ChannelShape {
 // false keeping it, for what only the page knows or must ask; a promise
 // answers once the tab has asked the user (chat's end-session confirm).
 // `atOnce` is true when the user's close key runs while any of the session's
-// tabs or popups closes at once. `shown` runs each time this tab becomes the
-// visible tab: the selected tab of the focused chat pane's session while
-// Sessions mode shows and that session has no open popup. Its plugin sets its
-// base key scope there. `hidden` runs when it stops being the visible tab, the
-// mode hiding or a popup opening over it included, before the next surface's
-// `shown`; a tab removed first gets none. `shown` may run inside `addTab`,
-// before its handle returns, so it must not read that handle. `order` places
-// the tab in the strip, as `addTab` says.
+// tabs or popups closes at once, and on an agent's targeted `closeSession`
+// run, which the user's Allow already confirmed. `shown` runs each time this
+// tab becomes the visible tab: the selected tab of the focused chat pane's
+// session while Sessions mode shows and that session has no open popup. Its
+// plugin sets its base key scope there. `hidden` runs when it stops being the
+// visible tab, the mode hiding or a popup opening over it included, before the
+// next surface's `shown`; a tab removed first gets none. `shown` may run
+// inside `addTab`, before its handle returns, so it must not read that handle.
+// `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
@@ -591,7 +647,8 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // claim goes to the lower `order`, a tie to the section registered first, and a
 // `claims` that throws counts as false and is logged. The sections that claim
 // a row draw after Recent, by `order`, a tie in registration order; one that
-// claims none draws nothing. Adding a
+// claims none draws nothing. A row a section claims is never where main's
+// selection lands after a close (`sessionsClaimedSlot`). Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
 // draws redraws into its own wrapper itself.
@@ -692,6 +749,19 @@ export const sessionsSelectionSlot: SlotKey<string | null, 'main', 'sessions'> =
 // or the selection reaches readers before the `sessions.active` write it causes.
 export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
   id: 'sessions.active',
+  process: 'page',
+  kind: 'value',
+};
+
+// The rows a registered side bar section claims, by sessionId, as the side
+// bar's last draw found them; [] before the first draw and at each page start.
+// Main's post-close selection skips them.
+export const sessionsClaimedSlot: SlotKey<
+  readonly string[],
+  'page',
+  'sessions'
+> = {
+  id: 'sessions.claimed',
   process: 'page',
   kind: 'value',
 };

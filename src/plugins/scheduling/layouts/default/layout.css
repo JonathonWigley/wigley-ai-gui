@@ -1,0 +1,176 @@
+/* The default layout's look: the list pane and its rows; the details pane's notices, the task's details, its buttons
+   and history; the editor's rows. */
+
+/* The list pane: the rows, which scroll. */
+.scheduling-pane[data-layout-owner='scheduling'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The details pane: notices, then the task or the editor, one sheet that scrolls as a whole. */
+.scheduling-pane--detail[data-layout-owner='scheduling'] {
+  align-content: start;
+  gap: var(--wg-space-3);
+  grid-template-rows: none;
+  padding: var(--wg-space-3) var(--wg-space-4);
+}
+
+[data-layout-owner='scheduling'].scheduling-new-row .ui-row-label {
+  color: var(--wg-fg-link);
+}
+
+[data-layout-owner='scheduling'] .scheduling-row-end {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-2);
+}
+
+/* A notice: one line, its tone on its edge and text. */
+.scheduling-notice[data-layout-owner='scheduling'] {
+  border-left: var(--wg-indicator-width) solid var(--wg-border);
+  padding: var(--wg-space-1) var(--wg-space-3);
+}
+
+.scheduling-notice--warning[data-layout-owner='scheduling'] {
+  border-left-color: var(--wg-status-warning);
+  color: var(--wg-status-warning);
+}
+
+.scheduling-notice--error[data-layout-owner='scheduling'] {
+  border-left-color: var(--wg-status-error);
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='scheduling'] .scheduling-heading {
+  font-size: var(--wg-text-13);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+[data-layout-owner='scheduling'] .scheduling-detail-title {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  margin-bottom: var(--wg-space-2);
+}
+
+/* The task's fields: a label column and a value column. */
+[data-layout-owner='scheduling'] .scheduling-detail-rows {
+  display: grid;
+  gap: var(--wg-space-1) var(--wg-space-4);
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+[data-layout-owner='scheduling'] .scheduling-detail-row {
+  display: contents;
+}
+
+[data-layout-owner='scheduling'] .scheduling-detail-label {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='scheduling'] .scheduling-detail-value {
+  color: var(--wg-fg);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='scheduling'] .scheduling-prompt {
+  color: var(--wg-fg);
+  font-family: var(--wg-font-mono);
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='scheduling'] .scheduling-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-top: var(--wg-space-3);
+}
+
+/* A run row: the time in tabular numerals, the outcome in its status colour, a linked row's outcome as a link. */
+[data-layout-owner='scheduling'].scheduling-run .ui-row-label {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='scheduling'].scheduling-run--finished .ui-row-detail {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='scheduling'].scheduling-run--skipped .ui-row-detail {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='scheduling'].scheduling-run--failed .ui-row-detail {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='scheduling'].scheduling-run--running .ui-row-detail {
+  color: var(--wg-status-running);
+}
+
+[data-layout-owner='scheduling'].scheduling-run.is-linked .ui-row-detail {
+  color: var(--wg-fg-link);
+}
+
+/* The editor: its heading and keys, then one row per field as Settings draws its rows. */
+.scheduling-editor-pane[data-layout-owner='scheduling'] {
+  display: grid;
+  gap: var(--wg-space-3);
+}
+
+[data-layout-owner='scheduling'] .scheduling-editor-header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+}
+
+[data-layout-owner='scheduling'] .scheduling-editor-keys {
+  display: flex;
+  gap: var(--wg-space-3);
+  margin-left: auto;
+}
+
+.scheduling-field[data-layout-owner='scheduling'] {
+  display: grid;
+  gap: var(--wg-space-1) var(--wg-space-4);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+[data-layout-owner='scheduling'] .scheduling-field-label {
+  color: var(--wg-fg-secondary);
+  padding-top: var(--wg-space-1);
+}
+
+[data-layout-owner='scheduling'] .scheduling-field-value {
+  display: grid;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+[data-layout-owner='scheduling'] .scheduling-choice {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+[data-layout-owner='scheduling'] .scheduling-field-hint,
+[data-layout-owner='scheduling'] .scheduling-env-note {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='scheduling'] .scheduling-env-note {
+  margin: 0;
+}
+
+[data-layout-owner='scheduling'] .scheduling-problem {
+  color: var(--wg-status-error);
+  margin: 0;
+}

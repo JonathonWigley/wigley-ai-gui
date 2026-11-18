@@ -6,6 +6,8 @@ import {
   hostRecordProtocol,
   isHostChildrenFile,
   pipeLogFile,
+  runsFile,
+  runsFileProtocol,
 } from './session-host-protocol';
 
 describe('pipeLogFile', () => {
@@ -38,6 +40,19 @@ describe('host files', () => {
   ])('hostFiles_Protocol_NamesAndParsesBack: %s', (fileName, expected) => {
     expect(hostRecordProtocol(fileName)).toBe(expected);
   });
+
+  it.each([
+    ['runs-v3.json', 3],
+    [runsFile(4), 4],
+    ['pending-v3.json', null],
+    ['runs-v.json', null],
+    ['runs-v3.json.tmp', null],
+  ])(
+    'runsFileProtocol_Names_ParsesBackTheProtocol: %s',
+    (fileName, expected) => {
+      expect(runsFileProtocol(fileName)).toBe(expected);
+    },
+  );
 
   it.each([
     [hostChildrenFile(1, 4242), true],

@@ -17,11 +17,19 @@ export interface PlatformKeys {
   readonly altGraphTypes: boolean;
 }
 
-export interface PlatformPrograms {
-  // The program a Claude Code session runs when the
-  // claude-code.command setting is empty.
-  readonly claude: string;
+// One way to start a program: the command and the arguments that lead every run (`py` with `-3`).
+export interface ProgramCandidate {
+  readonly command: string;
+  readonly args: readonly string[];
 }
+
+// Each program's candidates, tried in order.
+export interface PlatformPrograms {
+  readonly python: readonly ProgramCandidate[];
+  readonly claude: readonly ProgramCandidate[];
+}
+
+export type ProgramName = keyof PlatformPrograms;
 
 export interface PlatformRelay {
   // The user part of the relay's channel path.

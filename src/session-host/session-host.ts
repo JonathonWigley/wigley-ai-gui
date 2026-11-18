@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { constants } from 'node:os';
 import type { Clock, Timers } from '../contracts/ambient';
 import { osPlatform } from '../shared/os-platform';
 import { createDiagnosticLog } from './diagnostic-log';
@@ -35,11 +36,18 @@ process.on('uncaughtException', (error) => {
   }
 });
 
+// A signal's default action skips `exit` listeners, the channel lock's release
+// among them; 128 plus the signal number is the shell's exit code for it.
+for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => process.exit(128 + constants.signals[signal]));
+}
+
 void startSessionHost({
   folder,
   channel,
   pid: process.pid,
   children,
+  env: process.env,
   clock,
   timers,
   exit: (code) => process.exit(code),

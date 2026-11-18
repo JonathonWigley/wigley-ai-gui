@@ -1,4 +1,5 @@
 import type { Disposable } from './disposable';
+import type { HostedSpawn } from './session-host';
 
 export interface ControlChoice {
   value: string;
@@ -647,6 +648,25 @@ export interface AgentHarness {
   listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
   // Runs one poll of `profileDir`'s plan usage, or rejects with the reason.
   planUsage(profileDir: string | null): Promise<PlanUsage>;
+  // A start of `request` that the session host runs later. Its `stdin` holds the lines `start` writes when a process
+  // opens, then `firstMessage`. Its `env` holds `env`, the harness's own values and the names the adapter carries from
+  // the app's environment; its `unsetEnv` the names the child must not inherit. Spawns and writes nothing; it may
+  // look up the harness's program. Rejects where `start` would fail before spawning, and on a control value the
+  // harness does not offer for a control whose values it checks. `request.resume` is false and `request.sessionId`
+  // is set.
+  prepareRun(
+    request: AgentStart,
+    firstMessage: UserMessage,
+    env: Readonly<Record<string, string>>,
+  ): Promise<HostedSpawn>;
+  // The controls a new session starts from: each declared control with its choices and `value` null.
+  startControls(): SessionControl[];
+  // `controls` with each permission control lowered to `cap`'s value where `controls` grants more. A permission
+  // control `cap` has no value for caps at the harness's launch default. Other controls stay as `controls` has them.
+  capControls(
+    controls: Readonly<Record<string, string>>,
+    cap: Readonly<Record<string, string>>,
+  ): Record<string, string>;
 }
 
 // One harness's place in the registry. `refresh` publishes the adapter's `info()` again after its declarations

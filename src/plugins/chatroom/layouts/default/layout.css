@@ -1,0 +1,148 @@
+/* The default chatroom look: the side bar's thread list, the board and thread heading, the log's messages, the
+   composer and the row badge. */
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-side-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+  padding: var(--wg-space-2);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-thread {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='chatroom'][data-layout='default']
+  .chatroom-thread.is-resolved {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-count {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-board {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-2);
+  border-block-end: 1px solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-board-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-board-name {
+  font-weight: var(--wg-weight-medium);
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-branch {
+  font-family: var(--wg-font-mono);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-thread-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  padding-block-start: var(--wg-space-2);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-thread-title {
+  font-weight: var(--wg-weight-medium);
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-hints {
+  display: flex;
+  gap: var(--wg-space-2);
+  margin-inline-start: auto;
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-muted {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-error {
+  font-size: var(--wg-text-12);
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-2) var(--wg-space-4);
+  border-radius: var(--wg-radius-sm);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-message.is-quiet {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-message.is-cursor {
+  background: var(--wg-list-active-background);
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-message-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-sender {
+  font-weight: var(--wg-weight-medium);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-prompt {
+  margin-inline-start: auto;
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-2) var(--wg-space-4) var(--wg-space-3);
+  border-block-start: 1px solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='chatroom'][data-layout='default'] .chatroom-composer-line {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='chatroom'][data-layout='default']
+  .chatroom-composer-line
+  > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--wg-space-1) var(--wg-space-2);
+  border: 1px solid var(--wg-input-border);
+  border-radius: var(--wg-radius-md);
+  background: var(--wg-input-background);
+  color: var(--wg-fg);
+  font: inherit;
+  outline: none;
+}
+
+[data-layout-owner='chatroom'][data-layout='default'].chatroom-badge {
+  white-space: nowrap;
+  cursor: pointer;
+}

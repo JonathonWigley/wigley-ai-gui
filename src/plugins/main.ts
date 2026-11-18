@@ -1,4 +1,5 @@
 import type { MainPart } from '../contracts/plugin';
+import { agentCommandsMainPart } from './agent-commands/main/start';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { appUpdateMainPart } from './app-update/main/start';
 import { audioPickerMainPart } from './audio-picker/main/start';
@@ -10,6 +11,7 @@ import { autoCompactMainPart } from './auto-compact/main/start';
 import { autoRetroMainPart } from './auto-retro/main/start';
 import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
+import { chatroomMainPart } from './chatroom/main/start';
 import { claudeCodeMainPart } from './claude-code/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
@@ -19,6 +21,7 @@ import { liveViewMainPart } from './live-view/main/start';
 import { notesMainPart } from './notes/main/start';
 import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
+import { schedulingMainPart } from './scheduling/main/start';
 import { scopedAgentsMainPart } from './scoped-agents/main/start';
 import { sessionLogMainPart } from './session-log/main/start';
 import { sessionStashMainPart } from './session-stash/main/start';
@@ -35,14 +38,15 @@ import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { workflowSmallMainPart } from './workflow-small/main/start';
 import { workflowSpikeMainPart } from './workflow-spike/main/start';
 
-// Every built-in plugin's main part, in start order where no dependency says
-// otherwise.
+// Every built-in plugin's main part. `builtInManifests`' order, not this
+// list's, sets the start order where no dependency says otherwise.
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
   // Before chat and usage, so Claude's harness is registered when they start.
   claudeCodeMainPart,
   formsMainPart,
+  agentCommandsMainPart,
   primerMainPart,
   audioPickerMainPart,
   chatMainPart,
@@ -57,6 +61,7 @@ export const mainParts: readonly MainPart[] = [
   agentSkillsMainPart,
   contextSourcesMainPart,
   liveViewMainPart,
+  chatroomMainPart,
   docsMainPart,
   settingsMainPart,
   scopedAgentsMainPart,
@@ -72,6 +77,7 @@ export const mainParts: readonly MainPart[] = [
   unityPoolMainPart,
   systemStatsMainPart,
   visualMainPart,
+  schedulingMainPart,
   galleryMainPart,
   windowMainPart,
   // Last, so its self-test script's title bar button shows in no other script.

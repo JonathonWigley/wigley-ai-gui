@@ -44,6 +44,7 @@ import {
 import { FINDING_ORIGIN_SPECS, findingOrigins } from '../finding-origins';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
+import { askConfirm } from './confirm';
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { createKindRegistry } from './kinds/registry';
 import { ROUND_OPEN_TOOL } from './mcp-wording';
@@ -61,7 +62,7 @@ import {
   SELFTEST_LAYOUTS,
 } from './selftest-script';
 import { contributeFormsTools } from './tool-contribution';
-import { formsTools } from './tool-definitions';
+import { ASK_ROUND_OFFLINE, formsTools } from './tool-definitions';
 
 type FormsApi = MainApi<
   typeof formsManifest,
@@ -276,14 +277,16 @@ export function addDriveActions(
 }
 
 // Registers the built-in finding origins and item kinds and serves its two
-// tools, their schema following the registered origins and kinds, to every
-// agent session; shows each
+// tools, their schema following the registered origins and kinds and
+// ask_round with its offline answer, to every agent session; shows each
 // session's rounds on the page, wakes a round's chat session when the round
 // finishes with no call waiting, registers its layouts and opens the layout
 // preview on the page's ask, and refuses a switch-off while an agent's round
 // is open; in the self-test it writes the fixture layouts and hands the driver
 // its script, and in a drive run it adds the drive actions. Its exports
-// register a dependent's item kinds and finding origins.
+// register a dependent's item kinds and finding origins, and hand each
+// dependent `confirm`, an Allow or Deny round in a session's own forms
+// session.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -335,6 +338,7 @@ function startOverOrigins(
   const tools = contributeFormsTools({
     sessions,
     tools: () => formsTools(kinds()),
+    options: { offline: { [ROUND_OPEN_TOOL]: ASK_ROUND_OFFLINE } },
     startSession: (session) => forms.startSession(session),
     type: roundType,
     log: api.services.log,
@@ -374,6 +378,19 @@ function startOverOrigins(
       registerKind: (kind) => consumer.track(registry.register(kind)),
       registerFindingOrigin: (spec) =>
         consumer.track(findingOrigins.register(spec)),
+      confirm: (sessionId, request, signal, toolUseId) => {
+        const formSession = tools.session(sessionId);
+        if (formSession === undefined) {
+          return Promise.reject(new Error(`no forms session for ${sessionId}`));
+        }
+        return askConfirm(
+          formSession,
+          request,
+          api.services.randomHex(),
+          signal,
+          toolUseId,
+        );
+      },
     }),
     // The origins listener goes first, so removing the built-in origins
     // republishes no tool.

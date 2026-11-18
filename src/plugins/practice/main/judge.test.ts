@@ -11,7 +11,7 @@ import type {
   ProcessRunOptions,
 } from '../../../contracts/processes';
 import { createNodeFiles } from '../../../main/files/node-files';
-import { createNodeProcesses } from '../../../main/processes/node-processes';
+import { hostNodeProcesses } from '../../../main/processes/node-processes.test-support';
 import {
   createMemoryFiles,
   type MemoryFiles,
@@ -492,7 +492,7 @@ describe.skipIf(!clangOnPath)('createJudge with clang++', () => {
         trashItem: (path) => rm(path, { recursive: true, force: true }),
         os: OS_NAMES[process.platform] ?? 'linux',
       }),
-      processes: createNodeProcesses(),
+      processes: hostNodeProcesses(),
       paths: posixPaths,
       clock: { now: () => Date.now() },
       settings: () => ({

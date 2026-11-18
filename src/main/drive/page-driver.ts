@@ -255,7 +255,8 @@ export function readStartFailure(window: DrivenWindow): Promise<string | null> {
 const CORE_SCROLLS_ITSELF = ['.title-bar-context', '.shell-side-bar-handle'];
 
 // The design primitives' parts that clip their text with an ellipsis or scroll
-// their content on purpose, which the fit check lets clip in every script.
+// their content on purpose, and a split handle, whose resize prompt overflows
+// it by design, which the fit check lets clip in every script.
 export const PRIMITIVE_CLIPPING_SELECTORS: readonly string[] = [
   '.ui-row-label',
   '.ui-row-detail',
@@ -263,6 +264,7 @@ export const PRIMITIVE_CLIPPING_SELECTORS: readonly string[] = [
   '.ui-tab-label',
   '.ui-collapsible-summary',
   '.ui-h-scroller-track',
+  '.ui-split-handle',
 ];
 
 // A script's `scrollsItself` followed by each primitive clipping selector it

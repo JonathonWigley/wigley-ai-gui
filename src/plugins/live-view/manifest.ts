@@ -19,6 +19,7 @@ export const liveViewManifest = definePlugin({
       label: 'open the Screen Recording settings',
       group: 'hub',
       runsIn: 'main',
+      risky: true,
     },
   },
   scopes: {},

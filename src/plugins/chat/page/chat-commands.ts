@@ -35,6 +35,7 @@ import type {
   PermissionActions,
   SessionRef,
 } from './chat-view';
+import { readAgentFrame } from '../agent-frame';
 import { ROLE_COMMANDS } from './control-commands';
 import type { ImageViewer } from './image-viewer';
 import type { Picker } from './picker';
@@ -109,8 +110,9 @@ type Handler = (context: PageCommandContext) => void;
 // `hubLineDown`, `hubLineUp`, `hubHalfPageDown`, `hubHalfPageUp`), by short id.
 // A command whose arg names a session, as a click's does, acts on that session,
 // and only logs for a session no longer held. Any other command acting on a
-// session acts only on the session whose Chat tab is the visible tab, and does
-// nothing while no Chat tab is visible.
+// session acts on the run's target when the run names one, and only logs for a
+// target chat does not hold; with no target it acts only on the session whose
+// Chat tab is the visible tab, and does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
@@ -168,7 +170,11 @@ export function chatCommandHandlers(
     (context) => {
       const session = sessionFor(tabs, context);
       if (session === undefined) {
-        log('no Chat tab shown');
+        log(
+          context.targetSessionId === undefined
+            ? 'no Chat tab shown'
+            : `no chat session ${context.targetSessionId}`,
+        );
         return;
       }
       act(session, context);
@@ -447,12 +453,16 @@ export function chatCommandHandlers(
   };
 }
 
-// The visible Chat tab's session; undefined while no Chat tab is visible, or
-// when the key fired in another session's box.
+// The run's target session when the run names one, undefined when chat holds
+// no such session. With no target, the visible Chat tab's session; undefined
+// while no Chat tab is visible, or when the key fired in another session's box.
 function sessionFor(
   tabs: ChatTabs,
   context: PageCommandContext,
 ): ChatSession | undefined {
+  if (context.targetSessionId !== undefined) {
+    return tabs.session(context.targetSessionId);
+  }
   const visible = tabs.visibleSessionId();
   const session = visible === null ? undefined : tabs.session(visible);
   const firedInOtherBox =
@@ -583,9 +593,10 @@ function refused(
 }
 
 // Puts messages, oldest first, back into their session's box, ahead of
-// anything typed or attached since: each text on its own line above the box's
-// text, the oldest at the top, and their images in order before the attached
-// ones. A session closed since takes nothing back; whether the box took them.
+// anything typed or attached since: each text, a framed message's body without
+// its frame line, on its own line above the box's text, the oldest at the top,
+// and their images in order before the attached ones. A session closed since
+// takes nothing back; whether the box took them.
 export function putBack(
   deps: Pick<ChatCommandDeps, 'tabs'>,
   session: ChatSession,
@@ -595,7 +606,7 @@ export function putBack(
     return false;
   }
   const texts = messages
-    .map((message) => message.text)
+    .map((message) => readAgentFrame(message.text)?.body ?? message.text)
     .filter((text) => text !== '');
   if (texts.length > 0) {
     const typed = session.box.text();

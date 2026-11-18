@@ -34,8 +34,8 @@ export interface ProblemStoreDeps {
 // null for a missing file. `submissions` resolves newest first, skipping and
 // logging a file that does not parse. `writeBuildFile` writes only under
 // `.build/` and resolves the absolute path written. `watch` reports the slug of
-// each change under `problems/`, null when the change names none; it starts
-// watching, which makes `problems/`, once `startWatching` has been called, and
+// each change under `problems/`, null when the change names none or the watch
+// may have missed changes; it starts watching, which makes `problems/`, once `startWatching` has been called, and
 // logs a watch that cannot start.
 export interface ProblemStore {
   folder(): string;
@@ -158,7 +158,10 @@ export function createProblemStore(deps: ProblemStoreDeps): ProblemStore {
           watching = files.watch(
             problemsFolder(),
             (path) => onChange(path.split('/')[0] || null),
-            { onError: (error) => log(`watch stopped: ${errorText(error)}`) },
+            {
+              onError: (error) => log(`watch stopped: ${errorText(error)}`),
+              onMissed: () => onChange(null),
+            },
           );
         } catch (error) {
           log(`watch not started: ${errorText(error)}`);

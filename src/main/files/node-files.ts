@@ -36,8 +36,9 @@ import type { OsName } from '../../contracts/platform';
 // arrives as several events for one path.
 const WATCH_QUIET_MS = 100;
 
-// The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`.
-const TEMP_FILE = /^\..+\.[0-9a-f]{8}\.tmp$/;
+// The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`, the
+// target's name captured.
+const TEMP_FILE = /^\.(.+)\.[0-9a-f]{8}\.tmp$/;
 
 // The waits between tries of `write`'s rename while another process holds the
 // file (EPERM or EBUSY, as on Windows): one try, then one after each wait.
@@ -303,24 +304,39 @@ function watchDebounced(
   options?: WatchOptions,
 ): FileWatch {
   mkdirSync(folder, { recursive: true });
-  const pending = new Map<string, NodeJS.Timeout>();
+  // By the path reported. `fromTempOnly` while every event of its quiet window
+  // named the temp file of a `write` to it.
+  const pending = new Map<
+    string,
+    { timer: NodeJS.Timeout; fromTempOnly: boolean }
+  >();
   const recursive = options?.recursive ?? true;
   const watcher = watchFolder(folder, { recursive }, (_event, name) => {
     if (name === null || isWatchedFolderItself(os, folder, name)) {
       return;
     }
     const changed = slashJoined(name);
-    if (TEMP_FILE.test(changed.slice(changed.lastIndexOf('/') + 1))) {
-      return;
-    }
-    clearTimeout(pending.get(changed));
-    pending.set(
-      changed,
-      setTimeout(() => {
-        pending.delete(changed);
-        onChange(changed);
+    const nameStart = changed.lastIndexOf('/') + 1;
+    const tempTarget = TEMP_FILE.exec(changed.slice(nameStart))?.[1];
+    const isTempFile = tempTarget !== undefined;
+    const reported = isTempFile
+      ? changed.slice(0, nameStart) + tempTarget
+      : changed;
+    const earlier = pending.get(reported);
+    clearTimeout(earlier?.timer);
+    const fromTempOnly = isTempFile && (earlier?.fromTempOnly ?? true);
+    pending.set(reported, {
+      fromTempOnly,
+      timer: setTimeout(() => {
+        pending.delete(reported);
+        // The temp file of a write that failed leaves no target.
+        const isReported =
+          !fromTempOnly || existsSync(path.join(folder, reported));
+        if (isReported) {
+          onChange(reported);
+        }
       }, WATCH_QUIET_MS),
-    );
+    });
   });
   let missedTimer: NodeJS.Timeout | undefined;
   const live = {
@@ -335,7 +351,7 @@ function watchDebounced(
   }
   const dispose = () => {
     watcher.close();
-    for (const timer of pending.values()) {
+    for (const { timer } of pending.values()) {
       clearTimeout(timer);
     }
     pending.clear();

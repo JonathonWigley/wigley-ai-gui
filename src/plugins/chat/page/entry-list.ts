@@ -17,6 +17,7 @@ import {
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import type { ChatPlace, EntryFocus, QueuedMessage } from '../contract';
+import { readAgentFrame } from '../agent-frame';
 import { chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -1131,7 +1132,7 @@ function transcriptEntries(
 // What a layout draws `entry` from: the entry, a harness kind's included; a
 // result with its turn's step count from the session's `entries`, steps out of
 // the transcript included; a user entry with whether it is the latest delivery
-// entry.
+// entry, and with its sender and body when another session's agent sent it.
 function entryInput(
   entry: ChatEntry,
   entries: readonly ChatEntry[],
@@ -1140,8 +1141,11 @@ function entryInput(
     return { ...entry, stepCount: resultStepCount(entries, entry.id) };
   }
   if (entry.kind === 'user') {
+    const frame = readAgentFrame(entry.text);
     return {
       ...entry,
+      from: frame?.from ?? null,
+      text: frame?.body ?? entry.text,
       isLatestDelivery: isLatestDeliveryEntry(entry, entries),
     };
   }
@@ -1274,20 +1278,27 @@ function isInsideBand(box: DOMRect, band: Band): boolean {
 }
 
 // The text a copy reads from a stop: a message's or notice's, or a pending row's
-// message; null on a stop that gives nothing.
+// message, a framed message's body without its frame line; null on a stop that
+// gives nothing.
 function stopText(stop: EntryListStop): string | null {
   if (stop.kind === 'queued') {
-    return stop.message.text;
+    return messageBody(stop.message.text);
   }
   if (stop.kind === 'activity') {
     return null;
   }
   const { entry } = stop;
-  return entry.kind === 'user' ||
-    entry.kind === 'assistant' ||
-    entry.kind === 'notice'
+  if (entry.kind === 'user') {
+    return messageBody(entry.text);
+  }
+  return entry.kind === 'assistant' || entry.kind === 'notice'
     ? entry.text
     : null;
+}
+
+// `text` without the frame line another session's agent opened it with.
+function messageBody(text: string): string {
+  return readAgentFrame(text)?.body ?? text;
 }
 
 // A block's source lines from its mark: zero-based, `end` exclusive.
@@ -1374,8 +1385,10 @@ function queuedInput(
   message: QueuedMessage,
   skipKey: string,
 ): QueuedMessageInput {
+  const frame = readAgentFrame(message.text);
   return {
-    text: message.text,
+    from: frame?.from ?? null,
+    text: frame?.body ?? message.text,
     imageCount: message.images.length,
     sent: message.sentEntryId !== null,
     holdReason: message.holdReason,
@@ -1388,6 +1401,7 @@ function isQueuedChanged(
   next: QueuedMessageInput,
 ): boolean {
   return (
+    last.from !== next.from ||
     last.text !== next.text ||
     last.imageCount !== next.imageCount ||
     last.sent !== next.sent ||

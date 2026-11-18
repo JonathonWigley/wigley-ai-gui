@@ -10,6 +10,7 @@ import { createListeners } from '../../../shared/listeners';
 import {
   type AgentSession,
   type ConnectedSession,
+  type OfflineAnswer,
   type OwnedSession,
   type ProjectNamer,
   type SessionInfo,
@@ -26,6 +27,7 @@ import {
   textResult,
 } from '../contract';
 import { normalizedTitle, titleProblem } from '../session-title';
+import type { OfflineCall } from './offline-calls';
 
 export interface SessionListDeps {
   randomHex: RandomHex;
@@ -45,6 +47,9 @@ export interface SessionListDeps {
   // The session's config folder as its harness resolves it; null when the app
   // runs no such harness.
   configFolder(info: SessionInfo): string | null;
+  // The sessionIds of the rows a side bar section claims; a closed selected
+  // row never passes the selection to one of them.
+  claimed(): readonly string[];
   // The label the harness `harness` shows as; when no adapter registered it,
   // `harnessLabel`'s stand-in label, else its id.
   harnessLabel(harness: string): string;
@@ -55,11 +60,23 @@ export interface SessionListDeps {
 // one disposed, once each.
 export interface SessionList extends Omit<
   SessionsMainExports,
-  'holdConnects' | 'activate'
+  'holdConnects' | 'activate' | 'offlineEnv' | 'replayCalls' | 'addHookHandler'
 > {
   // `SessionsMainExports.activate`; true when it wrote the rows or the selection.
   activate(sessionId: string): boolean;
+  // The live session `info` names, looked up in `connect`'s order: the owned
+  // session `info.rowId` names under `connect`'s join rule, else the owned
+  // session holding `info.sessionId`, else the first connected one holding it;
+  // null when none does. Connects and changes nothing.
+  sessionOf(info: SessionInfo): AgentSession | null;
   tools(): ToolDefinition[];
+  // The live contributions' offline answers merged by tool name, in
+  // contribution order.
+  offlineTable(): Record<string, OfflineAnswer>;
+  // Routes a call the relay logged while the app was closed through the normal
+  // call path, every guard seeing it `replayed`, to the owned session holding
+  // `hostSessionId`, else a connected one; rejects when no session holds it.
+  replayCall(hostSessionId: string, call: OfflineCall): Promise<ToolResult>;
   onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
   // The user's close, which every close guard must allow; with `atOnce` it
@@ -86,6 +103,7 @@ export interface SessionList extends Omit<
 interface Contribution {
   tools: ToolDefinition[];
   start(session: AgentSession): ToolSession;
+  offline: Readonly<Record<string, OfflineAnswer>>;
 }
 
 // One connected or owned session: one tool session per contribution, and each
@@ -283,7 +301,8 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // next mark; an activate clears it. `mark` and
 // `activate` log and ignore a session opened with an
 // `owner`, and a closed selected row passes the selection to the nearest row
-// with no owner, right then left, so main never selects a row with an owner.
+// with no owner that no side bar section claims (`deps.claimed`), right then
+// left, else to none, so main never selects a row with an owner.
 // `mark`, `activate`, `release` and `closeSession` write
 // only what changed; `mark`, `activate`
 // and `closeSession` log and ignore an unknown session, `release` silently
@@ -358,8 +377,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     writeSelection(row.sessionId);
   };
 
-  // The nearest row with no owner to the right takes over from a closed
-  // selected row, else the nearest to the left.
+  // The nearest row to the right with no owner and no section claiming it
+  // takes over from a closed selected row, else the nearest such row to the
+  // left, else none.
   const removeRow = (sessionId: string) => {
     const held = [...rows.all().values()];
     const position = held.findIndex((row) => row.sessionId === sessionId);
@@ -367,10 +387,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (sessionId !== selectedSessionId()) {
       return;
     }
-    const hasNoOwner = (row: SessionRow) => row.owner === null;
+    const claimed = new Set(deps.claimed());
+    const isSelectable = (row: SessionRow) =>
+      row.owner === null && !claimed.has(row.sessionId);
     const neighbour =
-      held.slice(position + 1).find(hasNoOwner) ??
-      held.slice(0, position).findLast(hasNoOwner);
+      held.slice(position + 1).find(isSelectable) ??
+      held.slice(0, position).findLast(isSelectable);
     if (neighbour === undefined) {
       writeSelection(null);
     } else {
@@ -554,6 +576,20 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
+  // The owned entry `info.rowId` names, while it has no host id, `info` has
+  // none, or the two are equal; a row id naming a connected entry, or none,
+  // finds nothing.
+  const rowJoinEntry = (info: SessionInfo): SessionEntry | undefined => {
+    const hostId = info.sessionId;
+    const rowEntry = info.rowId === null ? undefined : entries.get(info.rowId);
+    const rowHostId = rowEntry?.session.info.sessionId ?? null;
+    const isRowJoin =
+      rowEntry !== undefined &&
+      rowEntry.owned &&
+      (rowHostId === null || hostId === null || hostId === rowHostId);
+    return isRowJoin ? rowEntry : undefined;
+  };
+
   // Ends the contribution's tool session in every live entry, each whatever
   // another's `end` throws, and frees its tool names.
   const withdrawContribution = (contribution: Contribution) => {
@@ -573,15 +609,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // Asks each guard registered when the call came, in order, then calls the
   // tool's handler; `SessionsMainExports.addToolCallGuard` states the rules.
-  // `callerRefusal` returns the error refusing the caller, or null; it is asked
-  // before the guards and again after a guard wait. The ended, refusal and
-  // abort checks follow only a guard wait: with no guard the handler is called
-  // in the same tick.
+  // `replayed` goes on the call the guards see. `callerRefusal` returns the
+  // error refusing the caller, or null; it is asked before the guards and again
+  // after a guard wait. The ended, refusal and abort checks follow only a guard
+  // wait: with no guard the handler is called in the same tick.
   const routeCall = async (
     entry: SessionEntry,
     name: string,
     args: unknown,
     context: ToolCallContext,
+    replayed: boolean,
     callerRefusal: () => Error | null = () => null,
   ): Promise<ToolResult> => {
     const refusalBeforeGuards = callerRefusal();
@@ -596,6 +633,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       tool: name,
       toolUseId: context.toolUseId,
       mainAgentOnly: mainAgentOnlyByTool.get(name) ?? false,
+      replayed,
     };
     const registrations = [...toolCallGuards];
     for (const registration of registrations) {
@@ -760,14 +798,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // only clears the join, and only while this handle still holds it; its
   // calls are refused once the session moves off the host id it joined under,
   // a move during a call's guard wait included. A relay joining a session with
-  // no host id yet joins under the hello's `helloSessionId`, else under the
-  // session's first host id; its calls run while the session has none.
-  const join = (
-    entry: SessionEntry,
-    helloSessionId: string | null,
-  ): ConnectedSession => {
+  // no host id yet joins under the hello's `info.sessionId`, else under the
+  // session's first host id; its calls run while the session has none. Host
+  // fields the hello carries replace the session's in its one info object, as
+  // `setHostSessionId` changes its id; a hello with none leaves them.
+  const join = (entry: SessionEntry, info: SessionInfo): ConnectedSession => {
     const appId = entry.session.id;
-    let joinedHostId = entry.session.info.sessionId ?? helloSessionId;
+    if (info.host !== undefined) {
+      entry.session.info.host = info.host;
+    }
+    let joinedHostId = entry.session.info.sessionId ?? info.sessionId;
     const handle = Symbol(appId);
     const isTakingOver = entry.joinedBy !== null;
     entry.joinedBy = handle;
@@ -779,7 +819,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     return {
       session: entry.session,
       call: (name, args, context) =>
-        routeCall(entry, name, args, context, () => {
+        routeCall(entry, name, args, context, false, () => {
           const hostId = entry.session.info.sessionId;
           if (hostId === null) {
             return null;
@@ -821,7 +861,15 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         }
         namesInThisContribution.add(tool.name);
       }
-      const contribution: Contribution = { tools, start };
+      const offline = options?.offline ?? {};
+      for (const name of Object.keys(offline)) {
+        if (!namesInThisContribution.has(name)) {
+          throw new Error(
+            `Offline answer names the tool "${name}", which the contribution does not list`,
+          );
+        }
+      }
+      const contribution: Contribution = { tools, start, offline };
       const started = startAllOrNone(
         entries.values(),
         (entry) => contribution.start(entry.session),
@@ -855,22 +903,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     connect(info): ConnectedSession {
       const hostId = info.sessionId;
-      const rowEntry =
-        info.rowId === null ? undefined : entries.get(info.rowId);
-      const rowHostId = rowEntry?.session.info.sessionId ?? null;
-      const isRowJoin =
-        rowEntry !== undefined &&
-        rowEntry.owned &&
-        (rowHostId === null || hostId === null || hostId === rowHostId);
-      if (isRowJoin) {
-        return join(rowEntry, hostId);
+      const rowEntry = rowJoinEntry(info);
+      if (rowEntry !== undefined) {
+        return join(rowEntry, info);
       }
       const ownedEntry =
         hostId === null
           ? undefined
           : entriesHolding(hostId).find((entry) => entry.owned);
       if (ownedEntry !== undefined) {
-        return join(ownedEntry, hostId);
+        return join(ownedEntry, info);
       }
       const retiringEntry =
         hostId === null
@@ -891,7 +933,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       deps.emit('connected', { ...entry.session, owned: false });
       return {
         session: entry.session,
-        call: (name, args, context) => routeCall(entry, name, args, context),
+        call: (name, args, context) =>
+          routeCall(entry, name, args, context, false),
         end: () => end(entry),
       };
     },
@@ -1036,6 +1079,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : labelOf(entry);
     },
+    project(sessionId) {
+      return entries.get(sessionId)?.project ?? null;
+    },
+    sessionOf(info) {
+      const holders =
+        info.sessionId === null ? [] : entriesHolding(info.sessionId);
+      const entry =
+        rowJoinEntry(info) ??
+        holders.find((holder) => holder.owned) ??
+        holders[0];
+      return entry?.session ?? null;
+    },
     setTitle,
     titles(sessionId) {
       const entry = entries.get(sessionId);
@@ -1066,6 +1121,26 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       setTitle(sessionId, 'user', title);
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
+    offlineTable: () =>
+      Object.fromEntries(
+        contributions.flatMap((contribution) =>
+          Object.entries(contribution.offline),
+        ),
+      ),
+    async replayCall(hostSessionId, call) {
+      const holders = entriesHolding(hostSessionId);
+      const entry = holders.find((holder) => holder.owned) ?? holders[0];
+      if (entry === undefined) {
+        throw new Error(`No session holds host ${hostSessionId}`);
+      }
+      return routeCall(
+        entry,
+        call.tool,
+        call.arguments,
+        { toolUseId: call.toolUseId, signal: new AbortController().signal },
+        true,
+      );
+    },
     onToolsChanged: (listener) => toolsChanged.add(listener),
     state,
     endAll() {

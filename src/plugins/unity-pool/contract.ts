@@ -109,7 +109,7 @@ export const unityPoolReleaseCommand: CommandKey<
 export const unityPoolOpenCommand: CommandKey<PoolCloneArg, 'unity-pool.open'> =
   { id: 'unity-pool.open' };
 
-// The CLI's own JSON answer, or `no-cli` and `cli-failed` when it gave none. `editorOpening` is open's: true when it
+// The CLI's own JSON answer, or `no-cli`, `no-python` and `cli-failed` when it gave none. `editorOpening` is open's: true when it
 // started the editor, false when it brought a running one to the front, null for an answer without it.
 export type PoolActionResult =
   | { ok: true; pool: string; clone: number; editorOpening: boolean | null }

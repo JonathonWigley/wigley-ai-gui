@@ -13,11 +13,12 @@ import type {
   PageCommandContext,
   ToastTone,
 } from '../../../contracts/plugin';
-import type {
-  PrimerBody,
-  PrimerEntry,
-  PrimerFeature,
-  PrimerPane,
+import {
+  MAX_PRIMER_ITEMS,
+  type PrimerBody,
+  type PrimerEntry,
+  type PrimerFeature,
+  type PrimerPane,
 } from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
 import {
@@ -605,22 +606,32 @@ describe('primerCommandHandlers', () => {
     expect(focused.map(boxKey)).toEqual(['p1/task/1/comment']);
   });
 
-  it('opens the review and adds nothing from an add-item box on a task holding 20 items', () => {
-    const full = primerEntry('1', 'primer', {
-      items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+  it('opens the review and adds nothing from an add-item box whose task filled after it mounted', () => {
+    const almostFull = primerEntry('1', 'primer', {
+      items: Array.from({ length: MAX_PRIMER_ITEMS - 1 }, (_, i) =>
+        primerItem(`Item ${i}`),
+      ),
     });
-    const { run, store, primer, logs } = setup({ entries: [full] });
+    const { run, store, primer, logs } = setup({ entries: [almostFull] });
+    store.dispatch({
+      type: 'setText',
+      formId: 'p1',
+      target: newItem1.target,
+      value: 'Fill the task',
+    });
+    store.dispatch({ type: 'addItem', formId: 'p1', entryId: '1' });
     store.dispatch({
       type: 'setText',
       formId: 'p1',
       target: newItem1.target,
       value: 'Test the store',
     });
+    logs.length = 0;
 
     run('openReview', { editor: editorOf(newItem1) });
 
     expect(store.get().view).toBe('review');
-    expect(primer().entries[0].items).toHaveLength(20);
+    expect(primer().entries[0].items).toHaveLength(MAX_PRIMER_ITEMS);
     expect(logs).toEqual([expect.stringContaining('task 1'), 'review opened']);
   });
 

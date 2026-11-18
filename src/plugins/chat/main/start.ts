@@ -28,11 +28,13 @@ import {
 import { registeredProfiles } from '../../../shared/harness-profiles';
 import { isSameJson } from '../../../shared/json';
 import {
+  editableTitle,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
   sessionsSelectionSlot,
 } from '../../sessions/contract';
+import { frameAgentMessage, frameSenderName } from '../agent-frame';
 import {
   type ChatChannel,
   chatCommandsSlot,
@@ -62,7 +64,11 @@ import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript, RETURN_FIXTURE_IDENTITY } from './selftest-script';
-import { SET_HEADLESS_TOOL, setHeadlessToolSession } from './set-headless-tool';
+import {
+  SET_HEADLESS_OFFLINE,
+  SET_HEADLESS_TOOL,
+  setHeadlessToolSession,
+} from './set-headless-tool';
 import { callerGuard, createToolCallers } from './tool-callers';
 import {
   START_SESSION_TOOL,
@@ -317,10 +323,12 @@ export function createHarnessFollower(
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
-// chat's sessions, with no process), offers a drive run its fixtures, and
-// exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, a close of every session in a folder or of one
-// session, a registration of
+// chat's sessions, with no process), offers a drive run its fixtures, runs
+// `chat.sendTo`, which sends to a session it holds, framed when an agent asks,
+// and exports to other plugins a background launch, a send, clear, active time,
+// headless, unattended and sender-name reads on the sessions it holds, the agent
+// that made a tool call in one of them, a close of every session in a folder or
+// of one session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool
@@ -361,6 +369,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // Checked once per settings change, so a bad entry logs once.
     let projectSettings = api.settings().projects;
     let projects = readProjects(projectSettings, services.log);
+    // The page's list and the `projects` export's, read at each call.
+    const projectList = () => [...projects];
     const accounts = createAccounts({
       harnesses,
       send: (message, data) => api.channel.send(message, data),
@@ -394,6 +404,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       toolCallers,
       log: services.log,
       clock: services.clock,
+      randomUuid: services.randomUuid,
       sessionHost: services.sessionHost,
       projects: () => projects,
       poolProvider,
@@ -412,11 +423,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         )?.name ?? null,
     );
     namer.changed();
+    // True for a row whose stream chat reads, which names its calls' agents.
+    const readsStreamOf = (sessionId: string) =>
+      chat.activeTimeOf(sessionId) !== null;
     sessions.addToolCallGuard(
-      callerGuard({
-        callers: toolCallers,
-        owns: (sessionId) => chat.activeTimeOf(sessionId) !== null,
-      }),
+      callerGuard({ callers: toolCallers, owns: readsStreamOf }),
     );
     const preview = createChatPreview({
       sessions,
@@ -438,7 +449,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // page that is gone, and would refuse every later one.
     api.channel.handle('loaded', () => accounts.cancelRunning());
     api.channel.handle('start', (request) => chat.start(request));
-    api.channel.handle('projects', () => [...projects]);
+    api.channel.handle('projects', projectList);
     api.channel.handle('projectPastSessions', (project, profile) =>
       chat.projectPastSessions(project, profile),
     );
@@ -572,7 +583,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           chat.setHeadless(sessionId, headless),
         log: services.log,
       }),
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_HEADLESS_TOOL.name]: SET_HEADLESS_OFFLINE },
+      },
     );
     const restored = Promise.all([
       saved.load().catch((error: unknown) => {
@@ -634,12 +648,36 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         throw new Error(`chat holds no session ${sessionId}`);
       }
     };
+    const senderName = (sessionId: string) => {
+      const titles = sessions.titles(sessionId);
+      return frameSenderName(
+        titles === null ? null : editableTitle(titles),
+        sessions.label(sessionId),
+        sessionId,
+      );
+    };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
+      prepareLaunch: (request, env) => chat.prepareLaunch(request, env),
+      projects: projectList,
+      // After chat's own restore, so a restored row of the same host session
+      // is found and saving has started; the hold makes the run's relay hello
+      // join the adopted row.
+      adopt: (run) => {
+        const adopting = restored.then(() => chat.adopt(run));
+        sessions.holdConnects(adopting);
+        return adopting;
+      },
       resume: (request) => chat.resume(request),
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
+      toolCaller: (sessionId, toolUseId) =>
+        readsStreamOf(sessionId)
+          ? toolCallers.agentOf(sessionId, toolUseId)
+          : Promise.resolve(null),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      isUnattended: (sessionId) => chat.isUnattended(sessionId),
+      senderName,
       launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
       restored: () => restored,
@@ -677,6 +715,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         await ended;
       },
       addInstructions: (text) => consumer.track(chat.addInstructions(text)),
+      onInstructionsChanged: (listener) =>
+        consumer.track(chat.onInstructionsChanged(listener)),
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),
       addIdleCompactThreshold: (read) =>
         consumer.track(chat.addIdleCompactThreshold(read)),
@@ -704,7 +744,28 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       },
     });
     return {
-      commands: {},
+      commands: {
+        // Sends as chat's own send does, so it queues behind a running turn;
+        // an agent's run opens the text with the frame line naming its
+        // session. It never runs an app slash command.
+        sendTo: async ({ arg, callerSessionId }) => {
+          const { sessionId, text } = arg;
+          if (text.trim() === '') {
+            throw new Error('chat.sendTo: no text');
+          }
+          if (sessionId === callerSessionId) {
+            throw new Error('chat.sendTo: a session cannot send to itself');
+          }
+          if (!holds(sessionId)) {
+            throw new Error(`chat.sendTo: no chat session ${sessionId}`);
+          }
+          const sent =
+            callerSessionId === undefined
+              ? text
+              : frameAgentMessage(senderName(callerSessionId), text);
+          await chat.send(sessionId, { text: sent, images: [] });
+        },
+      },
       exports,
       dispose: (stop) => {
         if (stop === 'restart') {

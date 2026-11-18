@@ -172,6 +172,24 @@ describe('activity runs', () => {
       working: true,
       expected: { startedAt: 5000, endedAt: 20000 },
     },
+    {
+      given: 'a run opening a restored list at 0',
+      list: entries('tool:t1@0', 'thinking:k@0', 'assistant:a@43000'),
+      working: false,
+      expected: { startedAt: null, endedAt: 43000 },
+    },
+    {
+      given: 'a run after an untimed notice',
+      list: entries('notice:n@0', 'tool:t1@0', 'assistant:a@5000'),
+      working: false,
+      expected: { startedAt: null, endedAt: 5000 },
+    },
+    {
+      given: 'a timed run after an untimed notice',
+      list: entries('notice:n@0', 'tool:t1@5000', 'assistant:a@9000'),
+      working: false,
+      expected: { startedAt: 5000, endedAt: 9000 },
+    },
   ])(
     'listRows times a run with $given → $expected',
     ({ list, working, expected }) => {

@@ -26,8 +26,10 @@ import {
 } from '../../../shared/fake-session-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { NESTED_SESSION_ENV } from '../../../shared/session-env';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
+import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
   ProcessRunner,
   SpawnedProcess,
@@ -40,11 +42,11 @@ import {
   textResult,
 } from '../../sessions/contract';
 import {
-  CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, controlOf, userMessage } from './claude-controls';
+import { CLAUDE_IDLE_RULE } from './claude-launch';
 import {
   CANCELLED_REASON,
   CLAUDE_PERMISSION_TOOL,
@@ -151,8 +153,9 @@ function spawnedChild(
 }
 
 // A `ProcessRunner` whose `spawn` hands out `children` in order, recording each
-// spawn's arguments, folder and environment in `spawned`; `run` and
-// `startDetached` throw, since the harness never calls them.
+// spawn's arguments, folder and environment in `spawned`; `run`,
+// `startDetached` and `resolveProgram` throw, since the harness never calls
+// them.
 function childProcesses(children: ChildProcessWithoutNullStreams[]) {
   const spawned: {
     args: readonly string[];
@@ -166,6 +169,9 @@ function childProcesses(children: ChildProcessWithoutNullStreams[]) {
     },
     startDetached: () => {
       throw new Error('the harness reached processes.startDetached');
+    },
+    resolveProgram: () => {
+      throw new Error('the harness reached processes.resolveProgram');
     },
     spawn(_command, args, options) {
       spawned.push({ args, options: { cwd: options.cwd, env: options.env } });
@@ -245,6 +251,11 @@ function childHost(
     list: async () => [],
     setKeepIdleMinutes() {},
     stopAll: async () => {},
+    setPending() {},
+    listRuns: async () => [],
+    forgetRuns() {},
+    onRunStarted: () => ({ dispose() {} }),
+    onConnected: () => ({ dispose() {} }),
   };
 }
 
@@ -346,6 +357,9 @@ const initializeRequest = (requestId: string) => ({
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+const CLAUDE_NOT_FOUND =
+  'claude was not found on PATH or in ~/.local/bin; set claude-code.command';
+
 function started(
   fake = fakeChild(),
   files: Files = createMemoryFiles(),
@@ -356,7 +370,7 @@ function started(
   let uuidCount = 0;
   const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
-    command: () => '/bin/claude',
+    command: async () => ({ command: '/bin/claude', args: [] }),
     permissions: createPermissionRoute(),
     profiles: () => [],
     env: {},
@@ -512,7 +526,7 @@ function idleHarness(
   profiles: () => readonly HarnessProfile[] = () => [],
 ) {
   return createClaudeCodeHarness({
-    command: () => '/bin/claude',
+    command: async () => ({ command: '/bin/claude', args: [] }),
     permissions: createPermissionRoute(),
     profiles,
     env: { CLAUDE_CONFIG_DIR: '/c' },
@@ -1729,6 +1743,7 @@ describe('createClaudeCodeHarness', () => {
     const fake = fakeChild();
     (fake.child as { pid: number | undefined }).pid = undefined;
     const run = started(fake);
+    await settle();
 
     run.emitter.emit(
       'error',
@@ -2897,7 +2912,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       transcript,
     );
     const harness = createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command: async () => ({ command: '/bin/claude', args: [] }),
       permissions: createPermissionRoute(),
       profiles: () => [],
       env,
@@ -2938,7 +2953,7 @@ describe('createClaudeCodeHarness past sessions', () => {
     'configFolder_$profileDir_IgnoresTheAppsConfigDir',
     ({ profileDir, folder }) => {
       const harness = createClaudeCodeHarness({
-        command: () => '/bin/claude',
+        command: async () => ({ command: '/bin/claude', args: [] }),
         permissions: createPermissionRoute(),
         profiles: () => [],
         env: { CLAUDE_CONFIG_DIR: '/c' },
@@ -3004,10 +3019,14 @@ describe('createClaudeCodeHarness accounts', () => {
   function authHarness(
     children: ReturnType<typeof authChild>[],
     harnessClock = clock,
+    command: () => Promise<ProgramCandidate | null> = async () => ({
+      command: '/bin/claude',
+      args: [],
+    }),
   ) {
     const processes = childProcesses(children.map((child) => child.child));
     const harness = createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command,
       permissions: createPermissionRoute(),
       profiles: () => [],
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
@@ -3052,6 +3071,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { harness } = authHarness([child]);
 
     const status = harness.accountStatus(null);
+    await settle();
     child.emitter.emit(
       'error',
       Object.assign(new Error('spawn /bin/claude ENOENT'), { code: 'ENOENT' }),
@@ -3125,6 +3145,7 @@ describe('createClaudeCodeHarness accounts', () => {
     const { heard, events } = recordingLogIn();
 
     const process = harness.logIn(null, events);
+    await settle();
     process.cancel();
     process.cancel();
     login.emitter.emit('close', null, 'SIGTERM');
@@ -3145,10 +3166,56 @@ describe('createClaudeCodeHarness accounts', () => {
     const login = authChild();
     const { harness } = authHarness([before, login]);
 
-    harness.logIn(null, recordingLogIn().events).sendCode('abc#123');
+    const process = harness.logIn(null, recordingLogIn().events);
+    await settle();
+    process.sendCode('abc#123');
     await settle();
 
     expect(login.lines).toEqual(['abc#123']);
+  });
+
+  it('logIn_CommandNotFound_EndsWithNotFoundText', async () => {
+    const { harness, spawned } = authHarness([], clock, async () => null);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await settle();
+
+    expect(heard).toEqual([
+      ['ended', { status: null, error: CLAUDE_NOT_FOUND }],
+    ]);
+    expect(spawned).toEqual([]);
+  });
+
+  it('logIn_CommandRejects_EndsWithTheErrorText', async () => {
+    const { harness, spawned } = authHarness([], clock, async () => {
+      throw new Error('lookup broke');
+    });
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events);
+    await settle();
+
+    expect(heard).toEqual([['ended', { status: null, error: 'lookup broke' }]]);
+    expect(spawned).toEqual([]);
+  });
+
+  it('logIn_CancelBeforeSpawn_SpawnsNothing', async () => {
+    const before = authChild();
+    const login = authChild();
+    const { harness, spawned } = authHarness([before, login]);
+    const { heard, events } = recordingLogIn();
+
+    harness.logIn(null, events).cancel();
+    await settle();
+
+    expect(heard).toEqual([
+      ['ended', { status: null, error: 'Sign-in cancelled' }],
+    ]);
+    expect(spawned.map((spawn) => spawn.args)).not.toContainEqual([
+      'auth',
+      'login',
+    ]);
   });
 
   it('logIn_LinkOnStderrSplitAcrossChunks_LinksOnce', async () => {
@@ -3324,11 +3391,18 @@ describe('createClaudeCodeHarness accounts', () => {
     ]);
   });
 
+  const foundClaude = async (): Promise<ProgramCandidate | null> => ({
+    command: '/bin/claude',
+    args: [],
+  });
+
   it.each([
     {
       name: 'SpawnNotFound',
+      command: foundClaude,
       finish: async (child: ReturnType<typeof authChild>) => {
         child.setPid(undefined);
+        await settle();
         child.emitter.emit(
           'error',
           Object.assign(new Error('spawn /bin/claude ENOENT'), {
@@ -3337,30 +3411,55 @@ describe('createClaudeCodeHarness accounts', () => {
         );
       },
       reason: 'claude was not found at /bin/claude; set claude-code.command',
+      spawnCount: 1,
+    },
+    {
+      name: 'CommandNotFound',
+      command: async () => null,
+      finish: () => settle(),
+      reason: CLAUDE_NOT_FOUND,
+      spawnCount: 0,
+    },
+    {
+      name: 'CommandRejects',
+      command: async () => {
+        throw new Error('lookup broke');
+      },
+      finish: () => settle(),
+      reason: 'lookup broke',
+      spawnCount: 0,
     },
     {
       name: 'NotSignedIn',
+      command: foundClaude,
       finish: async (child: ReturnType<typeof authChild>) => {
         child.stderr.write('Not logged in\n');
         await exitWith(child, '', 1);
       },
       reason: 'exited with code 1: Not logged in',
+      spawnCount: 1,
     },
     {
       name: 'NoReport',
+      command: foundClaude,
       finish: (child: ReturnType<typeof authChild>) =>
         exitWith(child, '{}\n', 0),
       reason: 'printed no usage report',
+      spawnCount: 1,
     },
-  ])('planUsage_Fails_$name', async ({ finish, reason }) => {
-    const child = authChild();
-    const { harness } = authHarness([child]);
+  ])(
+    'planUsage_Fails_$name',
+    async ({ command, finish, reason, spawnCount }) => {
+      const child = authChild();
+      const { harness, spawned } = authHarness([child], clock, command);
 
-    const rejected = expect(harness.planUsage(null)).rejects.toThrow(reason);
-    await finish(child);
+      const rejected = expect(harness.planUsage(null)).rejects.toThrow(reason);
+      await finish(child);
 
-    await rejected;
-  });
+      await rejected;
+      expect(spawned).toHaveLength(spawnCount);
+    },
+  );
 
   it('planUsage_NoAnswer_KillsAndRejectsAfterTimeout', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -3371,6 +3470,7 @@ describe('createClaudeCodeHarness accounts', () => {
     harness.planUsage(null).catch((error: unknown) => {
       failure = error;
     });
+    await settle();
     vi.advanceTimersByTime(PLAN_USAGE_TIMEOUT_MS - 1);
     await settle();
     expect(child.signals).toEqual([]);
@@ -3411,13 +3511,17 @@ describe('createClaudeCodeHarness on the session host', () => {
       env?: Readonly<Record<string, string>>;
       paths?: Paths;
       files?: Files;
+      homeDir?: string;
       permissions?: PermissionRoute;
       log?: Log;
+      command?: () => Promise<ProgramCandidate | null>;
     } = {},
   ) {
     let uuidCount = 0;
     return createClaudeCodeHarness({
-      command: () => '/bin/claude',
+      command:
+        overrides.command ??
+        (async () => ({ command: '/bin/claude', args: [] })),
       permissions: overrides.permissions ?? createPermissionRoute(),
       profiles: () => [],
       env: overrides.env ?? {},
@@ -3425,7 +3529,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       host,
       processes: childProcesses([]),
       files: overrides.files ?? createMemoryFiles(),
-      homeDir: '/Users/u',
+      homeDir: overrides.homeDir ?? '/Users/u',
       paths: overrides.paths ?? posixPaths,
       clock: harnessClock,
       randomUuid: () => {
@@ -3481,10 +3585,11 @@ describe('createClaudeCodeHarness on the session host', () => {
       name === 'entry' ? [payload as ChatEntry] : [],
     );
 
-  it('start_SpawnsThroughTheHost', () => {
+  it('start_SpawnsThroughTheHost', async () => {
     const host = createFakeSessionHost(clock);
 
     hostHarness(host, clock).start(request, recordingEvents().events);
+    await settle();
 
     expect(host.processes[0].request).toEqual({
       id: 'p-1',
@@ -3506,12 +3611,14 @@ describe('createClaudeCodeHarness on the session host', () => {
       ],
       cwd: '/proj',
       env: { WIGLEY_SESSION_ROW: 'row-1' },
-      idleRule: {
-        key: 'type',
-        value: 'result',
-        busyStdoutValues: expect.arrayContaining(['assistant', 'stream_event']),
-        busyStdinValues: expect.arrayContaining(['user']),
-      },
+      inheritEnv: false,
+      unsetEnv: [
+        ...NESTED_SESSION_ENV,
+        'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS',
+        'WIGLEY_SESSION_ROW',
+      ],
+      stdin: [],
+      idleRule: CLAUDE_IDLE_RULE,
       droppedOutKeys: [
         ['response', 'response', 'effective'],
         ['response', 'response', 'sources'],
@@ -3522,40 +3629,164 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
+  it('start_CandidateArgs_LeadTheLaunchArgs', async () => {
+    const host = createFakeSessionHost(clock);
+
+    hostHarness(host, clock, {
+      command: async () => ({ command: '/opt/claude', args: ['--x'] }),
+    }).start(request, recordingEvents().events);
+    await settle();
+
+    const hosted = host.processes[0].request;
+    expect(hosted?.command).toBe('/opt/claude');
+    expect(hosted?.args.slice(0, 3)).toEqual(['--x', '-p', '--input-format']);
+  });
+
+  it('start_CommandNotFound_EndsWithNotFoundText', async () => {
+    const host = createFakeSessionHost(clock);
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock, { command: async () => null }).start(
+      request,
+      events,
+    );
+    await settle();
+
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: CLAUDE_NOT_FOUND }],
+    ]);
+    expect(host.processes).toEqual([]);
+  });
+
+  it('start_CommandRejects_EndsWithTheErrorText', async () => {
+    const host = createFakeSessionHost(clock);
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock, {
+      command: async () => {
+        throw new Error('lookup broke');
+      },
+    }).start(request, events);
+    await settle();
+
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: 'lookup broke' }],
+    ]);
+    expect(host.processes).toEqual([]);
+  });
+
+  // A harness on `host` whose command resolves only when `resolve` is called.
+  function heldCommandHarness(host: SessionHost) {
+    let resolve: (program: ProgramCandidate | null) => void = () => {};
+    const harness = hostHarness(host, clock, {
+      command: () =>
+        new Promise<ProgramCandidate | null>((settled) => {
+          resolve = settled;
+        }),
+    });
+    return {
+      harness,
+      resolve: () => resolve({ command: '/bin/claude', args: [] }),
+    };
+  }
+
+  it('start_KillBeforeCommandResolves_SpawnsNothing', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    const { heard, events } = recordingEvents();
+
+    held.harness.start(request, events).kill();
+    held.resolve();
+    await settle();
+
+    expect(host.processes).toEqual([]);
+    expect(heard.filter(([name]) => name === 'ended')).toEqual([
+      ['ended', { code: null, error: null }],
+    ]);
+  });
+
+  // Nothing is emitted after a detach, the queued session id included.
+  it('start_DetachBeforeCommandResolves_SpawnsNothing', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    const { sequence, events } = recordingEvents();
+
+    held.harness.start(request, events).detach();
+    held.resolve();
+    await settle();
+
+    expect(host.processes).toEqual([]);
+    expect(sequence).toEqual([]);
+  });
+
+  // The end request waits for the command, then reaches the hosted process
+  // inside the grace window and before any kill. The pending pipe's own test
+  // pins the order of the queued writes and the end.
+  it('start_EndBeforeCommandResolves_EndsInputOnTheHostedProcess', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+    let hasResolved = false;
+
+    const process = held.harness.start(request, recordingEvents().events);
+    process.send({ text: 'hi', images: [] });
+    const ending = process.end().then(() => {
+      hasResolved = true;
+    });
+    held.resolve();
+    await settle();
+
+    const [hosted] = host.processes;
+    expect(hosted.writes.at(-1)).toBe(JSON.stringify(SEND_LINE));
+    expect(hosted.inputEnded).toBe(true);
+    expect(hosted.kills).toEqual([]);
+    expect(hasResolved).toBe(false);
+    host.close(hosted.id, { code: 0, signal: null, error: null });
+    await ending;
+    expect(hasResolved).toBe(true);
+  });
+
+  it('start_WriteBeforeCommandResolves_ReplaysOnTheHostedProcess', async () => {
+    const host = createFakeSessionHost(clock);
+    const held = heldCommandHarness(host);
+
+    held.harness
+      .start(request, recordingEvents().events)
+      .send({ text: 'hi', images: [] });
+    held.resolve();
+    await settle();
+
+    expect(host.processes[0].writes).toEqual(
+      [
+        initializeRequest('wigley-1'),
+        contextUsageRequest('wigley-2'),
+        settingsRequest('wigley-3'),
+        SEND_LINE,
+      ].map((line) => JSON.stringify(line)),
+    );
+  });
+
   it.each([
     {
       name: 'start_NoSessionId_MintsPassesAndReportsIt',
       sessionId: null,
-      detaches: false,
       expected: 'uuid-1',
       reported: [['sessionId', 'uuid-1']],
     },
     {
       name: 'start_GivenSessionId_ReportsIt',
       sessionId: 's-1',
-      detaches: false,
       expected: 's-1',
       reported: [['sessionId', 's-1']],
     },
-    // Nothing is emitted after a detach, the queued session id included.
-    {
-      name: 'start_ThenDetach_ReportsNoSessionId',
-      sessionId: 's-1',
-      detaches: true,
-      expected: 's-1',
-      reported: [],
-    },
-  ])('$name', async ({ sessionId, detaches, expected, reported }) => {
+  ])('$name', async ({ sessionId, expected, reported }) => {
     const host = createFakeSessionHost(clock);
     const { sequence, events } = recordingEvents();
 
-    const agent = hostHarness(host, clock).start(
+    hostHarness(host, clock).start(
       { ...request, sessionId, resume: false },
       events,
     );
-    if (detaches) {
-      agent.detach();
-    }
     await settle();
 
     const args = host.processes[0].request?.args ?? [];
@@ -3653,6 +3884,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       permissions,
       log: (source, message) => logged.push([source, message]),
     }).start(request, recorded.events);
+    await settle();
     host.spawned('p-1', 4321);
     await settle();
     const tools = permissions.toolSession(rowSession);
@@ -3852,11 +4084,188 @@ describe('createClaudeCodeHarness on the session host', () => {
     },
   );
 
+  const preparedRequest: AgentStart = {
+    ...request,
+    rowId: 'row-7',
+    profileDir: '~/.claude-work',
+    controls: { mode: 'plan', model: 'sonnet' },
+  };
+  const APP_ENV = {
+    PATH: '/usr/bin',
+    WIGLEY_AI_GUI_ENDPOINT_DIR: '/h/.agents/wigley-ai-gui',
+    HOME: '/h',
+    CLAUDECODE: '1',
+  };
+  const OFFLINE_ENV = {
+    WIGLEY_FORMS_OFFLINE: '/h/.agents/wigley-ai-gui/offline-calls',
+  };
+  const RUN_IT = { text: 'run it', images: [] };
+
+  it('prepareRun_SameRequest_MatchesTheLiveSpawn', async () => {
+    const host = createFakeSessionHost(clock);
+    const liveHost = createFakeSessionHost(clock);
+    const overrides = { env: APP_ENV, homeDir: '/h' };
+
+    const spawn = await hostHarness(host, clock, overrides).prepareRun(
+      preparedRequest,
+      RUN_IT,
+      OFFLINE_ENV,
+    );
+    hostHarness(liveHost, clock, overrides).start(
+      preparedRequest,
+      recordingEvents().events,
+    );
+    await settle();
+
+    const live = liveHost.processes[0].request;
+    expect(spawn.command).toBe(live?.command);
+    expect(spawn.args).toEqual(live?.args);
+    expect(spawn.cwd).toBe(live?.cwd);
+    expect(spawn.unsetEnv).toEqual(live?.unsetEnv);
+    expect(spawn.idleRule).toEqual(live?.idleRule);
+    expect(spawn.droppedOutKeys).toEqual(live?.droppedOutKeys);
+    expect(live?.inheritEnv).toBe(false);
+    expect(spawn.inheritEnv).toBe(true);
+    expect(spawn.env).toEqual({
+      PATH: '/usr/bin',
+      WIGLEY_AI_GUI_ENDPOINT_DIR: '/h/.agents/wigley-ai-gui',
+      WIGLEY_FORMS_OFFLINE: '/h/.agents/wigley-ai-gui/offline-calls',
+      CLAUDE_CONFIG_DIR: '/h/.claude-work',
+      WIGLEY_SESSION_ROW: 'row-7',
+    });
+    expect(host.processes).toEqual([]);
+  });
+
+  it('prepareRun_EnvArgument_CannotOverrideHarnessValues', async () => {
+    const host = createFakeSessionHost(clock);
+
+    const spawn = await hostHarness(host, clock).prepareRun(request, RUN_IT, {
+      WIGLEY_SESSION_ROW: 'x',
+      CLAUDECODE: '1',
+    });
+
+    expect(spawn.env.WIGLEY_SESSION_ROW).toBe('row-1');
+    expect(spawn.env).not.toHaveProperty('CLAUDECODE');
+  });
+
+  it.each<{
+    label: string;
+    env: Record<string, string>;
+    configDir: string | undefined;
+    unsetCarried: string[];
+  }>([
+    {
+      label: 'an inherited config folder',
+      env: { PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/h/cfg' },
+      configDir: '/h/cfg',
+      unsetCarried: ['WIGLEY_AI_GUI_ENDPOINT_DIR'],
+    },
+    {
+      label: 'no config folder',
+      env: { PATH: '/usr/bin' },
+      configDir: undefined,
+      unsetCarried: ['WIGLEY_AI_GUI_ENDPOINT_DIR', 'CLAUDE_CONFIG_DIR'],
+    },
+  ])(
+    'prepareRun_DefaultProfile_CarriesInheritedConfigDirElseUnsetsIt: $label',
+    async ({ env, configDir, unsetCarried }) => {
+      const host = createFakeSessionHost(clock);
+
+      const spawn = await hostHarness(host, clock, { env }).prepareRun(
+        request,
+        RUN_IT,
+        {},
+      );
+
+      const carriedNames = [
+        'PATH',
+        'WIGLEY_AI_GUI_ENDPOINT_DIR',
+        'CLAUDE_CONFIG_DIR',
+      ];
+      expect(spawn.env.CLAUDE_CONFIG_DIR).toBe(configDir);
+      expect(
+        spawn.unsetEnv.filter((name) => carriedNames.includes(name)),
+      ).toEqual(unsetCarried);
+    },
+  );
+
+  it('prepareRun_StdinReplayedOnAttach_WritesNothingHoldsTheMessageAndNumbersRequestsOn', async () => {
+    const host = createFakeSessionHost(clock);
+    const spawn = await hostHarness(host, clock).prepareRun(
+      request,
+      RUN_IT,
+      {},
+    );
+    const record = host.addRunning(
+      running(logOf(spawn.stdin.map((line) => ({ dir: 'in' as const, line })))),
+    );
+    const { timeline, events } = recordingEvents();
+
+    await hostHarness(host, clock).attach(request, events);
+    await settle();
+    expect(record.writes).toEqual([]);
+    host.output('p-1', 'out', asText(lifecycle('uuid-1', 'started')));
+    await settle();
+
+    // The lifecycle line joins the turn's events entry, as every gathered event does.
+    expect(
+      entriesOf(timeline).map((entry) =>
+        entry.kind === 'user' ? [entry.id, entry.text] : [entry.id],
+      ),
+    ).toEqual([['user-1', 'run it'], ['turn-events-1']]);
+    host.output('p-1', 'out', asText(successResult('done', ['uuid-1'])));
+    await settle();
+    const requests = record.writes
+      .map((text) => JSON.parse(text) as { type: string })
+      .filter((line) => line.type === 'control_request');
+    expect(requests[0]).toEqual(contextUsageRequest('wigley-4'));
+  });
+
+  it('prepareRun_Resume_Rejects', async () => {
+    const host = createFakeSessionHost(clock);
+
+    await expect(
+      hostHarness(host, clock).prepareRun(resumeRequest, RUN_IT, {}),
+    ).rejects.toThrow('A prepared run starts a new session');
+    expect(host.processes).toEqual([]);
+  });
+
+  it.each<{ controls: Record<string, string>; error: string | null }>([
+    {
+      controls: { mode: 'bypassPermissions' },
+      error: 'Claude Code control mode has no choice bypassPermissions',
+    },
+    {
+      controls: { mode: 'plna' },
+      error: 'Claude Code control mode has no choice plna',
+    },
+    {
+      controls: { effort: 'huge' },
+      error: 'Claude Code control effort has no choice huge',
+    },
+    { controls: { model: 'claude-opus-5-5' }, error: null },
+  ])(
+    'prepareRun_ControlValue_Cases ($controls)',
+    async ({ controls, error }) => {
+      const prepared = hostHarness(
+        createFakeSessionHost(clock),
+        clock,
+      ).prepareRun({ ...request, controls }, RUN_IT, {});
+
+      if (error === null) {
+        expect((await prepared).args).toContain('claude-opus-5-5');
+      } else {
+        await expect(prepared).rejects.toThrow(error);
+      }
+    },
+  );
+
   it.each([
     {
       via: 'start',
       run: async (host: FakeSessionHost, events: AgentProcessEvents) => {
         hostHarness(host, clock).start(request, events);
+        await settle();
         host.spawned('p-1', 4321);
         await settle();
       },

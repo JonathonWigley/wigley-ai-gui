@@ -174,6 +174,7 @@ export const LIST_PICKER_SCOPES = [
   'backlog.picker',
   'notes.picker',
   'keys.picker',
+  'scheduling.picker',
 ] as const;
 
 type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
@@ -269,7 +270,12 @@ export const defaultKeymap = {
         'practice.problem',
         'practice.editor',
         'practice.console',
+        'scheduling.list',
+        'scheduling.detail',
+        'scheduling.editor',
         'scoped-agents.ask',
+        'chatroom.threads',
+        'chatroom.log',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -282,6 +288,8 @@ export const defaultKeymap = {
     { keys: '<Leader>k,', scope: 'any', command: 'settings.showMode' },
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
     { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
+    { keys: '<Leader>kt', scope: 'any', command: 'scheduling.showMode' },
+    { keys: '<Leader>kc', scope: 'any', command: 'chatroom.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
     {
       keys: '<Leader>vi',
@@ -1011,6 +1019,109 @@ export const defaultKeymap = {
       command: 'practice.importCancel',
     },
 
+    // ── Schedules ──────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'scheduling.list', command: 'scheduling.listDown' },
+    { keys: 'k', scope: 'scheduling.list', command: 'scheduling.listUp' },
+    { keys: 'gg', scope: 'scheduling.list', command: 'scheduling.listTop' },
+    { keys: 'G', scope: 'scheduling.list', command: 'scheduling.listBottom' },
+    { keys: '<CR>', scope: 'scheduling.list', command: 'scheduling.open' },
+    {
+      keys: 'l',
+      scope: 'scheduling.list',
+      command: 'scheduling.openKeepingFocus',
+    },
+    {
+      keys: 'j',
+      scope: 'scheduling.detail',
+      command: 'scheduling.historyDown',
+    },
+    { keys: 'k', scope: 'scheduling.detail', command: 'scheduling.historyUp' },
+    {
+      keys: 'gg',
+      scope: 'scheduling.detail',
+      command: 'scheduling.historyTop',
+    },
+    {
+      keys: 'G',
+      scope: 'scheduling.detail',
+      command: 'scheduling.historyBottom',
+    },
+    { keys: '<CR>', scope: 'scheduling.detail', command: 'scheduling.openRun' },
+    { keys: 'l', scope: 'scheduling.detail', command: 'scheduling.openRun' },
+    ...(['scheduling.list', 'scheduling.detail'] as const).flatMap((scope) => [
+      { keys: 'a', scope, command: 'scheduling.newTask' as const },
+      { keys: 'i', scope, command: 'scheduling.edit' as const },
+      { keys: 'p', scope, command: 'scheduling.togglePaused' as const },
+      { keys: 'r', scope, command: 'scheduling.runNow' as const },
+      { keys: 'd', scope, command: 'scheduling.remove' as const },
+      { keys: '<C-j>', scope, command: 'scheduling.lineDown' as const },
+      { keys: '<C-k>', scope, command: 'scheduling.lineUp' as const },
+      { keys: '<C-S-j>', scope, command: 'scheduling.halfPageDown' as const },
+      { keys: '<C-S-k>', scope, command: 'scheduling.halfPageUp' as const },
+    ]),
+    {
+      keys: 'j',
+      scope: 'scheduling.editor',
+      command: 'scheduling.fieldDown',
+      where: 'page',
+    },
+    {
+      keys: 'k',
+      scope: 'scheduling.editor',
+      command: 'scheduling.fieldUp',
+      where: 'page',
+    },
+    {
+      keys: '<CR>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.editField',
+      where: 'page',
+    },
+    {
+      keys: 'i',
+      scope: 'scheduling.editor',
+      command: 'scheduling.editField',
+      where: 'page',
+    },
+    {
+      keys: '<Tab>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.nextField',
+    },
+    {
+      keys: '<S-Tab>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.previousField',
+    },
+    {
+      keys: '<D-Enter>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.save',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.leaveBox',
+      where: 'box',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'scheduling.editor',
+      command: 'scheduling.cancelEdit',
+      where: 'page',
+    },
+    {
+      keys: 'y',
+      scope: 'scheduling.confirm',
+      command: 'scheduling.confirmYes',
+    },
+    { keys: 'n', scope: 'scheduling.confirm', command: 'scheduling.confirmNo' },
+    {
+      keys: '<Esc>',
+      scope: 'scheduling.confirm',
+      command: 'scheduling.confirmNo',
+    },
+
     // ── Notes ──────────────────────────────────────────────────────────────
     { keys: '<Leader>nn', scope: 'any', command: 'notes.open' },
     { keys: 'j', scope: 'notes.popup', command: 'notes.nextField' },
@@ -1080,6 +1191,26 @@ export const defaultKeymap = {
       keys: '<CR>',
       scope: 'unity-pool.panel',
       command: 'unity-pool.showHolder',
+    },
+
+    // ── Chatroom ───────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'chatroom.threads', command: 'chatroom.listDown' },
+    { keys: 'k', scope: 'chatroom.threads', command: 'chatroom.listUp' },
+    { keys: 'gg', scope: 'chatroom.threads', command: 'chatroom.listTop' },
+    { keys: 'G', scope: 'chatroom.threads', command: 'chatroom.listBottom' },
+    { keys: '<CR>', scope: 'chatroom.threads', command: 'chatroom.openThread' },
+    { keys: 'j', scope: 'chatroom.log', command: 'chatroom.logDown' },
+    { keys: 'k', scope: 'chatroom.log', command: 'chatroom.logUp' },
+    { keys: 'gg', scope: 'chatroom.log', command: 'chatroom.logTop' },
+    { keys: 'G', scope: 'chatroom.log', command: 'chatroom.logBottom' },
+    { keys: 'i', scope: 'chatroom.log', command: 'chatroom.compose' },
+    { keys: 'r', scope: 'chatroom.log', command: 'chatroom.reply' },
+    // The composer is a one-line box: Enter sends and Esc leaves it.
+    { keys: '<CR>', scope: 'chatroom.composer', command: 'chatroom.send' },
+    {
+      keys: '<Esc>',
+      scope: 'chatroom.composer',
+      command: 'chatroom.leaveComposer',
     },
 
     // ── System stats ───────────────────────────────────────────────────────
@@ -1188,6 +1319,12 @@ export const defaultKeymap = {
       keys: '<Leader>zlw',
       scope: 'any',
       command: 'workflow.openPreview',
+      where: 'page',
+    },
+    {
+      keys: '<Leader>zlr',
+      scope: 'any',
+      command: 'chatroom.preview',
       where: 'page',
     },
     {

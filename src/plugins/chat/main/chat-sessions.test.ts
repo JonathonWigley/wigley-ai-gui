@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { SlotChange } from '../../../contracts/state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
@@ -46,6 +46,7 @@ import type {
   TitleSource,
 } from '../../sessions/contract';
 import {
+  type AdoptRequest,
   chatCommandsSlot,
   chatControlsSlot,
   chatEntriesSlot,
@@ -64,6 +65,7 @@ import {
   type SendGateInput,
   type SessionCompaction,
 } from '../contract';
+import { MAX_IMAGE_BASE64 } from '../image-rules';
 import {
   ARCHIVED_SESSIONS_FILE,
   createArchivedSessions,
@@ -549,7 +551,12 @@ function setUp(
   for (const each of harnesses) {
     register(each);
   }
+  let uuidCalls = 0;
   const chat = createChatSessions({
+    randomUuid: () => {
+      uuidCalls++;
+      return `uuid-${uuidCalls}`;
+    },
     harnesses: chatHarnessesOfRegistry(registry),
     harnessLabelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
     sessions,
@@ -4080,6 +4087,50 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless('row-unknown')).toBe(false);
   });
 
+  it.each([
+    {
+      given: 'a launch with unattended: true',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: { text: 'go', images: [] },
+          unattended: true,
+        }),
+      expected: true,
+    },
+    {
+      given: 'a restored unattended row',
+      open: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, record('host-a', { unattended: true }), []);
+        return ROW_ID;
+      },
+      expected: true,
+    },
+    {
+      given: 'a plain start',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
+      expected: false,
+    },
+    {
+      given: 'an unknown id',
+      open: () => 'row-unknown',
+      expected: false,
+    },
+  ])('isUnattended reads the held flag: $given', async ({ open, expected }) => {
+    const test = setUp();
+
+    const sessionId = open(test);
+    await flush();
+
+    expect(test.chat.isUnattended(sessionId)).toBe(expected);
+  });
+
   // The flag at the last process start, whatever it was set to since.
   it.each([
     { given: 'turned on, not cleared', clears: false, expected: false },
@@ -5946,6 +5997,15 @@ describe('createChatSessions titles', () => {
       expected: [[ROW_ID, 'firstMessage', 'fix it']],
     },
     {
+      given: "a first message from another session's agent",
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, {
+          text: '[Message from the agent in session "Planner" — not typed by the user]\n run the tests',
+          images: [],
+        }),
+      expected: [[ROW_ID, 'firstMessage', 'run the tests']],
+    },
+    {
       given: 'a whitespace-only first message',
       act: (chat: ChatSessions) =>
         chat.send(ROW_ID, { text: ' \n\t ', images: [] }),
@@ -5987,6 +6047,12 @@ describe('createChatSessions titles', () => {
       given: 'a title over 200 code points',
       title: '🙂a'.repeat(150),
       expected: '🙂a'.repeat(100),
+    },
+    {
+      given: "a title framed by another session's agent",
+      title:
+        '[Message from the agent in session "Planner" — not typed by the user]\nrun the tests',
+      expected: 'run the tests',
     },
   ])(
     'resume_SetsTheRequestTitleAndSavesIt given $given',
@@ -10186,5 +10252,577 @@ describe('createChatSessions harness leave and return', () => {
     await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
       WAITING_REFUSAL,
     );
+  });
+});
+
+describe('createChatSessions prepare and adopt', () => {
+  const MESSAGE: UserMessage = { text: '  run the task', images: [] };
+  const LAUNCH = {
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+    message: MESSAGE,
+  };
+  const PLAN_HIGH = { mode: 'plan', effort: 'high' };
+  const POOL_PROJECT: ChatProject = {
+    kind: 'pool',
+    name: 'Pool Project',
+    pool: 'ng',
+    profile: null,
+  };
+  const POOL_PROVIDER: PoolProvider = {
+    folders: (pool) => (pool === 'ng' ? ['/pool/ng-1', '/pool/ng-2'] : []),
+  };
+
+  // A run of `host-run` the host started in `/w/app` under `work`, unless
+  // `fields` say otherwise.
+  function adoptRun(fields: Partial<AdoptRequest> = {}): AdoptRequest {
+    return {
+      hostSessionId: 'host-run',
+      processId: 'host-run-1-4000',
+      rowId: 'row-run',
+      projectDir: '/w/app',
+      harness: FAKE_HARNESS_ID,
+      profile: 'work',
+      headless: true,
+      unattended: true,
+      instructions: ['own'],
+      owner: 'scheduling',
+      controls: PLAN_HIGH,
+      titles: { ...NO_TITLES, firstMessage: 'run the task' },
+      ...fields,
+    };
+  }
+
+  function originsOf(test: ReturnType<typeof setUp>): string[] {
+    return test.emitted.flatMap((each) =>
+      each.event === 'sessionOpened' ? [each.data.origin] : [],
+    );
+  }
+
+  function notedOf(test: ReturnType<typeof setUp>) {
+    return test.notesAndEmits.flatMap((each) =>
+      'noted' in each ? [each.noted] : [],
+    );
+  }
+
+  it('launch_Controls_FirstStartAndLaterStartsPassThem', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    const sessionId = test.chat.launch({ ...LAUNCH, controls: PLAN_HIGH });
+    await flush();
+
+    expect(startsOf(test)[0].request.controls).toEqual(PLAN_HIGH);
+    expect(test.saved.last()?.sessions[0]).toMatchObject({
+      launchControls: PLAN_HIGH,
+      confirmedPicks: { effort: 'high' },
+    });
+    startsOf(test)[0].events.ended({ code: 0, error: null });
+    await test.chat.send(sessionId, { text: 'again', images: [] });
+    await flush();
+    expect(startsOf(test).map((start) => start.request.controls)).toEqual([
+      PLAN_HIGH,
+      PLAN_HIGH,
+    ]);
+  });
+
+  it('launch_NoControls_OpensAsBefore', async () => {
+    const test = setUp();
+
+    test.chat.launch(LAUNCH);
+
+    expect(test.chat.sessions()[0].controls).toEqual([]);
+    await flush();
+    expect(startsOf(test)[0].request.controls).toEqual({});
+  });
+
+  it.each<{ act: string; run: (chat: ChatSessions) => unknown }>([
+    {
+      act: 'launch',
+      run: (chat: ChatSessions) =>
+        chat.launch({ ...LAUNCH, controls: { mdoe: 'plan' } }),
+    },
+    {
+      act: 'prepareLaunch',
+      run: (chat: ChatSessions) =>
+        chat.prepareLaunch({ ...LAUNCH, controls: { mdoe: 'plan' } }, {}),
+    },
+  ])(
+    'launchAndPrepare_UnknownControlId_ThrowsAndOpensNothing given $act',
+    async ({ run }) => {
+      const test = setUp();
+      const ids = test.harness
+        .startControls()
+        .map((control) => control.id)
+        .join(', ');
+
+      await expect(
+        Promise.resolve().then(() => run(test.chat)),
+      ).rejects.toThrow(`Unknown control "mdoe". Controls: ${ids}.`);
+      expect(test.opened).toEqual([]);
+      expect(test.harness.processes).toEqual([]);
+      expect(test.harness.preparedRuns).toEqual([]);
+    },
+  );
+
+  it('prepareLaunch_Headless_BuildsTheStartAndOpensNothing', async () => {
+    const test = setUp({ clockNow: 4000 });
+    test.chat.restore(NOTHING_SAVED, []);
+    const savesBefore = test.saved.saves();
+    test.chat.addInstructions('global');
+    const prepareRun = vi.spyOn(test.harness, 'prepareRun');
+    const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
+
+    const prepared = await test.chat.prepareLaunch(
+      {
+        ...LAUNCH,
+        headless: true,
+        instructions: ['own'],
+        controls: { mode: 'plan' },
+      },
+      env,
+    );
+    await flush();
+
+    expect(prepareRun).toHaveBeenCalledTimes(1);
+    const [start, message, passedEnv] = prepareRun.mock.calls[0];
+    const { hostSessionId, rowId } = prepared.adopt;
+    expect(start).toEqual({
+      processId: `${hostSessionId}-1-4000`,
+      sessionId: hostSessionId,
+      resume: false,
+      projectDir: PROJECT_DIR,
+      profileDir: '~/.claude-personal',
+      controls: { mode: 'plan' },
+      instructions: ['global', 'own', HEADLESS_NOTE],
+      idleCompactMinTokens: null,
+      rowId,
+    });
+    expect(message).toBe(MESSAGE);
+    expect(passedEnv).toBe(env);
+    expect(prepared.spawn).toBe(await prepareRun.mock.results[0].value);
+    expect(prepared.adopt).toEqual({
+      hostSessionId,
+      processId: `${hostSessionId}-1-4000`,
+      rowId,
+      projectDir: PROJECT_DIR,
+      harness: FAKE_HARNESS_ID,
+      profile: 'personal',
+      headless: true,
+      unattended: false,
+      instructions: ['own'],
+      owner: null,
+      controls: { mode: 'plan' },
+      titles: { ...NO_TITLES, firstMessage: 'run the task' },
+    });
+    expect(test.opened).toEqual([]);
+    expect(test.harness.processes).toEqual([]);
+    expect(test.saved.saves()).toBe(savesBefore);
+  });
+
+  it('prepareLaunch_TwoCalls_FreshIds', async () => {
+    const test = setUp();
+
+    const prepared = [
+      await test.chat.prepareLaunch(LAUNCH, {}),
+      await test.chat.prepareLaunch(LAUNCH, {}),
+    ];
+    const ids = prepared.flatMap(({ adopt }) => [
+      adopt.hostSessionId,
+      adopt.rowId,
+      adopt.processId,
+    ]);
+
+    expect(new Set(ids).size).toBe(6);
+  });
+
+  it('prepareLaunch_PoolProject_StartsInTheLowestClone', async () => {
+    const test = setUp({
+      projects: [POOL_PROJECT],
+      poolProvider: POOL_PROVIDER,
+    });
+
+    const prepared = await test.chat.prepareLaunch(
+      { project: POOL_PROJECT.name, profile: 'personal', message: MESSAGE },
+      {},
+    );
+
+    expect(test.harness.preparedRuns[0].request.projectDir).toBe('/pool/ng-1');
+    expect(prepared.adopt.projectDir).toBe('/pool/ng-1');
+  });
+
+  it.each([
+    {
+      refusal: 'an image over the cap',
+      options: {},
+      target: { projectDir: PROJECT_DIR },
+      profile: 'personal',
+      images: [
+        { mediaType: 'image/png', data: 'A'.repeat(MAX_IMAGE_BASE64 + 1) },
+      ],
+    },
+    {
+      refusal: 'an unknown profile',
+      options: {},
+      target: { projectDir: PROJECT_DIR },
+      profile: 'nobody',
+      images: [],
+    },
+    {
+      refusal: 'an unknown project',
+      options: { projects: [POOL_PROJECT], poolProvider: POOL_PROVIDER },
+      target: { project: 'Nope' },
+      profile: 'personal',
+      images: [],
+    },
+    {
+      refusal: "another profile than the project's",
+      options: {
+        projects: [{ ...POOL_PROJECT, profile: 'work' }],
+        poolProvider: POOL_PROVIDER,
+      },
+      target: { project: POOL_PROJECT.name },
+      profile: 'personal',
+      images: [],
+    },
+    {
+      refusal: 'no pool provider',
+      options: { projects: [POOL_PROJECT] },
+      target: { project: POOL_PROJECT.name },
+      profile: 'personal',
+      images: [],
+    },
+    {
+      refusal: 'a pool with no clones',
+      options: {
+        projects: [POOL_PROJECT],
+        poolProvider: { folders: () => [] },
+      },
+      target: { project: POOL_PROJECT.name },
+      profile: 'personal',
+      images: [],
+    },
+  ])(
+    'prepareLaunch_RefusedTarget_RejectsAsLaunchThrows given $refusal',
+    async ({ options, target, profile, images }) => {
+      const test = setUp(options);
+      const request = {
+        ...target,
+        profile,
+        message: { text: 'run', images },
+      };
+      let launchError = '';
+      try {
+        test.chat.launch(request);
+      } catch (error) {
+        launchError = (error as Error).message;
+      }
+
+      expect(launchError).not.toBe('');
+      await expect(test.chat.prepareLaunch(request, {})).rejects.toThrow(
+        launchError,
+      );
+      expect(test.opened).toEqual([]);
+      expect(test.harness.preparedRuns).toEqual([]);
+    },
+  );
+
+  it('adopt_ProcessRunsHere_AttachesUnderTheRowId', async () => {
+    const run = adoptRun();
+    const test = setUp({
+      sessionHost: {
+        list: () =>
+          Promise.resolve([
+            {
+              id: run.processId,
+              startedAt: 4000,
+              running: true,
+              current: true,
+            },
+          ]),
+      },
+    });
+    test.chat.restore(NOTHING_SAVED, []);
+    test.harness.scriptAttach(run.processId, {
+      outcome: 'process',
+      turns: 0,
+      replay() {},
+    });
+    const savesBefore = test.saved.saves();
+
+    const sessionId = await test.chat.adopt(run);
+
+    expect(sessionId).toBe('row-run');
+    expect(test.saved.saves()).toBeGreaterThan(savesBefore);
+    expect(test.saved.last()?.sessions).toEqual([
+      expect.objectContaining({ hostSessionId: 'host-run', rowId: 'row-run' }),
+    ]);
+    expect(test.openOptions).toEqual([
+      { select: false, rowId: 'row-run', owner: 'scheduling' },
+    ]);
+    expect(test.titlesOf('row-run')).toEqual(run.titles);
+    expect(test.harness.attachCalls).toHaveLength(1);
+    expect(test.harness.attachCalls[0]).toMatchObject({
+      processId: run.processId,
+      resume: false,
+      controls: PLAN_HIGH,
+      rowId: 'row-run',
+    });
+    expect(attachedOf(test)).toHaveLength(1);
+    expect(startsOf(test)).toEqual([]);
+    expect(originsOf(test)).toEqual(['launched']);
+  });
+
+  it.each([
+    {
+      given: 'a process the host does not list',
+      hosted: [],
+      profile: 'work',
+      reads: true,
+      notices: [],
+    },
+    {
+      given: 'a process the host lists not running',
+      hosted: [hostedP1({ id: 'host-run-1-4000', running: false })],
+      profile: 'work',
+      reads: true,
+      notices: [],
+    },
+    {
+      given: 'a process running in an older host',
+      hosted: [hostedP1({ id: 'host-run-1-4000', current: false })],
+      profile: 'work',
+      reads: false,
+      notices: [{ kind: 'notice', tone: 'info', text: OLDER_HOST_NOTICE }],
+    },
+    {
+      given: 'a profile chat does not know',
+      hosted: [],
+      profile: 'gone',
+      reads: false,
+      notices: [
+        {
+          kind: 'notice',
+          tone: 'error',
+          text: expect.stringContaining('gone'),
+        },
+      ],
+    },
+  ])(
+    'adopt_ProcessGone_RestsAndReadsItsHistory given $given',
+    async ({ hosted, profile, reads, notices }) => {
+      const test = setUp({
+        sessionHost: { list: () => Promise.resolve(hosted) },
+      });
+      const history = vi
+        .spyOn(test.harness, 'history')
+        .mockResolvedValue([toolEntry('main', 'Bash', BASH_CALL.input)]);
+
+      const sessionId = await test.chat.adopt(adoptRun({ profile }));
+
+      expect(sessionId).toBe('row-run');
+      expect(test.harness.attachCalls).toEqual([]);
+      expect(test.chat.sessions()[0].running).toBe(false);
+      expect(noticesOf(test)).toEqual(notices);
+      expect(history).toHaveBeenCalledTimes(reads ? 1 : 0);
+      expect(notedOf(test)).toEqual(
+        reads ? [['row-run', 'tu-main', MAIN_AGENT_ID]] : [],
+      );
+    },
+  );
+
+  it('adopt_ControlTheHarnessNoLongerDeclares_OpensTheRowAndLogsTheDroppedId', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    const sessionId = await test.chat.adopt(
+      adoptRun({ controls: { ...PLAN_HIGH, gone: 'x' } }),
+    );
+    await test.chat.send(sessionId, { text: 'next', images: [] });
+    await flush();
+
+    expect(sessionId).toBe('row-run');
+    expect(test.logged).toContain(
+      'session host-run: control "gone" dropped, the harness no longer declares it',
+    );
+    expect(startsOf(test).map(({ request }) => request.controls)).toEqual([
+      PLAN_HIGH,
+    ]);
+  });
+
+  it('adopt_HostListRejects_RestsUnheld', async () => {
+    const test = setUp({
+      sessionHost: { list: () => Promise.reject(new Error('no host')) },
+    });
+
+    const sessionId = await test.chat.adopt(adoptRun());
+
+    expect(sessionId).toBe('row-run');
+    expect(test.chat.sessions()[0].running).toBe(false);
+    await expect(
+      test.chat.send(sessionId, { text: 'next', images: [] }),
+    ).rejects.toThrow('no host');
+    expect(startsOf(test)).toEqual([]);
+  });
+
+  it('adopt_RestingRowSent_ResumesWithTheRunsControls', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    const sessionId = await test.chat.adopt(adoptRun());
+
+    await test.chat.send(sessionId, { text: 'next', images: [] });
+    await flush();
+
+    expect(
+      startsOf(test).map(({ request }) => [request.resume, request.controls]),
+    ).toEqual([[true, PLAN_HIGH]]);
+    expect(test.saved.last()?.sessions[0]).toMatchObject({
+      headless: true,
+      unattended: true,
+      instructions: ['own'],
+      owner: 'scheduling',
+    });
+  });
+
+  it.each([
+    {
+      given: 'a row chat holds',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.chat.restore(
+          { sessions: [record('host-run')], selectedHostSessionId: null },
+          [],
+        ),
+      duringList: false,
+      expected: 'row-1',
+      noted: [],
+    },
+    {
+      given: 'a resting restored row whose history holds a main-agent call',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        vi.spyOn(test.harness, 'history').mockResolvedValue([
+          toolEntry('main', 'Bash', BASH_CALL.input),
+        ]);
+        test.chat.restore(
+          {
+            sessions: [record('host-run', { sent: true })],
+            selectedHostSessionId: null,
+          },
+          [],
+        );
+      },
+      duringList: false,
+      expected: 'row-1',
+      noted: [['row-1', 'tu-main', MAIN_AGENT_ID]],
+    },
+    {
+      given: 'a relay row',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.chat.recordOpenHostId(connected('row-relay', 'host-run')),
+      duringList: false,
+      expected: 'row-relay',
+      noted: [],
+    },
+    {
+      given: 'a relay row opened during the host list',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.chat.recordOpenHostId(connected('row-relay', 'host-run')),
+      duringList: true,
+      expected: 'row-relay',
+      noted: [],
+    },
+  ])(
+    'adopt_HostIdOpen_ResolvesToThatRowAndOpensNothing given $given',
+    async ({ arrange, duringList, expected, noted }) => {
+      let onList = () => {};
+      const test = setUp({
+        sessionHost: {
+          list: () => {
+            onList();
+            return Promise.resolve([]);
+          },
+        },
+      });
+      if (duringList) {
+        onList = () => arrange(test);
+      } else {
+        arrange(test);
+      }
+      const opensBefore = test.opened.length;
+
+      const { sessionId, notedAtResolve } = await test.chat
+        .adopt(adoptRun())
+        .then((id) => ({ sessionId: id, notedAtResolve: notedOf(test) }));
+
+      expect(sessionId).toBe(expected);
+      expect(notedAtResolve).toEqual(noted);
+      expect(test.opened).toHaveLength(opensBefore);
+      expect(test.logged).toContain(
+        `session host-run already open as ${expected}`,
+      );
+    },
+  );
+
+  it('adopt_AfterDetachAll_RejectsAndOpensNothing', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    await test.chat.detachAll();
+
+    await expect(test.chat.adopt(adoptRun())).rejects.toThrow(
+      'session host-run not adopted: chat is stopping',
+    );
+    expect(test.opened).toEqual([]);
+  });
+
+  it('prepareLaunch_AfterDetachAll_ReturnsASpec', async () => {
+    const test = setUp();
+    await test.chat.detachAll();
+
+    const prepared = await test.chat.prepareLaunch(LAUNCH, {});
+
+    expect(prepared.spawn).toBe(test.harness.preparedRuns[0].spawn);
+    expect(test.opened).toEqual([]);
+  });
+
+  it.each([
+    { given: 'listeners that return', throws: false },
+    { given: 'a listener that throws, added first', throws: true },
+  ])(
+    'onInstructionsChanged_RegisterAndDispose_CallsEachLiveListener given $given',
+    ({ throws }) => {
+      const test = setUp();
+      const calls: string[] = [];
+      if (throws) {
+        test.chat.onInstructionsChanged(() => {
+          throw new Error('re-plan failed');
+        });
+      }
+      const first = test.chat.onInstructionsChanged(() => calls.push('first'));
+      test.chat.onInstructionsChanged(() => calls.push('second'));
+
+      const registration = test.chat.addInstructions('note');
+      expect(calls).toEqual(['first', 'second']);
+      first.dispose();
+      registration.dispose();
+      registration.dispose();
+
+      expect(calls).toEqual(['first', 'second', 'second']);
+      expect(
+        test.logged.filter(
+          (line) => line === 'instructions listener threw: re-plan failed',
+        ),
+      ).toHaveLength(throws ? 2 : 0);
+    },
+  );
+
+  it('adopt_RowIdHeld_OpensOnANewRow', async () => {
+    const test = setUp();
+    test.holdRowId('row-run');
+
+    const sessionId = await test.chat.adopt(adoptRun());
+
+    expect(sessionId).toBe('row-1');
+    expect(test.chat.sessions().map((session) => session.sessionId)).toEqual([
+      'row-1',
+    ]);
   });
 });

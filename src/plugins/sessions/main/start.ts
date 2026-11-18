@@ -28,6 +28,7 @@ import {
   type SessionsChannel,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsClaimedSlot,
   sessionsRowsSlot,
   sessionsSelectionSlot,
 } from '../contract';
@@ -36,12 +37,22 @@ import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
+import {
+  OFFLINE_CALLS_FOLDER,
+  OFFLINE_ENV,
+  replayOfflineCalls,
+} from './offline-calls';
 import { createEndpointWriter, endedDriveRunLaunch } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
+import { createHookRoutes, type HookRoutes } from './relay/hook-routes';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
-import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
+import {
+  SET_SESSION_TITLE_OFFLINE,
+  SET_SESSION_TITLE_TOOL,
+  startTitleTool,
+} from './title-tool';
 
 type SessionsApi = MainApi<
   typeof sessionsManifest,
@@ -90,6 +101,7 @@ export function harnessToolUseId(
 }
 
 function createList(api: SessionsApi): SessionList {
+  const claimed = api.state.read(sessionsClaimedSlot);
   const list = createSessionList({
     randomHex: api.services.randomHex,
     clock: api.services.clock,
@@ -102,6 +114,7 @@ function createList(api: SessionsApi): SessionList {
     projectName: createOriginRepoNames(api.services.git),
     hostSessionName: (info) => hostSessionName(api, info),
     configFolder: (info) => configFolder(api, info),
+    claimed: () => claimed.get() ?? [],
     harnessLabel: (harness) =>
       harnessLabel(registeredInfos(api.services.agentHarnesses), harness),
   });
@@ -121,9 +134,15 @@ function createList(api: SessionsApi): SessionList {
 
 // Opens the channel relay.py connects to, each relay connecting one session
 // served the live tool list under the platform's relay server name, its calls'
-// tool-use ids read by its harness. A relay that finds the app gone starts
-// it again, except a drive run's, which stays ended and names the run's home.
-function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
+// tool-use ids read by its harness, and each hook call answered by `routes`. A
+// relay that finds the app gone starts it again, except a drive run's, which
+// stays ended and names the run's home.
+function openRelay(
+  api: SessionsApi,
+  list: SessionList,
+  hold: ConnectHold,
+  routes: HookRoutes,
+) {
   const channel = channelPath(
     api.services.platform.os,
     api.services.homeDir,
@@ -145,6 +164,7 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
             meta,
           ),
       }),
+    hook: (name, info, request) => routes.answer(name, info, request),
     log: api.services.log,
   });
   const endpoint: RelayEndpoint = {
@@ -268,15 +288,18 @@ export function addDriveActions(
   });
 }
 
-// Owns agent sessions: the relay they connect through, the tools other
+// Owns agent sessions: the relay they connect through, the hook calls it
+// answers with the handlers other plugins register, the tools other
 // plugins contribute for them and its own `set_session_title`, their sidebar
 // rows and the project each row groups under, from the namers other plugins
 // register, and the sessions layouts.
 // A contribution reaches every live session, and each one added queues a
-// rewrite of the endpoint files, so a relay that starts the app finds every
-// tool listed. A disposal and a stop leave the files, which a relay serves
-// while the app is away; a stop waits for the queued writes. A failed write is
-// logged and keeps the contribution. Each dependent gets
+// rewrite of the endpoint files, the offline table among them, so a relay that
+// starts the app, or answers while it is closed, finds every tool listed. A
+// disposal and a stop leave the files, which a relay serves while the app is
+// away; a stop waits for the queued writes. A failed write is logged and keeps
+// the contribution. `replayCalls` routes a calls file the relay wrote while the
+// app was closed through the session list's normal call path. Each dependent gets
 // its own view of the exports, which files its registrations under it. In the
 // self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
@@ -287,23 +310,31 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const list = createList(api);
     const hold = createConnectHold(api.services.timers, api.services.log);
-    const opened =
-      api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
-    const endpointWriter = createEndpointWriter(
-      api.services.files,
-      api.services.paths,
-      appEndpointDir(
-        api.services.paths,
-        api.services.homeDir,
-        api.services.appInstance.id,
-      ),
+    const routes = createHookRoutes(
+      (info) => list.sessionOf(info),
       api.services.log,
     );
+    const opened =
+      api.services.runMode === 'selfTest'
+        ? null
+        : openRelay(api, list, hold, routes);
+    const { files, paths, log } = api.services;
+    const endpointDir = appEndpointDir(
+      paths,
+      api.services.homeDir,
+      api.services.appInstance.id,
+    );
+    const offlineCallsFolder = paths.join(endpointDir, OFFLINE_CALLS_FOLDER);
+    const endpointWriter = createEndpointWriter(files, paths, endpointDir, log);
     const exports: SessionsMainExports = {
       contributeTools(tools, start, options) {
         const contribution = list.contributeTools(tools, start, options);
         if (opened !== null) {
-          endpointWriter.write(opened.endpoint, list.tools());
+          endpointWriter.write(
+            opened.endpoint,
+            list.tools(),
+            list.offlineTable(),
+          );
         }
         return contribution;
       },
@@ -313,14 +344,29 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       activate: (sessionId) => list.activate(sessionId),
       release: (sessionId) => list.release(sessionId),
       label: (sessionId) => list.label(sessionId),
+      project: (sessionId) => list.project(sessionId),
       addCloseGuard: (mayClose, cancelHold) =>
         list.addCloseGuard(mayClose, cancelHold),
       addToolCallGuard: (guard) => list.addToolCallGuard(guard),
+      addHookHandler: (name, handler) => routes.add(name, handler),
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
       addProjectNamer: (namer) => list.addProjectNamer(namer),
       holdConnects: (until) => hold.hold(until),
+      offlineEnv: (): Readonly<Record<string, string>> =>
+        opened === null ? {} : { [OFFLINE_ENV]: offlineCallsFolder },
+      replayCalls: (hostSessionId) =>
+        replayOfflineCalls(
+          {
+            files,
+            paths,
+            folder: offlineCallsFolder,
+            route: (call) => list.replayCall(hostSessionId, call),
+            log,
+          },
+          hostSessionId,
+        ),
     };
     exports.contributeTools(
       [SET_SESSION_TITLE_TOOL],
@@ -329,7 +375,10 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         titles: exports.titles,
         maxLength: () => titleLimit(api.settings().titleMaxLength),
       }),
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_SESSION_TITLE_TOOL.name]: SET_SESSION_TITLE_OFFLINE },
+      },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, exports, (listener) =>

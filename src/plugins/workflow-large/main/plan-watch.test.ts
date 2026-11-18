@@ -436,6 +436,86 @@ describe('createPlanWatch', () => {
     },
   );
 
+  // Breaks if a missed burst on a copy folder does not read again, one on
+  // git's folder does not list again, or a list reopens a copy watch it keeps,
+  // which on macOS sets off another missed burst.
+  it.each([
+    {
+      on: 'a copy folder',
+      folder: PLAN_DIR,
+      act: async (
+        _checkouts: string[],
+        writeAt: ReturnType<typeof clockedFiles>['writeAt'],
+      ) => writeAt(30, PLAN_FILE, PLAN_ALL),
+      opened: [PLAN_DIR, GIT_FOLDER],
+      signals: [changed(PLAN_ONE), changed(PLAN_ALL)],
+    },
+    {
+      on: 'git folder',
+      folder: GIT_FOLDER,
+      act: async (
+        checkouts: string[],
+        _writeAt: ReturnType<typeof clockedFiles>['writeAt'],
+      ) => {
+        checkouts.push('/w');
+      },
+      opened: [PLAN_DIR, GIT_FOLDER, W_PLAN_DIR],
+      signals: [changed(PLAN_ONE), changed(PLAN_TWO)],
+    },
+    {
+      on: 'worktrees folder',
+      folder: WORKTREES_FOLDER,
+      // The folder exists before the follow, so its watch is open.
+      seeded: `${WORKTREES_FOLDER}/old/gitdir`,
+      act: async (
+        checkouts: string[],
+        _writeAt: ReturnType<typeof clockedFiles>['writeAt'],
+      ) => {
+        checkouts.push('/w');
+      },
+      opened: [PLAN_DIR, GIT_FOLDER, WORKTREES_FOLDER, W_PLAN_DIR],
+      signals: [changed(PLAN_ONE), changed(PLAN_TWO)],
+    },
+  ])(
+    'onMissed_WriteTheWatchDidNotReport_ReadsAgain ($on)',
+    async ({
+      folder,
+      seeded,
+      act,
+      opened: expectedOpened,
+      signals: expected,
+    }) => {
+      const { files, writeAt } = clockedFiles();
+      await files.write(`${GIT_FOLDER}/HEAD`, 'ref: refs/heads/main');
+      if (seeded !== undefined) {
+        await files.write(seeded, '/old/.git');
+      }
+      await writeAt(10, PLAN_FILE, PLAN_ONE);
+      await writeAt(20, `${W_PLAN_DIR}/plan.md`, PLAN_TWO);
+      const opened: string[] = [];
+      const missedOn = new Map<string, () => void>();
+      const deafFiles: WatchDeps['files'] = {
+        ...files,
+        watch: (watched, _onChange, options) => {
+          opened.push(watched);
+          missedOn.set(watched, () => options?.onMissed?.());
+          return { dispose: () => undefined };
+        },
+      };
+      const checkouts = ['/r'];
+      const { watch, signals } = startWatch(deafFiles, cloneGit(checkouts));
+      watch.follow('s1', followed(PLAN_DIR));
+      await settled();
+
+      await act(checkouts, writeAt);
+      missedOn.get(folder)?.();
+      await settled();
+
+      expect(signals).toEqual(expected);
+      expect(opened.sort()).toEqual([...expectedOpened].sort());
+    },
+  );
+
   // `failed` is the folder whose watcher error the log names, null for none.
   it.each([
     {
@@ -679,5 +759,30 @@ describe('createPlanWatch', () => {
     await settled();
 
     expect(signals).toEqual([changed(PLAN_TICKED)]);
+  });
+});
+
+describe('createPlanWatch worktree list failures', () => {
+  it('logs a failing worktree list once per clone across follows and checks', async () => {
+    const files = createMemoryFiles();
+    await files.write('/r/docs/features/f/plan-a/plan.md', PLAN);
+    const git: WatchDeps['git'] = {
+      ...cloneGit(['/r']),
+      worktrees: async () => {
+        throw new Error('git worktree exited 128');
+      },
+    };
+    const { watch, logs } = startWatch(files, git);
+
+    watch.follow('s1', followed('/r/docs/features/f/plan-a'));
+    await settled();
+    watch.check('s1');
+    await settled();
+
+    expect(
+      logs.filter((line) => line.startsWith('git worktree list failed')),
+    ).toEqual([
+      "git worktree list failed in /r: git worktree exited 128; reading the plan's own copy only",
+    ]);
   });
 });

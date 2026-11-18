@@ -136,6 +136,7 @@ does.
 | `backlog` | `backlog.layout` | the table and its filters, rows and empty text, the review pane with its item and commits, the chunk strip with its chunk and New chunk cards, and the picker rows |
 | `practice` | `practice.layout` | the problem list (its pane, header, rows and empty state) in the side bar; the problem column's three stacked panes (problem, editor, console) and the no-problem state; the problem pane's tabs (description, submissions with their rows and a submission's code, notes, solution), the console's Testcase and Result tabs, a case's result, the Solution confirm body (`confirmBody`), the import dialog's body (`importBox`), and the frame of both dialogs (`dialogFrame`) |
 | `scoped-agents` | `scoped-agents.layout` | the agent pane's ask box (`askBox`), drawn for Practice's interviewer and Backlog's assistant |
+| `scheduling` | `scheduling.layout` | Schedules mode: the task list in the side bar (the "+ New task" row, a row per task), the details sheet (its notices, the task's details and buttons or the empty state, its history rows), the task editor and its field rows, the picker rows, and the confirm's frame (`dialogFrame`) and body (`confirmBody`). The Scheduled runs section in the Sessions side bar draws through `sessions.layout` |
 | `settings` | `settings.layout` | the section list, the setting, plugin, key, leader and advanced rows, the Leader menu's panes, group, item and add rows, the Keybindings section's filter chips, the problem line, the picker rows; a setting row's `control` is the string id of its kind, which a layout may ignore, as the app draws the row's box or picker |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections and every plugin's section (`addSection`), their project groups and the session rows in them, each session's tab strip, the session popup (`popup`) and its hidden bar (`popupBar`), where other plugins' row and bar parts sit, the rename dialog, the split picker's rows |
@@ -143,6 +144,7 @@ does.
 | `session-stash` | `session-stash.layout` | the stash dialog's frame (`dialogFrame`) and body (`noteDialog`): the session's name, the note box and the hint |
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
+| `chatroom` | `chatroom.layout` | Chatroom mode's side bar (`sideBar`: the rooms and their threads), the room's board with the shown thread's heading (`board`), each message of the log (`message`) and the composer (`composer`); the unread badge under each session row (`rowBadge`) |
 | `system-stats` | `system-stats.layout` | the right-bar system stats panel: its section header, the five meter rows with their sparklines, and the process list's group and process rows |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `live-view` | `live-view.layout` | the session hub's Live section: its line and button above the stream, and the place the stream's video goes |
@@ -170,6 +172,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |
 | `Space z l m` | audio picker: a sample picker of three moments, every play format, and a file that will not decode |
+| `Space z l r` | chatroom: a sample room in Chatroom mode, its board of two sessions and a claim, and a thread holding a message of every post and entry kind, one question to the user still open; the composer posts nothing |
 
 ## The primer's columns
 

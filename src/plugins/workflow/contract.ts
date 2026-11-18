@@ -10,7 +10,12 @@ import type {
   PluginManifest,
 } from '../../contracts/plugin';
 import type { KeyedSlotKey } from '../../contracts/state';
-import type { RowActivity } from '../sessions/contract';
+import { HEADLESS_NOTE } from '../chat/contract';
+import {
+  type OfflineAnswer,
+  type RowActivity,
+  textResult,
+} from '../sessions/contract';
 import type {
   ChipInput,
   CompleteLayout,
@@ -296,6 +301,9 @@ export interface WorkflowMainExports {
   ): void;
   flowOf(sessionId: string): SessionFlow | null;
   flows(): readonly SessionFlow[];
+  // True when the flow's stage is one with `finishes` in the registered
+  // workflow holding the flow; false for a flow with no such workflow.
+  stageFinishes(flow: SessionFlow): boolean;
   // Replaces the current workflow's state with no fold, keeping the save time.
   setState(sessionId: string, state: unknown): void;
   observe(observer: WorkflowObserver): Disposable;
@@ -445,3 +453,13 @@ export const workflowPageKey: DependencyKey<
 // deletes the one flow it touched.
 export const workflowFlowsSlot: KeyedSlotKey<SessionFlow, 'main', 'workflow'> =
   { id: 'workflow.flows', process: 'main', kind: 'keyed' };
+
+// The answer of set_workflow_step, set_workflow_checklist and set_workflow_plan
+// while the app is closed: the call is recorded and replays onto its row when
+// the app adopts the run, and the run carries on headless.
+export const WORKFLOW_OFFLINE_ANSWER: OfflineAnswer = {
+  result: textResult(
+    `Recorded. The app applies it when it opens.\n\n${HEADLESS_NOTE}`,
+  ),
+  replay: true,
+};

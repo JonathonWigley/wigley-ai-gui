@@ -4,6 +4,7 @@ import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
+import { programNotFoundMessage } from '../../../shared/program-lookup';
 import {
   type IndexEntry,
   type IndexHarness,
@@ -27,14 +28,14 @@ const NO_FOLDER_MESSAGE = 'No project folder is known for this session';
 type ScriptCommand = 'build' | 'session' | 'context';
 
 // A script run's stdout, or the message the view shows when it failed;
-// `isScriptMissing` when no `docs_index.py` was found to run.
+// `isUnrunnable` when no `docs_index.py` or no Python was found to run.
 type ScriptOutcome =
   | { ok: true; stdout: string }
-  | { ok: false; message: string; isScriptMissing: boolean };
+  | { ok: false; message: string; isUnrunnable: boolean };
 
 export interface IndexSourcesDeps {
   files: Files;
-  processes: Pick<ProcessRunner, 'run'>;
+  processes: Pick<ProcessRunner, 'run' | 'resolveProgram'>;
   homeDir: string;
   // Read at each index run.
   scriptPath(): string;
@@ -214,7 +215,8 @@ export interface SessionSourceSpec {
 
 // A fresh index for one session on each load. A Claude session whose
 // `session` run fails, as before its transcript exists, falls back to
-// `context` on its project folder, unless no script was found to run.
+// `context` on its project folder, unless no script or no Python was found to
+// run.
 export function createSessionSource(
   deps: IndexSourcesDeps,
   sessionId: string,
@@ -237,7 +239,7 @@ async function sessionIndex(
   }
   let outcome = await runScript(deps, run.command, [run.argument]);
   const fallbackDir = run.command === 'session' ? spec.projectDir : null;
-  if (!outcome.ok && !outcome.isScriptMissing && fallbackDir !== null) {
+  if (!outcome.ok && !outcome.isUnrunnable && fallbackDir !== null) {
     deps.log(
       `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
     );
@@ -268,8 +270,10 @@ function sessionRun(
   return null;
 }
 
-// Runs `python3 -X utf8 <script> <command> <args>`, logging what it wrote to
-// stderr. UTF-8 mode lets the script print the index's `→` to a Windows
+// Runs `<python> -X utf8 <script> <command> <args>` with the Python
+// `resolveProgram('python')` gives, its own args leading, logging what it
+// wrote to stderr. With no Python found it runs nothing and logs one `not run`
+// line. UTF-8 mode lets the script print the index's `→` to a Windows
 // console's cp1252 pipe. A failed run's message is stderr's last non-empty
 // line, where a traceback puts its cause. A run the plugin's stop ended rejects
 // the caller: it is not a failure, so nothing in main logs it and no fallback
@@ -287,11 +291,18 @@ async function runScript(
     deps.paths,
   );
   if (script === null) {
-    return { ok: false, message: NO_SCRIPT_MESSAGE, isScriptMissing: true };
+    return { ok: false, message: NO_SCRIPT_MESSAGE, isUnrunnable: true };
   }
   let result;
   try {
-    result = await deps.processes.run('python3', [
+    const python = await deps.processes.resolveProgram('python');
+    if (python === null) {
+      const message = programNotFoundMessage('python');
+      deps.log(`docs_index.py ${command} not run: ${message}`);
+      return { ok: false, message, isUnrunnable: true };
+    }
+    result = await deps.processes.run(python.command, [
+      ...python.args,
       '-X',
       'utf8',
       script,
@@ -302,7 +313,7 @@ async function runScript(
     if (isStoppedRun(error)) {
       throw error;
     }
-    return { ok: false, message: errorText(error), isScriptMissing: false };
+    return { ok: false, message: errorText(error), isUnrunnable: false };
   }
   const stderr = result.stderr.trim();
   if (result.code !== 0) {
@@ -310,7 +321,7 @@ async function runScript(
     return {
       ok: false,
       message: lastLine(stderr) ?? `docs_index.py exited ${result.code}`,
-      isScriptMissing: false,
+      isUnrunnable: false,
     };
   }
   if (stderr !== '') {

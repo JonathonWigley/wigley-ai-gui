@@ -566,6 +566,15 @@ export interface FormsChannel extends ChannelShape {
   messages: AgentFormMessages<Round, FormBody>;
 }
 
+// What a confirm asks the user: `title` heads the round, `detail` says what
+// the action does. The round's overview shows the detail's first paragraph,
+// the text before its first blank line, so that paragraph is plain prose; the
+// question's context shows the whole detail, markdown blocks included.
+export interface ConfirmRequest {
+  title: string;
+  detail: string;
+}
+
 // The main part's exports. `registerKind` throws, registering nothing, on a
 // kind whose id or wire key another registered kind holds, a wire key a round
 // field holds, a `status` that disagrees with `spec.answerable`, or a
@@ -576,10 +585,21 @@ export interface FormsChannel extends ChannelShape {
 // blank word, or card-level fields that differ from another origin's on the
 // same card; its `Disposable` retires the origin, so new rounds refuse it and
 // rounds already open keep reading it, and each change re-contributes the
-// tools.
+// tools. `confirm` asks the user Allow or Deny in a fresh round, Deny
+// recommended, in the forms session forms started for the app session
+// `sessionId`; it queues behind that session's open round. It resolves true
+// only on a submitted Allow of that round, and false on any other answer or
+// once `signal` aborts. It rejects with `no forms session for <sessionId>`
+// when that session has no live forms tool session.
 export interface FormsMainExports {
   registerKind(kind: MainItemKind): Disposable;
   registerFindingOrigin(spec: FindingOriginSpec): Disposable;
+  confirm(
+    sessionId: string,
+    request: ConfirmRequest,
+    signal: AbortSignal,
+    toolUseId: string | null,
+  ): Promise<boolean>;
 }
 
 export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {

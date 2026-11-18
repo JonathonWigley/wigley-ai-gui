@@ -52,6 +52,7 @@ export const notesManifest = definePlugin({
       label: 'remove the image or the session',
       group: 'fields',
       runsIn: 'page',
+      risky: true,
     },
     capture: { label: 'capture the window', group: 'images', runsIn: 'page' },
     sendFollowup: {
@@ -69,7 +70,12 @@ export const notesManifest = definePlugin({
       group: 'send',
       runsIn: 'page',
     },
-    discard: { label: 'discard the draft', group: 'send', runsIn: 'page' },
+    discard: {
+      label: 'discard the draft',
+      group: 'send',
+      runsIn: 'page',
+      risky: true,
+    },
     toolSelect: { label: 'select and move', group: 'markup', runsIn: 'page' },
     toolPen: { label: 'pen', group: 'markup', runsIn: 'page' },
     toolText: { label: 'text', group: 'markup', runsIn: 'page' },
@@ -85,6 +91,7 @@ export const notesManifest = definePlugin({
       label: 'yes, discard the draft',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     confirmNo: { label: 'keep the draft', group: 'confirm', runsIn: 'page' },
     pickColour: {
@@ -98,12 +105,14 @@ export const notesManifest = definePlugin({
       group: 'images',
       runsIn: 'page',
       arg: 'number',
+      risky: true,
     },
     removeSession: {
       label: 'remove this session',
       group: 'fields',
       runsIn: 'page',
       arg: 'string',
+      risky: true,
     },
   },
   scopes: {

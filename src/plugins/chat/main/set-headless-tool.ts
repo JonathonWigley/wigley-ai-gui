@@ -1,6 +1,7 @@
 import {
   type AgentSession,
   errorResult,
+  type OfflineAnswer,
   textResult,
   type ToolDefinition,
   type ToolResult,
@@ -23,6 +24,13 @@ export const SET_HEADLESS_TOOL: ToolDefinition = {
     required: ['headless'],
     additionalProperties: false,
   },
+};
+
+// set_headless's answer while the app is closed: the run stays headless, and
+// the call does not replay.
+export const SET_HEADLESS_OFFLINE: OfflineAnswer = {
+  result: textResult('The app is closed: the session stays headless.'),
+  replay: false,
 };
 
 export interface SetHeadlessToolDeps {

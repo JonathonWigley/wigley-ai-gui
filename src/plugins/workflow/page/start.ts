@@ -3,6 +3,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
   PageApi,
+  PageCommandContext,
   PagePart,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -49,11 +50,12 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // Draws each session's flow as a chip under its row, a strip above its Chat
 // composer and a side pane beside its transcript, through the `draw` of the
 // flow's workflow, each workflow plugin's over its own layouts. Reads
-// `workflow.flows`, drawing the one flow each notice names, leaving a deleted flow
-// drawn until its row leaves and drawing no flow whose row has left, and holds the
-// page half of each workflow, which `addWorkflow` extends; each workflow takes one
-// side part. `stageAction` runs the view's gate for the session and action its arg
-// names; each engine key runs it on the session Sessions mode shows, each
+// `workflow.flows`, drawing the one flow each notice names, leaving a deleted
+// flow drawn until its row leaves and drawing no flow whose row has left, and
+// holds the page half of each workflow, which `addWorkflow` extends; each
+// workflow takes one side part. `stageAction` runs the view's gate for the
+// session and action its arg names; each engine key runs it on the run's
+// target when it names one, else on the session Sessions mode shows, and each
 // button on the session it draws. A `chat.session` change that flips a
 // session's headless flag draws its parts again. `toggleSidePane` shows or
 // hides the pane in every session, kept in `uiState`, and does nothing while
@@ -180,16 +182,19 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
 
     const runKey = keyRunner(api.commands, log);
-    // Acts on the session Sessions mode shows: in any other mode the key
-    // belongs to that mode, so it does nothing.
-    const runOnSelected = (command: SessionCommand) => () => {
-      const sessionId = sessions.shownSessionId();
-      if (sessionId === null) {
-        log(`no shown session for ${command}`);
-        return;
-      }
-      runKey(workflowStageActionCommand, { sessionId, action: command });
-    };
+    // Acts on the run's target when it names one; else on the session
+    // Sessions mode shows: in any other mode the key belongs to that mode, so
+    // it does nothing.
+    const runOnSelected =
+      (command: SessionCommand) =>
+      ({ targetSessionId }: PageCommandContext) => {
+        const sessionId = targetSessionId ?? sessions.shownSessionId();
+        if (sessionId === null) {
+          log(`no shown session for ${command}`);
+          return;
+        }
+        runKey(workflowStageActionCommand, { sessionId, action: command });
+      };
     const toggleSidePane = () => {
       if (sessions.shownSessionId() === null) {
         log('side pane key ignored: no shown session');

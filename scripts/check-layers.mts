@@ -94,8 +94,9 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
   chat: {
-    // Its contract names the layouts' entry types, for `addEntryRenderer`.
-    contract: { layers: ['src/plugins/chat/layouts'] },
+    // Its contract's `readAdoptRequest` reads JSON with the shared readers, and
+    // it names the layouts' entry types, for `addEntryRenderer`.
+    contract: { layers: ['src/shared', 'src/plugins/chat/layouts'] },
     // Its main joins paths with `node:path`.
     main: NODE_ONLY,
     sublayers: {
@@ -113,6 +114,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  // Its contract's record guards read JSON through `src/shared/json`.
+  chatroom: { contract: { layers: ['src/shared'] } },
   // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
   'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.
@@ -216,6 +219,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/practice/contract.ts',
           'src/plugins/practice/main',
           'src/main/processes',
+          'src/main/processes/node-processes.test-support.ts',
           'src/main/files',
         ],
         packages: ['node:'],
@@ -649,6 +653,34 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
+  // Finds a program on the PATH with the pure shared program lookup.
+  'src/main/processes/node-processes.ts': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:'],
+  },
+  // Builds the host's real process runner over the real file adapter.
+  'src/main/processes/node-processes.test-support.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/files',
+      'src/main/processes/node-processes.ts',
+    ],
+    packages: ['node:'],
+  },
+  // Runs real programs through the host's process runner, and the lookup on
+  // fake POSIX and Windows platforms.
+  'src/main/processes/node-processes.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/processes/node-processes.ts',
+      'src/main/processes/node-processes.test-support.ts',
+    ],
+    packages: ['node:'],
+  },
   'src/main/git': { layers: ['src/contracts'], packages: ['node:'] },
   // Over the shared fakes, and a commit in a real temporary clone through the
   // real process runner.
@@ -659,6 +691,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/main/git',
       'src/main/processes',
+      'src/main/processes/node-processes.test-support.ts',
     ],
     packages: ['node:'],
   },
@@ -704,6 +737,12 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
     packages: ['node:'],
   },
+  // The login-start adapters: files through `Files`, Electron's `app` handed
+  // in by `main.ts` as a structural type; no `node:` or `electron` import.
+  'src/main/login-start': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
   // The session host process: no electron import (`docs/features/session-host/design.md`).
   'src/session-host': {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
@@ -726,11 +765,13 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/screen-capture',
       'src/main/files',
       'src/main/processes',
+      'src/main/processes/node-processes.ts',
       'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',
       // Starts the session host client.
       'src/main/session-host',
+      'src/main/login-start',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',

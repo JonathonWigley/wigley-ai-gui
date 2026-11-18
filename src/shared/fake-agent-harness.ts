@@ -22,15 +22,19 @@ import {
   type ProjectFolder,
   type SessionControl,
   type UsageAgentEvent,
+  type UserMessage,
 } from '../contracts/agent';
 import type { Clock, Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
+import type { HostedSpawn, IdleRule } from '../contracts/session-host';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
 import { errorText } from './error-text';
+import { capPermission } from './permission-cap';
 import {
   SAMPLE_VISUALS_OPEN_TEXT,
   SAMPLE_VISUALS_TEXT,
 } from './sample-visuals';
+import { SESSION_ROW_ENV } from './session-env';
 import { typedSkill } from './typed-skill';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
@@ -221,12 +225,39 @@ export interface FakePastSessionCall {
   before: number | null;
 }
 
+// One `prepareRun` call of the fake and the spec it returned.
+export interface FakePreparedRun {
+  request: AgentStart;
+  firstMessage: UserMessage;
+  env: Readonly<Record<string, string>>;
+  spawn: HostedSpawn;
+}
+
+// The command of every spec the fake's `prepareRun` returns.
+export const FAKE_AGENT_COMMAND = 'fake-agent';
+
+// A stdout `result` line ends a turn; the stdin `user` line a spec opens with
+// starts one.
+const FAKE_IDLE_RULE: IdleRule = {
+  key: 'type',
+  value: 'result',
+  busyStdoutValues: [],
+  busyStdinValues: ['user'],
+  sideKey: null,
+  messageIdKey: null,
+  messageEnd: null,
+  turnEndIdsKey: null,
+  background: null,
+};
+
 // `processes` holds one record per `start` that did not throw and per `attach`
 // that resolved a process, in call order: the same array for the harness's life,
 // each record changing in place. `attachCalls` lists every `attach` request in
 // call order. `scriptAttach` sets the outcome of the next `attach` for that
 // process id, once, replacing an unused script; with none, `attach` resolves null.
-// `failNextStart` makes the next `start` throw `message`. Every `end` on a
+// `failNextStart` makes the next `start` throw, or the next `prepareRun` reject with, `message`.
+// `preparedRuns` holds one record per `prepareRun` that returned a spec, in call
+// order; a prepared run starts no process. Every `end` on a
 // process returns the promise its first `end` returned, or, once a
 // `FAKE_END_TEXT` send ended it, the promise of that exit. Between `holdEnd`
 // and `releaseEnd`, a first `end` marks its process ended and leaves that
@@ -266,6 +297,7 @@ export interface FakePastSessionCall {
 // profile's `configFolder`, [] before.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
+  readonly preparedRuns: readonly FakePreparedRun[];
   readonly attachCalls: readonly AgentStart[];
   scriptAttach(processId: string, script: FakeAttachScript): void;
   readonly pastSessionCalls: readonly FakePastSessionCall[];
@@ -1207,6 +1239,7 @@ export function createFakeAgentHarness(
   identity: FakeHarnessIdentity = FAKE_IDENTITY,
 ): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
+  const preparedRuns: FakePreparedRun[] = [];
   const attachCalls: AgentStart[] = [];
   const attachScripts = new Map<string, FakeAttachScript>();
   const pastSessionCalls: FakePastSessionCall[] = [];
@@ -2078,6 +2111,15 @@ export function createFakeAgentHarness(
     };
   }
 
+  // Throws the `failNextStart` message once, if one is set.
+  const throwStartFailure = () => {
+    if (nextStartFailure !== null) {
+      const message = nextStartFailure;
+      nextStartFailure = null;
+      throw new Error(message);
+    }
+  };
+
   const harness: FakeAgentHarness = {
     id: identity.id,
     info: () => ({
@@ -2108,14 +2150,11 @@ export function createFakeAgentHarness(
       installedPlugins.set(configDir, [...plugins]);
     },
     processes,
+    preparedRuns,
     attachCalls,
     pastSessionCalls,
     start(request, events) {
-      if (nextStartFailure !== null) {
-        const message = nextStartFailure;
-        nextStartFailure = null;
-        throw new Error(message);
-      }
+      throwStartFailure();
       const record: FakeAgentProcessRecord = {
         request,
         sessionId: request.sessionId ?? `fake-session-${++mintedSessionIds}`,
@@ -2169,6 +2208,34 @@ export function createFakeAgentHarness(
     failNextStart(message) {
       nextStartFailure = message;
     },
+    async prepareRun(request, firstMessage, env) {
+      throwStartFailure();
+      if (request.resume) {
+        throw new Error('A prepared run starts a new session');
+      }
+      const spawn: HostedSpawn = {
+        id: request.processId,
+        command: FAKE_AGENT_COMMAND,
+        args: [],
+        cwd: request.projectDir,
+        env: { ...env, [SESSION_ROW_ENV]: request.rowId },
+        inheritEnv: true,
+        unsetEnv: [],
+        stdin: [JSON.stringify({ type: 'user', ...firstMessage })],
+        idleRule: FAKE_IDLE_RULE,
+        droppedOutKeys: [],
+      };
+      preparedRuns.push({ request, firstMessage, env, spawn });
+      return spawn;
+    },
+    startControls: () =>
+      startingControls({}).map((control) => ({ ...control, value: null })),
+    capControls: (controls, cap) =>
+      capPermission(controls, cap, {
+        controlId: 'mode',
+        order: ['plan', 'auto'],
+        launchDefault: 'auto',
+      }),
     async listSessions(projectDir, profileDir) {
       pastSessionCalls.push({
         method: 'listSessions',

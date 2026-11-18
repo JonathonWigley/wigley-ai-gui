@@ -32,6 +32,7 @@ import {
   type WorkflowObserver,
   type WorkflowSelfTestHooks,
   type WorkflowSignal,
+  WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
@@ -76,7 +77,8 @@ type WorkflowApi = MainApi<
 // meters each session's active time and spend and appends a line to `runs.jsonl`
 // when a fold enters a stage that finishes its workflow, writes each open session's
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
-// actions. Exports `addWorkflow`, `signal`, `setState` and `observe`.
+// actions. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
+// `stageFinishes` for whether a flow sits in a stage that finishes its run.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -123,15 +125,21 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const tellFolded = (event: FoldEvent) =>
       tellObservers((observer) => observer.folded(event));
 
+    // The registered workflow holding `flow`; undefined with no flow, a null
+    // workflow, or a workflow no plugin holds.
+    const workflowOf = (flow: SessionFlow | null) =>
+      workflows.all().find((held) => held.id === flow?.workflow);
+
+    const stageFinishes = (flow: SessionFlow) =>
+      workflowOf(flow)?.stages.find((held) => held.id === flow.stage)
+        ?.finishes === true;
+
     // Writes the run's line when the fold entered a stage that finishes its
     // workflow, and starts the meter's next run.
     const logFinishedRun = (before: SessionFlow, after: SessionFlow) => {
-      const workflow = workflows
-        .all()
-        .find((held) => held.id === after.workflow);
-      const stage = workflow?.stages.find((held) => held.id === after.stage);
+      const workflow = workflowOf(after);
       const entered = after.stage !== before.stage;
-      if (workflow === undefined || !entered || stage?.finishes !== true) {
+      if (workflow === undefined || !entered || !stageFinishes(after)) {
         return;
       }
       const { sessionId, projectDir, movedUpFrom } = after;
@@ -210,12 +218,9 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       }
     };
 
-    // The registered workflow holding the session's flow; undefined with no flow,
-    // a null workflow, or a workflow no plugin holds.
-    const heldWorkflowOf = (sessionId: string) => {
-      const flow = store.get(sessionId);
-      return workflows.all().find((held) => held.id === flow?.workflow);
-    };
+    // The registered workflow holding the session's flow, as `workflowOf` says.
+    const heldWorkflowOf = (sessionId: string) =>
+      workflowOf(store.get(sessionId));
 
     // Folds a reported step as a live event; resolves whether the flow is now in
     // the stage its own workflow reports as `step`. No such stage, or a stage rule
@@ -262,7 +267,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     sessions.contributeTools(
       [checklistToolDefinition()],
       startChecklistToolSession,
-      { mainAgentOnly: true },
+      {
+        mainAgentOnly: true,
+        offline: { [SET_WORKFLOW_CHECKLIST_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+      },
     );
     if (api.drive !== null) {
       addDriveActions(api.drive, { reportStep, reportChecklist });
@@ -280,7 +288,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           : sessions.contributeTools(
               [stepToolDefinition(workflows.all())],
               startStepToolSession,
-              { mainAgentOnly: true },
+              {
+                mainAgentOnly: true,
+                offline: { [SET_WORKFLOW_STEP_TOOL]: WORKFLOW_OFFLINE_ANSWER },
+              },
             );
     };
     const addWorkflow = (workflow: MainWorkflow): Disposable => {
@@ -462,6 +473,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
         flowOf: (sessionId) => store.get(sessionId),
         flows: () => store.all(),
+        stageFinishes,
         setState(sessionId, state) {
           const flow = store.get(sessionId);
           if (flow === null) {

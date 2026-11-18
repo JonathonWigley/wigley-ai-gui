@@ -12,7 +12,7 @@ export const DEFAULT_PROFILES: HarnessProfile[] = [
 // CLI, registered in the core's harness registry. Main only: it has no surface,
 // no commands and no layout, and reads only services. It depends on sessions,
 // whose sessions it serves the `permission_prompt` tool. Its `command` setting
-// names the `claude` program, empty for the platform's; its `profiles` setting is
+// names the `claude` program, empty to look it up; its `profiles` setting is
 // the harness's profiles.
 export const claudeCodeManifest = definePlugin({
   id: 'claude-code',
@@ -27,7 +27,7 @@ export const claudeCodeManifest = definePlugin({
     command: {
       label: 'Claude command',
       description:
-        'The claude program sessions run; ~ is the home folder. Empty, it is the platform default, ~/.local/bin/claude. Applies to the next session.',
+        'The claude program sessions run: a program name or a path; ~ is the home folder. Empty, the app looks for claude on PATH, then in ~/.local/bin. Applies to the next session.',
     },
     profiles: {
       label: 'Profiles',

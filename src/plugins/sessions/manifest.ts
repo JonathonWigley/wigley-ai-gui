@@ -36,6 +36,8 @@ export const sessionsManifest = definePlugin({
       label: 'close the session',
       group: 'sessions',
       runsIn: 'page',
+      risky: true,
+      targets: true,
     },
     selectRow: {
       label: 'open the session',
@@ -53,6 +55,7 @@ export const sessionsManifest = definePlugin({
       label: 'rename the session',
       group: 'sessions',
       runsIn: 'page',
+      targets: true,
     },
     togglePopup: {
       label: "hide or show the session's popup",
@@ -123,6 +126,7 @@ export const sessionsManifest = definePlugin({
       label: "close the row's session",
       group: 'list',
       runsIn: 'page',
+      risky: true,
     },
     splitDown: {
       label: 'split the pane, new pane below',
@@ -134,7 +138,12 @@ export const sessionsManifest = definePlugin({
       group: 'panes',
       runsIn: 'page',
     },
-    closePane: { label: 'close the pane', group: 'panes', runsIn: 'page' },
+    closePane: {
+      label: 'close the pane',
+      group: 'panes',
+      runsIn: 'page',
+      risky: true,
+    },
     swapPaneLeft: {
       label: 'swap with the pane on the left',
       group: 'panes',

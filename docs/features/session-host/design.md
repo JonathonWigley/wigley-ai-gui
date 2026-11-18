@@ -5,11 +5,11 @@
 - **Intent** — sessions keep running through a quit, a relaunch and `install-app`.
 - **Vocabulary** — session host, hosted process, pipe log, replay, drain.
 - **Flow** — start, quit, relaunch and re-attach, idle end.
-- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, its known limits.
-- **Protocol** — the operations, which of them never change, and the pipe log format.
+- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, one host per channel, and its pending runs.
+- **Protocol** — the operations, which of them never change, the queue messages, and the pipe log format.
 - **Re-attach** — replay through the harness's pipe fold, the history cut, replayed events, queued messages.
 - **Older hosts** — drain after an update that changed the protocol.
-- **Platforms** — the RunAsNode fuse, macOS, the Windows per-version install.
+- **Platforms** — the RunAsNode fuse, macOS, the Windows per-version install, login start.
 - **Rejected approaches** — the host running the harness, waiting for turns on quit, auto-continue.
 
 ## Intent
@@ -20,6 +20,11 @@ version — shows each session as if it had stayed open. A machine reboot or a h
 ends a turn: the row rests, the next host ends what the dead one left (§ The host), and the next message resumes the
 session under it.
 
+The host also starts the runs the app queues for later, so a scheduled task fires while the app is quit
+(`docs/features/scheduled-tasks/design.md`). It keeps a pending queue of deferred spawns and a runs record of what it
+started from that queue, persisted in `pending-v4.json` and `runs-v4.json` in its folder. It still knows no harness
+and no MCP: every harness fact a queued run needs arrives in its spawn.
+
 ## Vocabulary
 
 - **Session host** — one detached process per app instance (stable, dev, self-test, drive run) that owns every
@@ -28,7 +33,10 @@ session under it.
 - **Pipe log** — the host's append-only record of every line a hosted process read on stdin or wrote on stdout or
   stderr, each with its direction and time.
 - **Replay** — the harness reading a pipe log from its first line to rebuild a session's state, writing nothing.
-- **Drain** — telling a host to end each process at its turn end, take no new process, and exit once empty.
+- **Drain** — telling a host to end each process once it reads idle, take no new process, and exit once empty.
+- **Pending entry** — a spawn the app hands the host to start at a later time (`PendingSpawn`), with the app's own
+  record of it.
+- **Run** — what the host records when a pending entry's time comes: the spawn it started or skipped (`HostedRun`).
 
 ## Flow
 
@@ -42,46 +50,77 @@ session under it.
 
  quit / install-app ──▶ app disconnects; host keeps every process running
  chat switched off live ──▶ chat's stop detaches its processes as a quit does; the app stays connected and the host keeps them
- turn ends while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
- host has no process and no app ──▶ host exits
+ process turns idle while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
+ pending entry's `at` comes ──▶ host spawns it, or skips it while its task's last run is busy ──▶ runStarted to every app
+ host has no process, no pending entry, no run and no app ──▶ host exits
  host dies ──▶ rows rest; next host ends what its record left ──▶ only then serves a spawn
 ```
 
 ## The host
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
-  it, and logs every pipe line, less the dropped keys below. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
-  and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
-  `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
-  `assistant` and `stream_event` on stdout, the last for a turn Claude starts by itself after a background task).
+  it, and logs every pipe line, less the dropped keys below. A live start's `env` (`inheritEnv` false) is the child's
+  whole environment. A prepared run's `env` (`inheritEnv` true) is an overlay: the host takes its own environment,
+  drops `ELECTRON_RUN_AS_NODE` and every name in the spawn's `unsetEnv`, then lays `env` over it, so a name in both
+  `unsetEnv` and `env` takes `env`'s value. A live start inherits nothing from the host, whose environment can be an
+  older app's or launchd's. The spawn's `stdin` lines are written right after the spawn,
+  in order, each logged as `in` like a `write`. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
+  and one **idle rule** (`IdleRule`), the top-level JSON keys and values that open and close the three parts of the
+  busy state below: the value that marks a stdout line as a turn end (for Claude `"type": "result"`), the values that
+  open a turn on each pipe (`user` on stdin, `assistant` and `stream_event` on stdout), the key that marks a stdout
+  line as side work (`parent_tool_use_id`), a stdin message's id (`uuid`), the line that ends a message
+  (`command_lifecycle` in an end state) and the turn end's list of the messages it took in (`user_message_uuids`), and
+  the line that lists background work (`system/background_tasks_changed`) with the kinds that count (`local_agent`).
+  A part whose fields are null is off.
 - The adapter also hands it **dropped keys**: JSON key paths from a stdout line's root (for Claude, the settings copies
   in one control reply, which hold the profile's `env` values). The host drops them from the line before it logs or
-  delivers it, so a replay reads what a live subscriber read. It searches each line for the quoted last key and parses
-  only on a hit; a line that holds no such path or is not JSON passes byte for byte.
-- A process starts **idle**, reads busy on a line that starts a turn, and turns idle on a stdout line that ends one.
+  delivers it, so a replay reads what a live subscriber read. It reads them from the one parse each stdout line gets
+  for the idle rule; a line that holds no such path or is not JSON passes byte for byte.
+- A process is **busy** while any of three parts holds, and **idle** when none does; it starts idle.
+  - **A main turn is open**: opened by a stdout line that opens a turn and is not side work (for Claude a main
+    `assistant` or `stream_event` line, a turn Claude starts by itself after background work included; a subagent's
+    own lines carry `parent_tool_use_id` and open nothing), or by a stdin line that opens a turn with no message id;
+    closed by a turn-end line.
+  - **A message is open**: opened by a stdin line that opens a turn with a message id (every user line the Claude
+    adapter writes carries `uuid`); closed by its end line in an end state (`completed`, `cancelled`, `discarded` or
+    `refused`), or by a turn-end line that lists it. So a message written during a turn stays open past that turn's
+    `result` until its own end. Until the process has printed a line of the message-end kind, in any state, a turn-end
+    line closes every open message: a CLI without `msg_lifecycle_v1` prints no `command_lifecycle` line, and the
+    adapter's turn tracker falls back the same way.
+  - **Background work runs**: the last background line counted more than 0 items of the kinds the rule names. For
+    Claude only a background subagent counts; a background Bash does not.
+
   Every other line leaves the state alone, on any pipe and whatever its shape, so a `system` line after a mode change
   or from a start hook, or the context request and its answer, keeps no process alive. While no app is connected, an
-  idle process is ended once the keep window has passed since the later of its turn end and the app's last disconnect:
-  stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
+  idle process is ended once the keep window has passed since the later of the moment it turned idle and the app's
+  last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
   (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees only pipe
-  lines, so a background shell that stays silent past the window ends with its process, and so does a background
-  subagent that has printed only `system` lines since the turn's `result`; one whose own `assistant` lines have reached
-  stdout reads busy until the `result` of the turn its end starts. A process ending this way, or through a drain, lists
-  as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the session.
+  lines, so a background shell that stays silent past the window ends with its process. An interrupt that stops a
+  background subagent prints no `result`, and the process turns idle at the background line that lists none. Under a
+  drain, a process that a background line listing none turned idle ends 10 s after that line rather than at once,
+  since Claude runs a turn of its own right after it to report the subagent's result. That turn's `system/init`
+  comes at once, its first busy line only at the API's first token: each main stdout line within the grace starts
+  the 10 s over, and a busy line cancels the end, so the process then ends at its next idle. A process ending this way, or through a drain, lists
+  as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the
+  session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
   appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
   process runs on with its row unheld. That holds after a relaunch too: such a process cannot be re-attached, so its
   row stays unheld until Stop all or the keep window ends it.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json`, each host's
-  own record of its children `host-v<protocol>.<pid>.children.json`, and the host's own log `host-v<protocol>.log`. When
+  own record of its children `host-v<protocol>.<pid>.children.json`, its pending table `pending-v<protocol>.json`, its
+  runs record `runs-v<protocol>.json` (§ Pending runs), and the host's own log `host-v<protocol>.log`. When
   an earlier host wrote a line to that log, the next host renames it to `host-v<protocol>.previous.log`, so a crash
   report outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
   process for, unless a host of another protocol may be listening: one that answers, stays silent or denies the connect
   keeps them, and only a record whose connect proves no listener does not. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
-  waits for its channel. The host exits once it holds no process and no app is connected.
+  waits for its channel. The host stays while it runs a process, or while its pending table or runs record is
+  non-empty, and exits once none holds and no app is connected. A host started with no app, at login, reads both
+  files at start. At login the app's own executable runs with `--start-session-host`, which starts the host
+  detached through `sessionHostLaunch`, the same command the client starts, and exits with no window or Dock icon.
 - A host that dies does not take its processes with it. The app treats the lost connection as each process's exit, so
   its row rests, but a `claude` in the middle of a tool can finish the tool and write to its session, beside whatever
   resumes that session. What closes that:
@@ -91,9 +130,8 @@ session under it.
     children record while that writer may run, so no host can delete or overwrite another's.
   - A new host, once it owns the channel, reads every protocol's children record, so a protocol bump leaves no orphan.
     It compares each record's writer with what `ps` or PowerShell reports for that pid. A writer that still runs keeps
-    its children and its record, and the new host logs it: owning the channel proves nothing, since a socket file gone
-    or a check-then-listen race gives a new host the channel beside a live one, and an older host may be draining. A
-    new host that cannot ask the OS, or cannot read a record, leaves that record the same way, for a later host. A session
+    its children and its record, and the new host logs it: owning the channel rules out only another host of its own
+    protocol, and an older host may be draining. A new host that cannot ask the OS, or cannot read a record, leaves that record the same way, for a later host. A session
     whose process runs under such a writer can run a second process beside it.
   - Once a record's writer is gone, its pid unused or reused, the new host ends what the record left and removes it:
     SIGTERM, then SIGKILL after 3 s, about 6 s at most, on macOS and Windows alike through the platform's kill (on
@@ -108,30 +146,69 @@ session under it.
     comes. The leftovers' pipe logs go with that host's log sweep.
   - Children are not started `detached`, and the end reaches only the recorded process: a tool the orphan was running
     may outlive it.
-- Two known limits come with a new host that owns the channel beside a live one, which only a socket file gone or a
-  check-then-listen race reaches:
-  - The new host renames the live host's log too. Both hosts then append to `host-v<protocol>.log`, so a line of the
-    live host can sit in either file.
-  - A host of the same protocol that exits still runs its `shutDown`, which removes the channel and the record by path,
-    and those are now the newer host's. The newer host keeps the clients it holds, and the next app finds no channel
-    and starts another host beside it.
+- One host listens per channel. On a Unix socket a host takes `<channel>.lock`, which holds its pid, before it checks
+  the channel, and holds it until its server has closed; a named pipe in use already refuses a second listener. A host
+  that finds the lock held by a pid that runs exits as a host that finds the channel owned does, the socket file gone
+  or not, so a login start and an app start at one moment leave one host. A lock is stale when it holds no pid, was
+  written before this boot (its mtime is before `Date.now() - os.uptime() * 1000`), names a pid that does not run, or
+  names the taker's own pid while none of the taker's servers holds it; one taker alone takes a stale lock over. A
+  process releases the locks it holds when it exits, and the host turns SIGTERM, SIGHUP and SIGINT into an exit. So only the host that listens sets the last log aside and
+  sweeps the pipe logs, and a host's `shutDown` removes the record only while it still holds that host's pid. The relay
+  channel takes the same lock, so two app instances of one id never share it.
+  - A known limit: a lock left this boot by a host ended by `kill -9` or a crash, whose pid another process has taken
+    since, counts as held, and no host starts on that channel until that process ends or the machine restarts.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
   home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain
   `quit` of a kept run, whose app is gone, refuses while its host may be listening: `start --run <id>` then `quit` ends it.
 
+### Pending runs
+
+The app hands the host spawns to start later, and the host keeps them through a quit of the app. Each kind of fact a
+run needs — args, carried env, unset names, opening stdin lines, idle rule — arrives in the spawn, so the queue knows no
+harness.
+
+- **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
+  `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
+  The client keeps the last list, less each entry a `runStarted` or `forgetRuns` named, and sends it again on each
+  connect, once every older host has served its `drain` (§ Older hosts), so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
+  scheduling plugin reads `listRuns` again.
+- **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. The timer waits at
+  most 30 s before it reads the wall clock again, since Node's timers do not advance while a Mac sleeps; an entry
+  whose `at` passed during sleep starts within 30 s of wake. Both files are rewritten on each change, so the queue
+  and the runs survive a host restart. A fire that throws records a run whose `exit` holds the error, and the host
+  goes on.
+- **The skip rule.** `skipWhileBusy` names a hosted process id, or null. At `at`, when that process runs and its idle
+  rule reads it busy, the host skips the spawn and records a run with `skipped: true` and `exit` null. An idle
+  process that stays alive does not block the entry.
+- **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
+  spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
+  holds `error`. A run with `exit` null that a starting host loads, or imports from an older file, is recorded as
+  ended by its host's death: the host sets its `exit` to `{ code: null, signal: null, error: null }`, since the run
+  did start.
+- **`runStarted`** is pushed to every connected client when the host starts or skips an entry.
+- **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
+  as `list` does. The client asks it only once every older host has served its `drain`.
+- **`forgetRuns`** drops the runs with the given ids from the runs record, once the app has adopted them.
+- **The runs file is frozen.** `runs-v<protocol>.json`'s name form and the `HostedRun` shape keep their form in every
+  protocol version, as the children record does, so a newer host can import an older host's runs (§ Older hosts).
+
 ## Protocol
 
 Newline-delimited JSON over the channel. `hello`, `list` and `drain` keep their shape in every protocol version, so
 any app can drain any older host. The pipe log format is frozen the same way, and so are the children record's name and
-shape, so any host can end what any other left.
+shape, so any host can end what any other left, and the runs file's name and shape, so any host can import the runs
+any older one fired.
 
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
   pipe log path.
-- `drain` — end each process at its turn end, refuse new ones, exit once empty.
+- `drain` — end each process once it reads idle, refuse new ones, exit once empty. It gets no reply; a `list` sent
+  after it on the same connection is answered only once the drain is served.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
+- `setPending`, `listRuns`, `forgetRuns`, and the pushed `runStarted` — the pending queue (§ Pending runs), since
+  protocol 4. The client sends its pending list again on each connect.
 
 Each hosted process's OS pid reaches the app: `subscribe`'s reply carries `pid` (null when it has none), and the host
 sends the connection that spawned a process `{ type: 'spawned', id, pid }` once the OS reports it (both since
@@ -173,11 +250,23 @@ lines past the last `seq` it read.
 
 ## Older hosts
 
-After an update that changed the protocol, the new app finds the older host's channel, sends it `drain`, and starts
-its own. A newer protocol's host is never drained: an older app that finds one lists its processes as not current and
+After an update that changed the protocol, the new app starts or finds its own host, then finds the older host's
+channel and sends it `drain`. A newer protocol's host is never drained: an older app that finds one lists its processes as not current and
 leaves them running. A row whose process lives in another protocol's host shows a notice that it is finishing in
 another app version and refuses a send until that process has ended; it then rests and resumes under the new host on
 the next message.
+
+A protocol bump drops the old host's pending queue: at `drain` the old host deletes its pending file and takes no
+`setPending` after it. `drain` gets no reply, so the new app follows it with a `list` on the same connection. A host
+reads one connection's lines in order, so the `list` reply, or the connection closing as the old host exits, shows the
+drain was served. Only then does the app send its queue to the new host and read `listRuns`, so no occurrence fires in
+both hosts and every pending run moves to the new host. The old host's run records stay in its frozen runs file, which
+it writes no more after the drain. The new host imports every older protocol's runs file at its start and again
+before each `setPending` and `listRuns`: it adds each run its own record lacks by id, gives each one still running the
+host-death exit (§ Pending runs), saves, and deletes the older file. So no run the old host fired is lost, and the app
+adopts it like any other. A known limit: a run still running in a draining older host is recorded as ended by its
+host, and its later exit is not read: its history entry reads finished while that turn runs, and a message sent on
+its resting row resumes the session while the older host's process may still be running.
 
 ## Platforms
 
@@ -187,6 +276,10 @@ the next message.
 - Windows: a running exe locks its folder, so `install-app` installs each build in its own folder under
   `%LOCALAPPDATA%\Programs\wigley-ai-gui\` and points the Start menu shortcut at the newest. An older folder is
   deleted once no host runs from it. The relay's `start_app` picks the newest folder.
+- Login start: while any scheduled task is active, the host starts when the user logs in on macOS, through the
+  login item service behind the `LoginStart` seam (`src/contracts/login-start.ts`; a LaunchAgent adapter is built for a
+  Mac where the login item does not work), so pending runs fire after a
+  restart with no app open. On Windows the host starts only with the app.
 
 ## Rejected approaches
 

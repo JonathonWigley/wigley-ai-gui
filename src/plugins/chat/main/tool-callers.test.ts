@@ -108,6 +108,17 @@ describe('createToolCallers', () => {
     await expect(read).resolves.toBe(agentId);
     expect(pending.size).toBe(0);
   });
+
+  it('noted_ReturnsTheNoteWithNoWait', () => {
+    const { timers, pending } = manualTimers();
+    const callers = createToolCallers(timers);
+    callers.noteToolStarted('r1', 't1', 'sub-1');
+
+    expect(callers.noted('r1', 't1')).toBe('sub-1');
+    expect(callers.noted('r1', 't2')).toBeNull();
+    expect(callers.noted('r2', 't1')).toBeNull();
+    expect(pending.size).toBe(0);
+  });
 });
 
 describe('callerGuard', () => {
@@ -116,6 +127,7 @@ describe('callerGuard', () => {
     tool: 'set_workflow_step',
     toolUseId: 't1',
     mainAgentOnly: true,
+    replayed: false,
   };
 
   it.each<{
@@ -179,7 +191,7 @@ describe('callerGuard', () => {
     async ({ call, owns, agentId, verdict, asksAgentOf }) => {
       const agentOf = vi.fn(() => Promise.resolve(agentId));
       const guard = callerGuard({
-        callers: { agentOf },
+        callers: { agentOf, noted: () => agentId },
         owns: () => owns,
       });
 
@@ -187,6 +199,69 @@ describe('callerGuard', () => {
       expect(agentOf.mock.calls).toEqual(
         asksAgentOf ? [[call.sessionId, call.toolUseId]] : [],
       );
+    },
+  );
+
+  it.each<{
+    case: string;
+    call: GuardedToolCall;
+    // The agent noted for `t1` in `r1` before the call; null notes nothing.
+    noted: string | null;
+    verdict: Awaited<ReturnType<ReturnType<typeof callerGuard>>>;
+    // Delays of the timers the guard set while it waited.
+    waited: number[];
+  }>([
+    {
+      case: 'ReplayedNotedMainAgent_Runs',
+      call: { ...CALL, replayed: true },
+      noted: MAIN_AGENT_ID,
+      verdict: { kind: 'run' },
+      waited: [],
+    },
+    {
+      case: 'ReplayedNotedSubagent_Skips',
+      call: { ...CALL, replayed: true },
+      noted: 'sub-1',
+      verdict: { kind: 'skip', text: SUBAGENT_CALL_TEXT },
+      waited: [],
+    },
+    {
+      case: 'ReplayedNotNoted_Skips',
+      call: { ...CALL, replayed: true },
+      noted: null,
+      verdict: { kind: 'skip', text: SUBAGENT_CALL_TEXT },
+      waited: [],
+    },
+    {
+      case: 'ReplayedNotMainAgentOnly_Runs',
+      call: { ...CALL, replayed: true, mainAgentOnly: false },
+      noted: 'sub-1',
+      verdict: { kind: 'run' },
+      waited: [],
+    },
+    {
+      case: 'LiveNotNoted_WaitsThenRuns',
+      call: CALL,
+      noted: null,
+      verdict: { kind: 'run' },
+      waited: [CALLER_WAIT_MS],
+    },
+  ])(
+    'callerGuard_ReplayedCall_ReadsTheNotesWithoutWaiting $case',
+    async ({ call, noted, verdict, waited }) => {
+      const { timers, pending, fireAll } = manualTimers();
+      const callers = createToolCallers(timers);
+      if (noted !== null) {
+        callers.noteToolStarted('r1', 't1', noted);
+      }
+      const guard = callerGuard({ callers, owns: () => true });
+
+      const answer = guard(call);
+      await Promise.resolve();
+      expect([...pending.values()].map(({ ms }) => ms)).toEqual(waited);
+      fireAll();
+
+      await expect(answer).resolves.toEqual(verdict);
     },
   );
 });

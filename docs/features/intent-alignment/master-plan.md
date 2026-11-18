@@ -144,7 +144,7 @@ conversion of chat to slots and its chat events also edited; that conversion has
 All ∥, any time, except Per-platform chord matching and Per-platform program lookup, which wait for the Platform
 record (Wave 0) because they read it:
 
-- [ ] Per-platform program lookup and spawning [ready]
+- [x] Per-platform program lookup and spawning [ready]
 - [x] Round store through Files [ready]
 - [x] Per-source alert descriptions [ready]
 - [x] Per-platform chord matching [ready]

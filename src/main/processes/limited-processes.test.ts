@@ -38,6 +38,7 @@ function setUp() {
     spawn: () => {
       throw new Error('unused');
     },
+    resolveProgram: () => Promise.reject(new Error('unused')),
   };
   return { started, release, limited: limitRuns(inner, 2) };
 }
@@ -52,6 +53,7 @@ describe('limitRuns', () => {
         spawned.push(command);
         return { write() {}, endInput() {}, kill() {} };
       },
+      resolveProgram: async () => null,
     };
     const limited = limitRuns(inner, 1);
     limited.run('a', []);
@@ -63,6 +65,22 @@ describe('limitRuns', () => {
     });
 
     expect(spawned).toEqual(['claude']);
+  });
+
+  it('resolveProgram_PastTheLimit_ForwardsAtOnce', async () => {
+    const inner: ProcessRunner = {
+      run: () => new Promise(() => {}),
+      startDetached: () => Promise.reject(new Error('unused')),
+      spawn: () => ({ write() {}, endInput() {}, kill() {} }),
+      resolveProgram: async () => ({ command: '/usr/bin/python3', args: [] }),
+    };
+    const limited = limitRuns(inner, 1);
+    limited.run('a', []);
+
+    await expect(limited.resolveProgram('python')).resolves.toEqual({
+      command: '/usr/bin/python3',
+      args: [],
+    });
   });
 
   it('startDetached_AtTheLimit_StartsAtOnce', async () => {
@@ -104,6 +122,7 @@ describe('limitRuns', () => {
       spawn: () => {
         throw new Error('unused');
       },
+      resolveProgram: () => Promise.reject(new Error('unused')),
     };
     const limited = limitRuns(inner, 1);
 

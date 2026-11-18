@@ -44,7 +44,10 @@ import { audioPickerAutoAnswer, createAudioPickerType } from './picker-type';
 import { createAudioPickerPreview } from './preview/audio-picker-preview';
 import { previewPickerArgs } from './preview/preview-picker';
 import { audioPickerSelfTestScript } from './selftest-script';
-import { AUDIO_PICKER_TOOLS } from './tool-definitions';
+import {
+  AUDIO_PICKER_TOOLS,
+  OPEN_AUDIO_PICKER_OFFLINE,
+} from './tool-definitions';
 
 type AudioPickerApi = MainApi<
   typeof audioPickerManifest,
@@ -165,12 +168,15 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
     api.channel.handle('readAudio', reads.readAudio);
     api.channel.handle('openPreview', () => preview.open());
     api.layouts.register({ layoutTypes });
-    sessions.contributeTools(AUDIO_PICKER_TOOLS, (session) =>
-      withAudioFileCheck(
-        createAgentFormToolSession(service.startSession(session), type),
-        type.parse,
-        services.files,
-      ),
+    sessions.contributeTools(
+      AUDIO_PICKER_TOOLS,
+      (session) =>
+        withAudioFileCheck(
+          createAgentFormToolSession(service.startSession(session), type),
+          type.parse,
+          services.files,
+        ),
+      { offline: { [OPEN_AUDIO_PICKER_TOOL]: OPEN_AUDIO_PICKER_OFFLINE } },
     );
     // Always resolves: a failed write is logged, and the open that needs the
     // files then fails on them.

@@ -84,6 +84,8 @@ import {
   type Draft,
   DRAFT_IDS,
   type DraftId,
+  type DraftMark,
+  draftMark,
   initialWorkspaceState,
   type JudgeKind,
   type JudgeState,
@@ -213,9 +215,9 @@ export interface ProblemWorkspaceDeps {
   // shows or hides: the view sets its scope, resize target and focus target
   // again.
   paneChanged(): void;
-  // The one function that applies an `open` result; a Submit's own `open`
-  // goes through it.
-  applyOpened(problem: OpenedProblem): void;
+  // The one function that applies an `open` result, with the mark taken as
+  // its read began; a Submit's own `open` goes through it.
+  applyOpened(problem: OpenedProblem, mark: DraftMark): void;
   // The last page's place; the first show of its open problem puts its pane
   // and tabs back.
   savedPlace: PracticePlace | null;
@@ -246,10 +248,14 @@ export interface ProblemWorkspace {
   // the place's pane and tabs instead. A draft that fails to save keeps the
   // shown problem and its drafts, and resolves `kept`.
   show(problem: OpenedProblem): Promise<ShowResult>;
-  // Takes the shown problem read again, keeping every unsaved draft, and drops
-  // a `show` of another problem still waiting on its save, which resolves
-  // `overtaken`; another problem is ignored.
-  refresh(problem: OpenedProblem): void;
+  // The mark a read of `open` takes as it begins, of the drafts as they stand
+  // whatever problem shows.
+  readMark(): DraftMark;
+  // Takes the shown problem read again, keeping every unsaved draft and every
+  // draft saved after `mark` was taken, and drops a `show` of another problem
+  // still waiting on its save, which resolves `overtaken`; another problem is
+  // ignored.
+  refresh(problem: OpenedProblem, mark: DraftMark): void;
   pane(): WorkspacePane;
   // Moves the DOM focus to the pane that held the keys last.
   focus(): void;
@@ -1119,6 +1125,7 @@ export function createProblemWorkspace(
   // the dispose.
   const reopen = async (slug: string, judgedShow: number) => {
     let problem: OpenedProblem;
+    const mark = draftMark(store.get());
     try {
       problem = await channel.invoke('open', slug);
     } catch (error) {
@@ -1130,7 +1137,7 @@ export function createProblemWorkspace(
       showCount === judgedShow &&
       store.get().problem?.summary.slug === slug;
     if (isStillShown) {
-      deps.applyOpened(problem);
+      deps.applyOpened(problem, mark);
     }
   };
 
@@ -1285,7 +1292,8 @@ export function createProblemWorkspace(
       setPane(place?.pane ?? 'problem', { always: true, movesFocus: true });
       return 'shown';
     },
-    refresh(problem) {
+    readMark: () => draftMark(store.get()),
+    refresh(problem, mark) {
       const before = store.get();
       if (before.problem?.summary.slug !== problem.summary.slug) {
         return;
@@ -1294,7 +1302,7 @@ export function createProblemWorkspace(
         showCount += 1;
         settledShow = showCount;
       }
-      dispatch({ type: 'refreshed', problem });
+      dispatch({ type: 'refreshed', problem, mark });
       const after = store.get();
       if (after.drafts.code.text !== before.drafts.code.text) {
         docEditor?.setText(after.drafts.code.text);

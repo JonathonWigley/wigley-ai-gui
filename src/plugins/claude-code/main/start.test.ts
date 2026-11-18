@@ -9,15 +9,19 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import {
   type AgentSession,
+  type ContributeToolsOptions,
   errorResult,
   type SessionsMainExports,
   sessionsMainKey,
+  textResult,
   type ToolDefinition,
   type ToolSession,
 } from '../../sessions/contract';
 import { claudeCodeManifest, DEFAULT_PROFILES } from '../manifest';
 import { NO_PROCESS_TEXT, PERMISSION_TOOLS } from './permission-route';
-import { claudeCodeMainPart, claudeCommand } from './start';
+import { claudeCodeMainPart } from './start';
+
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 // A registry that records: `register` adds the harness and returns a handle
 // whose `dispose` removes it, counts and logs `registration` to `stops`;
@@ -53,6 +57,7 @@ function recordingSessions(stops: string[]) {
   const contributed: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
+    options: ContributeToolsOptions | undefined;
   }[] = [];
   const built: ToolSession[] = [];
   const counts = { toolDisposes: 0, toolEnds: 0 };
@@ -63,6 +68,7 @@ function recordingSessions(stops: string[]) {
         contributeTools(
           tools: ToolDefinition[],
           start: (session: AgentSession) => ToolSession,
+          options?: ContributeToolsOptions,
         ) {
           contributed.push({
             tools,
@@ -71,6 +77,7 @@ function recordingSessions(stops: string[]) {
               built.push(toolSession);
               return toolSession;
             },
+            options,
           });
           return consumer.track({
             dispose: () => {
@@ -121,18 +128,6 @@ function started(
 }
 
 describe('claudeCodeMainPart', () => {
-  it.each([
-    { setting: '', expected: '~/.local/bin/claude' },
-    { setting: '/opt/claude', expected: '/opt/claude' },
-  ])(
-    'claudeCommand_EmptyOrSet_PicksThePlatformProgramOrTheSetting ($setting)',
-    ({ setting, expected }) => {
-      expect(claudeCommand(setting, { claude: '~/.local/bin/claude' })).toBe(
-        expected,
-      );
-    },
-  );
-
   it('start_RegistersTheClaudeHarness', () => {
     const { harnesses } = started();
 
@@ -149,6 +144,21 @@ describe('claudeCodeMainPart', () => {
     expect(harnesses).toEqual([]);
     expect(counts.disposes).toBe(1);
     expect(stops).toEqual(['registration', 'tools']);
+  });
+
+  // Breaks if a run started while the app is closed waits on, or allows, a
+  // permission prompt instead of having it denied.
+  it('start_PermissionTools_AnswerOfflineWithADeny', () => {
+    const { contributed } = started();
+
+    expect(contributed[0].options?.offline).toEqual({
+      permission_prompt: {
+        result: textResult(
+          '{"behavior":"deny","message":"The app is closed: this run\'s permission mode does not allow this tool, so it was denied."}',
+        ),
+        replay: false,
+      },
+    });
   });
 
   it('start_ContributesPermissionTools_StopDisposesThem', async () => {
@@ -178,17 +188,23 @@ describe('claudeCodeMainPart', () => {
     expect(toolCounts).toEqual({ toolDisposes: 1, toolEnds: 1 });
   });
 
-  it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment', () => {
+  it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment_EmptyLooksClaudeUp', async () => {
     const { harness, harnesses } = started({
       settings: { command: '~/bin/claude', profiles: DEFAULT_PROFILES },
       agentHomeDir: '/Users/u',
       agentEnvironment: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
     const [registered] = harnesses;
+    harness.processes.scriptProgram('claude', {
+      command: '/found/claude',
+      args: ['--found'],
+    });
 
     void registered.accountStatus(null);
+    await settle();
     harness.pushSettings({ command: '', profiles: DEFAULT_PROFILES });
     void registered.accountStatus(null);
+    await settle();
 
     expect(harness.processes.spawns[0]).toMatchObject({
       command: '/Users/u/bin/claude',
@@ -196,9 +212,10 @@ describe('claudeCodeMainPart', () => {
       cwd: '/Users/u',
       env: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
-    expect(harness.processes.spawns[1].command).toBe(
-      '/Users/u/.local/bin/claude',
-    );
+    expect(harness.processes.spawns[1]).toMatchObject({
+      command: '/found/claude',
+      args: ['--found', 'auth', 'status', '--json'],
+    });
   });
 
   it('settingsChanged_Profiles_RefreshesTheRegistration', () => {

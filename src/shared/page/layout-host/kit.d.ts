@@ -5,6 +5,7 @@
 export type TagTone =
   | 'neutral'
   | 'accent'
+  | 'info'
   | 'running'
   | 'success'
   | 'warning'

@@ -1364,24 +1364,26 @@ describe('Large over the engine page part', () => {
     expect(invoked).toEqual([]);
   });
 
+  // Breaks: a targeted run acting on the selected session instead.
   it.each([
-    'clearAndMake',
-    'cancelCountdown',
-    'makeInNewSession',
-    'resumeMake',
-    'openPlan',
-    'retro',
-    'dismiss',
+    ['clearAndMake', undefined, 's1'],
+    ['cancelCountdown', undefined, 's1'],
+    ['makeInNewSession', undefined, 's1'],
+    ['resumeMake', undefined, 's1'],
+    ['openPlan', undefined, 's1'],
+    ['retro', undefined, 's1'],
+    ['dismiss', undefined, 's1'],
+    ['clearAndMake', 'b', 'b'],
   ] as const)(
-    'commands_WithASelectedSession_RunThroughTheEngine %s',
-    async (command) => {
+    'commands_WithASelectedSession_RunThroughTheEngine %s, target %s',
+    async (command, targetSessionId, sessionId) => {
       const { large, selected, stageActions } = setUp();
       selected('s1');
 
-      large.started().commands[command]({ arg: undefined });
+      large.started().commands[command]({ arg: undefined, targetSessionId });
       await settle();
 
-      expect(stageActions()).toEqual([{ sessionId: 's1', action: command }]);
+      expect(stageActions()).toEqual([{ sessionId, action: command }]);
     },
   );
 

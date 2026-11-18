@@ -23,6 +23,15 @@ interface SchemaParts {
   };
 }
 
+// The command flags of the schema.
+interface CommandFlagParts {
+  properties: {
+    commands: {
+      additionalProperties: { properties: { risky: object; targets: object } };
+    };
+  };
+}
+
 describe('manifestSchema', () => {
   it("states the manifest's fields and the id rule", () => {
     const schema = manifestSchema as SchemaParts;
@@ -60,5 +69,13 @@ describe('manifestSchema', () => {
     expect(
       schema.properties.keys.properties.remaps.items.properties.mode.enum,
     ).toEqual(EDITOR_MODES);
+  });
+
+  it("states a command's risky and targets as only true", () => {
+    const schema = manifestSchema as CommandFlagParts;
+    const command = schema.properties.commands.additionalProperties.properties;
+
+    expect(command.risky).toEqual({ const: true });
+    expect(command.targets).toEqual({ const: true });
   });
 });

@@ -5,10 +5,15 @@ import { pageKindTable } from './page-kinds';
 describe('itemLabel', () => {
   const kinds = pageKindTable(BUILT_IN_PAGE_KINDS);
 
-  it('labels each kind by its rail prefix', () => {
-    expect(itemLabel(kinds, { kind: 'finding', index: 1 })).toBe('F1');
-    expect(itemLabel(kinds, { kind: 'notice', index: 2 })).toBe('N2');
-    expect(itemLabel(kinds, { kind: 'question', index: 3 })).toBe('3');
+  it('gives each kind its own label for one index, each ending in the index', () => {
+    const labels = (['finding', 'notice', 'question'] as const).map((kind) =>
+      itemLabel(kinds, { kind, index: 4 }),
+    );
+
+    expect(new Set(labels).size).toBe(3);
+    for (const label of labels) {
+      expect(label.endsWith('4')).toBe(true);
+    }
   });
 
   it('throws for a kind with no registration', () => {

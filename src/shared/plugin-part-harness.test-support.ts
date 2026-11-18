@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
-import type { CommandId } from '../contracts/commands';
+import type { CommandHop, CommandId } from '../contracts/commands';
 import {
   coreModeSlot,
   coreRuntimeMainSlot,
@@ -38,6 +38,7 @@ import type {
   MainServices,
   MainStart,
   Mode,
+  ModeContext,
   ModeHandle,
   PageApi,
   LayoutShow,
@@ -66,6 +67,7 @@ import { CommandRegistry } from './command-registry';
 import { dataUrl } from './data-url';
 import { createEventBus, type EventBus, pluginEvents } from './event-bus';
 import { gateExternalLinks } from './external-links';
+import { createFakeLoginStart } from './fake-login-start';
 import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
 import { createListeners, type Listeners } from './listeners';
@@ -100,6 +102,7 @@ import { scopedFiles } from './scoped-files';
 import {
   createSlotStore,
   layoutState,
+  mainPluginState,
   pluginState,
   type SlotStore,
 } from './state/slot-store';
@@ -139,9 +142,11 @@ export const noCounts: Readonly<PartCounts> = {
   frames: 0,
 };
 
+// `hop` holds the run's sessions and whether it reports.
 export interface HarnessCommandRun {
   id: CommandId;
   arg: unknown;
+  hop: CommandHop;
 }
 
 // `started` throws while the part is stopped. `ready` calls every started
@@ -160,7 +165,8 @@ export interface HarnessCommandRun {
 // held until the writer's `dispose` and `counts` does not hold it, so a test
 // publishes each key once and disposes the writer of a key the part under test
 // publishes before that part starts. `commandRuns` holds each run sent to the
-// other process, in order, under its qualified id.
+// other process, in order, under its qualified id with its hop; each resolves
+// `ran`.
 export interface PartHarness<Started> {
   started(): Started;
   ready(): void;
@@ -241,6 +247,8 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   isCapturing(): boolean;
   // The live mode added under qualified id `id`; throws when none is live.
   mode(id: string): Mode;
+  // The title bar context the live mode `id`'s handle set last; null before any.
+  modeContext(id: string): ModeContext | null;
   // Sets what every mode handle's `sideBarShown` reads; false until set.
   setSideBarShown(isShown: boolean): void;
   // The base scope `keys.setScope` set last, qualified; `idle` at the start.
@@ -469,7 +477,7 @@ function lazyCatalogWriter(
 
 // What every part of the harness runs commands on: a real registry and router over
 // the commands `manifests` declare and the catalog slots. A run sent to the other
-// process joins `commandRuns`.
+// process joins `commandRuns` with its hop, and resolves `ran`.
 function createWorld(
   state: SlotStore | undefined,
   process: ProcessName,
@@ -503,9 +511,9 @@ function createWorld(
       other: store.read(otherKey, 'core'),
       served: () => declared,
       leader: () => ' ',
-      remote(id, arg) {
-        commandRuns.push({ id, arg });
-        return Promise.resolve();
+      async remote(id, arg, hop) {
+        commandRuns.push({ id, arg, hop });
+        return 'ran';
       },
     }),
   };
@@ -1001,7 +1009,7 @@ function fakeMainApi(
       register: () => fakeLayoutsRegister(manifest, record, register),
       names: () => ['default'],
     },
-    state: common.state,
+    state: mainPluginState(world.state, manifest, common.register),
     services: {
       clock: common.clock,
       randomHex: world.randomHex,
@@ -1032,6 +1040,7 @@ function fakeMainApi(
       screenCapture: notFaked<ScreenCapture>('screenCapture'),
       // Refuses no switch-off.
       pluginSwitch: { mayDisable: async () => null },
+      loginStart: createFakeLoginStart(),
       ...replaced,
       files:
         replaced.files === undefined
@@ -1146,12 +1155,14 @@ function newPageRecord(
   };
 }
 
-// A mode the fake registry holds: its qualified id, the calls it hears, and
-// the mode a part added, null for the harness's own first mode.
+// A mode the fake registry holds: its qualified id, the calls it hears, the
+// mode a part added, null for the harness's own first mode, and the context its
+// handle set last.
 interface FakeLiveMode {
   id: string;
   mode: Pick<Mode, 'shown' | 'hidden'>;
   added: Mode | null;
+  context: ModeContext | null;
 }
 
 // What every page part of one harness shares: the page core's single slots.
@@ -1214,6 +1225,7 @@ function createPageWorld(
         id: 'part-harness.first-mode',
         mode: { shown() {}, hidden() {} },
         added: null,
+        context: null,
       }
     : null;
   const world: PageWorld = {
@@ -1314,7 +1326,7 @@ function fakeModes(
       if (liveModes.some((live) => live.id === id)) {
         throw new Error(`Mode "${id}" is added twice`);
       }
-      const entry: FakeLiveMode = { id, mode, added: mode };
+      const entry: FakeLiveMode = { id, mode, added: mode, context: null };
       liveModes.push(entry);
       const isDisposed = () => !liveModes.includes(entry);
       const handle: ModeHandle = common.register({
@@ -1326,7 +1338,9 @@ function fakeModes(
           revealFakeMode(world, entry);
         },
         isShown: () => world.shownMode === entry,
-        setContext() {},
+        setContext(context) {
+          entry.context = context;
+        },
         toggleSideBar() {
           if (mode.sideBar === undefined && !isDisposed()) {
             throw new Error(`Mode "${id}" has no side bar`);
@@ -1886,6 +1900,13 @@ export function startPagePart<M extends PluginManifest>(
         throw new Error(`part harness: no live mode ${id}`);
       }
       return live;
+    },
+    modeContext(id) {
+      const live = world.liveModes.find((entry) => entry.id === id);
+      if (live === undefined) {
+        throw new Error(`part harness: no live mode ${id}`);
+      }
+      return live.context;
     },
     setSideBarShown(isShown) {
       world.isSideBarShown = isShown;

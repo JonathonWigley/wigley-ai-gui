@@ -1,14 +1,19 @@
+import { spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   renameSync,
   rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
 } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
-import { tmpdir } from 'node:os';
+import { tmpdir, uptime } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { osPlatform } from '../os-platform';
@@ -17,6 +22,8 @@ import {
   type ChannelHandlers,
   connectToChannel,
   listenOnChannel,
+  releaseHeldLocks,
+  settleMovedLock,
 } from './local-channel';
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -28,9 +35,14 @@ afterEach(async () => {
 });
 
 // macOS caps a socket path near 104 bytes, so the folder name stays short.
-function tempChannel(): string {
+function tempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'lc-'));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function tempChannel(): string {
+  const dir = tempDir();
   return channelPath(
     osPlatform(process.platform),
     dir,
@@ -54,6 +66,26 @@ async function leaveStaleSocket(channel: string) {
   renameSync(channel, kept);
   await new Promise((resolve) => server.close(resolve));
   renameSync(kept, channel);
+}
+
+function lockText(channel: string): string | null {
+  const lock = `${channel}.lock`;
+  return existsSync(lock) ? readFileSync(lock, 'utf8') : null;
+}
+
+function writeLock(channel: string, text: string) {
+  mkdirSync(path.dirname(channel), { recursive: true });
+  writeFileSync(`${channel}.lock`, text);
+}
+
+function dateLockBeforeBoot(channel: string) {
+  const beforeBootSeconds = (Date.now() - uptime() * 1000 - 60_000) / 1000;
+  utimesSync(`${channel}.lock`, beforeBootSeconds, beforeBootSeconds);
+}
+
+// A child that has exited and been reaped, so its pid no longer runs.
+function deadPid(): number {
+  return spawnSync(process.execPath, ['-e', '']).pid;
 }
 
 function listen(channel: string, handlers: Partial<ChannelHandlers> = {}) {
@@ -110,6 +142,106 @@ describe('listenOnChannel', () => {
     await vi.waitFor(() => expect(reachedFirst).toEqual(['reached']));
   });
 
+  it.skipIf(channelIsPipe).each([
+    { label: 'no socket file', prepare: async (_channel: string) => {} },
+    { label: 'a stale socket file', prepare: leaveStaleSocket },
+    {
+      label: 'a stale lock',
+      prepare: async (channel: string) => writeLock(channel, `${deadPid()}`),
+    },
+  ])(
+    'listenOnChannel_TwoInOneTick_OneListensAndTheOtherFailsInUse: $label',
+    async ({ prepare }) => {
+      const channel = tempChannel();
+      await prepare(channel);
+      const failed = [
+        vi.fn<(error: Error) => void>(),
+        vi.fn<(error: Error) => void>(),
+      ];
+
+      const servers = failed.map((onFailed) =>
+        listen(channel, { failed: onFailed }),
+      );
+      const listening = await Promise.all(
+        servers.map((server) => server.listening),
+      );
+
+      expect(listening.filter(Boolean)).toHaveLength(1);
+      const loser = failed[listening.indexOf(false)];
+      expect(loser).toHaveBeenCalledOnce();
+      expect(loser.mock.calls[0][0]).toMatchObject({ code: 'EADDRINUSE' });
+      expect(lockText(channel)).toBe(`${process.pid}`);
+    },
+  );
+
+  it.skipIf(channelIsPipe)(
+    'listenOnChannel_LiveListenerItsSocketFileRemoved_FailsInUseAndTheFirstStillServes',
+    async () => {
+      const channel = tempChannel();
+      const reachedFirst: string[] = [];
+      const first = listen(channel, {
+        connected: (socket) =>
+          socket.on('data', (chunk) => reachedFirst.push(chunk.toString())),
+      });
+      await first.listening;
+      const kept = `${channel}.kept`;
+      renameSync(channel, kept);
+      const failed = vi.fn<(error: Error) => void>();
+
+      const second = listen(channel, { failed });
+
+      expect(await second.listening).toBe(false);
+      expect(failed.mock.calls[0][0]).toMatchObject({ code: 'EADDRINUSE' });
+      expect(existsSync(channel)).toBe(false);
+      const client = await connectClient(kept);
+      client.write('reached');
+      await vi.waitFor(() => expect(reachedFirst).toEqual(['reached']));
+    },
+  );
+
+  it.skipIf(channelIsPipe).each([
+    {
+      label: 'a pid that does not run',
+      holder: deadPid,
+      beforeBoot: false,
+      listens: true,
+    },
+    { label: 'no pid', holder: () => '', beforeBoot: false, listens: true },
+    {
+      label: 'another pid that runs, written this boot',
+      holder: () => process.ppid,
+      beforeBoot: false,
+      listens: false,
+    },
+    {
+      label: 'another pid that runs, written before boot',
+      holder: () => process.ppid,
+      beforeBoot: true,
+      listens: true,
+    },
+    {
+      label: 'this process, held by none of its servers',
+      holder: () => process.pid,
+      beforeBoot: false,
+      listens: true,
+    },
+  ])(
+    'listenOnChannel_LockFile_ListensOnlyWhenTheLockIsStale: $label',
+    async ({ holder, beforeBoot, listens }) => {
+      const channel = tempChannel();
+      const held = `${holder()}`;
+      writeLock(channel, held);
+      if (beforeBoot) {
+        dateLockBeforeBoot(channel);
+      }
+
+      const server = listen(channel);
+
+      expect(await server.listening).toBe(listens);
+      expect(lockText(channel)).toBe(listens ? `${process.pid}` : held);
+    },
+  );
+
   it.skipIf(channelIsPipe)(
     'listenOnChannel_ConnectDeniedOnASocketFile_CountsAsInUseAndKeepsTheFile',
     async () => {
@@ -157,6 +289,94 @@ describe('listenOnChannel', () => {
 
     await clientClosed;
   });
+
+  it.skipIf(channelIsPipe).each([
+    { label: 'its own lock goes', takenBy: null, left: null },
+    { label: 'a lock another pid took stays', takenBy: '777', left: '777' },
+  ])('close_Lock_DeletesOnlyItsOwn: $label', async ({ takenBy, left }) => {
+    const channel = tempChannel();
+    const server = listen(channel);
+    await server.listening;
+    if (takenBy !== null) {
+      writeLock(channel, takenBy);
+    }
+
+    await server.close();
+
+    expect(lockText(channel)).toBe(left);
+  });
+
+  it.skipIf(channelIsPipe)(
+    'exit_ServerListening_TheExitListenerReleasesItsLock',
+    async () => {
+      const channel = tempChannel();
+      const server = listen(channel);
+      await server.listening;
+      const exitListener = process
+        .listeners('exit')
+        .find((listener) => listener === releaseHeldLocks);
+
+      exitListener?.(0);
+
+      expect(exitListener).toBeDefined();
+      expect(lockText(channel)).toBeNull();
+    },
+  );
+});
+
+// A lock file whose inode and text a take-over judged.
+function judgeLockAt(file: string, text: string) {
+  writeFileSync(file, text);
+  const { ino, mtimeMs } = statSync(file);
+  return { ino, mtimeMs, text };
+}
+
+describe('settleMovedLock', () => {
+  it.each([
+    {
+      label: 'the judged lock was moved: the path stays free',
+      movedTheJudged: true,
+      arrived: null,
+      settled: true,
+      left: null,
+    },
+    {
+      label: 'a newer lock was moved: it is put back',
+      movedTheJudged: false,
+      arrived: null,
+      settled: false,
+      left: 'newer',
+    },
+    {
+      label:
+        'a newer lock was moved and another arrived: the arrived one stays',
+      movedTheJudged: false,
+      arrived: 'arrived',
+      settled: false,
+      left: 'arrived',
+    },
+  ])(
+    'settleMovedLock_MovedLock_SettlesOnlyTheJudgedOneAndKeepsALockAtThePath: $label',
+    ({ movedTheJudged, arrived, settled, left }) => {
+      const channel = path.join(tempDir(), 'channel');
+      const lock = `${channel}.lock`;
+      const moved = `${lock}.moved`;
+      const judged = movedTheJudged
+        ? judgeLockAt(moved, 'stale')
+        : judgeLockAt(`${lock}.judged`, 'stale');
+      if (!movedTheJudged) {
+        writeFileSync(moved, 'newer');
+      }
+      if (arrived !== null) {
+        writeFileSync(lock, arrived);
+      }
+
+      expect(settleMovedLock(lock, moved, judged)).toBe(settled);
+
+      expect(lockText(channel)).toBe(left);
+      expect(existsSync(moved)).toBe(false);
+    },
+  );
 });
 
 describe('connectToChannel', () => {

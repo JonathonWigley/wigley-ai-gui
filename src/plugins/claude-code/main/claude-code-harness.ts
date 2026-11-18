@@ -14,43 +14,50 @@ import {
   type PermissionDecision,
   type PlanUsage,
   type ProcessActivity,
+  type UserMessage,
 } from '../../../contracts/agent';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
+import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
   ProcessRunner,
   SpawnedProcess,
-  SpawnEvents,
   SpawnStartError,
 } from '../../../contracts/processes';
 import type {
   HostedExit,
   HostedProcess,
   HostedProcessEvents,
-  IdleRule,
-  KeyPath,
+  HostedSpawn,
   PipeLine,
   SessionHost,
 } from '../../../contracts/session-host';
 import { errorText } from '../../../shared/error-text';
+import { programNotFoundMessage } from '../../../shared/program-lookup';
 import {
   type AgentDefinitions,
   loadAgentDefinitions,
 } from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import {
+  CLAUDE_CARRIED_ENV,
   type ClaudeStart,
   claudeConfigFolder,
   claudeEnv,
-  claudeLaunch,
+  claudeSpawn,
   defaultConfigFolder,
 } from './claude-launch';
 import {
+  CLAUDE_OPENING_REQUESTS,
+  capClaudeControls,
+  claudeOpeningLines,
+  claudeStartControls,
   controlMessage,
   controlOf,
+  controlRequest,
   isChoice,
   startingControls,
   userMessage,
@@ -64,6 +71,7 @@ import {
   readSavedReplies,
   readSessionName,
 } from './past-sessions';
+import { createPendingPipe } from './pending-pipe';
 import {
   CANCELLED_REASON,
   permissionReplyText,
@@ -104,10 +112,12 @@ export const CLAUDE_TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
 export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 
 // `host` runs each session's `claude` process, so it outlives the app;
-// `processes` spawns the one-shot commands, which must not. `command` reads the
-// `claude` binary's path, once per process spawned;
+// `processes` spawns the one-shot commands, which must not. `command` gives the
+// `claude` program and its leading args, read once per launch and once per
+// `prepareRun`, null when none was found;
 // `permissions` routes each row's `permission_prompt` calls to the row's
-// process; `env` the environment every process starts from; `files` reads
+// process; `env` the environment every process starts from, of which a
+// prepared run carries only `CLAUDE_CARRIED_ENV`; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
@@ -117,13 +127,13 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // reads the profile's `settings.json` and the agent definitions at each session
 // start. `profiles` reads the harness's profiles at each `info()` call.
 export interface ClaudeCodeHarnessDeps {
-  command(): string;
+  command(): Promise<ProgramCandidate | null>;
   profiles(): readonly HarnessProfile[];
   permissions: PermissionRoute;
   env: Readonly<Record<string, string>>;
   log: Log;
   host: SessionHost;
-  processes: ProcessRunner;
+  processes: Pick<ProcessRunner, 'spawn'>;
   files: Files;
   homeDir: string;
   paths: Paths;
@@ -131,21 +141,6 @@ export interface ClaudeCodeHarnessDeps {
   randomUuid: RandomUuid;
 }
 
-// A stdout line of type `result` ends a turn. The app's `user` line starts one,
-// and `assistant` or `stream_event` shows one Claude started by itself, after a
-// background task ended. `system` and the rest also print between turns.
-export const CLAUDE_IDLE_RULE: IdleRule = {
-  key: 'type',
-  value: 'result',
-  busyStdoutValues: ['assistant', 'stream_event'],
-  busyStdinValues: ['user'],
-};
-// A `get_settings` reply's settings-file copies, which hold the `env` block's
-// values. The fold reads only the reply's `applied`.
-export const CLAUDE_DROPPED_OUT_KEYS: readonly KeyPath[] = [
-  ['response', 'response', 'effective'],
-  ['response', 'response', 'sources'],
-];
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
@@ -180,6 +175,18 @@ function spawnError(error: string, command: string, cwd: string): string {
   return error.includes('ENOENT')
     ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude-code.command`
     : error;
+}
+
+// The `claude` program a launch runs. Rejects with `programNotFoundMessage`
+// when the lookup found none, and with `command`'s own error when it rejects.
+async function claudeProgram(
+  deps: ClaudeCodeHarnessDeps,
+): Promise<ProgramCandidate> {
+  const program = await deps.command();
+  if (program === null) {
+    throw new Error(programNotFoundMessage('claude'));
+  }
+  return program;
 }
 
 // `events` with a failed spawn's error carrying `spawnError`'s hint.
@@ -424,32 +431,15 @@ function createClaudeSession(
 
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
-  // `init` waits for the first message; this answers at once.
-  const requestCommands = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'initialize' },
-    });
-  };
-
   // This request and `requestAppliedSettings` are asked at start and after every
   // turn, a control command's included: `/model` changes the window and the limit,
   // and `/effort` and `/model` change the applied model and effort.
   const requestContextUsage = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'get_context_usage' },
-    });
+    writeMessage(controlRequest('get_context_usage', nextRequestId()));
   };
 
   const requestAppliedSettings = () => {
-    writeMessage({
-      type: 'control_request',
-      request_id: nextRequestId(),
-      request: { subtype: 'get_settings' },
-    });
+    writeMessage(controlRequest('get_settings', nextRequestId()));
   };
 
   const answerOwed = () => {
@@ -646,9 +636,10 @@ function createClaudeSession(
       events.controls(state.controls.map((control) => ({ ...control }))),
     );
     emitActivity('idle');
-    requestCommands();
-    requestContextUsage();
-    requestAppliedSettings();
+    // `initialize` answers at once, where `init` waits for the first message.
+    for (const subtype of CLAUDE_OPENING_REQUESTS) {
+      writeMessage(controlRequest(subtype, nextRequestId()));
+    }
   };
 
   const agentProcess: AgentProcess = {
@@ -685,11 +676,7 @@ function createClaudeSession(
         kill();
         return;
       }
-      writeMessage({
-        type: 'control_request',
-        request_id: nextRequestId(),
-        request: { subtype: 'interrupt' },
-      });
+      writeMessage(controlRequest('interrupt', nextRequestId()));
       // Claude's interrupt leaves a main agent's background Bash running.
       for (const taskId of runningTaskIds) {
         writeMessage({
@@ -873,6 +860,10 @@ function createPipeForwarder() {
 }
 
 // A new session (a null `request.sessionId`) runs under a uuid the adapter mints; the session id is reported first.
+// The session holds a pending pipe from the start, and the host spawns once the
+// command resolves: a kill before then ends the session with its signal and a
+// detach ends nothing, each spawning nothing; a command not found ends it with
+// the lookup's text.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -882,23 +873,50 @@ function startClaudeProcess(
     ...request,
     sessionId: request.sessionId ?? deps.randomUuid(),
   };
-  const launch = claudeLaunch(started, deps.env, deps.homeDir, deps.paths);
-  const command = deps.command();
   const forwarder = createPipeForwarder();
-  const pipe = deps.host.spawn(
-    {
-      id: started.processId,
-      command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: launch.env,
-      idleRule: CLAUDE_IDLE_RULE,
-      droppedOutKeys: CLAUDE_DROPPED_OUT_KEYS,
-    },
-    withSpawnHint(forwarder.events, command, launch.cwd),
-  );
+  const pending = createPendingPipe(started.processId);
   const state = createSessionFoldState(started);
-  const session = createClaudeSession(deps, started, events, state, pipe);
+  const session = createClaudeSession(
+    deps,
+    started,
+    events,
+    state,
+    pending.pipe,
+  );
+  void claudeProgram(deps)
+    .then(
+      (program): ProgramCandidate | string => program,
+      (error: unknown) => errorText(error),
+    )
+    .then((found) => {
+      const stoppedBy = pending.stoppedBy();
+      if (stoppedBy === 'detach') {
+        return;
+      }
+      if (stoppedBy !== null) {
+        forwarder.events.closed({ code: null, signal: stoppedBy, error: null });
+        return;
+      }
+      if (typeof found === 'string') {
+        forwarder.events.closed({ code: null, signal: null, error: found });
+        return;
+      }
+      const spec = claudeSpawn({
+        request: started,
+        program: found,
+        env: deps.env,
+        homeDir: deps.homeDir,
+        paths: deps.paths,
+        stdin: [],
+        inheritEnv: false,
+      });
+      pending.attach(
+        deps.host.spawn(
+          spec,
+          withSpawnHint(forwarder.events, spec.command, spec.cwd),
+        ),
+      );
+    });
   session.keepRoute(
     deps.permissions.route(started.rowId, Promise.resolve(session.permissions)),
   );
@@ -916,6 +934,58 @@ function startClaudeProcess(
     state.definitions = loaded;
   });
   return session.process;
+}
+
+// The controls whose values a launch passes to a flag Claude checks only at
+// run time; `model` also takes a full model id, so it is not checked.
+const CHECKED_START_CONTROLS = ['mode', 'effort'] as const;
+
+// The spec of a new session the host starts later: its stdin opens the session
+// and sends `firstMessage`, its env holds the `CLAUDE_CARRIED_ENV` names of
+// `deps.env` under `env`, before the launch's own values, and its unset names
+// also hold each carried name that env lacks, so the child takes none from the
+// host's own environment. Rejects on a resumed request, on a request with no
+// session id, on a `mode` or `effort` value Claude does not offer, and as a
+// launch does when the `claude` program is not found.
+async function prepareClaudeRun(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  firstMessage: UserMessage,
+  env: Readonly<Record<string, string>>,
+): Promise<HostedSpawn> {
+  if (request.resume) {
+    throw new Error('A prepared run starts a new session');
+  }
+  const { sessionId } = request;
+  if (sessionId === null) {
+    throw new Error('A prepared run needs a session id');
+  }
+  const offered = claudeStartControls();
+  for (const id of CHECKED_START_CONTROLS) {
+    const value = request.controls[id];
+    if (value !== undefined && !isChoice(offered, id, value)) {
+      throw new Error(`Claude Code control ${id} has no choice ${value}`);
+    }
+  }
+  const carried = Object.fromEntries(
+    CLAUDE_CARRIED_ENV.flatMap((name) => {
+      const value = deps.env[name];
+      return value === undefined ? [] : [[name, value]];
+    }),
+  );
+  const spec = claudeSpawn({
+    request: { ...request, sessionId },
+    program: await claudeProgram(deps),
+    env: { ...carried, ...env },
+    homeDir: deps.homeDir,
+    paths: deps.paths,
+    stdin: claudeOpeningLines(firstMessage, deps.randomUuid()),
+    inheritEnv: true,
+  });
+  const absentNames = CLAUDE_CARRIED_ENV.filter(
+    (name) => !(name in spec.env) && !spec.unsetEnv.includes(name),
+  );
+  return { ...spec, unsetEnv: [...spec.unsetEnv, ...absentNames] };
 }
 
 // Attaches to the running process `request.processId`: replays a resumed
@@ -1037,52 +1107,75 @@ function commandLabel(args: readonly string[]): string {
   return ['claude', ...words].join(' ');
 }
 
-// `claude <args>` as `command` for `profileDir`, in the home folder with the
-// session launch's environment.
+// What a one-shot `claude` run reports: its output, then its exit, or the
+// `claude-code.command` hint when it could not start.
+interface CliEvents {
+  stdout(chunk: string): void;
+  stderr(chunk: string): void;
+  exited(code: number | null, signal: string | null): void;
+  failed(message: string): void;
+}
+
+// `claude <args>` as `program` for `profileDir`, in the home folder with the
+// session launch's environment, the program's leading args first.
 function spawnCli(
   deps: ClaudeCodeHarnessDeps,
-  command: string,
+  program: ProgramCandidate,
   args: readonly string[],
   profileDir: string | null,
-  events: SpawnEvents,
+  events: CliEvents,
 ): SpawnedProcess {
-  return deps.processes.spawn(command, args, {
+  return deps.processes.spawn(program.command, [...program.args, ...args], {
     cwd: deps.homeDir,
     env: claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths),
-    events,
+    events: {
+      stdout: (chunk) => events.stdout(chunk),
+      stderr: (chunk) => events.stderr(chunk),
+      closed: (exit) => {
+        if (exit.startError === null) {
+          events.exited(exit.code, exit.signal);
+        } else {
+          events.failed(cliSpawnError(exit.startError, program.command));
+        }
+      },
+    },
   });
 }
 
-// Runs `claude <args>` to its exit, stdin closed. Rejects with the
+// Runs `claude <args>` to its exit, stdin closed. Rejects with the lookup's
+// not-found text when no `claude` was found, spawning nothing, with the
 // `claude-code.command` hint when the process cannot start, and, given
 // `timeoutMs`, kills the child and rejects when it has not exited by then.
-function runCli(
+async function runCli(
   deps: ClaudeCodeHarnessDeps,
   args: readonly string[],
   profileDir: string | null,
   timeoutMs: number | null,
 ): Promise<CliRun> {
+  const program = await claudeProgram(deps);
   return new Promise((resolve, reject) => {
-    const command = deps.command();
     let stdout = '';
     let stderr = '';
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const child = spawnCli(deps, command, args, profileDir, {
+    const stopTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+    const child = spawnCli(deps, program, args, profileDir, {
       stdout: (chunk) => {
         stdout += chunk;
       },
       stderr: (chunk) => {
         stderr += chunk;
       },
-      closed: (exit) => {
-        if (timer !== null) {
-          clearTimeout(timer);
-        }
-        if (exit.startError !== null) {
-          reject(new Error(cliSpawnError(exit.startError, command)));
-          return;
-        }
-        resolve({ code: exit.code, stdout, stderr: stderr.trim() });
+      exited: (code) => {
+        stopTimer();
+        resolve({ code, stdout, stderr: stderr.trim() });
+      },
+      failed: (message) => {
+        stopTimer();
+        reject(new Error(message));
       },
     });
     child.endInput();
@@ -1175,7 +1268,10 @@ function isNewSignIn(
 // after a finished sign-in is unmeasured, so every exit reads the status, and
 // a status read as the login starts tells a new sign-in from the profile's
 // old one: a signed-in status ends the sign-in finished when the login exited
-// 0, the profile was signed out before, or the account changed.
+// 0, the profile was signed out before, or the account changed. The login
+// spawns once the command resolves: a code sent before then is dropped, since
+// the user pastes one only after the link, and a cancel before then spawns
+// nothing.
 function startLogIn(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
@@ -1183,7 +1279,7 @@ function startLogIn(
 ): LogInProcess {
   // A failed read leaves the earlier status unknown, read as signed out.
   const statusBefore = readAuthStatus(deps, profileDir).catch(() => null);
-  const command = deps.command();
+  let child: SpawnedProcess | null = null;
   let stdout = '';
   let stderr = '';
   let hasLink = false;
@@ -1226,36 +1322,39 @@ function startLogIn(
     );
   };
 
-  const child = spawnCli(deps, command, ['auth', 'login'], profileDir, {
-    stdout: (chunk) => {
-      stdout += chunk;
-      findLink(stdout);
-    },
-    stderr: (chunk) => {
-      stderr += chunk;
-      findLink(stderr);
-    },
-    closed: (exit) => {
-      if (exit.startError === null) {
-        endAfterExit(exit.code, exit.signal);
-      } else {
-        end(null, cliSpawnError(exit.startError, command));
+  void claudeProgram(deps).then(
+    (program) => {
+      if (hasEnded) {
+        return;
       }
+      child = spawnCli(deps, program, ['auth', 'login'], profileDir, {
+        stdout: (chunk) => {
+          stdout += chunk;
+          findLink(stdout);
+        },
+        stderr: (chunk) => {
+          stderr += chunk;
+          findLink(stderr);
+        },
+        exited: endAfterExit,
+        failed: (message) => end(null, message),
+      });
     },
-  });
+    (error: unknown) => end(null, errorText(error)),
+  );
 
   return {
     sendCode(code) {
       if (hasEnded) {
         return;
       }
-      child.write(`${code}\n`);
+      child?.write(`${code}\n`);
     },
     cancel() {
       if (hasEnded) {
         return;
       }
-      child.kill();
+      child?.kill();
       end(null, 'Sign-in cancelled');
     },
   };
@@ -1397,5 +1496,9 @@ export function createClaudeCodeHarness(
         projectsRoot(deps, profileDir),
       ),
     planUsage: (profileDir) => readProfilePlanUsage(deps, profileDir),
+    prepareRun: (request, firstMessage, env) =>
+      prepareClaudeRun(deps, request, firstMessage, env),
+    startControls: claudeStartControls,
+    capControls: capClaudeControls,
   };
 }

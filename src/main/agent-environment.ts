@@ -1,3 +1,5 @@
+import { APP_ENDPOINT_ENV } from '../shared/app-endpoint-dir';
+
 // The environment the app's agent sessions spawn with
 // (`services.agentEnvironment`): `env` with its undefined values dropped, so
 // none reaches a spawned process, and `WIGLEY_AI_GUI_ENDPOINT_DIR` set to
@@ -12,5 +14,5 @@ export function agentEnvironmentOf(
       (pair): pair is [string, string] => pair[1] !== undefined,
     ),
   );
-  return { ...definedEnv, WIGLEY_AI_GUI_ENDPOINT_DIR: endpointDir };
+  return { ...definedEnv, [APP_ENDPOINT_ENV]: endpointDir };
 }

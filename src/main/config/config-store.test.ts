@@ -36,6 +36,7 @@ const DEFAULTS: Settings = {
   keySequenceTimeoutMs: 1000,
   shell: { layout: 'default' },
   plugins: { disabled: ['d'] },
+  programs: { python: '' },
 };
 
 const DEFAULT_KEYMAP: DefaultKeymap = {

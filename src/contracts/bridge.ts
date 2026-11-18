@@ -1,4 +1,4 @@
-import type { CommandId } from './commands';
+import type { CommandHop, CommandId, CommandOutcome } from './commands';
 import type { Disposable } from './disposable';
 import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
@@ -76,12 +76,25 @@ export interface Bridge {
   onStateChange(
     listener: (seq: number, change: SlotChange) => void,
   ): Disposable;
-  // Runs a main command and resolves once its handler settles; rejects with
-  // main's text when main knows no such command or the argument is bad.
-  runCommand(id: CommandId, arg: unknown): Promise<void>;
-  // Calls `listener` with each page command main runs, and tells main once the
-  // returned promise settles.
-  onRunCommand(listener: (id: CommandId, arg: unknown) => Promise<void>): void;
+  // Runs a main command with `hop`'s sessions and resolves its outcome once its
+  // handler settles; rejects with main's text when main knows no such command or
+  // the argument is bad, and, for a hop with `reportErrors`, with the run's
+  // failure too.
+  runCommand(
+    id: CommandId,
+    arg: unknown,
+    hop?: CommandHop,
+  ): Promise<CommandOutcome>;
+  // Calls `listener` with each page command main runs and the hop main sent
+  // (`{}` when none), and tells main the outcome once the returned promise
+  // resolves, or `skipped` and the error text once it rejects.
+  onRunCommand(
+    listener: (
+      id: CommandId,
+      arg: unknown,
+      hop: CommandHop,
+    ) => Promise<CommandOutcome>,
+  ): void;
   // Calls `method` on the main part of plugin `pluginId`; rejects with main's
   // own error text when the handler throws.
   invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;

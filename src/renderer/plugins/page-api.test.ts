@@ -57,6 +57,7 @@ import { createRegistrations } from '../../shared/registrations';
 import {
   createRuntimeCommands,
   EMPTY_RUNTIME_CATALOG,
+  type RuntimeCommandsDeps,
 } from '../../shared/runtime-commands';
 import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import { createAnchors } from '../key-anchors';
@@ -159,7 +160,8 @@ function liveConfig(initial: AppConfig = appConfig()) {
 function pageCommandsOver(
   state: SlotStore,
   served: AppConfig['commands'] = {},
-  remote: (id: string, arg: unknown) => Promise<void> = () => Promise.resolve(),
+  remote: RuntimeCommandsDeps<PageCommandContext<any>>['remote'] = async () =>
+    'ran',
 ) {
   return createRuntimeCommands<PageCommandContext<any>>({
     process: 'page',
@@ -1486,6 +1488,7 @@ describe('createPageApi commands', () => {
     const remoteRuns: [string, unknown][] = [];
     const commands = pageCommandsOver(state, served, async (id, arg) => {
       remoteRuns.push([id, arg]);
+      return 'ran';
     });
     const api = createPageApi(
       manifest,

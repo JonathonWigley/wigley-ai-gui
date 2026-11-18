@@ -27,6 +27,7 @@ export interface UserFolderSourceDeps {
   codeRoot: string; // the absolute path of <user data>/plugin-code
   paths: Paths;
   importModule: (filePath: string) => Promise<Record<string, unknown>>;
+  removeFolder: (folderPath: string) => Promise<void>; // given an absolute path
   log: Log;
 }
 
@@ -83,7 +84,9 @@ type MainImport = { module: Record<string, unknown> } | { problem: string };
 // The user's plugin folders, `<config folder>/plugins/<id>/`. Each load copies
 // the folder to `<user data>/plugin-code/<id>/<revision>/` and imports the
 // copy's `main.js`, so every load, its relative imports included, is a new
-// module. A load never throws: a problem resolves `failed` with its message.
+// module. A plugin's first load in a launch deletes the revisions an earlier
+// launch left, and `loadAll` deletes the copies of plugins no longer in the
+// folder. A load never throws: a problem resolves `failed` with its message.
 // When the watch may have dropped changes (`onMissed`), each folder that came,
 // went, or whose reloading files' paths or modified times differ from its
 // last load settles, and loads if it still differs then.
@@ -108,8 +111,22 @@ export function createUserFolderSource(
     return { kind: 'failed', id, message };
   };
 
+  // Deletes the folder at `folderPath`, logging `failure` and the error when
+  // that fails rather than failing the load.
+  const removeFolderOrLog = async (
+    folderPath: string,
+    failure: string,
+  ): Promise<void> => {
+    try {
+      await deps.removeFolder(folderPath);
+    } catch (error) {
+      log(LOG_SOURCE, `${failure}: ${errorText(error)}`);
+    }
+  };
+
   // One above the highest revision folder an earlier launch left on disk
-  // for the id's first load in this launch; one above the last after that.
+  // for the id's first load in this launch, which also deletes those
+  // folders; one above the last after that.
   const nextRevision = async (id: string): Promise<number> => {
     let last = revisions.get(id);
     if (last === undefined) {
@@ -119,6 +136,12 @@ export function createUserFolderSource(
         .filter((name) => REVISION_NAME.test(name))
         .map(Number);
       last = Math.max(0, ...onDisk);
+      for (const old of onDisk) {
+        await removeFolderOrLog(
+          paths.join(deps.codeRoot, id, String(old)),
+          `plugin ${id} old revision ${old} not deleted`,
+        );
+      }
     }
     const revision = last + 1;
     revisions.set(id, revision);
@@ -375,6 +398,31 @@ export function createUserFolderSource(
     return changed;
   };
 
+  // Deletes the code folder of each plugin not in `names` that took no
+  // revision this launch.
+  const removeCodeOfGonePlugins = async (names: string[]): Promise<void> => {
+    const listed = new Set(names);
+    let codeFolders: string[];
+    try {
+      codeFolders = (await codeFolder.list(ROOT))
+        .filter((entry) => entry.kind === 'folder')
+        .map((entry) => entry.path);
+    } catch (error) {
+      log(LOG_SOURCE, `plugin code not listed: ${errorText(error)}`);
+      return;
+    }
+    for (const name of codeFolders) {
+      const isListed = listed.has(name);
+      const tookRevisionThisLaunch = revisions.has(name);
+      if (!isListed && !tookRevisionThisLaunch) {
+        await removeFolderOrLog(
+          paths.join(deps.codeRoot, name),
+          `plugin code ${name} not deleted`,
+        );
+      }
+    }
+  };
+
   const watch = (listener: (load: SourceLoad) => void) => {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     // The ids with a save under their folder since their last settle.
@@ -480,15 +528,16 @@ export function createUserFolderSource(
       const names = (await listPluginNames()).sort((a, b) =>
         a.localeCompare(b),
       );
-      const loads: SourceLoad[] = [];
+      const results: SourceLoad[] = [];
       for (const name of names) {
         const { load: loaded } = await loadInTurn(name);
         if (loaded.kind !== 'gone') {
-          loads.push(loaded);
+          results.push(loaded);
         }
       }
+      await loads.run(() => removeCodeOfGonePlugins(names));
       hasLoadedAll = true;
-      return loads;
+      return results;
     },
     watch,
     reload: async (id) => (await loadInTurn(id)).load,

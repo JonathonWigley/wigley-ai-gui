@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { InstalledPlugin } from '../../../contracts/agent';
-import type { Files } from '../../../contracts/files';
+import type { Files, WatchOptions } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import {
   createMemoryFiles,
@@ -1134,6 +1134,36 @@ describe('watch', () => {
     await test.docFiles.watch(path, () => {});
 
     expect(watched).toEqual([{ folder: ROOT, recursive: false }]);
+  });
+
+  // Breaks if a missed burst does not report a write the watch missed, or
+  // reports again with no new write, which sets off a caller that watches
+  // again on each change.
+  it('watch_OnMissed_CallsChangedOnlyWhenTheFileChanged', async () => {
+    let time = 10;
+    const memory = createMemoryFiles({ now: () => time });
+    await memory.write(path, 'a');
+    let watchOptions: WatchOptions | undefined;
+    const test = setUp({
+      files: {
+        ...memory,
+        watch: (_folder, _onChange, options) => {
+          watchOptions = options;
+          return { dispose: () => undefined };
+        },
+      },
+    });
+    let changes = 0;
+    await test.docFiles.watch(path, () => changes++);
+    time = 20;
+    await memory.write(path, 'b');
+
+    watchOptions?.onMissed?.();
+    await new Promise((settle) => setImmediate(settle));
+    watchOptions?.onMissed?.();
+    await new Promise((settle) => setImmediate(settle));
+
+    expect(changes).toBe(1);
   });
 });
 

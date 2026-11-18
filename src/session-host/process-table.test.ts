@@ -12,11 +12,19 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { HostedExit } from '../contracts/session-host';
 import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
-import { createProcessTable, type HostSpawn } from './process-table';
+import { CLAUDE_IDLE_RULE_COPY } from './claude-idle-rule-copy.test-support';
+import {
+  createProcessTable,
+  DRAIN_REPORT_GRACE_MS,
+  type HostSpawn,
+  type ProcessTable,
+} from './process-table';
 import {
   type FakeChild,
   fakeChild,
+  IDLE_RULE,
   manualTime,
   recordingSubscriber,
   spawnRequest,
@@ -24,9 +32,43 @@ import {
 } from './session-host-test-doubles';
 
 const HOUR_MS = 3_600_000;
+type ManualTime = ReturnType<typeof manualTime>;
 const USER = '{"type":"user"}';
 const RESULT = '{"type":"result"}';
 const SYSTEM = '{"type":"system"}';
+const userLine = (uuid: string) => JSON.stringify({ type: 'user', uuid });
+const lifecycle = (uuid: string, state: string) =>
+  JSON.stringify({ type: 'command_lifecycle', command_uuid: uuid, state });
+const resultFor = (...uuids: string[]) =>
+  JSON.stringify({ type: 'result', user_message_uuids: uuids });
+const backgroundTasks = (...kinds: string[]) =>
+  JSON.stringify({
+    type: 'system',
+    subtype: 'background_tasks_changed',
+    tasks: kinds.map((kind, index) => ({
+      task_id: `t${index}`,
+      task_type: kind,
+    })),
+  });
+const MAIN_ASSISTANT = '{"type":"assistant","parent_tool_use_id":null}';
+const SUBAGENT_ASSISTANT = '{"type":"assistant","parent_tool_use_id":"tu_1"}';
+const SUBAGENT_STREAM_EVENT =
+  '{"type":"stream_event","parent_tool_use_id":"tu_1"}';
+const SUBAGENT_MARKER = '{"type":"user","parent_tool_use_id":"tu_1"}';
+const TASK_KILLED = '{"type":"system","subtype":"task_updated"}';
+const TASK_STOPPED = '{"type":"system","subtype":"task_notification"}';
+const CONTROL_REPLY = '{"type":"control_response"}';
+const INIT = '{"type":"system","subtype":"init"}';
+// A turn on message A that launched a background subagent and ended.
+const SUBAGENT_LAUNCHED: [string, string][] = [
+  ['in', userLine('A')],
+  ['out', lifecycle('A', 'started')],
+  ['out', MAIN_ASSISTANT],
+  ['out', backgroundTasks('local_agent')],
+  ['out', resultFor('A')],
+  ['out', lifecycle('A', 'completed')],
+  ['out', SUBAGENT_ASSISTANT],
+];
 const folders: string[] = [];
 
 afterEach(() => {
@@ -35,7 +77,11 @@ afterEach(() => {
   }
 });
 
-function setUp(start = 0, spawnOverride?: HostSpawn) {
+function setUp(
+  start = 0,
+  spawnOverride?: HostSpawn,
+  env: NodeJS.ProcessEnv = {},
+) {
   const folder = mkdtempSync(path.join(tmpdir(), 'process-table-'));
   folders.push(folder);
   const logsFolder = path.join(folder, 'logs');
@@ -48,8 +94,10 @@ function setUp(start = 0, spawnOverride?: HostSpawn) {
     return fake.child;
   };
   const diagnosticLines: string[] = [];
+  const closedProcesses: { id: string; exit: HostedExit }[] = [];
   const table = createProcessTable({
     spawn: spawnOverride ?? spawn,
+    env,
     clock: time.clock,
     timers: time.timers,
     logsFolder,
@@ -57,11 +105,19 @@ function setUp(start = 0, spawnOverride?: HostSpawn) {
       append: (message) => diagnosticLines.push(message),
       setAsidePrevious: () => {},
     },
-    processClosed: () => {},
+    processClosed: (id, exit) => closedProcesses.push({ id, exit }),
   });
   const logFile = (name: string) => path.join(logsFolder, name);
   const logRecords = (name: string) => readFileSync(logFile(name), 'utf8');
-  return { table, time, children, logFile, logRecords, diagnosticLines };
+  return {
+    table,
+    time,
+    children,
+    logFile,
+    logRecords,
+    diagnosticLines,
+    closedProcesses,
+  };
 }
 
 describe('process table', () => {
@@ -154,6 +210,131 @@ describe('process table', () => {
       const logged = JSON.parse(logRecords('a.jsonl')) as { text: string };
       expect(logged.text).toBe(delivered);
       expect(lines.map((line) => line.text)).toEqual([delivered]);
+    },
+  );
+
+  const HOST_ENV = {
+    KEEP: 'a',
+    DROP: 'b',
+    ELECTRON_RUN_AS_NODE: '1',
+    BOTH: 'host',
+  };
+
+  it.each<{
+    label: string;
+    hostEnv: NodeJS.ProcessEnv;
+    inheritEnv: boolean;
+    unsetEnv: string[];
+    env: Readonly<Record<string, string>>;
+    childEnv: NodeJS.ProcessEnv;
+  }>([
+    {
+      label: 'unset names under an overlay',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: ['DROP', 'BOTH'],
+      env: { BOTH: 'spawn', NEW: 'c' },
+      childEnv: { KEEP: 'a', BOTH: 'spawn', NEW: 'c' },
+    },
+    {
+      label: 'no unset names and an empty overlay',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: [],
+      env: {},
+      childEnv: { KEEP: 'a', DROP: 'b', BOTH: 'host' },
+    },
+    {
+      label: 'an overlay that sets ELECTRON_RUN_AS_NODE',
+      hostEnv: HOST_ENV,
+      inheritEnv: true,
+      unsetEnv: [],
+      env: { ELECTRON_RUN_AS_NODE: '2' },
+      childEnv: {
+        KEEP: 'a',
+        DROP: 'b',
+        BOTH: 'host',
+        ELECTRON_RUN_AS_NODE: '2',
+      },
+    },
+    {
+      label: 'a host value undefined',
+      hostEnv: { KEEP: 'a', GONE: undefined },
+      inheritEnv: true,
+      unsetEnv: [],
+      env: { NEW: 'c' },
+      childEnv: { KEEP: 'a', NEW: 'c' },
+    },
+    {
+      label: 'a live start',
+      hostEnv: HOST_ENV,
+      inheritEnv: false,
+      unsetEnv: ['DROP'],
+      env: { NEW: 'c' },
+      childEnv: { NEW: 'c' },
+    },
+  ])(
+    'spawn_ChildEnv_HostEnvLessUnsetNamesUnderTheOverlay: $label',
+    ({ hostEnv, inheritEnv, unsetEnv, env, childEnv }) => {
+      const childEnvs: NodeJS.ProcessEnv[] = [];
+      const { table } = setUp(
+        0,
+        (_command, _args, options) => {
+          childEnvs.push(options.env);
+          return fakeChild().child;
+        },
+        hostEnv,
+      );
+
+      table.spawn(
+        { ...spawnRequest('a'), inheritEnv, unsetEnv, env },
+        recordingSubscriber().subscriber,
+      );
+
+      expect(childEnvs).toStrictEqual([childEnv]);
+    },
+  );
+
+  it.each([
+    {
+      label: 'a child that ran',
+      ran: true,
+      logged: [
+        { seq: 1, dir: 'in', at: 0, text: USER },
+        { seq: 2, dir: 'in', at: 0, text: 'x' },
+      ],
+      stdinText: `${USER}\nx\n`,
+      busy: true,
+    },
+    {
+      label: 'a child that never ran',
+      ran: false,
+      logged: [],
+      stdinText: '',
+      busy: false,
+    },
+  ])(
+    'spawn_StdinLines_LoggedAsInThenWrittenInOrder: $label',
+    async ({ ran, logged, stdinText, busy }) => {
+      const fake = fakeChild(ran);
+      const { table, time, logRecords } = setUp(0, () => fake.child);
+
+      table.spawn(
+        { ...spawnRequest('a'), stdin: [USER, 'x'] },
+        recordingSubscriber().subscriber,
+      );
+      const written: string[] = [];
+      fake.stdin.on('data', (chunk: Buffer) => written.push(chunk.toString()));
+      await streamsDelivered();
+
+      const records = logRecords('a.jsonl')
+        .split('\n')
+        .filter(Boolean)
+        .map((record) => JSON.parse(record) as unknown);
+      expect(records).toEqual(logged);
+      expect(written.join('')).toBe(stdinText);
+      time.advanceTo(2 * HOUR_MS);
+      expect(fake.stdin.writableEnded).toBe(!busy);
     },
   );
 
@@ -311,6 +492,203 @@ describe('process table', () => {
     },
   );
 
+  it.each<{ label: string; steps: [string, string][]; busy: boolean }>([
+    {
+      label: 'a background subagent at work after its turn ended',
+      steps: SUBAGENT_LAUNCHED,
+      busy: true,
+    },
+    {
+      label: 'a background subagent stopped by an interrupt, with no result',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['in', '{"type":"control_request"}'],
+        ['out', TASK_KILLED],
+        ['out', TASK_STOPPED],
+        ['out', backgroundTasks()],
+        ['out', CONTROL_REPLY],
+        ['out', SUBAGENT_MARKER],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a self-started turn after a background end',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['out', backgroundTasks()],
+        ['out', INIT],
+        ['out', MAIN_ASSISTANT],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a self-started turn after a background end, ended',
+      steps: [
+        ...SUBAGENT_LAUNCHED,
+        ['out', backgroundTasks()],
+        ['out', INIT],
+        ['out', MAIN_ASSISTANT],
+        ['out', RESULT],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message written during a turn, past the result of that turn',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'queued')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'that message, at its own lifecycle end',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'queued')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a folded message ended before the turn result, turn running',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a folded message ended before the turn result, turn ended',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', lifecycle('B', 'started')],
+        ['out', lifecycle('B', 'completed')],
+        ['out', resultFor('A', 'B')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message the turn end lists, before its lifecycle end',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['out', resultFor('A')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message started, not ended',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'started')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'messages open at a turn end, no lifecycle frame printed',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', RESULT],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message a turn end does not list, after a lifecycle frame',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'queued')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', resultFor('A')],
+      ],
+      busy: true,
+    },
+    {
+      label: 'a discarded message',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'queued')],
+        ['out', lifecycle('A', 'discarded')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'an interrupted message, cancelled after the error result',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', '{"type":"control_request"}'],
+        ['out', CONTROL_REPLY],
+        ['out', RESULT],
+        ['out', lifecycle('A', 'cancelled')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a stdin user line with no id, then silence',
+      steps: [['in', USER]],
+      busy: true,
+    },
+    {
+      label: 'a subagent stream_event',
+      steps: [['out', SUBAGENT_STREAM_EVENT]],
+      busy: false,
+    },
+    {
+      label: 'a turn that ended with a background Bash running',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['out', backgroundTasks('local_bash')],
+        ['out', resultFor('A')],
+        ['out', lifecycle('A', 'completed')],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a background subagent beside a background Bash',
+      steps: [['out', backgroundTasks('local_bash', 'local_agent')]],
+      busy: true,
+    },
+  ])(
+    'turnState_LineSequences_BusyWhileATurnAMessageOrBackgroundWorkIsOpen: $label → busy $busy',
+    async ({ steps, busy }) => {
+      const { table, time, children } = setUp();
+      table.spawn(
+        { ...spawnRequest('a'), idleRule: CLAUDE_IDLE_RULE_COPY },
+        recordingSubscriber().subscriber,
+      );
+      for (const [dir, text] of steps) {
+        if (dir === 'in') {
+          table.write('a', text);
+        } else {
+          children[0].stdout.write(`${text}\n`);
+        }
+      }
+      await streamsDelivered();
+
+      expect(table.isBusy('a')).toBe(busy);
+      time.advanceTo(HOUR_MS);
+      expect(children[0].stdin.writableEnded).toBe(!busy);
+    },
+  );
+
   it('keepWindow_IdleNoClient_EndsAfterTheWindowThenGraces', async () => {
     const { table, time, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
@@ -429,6 +807,104 @@ describe('process table', () => {
     },
   );
 
+  const DRAIN = 'drain';
+  // Each step at its time after the background line that lists none; `endsAt` null when only the report turn's
+  // `result` ends the process.
+  it.each<{ label: string; steps: [number, string][]; endsAt: number | null }>([
+    {
+      label: 'no report turn',
+      steps: [],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+    {
+      label: 'a report turn started within the grace',
+      steps: [
+        [DRAIN_REPORT_GRACE_MS / 2, INIT],
+        [DRAIN_REPORT_GRACE_MS / 2, MAIN_ASSISTANT],
+      ],
+      endsAt: null,
+    },
+    {
+      label: 'a report turn whose first busy line comes 3 s after its init',
+      steps: [
+        [DRAIN_REPORT_GRACE_MS - 1000, INIT],
+        [DRAIN_REPORT_GRACE_MS + 2000, MAIN_ASSISTANT],
+      ],
+      endsAt: null,
+    },
+    {
+      label: 'a main line within the grace, then silence',
+      steps: [[DRAIN_REPORT_GRACE_MS - 1000, INIT]],
+      endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
+    },
+    {
+      label: 'a subagent line within the grace',
+      steps: [[DRAIN_REPORT_GRACE_MS - 1000, SUBAGENT_ASSISTANT]],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+    {
+      label: 'a drain sent within the grace',
+      steps: [[DRAIN_REPORT_GRACE_MS / 2, DRAIN]],
+      endsAt: DRAIN_REPORT_GRACE_MS,
+    },
+    {
+      label: 'a second drain after a main line re-armed the grace',
+      steps: [
+        [0, DRAIN],
+        [DRAIN_REPORT_GRACE_MS - 1000, INIT],
+        [DRAIN_REPORT_GRACE_MS + 2000, DRAIN],
+      ],
+      endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
+    },
+  ])(
+    'drain_BackgroundWorkEnds_EndsAfterTheGraceOrAtTheReportTurnEnd: $label',
+    async ({ steps, endsAt }) => {
+      const { table, time, children } = setUp();
+      table.spawn(
+        { ...spawnRequest('a'), idleRule: CLAUDE_IDLE_RULE_COPY },
+        recordingSubscriber().subscriber,
+      );
+      for (const [dir, text] of SUBAGENT_LAUNCHED) {
+        if (dir === 'in') {
+          table.write('a', text);
+        } else {
+          children[0].stdout.write(`${text}\n`);
+        }
+      }
+      await streamsDelivered();
+      const drainsInTheGrace = steps.some(([, step]) => step === DRAIN);
+      if (!drainsInTheGrace) {
+        table.drain();
+      }
+      expect(children[0].stdin.writableEnded).toBe(false);
+
+      children[0].stdout.write(`${backgroundTasks()}\n`);
+      await streamsDelivered();
+      for (const [at, step] of steps) {
+        time.advanceTo(at);
+        if (step === DRAIN) {
+          table.drain();
+        } else {
+          children[0].stdout.write(`${step}\n`);
+          await streamsDelivered();
+        }
+      }
+      if (endsAt !== null) {
+        time.advanceTo(endsAt - 1);
+        expect(children[0].stdin.writableEnded).toBe(false);
+        time.advanceTo(endsAt);
+        expect(children[0].stdin.writableEnded).toBe(true);
+        return;
+      }
+      time.advanceTo(3 * DRAIN_REPORT_GRACE_MS);
+      expect(children[0].stdin.writableEnded).toBe(false);
+
+      children[0].stdout.write(`${RESULT}\n`);
+      await streamsDelivered();
+      expect(children[0].stdin.writableEnded).toBe(true);
+    },
+  );
+
   it('setKeepIdle_LongerWindow_ReArmsTheTimer', () => {
     const { table, time, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
@@ -502,7 +978,7 @@ describe('process table', () => {
   });
 
   it('close_EndsPendingSignals_AndDeletesTheLog', () => {
-    const { table, time, children, logFile } = setUp();
+    const { table, time, children, logFile, closedProcesses } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
     time.advanceTo(HOUR_MS);
 
@@ -515,6 +991,52 @@ describe('process table', () => {
     expect(children[0].stdout.destroyed).toBe(false);
     expect(existsSync(logFile('a.jsonl'))).toBe(false);
     expect(table.list()).toEqual([]);
+    expect(closedProcesses).toEqual([
+      { id: 'a', exit: { code: 0, signal: null, error: null } },
+    ]);
+  });
+
+  it.each<{
+    label: string;
+    spawns: boolean;
+    setUpProcess(table: ProcessTable, time: ManualTime): void;
+    busy: boolean;
+  }>([
+    {
+      label: 'an unknown id',
+      spawns: false,
+      setUpProcess: () => {},
+      busy: false,
+    },
+    {
+      label: 'an idle process',
+      spawns: true,
+      setUpProcess: () => {},
+      busy: false,
+    },
+    {
+      label: 'busy after a stdin user line',
+      spawns: true,
+      setUpProcess: (table) => table.write('a', USER),
+      busy: true,
+    },
+    {
+      label: 'ending, with a user line after the keep window ended it',
+      spawns: true,
+      setUpProcess: (table, time) => {
+        time.advanceTo(HOUR_MS);
+        table.write('a', USER);
+      },
+      busy: false,
+    },
+  ])('isBusy_Cases: $label', ({ spawns, setUpProcess, busy }) => {
+    const { table, time } = setUp();
+    if (spawns) {
+      table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+    }
+    setUpProcess(table, time);
+
+    expect(table.isBusy('a')).toBe(busy);
   });
 
   it.skipIf(process.platform === 'win32')(
@@ -643,6 +1165,48 @@ describe('process table', () => {
       error: 'idle rule',
     },
     {
+      label: 'the idle rule has no side key, as an older one',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: { ...IDLE_RULE, sideKey: undefined as never },
+      },
+      error: 'process a has no well-formed idle rule',
+    },
+    {
+      label: 'the message end has no end states',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: {
+          ...CLAUDE_IDLE_RULE_COPY,
+          messageEnd: {
+            value: 'command_lifecycle',
+            idKey: 'command_uuid',
+            stateKey: 'state',
+          } as never,
+        },
+      },
+      error: 'process a has no well-formed idle rule',
+    },
+    {
+      label: 'the background match holds a value that is not a string',
+      spawnFails: () => fakeChild().child,
+      request: {
+        ...spawnRequest('a'),
+        idleRule: {
+          ...CLAUDE_IDLE_RULE_COPY,
+          background: {
+            match: { type: 1 },
+            listKey: 'tasks',
+            kindKey: 'task_type',
+            kinds: ['local_agent'],
+          } as never,
+        },
+      },
+      error: 'process a has no well-formed idle rule',
+    },
+    {
       label: 'the dropped keys are missing',
       spawnFails: () => fakeChild().child,
       request: { ...spawnRequest('a'), droppedOutKeys: undefined as never },
@@ -653,6 +1217,30 @@ describe('process table', () => {
       spawnFails: () => fakeChild().child,
       request: { ...spawnRequest('a'), droppedOutKeys: [[]] },
       error: 'dropped keys',
+    },
+    {
+      label: 'an unset name is not a string',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), unsetEnv: [1] as never },
+      error: 'process a has no well-formed unset names',
+    },
+    {
+      label: 'the stdin lines are not an array',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), stdin: 'x' as never },
+      error: 'process a has no well-formed stdin lines',
+    },
+    {
+      label: 'an env value is not a string',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), env: { A: 1 } as never },
+      error: 'process a has no well-formed env',
+    },
+    {
+      label: 'inheritEnv is missing',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), inheritEnv: undefined as never },
+      error: 'process a has no well-formed inheritEnv',
     },
   ])(
     'spawn_Throws_ClosesWithTheMessageAndKeepsNoEntry: $label',

@@ -4,6 +4,7 @@ import { errorText } from '../../../shared/error-text';
 import {
   type AgentSession,
   errorResult,
+  type OfflineAnswer,
   textResult,
   type ToolDefinition,
   type ToolSession,
@@ -113,6 +114,22 @@ export function permissionReplyText(
         message: decision.reason ?? DEFAULT_DENY_MESSAGE,
       });
 }
+
+// permission_prompt's answer while the app is closed: a tool the run's
+// permission mode does not allow is denied, since nobody can allow it.
+export const PERMISSION_OFFLINE: OfflineAnswer = {
+  result: textResult(
+    permissionReplyText(
+      {
+        allowed: false,
+        reason:
+          "The app is closed: this run's permission mode does not allow this tool, so it was denied.",
+      },
+      undefined,
+    ),
+  ),
+  replay: false,
+};
 
 // The target a record's promise settles to; null when it settles null or
 // rejects.

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { Files } from '../../../../contracts/files';
 import { createMemoryFiles } from '../../../../shared/memory-files';
 import { posixPaths } from '../../../../shared/paths/posix-paths';
-import type { RelayEndpoint, ToolDefinition } from '../../contract';
+import {
+  type OfflineAnswer,
+  type RelayEndpoint,
+  textResult,
+  type ToolDefinition,
+} from '../../contract';
 import { createEndpointWriter, endedDriveRunLaunch } from './endpoint';
 
 async function readJson(files: Files, file: string): Promise<unknown> {
@@ -55,6 +60,9 @@ describe('createEndpointWriter', () => {
       inputSchema: { type: 'object' },
     },
   ];
+  const offline: Record<string, OfflineAnswer> = {
+    ask_round: { result: textResult('closed'), replay: false },
+  };
   const dir = '/home/.agents/wigley-ai-gui';
   let logged: string[];
 
@@ -69,25 +77,30 @@ describe('createEndpointWriter', () => {
     const files = createMemoryFiles();
     const writer = writerOver(files);
 
-    writer.write(endpoint, tools);
+    writer.write(endpoint, tools, offline);
     await writer.flushed();
 
     expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(endpoint);
     expect(await readJson(files, `${dir}/tools.json`)).toEqual({ tools });
+    expect(await readJson(files, `${dir}/offline.json`)).toEqual({
+      tools: offline,
+    });
   });
 
   it('replaces the files of an earlier start and leaves no temp file', async () => {
     const files = createMemoryFiles();
     const writer = writerOver(files);
-    writer.write(endpoint, tools);
+    writer.write(endpoint, tools, offline);
 
-    writer.write(moved, []);
+    writer.write(moved, [], {});
     await writer.flushed();
 
     expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(moved);
     expect(await readJson(files, `${dir}/tools.json`)).toEqual({ tools: [] });
+    expect(await readJson(files, `${dir}/offline.json`)).toEqual({ tools: {} });
     expect((await files.list(dir)).map((entry) => entry.path).sort()).toEqual([
       'endpoint.json',
+      'offline.json',
       'tools.json',
     ]);
   });
@@ -108,12 +121,15 @@ describe('createEndpointWriter', () => {
       },
     });
 
-    writer.write(endpoint, tools);
-    writer.write(moved, tools);
+    writer.write(endpoint, tools, {});
+    writer.write(moved, tools, offline);
     held.resolve();
     await writer.flushed();
 
     expect(await readJson(files, `${dir}/endpoint.json`)).toEqual(moved);
+    expect(await readJson(files, `${dir}/offline.json`)).toEqual({
+      tools: offline,
+    });
   });
 
   it('logs a failed write and still runs the next', async () => {
@@ -129,8 +145,8 @@ describe('createEndpointWriter', () => {
       },
     });
 
-    writer.write(endpoint, tools);
-    writer.write(moved, []);
+    writer.write(endpoint, tools, {});
+    writer.write(moved, [], {});
     await writer.flushed();
 
     expect(logged).toEqual([

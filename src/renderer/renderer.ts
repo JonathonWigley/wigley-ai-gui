@@ -182,19 +182,29 @@ async function start() {
     other: state.read(coreRuntimeMainSlot, 'core'),
     served: () => live.current().commands,
     leader: () => live.current().keymap.editor.leader,
-    async remote(id, arg) {
+    async remote(id, arg, hop) {
       try {
-        await bridge.runCommand(id, arg);
+        return await bridge.runCommand(id, arg, hop);
       } catch (error) {
+        if (hop.reportErrors === true) {
+          throw error;
+        }
         log('commands', `command ${id} failed: ${errorText(error)}`);
+        return 'skipped';
       }
     },
   });
-  bridge.onRunCommand(async (id, arg) => {
+  // A run that reports rejects, and the preload sends main its error text.
+  bridge.onRunCommand(async (id, arg, hop) => {
+    const { reportErrors, ...sessions } = hop;
     try {
-      await commands.router.run(id, arg);
+      return await commands.router.run(id, arg, sessions, { reportErrors });
     } catch (error) {
+      if (reportErrors === true) {
+        throw error;
+      }
       log('commands', `command ${id} failed: ${errorText(error)}`);
+      return 'skipped';
     }
   });
   const { settings, keymap } = config;

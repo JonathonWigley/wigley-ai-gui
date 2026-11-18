@@ -81,6 +81,7 @@ export function definePlugin<
       Partial<Record<SettingPath<NoInfer<T>>, string>>
     >;
     themeTokens: Readonly<Record<string, TokenDecl>>;
+    readsEverySlot?: true;
   } & NullKindsDeclared<NoInfer<T>>,
 ): typeof manifest {
   const idProblem = pluginIdProblem(manifest.id);

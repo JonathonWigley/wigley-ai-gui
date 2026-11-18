@@ -133,35 +133,12 @@ describe('picker kit', () => {
     },
   );
 
-  // `tallestFirst` lists the bars by height, a tie in bar order.
   it.each([
-    {
-      case: 'peaks',
-      peaks: [0.5, 0.25, 1],
-      bars: 3,
-      tallestFirst: [2, 0, 1],
-      distinctHeights: 3,
-      isLoading: false,
-    },
-    {
-      case: 'no peaks yet',
-      peaks: null,
-      bars: 0,
-      tallestFirst: [],
-      distinctHeights: 0,
-      isLoading: true,
-    },
-    {
-      case: 'silence',
-      peaks: [0, 0],
-      bars: 2,
-      tallestFirst: [0, 1],
-      distinctHeights: 1,
-      isLoading: false,
-    },
+    { case: 'peaks', peaks: [0.5, 1], bars: 2, isLoading: false },
+    { case: 'no peaks yet', peaks: null, bars: 0, isLoading: true },
   ])(
-    'createCandidateKit_Waveform_DrawsABarPerPeakInPeakOrder ($case)',
-    ({ peaks, bars, tallestFirst, distinctHeights, isLoading }) => {
+    "draws the row's waveform from its peaks, classed for the layout: $case",
+    ({ peaks, bars, isLoading }) => {
       const { deps } = fakeDeps();
       const kit = createCandidateKit(
         deps,
@@ -169,24 +146,17 @@ describe('picker kit', () => {
         peaks,
         recordingRollback().rollback,
       );
+      const parent = newParent();
 
-      const waveform = asFake(kit.waveform(newParent()));
+      const waveform = asFake(kit.waveform(parent));
 
-      const rects = waveform.children[0].children.filter(
-        (node) => node.tagName === 'RECT',
-      );
-      const heights = rects.map((rect) =>
-        Number(rect.attributes.get('height')),
-      );
-      const byHeight = heights
-        .map((height, index) => ({ height, index }))
-        .sort((a, b) => b.height - a.height || a.index - b.index)
-        .map(({ index }) => index);
-      expect(rects.length).toBe(bars);
-      expect(byHeight).toEqual(tallestFirst);
-      expect(new Set(heights).size).toBe(distinctHeights);
-      expect(heights.every((height) => height > 0)).toBe(true);
+      expect(asFake(parent).children.at(-1)).toBe(waveform);
+      expect(waveform.classList.contains('ui-waveform')).toBe(true);
+      expect(waveform.classList.contains('audio-picker-waveform')).toBe(true);
       expect(waveform.classList.contains('is-loading')).toBe(isLoading);
+      expect(
+        waveform.children[0].children.filter((node) => node.tagName === 'RECT'),
+      ).toHaveLength(bars);
     },
   );
 

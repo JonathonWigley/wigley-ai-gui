@@ -52,6 +52,7 @@
     "status-warning-tint": "yellow / 0.12",
     "status-attention-tint": "peach / 0.12",
     "status-error-tint": "red / 0.12",
+    "status-info-tint": "blue / 0.12",
     "window-background": "crust",
     "window-ambient": "radial-gradient(1200px 800px at 0% 0%, #cba6f712, transparent 60%), radial-gradient(1000px 700px at 100% 100%, #89b4fa0f, transparent 60%)",
     "editor-background": "base",

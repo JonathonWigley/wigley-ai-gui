@@ -12,6 +12,7 @@ import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type SessionPart,
   sessionsActivitySlot,
+  sessionsClaimedSlot,
   type SessionsPlace,
   sessionsPlaceSlot,
   type SessionsState,
@@ -149,6 +150,7 @@ export function sessionsViewSetup(
     favorites: createProjectFavorites(uiState),
     activities: createSlotStore(() => undefined).publish(sessionsActivitySlot),
     places,
+    claimed: createSlotStore(() => undefined).publish(sessionsClaimedSlot),
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

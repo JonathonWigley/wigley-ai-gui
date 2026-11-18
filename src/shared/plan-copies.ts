@@ -32,6 +32,9 @@ export interface PlanCopyDeps {
     'read' | 'modified' | 'list' | 'realPath' | 'stat'
   >;
   readonly paths: Paths;
+  // Told when `git worktree list` fails in the clone at `top`, before
+  // `planCopies` falls back to the plan's own copy.
+  readonly worktreesFailed?: (top: string, error: unknown) => void;
 }
 
 // A task document's file name in a plan folder.
@@ -64,8 +67,9 @@ export async function repoTop(
 // The copies of `planDir` that hold a `plan.md`: the same repo-relative folder
 // in each checkout of its clone, in `git worktree list` order (the main tree
 // first), each marked whether it is the main tree's. Outside a clone, or when
-// git cannot list the checkouts, the copy at `planDir` alone, marked the main
-// tree's. Rejects on a files failure other than a missing file.
+// git cannot list the checkouts (reported to `worktreesFailed`), the copy at
+// `planDir` alone, marked the main tree's. Rejects on a files failure other
+// than a missing file.
 export async function planCopies(
   planDir: string,
   deps: PlanCopyDeps,
@@ -86,7 +90,8 @@ export async function planCopies(
   let trees;
   try {
     trees = await deps.git.worktrees(top);
-  } catch {
+  } catch (error) {
+    deps.worktreesFailed?.(top, error);
     return copyAtPlanDir(planDir, deps);
   }
   const copies = await Promise.all(
