@@ -25,6 +25,97 @@ describe('parsePlaytestCommand', () => {
       result: stop(P),
     },
     {
+      given: 'grouped play',
+      command: `unity command editor.playmode start --result-only --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'grouped stop',
+      command: `unity command editor.playmode stop --project-path ${P}`,
+      result: stop(P),
+    },
+    {
+      given: 'grouped name with no verb',
+      command: `unity command editor.playmode --project-path ${P}`,
+      result: null,
+    },
+    {
+      given: 'other grouped command',
+      command: `unity command editor status --project-path ${P}`,
+      result: null,
+    },
+    {
+      given: 'path from an earlier assignment',
+      command: `P=${P}; unity command editor.playmode start --project-path $P`,
+      result: start(P),
+    },
+    {
+      given: 'quoted braced variable',
+      command: `G=${P}\nunity command editor_play --project-path "\${G}"`,
+      result: start(P),
+    },
+    {
+      given: 'capture path from an assignment',
+      command: `P=${P}; C=/s/capture.py; python3 "$C" start --project-path "$P"`,
+      result: start(P),
+    },
+    {
+      given: 'variable with a suffix',
+      command:
+        'ROOT=/clones/b; unity command editor_play --project-path $ROOT/Game',
+      result: start(P),
+    },
+    {
+      given: 'PWD after cd',
+      command: `cd ${P}; Q="$PWD"; unity command editor.playmode start --project-path "$Q"`,
+      result: start(P),
+    },
+    {
+      given: 'variable never assigned',
+      command: 'unity command editor_play --project-path $P',
+      result: start(null),
+    },
+    {
+      given: 'assignment in the same segment',
+      command: `P=${P} unity command editor_play --project-path $P`,
+      result: start(null),
+    },
+    {
+      given: 'command substitution',
+      command: 'unity command editor_play --project-path "$(pwd)"',
+      result: start(null),
+    },
+    {
+      given: 'UNITY_PROJECT_PATH exported',
+      command: `cd ${P} && export UNITY_PROJECT_PATH=$PWD; unity command editor.playmode start`,
+      result: start(P),
+    },
+    {
+      given: 'UNITY_PROJECT_PATH before the program',
+      command: `UNITY_PROJECT_PATH=${P} unity command editor_stop`,
+      result: stop(P),
+    },
+    {
+      given: 'flag over UNITY_PROJECT_PATH',
+      command: `export UNITY_PROJECT_PATH=/a; unity command editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'UNITY_PROJECT_PATH for capture',
+      command: `export UNITY_PROJECT_PATH=${P}; python3 capture.py start`,
+      result: start(null),
+    },
+    {
+      given: 'cd folder with no path',
+      command: `cd ${P}; unity command editor.playmode start --result-only`,
+      result: start(P),
+    },
+    {
+      given: 'UNITY_PROJECT_PATH over the cd folder',
+      command: `cd /x; UNITY_PROJECT_PATH=${P} unity command editor_stop`,
+      result: stop(P),
+    },
+    {
       given: 'no path',
       command: 'unity command editor_play --result-only',
       result: start(null),

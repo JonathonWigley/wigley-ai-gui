@@ -28,8 +28,8 @@ interface RowCalls {
 }
 
 // Opens and closes a session's Live view on its live Bash calls that succeed:
-// a playtest start (`unity command editor_play`, `capture.py start`) or stop
-// (`unity command editor_stop`), on the command's `--project-path`. A call is
+// a playtest start or stop as `parsePlaytestCommand` reads it, on the project
+// folder it names. A call is
 // live when chat's `toolStarted` for its `toolUseId` came with `replayed`
 // false; a restored or replayed entry never acts, and each call acts once.
 // Chat's preview row is left out; a subagent's call acts for its lead's row.
