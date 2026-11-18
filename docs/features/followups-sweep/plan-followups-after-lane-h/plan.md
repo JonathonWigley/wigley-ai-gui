@@ -126,21 +126,21 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [ ] [Docs view state](01-docs-view-state.md)
 - [x] [One ownsRoot helper](02-docs-owns-root.md)
 - [x] [Sessions pane clicks and presses](03-sessions-pane-presses.md)
-- [ ] [Step and tool-call durations](07-step-durations.md)
+- [x] [Step and tool-call durations](07-step-durations.md)
 - [x] [One DEFAULT_NAME](09-default-name.md)
-- [ ] [Window adapter hears page load 1](12-window-page-load.md)
-- [ ] [Drive wait-log and test titles](13-drive-wait-log.md)
+- [x] [Window adapter hears page load 1](12-window-page-load.md)
+- [x] [Drive wait-log and test titles](13-drive-wait-log.md)
 - [x] [Memory Files reports folder events](16-memory-files-folders.md)
 - [x] [Auto-retro claims restored rows](17-auto-retro-rows.md)
-- [ ] [Chat close after dispose](18-chat-close-after-dispose.md)
+- [x] [Chat close after dispose](18-chat-close-after-dispose.md)
 - [x] [Claude adapter: interrupt and hand-back](19-claude-adapter-fixes.md)
-- [ ] [Terminal session name from its own profile](21-terminal-session-name.md)
+- [x] [Terminal session name from its own profile](21-terminal-session-name.md)
 
 ### Wave 2
 - [ ] [Sessions page model](05-sessions-page-model.md) — after 03
-- [ ] [Chat cursor follows tall blocks and hidden tabs](06-chat-cursor.md) — after 07
+- [x] [Chat cursor follows tall blocks and hidden tabs](06-chat-cursor.md) — after 07
 - [ ] [Test naming, the rest](14-test-naming-rest.md) — after 01, 02
-- [ ] [Local commands do not title a row](20-local-command-titles.md) — after 13
+- [x] [Local commands do not title a row](20-local-command-titles.md) — after 13
 
 ### Wave 3
 - [ ] [Split subscribes to its width key](10-split-width.md) — after 01, 05, 07
@@ -174,11 +174,23 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 16 · standard · 51f0ce8e5 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: watch-based tests may hear an extra folder key (plan-watch, workflow-large-main, pool-watch, layout-registry, docs doc-files and start, user-folder-source, audio-reads, problem-store): test gate scope; four new test titles use subject_Case_Result form
 - 17 · deep · c1fb07efb · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: the first-message claim also runs on a row chat's resume adds, so a resumed old retro session mid-run is claimed and closed finished once idle
 - 19 · deep · a1b694bf3 b3c225cb0 · diff read; wave-1 tsc --noEmit and lint (layers, styles, oxlint, oxfmt) clean at 060ad4e67 · concerns: a subagent's own content line inside the held window after a hand-back's init also opens a new events entry
+- 18 · hard · 961120ddd · diff read: isDisposed/requireRunning reject close and closeSessionsIn; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: contract.ts comment says both 'resolves ... or chat stops' and 'rejects once chat has stopped'
+- 13 · standard · f2a296ec7 4a0ef5f0c · diff read: wait-log since in drive-commands, drive-args, SKILL.md, tests; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: none
+- 21 · standard · cd9e08828 · diff read: hostSessionName passes profileDir ?? harness.configFolder(null); typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: none
+- 12 · hard · 836232d5c · diff read: loadAppPage after drive-run block, one electronDrivenWindow for selfTest/drive; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: followups.md:71 entry left for task 26
+- 07 · hard (compile error back on hard) · 023a8d3d1 e6fcb5480 · diff read: stepDurationMs, StepDuration on tool/thinking inputs, card trailing, fillStepTime; compile error in read-chat-layout InputAddition fixed on the same rung; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: layout.test asserts '· 65s' not '· 1m 05s' (fake kit counts whole seconds)
+- 20 · deep · 59726fbeb · diff read: titleCandidates settled by entry delivery, cleared on drop/beginProcess/clear; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: a test reading a first-message title right after an unawaited send now finds none; relaunch row relies on the silent fake's second process
+- 06 · hard · 12af5da63 · diff read: scrollsToStop also needs the list off its bottom; scrollToFocus settles a following cursor with by='list'; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: rebuilds of a shown list now settle the cursor, which may move existing rebuild tests
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
 - 09: layout-url.ts's local DEFAULT_NAME comment dropped; the exported constant's comment covers it · group 09
 - 16: foldersAtOrUnder also reports the implicit ancestors of each made folder, not only of files · group 16
 - 19: releaseHeld sends the events entry once after every held line joins it, not once per held line, as the task's own test needs · group 19
+- 18: contract.ts comments edited outside Files to match the new rejection · group 18
+- 13: practice/page/start.test.ts table titles renamed too, under the same $case suffix rule · group 13
+- 12: requireDrivenWindow helper in main.ts throws for a selfTest or drive run with no driven window · group 12
+- 20: setFirstMessageTitle became firstMessageTitleToSet with the same guards; a candidate is recorded only for a message that would title the row; a save follows the delayed title · group 20
+- 06: settleInBand takes the PlaceChange; scrollToFocus's settle reports 'list' so a restored place survives · group 06
 ### Review rounds
 ### Test gate

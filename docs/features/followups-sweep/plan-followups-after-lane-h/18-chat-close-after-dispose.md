@@ -1,6 +1,6 @@
 # 18 — Chat close after dispose
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · a disposed flag changes how two async exports behave across the part's stop
 Wave: 1 · Depends on: none
@@ -52,3 +52,7 @@ clean.
 
 Commit: one commit for the group, e.g. "Chat's close and closeSessionsIn reject once the part is disposed (follow-up:
 Chat close/closeSessionsIn never resolve after dispose)"
+
+## Proof
+
+Commit 961120ddd · proof: diff read: isDisposed/requireRunning reject close and closeSessionsIn; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: contract.ts comment says both 'resolves ... or chat stops' and 'rejects once chat has stopped'

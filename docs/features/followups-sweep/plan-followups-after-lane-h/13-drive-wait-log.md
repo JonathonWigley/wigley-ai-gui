@@ -1,6 +1,6 @@
 # 13 — Drive wait-log and test titles
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · one new optional argument on one drive command, plus a mechanical sweep of test titles
 Wave: 1 · Depends on: none
@@ -126,3 +126,7 @@ there and the fake-agent-harness comment; `npm run lint` clean.
 
 Commit: one commit for the group, e.g. "Drive wait-log takes a since cursor; test titles end on their variable
 (follow-ups: wait-log misses earlier lines, `$name_<suffix>` titles)"
+
+## Proof
+
+Commit f2a296ec7 4a0ef5f0c · proof: diff read: wait-log since in drive-commands, drive-args, SKILL.md, tests; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: none

@@ -1,6 +1,6 @@
 # 06 — Chat cursor follows tall blocks and hidden tabs
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · the cursor's scroll rules interact (following, the visible band, the saved place), and no existing pattern settles which callers of `scrollToFocus` settle the cursor
 Wave: 2 · Depends on: 07 (both list `entry-list.ts`, `entry-list.test.ts` and `agent-chat/design.md`)
@@ -104,3 +104,4 @@ when a hidden tab shows (follow-ups L197, L202)".
 
 ## Proof
 
+Commit 12af5da63 · proof: diff read: scrollsToStop also needs the list off its bottom; scrollToFocus settles a following cursor with by='list'; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: rebuilds of a shown list now settle the cursor, which may move existing rebuild tests

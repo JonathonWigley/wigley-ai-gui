@@ -1,6 +1,6 @@
 # 20 — Local commands do not title a row
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · per-process candidate state fed by the harness's async delivery events, cleared on process start, clear and drop
 Wave: 2 · Depends on: 13 (both list `src/plugins/chat/main/chat-sessions.test.ts`)
@@ -96,3 +96,7 @@ verification task.
 
 Commit: one commit for the group, e.g. "A row's first-message title waits for a message that reaches the model, so a
 local command names no row (follow-up: Row title takes a local command's text)"
+
+## Proof
+
+Commit 59726fbeb · proof: diff read: titleCandidates settled by entry delivery, cleared on drop/beginProcess/clear; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: a test reading a first-message title right after an unawaited send now finds none; relaunch row relies on the silent fake's second process

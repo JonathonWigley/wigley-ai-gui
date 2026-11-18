@@ -1,6 +1,6 @@
 # 21 — Terminal session name from its own profile
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · one argument resolved in one function, with a table row
 Wave: 1 · Depends on: none
@@ -51,3 +51,7 @@ lint` clean.
 
 Commit: one commit for the group, e.g. "A terminal session's saved name is read from its own default config folder,
 not the app's CLAUDE_CONFIG_DIR (follow-up: terminal session name)"
+
+## Proof
+
+Commit cd9e08828 · proof: diff read: hostSessionName passes profileDir ?? harness.configFolder(null); typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: none

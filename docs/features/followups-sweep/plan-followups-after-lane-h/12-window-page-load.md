@@ -1,6 +1,6 @@
 # 12 — Window adapter hears page load 1
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · reorders one synchronous composition root, the window's first load after the self-test's and the drive run's load counting, with no async crossing and no unit test able to pin it
 Wave: 1 · Depends on: none
@@ -80,3 +80,5 @@ Commit:    one commit for the group, e.g. "Window loads its page after the drive
            counted (follow-up: Window adapter misses page load 1)"
 
 ## Proof
+
+Commit 836232d5c · proof: diff read: loadAppPage after drive-run block, one electronDrivenWindow for selfTest/drive; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: followups.md:71 entry left for task 26

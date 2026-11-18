@@ -1,6 +1,6 @@
 # 07 — Step and tool-call durations
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds a field to the chat layout contract and an option to the shared collapsible, and the entry list must redraw a step whose end arrives later
 Wave: 1 · Depends on: none
@@ -128,3 +128,4 @@ its agent (follow-up L468)".
 
 ## Proof
 
+Commit 023a8d3d1 e6fcb5480 · proof: diff read: stepDurationMs, StepDuration on tool/thinking inputs, card trailing, fillStepTime; compile error in read-chat-layout InputAddition fixed on the same rung; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: layout.test asserts '· 65s' not '· 1m 05s' (fake kit counts whole seconds)
