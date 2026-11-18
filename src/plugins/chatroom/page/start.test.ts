@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
+import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
   asHtml,
@@ -145,6 +146,7 @@ function startChatroomPage(options: PageOptions = {}) {
   const harness = startDrawingPagePart(chatroomPagePart, {
     firstModeTaken: true,
     state,
+    services: { markdown: PLAIN_MARKDOWN },
     dependencies: [
       fakeDependency(
         sessionsPageKey,

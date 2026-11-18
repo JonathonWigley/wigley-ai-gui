@@ -296,8 +296,14 @@ describe('chatroomMainPart', () => {
       await settle();
       expect(await thread('game', sessionThread('rA'))).toEqual([]);
 
-      await callTool('rA', 'chatroom_board', {});
-      await callTool('rA', 'chatroom_board', {});
+      // A board call reads git once the read window allows, so the window
+      // passes before each call answers.
+      for (let call = 0; call < 2; call += 1) {
+        const answered = callTool('rA', 'chatroom_board', {});
+        await settle();
+        harness.advance(GIT_READ_WINDOW_MS);
+        await answered;
+      }
       await settle();
 
       expect(

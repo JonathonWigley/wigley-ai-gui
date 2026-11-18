@@ -308,9 +308,14 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     room.onMessage((message) => rewriteRoom(message.room));
     boardFeed.onChanged(rewriteRoom);
 
+    // A first `connected` refreshes through `track`; a repeat for a row
+    // already in the roster refreshes here.
     api.events.on('sessions.connected', (event) => {
+      const isRepeat = roster.has(event.id);
       connect(event);
-      refreshRowRoom(event.id);
+      if (isRepeat) {
+        refreshRowRoom(event.id);
+      }
     });
     api.events.on('sessions.hostSessionChanged', (session) => {
       roster.hostSessionChanged(session);
