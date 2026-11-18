@@ -1,6 +1,6 @@
 # 06 — Chat cursor follows tall blocks and hidden tabs
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · the cursor's scroll rules interact (following, the visible band, the saved place), and no existing pattern settles which callers of `scrollToFocus` settle the cursor
 Wave: 2 · Depends on: 07 (both list `entry-list.ts`, `entry-list.test.ts` and `agent-chat/design.md`)

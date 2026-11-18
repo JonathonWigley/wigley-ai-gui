@@ -158,10 +158,10 @@ export interface TranscriptScroll extends ContentScroll {
 // box less its bottom scroll padding) moves to the nearest stop inside it, a
 // stop being inside once it lies wholly in the band, or overlaps a band it is
 // too tall to fit, and with no such stop to the nearest that overlaps the band.
-// So a run that overflows moves a following cursor off its line. `latest` makes
-// the same move, since a list already at its bottom fires no scroll. A plain click
-// hands `stopClicked` the block or slot under it, which `moveFocusTo` moves the
-// cursor to without scrolling; a click ending a text selection, on a link,
+// So a run that overflows moves a following cursor off its line. `latest` and
+// `scrollToFocus` make the same move, since a list already at its bottom fires
+// no scroll. A plain click hands `stopClicked` the block or slot under it,
+// which `moveFocusTo` moves the cursor to without scrolling; a click ending a text selection, on a link,
 // control or pending row, or on what has no slot hands it nothing.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
@@ -185,7 +185,9 @@ export interface EntryList {
   // Moves one stop, a block being a stop of its own; the focused stop after the
   // move, null with no stops. A move onto the last stop scrolls to the bottom and
   // follows, unless the stop is too tall for the visible band: then it scrolls
-  // to its nearest edge and follows only if that rests on the bottom.
+  // to its nearest edge and follows only if that rests on the bottom; a
+  // following cursor on such a stop with the list at its bottom stays at the
+  // bottom and follows.
   move(step: 1 | -1): EntryListStop | null;
   // Moves to the first stop of the next or previous user or assistant message;
   // the focused stop after the move, unchanged at the first or last message,
@@ -216,8 +218,9 @@ export interface EntryList {
   selectedSource(): { text: string; blockCount: number } | null;
   // Scrolls to the bottom while following, else leaves the scroll alone.
   followBottom(): void;
-  // Scrolls to the bottom while following, else brings the focused stop
-  // into view.
+  // Scrolls to the bottom while following and moves a cursor left off screen
+  // into the visible band, as `latest` does; else brings the focused stop into
+  // view.
   scrollToFocus(): void;
   // Scrolls the list by `step`. Scrolling up off the bottom
   // stops following, so entries that arrive leave the scroll alone; scrolling
@@ -560,7 +563,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   // Whether a `slot` scroll shows the stop itself, rather than the list's bottom.
   const scrollsToStop = (stop: HTMLElement) =>
     !focus.following ||
-    isTallerThanBand(stop.getBoundingClientRect(), visibleBand(list));
+    (isTallerThanBand(stop.getBoundingClientRect(), visibleBand(list)) &&
+      !isScrolledToEnd(list, 1));
 
   const scrollFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
     const stop = focus.stopId === null ? undefined : stopElement(focus.stopId);
@@ -593,7 +597,14 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     tellPlace();
   };
 
-  const scrollToFocus = () => drawFocus(focus.following ? 'bottom' : 'slot');
+  // A list already at its bottom fires no scroll, so a following cursor is
+  // settled into the band here, as `latest` does.
+  const scrollToFocus = () => {
+    drawFocus(focus.following ? 'bottom' : 'slot');
+    if (focus.following && !isListHidden()) {
+      settleInBand(1, true, 'list');
+    }
+  };
 
   // Runs the live run's part update with the time now, and arms the next tick.
   const runTick = () => {
@@ -797,12 +808,16 @@ export function createEntryList(deps: EntryListDeps): EntryList {
 
   // Moves a cursor outside the visible band into it, and follows only at the
   // bottom. A cursor already inside stays, so running it twice moves nothing.
-  const settleInBand = (direction: 1 | -1, isAtBottom: boolean) => {
+  const settleInBand = (
+    direction: 1 | -1,
+    isAtBottom: boolean,
+    by: PlaceChange,
+  ) => {
     const nearest = nearestStopInBand(direction);
     if (nearest !== null) {
-      setFocus(focusStop(focus, order, nearest), 'user');
+      setFocus(focusStop(focus, order, nearest), by);
     }
-    setFocus(focusAfterScrollEvent(focus, isAtBottom), 'user');
+    setFocus(focusAfterScrollEvent(focus, isAtBottom), by);
     drawFocus('marks');
   };
 
@@ -822,7 +837,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       scrollToBottom();
       return;
     }
-    settleInBand(direction, isAtBottom);
+    settleInBand(direction, isAtBottom, 'user');
   };
   list.addEventListener('scroll', onListScroll);
 
@@ -954,7 +969,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       setFocus(focusLatest(lastStopId(), focus.anchorId), 'user');
       drawFocus('bottom');
       if (!isListHidden()) {
-        settleInBand(1, true);
+        settleInBand(1, true, 'user');
       }
     },
     first() {

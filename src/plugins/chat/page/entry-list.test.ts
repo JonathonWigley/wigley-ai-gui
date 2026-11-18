@@ -2516,10 +2516,42 @@ describe('block stops', () => {
     expect(cursorSlot(list)).toBe(asFake(list.element).children[1]);
   });
 
+  // A 900px list over a 100px box holding one assistant entry of two blocks,
+  // the first in the band and the last at `lastStop`, scrolled to `from` with
+  // the cursor on the first block unless `startsOnLastStop`.
+  const setUpOnTheLastStop = (row: {
+    startsOnLastStop: boolean;
+    from: number;
+    lastStop: { top: number; height: number };
+  }) => {
+    const { list, put } = setUpList(blocksShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.clientHeight = 100;
+    scroller.scrollHeight = 900;
+    put(assistantText('a', 'one\n\ntwo'));
+    const first = blockAt(list, 0, 0);
+    const last = blockAt(list, 0, 1);
+    first.rectTop = 30;
+    first.rectHeight = 10;
+    last.rectTop = row.lastStop.top;
+    last.rectHeight = row.lastStop.height;
+    if (!row.startsOnLastStop) {
+      list.move(-1);
+    }
+    scroller.scrollTop = row.from;
+    scroller.fire('scroll');
+    return { list, put, scroller, last };
+  };
+
   it.each([
     {
       case: 'a stop that fits scrolls to the bottom and follows',
       startsOnLastStop: false,
+      from: 100,
       lastStop: { top: 30, height: 10 },
       scrollsToStop: false,
       scrollTop: 900,
@@ -2528,6 +2560,7 @@ describe('block stops', () => {
     {
       case: 'a stop too tall shows itself and does not follow',
       startsOnLastStop: false,
+      from: 100,
       lastStop: { top: 30, height: 150 },
       scrollsToStop: true,
       scrollTop: 100,
@@ -2536,46 +2569,51 @@ describe('block stops', () => {
     {
       case: 'a clamped move while reading a stop too tall stays put',
       startsOnLastStop: true,
+      from: 100,
       lastStop: { top: -20, height: 150 },
       scrollsToStop: true,
       scrollTop: 100,
       afterPut: 'a#1',
     },
-  ])(
-    'move_OntoTheLastStop ($case)',
-    ({ startsOnLastStop, lastStop, scrollsToStop, scrollTop, afterPut }) => {
-      const { list, put } = setUpList(blocksShown());
-      const scroller = asFake(list.element) as FocusFakeElement & {
-        scrollHeight: number;
-        clientHeight: number;
-      };
-      scroller.rectHeight = 100;
-      scroller.clientHeight = 100;
-      scroller.scrollHeight = 900;
-      put(assistantText('a', 'one\n\ntwo'));
-      const first = blockAt(list, 0, 0);
-      const last = blockAt(list, 0, 1);
-      first.rectTop = 30;
-      first.rectHeight = 10;
-      last.rectTop = lastStop.top;
-      last.rectHeight = lastStop.height;
-      if (!startsOnLastStop) {
-        list.move(-1);
-      }
-      scroller.scrollTop = 100;
-      scroller.fire('scroll');
-      const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
-
-      list.move(1);
-
-      expect(scrolled.mock.contexts).toEqual(scrollsToStop ? [last] : []);
-      expect(scroller.scrollTop).toBe(scrollTop);
-      expect(cursorLabel(list)).toBe('a#1');
-      scroller.fire('scroll');
-      put(notice('n'));
-      expect(cursorLabel(list)).toBe(afterPut);
+    {
+      case: 'a clamped move on a stop too tall while following at the bottom keeps following',
+      startsOnLastStop: true,
+      from: 800,
+      lastStop: { top: -20, height: 150 },
+      scrollsToStop: false,
+      scrollTop: 900,
+      afterPut: 'n',
     },
-  );
+  ])('move_OntoTheLastStop ($case)', (row) => {
+    const { list, put, scroller, last } = setUpOnTheLastStop(row);
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+    list.move(1);
+
+    expect(scrolled.mock.contexts).toEqual(row.scrollsToStop ? [last] : []);
+    expect(scroller.scrollTop).toBe(row.scrollTop);
+    expect(cursorLabel(list)).toBe('a#1');
+    scroller.fire('scroll');
+    put(notice('n'));
+    expect(cursorLabel(list)).toBe(row.afterPut);
+  });
+
+  it('a moveToMessage clamped on a stop too tall while following at the bottom keeps following', () => {
+    const { list, put, scroller } = setUpOnTheLastStop({
+      startsOnLastStop: true,
+      from: 800,
+      lastStop: { top: -20, height: 150 },
+    });
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+    list.moveToMessage(1);
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(scroller.scrollTop).toBe(900);
+    expect(cursorLabel(list)).toBe('a#1');
+    put(notice('n'));
+    expect(cursorLabel(list)).toBe('n');
+  });
 
   it('scrollToFocus_FollowingOnAStopTooTall_ScrollsToTheBottom', () => {
     const { list, put } = setUpList(blocksShown());
@@ -2785,6 +2823,41 @@ describe('block stops', () => {
   const above = { top: -50, height: 10 };
   const inBand = { top: 30, height: 10 };
   const below = { top: 200, height: 10 };
+
+  // A shown list whose box runs 0 to 100.
+  const setUpScroller = (shown: ShownLayouts<ChatLayout>) => {
+    const { list, put } = setUpList(shown);
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.clientHeight = 100;
+    return { list, put, scroller };
+  };
+
+  // A list following at its bottom over the open last run of steps t1 and t2,
+  // whose line and first step sit above the band and last step in it.
+  const setUpAtTheBottomOverAnOpenRun = () => {
+    const { list, put, scroller } = setUpScroller(activityShown());
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+    list.toggleFocused();
+    const [line, firstStep, lastStep] = [
+      slotOf(list.element, 'chat-activity-slot'),
+      slotOf(list.element, 'chat-step-slot'),
+      slotOf(list.element, 'chat-step-slot', 1),
+    ] as FocusFakeElement[];
+    for (const offScreen of [line, firstStep]) {
+      offScreen.rectTop = above.top;
+      offScreen.rectHeight = above.height;
+    }
+    lastStep.rectTop = inBand.top;
+    lastStep.rectHeight = inBand.height;
+    scroller.scrollHeight = 400;
+    scroller.scrollTop = 400;
+    scroller.fire('scroll');
+    return { list, put, scroller };
+  };
 
   it.each<{
     case: string;
@@ -3029,29 +3102,7 @@ describe('block stops', () => {
   ])(
     'latest_AtTheBottomOverAnOverflowingOpenRun ($case)',
     ({ clientHeight, focused, afterPut }) => {
-      const { list, put } = setUpList(activityShown());
-      const scroller = asFake(list.element) as FocusFakeElement & {
-        scrollHeight: number;
-        clientHeight: number;
-      };
-      scroller.rectHeight = 100;
-      scroller.clientHeight = 100;
-      [user('u1'), tool('t1'), tool('t2')].forEach(put);
-      list.toggleFocused();
-      const [line, firstStep, lastStep] = [
-        slotOf(list.element, 'chat-activity-slot'),
-        slotOf(list.element, 'chat-step-slot'),
-        slotOf(list.element, 'chat-step-slot', 1),
-      ] as FocusFakeElement[];
-      for (const offScreen of [line, firstStep]) {
-        offScreen.rectTop = above.top;
-        offScreen.rectHeight = above.height;
-      }
-      lastStep.rectTop = inBand.top;
-      lastStep.rectHeight = inBand.height;
-      scroller.scrollHeight = 400;
-      scroller.scrollTop = 400;
-      scroller.fire('scroll');
+      const { list, put, scroller } = setUpAtTheBottomOverAnOpenRun();
       scroller.clientHeight = clientHeight;
 
       list.latest();
@@ -3065,6 +3116,76 @@ describe('block stops', () => {
       expect(list.focused()).toEqual(afterPut);
     },
   );
+
+  it.each([
+    {
+      case: 'moves the cursor into the band and follows',
+      shownHeight: 100,
+      focused: { kind: 'entry', entry: tool('t2') },
+      afterPut: { kind: 'entry', entry: tool('t3') },
+    },
+    {
+      case: 'on a list still hidden stays on the line',
+      shownHeight: 0,
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+      afterPut: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2'), tool('t3')],
+      },
+    },
+  ])(
+    'scrollToFocus on a list shown again at its bottom over an overflowing open run ($case)',
+    ({ shownHeight, focused, afterPut }) => {
+      const { list, put, scroller } = setUpAtTheBottomOverAnOpenRun();
+      scroller.clientHeight = 0;
+      list.latest();
+      scroller.clientHeight = shownHeight;
+
+      list.scrollToFocus();
+
+      expect(list.focused()).toEqual(focused);
+      put(tool('t3'));
+      expect(list.focused()).toEqual(afterPut);
+    },
+  );
+
+  it('a restored place whose stop is not drawn yet survives the settle of a following overflowing list', () => {
+    const { list, scroller } = setUpScroller(activityShown());
+    scroller.scrollHeight = 400;
+    scroller.scrollTop = 400;
+    const boxOf = FocusFakeElement.prototype.getBoundingClientRect;
+    vi.spyOn(
+      FocusFakeElement.prototype,
+      'getBoundingClientRect',
+    ).mockImplementation(function (this: FocusFakeElement) {
+      const box = boxOf.call(this);
+      return this.classList.contains('chat-activity-slot')
+        ? {
+            ...box,
+            top: above.top,
+            bottom: above.top + above.height,
+            height: above.height,
+          }
+        : box;
+    });
+    const saved = { stopId: 't3', following: false, anchorId: null };
+    list.restorePlace({
+      focus: saved,
+      openRuns: ['activity:t1'],
+      openExpanders: {},
+    });
+    list.rebuild([user('u1'), tool('t1'), tool('t2')]);
+
+    list.rebuild([user('u1'), tool('t1'), tool('t2'), tool('t3')]);
+
+    expect(cursorLabel(list)).toBe('t3');
+    expect(list.place().focus).toEqual(saved);
+  });
 
   it.each<{
     case: string;
