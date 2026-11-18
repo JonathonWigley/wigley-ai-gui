@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { AgentHarness, SessionControl } from '../../../contracts/agent';
 import type { AlertNoun } from '../../../contracts/alerts';
 import { readIfPresent } from '../../../contracts/files';
@@ -300,7 +300,17 @@ function startPart(options: StartOptions = {}) {
         }
       });
     },
-    onConnected: (listener) => host.onConnected(listener),
+    onConnected(listener) {
+      const subscription = host.onConnected(listener);
+      return {
+        dispose() {
+          subscription.dispose();
+          if (part.unsubscribeError !== null) {
+            throw new Error(part.unsubscribeError);
+          }
+        },
+      };
+    },
   };
 
   const chatHarness = {
@@ -429,6 +439,8 @@ function startPart(options: StartOptions = {}) {
     replayed: 0,
     // What `replayCalls` rejects with; null resolves to `replayed`.
     replayError: null as string | null,
+    // What the `onConnected` subscription's dispose throws; null disposes cleanly.
+    unsubscribeError: null as string | null,
     // What the adopted row's chat session reads; null opens a relay row, with no chat session.
     session: { running: true, activity: 'working' } as Pick<
       ChatSessionInfo,
@@ -1235,6 +1247,24 @@ describe('schedulingMainPart', () => {
 
     expect(part.lastPending()).toHaveLength(clears ? 0 : 1);
     expect(part.loginStart.calls).toEqual(clears ? [true, false] : [true]);
+  });
+
+  // Breaks if a later step's error replaces the first, or a throw skips the
+  // steps after it.
+  it('runs every stop step and rejects with the first error when several throw', async () => {
+    const part = startPart();
+    await settle();
+    part.unsubscribeError = 'unsubscribe refused';
+    const setLoginStart = vi
+      .spyOn(part.loginStart, 'set')
+      .mockRejectedValue(new Error('login start refused'));
+
+    await expect(part.harness.stop('end')).rejects.toThrow(
+      'unsubscribe refused',
+    );
+
+    expect(part.lastPending()).toHaveLength(0);
+    expect(setLoginStart).toHaveBeenCalledWith(false);
   });
 
   it('tools_AreContributedMainAgentOnly', async () => {

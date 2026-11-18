@@ -757,13 +757,13 @@ export interface ChatMainExports {
   // does), a resting one included, as a `sessions.closed` would, without
   // asking the close guards: for a self-test that starts its project over.
   // Each fires `sessionClosed` with reason `project-closed`. Resolves once
-  // each one's owned session has ended and its row is gone, or chat stops;
-  // rejects once chat has stopped.
+  // each one's owned session has ended and its row is gone, or when chat
+  // stops while it waits; a call made after chat has stopped rejects.
   closeSessionsIn(projectDir: string): Promise<void>;
   // Ends one session chat owns, as a sessions.closed would, without asking the
   // close guards; fires sessionClosed with `reason`. Resolves once its row is
-  // gone or chat stops; rejects for a session chat does not hold, or once chat
-  // has stopped.
+  // gone, or when chat stops while it waits; rejects for a session chat does
+  // not hold, and a call made after chat has stopped rejects.
   close(sessionId: string, reason: SessionCloseReason): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started

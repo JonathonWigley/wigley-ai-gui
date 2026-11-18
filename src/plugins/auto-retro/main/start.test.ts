@@ -126,6 +126,7 @@ function startPart(
               closes.push([sessionId, reason]);
               return Promise.resolve();
             },
+            restored: () => Promise.resolve(),
           }) as unknown as ChatMainExports,
       ),
       fakeDependency(
@@ -316,7 +317,7 @@ describe('autoRetroMainPart', () => {
     rowDropped: boolean;
     logsLostRetro: boolean;
   }[])(
-    'sessionClosed_RunningRowClosed_LogsTheLostRetroOnlyBeforeDone ($reason, in settle: $inSettle, row dropped: $rowDropped) → logs: $logsLostRetro',
+    'logs the lost retro only when the running row closes before done ($reason, in settle: $inSettle, row dropped: $rowDropped) → logs: $logsLostRetro',
     async ({ reason, inSettle, rowDropped, logsLostRetro }) => {
       const part = startPart();
       await settled();
@@ -445,8 +446,35 @@ describe('autoRetroMainPart', () => {
     expect(part.launches).toEqual([]);
   });
 
-  it('leaves a restored row that is not a retro unclaimed', async () => {
-    const part = await restartWithQueueLost('hi');
+  // Breaks if a row is claimed by its first message alone, when a resumed or
+  // hand-started retro would be closed as finished.
+  it.each([
+    {
+      row: 'a restored row that is not a retro',
+      join: async () => restartWithQueueLost('hi'),
+    },
+    {
+      row: 'a retro row added after start',
+      join: async () => {
+        const part = startPart();
+        await settled();
+        part.rows.set(
+          'retro-9',
+          sessionRow('retro-9', {
+            hostSessionId: 'retro-host-9',
+            titles: {
+              user: null,
+              agent: null,
+              firstMessage: '/wigley:retro auto h1',
+            },
+          }),
+        );
+        await settled();
+        return part;
+      },
+    },
+  ])('leaves $row unclaimed', async ({ join }) => {
+    const part = await join();
 
     expect(part.state()?.rows).toEqual([]);
   });

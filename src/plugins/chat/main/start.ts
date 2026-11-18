@@ -15,12 +15,12 @@ import type {
 } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import type { KeyedSlotReader } from '../../../contracts/state';
+import { callEach } from '../../../shared/call-each';
 import {
   argsObject,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
-import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createFakeAgentHarness,
@@ -779,7 +779,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       },
       exports,
       // A step that throws skips none of the rest; the end waits resolve
-      // whatever throws, and the quit awaits the final save.
+      // whatever throws, and the quit awaits the final save before a step's
+      // error rejects it.
       dispose: (stop) => {
         isDisposed = true;
         let lastSave: Promise<void> = Promise.resolve();
@@ -799,6 +800,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
             ],
             (step) => step(),
           );
+        } catch (error) {
+          return lastSave.then(() => {
+            throw error;
+          });
         } finally {
           for (const resolveWait of endWaits.values()) {
             resolveWait();

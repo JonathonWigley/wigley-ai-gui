@@ -610,6 +610,7 @@ function startChatPart(
     processDetach,
     processKill,
     sessionHost,
+    timers,
     timerRuns,
     timerDelays,
     heldConnects,
@@ -740,7 +741,7 @@ describe('chat main part', () => {
     { method: 'clear', target: 'row-9' },
     { method: 'clear', target: 'row-2' },
   ] as const)(
-    'exports_SessionChatDoesNotHold_Rejects ($method, $target)',
+    'rejects a $method to a session chat does not hold ($target)',
     async ({ method, target }) => {
       const chat = startChatPart();
       chat.invoke('start', {
@@ -1533,6 +1534,71 @@ describe('chat main part', () => {
     expect(chat.cancelLogIn).toHaveBeenCalledOnce();
     await closing;
   });
+
+  // Breaks if a throwing step rethrows before the final save is returned,
+  // when the quit would no longer wait on the write.
+  it.each([
+    { step: 'the sign-in cancel', failsAt: 'cancelLogIn' },
+    { step: 'the tool-caller stop', failsAt: 'timerClear' },
+  ] as const)(
+    'holds for the final save, runs every step and then rejects when $step throws',
+    async ({ failsAt }) => {
+      const memory = createMemoryFiles();
+      let writesWaitOn = Promise.resolve();
+      const chat = startChatPart({
+        data: {
+          ...memory,
+          write: async (name: string, text: string) => {
+            await writesWaitOn;
+            await memory.write(name, text);
+          },
+        } as Files,
+      });
+      chat.invoke('logIn', 1, 'work');
+      chat.invoke('start', {
+        projectDir: '/p',
+        harness: 'claude',
+        profile: 'work',
+      });
+      await settle();
+      const [guard] = chat.toolCallGuards;
+      void guard({
+        sessionId: 'row-1',
+        tool: 'set_workflow_step',
+        toolUseId: 'unseen',
+        mainAgentOnly: true,
+        replayed: false,
+      });
+      const clear = vi.spyOn(chat.timers, 'clear');
+      const refuse = () => {
+        throw new Error('step refused');
+      };
+      if (failsAt === 'cancelLogIn') {
+        chat.cancelLogIn.mockImplementation(refuse);
+      } else {
+        clear.mockImplementation(refuse);
+      }
+      let finishWrite = () => undefined as void;
+      writesWaitOn = new Promise((resolve) => {
+        finishWrite = resolve;
+      });
+      let isHeld = true;
+
+      const disposed = Promise.resolve(chat.part.dispose?.('end')).finally(
+        () => {
+          isHeld = false;
+        },
+      );
+      await settle();
+      const heldBeforeTheWrite = isHeld;
+      finishWrite();
+
+      await expect(disposed).rejects.toThrow('step refused');
+      expect(heldBeforeTheWrite).toBe(true);
+      expect(clear).toHaveBeenCalled();
+      expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+    },
+  );
 
   it('stopAll_Channel_StopsEveryProcess', () => {
     const chat = startChatPart();

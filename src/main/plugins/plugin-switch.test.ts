@@ -111,7 +111,8 @@ function restartMark(stop: PartStop | undefined): string {
 // dependents, dependents first. The catalog fake fires `onChanged` through
 // `change`. The config fake admits what `setPlugins` hands, except an id in
 // `config.refused`, for which it keeps the entry it held and serves
-// `config.refusals[id]` as its problem.
+// `config.refusals[id]` as its problem. With `drops.traced` set, each
+// `dropParked` pushes `dropParked <id>`.
 function setup({
   manifests = [],
   entries = manifests.map((each) => entry(each.id, { manifest: each })),
@@ -171,7 +172,7 @@ function setup({
     refusals: {} as Record<string, string>,
   };
   const configDisabled = { list: disabled };
-  const dropped: string[] = [];
+  const drops = { traced: false };
   const applied = createAppliedPlugins(initial);
   const fakeTimers: Timers = {
     set(run, ms) {
@@ -276,7 +277,9 @@ function setup({
       };
     },
     dropParked: (id) => {
-      dropped.push(id);
+      if (drops.traced) {
+        calls.push(`dropParked ${id}`);
+      }
     },
     applied: {
       disabled: () => applied.disabled(),
@@ -355,7 +358,7 @@ function setup({
     configDisabled,
     handed,
     handedProblems,
-    dropped,
+    drops,
   };
 }
 
@@ -476,14 +479,91 @@ describe('createPluginSwitch', () => {
     expect(problems).toEqual([PROBLEM, null]);
   });
 
-  it('drops the parked calls of each id a page stop reply names as stopped', async () => {
-    const switched = setup({ manifests: GALLERY });
-    switched.page.stopReply = ['gallery', 'notes'];
+  // Breaks if a drop is skipped on a reply kind, or if the second drop does not
+  // follow the main stop: a straggler invoke of the stopped page part, parked
+  // after the page reply, would hold a switch-off forever or reach the main
+  // part that starts next.
+  it.each<{
+    flow: string;
+    options: SetupOptions;
+    run: (switched: ReturnType<typeof setup>) => Promise<unknown>;
+    calls: string[];
+  }>([
+    {
+      flow: 'switch-off',
+      options: { manifests: GALLERY },
+      run: (switched) => {
+        switched.page.stopReply = ['gallery', 'notes'];
+        return switched.pluginSwitch.apply(['gallery']);
+      },
+      calls: [
+        'page stop gallery',
+        'dropParked gallery',
+        'dropParked notes',
+        'main stop gallery',
+        'dropParked gallery',
+        'dropParked notes',
+      ],
+    },
+    {
+      flow: 'remove',
+      options: { entries: [entry('a'), user('u')] },
+      run: (switched) => {
+        switched.catalog.change([entry('a')]);
+        return switched.pluginSwitch.settled();
+      },
+      calls: ['page remove u', 'dropParked u', 'main remove u', 'dropParked u'],
+    },
+    {
+      flow: 'reload',
+      options: { entries: [user('u')] },
+      run: (switched) => {
+        switched.catalog.change([user('u', { revision: 2 })]);
+        return switched.pluginSwitch.settled();
+      },
+      calls: [
+        'page stop u',
+        'dropParked u',
+        'main remove u restart',
+        'dropParked u',
+        'main start u',
+        'page reload u',
+        'dropParked u',
+      ],
+    },
+    {
+      flow: 'restart',
+      options: { manifests: GALLERY },
+      run: (switched) => switched.pluginSwitch.restart('gallery'),
+      calls: [
+        'page stop gallery',
+        'dropParked gallery',
+        'main stop gallery restart',
+        'dropParked gallery',
+        'main start gallery',
+      ],
+    },
+  ])(
+    'drops the parked calls of each id a $flow page reply names as stopped, again once its main part stopped',
+    async ({ options, run, calls }) => {
+      const switched = setup(options);
+      await switched.pluginSwitch.settled();
+      switched.drops.traced = true;
+      const before = switched.calls.length;
 
-    await switched.pluginSwitch.apply(['gallery']);
+      await run(switched);
 
-    expect(switched.dropped).toEqual(['gallery', 'notes']);
-  });
+      expect(
+        switched.calls
+          .slice(before)
+          .filter((call) =>
+            /^(page (stop|remove|reload)|main (stop|remove|start)|dropParked) /.test(
+              call,
+            ),
+          ),
+      ).toEqual(calls);
+    },
+  );
 
   it('apply_OffAndOn_RunsStepsTwoToFive', async () => {
     const { pluginSwitch, calls } = setup({

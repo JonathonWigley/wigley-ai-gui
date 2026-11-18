@@ -99,7 +99,7 @@ export interface PluginSwitchDeps {
   >;
   page(request: PluginPartsRequest): Promise<PluginPartsReply>;
   // Drops the invokes parked for `pluginId`'s stopped main part, once its page
-  // part stopped.
+  // part stopped and again once its main part stopped.
   dropParked(pluginId: string): void;
   applied: AppliedPlugins;
   slots: { clearOwner(pluginId: string): void };
@@ -206,13 +206,20 @@ export function heldAtStart(entries: readonly CatalogEntry[]): string[] {
 
 export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const { main, applied, catalog, config } = deps;
+  // Drops the parked invokes of each id `reply` names as stopped. A stop calls
+  // it on the page reply and again once the main parts stopped: a straggler
+  // invoke of the stopped page part that parks in between would hold a
+  // switch-off forever, or reach the main part that starts next.
+  const dropParkedOf = (reply: PluginPartsReply) => {
+    for (const id of stoppedOf(reply)) {
+      deps.dropParked(id);
+    }
+  };
   // Sends `request` to the page, then drops the parked invokes of each id the
   // reply names as stopped.
   const askPage = async (request: PluginPartsRequest) => {
     const reply = await deps.page(request);
-    for (const id of stoppedOf(reply)) {
-      deps.dropParked(id);
-    }
+    dropParkedOf(reply);
     return reply;
   };
   const admittedEntry = (id: string) =>
@@ -403,11 +410,12 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   // switch-off does: their page parts, then their main parts, last first, as
   // an `end`, then their slots. A main stop that throws is logged.
   const stopWithheld = async (ids: readonly string[]) => {
-    await askPage({ kind: 'stop', ids });
+    const reply = await askPage({ kind: 'stop', ids });
     if (isDisposed) {
       return;
     }
     await stopStarted(ids);
+    dropParkedOf(reply);
     for (const id of ids.filter((each) => !main.started.has(each))) {
       deps.slots.clearOwner(id);
     }
@@ -566,14 +574,18 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     const disabledBefore = applied.disabled();
     addToApplied(ids);
     deps.servedChanged();
+    const replies: PluginPartsReply[] = [];
     for (const id of ids) {
-      await askPage({ kind: 'remove', id });
+      replies.push(await askPage({ kind: 'remove', id }));
       if (isDisposed) {
         return false;
       }
     }
     for (const id of ids) {
       await removeMain(id);
+    }
+    for (const reply of replies) {
+      dropParkedOf(reply);
     }
     for (const id of ids) {
       deps.slots.clearOwner(id);
@@ -817,7 +829,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         );
         return;
       }
-      await askPage({ kind: 'stop', ids: [id] });
+      const pageStopReply = await askPage({ kind: 'stop', ids: [id] });
       if (isDisposed) {
         return;
       }
@@ -831,6 +843,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
           }
         }
       }
+      dropParkedOf(pageStopReply);
       // A last good version with a main part starts it at once when the new
       // one fails, so a new part whose handlers differ stops as a `restart`.
       const good = lastGood.get(id);
@@ -964,7 +977,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   const switchOff = async (off: readonly string[]) => {
     applied.set([...applied.disabled(), ...off]);
     deps.servedChanged();
-    await askPage({ kind: 'stop', ids: off });
+    const reply = await askPage({ kind: 'stop', ids: off });
     const errors: unknown[] = [];
     for (const id of off) {
       try {
@@ -973,6 +986,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         errors.push(error);
       }
     }
+    dropParkedOf(reply);
     for (const id of off.filter((each) => !main.started.has(each))) {
       deps.slots.clearOwner(id);
     }
@@ -1185,11 +1199,15 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         deps.servedChanged();
         try {
           let stopFailure: { error: unknown } | null = null;
+          let pageStopReply: PluginPartsReply | null = null;
           try {
-            await askPage({ kind: 'stop', ids: [pluginId] });
+            pageStopReply = await askPage({ kind: 'stop', ids: [pluginId] });
             await main.stop(pluginId, 'restart');
           } catch (error) {
             stopFailure = { error };
+          }
+          if (pageStopReply !== null) {
+            dropParkedOf(pageStopReply);
           }
           // A stop that threw still stopped its parts, dependents first.
           await startEach(

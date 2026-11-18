@@ -84,6 +84,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     let queue: RetroQueue = EMPTY_QUEUE;
     let isFileWritable = true;
     let isDisposed = false;
+    // True until chat's restore of the saved rows ends: only a row present or restored by then is claimed.
+    let isRestoring = true;
     // The slot's rows, in join order.
     const rows: string[] = [];
     // Row ids whose first turn began, kept until the row leaves the side bar.
@@ -300,10 +302,14 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           `dropped retro ${before.hostSessionId}: profile ${before.item.profile} is gone`,
         );
       }
-      // A row that joins here is a restored retro row, one `launched` holds or one the queue lost, which counts as
-      // started.
+      // Claims a retro row present at start or restored before chat's restore ends — one `launched` holds, or one
+      // the queue lost that opens with the retro command — as started. A row that joins later, a resumed or
+      // hand-started retro included, is left alone; a launch claims its own row in `launched`.
       followRows(rowsSlot, {
         added(row) {
+          if (!isRestoring) {
+            return;
+          }
           const isLaunchedRow =
             row.hostSessionId !== null &&
             queue.launched.includes(row.hostSessionId);
@@ -365,6 +371,11 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       },
     );
     serial(begin);
+    chat.restored().then(() =>
+      serial(() => {
+        isRestoring = false;
+      }),
+    );
 
     return {
       commands: {},

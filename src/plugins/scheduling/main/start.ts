@@ -761,21 +761,30 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
 
     return {
       commands: {},
+      // A step that throws skips none of the rest, and the first error
+      // rethrows once the last step ran.
       async dispose(stop) {
         isDisposing = true;
-        try {
-          callEach(subscriptions, (subscription) => subscription.dispose());
-        } finally {
-          await chain;
+        const errors: unknown[] = [];
+        const step = async (run: () => unknown) => {
           try {
-            if (stop === 'end' && fires) {
-              sessionHost.setPending([]);
-              await services.loginStart.set(false);
-            }
-          } finally {
-            taskStore.dispose();
-            await Promise.all([taskStore.settled(), history.settled()]);
+            await run();
+          } catch (error) {
+            errors.push(error);
           }
+        };
+        await step(() =>
+          callEach(subscriptions, (subscription) => subscription.dispose()),
+        );
+        await step(() => chain);
+        if (stop === 'end' && fires) {
+          await step(() => sessionHost.setPending([]));
+          await step(() => services.loginStart.set(false));
+        }
+        await step(() => taskStore.dispose());
+        await step(() => Promise.all([taskStore.settled(), history.settled()]));
+        if (errors.length > 0) {
+          throw errors[0];
         }
       },
     };
