@@ -17,7 +17,8 @@ export interface OtherHostsDeps {
 
 // The hosts of other protocols, found through their record files in the host folder.
 export interface OtherHosts {
-  // Sends `drain` to each older host that answers, once per record for the life of this object. Never rejects.
+  // Sends `drain` to each older host that answers, once per record for the life of this object, and resolves once each
+  // has served it, closed, or let its reply limit run out. Never rejects.
   drainOlder(): Promise<void>;
   // The processes of every other host, older and newer, lowest protocol first. Rejects when the host folder cannot be
   // read, or a host with a record did not answer; a record whose channel has no listener is deleted and counts as none.
@@ -91,7 +92,8 @@ async function deleteStaleRecord(file: string, log: Log) {
 }
 
 export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
-  const drained = new Set<string>();
+  // Each record's drain, settled or under way; a record whose host did not answer leaves it, to be tried again.
+  const drains = new Map<string, Promise<void>>();
   const loggedNewer = new Set<string>();
 
   const openRecorded = async (record: OtherRecord): Promise<HostAnswer> => {
@@ -105,13 +107,26 @@ export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
   const drain = async (record: OtherRecord) => {
     const answer = await openRecorded(record);
     if (answer.kind !== 'answered') {
+      drains.delete(record.file);
       return;
     }
-    if (!drained.has(record.file)) {
-      drained.add(record.file);
-      answer.link.send({ type: 'drain' });
-    }
+    answer.link.send({ type: 'drain' });
+    // A host serves one connection's lines in order, so this reply, or the close of a host that exits on the drain,
+    // comes after the drain was served.
+    await answer.link.request(
+      (requestId) => ({ type: 'list', requestId }),
+      HOST_REPLY_LIMIT_MS,
+    );
     answer.link.end();
+  };
+
+  const drainOnce = (record: OtherRecord): Promise<void> => {
+    let drained = drains.get(record.file);
+    if (drained === undefined) {
+      drained = drain(record);
+      drains.set(record.file, drained);
+    }
+    return drained;
   };
 
   const listOf = async (record: OtherRecord): Promise<HostedProcessInfo[]> => {
@@ -153,9 +168,7 @@ export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
       const older: OtherRecord[] = [];
       for (const record of records) {
         if (record.protocol < SESSION_HOST_PROTOCOL) {
-          if (!drained.has(record.file)) {
-            older.push(record);
-          }
+          older.push(record);
         } else if (!loggedNewer.has(record.file)) {
           loggedNewer.add(record.file);
           deps.log(
@@ -164,7 +177,7 @@ export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
           );
         }
       }
-      await Promise.all(older.map(drain));
+      await Promise.all(older.map(drainOnce));
     },
     async list() {
       const records = await readOtherRecords(deps.folder, deps.log);

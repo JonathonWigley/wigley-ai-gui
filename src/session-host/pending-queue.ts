@@ -20,8 +20,6 @@ import { replaceFile } from './replace-file';
 // The longest the queue's timer waits before it reads the clock again (Decisions, The timer).
 export const PENDING_TICK_MS = 30_000;
 
-const HOST_EXITED_ERROR = 'the session host that started it exited';
-
 export interface PendingQueueDeps {
   folder: string; // the host folder
   clock: Clock;
@@ -33,13 +31,17 @@ export interface PendingQueueDeps {
   isBusy(id: string): boolean;
   // Called once for each run the queue starts or skips, after its record is saved.
   runStarted(run: HostedRun): void;
+  // Whether the host of the older protocol `protocol` may still run, and so still record exits in its runs file.
+  olderHostRuns(protocol: number): boolean;
 }
 
 export interface PendingQueue {
-  // Reads the pending table and runs record of `SESSION_HOST_PROTOCOL`, then calls `importOlder`. Arms no timer.
+  // Reads the pending table and runs record of `SESSION_HOST_PROTOCOL`, then calls `importOlder`, then ends each run
+  // still running that no older host still running names. Arms no timer.
   load(): void;
-  // Adds the records of every older protocol's runs file in the folder that this record lacks, saves, and deletes
-  // the older file (Decisions, Import).
+  // For every older protocol's runs file in the folder: adds each record this record lacks and never held, fills the
+  // null exit of each held one from the file, and saves (Decisions, Import). Once that older host is gone, it ends each
+  // of the file's runs still running and deletes the file.
   importOlder(): void;
   // Arms the timer and starts each entry already due. Before `start`, nothing spawns.
   start(): void;
@@ -48,8 +50,8 @@ export interface PendingQueue {
   forgetRuns(ids: readonly string[]): void;
   // Fills the exit of the run with this id when its exit is null.
   processClosed(id: string, exit: HostedExit): void;
-  // At a drain: drops every pending entry, deletes the pending file, takes no new entry, and writes the runs file no
-  // more, so it stays as last written for the next host to import. `isEmpty` reads true after it.
+  // At a drain: drops every pending entry, deletes the pending file, takes no new entry and imports no more. It still
+  // records each exit in the runs file, for the next host to import. `isEmpty` reads true after it.
   drop(): void;
   isEmpty(): boolean; // no pending entry and no run record, or dropped
 }
@@ -121,13 +123,13 @@ function wellFormedItems<T>(
   return kept;
 }
 
-// A loaded run that still reads as running belongs to a host that is gone, which took its process with it.
-// True when it changed the run.
+// A loaded run that still reads as running belongs to a host that is gone, which took its process with it. Its exit
+// holds no error, since its spawn did not fail. True when it changed the run.
 function endRunOfAGoneHost(run: HostedRun): boolean {
   if (run.exit !== null || run.skipped) {
     return false;
   }
-  run.exit = { code: null, signal: null, error: HOST_EXITED_ERROR };
+  run.exit = { code: null, signal: null, error: null };
   return true;
 }
 
@@ -141,6 +143,8 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
   const runsPath = path.join(folder, runsFile(SESSION_HOST_PROTOCOL));
   let pending: PendingSpawn[] = [];
   let runs: HostedRun[] = [];
+  // Every id an import added, so a run `forgetRuns` dropped is not added again from an older file that stays.
+  const importedIds = new Set<string>();
   let timer: number | null = null;
   let isStarted = false;
   let isDropped = false;
@@ -162,9 +166,6 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
   }
 
   function saveRuns() {
-    if (isDropped) {
-      return;
-    }
     try {
       replaceFile(runsPath, JSON.stringify(runs));
     } catch (error) {
@@ -282,43 +283,80 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
     armTimer();
   }
 
-  function importOlder() {
+  // Adds each run of `older` the record lacks and never held, and fills each held run's null exit from it; with
+  // `isHostGone`, ends each of its runs still running. True when it changed the record.
+  function mergeOlderRuns(
+    older: readonly HostedRun[],
+    isHostGone: boolean,
+  ): boolean {
+    let changed = false;
+    for (const olderRun of older) {
+      let held = runs.find(({ id }) => id === olderRun.id);
+      if (held === undefined) {
+        if (importedIds.has(olderRun.id)) {
+          continue;
+        }
+        importedIds.add(olderRun.id);
+        runs.push(olderRun);
+        held = olderRun;
+        changed = true;
+      } else if (
+        held.exit === null &&
+        !held.skipped &&
+        olderRun.exit !== null
+      ) {
+        held.exit = olderRun.exit;
+        changed = true;
+      }
+      if (isHostGone) {
+        changed = endRunOfAGoneHost(held) || changed;
+      }
+    }
+    return changed;
+  }
+
+  // The ids named by the runs file of an older host that still runs.
+  function importOlderRuns(): Set<string> {
+    const namedByRunningHosts = new Set<string>();
     if (isDropped) {
-      return;
+      return namedByRunningHosts;
     }
     let names: string[];
     try {
       names = readdirSync(folder);
     } catch (error) {
       diagnostics.append(`runs import: ${(error as Error).message}`);
-      return;
+      return namedByRunningHosts;
     }
     for (const name of names) {
       const protocol = runsFileProtocol(name);
       if (protocol === null || protocol >= SESSION_HOST_PROTOCOL) {
         continue;
       }
+      // Asked before the read: a host records its last exit before it removes its record.
+      const isHostGone = !deps.olderHostRuns(protocol);
       const file = path.join(folder, name);
       const older = loadRuns(file);
       if (older === null) {
         continue;
       }
-      const heldIds = new Set(runs.map(({ id }) => id));
-      for (const run of older) {
-        if (!heldIds.has(run.id)) {
-          endRunOfAGoneHost(run);
-          runs.push(run);
-          heldIds.add(run.id);
-        }
+      if (mergeOlderRuns(older, isHostGone)) {
+        runs.sort((a, b) => a.startedAt - b.startedAt);
+        saveRuns();
       }
-      runs.sort((a, b) => a.startedAt - b.startedAt);
-      saveRuns();
+      if (!isHostGone) {
+        for (const { id } of older) {
+          namedByRunningHosts.add(id);
+        }
+        continue;
+      }
       try {
         rmSync(file, { force: true });
       } catch (error) {
         diagnostics.append(`${name}: ${(error as Error).message}`);
       }
     }
+    return namedByRunningHosts;
   }
 
   return {
@@ -330,16 +368,20 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
         diagnostics,
       );
       runs = loadRuns(runsPath) ?? [];
+      const namedByRunningHosts = importOlderRuns();
       let endedAny = false;
       for (const run of runs) {
-        endedAny = endRunOfAGoneHost(run) || endedAny;
+        if (!namedByRunningHosts.has(run.id)) {
+          endedAny = endRunOfAGoneHost(run) || endedAny;
+        }
       }
       if (endedAny) {
         saveRuns();
       }
-      importOlder();
     },
-    importOlder,
+    importOlder() {
+      importOlderRuns();
+    },
     start() {
       isStarted = true;
       startDueEntries();

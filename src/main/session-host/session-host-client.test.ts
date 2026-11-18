@@ -118,7 +118,21 @@ interface HostScript {
   runs?: HostedRun[]; // what `listRuns` answers
   runsAnswered?: boolean;
   heldHello?: Promise<void>; // each `hello` reply waits for it
+  heldList?: Promise<void>; // each `list` reply waits for it
   subscribed?(message: SubscribeMessage, host: ScriptedHost): void;
+}
+
+// Writes `reply` once `held` has settled, or at once with none.
+function writeAfter(socket: Socket, reply: string, held?: Promise<void>) {
+  if (held === undefined) {
+    socket.write(reply);
+    return;
+  }
+  void held.then(() => {
+    if (socket.writable) {
+      socket.write(reply);
+    }
+  });
 }
 
 interface ScriptedHost {
@@ -158,15 +172,7 @@ async function startScriptedHost(
         requestId: message.requestId,
         protocol: script.protocol ?? SESSION_HOST_PROTOCOL,
       });
-      if (script.heldHello === undefined) {
-        socket.write(reply);
-      } else {
-        void script.heldHello.then(() => {
-          if (socket.writable) {
-            socket.write(reply);
-          }
-        });
-      }
+      writeAfter(socket, reply, script.heldHello);
     } else if (message.type === 'listRuns' && script.runsAnswered !== false) {
       socket.write(
         jsonLine({
@@ -176,13 +182,12 @@ async function startScriptedHost(
         }),
       );
     } else if (message.type === 'list' && script.listAnswered !== false) {
-      socket.write(
-        jsonLine({
-          type: 'list',
-          requestId: message.requestId,
-          processes: script.processes ?? [],
-        }),
-      );
+      const reply = jsonLine({
+        type: 'list',
+        requestId: message.requestId,
+        processes: script.processes ?? [],
+      });
+      writeAfter(socket, reply, script.heldList);
     } else if (message.type === 'subscribe') {
       script.subscribed?.(message, host);
     } else if (message.type === 'stopAll' && script.stopAllAnswered !== false) {
@@ -1340,6 +1345,49 @@ describe('createSessionHostClient', () => {
     await settled;
   });
 
+  it('drain_OlderHostListReplyHeld_HoldsThePendingListAndRunReadsUntilItComes', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const older = testChannel(dir, '-older');
+    let releaseList = () => {};
+    const heldList = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    const olderHost = await startScriptedHost(older, {
+      protocol: 0,
+      heldList,
+    });
+    const currentHost = await startScriptedHost(channel, {
+      runs: [hostedRun('r1')],
+    });
+    const rig = clientRig(dir, channel);
+    writeRecord(rig.folder, 0, older);
+    const client = rig.create();
+    client.setPending(pendingSpawns('a'));
+
+    const runsRead = client.listRuns();
+    await vi.waitFor(() =>
+      expect(olderHost.got.map((message) => message.type)).toEqual([
+        'hello',
+        'drain',
+        'list',
+      ]),
+    );
+    // A reply on the current link, so whatever was sent on it before has arrived.
+    await client.stopAll();
+    expect(sentOfType(currentHost, 'setPending')).toEqual([]);
+    expect(sentOfType(currentHost, 'listRuns')).toEqual([]);
+
+    releaseList();
+
+    await expect(runsRead).resolves.toEqual([hostedRun('r1')]);
+    expect(
+      currentHost.got
+        .filter((message) => ['setPending', 'listRuns'].includes(message.type))
+        .map((message) => message.type),
+    ).toEqual(['setPending', 'listRuns']);
+  });
+
   it.each([
     {
       name: 'ids sent as one message',
@@ -1431,34 +1479,44 @@ describe('createSessionHostClient', () => {
       expect(calls).toBe(0);
       await stopAndSeeTheDrop(client, firstHost);
       const secondHost = await startScriptedHost(channel);
-      await client.listRuns();
+      const runsRead = client.listRuns();
       await vi.waitFor(() =>
-        expect(sentOfType(olderHost, 'hello')).toHaveLength(
-          dropsDuringDrain ? 2 : 1,
-        ),
+        expect(sentOfType(secondHost, 'setKeepIdle')).toHaveLength(1),
+      );
+      // One drain per record: one under way when its link dropped is the one the next connect waits on.
+      await vi.waitFor(() =>
+        expect(sentOfType(olderHost, 'hello')).toHaveLength(1),
       );
       expect(calls).toBe(0);
       expect(sentOfType(secondHost, 'setPending')).toEqual([]);
+      expect(sentOfType(secondHost, 'listRuns')).toEqual([]);
 
       releaseHello();
 
       await vi.waitFor(() =>
         expect(sentOfType(secondHost, 'forgetRuns')).toHaveLength(1),
       );
+      await runsRead;
       expect(calls).toBe(1);
       expect(disposedCalls).toBe(0);
       expect(
-        secondHost.got.filter(
-          (message) =>
-            message.type === 'setPending' || message.type === 'forgetRuns',
-        ),
-      ).toEqual([
+        secondHost.got
+          .filter((message) =>
+            ['setPending', 'listRuns', 'forgetRuns'].includes(message.type),
+          )
+          .map((message) => message.type),
+      ).toEqual(['setPending', 'listRuns', 'forgetRuns']);
+      expect(sentOfType(secondHost, 'setPending')).toEqual([
         { type: 'setPending', entries: pendingSpawns('a') },
+      ]);
+      expect(sentOfType(secondHost, 'forgetRuns')).toEqual([
         { type: 'forgetRuns', ids: ['marker'] },
       ]);
-      await vi.waitFor(() =>
-        expect(sentOfType(olderHost, 'drain')).toHaveLength(1),
-      );
+      expect(olderHost.got.map((message) => message.type)).toEqual([
+        'hello',
+        'drain',
+        'list',
+      ]);
     },
   );
 });

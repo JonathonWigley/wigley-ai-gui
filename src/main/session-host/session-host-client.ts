@@ -169,11 +169,14 @@ export function createSessionHostClient(
   const processes = new Map<string, ProcessEntry>();
   let current: HostLink | null = null;
   let attempt: ConnectAttempt | null = null;
-  let waiting: ConnectedRun[] = [];
+  const waiting: ConnectedRun[] = [];
+  // Runs that wait for `queueLink` to be the current link.
+  const waitingForQueue: ConnectedRun[] = [];
   let keepIdleMinutes = DEFAULT_KEEP_IDLE_MINUTES;
   // The last `setPending` list, less each entry a `runStarted` or `forgetRuns` named; null until the first `setPending`.
   let pending: readonly PendingSpawn[] | null = null;
-  // The link whose older hosts were drained and which got the pending list; `setPending` sends straight to it.
+  // The link whose older hosts have served their drain and which got the pending list; `setPending` and `listRuns` go
+  // straight to it.
   let queueLink: HostLink | null = null;
   let connects = 0;
   const runStartedListeners = new Set<(run: HostedRun) => void>();
@@ -277,10 +280,13 @@ export function createSessionHostClient(
     }
   };
 
-  const runWaiting = (link: HostLink | null, failure: string) => {
-    const queued = waiting;
-    waiting = [];
-    for (const run of queued) {
+  // Empties `queued` before it runs any, so a run queued meanwhile waits for the next call.
+  const runQueued = (
+    queued: ConnectedRun[],
+    link: HostLink | null,
+    failure: string,
+  ) => {
+    for (const run of queued.splice(0)) {
       run(link, failure);
     }
   };
@@ -288,7 +294,8 @@ export function createSessionHostClient(
   const failAttempt = (started: ConnectAttempt, reason: string) => {
     endAttempt(started);
     deps.log(LOG_SOURCE, `the session host did not start: ${reason}`);
-    runWaiting(null, reason);
+    runQueued(waiting, null, reason);
+    runQueued(waitingForQueue, null, reason);
   };
 
   const startHost = (started: ConnectAttempt) => {
@@ -325,23 +332,28 @@ export function createSessionHostClient(
       };
     });
 
-  // The pending list and `onConnected` wait for the drain, so an older host and this one hold the queue together only
-  // until the drain arrives.
+  // The pending list, `listRuns` and `onConnected` wait until each older host has served its drain, so no older host
+  // fires a run once this host holds the queue, and no run is read before.
   const adopt = async (started: ConnectAttempt, link: HostLink) => {
     connects += 1;
     const isReconnect = connects > 1;
     endAttempt(started);
     current = link;
     link.send({ type: 'setKeepIdle', minutes: keepIdleMinutes });
-    runWaiting(link, '');
+    runQueued(waiting, link, '');
     await otherHosts.drainOlder();
     if (current !== link) {
+      // A newer link's own `adopt` serves the queued runs; a dropped link leaves them to a new connect.
+      if (current === null && waitingForQueue.length > 0) {
+        startConnecting();
+      }
       return;
     }
     queueLink = link;
     if (pending !== null) {
       link.send({ type: 'setPending', entries: [...pending] });
     }
+    runQueued(waitingForQueue, link, '');
     if (isReconnect) {
       // A copy, so a listener added during the loop is not told this connect.
       // oxlint-disable-next-line unicorn/no-useless-spread
@@ -393,6 +405,18 @@ export function createSessionHostClient(
     }
     waiting.push(run);
     startConnecting();
+  };
+
+  // Runs `run` on `queueLink` while it is the current link; else once `adopt` has made it so, or the attempt failed.
+  const whenQueueReady = (run: ConnectedRun) => {
+    if (current !== null && current === queueLink) {
+      run(current, '');
+      return;
+    }
+    waitingForQueue.push(run);
+    if (current === null) {
+      startConnecting();
+    }
   };
 
   const sendWhenConnected = (message: ClientMessage) => {
@@ -647,7 +671,7 @@ export function createSessionHostClient(
     },
     listRuns() {
       return new Promise((resolve, reject) => {
-        whenConnected((link, failure) => {
+        whenQueueReady((link, failure) => {
           if (link === null) {
             reject(new Error(`the session host did not start: ${failure}`));
             return;

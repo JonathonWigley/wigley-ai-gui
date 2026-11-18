@@ -157,6 +157,23 @@ function readRecord(file: string): SessionHostRecord | null {
   }
 }
 
+// Whether the pid in the record of `protocol`'s host runs. `kill(pid, 0)` sends no signal; EPERM means the pid runs as
+// another user.
+function recordedHostRuns(folder: string, protocol: number): boolean {
+  const pid = readRecord(path.join(folder, hostRecordFile(protocol)))?.pid;
+  const isOnePid =
+    typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0;
+  if (!isOnePid) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
 // A record another host wrote since, or one that cannot be read, stays.
 function removeOwnRecord(folder: string, pid: number) {
   const file = path.join(folder, hostRecordFile(SESSION_HOST_PROTOCOL));
@@ -249,6 +266,7 @@ function createConnections(deps: ConnectionsDeps) {
         sendTo(socket, { type: 'runStarted', run });
       }
     },
+    olderHostRuns: (protocol) => recordedHostRuns(deps.folder, protocol),
   });
 
   function checkExitRule() {
@@ -351,6 +369,8 @@ function createConnections(deps: ConnectionsDeps) {
         );
         break;
       case 'setPending':
+        // The dedupe against the runs must see each run an older host fired.
+        queue.importOlder();
         queue.setPending(message.entries);
         checkExitRule();
         break;

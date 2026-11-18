@@ -707,19 +707,36 @@ describe('host queue', () => {
     ]);
   });
 
-  it('listRuns_OlderRunsFileWrittenAfterLoad_IsImportedFirst', async () => {
-    const running = await runningHost();
-    const connection = await client(running.channel);
-    await settled(connection);
-    writeRuns(running.folder, SESSION_HOST_PROTOCOL - 1, [hostedRun('older')]);
+  it.each([
+    { label: 'before a listRuns reply', sendsPending: false },
+    { label: 'before a setPending dedupe', sendsPending: true },
+  ])(
+    'import_OlderRunsFileWrittenAfterLoad_IsImportedFirst: $label',
+    async ({ sendsPending }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
+      await settled(connection);
+      writeRuns(running.folder, SESSION_HOST_PROTOCOL - 1, [
+        hostedRun('older'),
+      ]);
 
-    expect(await listedRuns(connection)).toEqual([hostedRun('older')]);
-    expect(
-      existsSync(
-        path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL - 1)),
-      ),
-    ).toBe(false);
-  });
+      if (sendsPending) {
+        connection.send({
+          type: 'setPending',
+          entries: [pendingEntry('older', 0)],
+        });
+        await settled(connection);
+      }
+
+      expect(running.spawned).toEqual([]);
+      expect(await listedRuns(connection)).toEqual([hostedRun('older')]);
+      expect(
+        existsSync(
+          path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL - 1)),
+        ),
+      ).toBe(false);
+    },
+  );
 });
 
 describe('host lifetime', () => {
@@ -761,7 +778,6 @@ describe('host lifetime', () => {
     });
     await settled(connection);
     const runsPath = path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL));
-    const runsText = readFileSync(runsPath, 'utf8');
 
     connection.send({ type: 'drain' });
     await settled(connection);
@@ -772,7 +788,9 @@ describe('host lifetime', () => {
 
     running.spawned[0].close();
     await vi.waitFor(() => expect(running.exits).toEqual([0]));
-    expect(readFileSync(runsPath, 'utf8')).toBe(runsText);
+    expect(JSON.parse(readFileSync(runsPath, 'utf8'))).toEqual([
+      hostedRun('fired'),
+    ]);
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: pending entries and no client', async () => {

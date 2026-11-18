@@ -24,11 +24,9 @@ import { createPendingQueue, PENDING_TICK_MS } from './pending-queue';
 import type { ProcessSubscriber } from './process-table';
 import { manualTime, spawnRequest } from './session-host-test-doubles';
 
-const HOST_EXITED: HostedExit = {
-  code: null,
-  signal: null,
-  error: 'the session host that started it exited',
-};
+// A host death is no spawn failure, so the exit holds no error.
+const HOST_EXITED: HostedExit = { code: null, signal: null, error: null };
+const OLDER_PROTOCOL = SESSION_HOST_PROTOCOL - 1;
 const folders: string[] = [];
 
 afterEach(() => {
@@ -68,6 +66,8 @@ function setUp(
   const time = manualTime(options.start ?? 1000);
   const spawnedIds: string[] = [];
   const busyIds = new Set<string>();
+  // The older protocols whose host still runs.
+  const runningOlderHosts = new Set<number>();
   const started: HostedRun[] = [];
   const diagnosticLines: string[] = [];
   const queue = createPendingQueue({
@@ -85,6 +85,7 @@ function setUp(
     isBusy: (id) => busyIds.has(id),
     // A copy, so a later change to the run does not rewrite what was pushed.
     runStarted: (startedRun) => started.push(structuredClone(startedRun)),
+    olderHostRuns: (protocol) => runningOlderHosts.has(protocol),
   });
   const filePath = (name: string) => path.join(folder, name);
   const pendingPath = filePath(pendingFile(SESSION_HOST_PROTOCOL));
@@ -107,6 +108,7 @@ function setUp(
     time,
     spawnedIds,
     busyIds,
+    runningOlderHosts,
     started,
     diagnosticLines,
     filePath,
@@ -424,11 +426,10 @@ describe('pending queue', () => {
     expect(savedRuns()).toEqual(kept);
   });
 
-  it('drop_DeletesThePendingFileKeepsTheRunsFileAndRefusesSetPending', () => {
-    const { queue, time, spawnedIds, diagnosticLines, pendingPath, runsPath } =
+  it('drop_DeletesThePendingFileRefusesSetPendingAndStillRecordsExits', () => {
+    const { queue, time, spawnedIds, diagnosticLines, pendingPath, savedRuns } =
       startedWithARun();
     queue.setPending([entry('later', 9000)]);
-    const runsText = readFileSync(runsPath, 'utf8');
 
     queue.drop();
     queue.processClosed('done', { code: 0, signal: null, error: null });
@@ -436,7 +437,7 @@ describe('pending queue', () => {
     time.advanceTo(10_000);
 
     expect(existsSync(pendingPath)).toBe(false);
-    expect(readFileSync(runsPath, 'utf8')).toBe(runsText);
+    expect(savedRuns()).toEqual([run('done')]);
     expect(spawnedIds).toEqual(['done']);
     expect(diagnosticLines).toHaveLength(1);
     expect(queue.isEmpty()).toBe(true);
@@ -445,10 +446,12 @@ describe('pending queue', () => {
   it.each([
     {
       label: 'an older file with two records, one already held',
+      held: [run('held')],
       older: JSON.stringify([
         run('held', { record: { task: 'older copy' } }),
         run('fired', { startedAt: 500, exit: null }),
       ]),
+      olderHostRuns: false,
       loaded: [
         run('fired', { startedAt: 500, exit: HOST_EXITED }),
         run('held'),
@@ -458,18 +461,47 @@ describe('pending queue', () => {
     },
     {
       label: 'an older file that is not JSON',
+      held: [run('held')],
       older: 'nope',
+      olderHostRuns: false,
       loaded: [run('held')],
       olderStays: true,
       lines: 1,
     },
+    {
+      label: 'a gone host whose file holds the exit of a run held as running',
+      held: [run('held', { exit: null })],
+      older: JSON.stringify([run('held', { record: { task: 'older copy' } })]),
+      olderHostRuns: false,
+      loaded: [run('held')],
+      olderStays: false,
+      lines: 0,
+    },
+    {
+      label: 'a running host whose file names a run held as running',
+      held: [run('held', { exit: null })],
+      older: JSON.stringify([
+        run('held', { exit: null }),
+        run('fired', { startedAt: 500, exit: null }),
+      ]),
+      olderHostRuns: true,
+      loaded: [
+        run('fired', { startedAt: 500, exit: null }),
+        run('held', { exit: null }),
+      ],
+      olderStays: true,
+      lines: 0,
+    },
   ])(
-    'load_OlderRunsFile_ImportsItsRecordsAndDeletesIt: $label',
-    ({ older, loaded, olderStays, lines }) => {
+    'load_OlderRunsFile_ImportsItsRecords: $label',
+    ({ held, older, olderHostRuns, loaded, olderStays, lines }) => {
       const setup = setUp();
-      const olderPath = setup.filePath(runsFile(SESSION_HOST_PROTOCOL - 1));
-      writeFileSync(setup.runsPath, JSON.stringify([run('held')]));
+      const olderPath = setup.filePath(runsFile(OLDER_PROTOCOL));
+      writeFileSync(setup.runsPath, JSON.stringify(held));
       writeFileSync(olderPath, older);
+      if (olderHostRuns) {
+        setup.runningOlderHosts.add(OLDER_PROTOCOL);
+      }
 
       setup.queue.load();
 
@@ -479,6 +511,47 @@ describe('pending queue', () => {
       expect(setup.diagnosticLines).toHaveLength(lines);
     },
   );
+
+  it('importOlder_OlderHostRunsThenGoes_FollowsItsFileUntilItIsGone', () => {
+    const { queue, runningOlderHosts, filePath, savedRuns } = setUp();
+    const olderPath = filePath(runsFile(OLDER_PROTOCOL));
+    const writeOlder = (runs: HostedRun[]) =>
+      writeFileSync(olderPath, JSON.stringify(runs));
+    runningOlderHosts.add(OLDER_PROTOCOL);
+    writeOlder([
+      run('forgotten', { startedAt: 100 }),
+      run('ends', { startedAt: 200, exit: null }),
+      run('cut', { startedAt: 300, exit: null }),
+    ]);
+    queue.load();
+    queue.forgetRuns(['forgotten']);
+
+    writeOlder([
+      run('forgotten', { startedAt: 100 }),
+      run('ends', { startedAt: 200 }),
+      run('cut', { startedAt: 300, exit: null }),
+    ]);
+    queue.importOlder();
+
+    const whileRunning = [
+      run('ends', { startedAt: 200 }),
+      run('cut', { startedAt: 300, exit: null }),
+    ];
+    expect(queue.runs()).toEqual(whileRunning);
+    expect(savedRuns()).toEqual(whileRunning);
+    expect(existsSync(olderPath)).toBe(true);
+
+    runningOlderHosts.clear();
+    queue.importOlder();
+
+    const afterItWent = [
+      run('ends', { startedAt: 200 }),
+      run('cut', { startedAt: 300, exit: HOST_EXITED }),
+    ];
+    expect(queue.runs()).toEqual(afterItWent);
+    expect(savedRuns()).toEqual(afterItWent);
+    expect(existsSync(olderPath)).toBe(false);
+  });
 
   it.each([
     { label: 'empty', pending: [], fired: false, drops: false, empty: true },

@@ -85,7 +85,8 @@ export interface PendingSpawn {
 }
 // Frozen: never change this shape; a newer host imports an older host's `runsFile`. A run the host started or skipped
 // from a pending entry. `id` is the entry's `spawn.id`; `startedAt` is when the host spawned or skipped it; `exit` is
-// null while it runs and for a skipped run, and holds `error` for a spawn that failed.
+// null while it runs and for a skipped run, and holds `error` for a spawn that failed. A run whose host exited while it
+// ran has an exit with all three fields null.
 export interface HostedRun {
   id: string;
   record: unknown;
@@ -139,7 +140,8 @@ export interface SessionHost {
   // Replaces every pending entry this app sent before. The client keeps the last list and sends it again on each
   // connect, so a new host takes it over.
   setPending(entries: readonly PendingSpawn[]): void;
-  // Every run the current host started or skipped that no `forgetRuns` dropped, oldest first. Rejects as `list` does.
+  // Every run the current host started or skipped that no `forgetRuns` dropped, oldest first, with the runs of each
+  // older host imported. Asked once every older host has served its drain. Rejects as `list` does.
   listRuns(): Promise<HostedRun[]>;
   // Drops the runs with these ids from the host's runs record.
   forgetRuns(ids: readonly string[]): void;
