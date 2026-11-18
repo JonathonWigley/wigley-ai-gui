@@ -15,6 +15,7 @@ import {
   type PermissionDecision,
   type ProcessActivity,
   type SessionControl,
+  type UserDelivery,
   type UserMessage,
 } from '../../../contracts/agent';
 import type { GitWorktree } from '../../../contracts/git';
@@ -749,14 +750,18 @@ function sentEntryIdOf(test: ReturnType<typeof setUp>, index: number): string {
   return sentEntryId;
 }
 
-function userEntry(id: string, text: string): ChatEntry {
+function userEntry(
+  id: string,
+  text: string,
+  delivery: UserDelivery | null = null,
+): ChatEntry {
   return {
     kind: 'user',
     id,
     at: 1000,
     text,
     images: [],
-    delivery: null,
+    delivery,
     raw: [],
   };
 }
@@ -795,6 +800,39 @@ async function startedRefusing() {
   const process = fake.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
   return { ...test, process, activity };
+}
+
+// A started session whose processes emit nothing on a write and return
+// `user-<n>`, numbered from 1 in each process, so a test drives each user
+// entry itself through `processes`.
+async function startedSilent() {
+  const fake = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+  const silent: FakeAgentHarness = {
+    ...fake,
+    start: (request, events) => {
+      const process = fake.start(request, events);
+      let writes = 0;
+      return {
+        ...process,
+        send: () => {
+          writes += 1;
+          return `user-${writes}`;
+        },
+      };
+    },
+  };
+  const test = setUp({ harnesses: [silent] });
+  test.chat.start({
+    harness: FAKE_HARNESS_ID,
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+  });
+  await flush();
+  return { ...test, processes: fake.processes };
 }
 
 // Each message the process was sent, as its text and whether it went `now`.
@@ -6024,9 +6062,90 @@ describe('createChatSessions titles', () => {
     const test = await started();
 
     await row.act(test.chat);
+    await flush();
 
     expect(test.titleCalls).toEqual(row.expected);
   });
+
+  it('titles the row from the first message after a local command', async () => {
+    const test = await startedSilent();
+    const [process] = test.processes;
+
+    await test.chat.send(ROW_ID, { text: '/effort auto', images: [] });
+    process.events.entry(userEntry('user-1', '/effort auto', 'sent'));
+    process.events.entry(userEntry('user-1', '/effort auto', null));
+    await test.chat.send(ROW_ID, { text: 'fix the login bug', images: [] });
+    process.events.entry(userEntry('user-2', 'fix the login bug', 'sent'));
+    process.events.entry(userEntry('user-2', 'fix the login bug', 'received'));
+
+    expect(test.titleCalls).toEqual([
+      [ROW_ID, 'firstMessage', 'fix the login bug'],
+    ]);
+    expect(test.saved.last()?.sessions[0]?.sent).toBe(true);
+  });
+
+  it('titles the row from a first message whose turn ended before the model received it', async () => {
+    const test = await startedSilent();
+    const [process] = test.processes;
+
+    await test.chat.send(ROW_ID, { text: 'fix the login bug', images: [] });
+    process.events.entry(userEntry('user-1', 'fix the login bug', 'sent'));
+    process.events.entry(
+      userEntry('user-1', 'fix the login bug', 'notReceived'),
+    );
+
+    expect(test.titleCalls).toEqual([
+      [ROW_ID, 'firstMessage', 'fix the login bug'],
+    ]);
+  });
+
+  it('titles the row from the next message when the first is dropped', async () => {
+    const test = await startedSilent();
+    const [process] = test.processes;
+
+    await test.chat.send(ROW_ID, { text: 'dropped', images: [] });
+    process.events.messageDropped('user-1', { text: 'dropped', images: [] });
+    await test.chat.send(ROW_ID, { text: 'fix the login bug', images: [] });
+    process.events.entry(userEntry('user-2', 'fix the login bug', 'received'));
+
+    expect(test.titleCalls).toEqual([
+      [ROW_ID, 'firstMessage', 'fix the login bug'],
+    ]);
+  });
+
+  it.each([
+    {
+      given: 'a relaunch',
+      act: async (test: Awaited<ReturnType<typeof startedSilent>>) => {
+        test.processes[0].events.ended({ code: 0, error: null });
+        await test.chat.send(ROW_ID, {
+          text: 'fix the login bug',
+          images: [],
+        });
+      },
+    },
+    {
+      given: 'a clear',
+      act: (test: Awaited<ReturnType<typeof startedSilent>>) => {
+        test.chat.clear(ROW_ID);
+      },
+    },
+  ])(
+    'titles nothing from a message the ended process sent, after $given',
+    async (row) => {
+      const test = await startedSilent();
+      await test.chat.send(ROW_ID, { text: '/effort auto', images: [] });
+      await test.chat.send(ROW_ID, { text: 'hello', images: [] });
+
+      await row.act(test);
+      await flush();
+      test.processes[1].events.entry(
+        userEntry('user-2', 'replayed', 'received'),
+      );
+
+      expect(test.titleCalls).toEqual([]);
+    },
+  );
 
   it('deliver_FirstMessageAfterClear_KeepsTheTitle', async () => {
     const test = await started();

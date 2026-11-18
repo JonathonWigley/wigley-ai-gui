@@ -1,6 +1,6 @@
 # 20 — Local commands do not title a row
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · per-process candidate state fed by the harness's async delivery events, cleared on process start, clear and drop
 Wave: 2 · Depends on: 13 (both list `src/plugins/chat/main/chat-sessions.test.ts`)
