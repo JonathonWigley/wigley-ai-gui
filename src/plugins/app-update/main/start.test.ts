@@ -4,6 +4,7 @@ import type { Git } from '../../../contracts/git';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { appUpdateStatusSlot } from '../contract';
+import { demoStatus } from './demo-steps';
 import { appUpdateMainPart } from './start';
 import { INSTALL_POLL_MS, RESUMED_INSTALL_CAP_MS } from './updater';
 
@@ -345,6 +346,21 @@ describe('appUpdateMainPart', () => {
 
     expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
     expect(test.harness.processes.detachedStarts).toEqual([]);
+  });
+
+  // Breaks: a stage left after a restart writing its part's real status over
+  // the new part's sample.
+  it('demoStep_LeftAfterARestart_LeavesTheNewStagesStatus', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    const stale = await test.enterDemoStep();
+    await test.harness.restart();
+    await settle();
+    await test.enterDemoStep();
+    test.harness.invoke('showDemoStatus', 'failed');
+
+    stale.dispose();
+
+    expect(test.status()).toEqual(demoStatus('failed'));
   });
 
   it('showDemoStatus_NoStageEntered_Throws', async () => {

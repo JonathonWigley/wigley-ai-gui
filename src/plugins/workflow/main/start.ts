@@ -1,5 +1,5 @@
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
-import { DEMO_PROFILE } from '../../../contracts/demo';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
@@ -79,8 +79,8 @@ type WorkflowApi = MainApi<
 // meters each session's active time and spend and appends a line to `runs.jsonl`
 // when a fold enters a stage that finishes its workflow, writes each open session's
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
-// actions. A demo session (profile `demo`) opens no flow, so nothing of it reaches
-// `flows.json`; registers the `workflow.engine` demo step's main half. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
+// actions. A demo session (an ephemeral open, or a row on the demo harness) opens
+// no flow, so nothing of it reaches `flows.json`; registers the `workflow.engine` demo step's main half. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
 // `stageFinishes` for whether a flow sits in a stage that finishes its run.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
@@ -350,7 +350,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           continue;
         }
         const isHeld = store.hostIdOf(sessionId) !== null;
-        const isDemo = info.profile === DEMO_PROFILE;
+        const isDemo = info.harness === DEMO_HARNESS_ID;
         if (isHeld || isDemo || !profileNames.has(info.profile)) {
           continue;
         }
@@ -360,11 +360,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
 
     // Chat's open carries the host id and folder: a session chat adopts across
     // its own restart fires no `sessions.connected`. A row already held under
-    // that host id is left, and a demo session opens no flow.
+    // that host id is left, and an ephemeral (demo) session opens no flow.
     events.on(
       'chat.sessionOpened',
-      ({ sessionId, hostSessionId, projectDir, profile }) => {
-        if (profile === DEMO_PROFILE) {
+      ({ sessionId, hostSessionId, projectDir, ephemeral }) => {
+        if (ephemeral === true) {
           return;
         }
         void ready.then(() => {

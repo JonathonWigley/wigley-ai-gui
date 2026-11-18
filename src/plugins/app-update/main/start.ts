@@ -50,6 +50,8 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     // sample `demo` is set.
     let real: AppUpdateStatus = status.get() ?? { kind: 'none' };
     let demo: AppUpdateStatus | null = null;
+    // A stage left after this part stopped writes nothing.
+    let isStopped = false;
     const updaterStatus: SlotWriter<AppUpdateStatus> = {
       get: () => real,
       set(next) {
@@ -61,6 +63,9 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
       dispose() {},
     };
     const setDemo = (next: AppUpdateStatus | null) => {
+      if (isStopped) {
+        return;
+      }
       demo = next;
       status.set(next ?? real);
     };
@@ -180,6 +185,7 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
         },
       },
       dispose: () => {
+        isStopped = true;
         // The next start reads the slot to resume an install.
         if (demo !== null) {
           status.set(real);

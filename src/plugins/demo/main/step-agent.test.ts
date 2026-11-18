@@ -77,12 +77,14 @@ describe('createStepAgentStore', () => {
   });
 });
 
+const CLONE = { path: '/clone', isAppClone: true };
+
 describe('stepAgentInstructions', () => {
   it('stepAgentInstructions_BriefAndRun_NamesStepFilesBeatAndFolder', () => {
     const run = runState({ stepId: 'p.one', beat: 1 });
 
-    const text = stepAgentInstructions('p.one', BRIEF, run, '/clone');
-    const briefless = stepAgentInstructions('p.one', undefined, run, '/clone');
+    const text = stepAgentInstructions('p.one', BRIEF, run, CLONE);
+    const briefless = stepAgentInstructions('p.one', undefined, run, CLONE);
 
     expect(text).toContain('step p.one of the p plugin: The first feature.');
     expect(text).toContain('- src/plugins/p/page/view.ts\n');
@@ -103,9 +105,31 @@ describe('stepAgentInstructions', () => {
   ])(
     'stepAgentInstructions_NoStepOnScreen_LeavesOutTheStartedLine ($name)',
     ({ run }) => {
-      const text = stepAgentInstructions('p.one', BRIEF, run, '/clone');
+      const text = stepAgentInstructions('p.one', BRIEF, run, CLONE);
 
       expect(text).not.toContain('When this conversation started');
+    },
+  );
+
+  // Breaks: an agent started in the home folder told it works in the app's clone.
+  it.each([
+    {
+      name: 'clone',
+      folder: CLONE,
+      says: "You work in the app's own clone, /clone.",
+    },
+    {
+      name: 'home',
+      folder: { path: '/home', isAppClone: false },
+      says: 'You start in /home: the app found no clone of its own.',
+    },
+  ])(
+    'stepAgentInstructions_Folder_NamesWhereTheAgentWorks ($name)',
+    ({ folder, says }) => {
+      const text = stepAgentInstructions('p.one', BRIEF, undefined, folder);
+
+      expect(text).toContain(says);
+      expect(text.includes("app's own clone")).toBe(folder.isAppClone);
     },
   );
 });

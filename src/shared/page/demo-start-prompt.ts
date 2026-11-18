@@ -6,7 +6,11 @@ import type { SlotReader } from '../../contracts/state';
 // How long `open` waits for chat's start prompt to show.
 export const DEMO_PROMPT_WAIT_MS = 5000;
 
-const PROMPT_SCOPE = 'chat.picker';
+// The scopes the start prompt holds the keys in: its list, and its resume section.
+const PROMPT_SCOPES: ReadonlySet<ViewScope | undefined> = new Set([
+  'chat.picker',
+  'chat.resume',
+]);
 const NEW_SESSION = 'chat.newSession';
 const PICKER_CANCEL = 'chat.pickerCancel';
 
@@ -19,14 +23,15 @@ export interface DemoStartPromptDeps {
   log(line: string): void;
 }
 
-// A demo stage's hold on chat's start prompt, which shows while the key scope
-// reads `chat.picker`. `open` resolves true once the prompt shows, at once when
-// it already shows from an earlier `open`, else after running `chat.newSession`;
-// it resolves false when the prompt has not shown after `DEMO_PROMPT_WAIT_MS`.
-// `isOpen` is true from `open`'s true until the scope leaves the prompt.
-// `cancel` closes a prompt `open` showed, and makes a still waiting `open` close
-// the prompt the moment it shows and resolve false; a later `open` takes the
-// wait back. `dispose` cancels.
+// A demo stage's hold on chat's start prompt, which holds the keys in
+// `chat.picker` or `chat.resume`. `open` resolves true once the prompt shows, at
+// once when it already shows from an earlier `open`, else after running
+// `chat.newSession`; it resolves false when the prompt has not shown after
+// `DEMO_PROMPT_WAIT_MS`. `isOpen` is true from `open`'s true until the scope
+// leaves the prompt's scopes. `cancel` runs `chat.pickerCancel` once for a
+// prompt `open` showed, wherever the keys moved since, and makes a still waiting
+// `open` close the prompt the moment it shows and resolve false; a later `open`
+// takes the wait back. `dispose` cancels.
 export interface DemoStartPrompt extends Disposable {
   open(): Promise<boolean>;
   isOpen(): boolean;
@@ -44,10 +49,13 @@ export function demoStartPrompt(deps: DemoStartPromptDeps): DemoStartPrompt {
   // Listens for the scope leaving the prompt while `open` holds it shown.
   let shownWatch: Disposable | null = null;
   let wait: Wait | null = null;
+  // True from `open`'s true until `cancel`: chat shows no signal of the prompt
+  // itself, and the keys may leave it for the demo panel or help while it shows.
+  let hasShownPrompt = false;
 
   const watchShown = () => {
     const watch = deps.scope.on((scope) => {
-      if (scope !== PROMPT_SCOPE && shownWatch === watch) {
+      if (!PROMPT_SCOPES.has(scope) && shownWatch === watch) {
         watch.dispose();
         shownWatch = null;
       }
@@ -71,7 +79,7 @@ export function demoStartPrompt(deps: DemoStartPromptDeps): DemoStartPrompt {
       settle(isShown);
     };
     const check = () => {
-      if (!started.isWaiting || deps.scope.get() !== PROMPT_SCOPE) {
+      if (!started.isWaiting || !PROMPT_SCOPES.has(deps.scope.get())) {
         return;
       }
       if (started.cancelsOnShow) {
@@ -80,6 +88,7 @@ export function demoStartPrompt(deps: DemoStartPromptDeps): DemoStartPrompt {
         return;
       }
       watchShown();
+      hasShownPrompt = true;
       end(true);
     };
     const subscription = deps.scope.on(check);
@@ -108,7 +117,8 @@ export function demoStartPrompt(deps: DemoStartPromptDeps): DemoStartPrompt {
       if (wait?.isWaiting === true) {
         wait.cancelsOnShow = true;
       }
-      if (prompt.isOpen()) {
+      if (hasShownPrompt) {
+        hasShownPrompt = false;
         deps.runCommand(PICKER_CANCEL);
       }
     },

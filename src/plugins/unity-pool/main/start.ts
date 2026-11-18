@@ -53,6 +53,8 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     };
     // The demo step's pool, published beside the watch's while the step is entered.
     let demoPool: PoolState | null = null;
+    // A stage left after this part stopped writes nothing.
+    let isStopped = false;
     const publish = (snapshot: PoolSnapshot) =>
       poolSnapshot.set(
         demoPool === null
@@ -82,6 +84,9 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     const originName = createOriginRepoNames(services.git);
     const demo = registerDemoSteps(services, {
       setDemoPool(pool) {
+        if (isStopped) {
+          return;
+        }
         demoPool = pool;
         publish(watch.snapshot());
       },
@@ -121,6 +126,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
     return {
       commands: {},
       dispose: () => {
+        isStopped = true;
         registration.dispose();
         watch.dispose();
       },

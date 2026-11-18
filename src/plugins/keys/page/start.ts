@@ -10,6 +10,7 @@ import {
   scrollText,
   scrollToEdge,
 } from '../../../shared/content-scroll';
+import { pageKeysFor } from '../../../shared/key-notation';
 import { element } from '../../../shared/page/dom';
 import { listPickerCommands } from '../../../shared/page/list-picker';
 import { textLineHeightPx } from '../../../shared/page/text-line';
@@ -19,7 +20,6 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
-import { pageKeysFor } from '../../../shared/key-notation';
 import { registerDemoSteps } from './demo-steps';
 import { helpSections } from './help-sections';
 import { mountHelpView } from './help-view';

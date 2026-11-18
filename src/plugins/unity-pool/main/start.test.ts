@@ -192,6 +192,19 @@ describe('unityPoolMainPart', () => {
     expect(slot.get()?.pools).toEqual([]);
   });
 
+  // Breaks: a stage left after a restart dropping the new part's demo pool.
+  it('demoStep_LeftAfterARestart_LeavesTheNewStagesPool', async () => {
+    const harness = startOnHarness();
+    const slot = harness.state.read(unityPoolSnapshotSlot, 'test');
+    const stale = await harness.enterDemoStep();
+    await harness.restart();
+    await harness.enterDemoStep();
+
+    stale.dispose();
+
+    expect(slot.get()?.pools.map(({ pool }) => pool)).toEqual([DEMO_POOL]);
+  });
+
   it('demoStep_RealPoolHeld_PublishesBothSortedByName', async () => {
     const harness = startOnHarness();
     const slot = harness.state.read(unityPoolSnapshotSlot, 'test');

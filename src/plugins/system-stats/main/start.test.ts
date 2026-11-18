@@ -230,6 +230,18 @@ describe('systemStatsMainPart', () => {
     expect(run.logged('sampling stopped by a seed')).toBe(1);
   });
 
+  // Breaks: a stage left after a restart clearing the new part's fixture.
+  it('demoStep_LeftAfterARestart_LeavesTheNewStagesFixture', async () => {
+    const run = startOnHarness();
+    const stale = await run.enterDemoStep();
+    await run.harness.restart();
+    await run.enterDemoStep();
+
+    stale.dispose();
+
+    expect(run.slot.get()).toEqual(statsFixture('busy', 0));
+  });
+
   it('demoStep_HoldsTheFixtureOverSamples_AndLeavingSamplesAgain', async () => {
     const run = startOnHarness();
     await run.show(true);

@@ -74,9 +74,22 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       liveTools.sessionEnded(sessionId);
       watch.sessionEnded(sessionId);
     });
+    // A stage entered or left after this part stopped writes no pick.
+    let isStopped = false;
     registerDemoSteps(services, {
       screenCapture: services.screenCapture,
-      picks,
+      picks: {
+        set: (sessionId, pick) => {
+          if (!isStopped) {
+            picks.set(sessionId, pick);
+          }
+        },
+        delete: (sessionId) => {
+          if (!isStopped) {
+            picks.delete(sessionId);
+          }
+        },
+      },
       ownProcessId: process.pid,
       log: services.log,
     });
@@ -132,6 +145,9 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
               ),
             );
         },
+      },
+      dispose: () => {
+        isStopped = true;
       },
     };
   },

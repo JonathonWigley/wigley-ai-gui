@@ -1335,34 +1335,52 @@ describe('workflowMainPart', () => {
     });
   }
 
-  // Breaks: a demo session writing the user's flows.json.
+  // Breaks: a demo session writing the user's flows.json, or a user's own
+  // profile named `demo` losing its flows.
   it.each<{
     name: string;
     entry: 'sessionOpened' | 'openRowsAlreadyOpen';
     profile: string;
+    isDemo: boolean;
     opens: boolean;
   }>([
     {
-      name: 'sessionOpened_DemoProfile_OpensNoFlow',
+      name: 'sessionOpened_Ephemeral_OpensNoFlow',
       entry: 'sessionOpened',
       profile: DEMO_PROFILE,
+      isDemo: true,
       opens: false,
     },
     {
-      name: 'openRowsAlreadyOpen_DemoProfile_OpensNoFlow',
+      name: 'sessionOpened_EphemeralOnOtherProfile_OpensNoFlow',
+      entry: 'sessionOpened',
+      profile: 'personal',
+      isDemo: true,
+      opens: false,
+    },
+    {
+      name: 'openRowsAlreadyOpen_DemoHarness_OpensNoFlow',
       entry: 'openRowsAlreadyOpen',
       profile: DEMO_PROFILE,
+      isDemo: true,
       opens: false,
+    },
+    {
+      name: 'openRowsAlreadyOpen_OtherHarnessOnDemoProfile_OpensFlow',
+      entry: 'openRowsAlreadyOpen',
+      profile: DEMO_PROFILE,
+      isDemo: false,
+      opens: true,
     },
     {
       name: 'sessionOpened_OtherProfile_OpensFlow',
       entry: 'sessionOpened',
       profile: 'personal',
+      isDemo: false,
       opens: true,
     },
-  ])('$name', async ({ entry, profile, opens }) => {
+  ])('$name', async ({ entry, profile, isDemo, opens }) => {
     const harness = startWithDemoHarness();
-    const isDemo = profile === DEMO_PROFILE;
     if (entry === 'sessionOpened') {
       harness.emit('chat.sessionOpened', {
         sessionId: 's1',

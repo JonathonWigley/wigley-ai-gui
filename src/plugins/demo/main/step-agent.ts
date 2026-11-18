@@ -41,6 +41,13 @@ function briefLines(
   ];
 }
 
+// The folder a step agent works in: the app's own clone, else the home folder
+// when no clone resolves.
+export interface StepAgentFolder {
+  path: string;
+  isAppClone: boolean;
+}
+
 // The step agent's instructions for step `stepId`, working in `folder`. They
 // reach the agent only at launch and resume, so the beat they name is the one
 // on screen then; the text sends the agent to `demo.run` for the beat now.
@@ -48,9 +55,12 @@ export function stepAgentInstructions(
   stepId: string,
   brief: DemoStepBrief | undefined,
   run: DemoRunState | undefined,
-  folder: string,
+  folder: StepAgentFolder,
 ): string {
   const isStepOnScreen = run !== undefined && run.stepId !== null;
+  const folderLine = folder.isAppClone
+    ? `You work in the app's own clone, ${folder.path}. Read its AGENTS.md before you change code, and land each change by its rules.`
+    : `You start in ${folder.path}: the app found no clone of its own. Ask the user where the wigley-ai-gui clone is before you change code, then read its AGENTS.md and land each change by its rules.`;
   return [
     ...briefLines(stepId, brief),
     ...(isStepOnScreen
@@ -59,7 +69,7 @@ export function stepAgentInstructions(
         ]
       : []),
     '',
-    `The user watches this step in the app and asks you to change the feature it shows. You work in the app's own clone, ${folder}. Read its AGENTS.md before you change code, and land each change by its rules.`,
+    `The user watches this step in the app and asks you to change the feature it shows. ${folderLine}`,
     '',
     "The demo's state is the demo.run slot: call read_state with slot demo.run for the step and beat on screen now (beat counts from 0). Drive the demo with run_command: demo.goTo with a step id as its arg, demo.next, demo.previous, demo.reset (sets the step up again from its first beat, for example after a change lands) and demo.stop. Call list_commands for the other commands.",
   ].join('\n');

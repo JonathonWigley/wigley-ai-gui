@@ -156,4 +156,30 @@ describe('demoStartPrompt', () => {
     expect(test.prompt.isOpen()).toBe(false);
     expect(test.holdsAnything()).toBe(false);
   });
+
+  // Breaks: the stage's prompt left covering the next step once the keys moved
+  // off `chat.picker`.
+  it.each([
+    {
+      name: 'cancel after the scope moved to resume',
+      moveTo: 'chat.resume',
+      leave: 'cancel',
+    },
+    {
+      name: 'dispose after the keys moved to the demo panel',
+      moveTo: 'demo.panel',
+      leave: 'dispose',
+    },
+  ] as const)('$name still runs pickerCancel', async ({ moveTo, leave }) => {
+    const test = setUp();
+    const opening = test.prompt.open();
+    test.setScope(PROMPT);
+    await opening;
+    test.setScope(moveTo);
+
+    test.prompt[leave]();
+
+    expect(test.ran).toEqual(['chat.newSession', 'chat.pickerCancel']);
+    expect(test.holdsAnything()).toBe(false);
+  });
 });

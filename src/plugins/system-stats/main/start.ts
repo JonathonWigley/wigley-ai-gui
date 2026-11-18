@@ -54,6 +54,8 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
     // The demo step's snapshot while it is entered, and the slot's value when it entered.
     let demo: StatsSnapshot | null = null;
     let beforeDemo: StatsSnapshot | null = null;
+    // A stage left after this part stopped writes nothing.
+    let isStopped = false;
 
     const sampled = (sample: SystemSample, at: number) => {
       if (demo !== null) {
@@ -135,6 +137,9 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
 
     registerDemoSteps(services, {
       setDemo(next) {
+        if (isStopped) {
+          return;
+        }
         if (next !== null) {
           if (demo === null) {
             beforeDemo = snapshot.get() ?? null;
@@ -174,6 +179,12 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       systemStatsSelfTestScript({ seed, snapshot: current }),
     );
 
-    return { commands: {}, dispose: () => poller?.dispose() };
+    return {
+      commands: {},
+      dispose: () => {
+        isStopped = true;
+        poller?.dispose();
+      },
+    };
   },
 };
