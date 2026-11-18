@@ -330,7 +330,8 @@ describe('settleMovedLock', () => {
       left: 'newer',
     },
     {
-      label: 'a newer lock was moved and another arrived: the arrived one stays',
+      label:
+        'a newer lock was moved and another arrived: the arrived one stays',
       movedTheJudged: false,
       arrived: 'arrived',
       settled: false,

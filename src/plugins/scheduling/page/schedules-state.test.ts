@@ -467,15 +467,41 @@ describe('selection', () => {
   );
 
   it.each<{ name: string; isOpening: boolean; cursor: number }>([
-    { name: 'opened from the list: back to the newest run', isOpening: true, cursor: 0 },
-    { name: 'any other focus move: keeps the cursor', isOpening: false, cursor: 1 },
+    {
+      name: 'opened from the list: back to the newest run',
+      isOpening: true,
+      cursor: 0,
+    },
+    {
+      name: 'any other focus move: keeps the cursor',
+      isOpening: false,
+      cursor: 1,
+    },
   ])('focus_DetailWithHistoryCursor: $name', ({ isOpening, cursor }) => {
     const runs = view(
       {},
       {
         history: [
-          { taskId: 'aaaa1111', occurrence: 2, at: 2, outcome: 'finished', reason: null, rowId: null, processId: null, viewed: true },
-          { taskId: 'aaaa1111', occurrence: 1, at: 1, outcome: 'finished', reason: null, rowId: null, processId: null, viewed: true },
+          {
+            taskId: 'aaaa1111',
+            occurrence: 2,
+            at: 2,
+            outcome: 'finished',
+            reason: null,
+            rowId: null,
+            processId: null,
+            viewed: true,
+          },
+          {
+            taskId: 'aaaa1111',
+            occurrence: 1,
+            at: 1,
+            outcome: 'finished',
+            reason: null,
+            rowId: null,
+            processId: null,
+            viewed: true,
+          },
         ],
       },
     );

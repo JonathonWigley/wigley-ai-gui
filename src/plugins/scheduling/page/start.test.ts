@@ -224,9 +224,9 @@ describe('scheduling page part', () => {
     settleSave('bbbb2222');
     await settle();
 
-    expect(page.calls.filter((call) => call.method === 'saveTask')).toHaveLength(
-      1,
-    );
+    expect(
+      page.calls.filter((call) => call.method === 'saveTask'),
+    ).toHaveLength(1);
   });
 
   it('nextField with no box focused steps from the cursor row to the next box row', async () => {
@@ -240,9 +240,9 @@ describe('scheduling page part', () => {
 
     page.run('nextField');
 
-    expect(
-      sheetOf(page).querySelector('.is-cursor')?.textContent,
-    ).toContain('Time');
+    expect(sheetOf(page).querySelector('.is-cursor')?.textContent).toContain(
+      'Time',
+    );
   });
 
   it('a part restarted while Schedules mode shows starts with the mode shown', async () => {

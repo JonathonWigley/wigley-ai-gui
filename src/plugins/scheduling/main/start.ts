@@ -512,9 +512,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       }
       // A replay that rejects leaves the calls file on disk.
       try {
-        const replayed = await sessions.replayCalls(
-          record.adopt.hostSessionId,
-        );
+        const replayed = await sessions.replayCalls(record.adopt.hostSessionId);
         if (replayed > 0) {
           log(`replayed ${replayed} calls for ${rowId}`);
         }

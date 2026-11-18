@@ -200,8 +200,7 @@ function readStdoutLine(
     state.isTurnOpen = true;
   }
   const endedMessageId =
-    isMessageEndLine &&
-    isOneOf(line[messageEnd.stateKey], messageEnd.endStates)
+    isMessageEndLine && isOneOf(line[messageEnd.stateKey], messageEnd.endStates)
       ? line[messageEnd.idKey]
       : undefined;
   if (typeof endedMessageId === 'string') {
