@@ -49,6 +49,8 @@ export interface PermissionActionDeps {
   channel: ChatInvoke;
   reasonBox: Pick<ReasonBox, 'open'>;
   log: PluginLog;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 // Allow answers at once; deny opens the reason box and answers with what the
@@ -69,9 +71,11 @@ export function createPermissionActions(
         allowed,
         reason,
       })
-      .catch((error: unknown) =>
-        log(`answerPermission failed: ${errorText(error)}`),
-      );
+      .catch((error: unknown) => {
+        if (!deps.isStopped()) {
+          log(`answerPermission failed: ${errorText(error)}`);
+        }
+      });
   return {
     allow(session, entry) {
       answer(session, entry.id, true, null);
@@ -230,9 +234,11 @@ export function chatCommandHandlers(
       }
       void channel
         .invoke('interrupt', session.sessionId)
-        .catch((error: unknown) =>
-          log(`interrupt failed: ${errorText(error)}`),
-        );
+        .catch((error: unknown) => {
+          if (!deps.isStopped()) {
+            log(`interrupt failed: ${errorText(error)}`);
+          }
+        });
       log(`interrupted ${session.name}`);
     }),
     // On the last stop, a composer part's stop may take the cursor; the
@@ -443,12 +449,18 @@ export function chatCommandHandlers(
     stopAll: () => {
       log('stopping every session');
       void channel.invoke('stopAll').catch((error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`sessions not stopped: ${errorText(error)}`);
         deps.toast(`Sessions not stopped: ${errorText(error)}`, 'error');
       });
     },
     openPreview: () =>
       void channel.invoke('openPreview').catch((error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`chat preview not opened: ${errorText(error)}`);
         deps.toast(`Chat preview not opened: ${errorText(error)}`, 'error');
       }),
@@ -634,7 +646,7 @@ export function putBack(
 // Puts messages main returned into their session's box and tells main they are
 // placed.
 export function placeReturned(
-  deps: Pick<ChatCommandDeps, 'tabs' | 'channel' | 'log'>,
+  deps: Pick<ChatCommandDeps, 'tabs' | 'channel' | 'log' | 'isStopped'>,
   session: ChatSession,
   messages: readonly ReturnedMessage[],
 ) {
@@ -651,11 +663,13 @@ export function placeReturned(
       session.sessionId,
       messages.map((message) => message.id),
     )
-    .catch((error: unknown) =>
-      deps.log(
-        `returned messages in ${session.name} not reported placed: ${errorText(error)}`,
-      ),
-    );
+    .catch((error: unknown) => {
+      if (!deps.isStopped()) {
+        deps.log(
+          `returned messages in ${session.name} not reported placed: ${errorText(error)}`,
+        );
+      }
+    });
 }
 
 // Replaces the session's draft with `text`, leaving its attached images, then
@@ -679,15 +693,17 @@ export function fillComposer(
 // Asks main to take the queued message out of the session's queue; it
 // arrives back in `chat.returned`.
 export function pullBackQueued(
-  deps: { channel: ChatInvoke; log: PluginLog },
+  deps: Pick<ChatCommandDeps, 'channel' | 'log' | 'isStopped'>,
   session: SessionRef,
   queuedId: string,
 ) {
   void deps.channel
     .invoke('pullBack', session.sessionId, queuedId)
-    .catch((error: unknown) =>
-      deps.log(`pullBack failed: ${errorText(error)}`),
-    );
+    .catch((error: unknown) => {
+      if (!deps.isStopped()) {
+        deps.log(`pullBack failed: ${errorText(error)}`);
+      }
+    });
   deps.log(`pulling back a pending message in ${session.name}`);
 }
 
@@ -695,13 +711,17 @@ export function pullBackQueued(
 // stays, drawn as sending, until the agent takes it in. Main refuses a row
 // already sent, and on the held row skips the compaction instead.
 export function sendQueuedNow(
-  deps: { channel: ChatInvoke; log: PluginLog },
+  deps: Pick<ChatCommandDeps, 'channel' | 'log' | 'isStopped'>,
   session: SessionRef,
   queuedId: string,
 ) {
   void deps.channel
     .invoke('sendNow', session.sessionId, queuedId)
-    .catch((error: unknown) => deps.log(`sendNow failed: ${errorText(error)}`));
+    .catch((error: unknown) => {
+      if (!deps.isStopped()) {
+        deps.log(`sendNow failed: ${errorText(error)}`);
+      }
+    });
   deps.log(`sending a pending message now in ${session.name}`);
 }
 
@@ -723,6 +743,9 @@ function runSlashCommand(
   session.boxChanged();
   log(`ran /${command.name} in ${session.name}`);
   void (async () => command.run(context))().catch((error: unknown) => {
+    if (deps.isStopped()) {
+      return;
+    }
     log(`/${command.name} failed: ${errorText(error)}`);
     deps.toast(`/${command.name} failed: ${errorText(error)}`, 'error');
   });

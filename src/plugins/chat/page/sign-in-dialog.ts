@@ -24,6 +24,8 @@ export interface SignInDialogDeps extends DialogDeps {
   channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>;
   writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 // The sign-in dialog, one at a time, belonging to a profile rather than a
@@ -122,5 +124,6 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     writeClipboard: deps.writeClipboard,
     toast: deps.toast,
     log: deps.log,
+    isStopped: deps.isStopped,
   });
 }

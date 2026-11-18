@@ -506,7 +506,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     // `tabs` holds a tab once `createTab` mounted its box.
     const session = sessionOf(tab, tab.box!, deps.composerParts);
-    placeReturned({ tabs: view, channel, log }, session, fresh);
+    placeReturned(
+      { tabs: view, channel, log, isStopped: () => isDisposed },
+      session,
+      fresh,
+    );
   };
 
   const tabView: TabView = {
@@ -517,7 +521,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     shown: (shownTab) => {
       shownTab.stop.leave();
       takeKeys(shownTab, 'chat', deps);
-      askHistory(shownTab, deps);
+      askHistory(shownTab, deps, () => isDisposed);
       if (lastShown !== null && lastShown.sessionId !== shownTab.sessionId) {
         deps.otherSessionShown();
       }
@@ -1153,11 +1157,19 @@ function hubToEntries(tab: HeldTab, deps: PaneDeps) {
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
-// main reads it once, and it arrives as a `replace` in `chat.entries`.
-function askHistory(tab: HeldTab, deps: ChatViewDeps) {
+// main reads it once, and it arrives as a `replace` in `chat.entries`. A
+// failure landing once the view is disposed says nothing.
+function askHistory(
+  tab: HeldTab,
+  deps: ChatViewDeps,
+  isDisposed: () => boolean,
+) {
   void deps.channel
     .invoke('loadHistory', tab.sessionId)
     .catch((error: unknown) => {
+      if (isDisposed()) {
+        return;
+      }
       deps.log(`history not loaded: ${errorText(error)}`);
       deps.toast(`history not loaded: ${errorText(error)}`, 'error');
     });

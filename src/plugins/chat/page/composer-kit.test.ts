@@ -1035,4 +1035,23 @@ describe('composer surface activity dock', () => {
       expect(armed.size).toBe(0);
     },
   );
+
+  it('dispose still disposes the working line parts when the dock part throws', () => {
+    const { surface, anchors } = setUpSurface({
+      working: userPart(),
+      workingLine: userPart(),
+    });
+    surface.setTurn(LIVE_TURN, true, null);
+    const partAnchors = anchors.filter(
+      (anchor) => anchor.command === chatCommand('newSession'),
+    );
+    partAnchors[0].disposeError = new Error('anchor refused');
+
+    expect(() => surface.dispose()).toThrow('anchor refused');
+
+    expect(partAnchors.length).toBeGreaterThan(1);
+    expect(partAnchors.map((anchor) => anchor.isDisposed)).toEqual(
+      partAnchors.map(() => true),
+    );
+  });
 });

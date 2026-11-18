@@ -1411,25 +1411,153 @@ describe('chat commands', () => {
     },
   );
 
-  it('logs, toasts and puts back nothing when a send is refused after the part stopped', async () => {
-    const message = box('hi');
+  // A session with `hi` in its focused box.
+  const typedHi = () => {
     const entries = focusedOnStop({ kind: 'entry', entry: userEntry });
-    const shown = Object.assign(session(false), {
-      box: message,
+    return Object.assign(session(false), {
+      box: box('hi'),
       entries: Object.assign(entries, { latest: () => undefined }),
       isBoxFocused: () => true,
     });
-    const run = setUp(shown, new Error('profile gone'));
+  };
+  // A session whose cursor stop has `x` to copy.
+  const copyable = () =>
+    Object.assign(session(true), {
+      entries: {
+        focused: () => null,
+        isRangeOpen: () => false,
+        selectedSource: () => ({ text: 'x', blockCount: 1 }),
+        cancelRange: () => true,
+      } as Partial<ChatSession['entries']> as ChatSession['entries'],
+    });
+  // An app slash command `/logout` whose run rejects.
+  const failingLogout = () => {
+    const commands = createSlashCommands();
+    commands.add({
+      name: 'logout',
+      description: 'Sign out',
+      run: () => Promise.reject(new Error('no network')),
+    });
+    return commands;
+  };
+  const refused = new Error('profile gone');
+  it.each<{
+    reply: string;
+    refusal?: Error;
+    clipboardFailure?: Error;
+    shown: () => ChatSession;
+    slashCommands?: () => SlashCommands;
+    act: (run: ReturnType<typeof setUp>) => void;
+  }>([
+    {
+      reply: 'a refused send',
+      refusal: refused,
+      shown: typedHi,
+      act: (run) => run.handlers.send({ arg: undefined }),
+    },
+    {
+      reply: 'an accepted send',
+      shown: typedHi,
+      act: (run) => run.handlers.send({ arg: undefined }),
+    },
+    {
+      reply: 'an accepted sendNow',
+      shown: typedHi,
+      act: (run) => run.handlers.sendNow({ arg: undefined }),
+    },
+    {
+      reply: 'a refused sendNow of a pending row',
+      refusal: refused,
+      shown: () => session(true),
+      act: (run) =>
+        sendQueuedNow(run.deps, { sessionId: 'row-1', name: 'app' }, 'q-2'),
+    },
+    {
+      reply: 'a refused pullBack',
+      refusal: refused,
+      shown: () => {
+        const shown = session(true);
+        const queued = [
+          { id: 'q-1', sentEntryId: null, text: 'q', images: [] },
+        ];
+        return Object.assign(shown, { state: { ...shown.state, queued } });
+      },
+      act: (run) => run.handlers.pullBackQueued({ arg: undefined }),
+    },
+    {
+      reply: 'a copy that lands',
+      shown: copyable,
+      act: (run) => run.handlers.allowOrCopy({ arg: undefined }),
+    },
+    {
+      reply: 'a copy that fails',
+      clipboardFailure: new Error('denied'),
+      shown: copyable,
+      act: (run) => run.handlers.allowOrCopy({ arg: undefined }),
+    },
+    {
+      reply: 'a control choice main applied',
+      shown: () => session(true),
+      act: (run) => {
+        run.handlers.pickMode({ arg: undefined });
+        run.opened[0].picked(mode.choices[1]);
+      },
+    },
+    {
+      reply: 'a control choice main refused',
+      refusal: refused,
+      shown: () => session(true),
+      act: (run) => {
+        run.handlers.pickMode({ arg: undefined });
+        run.opened[0].picked(mode.choices[1]);
+      },
+    },
+    {
+      reply: 'a refused interrupt',
+      refusal: refused,
+      shown: () => session(true),
+      act: (run) => run.handlers.interrupt({ arg: undefined }),
+    },
+    {
+      reply: 'a refused stopAll',
+      refusal: refused,
+      shown: () => session(true),
+      act: (run) => run.handlers.stopAll({ arg: undefined }),
+    },
+    {
+      reply: 'a refused openPreview',
+      refusal: refused,
+      shown: () => session(true),
+      act: (run) => run.handlers.openPreview({ arg: undefined }),
+    },
+    {
+      reply: 'an app slash command that rejects',
+      shown: () => Object.assign(session(true), { box: box('/logout') }),
+      slashCommands: failingLogout,
+      act: (run) => run.handlers.send({ arg: undefined }),
+    },
+  ])(
+    'logs, toasts, marks and puts back nothing for $reply landing after the part stopped',
+    async ({ refusal, clipboardFailure, shown, slashCommands, act }) => {
+      const run = setUp(
+        shown(),
+        refusal,
+        true,
+        slashCommands?.() ?? createSlashCommands(),
+        clipboardFailure,
+      );
+      act(run);
+      const logsAtStop = [...run.logs];
+      const markedAtStop = [...run.marked];
 
-    run.handlers.send({ arg: undefined });
-    const logsAtStop = [...run.logs];
-    run.stop();
-    await flush();
+      run.stop();
+      await flush();
 
-    expect(run.toasts).toEqual([]);
-    expect(run.logs).toEqual(logsAtStop);
-    expect(message.held.text).toBe('');
-  });
+      expect(run.toasts).toEqual([]);
+      expect(run.logs).toEqual(logsAtStop);
+      expect(run.marked).toEqual(markedAtStop);
+    },
+  );
 
   it('send_ImagesOnly_Sends', async () => {
     const shown = Object.assign(session(true), { box: box('') });

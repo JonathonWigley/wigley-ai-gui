@@ -118,11 +118,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
     const { services } = api;
-    void api.channel
-      .invoke('loaded')
-      .catch((error: unknown) =>
-        services.log(`chat page load not sent: ${errorText(error)}`),
-      );
+    let isStopped = false;
+    void api.channel.invoke('loaded').catch((error: unknown) => {
+      if (!isStopped) {
+        services.log(`chat page load not sent: ${errorText(error)}`);
+      }
+    });
     // The restore window waits for main's restore of the saved rows.
     api.restores.track(api.channel.invoke('restored'));
     const sessions = api.dependency(sessionsPageKey);
@@ -222,12 +223,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
       writeClipboard,
       toast: services.toast,
+      isStopped: () => isStopped,
     });
     const slashCommands = createSlashCommands();
     addAccountCommands({
       commands: slashCommands,
       signIn,
       channel: api.channel,
+      isStopped: () => isStopped,
     });
     addClearCommands({
       commands: slashCommands,
@@ -249,6 +252,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       channel: api.channel,
       reasonBox,
       log: services.log,
+      isStopped: () => isStopped,
     });
     // The pickers and dialogs that act on the visible session.
     const closeSessionDialogs = () => {
@@ -377,7 +381,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => layouts.set(shown),
     });
-    let isStopped = false;
     const startPrompt = createStartPrompt({
       picker,
       signIn,

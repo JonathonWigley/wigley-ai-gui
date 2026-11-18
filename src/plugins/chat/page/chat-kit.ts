@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import { callEach } from '../../../shared/call-each';
 import { formatTokens } from '../../../shared/format-tokens';
 import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -15,7 +16,6 @@ import type { ChatKit } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import { type SurfaceKitDeps, surfaceBaseKit } from './chat-layouts';
 import type { PermissionEntry } from './chat-state';
-import { callEach } from '../../../shared/call-each';
 
 // What a click on Allow once, Deny, a thumbnail or an expander's head calls:
 // `allow` and `deny` with the permission entry, `openImages` with the user

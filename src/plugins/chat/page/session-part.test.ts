@@ -61,8 +61,9 @@ function factsWithBranch(branch: string): SessionFactsInput {
 }
 
 // A source the test changes: `change` sets what `input` reads and tells each
-// listener still subscribed.
-function fakeSource(shown: SessionFactsInput) {
+// listener still subscribed. With `refusesUnlisten`, a listener's handle
+// throws once disposed.
+function fakeSource(shown: SessionFactsInput, refusesUnlisten = false) {
   const listeners = new Set<() => void>();
   return {
     listeners,
@@ -70,7 +71,14 @@ function fakeSource(shown: SessionFactsInput) {
       input: () => shown,
       onChanged(listener: () => void) {
         listeners.add(listener);
-        return { dispose: () => listeners.delete(listener) };
+        return {
+          dispose: () => {
+            listeners.delete(listener);
+            if (refusesUnlisten) {
+              throw new Error('listener refused');
+            }
+          },
+        };
       },
     },
     change(next: SessionFactsInput) {
@@ -231,6 +239,24 @@ describe('Session part', () => {
     expect(findAll(parent, 'chat-session-branch-name')[0].textContent).toBe(
       'feature',
     );
+  });
+
+  it.each([
+    { case: 'every step disposes', refusesUnlisten: false },
+    { case: 'the source subscription throws', refusesUnlisten: true },
+  ])('dispose removes the drawn facts when $case', ({ refusesUnlisten }) => {
+    const { source } = fakeSource(factsWithBranch('main'), refusesUnlisten);
+    const { parent, part } = partOver(source);
+    const built = part.build(asHtml(parent), 'row-1', NO_SECTION);
+
+    const dispose = () => built.dispose?.();
+
+    if (refusesUnlisten) {
+      expect(dispose).toThrow('listener refused');
+    } else {
+      dispose();
+    }
+    expect(parent.children).toEqual([]);
   });
 
   it('build_NoSource_DrawsNothing', () => {

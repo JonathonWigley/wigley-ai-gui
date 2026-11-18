@@ -8,6 +8,8 @@ export interface AccountCommandDeps {
   commands: SlashCommands;
   signIn: Pick<SignInDialog, 'open'>;
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
+  // True once chat's page part stopped: a reply landing later reports nothing.
+  isStopped(): boolean;
 }
 
 // An account as a message names it.
@@ -33,6 +35,9 @@ export function addAccountCommands(deps: AccountCommandDeps): Disposable[] {
       description: "Sign out of this session's profile",
       run: async (context) => {
         await channel.invoke('logOut', context.profile);
+        if (deps.isStopped()) {
+          return;
+        }
         await report(context, `Signed out of ${context.profile}`);
       },
     }),
@@ -41,6 +46,9 @@ export function addAccountCommands(deps: AccountCommandDeps): Disposable[] {
       description: "Show this session's account",
       run: async (context) => {
         const status = await channel.invoke('accountStatus', context.profile);
+        if (deps.isStopped()) {
+          return;
+        }
         await report(
           context,
           status.signedIn

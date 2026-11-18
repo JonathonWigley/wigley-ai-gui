@@ -144,9 +144,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Counts the prompt's opens, so an answer can tell its own open is gone.
   let opens = 0;
 
-  // True, logging `what` as dropped, once the prompt has opened again since
-  // the open `isCurrent` belongs to.
+  // True once chat's page part stopped, and, logging `what` as dropped, once
+  // the prompt has opened again since the open `isCurrent` belongs to.
   const isStale = (isCurrent: () => boolean, what: string) => {
+    if (deps.isStopped()) {
+      return true;
+    }
     if (isCurrent()) {
       return false;
     }
@@ -157,7 +160,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // The sections' rows; none when they cannot be read.
   const readSections = (): Promise<ResumeSectionRows[]> =>
     channel.invoke('resumeSections').catch((error: unknown) => {
-      log(`resume sections not read: ${errorText(error)}`);
+      if (!deps.isStopped()) {
+        log(`resume sections not read: ${errorText(error)}`);
+      }
       return [];
     });
 
@@ -172,7 +177,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Chat's projects; none when they cannot be read.
   const readProjects = (): Promise<ChatProject[]> =>
     channel.invoke('projects').catch((error: unknown) => {
-      log(`projects not read: ${errorText(error)}`);
+      if (!deps.isStopped()) {
+        log(`projects not read: ${errorText(error)}`);
+      }
       return [];
     });
 
@@ -224,6 +231,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`start prompt not opened: ${errorText(error)}`);
         deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
       },
@@ -338,6 +348,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         });
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`folder dialog failed: ${errorText(error)}`);
         deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
       },
@@ -468,6 +481,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         });
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`account status not read: ${errorText(error)}`);
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
           return;
@@ -524,6 +540,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         openWith(rows);
       },
       (error: unknown) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`saved sessions not listed: ${errorText(error)}`);
         if (isStale(context.isCurrent, 'saved sessions')) {
           return;

@@ -13,9 +13,9 @@ const blue: ChatImage = { mediaType: 'image/png', data: 'Ymx1ZQ==' };
 
 // The viewer over a layout whose image viewer records each input it draws or
 // updates with in `drawn`; the log records each line in `logs`, `pops` counts
-// each pushed scope's `pop`, and `layoutListeners` counts the viewer's layout
-// subscriptions still held.
-function viewerSetup() {
+// each pushed scope's `pop`, which throws after counting when `popRefused`,
+// and `layoutListeners` counts the viewer's layout subscriptions still held.
+function viewerSetup(popRefused = false) {
   const logs: string[] = [];
   const drawn: ImageViewerInput[] = [];
   const log = (line: string) => logs.push(line);
@@ -61,6 +61,9 @@ function viewerSetup() {
     pushScope: () => ({
       pop: () => {
         pops.count++;
+        if (popRefused) {
+          throw new Error('pop refused');
+        }
       },
       dispose: noEvent,
       onBaseChanged: () => ({ dispose: noEvent }),
@@ -215,12 +218,26 @@ describe('createImageViewer', () => {
 
   // Breaks: a stop that leaves the viewer following the layouts, or ends that
   // subscription twice.
-  it('createImageViewer dispose ends its layout subscription once', () => {
-    const setup = viewerSetup();
-    expect(setup.layoutListeners.count).toBe(1);
+  it.each([
+    { case: 'no viewer is open', popRefused: false },
+    { case: "closing the open viewer's scope throws", popRefused: true },
+  ])(
+    'createImageViewer dispose ends its layout subscription once when $case',
+    ({ popRefused }) => {
+      const setup = viewerSetup(popRefused);
+      if (popRefused) {
+        setup.viewer.open([red], 0);
+      }
+      expect(setup.layoutListeners.count).toBe(1);
 
-    setup.viewer.dispose();
+      const dispose = () => setup.viewer.dispose();
 
-    expect(setup.layoutListeners.count).toBe(0);
-  });
+      if (popRefused) {
+        expect(dispose).toThrow('pop refused');
+      } else {
+        dispose();
+      }
+      expect(setup.layoutListeners.count).toBe(0);
+    },
+  );
 });

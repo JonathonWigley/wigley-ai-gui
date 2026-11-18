@@ -95,7 +95,8 @@ async function flush() {
 }
 
 // `profiles` are those of the one harness `claude`, unless `harnesses`
-// replaces every harness; `defaultHarness` is `claude` unless given.
+// replaces every harness; `defaultHarness` is `claude` unless given. `stop`
+// marks chat's page part stopped.
 function setUp(
   options: {
     profiles?: HarnessProfile[];
@@ -114,6 +115,7 @@ function setUp(
       ],
     ]);
   const recent = options.recent ?? [app];
+  let isStopped = false;
   const opened: Opened[] = [];
   const invoked: string[] = [];
   // The arguments of each `projectPastSessions` and `accountStatus` invoke.
@@ -214,11 +216,14 @@ function setUp(
     homeDir: HOME,
     log: (message) => logs.push(message),
     toast: (text, tone) => toasts.push({ text, tone }),
-    isStopped: () => false,
+    isStopped: () => isStopped,
   });
   prompt.open();
   return {
     prompt,
+    stop: () => {
+      isStopped = true;
+    },
     opened,
     invoked,
     projectSessionReads,
@@ -1186,6 +1191,154 @@ describe('start prompt', () => {
     expect(run.signIns).toEqual([]);
     expect(run.last().title).toBe('Folder');
   });
+
+  // `gate` is the pending answer the row's `drive` leaves the prompt waiting
+  // on; `settle` answers it, or finishes the sign-in, after the stop.
+  const atApp = async (run: ReturnType<typeof setUp>) => {
+    await flush();
+    pickFolder(run.opened[0], '~/dev/app');
+    await flush();
+  };
+  const signedOut = () => Promise.resolve({ signedIn: false, account: null });
+  it.each<{
+    reply: string;
+    answers: (gate: Promise<never>) => Partial<Answers>;
+    drive: (run: ReturnType<typeof setUp>) => Promise<void>;
+    settle: (
+      gate: ReturnType<typeof deferred<unknown>>,
+      run: ReturnType<typeof setUp>,
+    ) => void;
+  }>([
+    {
+      reply: 'recent folders that arrive',
+      answers: (gate) => ({ recentFolders: () => gate }),
+      drive: () => Promise.resolve(),
+      settle: (gate) => gate.resolve([app]),
+    },
+    {
+      reply: 'recent folders that fail',
+      answers: (gate) => ({ recentFolders: () => gate }),
+      drive: () => Promise.resolve(),
+      settle: (gate) => gate.reject(new Error('bad file')),
+    },
+    {
+      reply: 'resume sections that fail',
+      answers: (gate) => ({ resumeSections: () => gate }),
+      drive: () => Promise.resolve(),
+      settle: (gate) => gate.reject(new Error('bad file')),
+    },
+    {
+      reply: 'projects that fail',
+      answers: (gate) => ({ projects: () => gate }),
+      drive: () => Promise.resolve(),
+      settle: (gate) => gate.reject(new Error('bad file')),
+    },
+    {
+      reply: 'a chosen folder',
+      answers: (gate) => ({ chooseFolder: () => gate }),
+      drive: async (run) => {
+        await flush();
+        pickFolder(run.opened[0], CHOOSE_FOLDER_LABEL);
+      },
+      settle: (gate) => gate.resolve('/Users/u/dev/new'),
+    },
+    {
+      reply: 'a folder dialog that fails',
+      answers: (gate) => ({ chooseFolder: () => gate }),
+      drive: async (run) => {
+        await flush();
+        pickFolder(run.opened[0], CHOOSE_FOLDER_LABEL);
+      },
+      settle: (gate) => gate.reject(new Error('no dialog')),
+    },
+    {
+      reply: 'a status that reads signed out',
+      answers: (gate) => ({ accountStatus: () => gate }),
+      drive: atApp,
+      settle: (gate) => gate.resolve({ signedIn: false, account: null }),
+    },
+    {
+      reply: 'a status read that fails',
+      answers: (gate) => ({ accountStatus: () => gate }),
+      drive: atApp,
+      settle: (gate) => gate.reject(new Error('claude not found')),
+    },
+    {
+      reply: 'a sign-in that finishes signed in',
+      answers: () => ({ accountStatus: signedOut }),
+      drive: atApp,
+      settle: (_gate, run) => run.signIns[0].finished?.(true),
+    },
+    {
+      reply: 'saved sessions that arrive',
+      answers: (gate) => ({ pastSessions: () => gate }),
+      drive: atApp,
+      settle: (gate) => gate.resolve([alpha]),
+    },
+    {
+      reply: 'saved sessions that fail',
+      answers: (gate) => ({ pastSessions: () => gate }),
+      drive: atApp,
+      settle: (gate) => gate.reject(new Error('unreadable')),
+    },
+    {
+      reply: 'a started session',
+      answers: (gate) => ({ start: () => gate }),
+      drive: atApp,
+      settle: (gate) => gate.resolve('row-1'),
+    },
+    {
+      reply: 'a resumed session',
+      answers: (gate) => ({
+        pastSessions: () => Promise.resolve([alpha, beta]),
+        resume: () => gate,
+      }),
+      drive: async (run) => {
+        await atApp(run);
+        pickItem(run.last(), rowLabel(beta));
+        await flush();
+      },
+      settle: (gate) => gate.resolve('row-2'),
+    },
+    {
+      reply: 'an archive write that fails',
+      answers: (gate) => ({
+        pastSessions: () => Promise.resolve([alpha, beta]),
+        setArchived: () => gate,
+      }),
+      drive: async (run) => {
+        await atApp(run);
+        run.moveCursor(1);
+        run.prompt.toggleArchive();
+      },
+      settle: (gate) => gate.reject(new Error('read-only')),
+    },
+  ])(
+    'opens, logs, toasts and reveals nothing for $reply after chat stopped',
+    async ({ answers, drive, settle }) => {
+      const gate = deferred<unknown>();
+      const run = setUp({
+        profiles: [work],
+        answers: answers(gate.promise as Promise<never>),
+      });
+      await drive(run);
+      const shownAtStop = run.opened.length;
+      const logsAtStop = [...run.logs];
+      const signInsAtStop = run.signIns.length;
+      const startedAtStop = run.started.length;
+
+      run.stop();
+      settle(gate, run);
+      await flush();
+
+      expect(run.opened.length).toBe(shownAtStop);
+      expect(run.logs).toEqual(logsAtStop);
+      expect(run.toasts).toEqual([]);
+      expect(run.signIns.length).toBe(signInsAtStop);
+      expect(run.started.length).toBe(startedAtStop);
+      expect(run.revealed).toEqual([]);
+    },
+  );
   it('open_ProjectsReject_OpensTheFolderStep', async () => {
     const run = setUp({
       answers: { projects: () => Promise.reject(new Error('bad setting')) },

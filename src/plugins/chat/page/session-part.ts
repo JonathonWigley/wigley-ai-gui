@@ -3,6 +3,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { harnessLabel } from '../../../shared/agent-harness-label';
+import { callEach } from '../../../shared/call-each';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { ChatSidePart } from '../contract';
 import type {
@@ -18,7 +19,6 @@ import {
 } from './chat-layouts';
 import { modelEffortText } from './composer-input';
 import { displayPath } from './start-prompt-items';
-import { callEach } from '../../../shared/call-each';
 
 // A session's facts for the Session section, read live.
 export interface SessionFactsSource {

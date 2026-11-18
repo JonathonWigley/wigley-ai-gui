@@ -162,8 +162,9 @@ export interface TranscriptScroll extends ContentScroll {
 // So a run that overflows moves a following cursor off its line. `latest` and
 // `scrollToFocus` make the same move, since a list already at its bottom fires
 // no scroll. A plain click hands `stopClicked` the block or slot under it,
-// which `moveFocusTo` moves the cursor to without scrolling; a click ending a text selection, on a link,
-// control or pending row, or on what has no slot hands it nothing.
+// which `moveFocusTo` moves the cursor to without scrolling; a click ending a
+// text selection, on a link, control or pending row, or on what has no slot
+// hands it nothing.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -1148,15 +1149,11 @@ function followListSize(
 }
 
 function disposeSlots(slots: Map<string, Slot>) {
-  for (const slot of slots.values()) {
-    slot.dispose();
-  }
+  callEach([...slots.values()], (slot) => slot.dispose());
 }
 
 function disposePartSlots(partSlots: Map<string, PartSlot<SlotPartName>>) {
-  for (const slot of partSlots.values()) {
-    slot.drawn?.dispose();
-  }
+  callEach([...partSlots.values()], (slot) => slot.drawn?.dispose());
 }
 
 // Whether `entry` gets a slot: steps only while activity shows in the

@@ -28,6 +28,8 @@ export interface SignInFlowDeps {
   writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
   log: PluginLog;
+  // True once chat's page part stopped: a reply landing later does nothing.
+  isStopped(): boolean;
 }
 
 interface OpenSignIn {
@@ -62,11 +64,11 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
     if (cancelled === null) {
       return;
     }
-    void channel
-      .invoke('cancelLogIn', cancelled.id)
-      .catch((error: unknown) =>
-        log(`cancelLogIn failed: ${errorText(error)}`),
-      );
+    void channel.invoke('cancelLogIn', cancelled.id).catch((error: unknown) => {
+      if (!deps.isStopped()) {
+        log(`cancelLogIn failed: ${errorText(error)}`);
+      }
+    });
     cancelled.finished(false);
     log(`sign-in cancelled for ${cancelled.profile}`);
   };
@@ -121,6 +123,9 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
       void channel
         .invoke('logIn', opened.id, profile)
         .catch((error: unknown) => {
+          if (deps.isStopped()) {
+            return;
+          }
           if (open === opened) {
             close();
             finished(false);
@@ -140,9 +145,11 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
       }
       void channel
         .invoke('logInCode', open.id, code)
-        .catch((error: unknown) =>
-          log(`logInCode failed: ${errorText(error)}`),
-        );
+        .catch((error: unknown) => {
+          if (!deps.isStopped()) {
+            log(`logInCode failed: ${errorText(error)}`);
+          }
+        });
       log(`sign-in code sent for ${open.profile}`);
     },
     cancel,
@@ -153,8 +160,16 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
         return;
       }
       void deps.writeClipboard(url).then(
-        () => log('sign-in link copied'),
-        (error: unknown) => log(`sign-in link not copied: ${errorText(error)}`),
+        () => {
+          if (!deps.isStopped()) {
+            log('sign-in link copied');
+          }
+        },
+        (error: unknown) => {
+          if (!deps.isStopped()) {
+            log(`sign-in link not copied: ${errorText(error)}`);
+          }
+        },
       );
     },
   };

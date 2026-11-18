@@ -27,6 +27,16 @@ const ASSISTANT: ChatEntry = {
   raw: [],
 };
 
+const PERMISSION: ChatEntry = {
+  kind: 'permission',
+  id: 'p1',
+  at: 1000,
+  toolName: 'Bash',
+  input: {},
+  answer: null,
+  raw: [],
+};
+
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
@@ -38,9 +48,10 @@ describe('createEntryKit', () => {
   });
 
   // `entry`'s kit; each anchor's dispose records its command in `disposed`,
-  // each thumbnail click its entry id and index in `opened`, and each
-  // expander head click its entry id and place in `expanderClicks`.
-  function kitOf(entry: ChatEntry = ASSISTANT) {
+  // then throws when the command is `throwsOn`; each thumbnail click records
+  // its entry id and index in `opened`, and each expander head click its entry
+  // id and place in `expanderClicks`.
+  function kitOf(entry: ChatEntry = ASSISTANT, throwsOn?: CommandId) {
     const disposed: CommandId[] = [];
     const opened: [string, number][] = [];
     const expanderClicks: [string, number][] = [];
@@ -53,7 +64,12 @@ describe('createEntryKit', () => {
       },
       keys: {
         anchor: (_node, command) => ({
-          dispose: () => disposed.push(command),
+          dispose: () => {
+            disposed.push(command);
+            if (command === throwsOn) {
+              throw new Error('anchor refused');
+            }
+          },
         }),
         keysFor: () => null,
       },
@@ -75,14 +91,30 @@ describe('createEntryKit', () => {
 
   const body = () => asHtml(new FakeElement('div'));
 
-  it('dispose_DisposesBaseKitAnchors', () => {
-    const { entryKit, disposed } = kitOf();
-    entryKit.kit.keyHint(asHtml(new FakeElement('div')), 'send');
+  it.each([
+    { case: 'every anchor disposes', throwsOn: undefined },
+    { case: "the base kit's anchor throws", throwsOn: chatCommand('send') },
+  ])(
+    'dispose disposes the base kit and permission anchors when $case',
+    ({ throwsOn }) => {
+      const { entryKit, disposed } = kitOf(PERMISSION, throwsOn);
+      entryKit.kit.keyHint(asHtml(new FakeElement('div')), 'send');
+      entryKit.kit.permissionActions(asHtml(new FakeElement('div')));
 
-    entryKit.dispose();
+      const dispose = () => entryKit.dispose();
 
-    expect(disposed).toEqual([chatCommand('send')]);
-  });
+      if (throwsOn === undefined) {
+        dispose();
+      } else {
+        expect(dispose).toThrow('anchor refused');
+      }
+      expect(disposed).toEqual([
+        chatCommand('send'),
+        chatCommand('allowOrCopy'),
+        chatCommand('denyPermission'),
+      ]);
+    },
+  );
 
   it('collapsibleRow_RegistersWithExpanders', () => {
     const { entryKit } = kitOf();

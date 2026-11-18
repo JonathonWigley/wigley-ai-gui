@@ -504,10 +504,11 @@ function activityShown(
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
 
-function setUpList(shown: ShownLayouts<ChatLayout>) {
+function setUpList(shown: ShownLayouts<ChatLayout>, throwsOn?: CommandId) {
   const logs: string[] = [];
   const pulled: string[] = [];
   const toasts: string[] = [];
+  const anchored: CommandId[] = [];
   const disposed: CommandId[] = [];
   const log = (message: string) => logs.push(message);
   const layouts = createChatLayouts(log);
@@ -529,9 +530,17 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         ...NO_FENCES,
       },
       keys: {
-        anchor: (_node, command) => ({
-          dispose: () => disposed.push(command),
-        }),
+        anchor: (_node, command) => {
+          anchored.push(command);
+          return {
+            dispose: () => {
+              disposed.push(command);
+              if (command === throwsOn) {
+                throw new Error('anchor refused');
+              }
+            },
+          };
+        },
         keysFor: (command) =>
           command === chatCommand('interrupt') ? '⌃C' : null,
       },
@@ -573,6 +582,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     list,
     logs,
     toasts,
+    anchored,
     disposed,
     pulled,
     armed,
@@ -708,6 +718,31 @@ describe('entry list', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    { case: 'every anchor disposes', throwsOn: undefined },
+    {
+      case: "the first slot's anchor throws",
+      throwsOn: chatCommand('denyPermission'),
+    },
+  ])('dispose disposes every slot when $case', ({ throwsOn }) => {
+    const { list, put, anchored, disposed } = setUpList(
+      defaultShown(),
+      throwsOn,
+    );
+    [permission('p1'), permission('p2')].forEach(put);
+    expect(disposed).toEqual([]);
+
+    const dispose = () => list.dispose();
+
+    if (throwsOn === undefined) {
+      dispose();
+    } else {
+      expect(dispose).toThrow('anchor refused');
+    }
+    expect(anchored.length).toBeGreaterThan(2);
+    expect([...disposed].sort()).toEqual([...anchored].sort());
   });
 
   it.each(rows)('buildEntry: $name', (row) => {

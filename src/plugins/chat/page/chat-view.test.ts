@@ -168,9 +168,9 @@ const returnedTwo: ReturnedMessage = {
 // `focusAtAddTab` gets the focus as `addTab` returns. `selects` holds the
 // session of each tab handle's `select`; `hasSavedPlace` answers whether
 // `savedPlaces` holds the session. `liveSubscriptions` counts the view's own
-// subscriptions to its layouts and part stores still held, by store. `owners` holds each session's row owner as
-// `ownerOf` reads it, null for a session it does not name and undefined for a
-// row not yet arrived; `rowAdded` sets a row's owner and tells the view the row
+// subscriptions to its layouts and part stores still held, by store. `owners`
+// holds each session's row owner as `ownerOf` reads it, null for a session it
+// does not name and undefined for a row not yet arrived; `rowAdded` sets a row's owner and tells the view the row
 // arrived. `addTabs` records each `addTab` session id and `otherShown.count`
 // each `otherSessionShown` call.
 function mounted(
@@ -2344,5 +2344,33 @@ describe('mountChatView dispose', () => {
     mount.view.dispose();
 
     expect(mount.liveSubscriptions.get(store)).toBe(0);
+  });
+
+  // Breaks: a dispose that stops at the first tab whose teardown throws.
+  it('dispose tears down every tab when one tab side part dispose throws', () => {
+    const mount = mounted();
+    mount.pageLoad([
+      stateOf([], { sessionId: 'row-1' }),
+      stateOf([], { sessionId: 'row-2' }),
+    ]);
+    const disposed: string[] = [];
+    mount.sideParts.add({
+      id: 'part',
+      title: 'Part',
+      order: 10,
+      build: (_parent, sessionId) => ({
+        dispose: () => {
+          disposed.push(sessionId);
+          if (sessionId === 'row-1') {
+            throw new Error('part refused');
+          }
+        },
+      }),
+    });
+
+    expect(() => mount.view.dispose()).toThrow('part refused');
+
+    expect(disposed).toEqual(['row-1', 'row-2']);
+    expect(mount.liveSubscriptions.get('sideParts')).toBe(0);
   });
 });
