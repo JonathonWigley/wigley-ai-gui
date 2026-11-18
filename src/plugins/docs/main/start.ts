@@ -26,9 +26,11 @@ import {
 import type { JsonObject } from '../../../shared/json';
 import {
   type AgentSession,
+  followRows,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
   type DocsChannel,
@@ -52,6 +54,7 @@ import {
   MACHINE_INDEX_FILE,
   MACHINE_SOURCE_TITLE,
   SESSION_SOURCE_TITLE,
+  type SessionSourceSpec,
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
 import { readRecentChanges } from './recent-changes';
@@ -292,12 +295,11 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     );
     // Keyed by the session row's id.
     const sessionSources = new Map<string, Disposable>();
-    const addSessionSource = ({ id, info }: AgentSession) => {
-      const spec = {
-        hostSessionId: info.sessionId,
-        projectDir: info.projectDir,
-        harness: info.harness,
-      };
+    // A session that already has a source keeps it.
+    const addSessionSource = (id: string, spec: SessionSourceSpec) => {
+      if (sessionSources.has(id)) {
+        return;
+      }
       const added = addStartedSource(
         registry,
         sessionSourceId(id),
@@ -307,7 +309,20 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       );
       sessionSources.set(id, added);
     };
-    api.events.on('sessions.connected', addSessionSource);
+    const addConnectedSource = ({ id, info }: AgentSession) =>
+      addSessionSource(id, {
+        hostSessionId: info.sessionId,
+        projectDir: info.projectDir,
+        harness: info.harness,
+      });
+    api.events.on('sessions.connected', addConnectedSource);
+    // A start while sessions run hears no `connected` for them, and a session
+    // connected with no row can gain one later, so every row, held or added,
+    // gets its session's source too: the Docs tab reads it by the row's id.
+    followRows(api.state.read(sessionsRowsSlot), {
+      added: ({ sessionId, hostSessionId, projectDir, harness }) =>
+        addSessionSource(sessionId, { hostSessionId, projectDir, harness }),
+    });
     // The new source holds no entries until the session's Docs tab, with
     // `docs-session-tab` on (disabled by default; the self-test starts it),
     // loads it.
@@ -317,7 +332,8 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         return;
       }
       source.dispose();
-      addSessionSource(session);
+      sessionSources.delete(session.id);
+      addConnectedSource(session);
     };
     api.events.on('sessions.hostSessionChanged', replaceSessionSource);
     api.events.on('sessions.ended', ({ sessionId }) => {

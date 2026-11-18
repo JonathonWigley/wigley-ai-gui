@@ -27,7 +27,9 @@ import {
   type SessionInfo,
   sessionsMainKey,
   type SessionsMainExports,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { docsFixtureInstalls } from './selftest-fixture';
@@ -236,9 +238,13 @@ function startDocsPart() {
       agentHarnesses: harnessRegistryOf([]),
     },
     state: {
-      read: () => ({
-        all: () => new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
-      }),
+      read: (key: unknown) =>
+        key === sessionsRowsSlot
+          ? { all: () => new Map(), on: () => ({ dispose: () => undefined }) }
+          : {
+              all: () =>
+                new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
+            },
     },
     dependency: () => ({}),
     drive: null,
@@ -803,6 +809,52 @@ describe('docs main part lifecycle', () => {
 
     expect(sentWhileLive).toBe(1);
     expect(harness.sent).toHaveLength(sentWhileLive);
+  });
+
+  // Breaks if docs adds a session's source only on `sessions.connected`: a docs
+  // restart while sessions run hears none, so each Docs tab reads `No docs
+  // index source`, and a row a connected session gains later never gets one.
+  it.each<{ when: string; seed: 'before restart' | 'after start' | 'both' }>([
+    { when: 'a row held when docs restarts', seed: 'before restart' },
+    { when: 'a row added after the start', seed: 'after start' },
+    { when: 'a row and its connected event', seed: 'both' },
+  ])('serves the session index of $when', async ({ seed }) => {
+    const { harness } = startDocsOnHarness();
+    harness.processes.script(
+      'python3',
+      ['-X', 'utf8', '/script.py', 'session', 'abc'],
+      {
+        code: 0,
+        stdout: JSON.stringify(INDEX_DOCUMENT),
+        stderr: '',
+        timedOut: false,
+      },
+    );
+    const rows = harness.state.publish(sessionsRowsSlot);
+    const row = sessionRow('row-1', { hostSessionId: 'abc', projectDir: '/p' });
+    rows.set('row-1', row);
+    if (seed === 'before restart') {
+      await harness.restart();
+    }
+    if (seed === 'both') {
+      harness.emit('sessions.connected', {
+        id: 'row-1',
+        info: {
+          sessionId: 'abc',
+          projectDir: '/p',
+          harness: 'claude',
+          rowId: null,
+        },
+        owned: true,
+      });
+    }
+
+    expect(await harness.invoke('loadIndex', 'session:row-1')).toEqual({
+      document: INDEX_DOCUMENT,
+      message: null,
+      title: 'session index',
+      canRebuild: false,
+    });
   });
 
   it('stop_IndexRunInFlight_LogsNoFailure', async () => {
