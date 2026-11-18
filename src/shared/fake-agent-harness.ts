@@ -68,6 +68,9 @@ import { typedSkill } from './typed-skill';
 export const FAKE_HOLD_TEXT = 'fake: hold';
 // A send of this text runs one tool before the reply.
 export const FAKE_TOOL_TEXT = 'fake: tool';
+// A send of this text runs one Bash tool, `unity command editor_play` on the
+// process's own project folder, before the reply.
+export const FAKE_PLAYTEST_TEXT = 'fake: playtest';
 // A send of this text streams a reply holding two visuals, holds it with the
 // second block still open for `FAKE_VISUAL_HOLD_MS`, then sends the whole
 // reply; an interrupt during the hold ends the turn as a held turn's does,
@@ -655,6 +658,13 @@ type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
 
 type ToolResult = { text: string; isError: boolean };
 
+// The Bash command a one-tool turn runs, its result, and the reply after it.
+interface FakeBashRun {
+  command: string;
+  result: ToolResult;
+  reply: string;
+}
+
 type CompactionEntryDraft = Extract<EntryDraft, { kind: 'compaction' }>;
 
 // One compaction, from its start call to its end. `n` counts the process's
@@ -760,6 +770,7 @@ function emitToolTurn(
   emitTurnUsage: EmitTurnUsage,
   clock: Clock,
   turn: number,
+  run: FakeBashRun,
 ) {
   const tool: ToolCall = {
     kind: 'tool',
@@ -767,15 +778,12 @@ function emitToolTurn(
     agentId: MAIN_AGENT_ID,
     toolUseId: `fake-tool-${turn}`,
     name: 'Bash',
-    input: { command: 'echo fake' },
-    summary: 'echo fake',
+    input: { command: run.command },
+    summary: run.command.split('\n')[0],
   };
   startFakeTool(events, emitEntry, clock, tool, 'tool');
-  finishFakeTool(events, emitEntry, clock, tool, 'tool', {
-    text: 'fake',
-    isError: false,
-  });
-  const reply = 'fake agent ran a tool';
+  finishFakeTool(events, emitEntry, clock, tool, 'tool', run.result);
+  const { reply } = run;
   emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
@@ -1928,7 +1936,17 @@ export function createFakeAgentHarness(
           } else if (isSteps) {
             emitStepsTurn(events, emitEntry, clock, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
-            emitToolTurn(events, emitEntry, emitTurnUsage, clock, sentTurn);
+            emitToolTurn(events, emitEntry, emitTurnUsage, clock, sentTurn, {
+              command: 'echo fake',
+              result: { text: 'fake', isError: false },
+              reply: 'fake agent ran a tool',
+            });
+          } else if (text === FAKE_PLAYTEST_TEXT) {
+            emitToolTurn(events, emitEntry, emitTurnUsage, clock, sentTurn, {
+              command: `unity command editor_play --result-only --project-path '${record.request.projectDir}'`,
+              result: { text: 'Entered Play Mode.', isError: false },
+              reply: 'fake agent entered Play Mode',
+            });
           } else if (isVisual) {
             emitVisualTurn(sentTurn);
           } else if (text === FAKE_BLOCKS_TEXT) {

@@ -16,7 +16,7 @@ import {
 } from './test-rounds';
 import {
   hasOtherUnanswered,
-  pagerText,
+  pagerInput,
   pickRailItem,
   progressText,
   railHeadText,
@@ -444,7 +444,7 @@ describe('rail entries', () => {
   });
 });
 
-describe('pagerText', () => {
+describe('pagerInput', () => {
   // Rail positions: 0 = question Alpha, 1 = the notices stop.
   const state = initialState(
     [
@@ -457,12 +457,15 @@ describe('pagerText', () => {
   );
 
   it.each([
-    { case: 'question 1', focus: 0, text: '1 of 2' },
-    { case: 'the notices stop', focus: 1, text: 'N of 2' },
-  ])('pagerText reads $text on $case', ({ focus, text }) => {
-    const focused = apply(state, { type: 'focusItem', item: focus });
-    expect(pagerText(activeOf(focused))).toBe(text);
-  });
+    { case: 'question 1', focus: 0, text: '1 of 2', index: 0 },
+    { case: 'the notices stop', focus: 1, text: 'N of 2', index: 1 },
+  ])(
+    'pagerInput reads $text at $index of 2 on $case',
+    ({ focus, text, index }) => {
+      const focused = apply(state, { type: 'focusItem', item: focus });
+      expect(pagerInput(activeOf(focused))).toEqual({ text, index, total: 2 });
+    },
+  );
 });
 
 describe('progressText, railHeadText and reviewSummaryText', () => {

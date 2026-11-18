@@ -324,8 +324,16 @@ describe('workflow view', () => {
     await view.runFor('a', 'toggleFinishedWaves');
     await settle();
 
-    expect(logged.at(-1)).toBe('finished waves open in proj');
-    expect(small.sidePanes.at(-1)?.finishedOpen).toBe(true);
+    expect(logged.at(-1)).toBe('finished waves folded in proj');
+    expect(small.sidePanes.at(-1)?.finishedOpen).toBe(false);
+  });
+
+  it('the side part keeps its height in the hub', () => {
+    const { view, workflows } = setUp(['a']);
+    const small = stubWorkflow('small');
+    workflows.push(small.workflow);
+
+    expect(view.sidePartFor(small.workflow).keepsHeight).toBe(true);
   });
 
   it('hold_FirstDrawThrows_LetsThePartGo', () => {
@@ -722,8 +730,8 @@ describe('workflow view over several workflows', () => {
     put(flowOf('large'));
 
     expect(large.sidePanes.at(-1)?.currentGroup?.items).toEqual([
-      { text: 'a', state },
-      { text: 'b', state: 'pending' },
+      { number: 1, text: 'a', state },
+      { number: 2, text: 'b', state: 'pending' },
     ]);
   });
 

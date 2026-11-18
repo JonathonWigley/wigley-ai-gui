@@ -77,7 +77,7 @@ export interface PrimerPartKitDeps extends PrimerKitDeps {
 // with the card's input and each of its boxes to its text in `primer`.
 export interface CardKit<K, Input> {
   kit: K;
-  appendUnmountedBoxes(card: HTMLElement): void;
+  appendUnplacedBoxes(card: HTMLElement): void;
   update(input: Input, primer: OpenPrimer): void;
 }
 
@@ -176,8 +176,8 @@ export function createFeatureKit(
     })),
   );
   return {
-    kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.mount },
-    appendUnmountedBoxes: boxes.appendUnmounted,
+    kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.place },
+    appendUnplacedBoxes: boxes.appendUnplaced,
     update: (_input, current) => boxes.syncText(current),
   };
 }
@@ -198,8 +198,8 @@ export function createTaskKit(
     })),
   );
   return {
-    kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.mount },
-    appendUnmountedBoxes: boxes.appendUnmounted,
+    kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.place },
+    appendUnplacedBoxes: boxes.appendUnplaced,
     update: (_input, current) => boxes.syncText(current),
   };
 }
@@ -230,7 +230,7 @@ export function createItemKit(
   return {
     kit: {
       ...base,
-      textBox: boxes.mount,
+      textBox: boxes.place,
       includeMark(parent) {
         const mark = toggleMark({
           isOn: item.include,
@@ -262,7 +262,7 @@ export function createItemKit(
         );
       },
     },
-    appendUnmountedBoxes: boxes.appendUnmounted,
+    appendUnplacedBoxes: boxes.appendUnplaced,
     update(input, current) {
       for (const mark of marks) {
         setToggleMark(mark, input.include);
@@ -506,9 +506,9 @@ function itemRowElement(
   });
 }
 
-// One card draw's text boxes. `mount` draws the box of `field` in its
+// One card draw's text boxes. `place` draws the box of `field` in its
 // labelled field and records it in `rollback`; it throws for a field the card
-// lacks or one already mounted. `appendUnmounted` mounts every box `mount`
+// lacks or one already placed. `appendUnplaced` places every box `place`
 // has not, in `cardBoxes` order, at the end of `card`. `syncText` sets each
 // placed box's editor to its text in `current`, where the two differ.
 function createCardBoxes<Field extends string>(
@@ -517,28 +517,28 @@ function createCardBoxes<Field extends string>(
   rollback: RollbackDeps,
   cardBoxes: CardBox<Field>[],
 ): {
-  mount(parent: HTMLElement, field: Field): HTMLElement;
-  appendUnmounted(card: HTMLElement): void;
+  place(parent: HTMLElement, field: Field): HTMLElement;
+  appendUnplaced(card: HTMLElement): void;
   syncText(current: OpenPrimer): void;
 } {
-  const mounted = new Set<Field>();
-  const mount = (parent: HTMLElement, field: Field) => {
+  const placed = new Set<Field>();
+  const place = (parent: HTMLElement, field: Field) => {
     const box = cardBoxes.find((candidate) => candidate.field === field);
     if (box === undefined) {
       throw new Error(`the card has no ${field} box`);
     }
-    if (mounted.has(field)) {
+    if (placed.has(field)) {
       throw new Error(`the ${field} box is already on the card`);
     }
-    mounted.add(field);
+    placed.add(field);
     return appendField(deps, primer, rollback, parent, box);
   };
   return {
-    mount,
-    appendUnmounted(card) {
+    place,
+    appendUnplaced(card) {
       for (const box of cardBoxes) {
-        if (!mounted.has(box.field)) {
-          mount(card, box.field);
+        if (!placed.has(box.field)) {
+          place(card, box.field);
         }
       }
     },

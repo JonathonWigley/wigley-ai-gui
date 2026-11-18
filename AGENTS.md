@@ -102,6 +102,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
+                 `bash-command.ts`: `bashCommandOf`, a Bash call input's command, which chat and live-view read,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,
@@ -152,7 +153,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   image-types.ts the image media types the app attaches and pastes (chat and notes share it), the 5 MB base64 cap `MAX_IMAGE_BASE64`, and the helpers `extensionOf`, `base64LengthOf` and `base64Of`
   shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
-                 (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
+                 (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, chrome strips (`chrome-strip.ts`:
+                 a slot drawn again on a changed input or pick, and its `is-no-target` marks), `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `sparkline`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
@@ -313,12 +315,15 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
   live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), window-pick.ts (the
-                 editor window lookup, the crop and the moved check, as pure functions), main/ (the `show_live_view`
-                 and `hide_live_view` tools, the window list through `services.screenCapture`, the preview sample, its
-                 self-test script), page/ (live-section.ts, the session hub's Live section through chat's
-                 `addSidePart` with `shrinksLast`, streaming only while on screen; stream-source.ts, the capture or
-                 `sample:` stream; layout/, the layout reader), layouts/ (its Layout contract and `default` layout);
-                 `docs/features/live-view/design.md`
+                 editor window lookup, the crop and the moved check, as pure functions), playtest-command.ts (a Bash
+                 command's playtest signal, a pure function), main/ (the `show_live_view` and `hide_live_view` tools,
+                 the window list through `services.screenCapture`, the playtest watch: opens a session's Live view when
+                 a live `editor.playmode start` / `editor_play` / `capture.py start` Bash call succeeds, read through
+                 chat's entries, and closes the view it opened on `editor.playmode stop` / `editor_stop` for the same
+                 project; the preview sample, its self-test script),
+                 page/ (live-section.ts, the session hub's Live section through chat's `addSidePart` with `shrinksLast`,
+                 streaming only while on screen; stream-source.ts, the capture or `sample:` stream; layout/, the layout
+                 reader), layouts/ (its Layout contract and `default` layout); `docs/features/live-view/design.md`
   auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
                  close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
@@ -743,7 +748,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
   the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
-  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up. A side part takes no key scope and no stop: the hub is a pane of chat's
+  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up, and one marked `keepsHeight` (the workflow's side pane) keeps its height ahead of every other, a `shrinksLast` one included. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
@@ -1103,18 +1108,20 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   harness kind joins no activity run.
 - **A forms layout** draws the forms view: the three named cards (`question`, `finding`, `notice`), `cards.kinds` (a
   builder per plugin kind id), `cards.other` (the card of a plugin kind no layout in the chain has a `kinds` builder
-  for) and the `head`, `rail`, `review` and `notices` panes. A finding's card, origin, action and severity are strings,
+  for), the `head`, `rail`, `review` and `notices` panes, the rail's `railHead` and `railFoot` and the `pager` over
+  the cards, and the cancel prompt's frame and body (`dialogFrame`, `confirmBody`), which the `forms.layout` setting
+  picks, never a round. A finding's card, origin, action and severity are strings,
   since a plugin may register more. The `notices` pane is the round's one notices page, after every other rail
   stop, plugin kinds' included: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
-  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
+  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, save status, unanswered and item edges, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
   `kbd`, `button` — a command id with its `arg`, variant and `keys` — and `sectionHeader`, and
   `command(qualifiedId, arg?)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
-  scrolling, the split width, the rail header's open count and saved state, and the cancel dialog. The built-in `default` layout is
+  scrolling, the split width, the cancel prompt's lifecycle, and the save state's text, which a layout places through `kit.saveStatus`. The built-in `default` layout is
   `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
-  the rail, review and notices panes, and draws the forms look. The user's forms layouts are folders in
-  `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the cards and panes it changes.
+  every part but the head, and draws the forms look. The user's forms
+  layouts are folders in `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the parts it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default` (a plugin kind: the first `cards.kinds[id]`, else
     the first `cards.other`); a pane the same way without the item. One page
@@ -1124,9 +1131,10 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
     refusal once.
   - **An agent wanting a look no layout has** writes a new layout folder, names it in the round, and lists each
     layout it wrote or changed in a notice on that round, so the user sees the file while its look is on screen.
-  - **Reloads:** saving a layout's code (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws
-    the open rounds and keeps every answer; editor swap and lock files do not. A card or pane that throws falls back
-    to `default`, and a reload that fails keeps the last good version of that layout.
+  - **Reloads:** saving a layout's code (`.js`, `.mjs`), data (`.json`), image or font files redraws only the cards,
+    panes and strips whose layout changed, and keeps every box with its text, cursor, vim mode and undo; saving only its
+    style (`.css`) restyles in place with no redraw; editor swap and lock files do neither. A card or pane that throws
+    falls back to `default`, and a reload that fails keeps the last good version of that layout.
   - `Space z l o` opens the preview round in the user's layout and selects its row; the round sends nothing and
     raises no notification or badge.
   - **Other plugins** reach the forms view through the page exports (`FormsPageExports` in

@@ -51,10 +51,18 @@ Core seams that most items below assume.
 - **Built-in plugin hot reload** — *needs a feature plan*: built-ins still need a rebuild to change. Reloading one
   with new code compiles TypeScript inside the running app, so a compiler ships with it (a third-party ask). The
   runtime loader's `PluginSource` seam and `reload` are the base: a third source over the repo clone.
+- **A confirm prompt's own buttons outlive their view** — *agent-ready*: `ConfirmPrompt`
+  (`src/shared/page/confirm-prompt.ts`) disposes its buttons' key anchors only on its next `redraw`, and has no
+  `dispose`, so the forms, primer and audio picker views' `dispose` leave the last two button anchors live. Add
+  `ConfirmPrompt.dispose` and call it from each owner's view dispose.
 
 ## Bugs seen in use
 
 Defects seen in a drive run, a transcript or the user's own use.
+
+- **Practice's Solution tab sits under the file name** — *agent-ready*: in a drive run at 1400x900, the practice
+  Solution tab lay under `span.practice-file-name`, so a real click on the tab was refused and only a DOM `.click()`
+  opened its confirm. Find the overlap in practice's tab row layout and keep the tab clickable.
 
 - **Chat self-test fails the minimum-width fit on the session tab bar** — *needs a feature plan*:
   `npm run selftest -- --plugin chat` fails 8 steps with `<keys> fits the minimum width: nav.ui-tabs.session-tabs
@@ -358,17 +366,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **View and interaction behaviours as switchable plugins** — *needs a feature plan*: behaviours such as
   `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
   settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
-- **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
-  reload changes a layout it draws with, by a card part or review column added or disposed, and by a page kind
-  registered or disposed) destroys and
-  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
-  was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes to
-  `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio picker
-  do, so a redraw keeps each box's editor. Redraw only the parts whose layout pick changed: compare each card's,
-  notice card's and pane's pick (name and layout object) with the last draw's, in place of `setLayouts`' one
-  `picksEqual` over the whole round, and redraw each changed part alone in its place (task 13 of the Lane L plan,
-  `changedPicks`). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
-  doc pane redraws its frame only after the editor closes.
 - **A finding origin registered only in main draws with the `caused` actions** — *needs a feature plan*: the page draws
   an origin it has no registration for with the `caused` card's fields and actions (`drawnOriginSpec`,
   `src/plugins/forms/page/kinds/finding/verdict.ts:36-55`). Main checks the user's pick against its own spec for that
@@ -479,25 +476,17 @@ User-facing features, those other work builds on first.
   started rests, and a message to it waits until the user starts it. Waking it means starting its process, which needs
   chat to expose "never started since the app opened" apart from "stopped by the user" (a stopped row must stay
   resting). Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Wrap-up action chips act on click** — *needs a feature plan*: the wrap-up card (`wigley:wrap-up` § Your move)
+  draws standard actions — `push`, `install`, `/clear`, `restart`, `make`, `device build` — as chips, but a visual's
+  frame is sandboxed, so a chip only shows the word the user then types. A click could send that word to the
+  session, or run the command behind it (`install` through app-update's install line, `make` through workflow-large's
+  Clear & make). It needs a way for a visual to ask the page to act, and which chips may run without a confirm.
+  Source session: Claude Code 2d49f095-112d-44a6-acba-0359d2074186 in ai.
 
 ## Code cleanup
 
 Duplication and drift with no user-visible defect.
 
-- **Split subscribes to its width key** — *agent-ready*: `Split` (`src/shared/page/ui/split.ts`) subscribes to its
-  ui-state key, so a new split owner cannot forget a reload. One caller still calls `reloadWidth()` by hand: forms'
-  rail in `src/plugins/forms/page/round-view.ts`, left for Lane L's tasks 12–13, which rewrite that file. Drop that call
-  once they land.
-- **Forms' cancel confirm through the forms layout** — *agent-ready*: the forms cancel confirm passes neither
-  `drawFrame` nor `drawBody` to `createConfirmPrompt` (`src/plugins/forms/page/forms-view.ts`), so its frame and body
-  are drawn in code; the primer, the audio picker, practice and the session stash already draw theirs through
-  `dialogFrame` and `confirmBody`. Add those two parts to the forms layout contract and `default` layout and pass
-  both hooks, as `src/plugins/primer/page/primer-view.ts` does. Then drop "the cancel dialog" from what AGENTS.md
-  § A forms layout says the app keeps.
-- **Forms column chrome through the forms layout** — *agent-ready*: forms' rail head, item pager and rail foot
-  (`src/plugins/forms/page/round-view.ts`), and the status line in it (`createStatusLine`,
-  `src/shared/page/status-line.ts`), are built in code. Add their parts to the forms layout contract and `default`
-  layout, as the primer's column strips (`tasksHead`, `itemsHead`, `tasksFoot`, `cardEdge`, `reviewFooter`) are.
 - **Saved outcomes from one list** — *agent-ready*: `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`)
   hard-codes `'open' | 'submitted' | 'cancelled'` beside the `SavedOutcome` type; derive both from one
   `SAVED_OUTCOMES` const.

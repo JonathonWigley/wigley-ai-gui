@@ -11,8 +11,11 @@ import {
   createMarkdownMount,
   type MarkdownMount,
 } from '../../../../shared/page/markdown-mount';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
+import type { DrawnStrip } from '../../../../shared/page/layout-host/chrome-strip';
 import {
   drawPart,
+  type DrawnPart,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
@@ -24,6 +27,7 @@ import {
   type CollapsibleCard,
   createCollapsibleCard,
 } from '../../../../shared/page/ui/card';
+import { keyChevron, keyEdge } from '../../../../shared/page/ui/key-anchors';
 import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
@@ -37,6 +41,11 @@ import type {
   LayoutPane,
   NoticesInput,
   NoticesKit,
+  PagerInput,
+  PagerKit,
+  RailFootInput,
+  RailHeadInput,
+  RailHeadKit,
   RailInput,
   RailKit,
   ReviewInput,
@@ -84,7 +93,8 @@ import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope and the
-// anchors that show them, a forms command, the round's text boxes, the
+// anchors that show them, a forms command, the round's text boxes (`placeBox`
+// places one and returns its frame, `releaseBox` releases it), the
 // registered commands `kit.command` checks and runs, which the rail entries
 // and review rows run through, the review columns other plugins added, the
 // slots `kit.state` reads, where each anchor the kit names and each slot
@@ -96,8 +106,8 @@ export interface PaneDeps {
   log: PluginLog;
   keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   run(command: CommandId): void;
-  mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
-  destroyBox(target: TextTarget): void;
+  placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;
+  releaseBox(target: TextTarget): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
   state: LayoutState;
@@ -126,14 +136,15 @@ type Updater = (round: RoundState) => void;
 
 // The round's rail, drawn into `parent` by drawPart with the picked layout's
 // `rail`, or with `default`'s when the pick lacks it or its rail throws. The
-// boxes the rail mounts and the anchors it names are recorded for drawPart's
-// rollback.
+// boxes the rail places and the anchors it names are recorded for drawPart's
+// rollback; `dispose` releases those boxes and disposes those anchors, and
+// leaves the pane's element in place.
 export function buildRailPane(
   pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
-): RailPane {
+): Pick<DrawnPart<RailPane>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -144,7 +155,7 @@ export function buildRailPane(
       drawRail(rail, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
     partName: 'rail',
-  }).built;
+  });
 }
 
 // The round's review, drawn into `parent` as buildRailPane draws the rail,
@@ -154,7 +165,7 @@ export function buildReviewPane(
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
-): ReviewPane {
+): Pick<DrawnPart<ReviewPane>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -165,14 +176,15 @@ export function buildReviewPane(
       drawReview(review, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
     partName: 'review',
-  }).built;
+  });
 }
 
 // The round's notices page at rail `position`, drawn into `parent` as
 // buildRailPane draws the rail, with the layout's `notices`. Each line's body is
 // its notice's card, drawn by buildLayoutCard with `bodyPicks[index - 1]` and
-// `cardDeps`; a pane that throws destroys each body it drew through the body's
-// own dispose, and `default` draws the pane and its bodies again. `update`
+// `cardDeps`; a pane that throws undoes each body it drew through the body's
+// own dispose, releasing its boxes, and `default` draws the pane and its
+// bodies again. `dispose` undoes the pane and each body the same way. `update`
 // opens the open lines, marks the cursor line, moves the toggle prompt to it
 // and updates each body; it scrolls the cursor line into view when it moved
 // since the last update.
@@ -184,7 +196,7 @@ export function buildNoticesPane(
   position: number,
   deps: PaneDeps,
   cardDeps: CardDeps,
-): ItemCard {
+): Pick<DrawnPart<ItemCard>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -202,7 +214,153 @@ export function buildNoticesPane(
       }),
     log: deps.log,
     partName: 'notices',
-  }).built;
+  });
+}
+
+// The rail's head strip, drawn into `parent` by drawPart with the picked
+// layout's `railHead`, or with `default`'s when the pick lacks it or its head
+// throws. Its kit places `saveStatus`, the app's status line, once; a head
+// that leaves it out gets it at the end of its root. `dispose` disposes the
+// anchors it drew and detaches the status line.
+export function drawRailHead(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: RailHeadInput,
+  saveStatus: HTMLElement,
+  deps: PaneDeps,
+): DrawnPart<DrawnStrip> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.railHead,
+    build: (railHead, stripParent, rollback) => {
+      const kitDeps = recordingDeps(deps, rollback);
+      const edges: HTMLElement[] = [];
+      const slot = appSlot(saveStatus, 'saveStatus', rollback);
+      const kit: RailHeadKit = {
+        ...chromeKit(kitDeps),
+        saveStatus: (statusParent) => slot.place(statusParent),
+        unansweredEdge: (edgeParent) =>
+          appendEdge(edgeParent, edges, unansweredEdge(kitDeps)),
+      };
+      const element = requireElementIn(
+        stripParent,
+        (railHead(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'railHead',
+      );
+      slot.placeIfLeftOut(element, 'end');
+      return { element, noTargets: edges };
+    },
+    log: deps.log,
+    partName: 'railHead',
+  });
+}
+
+// The rail's foot strip, drawn into `parent` as drawRailHead draws the head,
+// with the layout's `railFoot`; its `noTargets` is always empty.
+export function drawRailFoot(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: RailFootInput,
+  deps: PaneDeps,
+): DrawnPart<DrawnStrip> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.railFoot,
+    build: (railFoot, stripParent, rollback) => {
+      const kit = chromeKit(recordingDeps(deps, rollback));
+      const element = requireElementIn(
+        stripParent,
+        (railFoot(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'railFoot',
+      );
+      return { element, noTargets: [] };
+    },
+    log: deps.log,
+    partName: 'railFoot',
+  });
+}
+
+// The item pager over the cards, drawn into `parent` as drawRailHead draws
+// the rail's head, with the layout's `pager`.
+export function drawPager(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: PagerInput,
+  deps: PaneDeps,
+): DrawnPart<DrawnStrip> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.pager,
+    build: (pager, stripParent, rollback) => {
+      const kitDeps = recordingDeps(deps, rollback);
+      const edges: HTMLElement[] = [];
+      const kit: PagerKit = {
+        ...chromeKit(kitDeps),
+        itemEdge: (edgeParent, side) =>
+          appendEdge(edgeParent, edges, itemEdge(kitDeps, side)),
+      };
+      const element = requireElementIn(
+        stripParent,
+        (pager(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'pager',
+      );
+      return { element, noTargets: edges };
+    },
+    log: deps.log,
+    partName: 'pager',
+  });
+}
+
+// A chrome strip's base kit, its keys firing in the forms scope.
+function chromeKit(deps: PaneDeps): FormsBaseKit {
+  return createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms')));
+}
+
+// Appends `edge` to `parent` and keeps it in `edges`.
+function appendEdge(
+  parent: HTMLElement,
+  edges: HTMLElement[],
+  edge: HTMLElement,
+): HTMLElement {
+  parent.append(edge);
+  edges.push(edge);
+  return edge;
+}
+
+// `⌥P ◂ ▸ ⌥N`: the unanswered pair's anchors with their chevrons.
+function unansweredEdge(deps: PaneDeps): HTMLElement {
+  const anchor = scopedAnchor(deps.keys, formsScope('forms'));
+  const previous = element('span');
+  const next = element('span');
+  anchor(previous, formsCommand('prevUnanswered'));
+  anchor(next, formsCommand('nextUnanswered'));
+  return keyEdge('rail-edge', [
+    previous,
+    keyChevron('◂'),
+    keyChevron('▸'),
+    next,
+  ]);
+}
+
+// `⌃H ‹` at the start or `› ⌃L` at the end: an item key with its chevron.
+function itemEdge(deps: PaneDeps, side: 'start' | 'end'): HTMLElement {
+  const anchor = scopedAnchor(deps.keys, formsScope('forms'));
+  const key = element('span');
+  if (side === 'start') {
+    anchor(key, formsCommand('prevItem'));
+    return keyEdge('item-pager-edge', [key, keyChevron('‹')]);
+  }
+  anchor(key, formsCommand('nextItem'));
+  return keyEdge('item-pager-edge', [keyChevron('›'), key]);
 }
 
 // Throws `message` unless `index` is a whole number in [0, `length`).
@@ -336,7 +494,7 @@ function drawNoticeLine(
     draw.position,
     draw.cardDeps,
     draw.rollback,
-  );
+  ).built;
   lines.set(index, { line, head, body });
   return head;
 }
@@ -481,7 +639,7 @@ function drawReview(
   let drawn: RoundState | null = null;
   // The rows the latest update redraws; null when they were unchanged.
   let changedRows: ReviewRow[] | null = null;
-  let isNoteMounted = false;
+  let isNotePlaced = false;
   const input: ReviewInput = {
     round: roundInfo(round.round),
     rows: answerableItems(round).map((item, row) => ({
@@ -533,18 +691,18 @@ function drawReview(
       return line;
     },
     roundNote(noteParent) {
-      if (isNoteMounted) {
-        throw new Error('review pane mounted note twice');
+      if (isNotePlaced) {
+        throw new Error('review pane placed note twice');
       }
-      isNoteMounted = true;
+      isNotePlaced = true;
       const note = buildField(
         noteParent,
         'field-note',
         'Round note',
         'Optional. Anything about the round as a whole.',
         { command: formsCommand('editNote'), anchor },
+        (field) => deps.placeBox(field, { field: 'note' }, round.note),
       );
-      deps.mountBox(note.box, { field: 'note' }, round.note);
       appendBoxKeys(note, anchor);
       return note.element;
     },
@@ -572,7 +730,7 @@ function drawReview(
     (review(parent, input, kit) as LayoutPane | undefined)?.element,
     'review',
   );
-  if (!isNoteMounted) {
+  if (!isNotePlaced) {
     kit.roundNote(paneElement);
   }
   return {

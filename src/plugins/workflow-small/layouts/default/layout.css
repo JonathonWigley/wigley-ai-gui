@@ -67,3 +67,21 @@
   padding: 0;
   list-style: none;
 }
+
+/* Each row leads with its number in the whole list, then its mark, so an
+   agent's "task 3" names one row. */
+[data-layout-owner='workflow-small'][data-layout='default']
+  .workflow-side-lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='workflow-small'][data-layout='default']
+  .workflow-side-number {
+  min-width: var(--wg-space-4);
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

@@ -106,6 +106,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   A part marked `shrinksLast` (Live) changes the order of giving up height: while it shows, the sections that share
   the column give up height first, each down to its head and a few lines (a shorter body leaves blank down to that
   floor), and the `shrinksLast` section takes what is left, up to its content's height.
+  A part marked `keepsHeight` (the workflow's Checklist or Plan) goes ahead of that: while it shows, every other
+  section, Live included, gives up height first down to its head and that floor, and the `keepsHeight` section
+  scrolls in its own body only once they have, so the task list shows in full whenever the column can hold it.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.

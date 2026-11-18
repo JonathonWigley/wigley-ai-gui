@@ -1,5 +1,8 @@
 import type {
   BaseKit,
+  ConfirmButtonsKit,
+  DialogFrameInput,
+  DialogFramePart,
   KeyHintOptions,
   TagTone,
 } from '../../../shared/page/layout-host/kit';
@@ -109,13 +112,13 @@ export interface Kit extends FormsBaseKit {
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
-  // Mounts the item's text box for `field`: `notes`, `dontAskReason` and `comment` on the built-in kinds, a plugin
-  // kind's own fields on its card. Each box mounts once per card. Any box the card leaves unmounted, the app appends
+  // Places the item's text box for `field`: `notes`, `dontAskReason` and `comment` on the built-in kinds, a plugin
+  // kind's own fields on its card. Each box places once per card. Any box the card leaves out, the app appends
   // in its default field at the end of the card, so the box keys always reach it.
   textBox(parent: HTMLElement, field: string): HTMLElement;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
-  // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
+  // leaves it out gets the parts appended at the end of its element, after the boxes it left out. A part that
   // throws is logged and draws nothing. On the card of a kind that takes an answer, each part updates after the
   // card's own `update`; on any other card (a notice's included), the parts never update.
   contributedParts(parent: HTMLElement): HTMLElement;
@@ -150,7 +153,7 @@ export interface FindingKit extends AnswerKit {
   ): HTMLElement;
 }
 
-// `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and
+// `element` is the card's own node, appended to `parent` before the card places any text box; the app shows, hides and
 // marks that node. On the card of a kind that takes an answer (question, finding, an answerable plugin kind),
 // `update` runs with the item's current answer while the card shows; on any other card it never runs. The kit's parts
 // update themselves.
@@ -168,8 +171,8 @@ export interface OtherCard {
   round: RoundInfo;
 }
 
-// A plugin kind's card kit: `answerControls` is present when the kind takes an answer. It mounts the Not applicable
-// and Don't ask toggles always, and the Notes and reason boxes when the kind has those fields.
+// A plugin kind's card kit: `answerControls` is present when the kind takes an answer. It draws the Not applicable
+// and Don't ask toggles always, and places the Notes and reason boxes when the kind has those fields.
 export interface KindKit extends Kit {
   answerControls?(parent: HTMLElement): HTMLElement;
 }
@@ -240,7 +243,7 @@ export interface NoticesInput {
   notices: NoticeLineInput[];
 }
 
-// `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
+// `element` is the pane's own node, appended to `parent` before the pane places any text box. The app shows and hides
 // that node and sets `data-layout-owner="forms"` and `data-layout="<name>"` on it, `<name>` being the layout that drew
 // it.
 export interface LayoutPane {
@@ -268,13 +271,47 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   progress(parent: HTMLElement): HTMLElement;
   // `p.review-summary`: the progress, and how many items are sent untouched.
   summary(parent: HTMLElement): HTMLElement;
-  // The round note's field with its text box; returns the field. It mounts once per pane: a pane that leaves it out
+  // The round note's field with its text box; returns the field. It places once per pane: a pane that leaves it out
   // gets it appended at the end of its element, so the note keys always reach a box.
   roundNote(parent: HTMLElement): HTMLElement;
   // `Send answers`, the primary button, with its keys; a click sends the round.
   sendButton(parent: HTMLElement): HTMLButtonElement;
   // `Cancel round`, with its keys; a click opens the round's cancel prompt.
   cancelButton(parent: HTMLElement): HTMLButtonElement;
+}
+
+// `text` is the app's line (`Items · 3 open`); `open` is how many items are untouched, of `total` items (findings
+// and questions).
+export interface RailHeadInput {
+  text: string;
+  open: number;
+  total: number;
+}
+// As `RailHeadInput`'s counts.
+export interface RailFootInput {
+  open: number;
+  total: number;
+}
+// `text` is the app's line (`F1 of 6`), '' with no stop focused; `index` is the focused stop's 0-based rail
+// position (as `RailEntryInput.position`), null with no stop focused; `total` is the rail's stop count.
+export interface PagerInput {
+  text: string;
+  index: number | null;
+  total: number;
+}
+
+export interface RailHeadKit extends FormsBaseKit {
+  // The app's save status (`span.ui-status-line`), which the app keeps current. It places once per draw; a second
+  // call throws. A head that leaves it out gets it at the end of its root.
+  saveStatus(parent: HTMLElement): HTMLElement;
+  // `span.ui-key-edge.rail-edge`: `⌥P ◂ ▸ ⌥N`, the prevUnanswered and nextUnanswered anchors. The app marks it
+  // `is-no-target` while no other untouched item is left to jump to.
+  unansweredEdge(parent: HTMLElement): HTMLElement;
+}
+export interface PagerKit extends FormsBaseKit {
+  // `span.ui-key-edge.item-pager-edge`: `start` is the prevItem anchor then `‹`, `end` is `›` then the nextItem
+  // anchor. The app marks each `is-no-target` while the round holds fewer than two stops.
+  itemEdge(parent: HTMLElement, side: 'start' | 'end'): HTMLElement;
 }
 
 // The notices pane's parts.
@@ -289,38 +326,100 @@ export interface NoticesKit extends FormsBaseKit {
   line(parent: HTMLElement, index: number): HTMLElement;
 }
 
-// A layout defines only the cards and panes it changes. A built-in kind's card comes from the first layout defining
-// its card (`cards.question`, `cards.finding`, `cards.notice`) among the item's `layout`, the round's `layout`, the
+// `body` is the prompt's body text.
+export interface ConfirmBodyInput {
+  body: string;
+}
+// The prompt's own buttons (label, variant, key anchor in `forms.confirm`), each appended to `parent`.
+export interface ConfirmBodyKit extends FormsBaseKit, ConfirmButtonsKit {}
+
+// A layout defines only the parts it changes. A built-in kind's card comes from the first layout defining its card
+// (`cards.question`, `cards.finding`, `cards.notice`) among the item's `layout`, the round's `layout`, the
 // `forms.layout` setting and `default`; a plugin kind's from the first layout in that chain defining
-// `cards.kinds[id]`, else from the first defining `cards.other`; each pane the same way without the item. A card or
-// pane that throws, or returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by
-// its `other`).
+// `cards.kinds[id]`, else from the first defining `cards.other`; each pane the same way without the item; the cancel
+// prompt's `dialogFrame` and `confirmBody` from the `forms.layout` setting, then `default`. A part that throws, or
+// returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by its `other`).
 export interface Layout {
   cards?: Partial<LayoutCards>;
-  // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
+  // Drawn above the cards in the forms view, once per round and again after each keymap change and when a reload changes
+  // its layout, into a slot carrying
   // `data-layout-owner="forms"` and `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: FormsBaseKit): void;
-  // The rail beside the cards, under the app's rail header and over its Review button, built once per round.
+  // The rail beside the cards, between the `railHead` and `railFoot` parts, built once per round and again when a reload
+  // changes its layout.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
-  // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
+  // Over the rail, drawn again when its input changes.
+  railHead?(
+    parent: HTMLElement,
+    input: RailHeadInput,
+    kit: RailHeadKit,
+  ): LayoutPane;
+  // Under the rail, drawn again when its input changes.
+  railFoot?(
+    parent: HTMLElement,
+    input: RailFootInput,
+    kit: FormsBaseKit,
+  ): LayoutPane;
+  // Over the cards, under the head, drawn again when its input changes.
+  pager?(parent: HTMLElement, input: PagerInput, kit: PagerKit): LayoutPane;
+  // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round and again
+  // when a reload changes its layout.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
   // The round's one notices page, the last stop after every other rail stop, plugin kinds' included, shown in place of
-  // the cards while its stop is focused, built once per round.
+  // the cards while its stop is focused, built once per round and again when a reload changes its layout.
   notices?(
     parent: HTMLElement,
     input: NoticesInput,
     kit: NoticesKit,
   ): LayoutPane;
+  // The cancel prompt's frame. Picked by the `forms.layout` setting, then `default`; never by a round or item. It
+  // draws the panel, its title (`input.title`) and, when `input.hasActions`, its actions row, and returns the panel,
+  // appended to `parent`, with `body` and `actions` inside it; the app fills them and keeps the scrim, showing and
+  // hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel, or whose `actions` is not null
+  // exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: FormsBaseKit,
+  ): DialogFramePart;
+  // The cancel prompt's body, drawn into the frame's body, scope `forms.confirm`: `input.body` and the prompt's two
+  // buttons. Picked as `dialogFrame` is. A button the part leaves out goes at the end of the frame's actions row.
+  confirmBody?(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
 }
 
-// The built-in `default` layout, which defines every card and pane but the head.
+// The built-in `default` layout, which defines every part but the head.
 export interface CompleteLayout extends Layout {
   cards: LayoutCards;
   rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
+  railHead(
+    parent: HTMLElement,
+    input: RailHeadInput,
+    kit: RailHeadKit,
+  ): LayoutPane;
+  railFoot(
+    parent: HTMLElement,
+    input: RailFootInput,
+    kit: FormsBaseKit,
+  ): LayoutPane;
+  pager(parent: HTMLElement, input: PagerInput, kit: PagerKit): LayoutPane;
   review(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
   notices(
     parent: HTMLElement,
     input: NoticesInput,
     kit: NoticesKit,
   ): LayoutPane;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: FormsBaseKit,
+  ): DialogFramePart;
+  confirmBody(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
 }

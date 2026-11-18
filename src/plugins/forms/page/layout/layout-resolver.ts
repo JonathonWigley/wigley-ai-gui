@@ -16,12 +16,26 @@ import {
   type RoundState,
 } from '../round-model';
 
-// A pane of the forms view.
-export type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
+// A pane of the forms view, its rail's head and foot strips and the pager
+// over its cards included.
+export type LayoutPane =
+  | 'head'
+  | 'rail'
+  | 'railHead'
+  | 'railFoot'
+  | 'pager'
+  | 'review'
+  | 'notices';
 
-// The card of a kind, or a pane of the forms view: what one layout in a chain
-// draws.
-export type LayoutPart = { card: ItemKind } | { pane: LayoutPane };
+// A part of the cancel prompt's dialog.
+export type LayoutDialogPart = 'dialogFrame' | 'confirmBody';
+
+// The card of a kind, a pane of the forms view, or a part of the cancel
+// prompt's dialog: what one layout in a chain draws.
+export type LayoutPart =
+  | { card: ItemKind }
+  | { pane: LayoutPane }
+  | { dialog: LayoutDialogPart };
 
 // The layout that draws a part, and its name.
 export type LayoutPick = PartPick<Layout>;
@@ -51,15 +65,30 @@ export interface RoundPicks {
   panes: Record<LayoutPane, LayoutPick>;
 }
 
-const PANES: readonly LayoutPane[] = ['head', 'rail', 'review', 'notices'];
+const PANES: readonly LayoutPane[] = [
+  'head',
+  'rail',
+  'railHead',
+  'railFoot',
+  'pager',
+  'review',
+  'notices',
+];
 
-// What each pane reads from a layout; a layout defines the pane when the read
-// is a function.
-const PANE_READS: { [P in LayoutPane]: (layout: Layout) => unknown } = {
+// What each pane and dialog part reads from a layout; a layout defines the
+// part when the read is a function.
+const PART_READS: {
+  [P in LayoutPane | LayoutDialogPart]: (layout: Layout) => unknown;
+} = {
   head: (layout) => layout.head,
   rail: (layout) => layout.rail,
+  railHead: (layout) => layout.railHead,
+  railFoot: (layout) => layout.railFoot,
+  pager: (layout) => layout.pager,
   review: (layout) => layout.review,
   notices: (layout) => layout.notices,
+  dialogFrame: (layout) => layout.dialogFrame,
+  confirmBody: (layout) => layout.confirmBody,
 };
 
 // The names to look a part up in, first to last: the item's layout, the
@@ -84,8 +113,8 @@ export function pickLayout(
   chain: readonly string[],
   loaded: ReadonlyMap<string, Layout>,
 ): LayoutPick {
-  if ('pane' in part) {
-    const read = PANE_READS[part.pane];
+  if (!('card' in part)) {
+    const read = PART_READS['pane' in part ? part.pane : part.dialog];
     return pickHostLayout(
       chain,
       loaded,
@@ -214,29 +243,43 @@ export function pickRoundLayouts(
     panes: {
       head: pickPane('head'),
       rail: pickPane('rail'),
+      railHead: pickPane('railHead'),
+      railFoot: pickPane('railFoot'),
+      pager: pickPane('pager'),
       review: pickPane('review'),
       notices: pickPane('notices'),
     },
   };
 }
 
-// True when every card, notice card and pane has the same name and the same
-// layout object in both.
-export function picksEqual(a: RoundPicks, b: RoundPicks): boolean {
-  return (
-    isSamePickList(a.cards, b.cards) &&
-    isSamePickList(a.noticeCards, b.noticeCards) &&
-    PANES.every((pane) => isSamePick(a.panes[pane], b.panes[pane]))
+// The parts of a round whose pick differs between two RoundPicks: the
+// positions in `cards`, whether any notice card's, and the panes.
+export interface RoundPickChanges {
+  cards: number[];
+  noticeCards: boolean;
+  panes: LayoutPane[];
+}
+
+// The parts whose pick in `b` differs from `a` by name or layout object; when
+// `a` and `b` hold card or notice card lists of different lengths, every
+// position of the longer counts as changed.
+export function changedPicks(a: RoundPicks, b: RoundPicks): RoundPickChanges {
+  return {
+    cards: changedPositions(a.cards, b.cards),
+    noticeCards: changedPositions(a.noticeCards, b.noticeCards).length > 0,
+    panes: PANES.filter((pane) => !isSamePick(a.panes[pane], b.panes[pane])),
+  };
+}
+
+function changedPositions(a: LayoutPick[], b: LayoutPick[]): number[] {
+  const longer = a.length >= b.length ? a : b;
+  const isSameLength = a.length === b.length;
+  return longer.flatMap((_, position) =>
+    isSameLength && isSamePick(a[position], b[position]) ? [] : [position],
   );
 }
 
-function isSamePickList(a: LayoutPick[], b: LayoutPick[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((pick, position) => isSamePick(pick, b[position]))
-  );
-}
-
-function isSamePick(a: LayoutPick, b: LayoutPick): boolean {
+// True when both picks have the same name and the same layout object.
+export function isSamePick(a: LayoutPick, b: LayoutPick): boolean {
   return a.name === b.name && a.layout === b.layout;
 }

@@ -1,6 +1,6 @@
 import './dialog.css';
 import { element } from '../dom';
-import { floatingPanel, openFloatingPanel } from './floating-panel';
+import { openFloatingPanel } from './floating-panel';
 
 // The app's copies of the layout kit's `DialogFrameInput` and `DialogFramePart`
 // (`layout-host/kit.d.ts`), which this layer may not import;
@@ -41,7 +41,7 @@ export interface Dialog {
   // nodes and their `hidden` into the new frame and keeping focus inside the
   // dialog; the scrim stays shown or hidden. A throw from `drawFrame`
   // propagates and leaves the earlier frame's fields in place, so a later call
-  // retries. Does nothing without `drawFrame`.
+  // retries.
   redrawFrame(): void;
   show(): void;
   hide(): void;
@@ -49,11 +49,10 @@ export interface Dialog {
 }
 
 // `hasActions: false` leaves the actions row out of the panel; true when left
-// out. `drawFrame` draws the panel, title and actions row; without it the
-// dialog builds its own `.ui-dialog` panel.
+// out. `drawFrame` draws the panel, title and actions row.
 export interface DialogOptions {
   hasActions?: boolean;
-  drawFrame?: DrawDialogFrame;
+  drawFrame: DrawDialogFrame;
 }
 
 // The frame inside the scrim, and how a title change and a redraw reach it.
@@ -66,22 +65,20 @@ interface Frame {
 }
 
 // A modal dialog over the scrim, hidden until `show`. A click on the scrim
-// does nothing: the caller owns the dialog's keys, which close it. With
-// `drawFrame` the frame is drawn once here, and again on each `redrawFrame`
-// and each `setTitle` that changes the title; the dialog marks the drawn panel
+// does nothing: the caller owns the dialog's keys, which close it. The frame
+// is drawn through `drawFrame` once here, and again on each `redrawFrame` and
+// each `setTitle` that changes the title; the dialog marks the drawn panel
 // `role="dialog"`, `aria-modal` and `aria-label` (the title) and adds no
 // class.
-export function createDialog(
-  title: string,
-  options: DialogOptions = {},
-): Dialog {
+export function createDialog(title: string, options: DialogOptions): Dialog {
   const scrim = element('div', 'ui-scrim');
   scrim.hidden = true;
-  const hasActions = options.hasActions ?? true;
-  const frame =
-    options.drawFrame === undefined
-      ? codeFrame(scrim, title, hasActions)
-      : layoutFrame(scrim, title, hasActions, options.drawFrame);
+  const frame = drawnFrame(
+    scrim,
+    title,
+    options.hasActions ?? true,
+    options.drawFrame,
+  );
   return {
     element: scrim,
     get panel() {
@@ -105,37 +102,9 @@ export function createDialog(
   };
 }
 
-// The `.ui-dialog` panel the dialog builds itself when no `drawFrame` is given.
-function codeFrame(
-  scrim: HTMLElement,
-  title: string,
-  hasActions: boolean,
-): Frame {
-  const panel = floatingPanel();
-  panel.classList.add('ui-dialog');
-  panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-modal', 'true');
-  const heading = element('h2', 'ui-dialog-title');
-  const body = element('div', 'ui-dialog-body');
-  const actions = element('div', 'ui-dialog-actions');
-  if (hasActions) {
-    panel.append(heading, body, actions);
-  } else {
-    panel.append(heading, body);
-  }
-  scrim.append(panel);
-
-  const setTitle = (next: string) => {
-    heading.textContent = next;
-    panel.setAttribute('aria-label', next);
-  };
-  setTitle(title);
-  return { panel, body, actions, setTitle, redraw: () => undefined };
-}
-
 // The frame `drawFrame` draws into the scrim. Its fields change only once a
 // draw returns, so a throwing draw leaves the earlier frame's in place.
-function layoutFrame(
+function drawnFrame(
   scrim: HTMLElement,
   title: string,
   hasActions: boolean,

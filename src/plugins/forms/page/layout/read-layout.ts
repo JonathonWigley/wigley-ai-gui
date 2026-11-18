@@ -9,8 +9,13 @@ import type { Layout, LayoutCards } from '../../layouts/layout';
 const FUNCTION_PARTS: Record<Exclude<keyof Layout, 'cards'>, true> = {
   head: true,
   rail: true,
+  railHead: true,
+  railFoot: true,
+  pager: true,
   review: true,
   notices: true,
+  dialogFrame: true,
+  confirmBody: true,
 };
 // The named cards; `kinds` is read on its own.
 const CARD_KINDS: Record<Exclude<keyof LayoutCards, 'kinds'>, true> = {

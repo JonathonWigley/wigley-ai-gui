@@ -31,6 +31,7 @@ import {
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   FAKE_PERMISSION_TEXT,
+  FAKE_PLAYTEST_TEXT,
   FAKE_PROFILES,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
@@ -421,76 +422,102 @@ describe('createFakeAgentHarness', () => {
     ]);
   });
 
-  it('send_ToolText_EmitsToolWithResult', async () => {
-    const { agent, heard } = await startedProcess();
+  it.each([
+    {
+      given: 'a tool text',
+      text: FAKE_TOOL_TEXT,
+      command: 'echo fake',
+      result: 'fake',
+      reply: 'fake agent ran a tool',
+    },
+    {
+      given: 'a playtest text',
+      text: FAKE_PLAYTEST_TEXT,
+      command: `unity command editor_play --result-only --project-path '${request.projectDir}'`,
+      result: 'Entered Play Mode.',
+      reply: 'fake agent entered Play Mode',
+    },
+  ])(
+    'send_ToolText_EmitsToolWithResult given $given',
+    async ({ text, command, result, reply }) => {
+      const { agent, heard, agentEvents } = await startedProcess();
 
-    agent.send({ text: FAKE_TOOL_TEXT, images: [] });
-    await flush();
+      agent.send({ text, images: [] });
+      await flush();
 
-    const tool = {
-      kind: 'tool',
-      id: 'tool-1',
-      at: 1000,
-      agentId: MAIN_AGENT_ID,
-      toolUseId: 'fake-tool-1',
-      name: 'Bash',
-      input: { command: 'echo fake' },
-      summary: 'echo fake',
-    };
-    expect(heard.slice(2)).toEqual([
-      ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
-      [
-        'entry',
-        {
-          ...tool,
-          result: { text: 'fake', isError: false },
-          raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
-        },
-      ],
-      [
-        'entry',
-        {
-          kind: 'assistant',
-          id: 'assistant-1',
-          at: 1000,
-          agentId: MAIN_AGENT_ID,
-          text: 'fake agent ran a tool',
-          streaming: false,
-          raw: [{ fake: 'assistant', text: 'fake agent ran a tool' }],
-        },
-      ],
-      [
-        'entry',
-        {
-          kind: 'result',
-          id: 'result-1',
-          at: 1000,
-          stopReason: 'end_turn',
-          costUsd: null,
-          durationMs: null,
-          raw: [{ fake: 'result' }],
-        },
-      ],
-      ['agentEvent', fakeUsageEvent(1, 1000)],
-      ['planUsage', fakePlanRowUpdate(1, 1000)],
-      ['activity', 'idle'],
-    ]);
-    expect(heard.slice(0, 2)).toEqual([
-      [
-        'entry',
-        {
-          kind: 'user',
-          id: 'user-1',
-          at: 1000,
-          text: FAKE_TOOL_TEXT,
-          images: [],
-          delivery: null,
-          raw: [{ fake: 'user', text: FAKE_TOOL_TEXT }],
-        },
-      ],
-      ['activity', 'working'],
-    ]);
-  });
+      const tool = {
+        kind: 'tool',
+        id: 'tool-1',
+        at: 1000,
+        agentId: MAIN_AGENT_ID,
+        toolUseId: 'fake-tool-1',
+        name: 'Bash',
+        input: { command },
+        summary: command,
+      };
+      expect(agentEvents).toContainEqual({
+        type: 'toolStarted',
+        at: 1000,
+        agentId: MAIN_AGENT_ID,
+        toolUseId: 'fake-tool-1',
+        tool: 'Bash',
+        summary: command,
+      });
+      expect(heard.slice(2)).toEqual([
+        ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
+        [
+          'entry',
+          {
+            ...tool,
+            result: { text: result, isError: false },
+            raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
+          },
+        ],
+        [
+          'entry',
+          {
+            kind: 'assistant',
+            id: 'assistant-1',
+            at: 1000,
+            agentId: MAIN_AGENT_ID,
+            text: reply,
+            streaming: false,
+            raw: [{ fake: 'assistant', text: reply }],
+          },
+        ],
+        [
+          'entry',
+          {
+            kind: 'result',
+            id: 'result-1',
+            at: 1000,
+            stopReason: 'end_turn',
+            costUsd: null,
+            durationMs: null,
+            raw: [{ fake: 'result' }],
+          },
+        ],
+        ['agentEvent', fakeUsageEvent(1, 1000)],
+        ['planUsage', fakePlanRowUpdate(1, 1000)],
+        ['activity', 'idle'],
+      ]);
+      expect(heard.slice(0, 2)).toEqual([
+        [
+          'entry',
+          {
+            kind: 'user',
+            id: 'user-1',
+            at: 1000,
+            text,
+            images: [],
+            delivery: null,
+            raw: [{ fake: 'user', text }],
+          },
+        ],
+        ['activity', 'working'],
+      ]);
+    },
+  );
 
   it.each([
     {

@@ -1,26 +1,29 @@
 // @ts-check
 
 // The built-in forms look. Every card and pane appends its element to
-// `parent` first, so the text boxes mount into an attached element.
+// `parent` first, so the text boxes are placed into an attached element.
 //
 // What a user layout may leave out of a card or pane it defines, and what the
 // app does then:
 // - question and finding cards: `itemHead` (the card still carries
-//   `data-status`), `answerControls` and `textBox` (each box left unmounted is
+//   `data-status`), `answerControls` and `textBox` (each box left out is
 //   appended at the end of the card), and `contributedParts` (other plugins'
 //   parts are appended after those boxes)
 // - notice card: `textBox` (the comment box is appended at the end) and
 //   `contributedParts` (appended after it)
 // - `other` card and `kinds` cards (a plugin kind's): `itemHead`,
-//   `answerControls` and `textBox` (each box left unmounted is appended at the
+//   `answerControls` and `textBox` (each box left out is appended at the
 //   end of the card), and `contributedParts` (appended after those boxes); a
 //   layout leaving out `other` has its plugin kinds' cards drawn by the next
 //   layout in the chain defining it
 // - rail: `entry` (a rail without entries scrolls nothing into view)
+// - railHead: `saveStatus` (placed at the end of the part's root)
 // - notices pane: `line` (each line left out is appended at the end of the
 //   pane)
 // - review: `roundNote` (appended at the end of the pane), and every other
 //   part, which then draws nothing
+// - confirmBody: either button (a button left out is appended at the end of
+//   the frame's actions row)
 //
 // The question card draws no section labels: the summary is its headline, and
 // the context, the choices and the rationale follow with no label. The finding
@@ -93,6 +96,29 @@ const layout = {
     }
     return { element: nav };
   },
+  railHead(parent, input, kit) {
+    const head = kit.el(parent, 'header', 'rail-head');
+    kit.el(head, 'span', 'rail-head-text', input.text);
+    kit.el(head, 'span', 'rail-head-separator', '·');
+    kit.saveStatus(head);
+    kit.unansweredEdge(head);
+    return { element: head };
+  },
+  railFoot(parent, _input, kit) {
+    const foot = kit.el(parent, 'footer', 'rail-foot');
+    const review = kit.button(foot, 'Review', 'forms.openReview', {
+      variant: 'secondary',
+    });
+    kit.keyHint(review, 'openReview');
+    return { element: foot };
+  },
+  pager(parent, input, kit) {
+    const pager = kit.el(parent, 'div', 'item-pager');
+    kit.itemEdge(pager, 'start');
+    kit.el(pager, 'span', 'item-pager-text', input.text);
+    kit.itemEdge(pager, 'end');
+    return { element: pager };
+  },
   notices(parent, input, kit) {
     const pane = kit.el(parent, 'section', 'notices');
     const list = kit.el(pane, 'div', 'notice-lines');
@@ -124,6 +150,22 @@ const layout = {
     kit.sendButton(actions);
     kit.cancelButton(actions);
     return { element: pane };
+  },
+  confirmBody(parent, input, kit) {
+    return kit.el(parent, 'p', '', input.body);
+  },
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(
+      parent,
+      'div',
+      'ui-floating material-floating ui-dialog',
+    );
+    kit.el(panel, 'h2', 'ui-dialog-title', input.title);
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'ui-dialog-actions')
+      : null;
+    return { element: panel, body, actions };
   },
 };
 

@@ -14,8 +14,9 @@ export interface PartPick<L> {
   layout: L;
 }
 
-// What a part's build records for its rollback and its dispose: the destroy of
-// each box it mounts and each key anchor it names.
+// What a part's build records for its rollback and its dispose: the undo of
+// each box, slot, kit or nested part it places (a release, a removal or a
+// dispose) and each key anchor it names.
 export interface RollbackDeps {
   recordBox(destroy: () => void): void;
   recordAnchor(anchor: Disposable): void;

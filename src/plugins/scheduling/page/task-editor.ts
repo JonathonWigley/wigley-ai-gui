@@ -121,7 +121,7 @@ export function createTaskEditor(deps: TaskEditorDeps): TaskEditorView {
         { ...deps.kit(rollback), textBox },
       );
       requireElementIn(into, root, 'fieldRow');
-      if (row.kind !== 'choice' && !boxes.isMounted(row.field)) {
+      if (row.kind !== 'choice' && !boxes.isPlaced(row.field)) {
         textBox(root);
       }
       return { element: root };
@@ -218,7 +218,7 @@ export function createTaskEditor(deps: TaskEditorDeps): TaskEditorView {
       });
     },
     focusBox(field) {
-      if (!boxes.isMounted(field)) {
+      if (!boxes.isPlaced(field)) {
         return false;
       }
       boxes.focus(field);

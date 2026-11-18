@@ -13,6 +13,7 @@ import {
 import {
   CHAT_PREVIEW_HOST_ID,
   type ChatMainEvents,
+  chatEntriesSlot,
   chatMainKey,
 } from '../../chat/contract';
 import {
@@ -24,6 +25,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
 import { pickOf, rectOfTuple } from '../window-pick';
 import { createLiveTools, LIVE_VIEW_OFFLINE } from './live-tools';
+import { createPlaytestWatch } from './playtest-watch';
 import { liveViewSelfTestScript } from './selftest-script';
 
 type LiveViewApi = MainApi<
@@ -36,7 +38,9 @@ type LiveViewApi = MainApi<
 
 // Registers live-view's layouts; contributes `show_live_view` and
 // `hide_live_view` to every session, subagents included, which write the
-// session's pick to `live-view.picks`; deletes it on `sessions.ended`; writes
+// session's pick to `live-view.picks`; runs the playtest watch, which opens and
+// closes a session's pick on its live playtest Bash calls, read from chat's
+// entries and agent events; deletes the pick on `sessions.ended`; writes
 // chat's layout preview row a sample pick, the real pick and crop over the
 // fake ScreenCapture's windows; and hands the self-test its script.
 export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
@@ -58,9 +62,15 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       liveTools.startSession,
       { offline: LIVE_VIEW_OFFLINE },
     );
-    api.events.on('sessions.ended', ({ sessionId }) =>
-      liveTools.sessionEnded(sessionId),
-    );
+    const watch = createPlaytestWatch({
+      entries: api.state.read(chatEntriesSlot),
+      liveTools,
+      log: services.log,
+    });
+    api.events.on('sessions.ended', ({ sessionId }) => {
+      liveTools.sessionEnded(sessionId);
+      watch.sessionEnded(sessionId);
+    });
 
     // The preview emits several events in a row, so the key is checked again
     // after the await.
@@ -79,7 +89,9 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
         picks.set(sessionId, result.pick);
       }
     };
-    api.events.on('chat.agentEvent', ({ sessionId, hostSessionId }) => {
+    api.events.on('chat.agentEvent', (agentEvent) => {
+      watch.agentEvent(agentEvent);
+      const { sessionId, hostSessionId } = agentEvent;
       const isPreviewWithoutPick =
         hostSessionId === CHAT_PREVIEW_HOST_ID &&
         picks.get(sessionId) === undefined;
@@ -96,6 +108,7 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
         chat: api.dependency(chatMainKey),
         sessions,
         show: liveTools.show,
+        picks: api.state.read(livePicksSlot),
       }),
     );
 

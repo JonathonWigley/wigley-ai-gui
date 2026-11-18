@@ -846,19 +846,31 @@ describe('Large over the engine page part', () => {
         [5, false],
       ]),
       finishedGroups: [
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'done' }] },
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 1, text: 'w1.1', state: 'done' }],
+        },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: {
         title: 'Wave 3',
         items: [
-          { text: 'w3.1', state: 'done' },
-          { text: 'w3.2', state: 'pending' },
+          { number: 3, text: 'w3.1', state: 'done' },
+          { number: 4, text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
-        { title: 'Wave 5', items: [{ text: 'w5.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 5, text: 'w4.1', state: 'pending' }],
+        },
+        {
+          title: 'Wave 5',
+          items: [{ number: 6, text: 'w5.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -874,12 +886,15 @@ describe('Large over the engine page part', () => {
       currentGroup: {
         title: 'Wave 3',
         items: [
-          { text: 'w3.1', state: 'running' },
-          { text: 'w3.2', state: 'pending' },
+          { number: 1, text: 'w3.1', state: 'running' },
+          { number: 2, text: 'w3.2', state: 'pending' },
         ],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 3, text: 'w4.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -893,10 +908,13 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
-        items: [{ text: 'w3.1', state: 'paused' }],
+        items: [{ number: 1, text: 'w3.1', state: 'paused' }],
       },
       laterGroups: [
-        { title: 'Wave 4', items: [{ text: 'w4.1', state: 'pending' }] },
+        {
+          title: 'Wave 4',
+          items: [{ number: 2, text: 'w4.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -907,7 +925,7 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Wave 3',
-        items: [{ text: 'w3.1', state: 'pending' }],
+        items: [{ number: 1, text: 'w3.1', state: 'pending' }],
       },
       laterGroups: [],
     },
@@ -922,18 +940,21 @@ describe('Large over the engine page part', () => {
         [3, true],
       ]),
       finishedGroups: [
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: {
         title: 'Wave 1',
-        items: [{ text: 'w1.1', state: 'pending' }],
+        items: [{ number: 1, text: 'w1.1', state: 'pending' }],
       },
       laterGroups: [
         {
           title: 'Wave 3',
           items: [
-            { text: 'w3.1', state: 'pending' },
-            { text: 'w3.2', state: 'done' },
+            { number: 3, text: 'w3.1', state: 'pending' },
+            { number: 4, text: 'w3.2', state: 'done' },
           ],
         },
       ],
@@ -950,8 +971,8 @@ describe('Large over the engine page part', () => {
       currentGroup: {
         title: 'Tasks',
         items: [
-          { text: 't.1', state: 'done' },
-          { text: 't.2', state: 'pending' },
+          { number: 1, text: 't.1', state: 'done' },
+          { number: 2, text: 't.2', state: 'pending' },
         ],
       },
       laterGroups: [],
@@ -969,17 +990,20 @@ describe('Large over the engine page part', () => {
       finishedGroups: [],
       currentGroup: {
         title: 'Tasks',
-        items: [{ text: 't.1', state: 'pending' }],
+        items: [{ number: 1, text: 't.1', state: 'pending' }],
       },
       laterGroups: [
         {
           title: 'Wave 2',
           items: [
-            { text: 'w2.1', state: 'pending' },
-            { text: 'w2.2', state: 'done' },
+            { number: 2, text: 'w2.1', state: 'pending' },
+            { number: 3, text: 'w2.2', state: 'done' },
           ],
         },
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'pending' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 4, text: 'w1.1', state: 'pending' }],
+        },
       ],
     },
     {
@@ -991,8 +1015,14 @@ describe('Large over the engine page part', () => {
         [2, true],
       ]),
       finishedGroups: [
-        { title: 'Wave 1', items: [{ text: 'w1.1', state: 'done' }] },
-        { title: 'Wave 2', items: [{ text: 'w2.1', state: 'done' }] },
+        {
+          title: 'Wave 1',
+          items: [{ number: 1, text: 'w1.1', state: 'done' }],
+        },
+        {
+          title: 'Wave 2',
+          items: [{ number: 2, text: 'w2.1', state: 'done' }],
+        },
       ],
       currentGroup: null,
       laterGroups: [],
@@ -1228,19 +1258,19 @@ describe('Large over the engine page part', () => {
     line: string;
   }>([
     {
-      name: 'a toggle opens only its session',
+      name: 'a toggle folds only its session',
       act: (view) => view.toggleFinishedWaves('a'),
-      open: { a: true, b: false },
-      line: 'finished waves open in proj',
+      open: { a: false, b: true },
+      line: 'finished waves folded in proj',
     },
     {
-      name: 'a second toggle folds it',
+      name: 'a second toggle opens it again',
       act: (view) => {
         view.toggleFinishedWaves('a');
         view.toggleFinishedWaves('a');
       },
-      open: { a: false, b: false },
-      line: 'finished waves folded in proj',
+      open: { a: true, b: true },
+      line: 'finished waves open in proj',
     },
     {
       name: 'forget drops it',
@@ -1249,35 +1279,35 @@ describe('Large over the engine page part', () => {
         view.forget('a');
         view.redraw();
       },
-      open: { a: false, b: false },
-      line: 'finished waves open in proj',
+      open: { a: true, b: true },
+      line: 'finished waves folded in proj',
     },
     {
       name: 'no finished waves leaves it',
       flow: flowIn('make', { progress: progressOf(0, [1, 1]) }),
       act: (view) => view.toggleFinishedWaves('a'),
-      open: { a: false, b: false },
+      open: { a: true, b: true },
       line: 'nothing to run for toggleFinishedWaves in proj',
     },
     {
       name: 'a hidden pane leaves it',
       hidden: true,
       act: (view) => view.toggleFinishedWaves('a'),
-      open: { a: false, b: false },
+      open: { a: true, b: true },
       line: 'nothing to run for toggleFinishedWaves in proj',
     },
     {
       name: 'no plan read leaves it',
       flow: flowIn('make', { progress: null }),
       act: (view) => view.toggleFinishedWaves('a'),
-      open: { a: false, b: false },
+      open: { a: true, b: true },
       line: 'nothing to run for toggleFinishedWaves in proj',
     },
     {
       name: 'idle leaves it',
       flow: flowIn('idle', { progress: progressOf(1, [1, 1]) }),
       act: (view) => view.toggleFinishedWaves('a'),
-      open: { a: false, b: false },
+      open: { a: true, b: true },
       line: 'nothing to run for toggleFinishedWaves in proj',
     },
   ])('the fold is kept per session: $name', async (row) => {
@@ -1307,13 +1337,13 @@ describe('Large over the engine page part', () => {
     expect({ a: lastOpen('a'), b: lastOpen('b') }).toEqual(open);
   });
 
-  it('finishedFold_Click_OpensItsSessionsWavesAndStatesIt', async () => {
+  it('finishedFold_Click_FoldsItsSessionsOpenWavesAndStatesIt', async () => {
     const { put, sidePart } = setUp();
     const wrapper = new FakeElement('div');
     put(flowIn('make', { progress: progressOf(1, [1, 1]) }));
     sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
     const fold = () => findAll(wrapper, 'workflow-finished-fold')[0];
-    const closed = {
+    const opened = {
       text: fold().textContent,
       expanded: fold().attributes.get('aria-expanded'),
     };
@@ -1321,12 +1351,12 @@ describe('Large over the engine page part', () => {
     fold().click();
     await settle();
 
-    expect(closed).toEqual({
-      text: '▸ 1 wave · 1 done',
-      expanded: 'false',
+    expect(opened).toEqual({
+      text: '▾ 1 wave · 1 done',
+      expanded: 'true',
     });
-    expect(fold().textContent).toBe('▾ 1 wave · 1 done');
-    expect(fold().attributes.get('aria-expanded')).toBe('true');
+    expect(fold().textContent).toBe('▸ 1 wave · 1 done');
+    expect(fold().attributes.get('aria-expanded')).toBe('false');
   });
 
   it('chip_UserLayoutThrows_DrawsWithDefault', () => {

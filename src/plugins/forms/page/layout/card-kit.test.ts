@@ -203,8 +203,12 @@ function fakeCardDeps(contributions: FormsContributions) {
       document: async (text) => text,
       ...NO_FENCES,
     },
-    mountBox: vi.fn(),
-    destroyBox: vi.fn(),
+    placeBox: vi.fn((parent: HTMLElement) => {
+      const frame = asHtml(new FakeElement('div'));
+      parent.append(frame);
+      return frame;
+    }),
+    releaseBox: vi.fn(),
     keys: { keysFor, anchor },
     platform: 'macos',
     state: noLayoutState,
@@ -706,14 +710,14 @@ describe('plugin kind kit', () => {
       const { kit, round } = pollKit(oneBoxPollKind(false, shown), deps);
       const card = new FakeElement('div');
 
-      kit.appendUnmountedBoxes(asHtml(card));
+      kit.appendUnplacedBoxes(asHtml(card));
       kit.update(round);
 
       const [field] = findAll(card, 'field-why');
       expect(field.textContent).toContain('Why this poll');
       expect(field.textContent).toContain('Say why.');
       expect(field.hidden).toBe(hidden);
-      expect(deps.mountBox).toHaveBeenCalledWith(
+      expect(deps.placeBox).toHaveBeenCalledWith(
         expect.anything(),
         { field: 'why', item: { kind: 'poll', index: 1 } },
         '',
@@ -730,7 +734,7 @@ describe('plugin kind kit', () => {
 
     expect(findAll(parent, 'toggles')).toHaveLength(1);
     expect(findAll(parent, 'field')).toHaveLength(0);
-    expect(deps.mountBox).not.toHaveBeenCalled();
+    expect(deps.placeBox).not.toHaveBeenCalled();
   });
 });
 

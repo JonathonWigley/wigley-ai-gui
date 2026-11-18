@@ -26,8 +26,9 @@ export type LivePick =
   | { readonly kind: 'blocked' };
 
 // Each session's Live pick, by session id, from its agent's last
-// `show_live_view` until `hide_live_view` or the session ends; no key means
-// the section is hidden.
+// `show_live_view` or the app's playtest watch, until `hide_live_view`, a
+// Play Mode stop for the project of a pick the app opened, or the session's
+// end; no key means the section is hidden.
 export const livePicksSlot: KeyedSlotKey<LivePick, 'main', 'live-view'> = {
   id: 'live-view.picks',
   process: 'main',

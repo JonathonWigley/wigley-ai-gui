@@ -84,7 +84,7 @@ function setUp(uiState = fakeUiState()) {
 function recordingPart(
   id: string,
   order = 10,
-  options: Pick<ChatSidePart, 'shrinksLast'> = {},
+  options: Pick<ChatSidePart, 'shrinksLast' | 'keepsHeight'> = {},
 ) {
   const record = {
     builds: 0,
@@ -157,9 +157,9 @@ describe('createSideSections', () => {
     vi.restoreAllMocks();
   });
 
-  it('a tab sits its sections in order, equal orders in add order, and marks only the shrinksLast wrapper', () => {
+  it('a tab sits its sections in order, equal orders in add order, and marks only the shrinksLast and keepsHeight wrappers', () => {
     const { parts, openTab } = setUp();
-    parts.add(recordingPart('thirty', 30).part);
+    parts.add(recordingPart('thirty', 30, { keepsHeight: true }).part);
     parts.add(recordingPart('ten', 10).part);
     parts.add(recordingPart('twenty', 20, { shrinksLast: true }).part);
     parts.add(recordingPart('twenty-later', 20).part);
@@ -177,6 +177,11 @@ describe('createSideSections', () => {
         .querySelectorAll('[data-shrinks-last]')
         .map((wrapper) => wrapper.dataset.part),
     ).toEqual(['twenty']);
+    expect(
+      root
+        .querySelectorAll('[data-keeps-height]')
+        .map((wrapper) => wrapper.dataset.part),
+    ).toEqual(['thirty']);
   });
 
   it.each([

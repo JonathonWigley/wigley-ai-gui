@@ -11,11 +11,14 @@ import {
   type RoundParts,
 } from '../test-rounds';
 import {
+  changedPicks,
   itemLayout,
   layoutChain,
   pickLayout,
   pickRoundLayouts,
-  picksEqual,
+  type LayoutPane as LayoutPaneName,
+  type RoundPickChanges,
+  type RoundPicks,
   roundLayoutNames,
 } from './layout-resolver';
 
@@ -181,6 +184,9 @@ describe('pickRoundLayouts', () => {
       ...allCards(),
       head: () => undefined,
       notices: pane,
+      railHead: pane,
+      railFoot: pane,
+      pager: pane,
     };
     const loaded = new Map([
       ['f', f],
@@ -202,11 +208,23 @@ describe('pickRoundLayouts', () => {
     expect(picks.noticeCards[1].layout).toBe(n);
     expect(picks.panes.head).toEqual({ name: 'u', layout: u });
     expect(picks.panes.notices).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.railHead).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.railFoot).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.pager).toEqual({ name: 'u', layout: u });
   });
 
   it('pickRoundLayouts_PanesSkipTheItemLayout', () => {
     const loaded = new Map<string, Layout>([
-      ['f', { ...allCards(), review: pane }],
+      [
+        'f',
+        {
+          ...allCards(),
+          review: pane,
+          railHead: pane,
+          railFoot: pane,
+          pager: pane,
+        },
+      ],
       ['n', { ...allCards(), notices: pane }],
       ['default', allCards()],
     ]);
@@ -220,61 +238,105 @@ describe('pickRoundLayouts', () => {
     expect(picks.cards[0].name).toBe('f');
     expect(picks.panes.review.name).toBe('default');
     expect(picks.panes.notices.name).toBe('default');
+    expect(picks.panes.railHead.name).toBe('default');
+    expect(picks.panes.railFoot.name).toBe('default');
+    expect(picks.panes.pager.name).toBe('default');
     expect(picks.noticeCards[0].name).toBe('n');
   });
 });
 
-describe('picksEqual', () => {
-  it('picksEqual_SameNamesSameObjects_True_NewObject_False', () => {
-    const named = round({
-      findings: [finding('F1', { layout: 'f' })],
-      questions: [question('Q1')],
-      notices: [{ ...notice('N1'), layout: 'n' }],
-    });
-    const fallback = allCards();
-    const f = allCards();
-    const n = allCards();
-    const loaded = new Map([
-      ['f', f],
-      ['n', n],
-      ['default', fallback],
-    ]);
-    const reloadedCard = new Map([
-      ['f', allCards()],
-      ['n', n],
-      ['default', fallback],
-    ]);
-    const reloadedNoticeCard = new Map([
-      ['f', f],
-      ['n', allCards()],
-      ['default', fallback],
-    ]);
-    const withNotices: Layout = { notices: pane };
-    const withNoticesAgain: Layout = { notices: pane };
-
-    const first = pickRoundLayouts(named, 'default', loaded);
-
-    expect(picksEqual(first, pickRoundLayouts(named, 'default', loaded))).toBe(
-      true,
-    );
-    expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloadedCard)),
-    ).toBe(false);
-    expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloadedNoticeCard)),
-    ).toBe(false);
-    // Only the notices pane's layout object is new.
-    const panesFirst = pickRoundLayouts(
-      named,
-      'u',
-      new Map([...loaded, ['u', withNotices]]),
-    );
-    const panesReloaded = pickRoundLayouts(
-      named,
-      'u',
-      new Map([...loaded, ['u', withNoticesAgain]]),
-    );
-    expect(panesReloaded.panes.notices.layout).toBe(withNoticesAgain);
-    expect(picksEqual(panesFirst, panesReloaded)).toBe(false);
+describe('changedPicks', () => {
+  // Finding F2 (rail position 1) names `f`, the notice names `n`, and the
+  // user's `u` draws only the rail.
+  const named = round({
+    findings: [finding('F1'), finding('F2', { layout: 'f' })],
+    questions: [question('Q1')],
+    notices: [{ ...notice('N1'), layout: 'n' }],
   });
+  const f = allCards();
+  const n = allCards();
+  const u: Layout = { rail: pane };
+  const loaded = new Map<string, Layout>([
+    ['f', f],
+    ['n', n],
+    ['u', u],
+    ['default', allCards()],
+  ]);
+
+  const first = pickRoundLayouts(named, 'u', loaded);
+  // The picks with `name` loaded as `layout`.
+  const reload = (name: string, layout: Layout) => (): RoundPicks =>
+    pickRoundLayouts(named, 'u', new Map([...loaded, [name, layout]]));
+  // The first picks with `pane` picked from a layout of its own.
+  const repick =
+    (pane: LayoutPaneName) =>
+    (picks: RoundPicks): RoundPicks => ({
+      ...picks,
+      panes: { ...picks.panes, [pane]: { name: 'x', layout: {} } },
+    });
+
+  it.each<{
+    case: string;
+    next: (picks: RoundPicks) => RoundPicks;
+    expected: RoundPickChanges;
+  }>([
+    {
+      case: 'the same maps',
+      next: reload('f', f),
+      expected: { cards: [], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a new card layout object',
+      next: reload('f', allCards()),
+      expected: { cards: [1], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a new notice card layout object',
+      next: reload('n', allCards()),
+      expected: { cards: [], noticeCards: true, panes: [] },
+    },
+    {
+      case: 'a new pane layout object',
+      next: reload('u', { rail: pane }),
+      expected: { cards: [], noticeCards: false, panes: ['rail'] },
+    },
+    {
+      case: 'a longer card list',
+      next: (picks) => ({ ...picks, cards: [...picks.cards, picks.cards[0]] }),
+      expected: { cards: [0, 1, 2, 3], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a shorter card list',
+      next: (picks) => ({ ...picks, cards: picks.cards.slice(0, 2) }),
+      expected: { cards: [0, 1, 2], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a longer notice card list',
+      next: (picks) => ({
+        ...picks,
+        noticeCards: [...picks.noticeCards, picks.noticeCards[0]],
+      }),
+      expected: { cards: [], noticeCards: true, panes: [] },
+    },
+    {
+      case: 'the rail head',
+      next: repick('railHead'),
+      expected: { cards: [], noticeCards: false, panes: ['railHead'] },
+    },
+    {
+      case: 'the rail foot',
+      next: repick('railFoot'),
+      expected: { cards: [], noticeCards: false, panes: ['railFoot'] },
+    },
+    {
+      case: 'the pager',
+      next: repick('pager'),
+      expected: { cards: [], noticeCards: false, panes: ['pager'] },
+    },
+  ])(
+    'changedPicks_NamesAndObjects_ReportsEachChangedPart on $case',
+    ({ next, expected }) => {
+      expect(changedPicks(first, next(first))).toEqual(expected);
+    },
+  );
 });

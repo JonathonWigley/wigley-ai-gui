@@ -46,9 +46,8 @@ export interface ConfirmPromptDeps {
   // Draws the body into `parent` (the dialog's body), placing the buttons
   // through `parts`; the prompt draws its own body when left out.
   drawBody?(parent: HTMLElement, parts: ConfirmBodyParts): void;
-  // Draws the dialog's frame, the opener's layout part; the dialog builds its
-  // own frame when left out.
-  drawFrame?: DrawDialogFrame;
+  // Draws the dialog's frame, the opener's layout part.
+  drawFrame: DrawDialogFrame;
 }
 
 // What a `drawBody` draws with: the body text and the prompt's two buttons.

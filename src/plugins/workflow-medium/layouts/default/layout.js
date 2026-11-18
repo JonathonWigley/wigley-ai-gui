@@ -37,7 +37,7 @@ function allGroups(input) {
 }
 
 /**
- * The scrolling checklist: every group's items, each with its mark.
+ * The scrolling checklist: every group's items, each with its number and mark.
  * @param {HTMLElement} parent
  * @param {SidePaneInput} input
  * @param {WorkflowKit} kit
@@ -45,12 +45,14 @@ function allGroups(input) {
 function drawChecklist(parent, input, kit) {
   const items = kit.el(kit.sideList(parent), 'ul', 'workflow-side-tasks');
   for (const item of allGroups(input).flatMap((group) => group.items)) {
-    const mark = kit.statusMark(items, item.state);
+    const lead = kit.el(items, 'span', 'workflow-side-lead');
+    kit.el(lead, 'span', 'workflow-side-number', String(item.number));
+    kit.statusMark(lead, item.state);
     kit.row(items, {
       density: 'list',
       tag: 'li',
       label: item.text,
-      leading: mark,
+      leading: lead,
     });
   }
 }

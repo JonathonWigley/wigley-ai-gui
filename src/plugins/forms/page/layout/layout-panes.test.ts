@@ -25,10 +25,14 @@ import {
   question,
 } from '../test-rounds';
 import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
+import { pagerInput, railFootInput, railHeadInput } from '../view-model';
 import {
   buildNoticesPane,
   buildRailPane,
   buildReviewPane,
+  drawPager,
+  drawRailFoot,
+  drawRailHead,
   type PaneDeps,
 } from './layout-panes';
 import type { LayoutPick } from './layout-resolver';
@@ -51,8 +55,16 @@ function openRound(): FormsState {
   });
 }
 
+// Appends a new frame to `parent` and returns it, as placing a new box does.
+function placeFakeFrame(parent: HTMLElement): HTMLElement {
+  const frame = asHtml(new FakeElement('div'));
+  parent.append(frame);
+  return frame;
+}
+
 // Pane deps over `contributions` whose commands register every forms
 // command, each run recorded.
+
 function fakePaneDeps(contributions: FormsContributions) {
   const keysFor = vi.fn(() => null);
   const anchor = vi.fn(
@@ -74,8 +86,8 @@ function fakePaneDeps(contributions: FormsContributions) {
     log,
     keys: { keysFor, anchor },
     run: vi.fn(),
-    mountBox: vi.fn(),
-    destroyBox: vi.fn(),
+    placeBox: vi.fn(placeFakeFrame),
+    releaseBox: vi.fn(),
     commands: fakeKitCommandsOf(formsManifest, run),
     contributions,
     recordAnchor: () => {},
@@ -88,8 +100,8 @@ function fakePaneDeps(contributions: FormsContributions) {
 function fakeCardDeps(deps: PaneDeps): CardDeps {
   return {
     markdown: deps.markdown,
-    mountBox: deps.mountBox,
-    destroyBox: deps.destroyBox,
+    placeBox: deps.placeBox,
+    releaseBox: deps.releaseBox,
     keys: deps.keys,
     platform: deps.platform,
     log: deps.log,
@@ -129,7 +141,7 @@ function drawRow(contributions: FormsContributions) {
     asHtml(new FakeElement('div')),
     round,
     deps,
-  );
+  ).built;
   pane.update(round, true);
   const [row] = findAll(asFake(pane.element), 'review-row');
   return { row, log, run };
@@ -262,7 +274,7 @@ describe('review pane', () => {
       asHtml(new FakeElement('div')),
       round,
       deps,
-    );
+    ).built;
 
     pane.update(round, true);
 
@@ -297,7 +309,7 @@ function drawPane(
     asHtml(parent),
     state.forms[0],
     deps,
-  );
+  ).built;
   return { pane, parent, deps, log, run };
 }
 
@@ -337,7 +349,7 @@ function drawNoticesPane(
     1,
     deps,
     fakeCardDeps(deps),
-  );
+  ).built;
   return { pane, parent, deps, log, run, round };
 }
 
@@ -346,7 +358,7 @@ function noticeLines(pane: { element: HTMLElement }) {
   return findAll(asFake(pane.element), 'notice-line');
 }
 
-// A review that appends a stray node and mounts the round note, then throws.
+// A review that appends a stray node and places the round note, then throws.
 function throwingReview(): Layout {
   return {
     review(parent, _input, kit) {
@@ -363,11 +375,11 @@ describe('panes', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reviewPane_Throws_DestroysTheBoxesItMounted', () => {
+  it('reviewPane_Throws_ReleasesTheBoxesItPlaced', () => {
     const { deps } = drawPane(buildReviewPane, throwingReview());
 
-    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
-    expect(deps.destroyBox).toHaveBeenCalledWith({ field: 'note' });
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith({ field: 'note' });
   });
 
   it.each([
@@ -430,7 +442,7 @@ describe('panes', () => {
   it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {
     const { deps } = drawPane(buildReviewPane, oneRowReview());
 
-    expect(deps.mountBox).toHaveBeenCalledWith(
+    expect(deps.placeBox).toHaveBeenCalledWith(
       expect.anything(),
       { field: 'note' },
       expect.any(String),
@@ -459,7 +471,10 @@ describe('panes', () => {
       },
       state,
     );
-    (pane as ReturnType<typeof buildRailPane>).update(state.forms[0], 'review');
+    (pane as ReturnType<typeof buildRailPane>['built']).update(
+      state.forms[0],
+      'review',
+    );
 
     expect(inputs[0].items[0]).toEqual({
       position: 0,
@@ -607,7 +622,7 @@ describe('notices pane', () => {
     },
   );
 
-  it('noticesPane_Throws_DestroysEachBodysBoxOnce', () => {
+  it('noticesPane_Throws_ReleasesEachBodysBoxOnce', () => {
     const { pane, deps, log } = drawNoticesPane({
       name: 'test',
       layout: {
@@ -618,8 +633,8 @@ describe('notices pane', () => {
       },
     });
 
-    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
-    expect(deps.destroyBox).toHaveBeenCalledWith({
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith({
       field: 'comment',
       item: { kind: 'notice', index: 1 },
     });
@@ -627,7 +642,7 @@ describe('notices pane', () => {
     expect(pane.element.dataset.layout).toBe('default');
     expect(noticeLines(pane)).toHaveLength(2);
     for (const target of [1, 2]) {
-      expect(deps.mountBox).toHaveBeenCalledWith(
+      expect(deps.placeBox).toHaveBeenCalledWith(
         expect.anything(),
         { field: 'comment', item: { kind: 'notice', index: target } },
         expect.any(String),
@@ -652,7 +667,7 @@ describe('notices pane', () => {
     expect(asFake(pane.element).children.at(-1)).toBe(lines[1]);
     const title = findAll(lines[1], 'notice-line-title')[0];
     expect([title?.textContent, title?.title]).toEqual(['Also', 'Also']);
-    expect(deps.mountBox).toHaveBeenCalledWith(
+    expect(deps.placeBox).toHaveBeenCalledWith(
       expect.anything(),
       { field: 'comment', item: { kind: 'notice', index: 2 } },
       expect.any(String),
@@ -748,5 +763,87 @@ describe('notices pane', () => {
     findAll(noticeLines(pane)[1], 'ui-collapsible-head')[0].click();
 
     expect(run.mock.calls).toEqual([['forms.toggleNoticeAt', 2]]);
+  });
+});
+
+type ChromePart = 'railHead' | 'railFoot' | 'pager';
+
+// `part` drawn with `layout` into a fresh parent over openRound's round, with
+// its deps; the rail head places `saveStatus`.
+function drawChrome(
+  part: ChromePart,
+  layout: Layout,
+  saveStatus: FakeElement = new FakeElement('span'),
+) {
+  const round = openRound().forms[0];
+  const { deps, anchor, run } = fakePaneDeps(createFormsContributions());
+  const parent = asHtml(new FakeElement('div'));
+  const pick: LayoutPick = { name: 'test', layout };
+  const drawn =
+    part === 'railHead'
+      ? drawRailHead(
+          pick,
+          parent,
+          railHeadInput(round),
+          asHtml(saveStatus),
+          deps,
+        )
+      : part === 'railFoot'
+        ? drawRailFoot(pick, parent, railFootInput(round), deps)
+        : drawPager(pick, parent, pagerInput(round), deps);
+  return { drawn, anchor, run };
+}
+
+describe('chrome strips', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      part: 'railHead' as const,
+      commands: ['forms.prevUnanswered', 'forms.nextUnanswered'],
+    },
+    { part: 'railFoot' as const, commands: ['forms.openReview'] },
+    { part: 'pager' as const, commands: ['forms.prevItem', 'forms.nextItem'] },
+  ])(
+    'formsChrome_DefaultLayout_AnchorsItsKeysInTheFormsScope $part',
+    ({ part, commands }) => {
+      const { anchor } = drawChrome(part, defaultLayout);
+
+      expect(
+        anchor.mock.calls.map(([, command, options]) => [command, options]),
+      ).toEqual(commands.map((command) => [command, { scope: 'forms.forms' }]));
+    },
+  );
+
+  it('railFoot_ReviewClick_RunsOpenReview', () => {
+    const { drawn, run } = drawChrome('railFoot', defaultLayout);
+
+    findAll(asFake(drawn.built.element), 'ui-button')[0].click();
+
+    expect(run.mock.calls.map(([command]) => command)).toEqual([
+      'forms.openReview',
+    ]);
+  });
+
+  it('railHead_LeavesOutSaveStatus_PlacesItAtItsRootsEnd', () => {
+    const saveStatus = new FakeElement('span');
+    const { drawn } = drawChrome(
+      'railHead',
+      {
+        railHead(parent, input, kit) {
+          const head = kit.el(parent, 'header', 'mine');
+          kit.el(head, 'span', 'mine-text', input.text);
+          return { element: head };
+        },
+      },
+      saveStatus,
+    );
+
+    const root = asFake(drawn.built.element);
+    expect(root.classList.contains('mine')).toBe(true);
+    expect(root.children[root.children.length - 1]).toBe(saveStatus);
   });
 });
