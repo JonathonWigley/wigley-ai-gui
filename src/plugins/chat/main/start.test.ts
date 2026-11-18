@@ -740,7 +740,7 @@ describe('chat main part', () => {
     { method: 'clear', target: 'row-9' },
     { method: 'clear', target: 'row-2' },
   ] as const)(
-    'exports_$method_SessionChatDoesNotHold_Rejects ($target)',
+    'exports_SessionChatDoesNotHold_Rejects ($method, $target)',
     async ({ method, target }) => {
       const chat = startChatPart();
       chat.invoke('start', {
@@ -1417,6 +1417,30 @@ describe('chat main part', () => {
     await closing;
 
     expect(chat.ended).toEqual([]);
+  });
+
+  it.each<{
+    call: string;
+    run: (exports: ChatMainExports) => Promise<void>;
+  }>([
+    { call: 'close', run: (exports) => exports.close('row-1', 'user') },
+    {
+      call: 'closeSessionsIn',
+      run: (exports) => exports.closeSessionsIn('/p'),
+    },
+  ])('a $call made after dispose rejects', async ({ call, run }) => {
+    const chat = startChatPart();
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+
+    await chat.part.dispose?.('end');
+
+    await expect(run(chat.exports)).rejects.toThrow(
+      `chat is stopped; ${call} refused`,
+    );
   });
 
   it('sessionsTitleChanged_HeldRow_Saves', async () => {

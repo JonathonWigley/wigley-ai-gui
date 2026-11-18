@@ -540,8 +540,9 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       chat.recordOpenHostId(session),
     );
     // closeSessionsIn's and close's waits, by session id: each resolves when its
-    // session ends or chat stops.
+    // session ends or chat stops; once stopped, both calls are refused.
     const endWaits = new Map<string, () => void>();
+    let isDisposed = false;
     api.events.on('sessions.ended', ({ sessionId }) => {
       chat.sessionEnded(sessionId);
       toolCallers.forget(sessionId);
@@ -648,6 +649,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         throw new Error(`chat holds no session ${sessionId}`);
       }
     };
+    const requireRunning = (call: string) => {
+      if (isDisposed) {
+        throw new Error(`chat is stopped; ${call} refused`);
+      }
+    };
     const senderName = (sessionId: string) => {
       const titles = sessions.titles(sessionId);
       return frameSenderName(
@@ -691,6 +697,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         await chat.hostSessionIdSettled(sessionId);
       },
       closeSessionsIn: async (projectDir) => {
+        requireRunning('closeSessionsIn');
         const closing = chat
           .sessions()
           .filter((held) =>
@@ -707,6 +714,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         await Promise.all(ended);
       },
       close: async (sessionId, reason) => {
+        requireRunning('close');
         requireHeld(sessionId);
         const ended = new Promise<void>((resolve) =>
           endWaits.set(sessionId, resolve),
@@ -768,6 +776,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       },
       exports,
       dispose: (stop) => {
+        isDisposed = true;
         if (stop === 'restart') {
           chat.keepRows();
         }
