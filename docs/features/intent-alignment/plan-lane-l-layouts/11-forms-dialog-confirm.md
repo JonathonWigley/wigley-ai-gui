@@ -1,6 +1,6 @@
 # 11 — Forms dialog frame and cancel confirm
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07, 10
 Plan: [plan.md](plan.md)
@@ -141,3 +141,5 @@ Commit: one commit for the group, pathspecs `src/plugins/forms` `src/shared/page
 Files grep lists, `AGENTS.md`, `docs/features/followups.md`, `docs/features/intent-alignment/master-plan.md`.
 
 ## Proof
+
+Commit 1dc26df2e · proof: diff read (Produces present: layout-dialog.ts draws, dialogFrame/confirmBody in layout.d.ts and default, drawFrame required, code frame deleted) + wave 5 compile (typecheck, lint clean after oxfmt) · concerns: formatting fixed by oxfmt; withUser<Layout> default widening unchecked until the test gate; followups bullet already gone before this run, only the master-plan tick applied

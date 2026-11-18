@@ -284,7 +284,7 @@ every part its contract adds.
 - [x] [Primer, practice and the audio picker keep their boxes](10-boxes-kept-primer-practice-audio-picker.md) — after 06, 08, 09
 
 ### Wave 5 — gate: Lane E's forms chain (§ Gate)
-- [ ] [Forms dialog frame and cancel confirm](11-forms-dialog-confirm.md) — after 07, 10
+- [x] [Forms dialog frame and cancel confirm](11-forms-dialog-confirm.md) — after 07, 10
 
 ### Wave 6
 - [ ] [Forms column chrome](12-forms-chrome.md) — after 11
@@ -313,7 +313,9 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 08 · standard · 7e3bbdbec · diff read of the six rows + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: self-test steps: backlog activate has no fixture with a started chunk (Enter is a vim key, no anchor needed); docs actions mapped to existing groups by name, cursor-on-leaf at load unchecked; notes, sessions, settings, chat use existing steps; chat .chat-picker-key CSS now matches the wrapper span, not the hint; backlog openInDocs keeps label docs; out-of-Files edits: docs-view.ts (anchor arg), sessions-view.ts (anchor arg), settings start.ts (anchor dep), chat layout.test.ts (cursorEnd fake); settings LeaderMenuView gained dispose() and row-prompt exports samePromptActions
 - 09 · hard · 6cab7ba59 · diff read + wave 3 compile (typecheck clean; lint clean after oxfmt) · concerns: row pair keeps class primer-column-key; cancel prompt anchors are not disposed by view.dispose() (outside the task); keys-fake empty asserted only for strip slots
 - 10 · hard · ca910ef9e · Diff read: primer appendField and audio-picker appendNotesField place/release through EditorBoxes (Pick 'place'|'release'); practice textBoxSlot places with placedFor/boxTabKey, destroying on a changed key. Wave 4 typecheck clean; lint clean after oxfmt (ff9075cae). Tests written in primer-view, picker-kit, picker-view, practice start tests; run at the test gate. · concerns: Practice problem-change test drives customCases (opening a problem resets the problem tab to Description, so Notes cannot stay shown); primer and practice layout.d.ts still say 'mounts' (lines 65/189, 29) outside Files, for task 14's doc pass; after addItem the add-item box shows '' only on the next card redraw (card key unchanged), as before — check in task 15 live run; followups hot-reload item rewritten (text's start; fix now names place/release).
+- 11 · hard · 1dc26df2e · diff read (Produces present: layout-dialog.ts draws, dialogFrame/confirmBody in layout.d.ts and default, drawFrame required, code frame deleted) + wave 5 compile (typecheck, lint clean after oxfmt) · concerns: formatting fixed by oxfmt; withUser<Layout> default widening unchecked until the test gate; followups bullet already gone before this run, only the master-plan tick applied
 ### Contract changes
+- 11 layout-resolver LayoutPart: 'dialogFrame' | 'confirmBody' string members → { dialog: LayoutDialogPart } variant; pickLayout takes { dialog: 'dialogFrame' } · consumers: forms-view only
 ### Rulings
 - 01: the ToastTone equality test lives in src/renderer/shell/toast-tone.test-d.ts, not layouts/layout.test-d.ts — the layer check bars layouts from importing src/contracts · group 01
 - 07 keys: the default dialogFrame draws help's Close button (keys.closeHelp + keyHint closeHelp); mountHelpView no longer takes close/closeHint · group 07
@@ -321,6 +323,10 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 08 docs/sessions/settings: TreeViewDeps.anchor, mountSidebarView's anchor and SettingsViewDeps.anchor removed with their callers' arguments, per the task's unused-parameter rule · group 08
 - 08 settings: SettingsView has no dispose, so the cursor prompt and Leader prompts dispose with disposeEntries on each redraw · group 08
 - Task 15 stays open at the Lane E gate: Block A walked and recorded in the Test gate log; Block B (tasks 11–13) and the dialog-look rerun after task 11 run when the forms waves land.
+- Forms gate opened 2026-11-18 (Lane E's three boxes ticked); Waves 5+ run in worktree lane-l-forms from main c4cbc082a. Preconditions: scheduling is a new createConfirmPrompt caller and EditorBoxes owner, already on drawFrame and place/release, so tasks 11 and 13 gain no rows.
+- 11: LayoutPart gains a third variant { dialog: LayoutDialogPart } beside Lane E's { card } | { pane }; PANE_READS becomes PART_READS; isSamePick exported · group 11 · group 11
+- 11: AGENTS.md forms-layout first sentence follows Lane E's wording with the dialog clause appended; layouts design.md forms Adopters row names the dialog parts (outside Files, made untrue by the change) · group 11 · group 11
+- 11: setLayouts redraws the cancel prompt before handing shown to the round views · group 11 · group 11
 ### Review rounds
 - Round 1 fixes 6ed1fba05..6a18f4615: Medium — behaviour changes in shared EditorBoxes (setText, editorOf, keepFocusedBox caret, place scrollTop) and the layout-loader restyled filter; re-review correctness only.
 - Re-review 1 (correctness): all 29 findings closed; 3 Minor style findings lead-applied at review step 7 and closed by commit and compile; no new bug. #30 to step 7 as follow-up.
