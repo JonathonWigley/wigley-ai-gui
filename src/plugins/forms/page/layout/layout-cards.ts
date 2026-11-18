@@ -14,6 +14,7 @@ import {
   type AnswerableItem,
   isAnswerable,
   kindItems,
+  requireKind,
   type RoundItem,
   type RoundState,
   type TextTarget,
@@ -27,7 +28,6 @@ import type {
 } from '../kinds/item-format';
 import { roundInfo } from '../kinds/card-parts';
 import { itemLabel } from '../kinds/formats';
-import { requireKind } from '../view-model';
 import { type CardKit, createCardKit, createKindKit } from './card-kit';
 import {
   type CardBuilder,
@@ -153,7 +153,7 @@ function buildCard(
   position: number,
   deps: CardDeps,
 ): BuiltCard {
-  const kind = requireKind(round, item);
+  const kind = requireKind(round.kinds, item);
   const kindItem = kindItems(round.round, item.kind)[item.index - 1];
   const kindInput = () =>
     kind.cardInput.input(kindItem, item.index, round.round);

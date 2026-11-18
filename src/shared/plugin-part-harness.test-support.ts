@@ -23,6 +23,7 @@ import type {
   FenceContribution,
   MarkdownRenderer,
 } from '../contracts/markdown';
+import { blockNameProblem } from '../contracts/markdown';
 import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
 import type { OuterPanes } from '../contracts/panes';
@@ -1393,6 +1394,10 @@ function fakeMarkdown(
       );
     },
     addBlock(block) {
+      const problem = blockNameProblem(block.name);
+      if (problem !== null) {
+        throw new Error(problem);
+      }
       if (world.blocks.some((live) => live.name === block.name)) {
         throw new Error(`block ${block.name} is already registered`);
       }

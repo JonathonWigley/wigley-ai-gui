@@ -262,6 +262,29 @@ describe('roundType', () => {
       text: null,
     },
     {
+      case: 'a call path',
+      error: new RoundError({ path: { at: 'call' }, problem: 'needs items.' }),
+      text: 'ask_round needs items.',
+    },
+    {
+      case: 'a field path',
+      error: new RoundError({
+        path: { at: 'field', field: 'layout' },
+        problem: 'names no folder.',
+      }),
+      text: "ask_round's names no folder.",
+    },
+    {
+      case: 'a plain object with a non-string detail',
+      error: {
+        name: 'RoundError',
+        path: { at: 'call' },
+        problem: 'x.',
+        detail: 7,
+      },
+      text: null,
+    },
+    {
       case: 'another error',
       error: new Error('needs a title.'),
       text: null,

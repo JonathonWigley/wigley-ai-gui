@@ -5,7 +5,8 @@ import { BUILT_IN_KIND_SPECS } from '../../item-kinds';
 
 export interface KindRegistry {
   // Throws, registering nothing, on a kind that breaks a registration rule
-  // or when an `onChanged` listener throws; the handle's first `dispose` removes the kind, and a second does nothing.
+  // or when an `onChanged` listener throws; the handle's first `dispose`
+  // removes the kind, and a second does nothing.
   register(kind: MainItemKind): Disposable;
   // The registered kinds in registration order.
   kinds(): readonly MainItemKind[];

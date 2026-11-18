@@ -17,6 +17,7 @@ import {
   isAnswerable,
   isNoticesStop,
   kindItems,
+  requireKind,
   type RoundItem,
   type RoundState,
   sameRailItem,
@@ -78,9 +79,9 @@ function answerableKindOf(
   round: RoundState,
   item: RoundItem,
 ): AnswerableKindOf {
-  const kind = round.kinds.get(item.kind);
-  const pick = kind?.reduce.pick;
-  if (kind === undefined || pick === undefined) {
+  const kind = requireKind(round.kinds, item);
+  const pick = kind.reduce.pick;
+  if (pick === undefined) {
     throw new Error(`round ${round.formId}: ${item.kind} takes no answer`);
   }
   return { kind, pick };

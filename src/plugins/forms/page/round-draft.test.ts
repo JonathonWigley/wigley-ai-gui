@@ -240,37 +240,118 @@ describe('restoring a draft', () => {
     expect(questionAnswers(round)).toEqual([untouched, untouched]);
   });
 
-  it("logs a plugin kind's decode of the wrong count and starts its draft empty", () => {
+  // A poll kind whose decode gives no answers for saved entries, and with
+  // `always` for an empty draft too.
+  function shortPoll(always: boolean) {
     const base = pollPageKind('poll');
-    const short = {
+    return {
       ...base,
       restore: {
         ...base.restore,
         decode: (
           polls: Parameters<typeof base.restore.decode>[0],
           entries: readonly unknown[],
-        ) => (entries.length > 0 ? [] : base.restore.decode(polls, entries)),
+        ) =>
+          always || entries.length > 0
+            ? []
+            : base.restore.decode(polls, entries),
       },
     };
-    const lines: string[] = [];
-    const forms = formsWith([short], (line) => lines.push(line));
+  }
+  const savedPoll = {
+    ...draft({}),
+    poll_answers: [entry(1, { choice: 2 })],
+  };
 
-    const round = active(
+  // A round holding an answered poll, with the poll kind changed to `short`
+  // by `change` before the kinds are rederived.
+  function rederived(
+    change: (
+      kinds: ReturnType<typeof createPageKinds>,
+      first: { dispose(): void },
+      rederive: () => void,
+    ) => void,
+    lines: string[],
+  ) {
+    const kinds = createPageKinds();
+    for (const kind of BUILT_IN_PAGE_KINDS) {
+      kinds.register(kind);
+    }
+    const first = kinds.register(pollPageKind('poll'));
+    const forms = createFormsState(
+      () => kinds.table(),
+      (line) => lines.push(line),
+    );
+    let state = forms.initialState(
+      [presented('r1', POLL_PARTS, savedPoll)],
+      'r1-session',
+    );
+    change(kinds, first, () => {
+      state = forms.apply(state, {
+        type: 'kindsChanged',
+        kinds: kinds.table(),
+      });
+    });
+    return active(state);
+  }
+
+  it.each([
+    {
+      site: 'restoring the draft',
+      round: (lines: string[]) =>
+        active(
+          formsWith([shortPoll(false)], (line) =>
+            lines.push(line),
+          ).initialState(
+            [presented('r1', POLL_PARTS, savedPoll)],
+            'r1-session',
+          ),
+        ),
+    },
+    {
+      site: 'replacing the kind under its id',
+      round: (lines: string[]) =>
+        rederived((kinds, first, rederive) => {
+          first.dispose();
+          kinds.register(shortPoll(false));
+          rederive();
+        }, lines),
+    },
+    {
+      site: 'a kind returning to its held entries',
+      round: (lines: string[]) =>
+        rederived((kinds, first, rederive) => {
+          first.dispose();
+          rederive();
+          kinds.register(shortPoll(false));
+          rederive();
+        }, lines),
+    },
+  ])(
+    "logs a plugin kind's decode of the wrong count and starts its draft empty: $site",
+    ({ round }) => {
+      const lines: string[] = [];
+
+      const after = round(lines);
+
+      expect(after.itemAnswers.poll).toEqual([untouched]);
+      expect(lines).toEqual([
+        'round r1: page kind poll decoded 0 answers where its items need 1; its draft starts empty',
+      ]);
+    },
+  );
+
+  it('throws for a plugin kind whose empty draft decodes the wrong count too', () => {
+    const forms = formsWith([shortPoll(true)]);
+
+    expect(() =>
       forms.initialState(
-        [
-          presented('r1', POLL_PARTS, {
-            ...draft({}),
-            poll_answers: [entry(1, { choice: 2 })],
-          }),
-        ],
+        [presented('r1', POLL_PARTS, savedPoll)],
         'r1-session',
       ),
+    ).toThrow(
+      'page kind poll decodes no entries to 0 answers where its items need 1',
     );
-
-    expect(round.itemAnswers.poll).toEqual([untouched]);
-    expect(lines).toEqual([
-      'round r1: page kind poll decoded 0 answers where its items need 1; its draft starts empty',
-    ]);
   });
 
   it('starts saved', () => {

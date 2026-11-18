@@ -24,6 +24,16 @@ export interface MarkdownRenderer {
   addBlock(block: BlockContribution): Disposable;
 }
 
+const BLOCK_NAME = /^[a-z][a-z0-9-]*$/;
+
+// Why `name` cannot name a block, or null: the rule `addBlock` throws on, kept
+// here so every `MarkdownRenderer` and its test double refuse the same names.
+export function blockNameProblem(name: string): string | null {
+  return BLOCK_NAME.test(name)
+    ? null
+    : `block name "${name}" must match [a-z][a-z0-9-]*`;
+}
+
 // A `:::name header` block. `render` returns the block's HTML, which the
 // renderer trusts; a `render` that throws draws the block's opener and body as
 // escaped text, one paragraph per line.

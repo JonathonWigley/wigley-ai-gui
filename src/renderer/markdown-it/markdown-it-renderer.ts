@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import type { CodeHighlighter } from '../../contracts/highlight';
+import { blockNameProblem } from '../../contracts/markdown';
 import type {
   BlockContribution,
   BlockHelpers,
@@ -39,7 +40,6 @@ interface BlockRequest {
 }
 
 const BLOCK_OPENER = /^:::([a-z][a-z0-9-]*)(?:\s+(.*))?$/;
-const BLOCK_NAME = /^[a-z][a-z0-9-]*$/;
 const CLOSER = ':::';
 // A request's marker is its index between two of these. markdown-it's
 // normalize step turns every NUL in the source into U+FFFD, so no source text
@@ -110,8 +110,9 @@ function addFence(fences: Fences, fence: FenceContribution) {
 // Its Disposable removes `block` only while it is still the one registered.
 function addBlock(blocks: Blocks, block: BlockContribution) {
   const { name } = block;
-  if (!BLOCK_NAME.test(name)) {
-    throw new Error(`block name "${name}" must match [a-z][a-z0-9-]*`);
+  const problem = blockNameProblem(name);
+  if (problem !== null) {
+    throw new Error(problem);
   }
   if (blocks.has(name)) {
     throw new Error(`block ${name} is already registered`);

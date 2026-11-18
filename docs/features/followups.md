@@ -411,6 +411,32 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   `picksEqual` over the whole round, and redraw each changed part alone in its place (task 13 of the Lane L plan,
   `changedPicks`). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
   doc pane redraws its frame only after the editor closes.
+- **A finding origin registered only in main draws with the `caused` actions** — *needs a feature plan*: the page draws
+  an origin it has no registration for with the `caused` card's fields and actions (`drawnOriginSpec`,
+  `src/plugins/forms/page/kinds/finding/verdict.ts:36-55`). Main checks the user's pick against its own spec for that
+  origin (`findingResult`, `src/plugins/forms/main/kinds/finding/finding-format.ts:686`), so a pick that main's spec
+  lacks comes back untouched. Option: send the origin's action words with the round, so the page draws main's
+  actions.
+- **A broken plugin kind decode blocks its round** — *agent-ready*: `decodeAnswers`
+  (`src/plugins/forms/page/round-draft.ts:60-81`) calls a plugin kind's `restore.decode` with no guard. A decode that
+  throws propagates out of `restoreRound` into the reducer, and one that returns a non-array fails on `.length` as a
+  bare TypeError. Either keeps the round from opening. Catch the failure, log it with the kind id, and start that
+  kind's draft empty, as the wrong-count path does.
+- **The proof description words every proof-requiring origin as the Nit's** — *agent-ready*:
+  `src/plugins/forms/main/kinds/finding/finding-format.ts:144` says the proof is "why it cannot happen" for every
+  origin whose spec requires proof. A plugin origin with another reading of proof gets the Nit's wording. Take the
+  sentence from the spec, as the proof titles already are.
+- **`ask_round` still names three item kinds** — *agent-ready*: its description says "question, finding or notice, and
+  may carry any mix of the three" (`src/plugins/forms/main/tool-definitions.ts:53`), also when plugin kinds are
+  registered. Build that sentence from the registered kinds.
+- **`defineEx` leaves a throwing stub and a held prefix after `dispose`, and its shadow check depends on start
+  order** — *needs a feature plan*: a disposed definition leaves a stub in vim's tables, and its prefix stays there,
+  since vim has no call to remove an ex command (`defineHostEx`, `src/renderer/codemirror-vim/codemirror-vim-host.ts:164-189`).
+  The stub throws, so `:name` after the plugin stops raises an uncaught renderer error. The shadow check reads only
+  the live `defined` map (`exDefinitionProblem`, `src/renderer/codemirror-vim/ex-definitions.ts:111-149`, called from
+  `definePluginEx` at `codemirror-vim-host.ts:191-210`), so whether a reloading plugin's definition is refused depends
+  on which definitions are live when it starts. Options: have the stub show vim's own message without throwing; keep a
+  per-name record of every name and prefix ever defined, and check against that.
 
 ## Features
 
@@ -948,3 +974,26 @@ because the earlier items rewrite many of these tests anyway.
   also leaves one detached fake record in the fake's records (`record.detached`,
   `src/shared/fake-agent-harness.ts:2063`). Add an end API to `fake-agent-harness.ts` for the self-test to call, and
   host the fake's processes on the session host so the return attaches.
+- **A reload restores the wrong rail item when a user page part registers a kind** — *needs a feature plan*: the saved
+  rail position (`focus`) indexes the rail as it stood before the user's page parts register their kinds, and the
+  rail grows with each kind, so the restored position can land on another item (`restorePlace` and `changeKinds`,
+  `src/plugins/forms/page/form-state.ts:171-198`). Save the focused item's identity (kind and index) with the
+  position, and restore by identity after the kinds register.
+- **The Forms tools contribution is not undone when a later start step throws** — *agent-ready*: `contributeFormsTools`
+  runs at `src/plugins/forms/main/start.ts:335`, and the steps after it up to the return (`:369`) can throw. The tools
+  stay contributed, with no part to stop them. Pre-existing: it predates Lane E. Wrap the later steps so a throw
+  disposes the contribution, or move the contribution to the end of start.
+- **`ex-definitions.test.ts` imports an undeclared package** — *needs the user's yes*: the test imports
+  `@replit/codemirror-vim-core?raw` (`src/renderer/codemirror-vim/ex-definitions.test.ts:1`), and `package.json`
+  does not declare it. It resolves only as a hoisted dependency of `@replit/codemirror-vim`, so a change to that
+  package's layout breaks the test. Declaring it is a package change, which needs the user's yes.
+- **A block whose `render` throws loses its line marks** — *agent-ready*: the fallback in
+  `src/renderer/markdown-it/markdown-it-renderer.ts` (`pushBlockAsText`, `:565-579`, called at `:347-349`) draws one
+  paragraph per source line with no `data-md-lines`, while a block that renders carries its `map` marks. Text from a
+  broken block cannot be marked or picked by line. Give each fallback paragraph its source line range.
+- **Retro lists an older file's Nit `follow_up` header pick as an override** — *needs a feature plan*: in a round
+  saved before `action_label`, a Nit's `follow_up` header pick lists as `override · … | Follow-up`, though the forms
+  README says a Nit offers no `follow_up` (`wigley-ai-marketplace/plugins/wigley/scripts/forms/README.md:96`). The
+  test `test_a_nit_follow_up_header_pick_saved_before_action_label_lists_as_an_override`
+  (`wigley-ai-marketplace/plugins/wigley/scripts/retro/tests/test_answers.py:547`) pins that reading. Decide whether
+  the listing drops such a pick or keeps the Defect word, then change the test with it.

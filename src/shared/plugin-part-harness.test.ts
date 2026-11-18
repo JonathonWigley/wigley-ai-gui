@@ -673,6 +673,13 @@ describe('plugin part harness', () => {
       message: 'block sample is already registered',
     },
     {
+      member: 'markdown.addBlock',
+      misuse({ services: { markdown } }) {
+        markdown.addBlock({ ...sampleBlock, name: 'Bad' });
+      },
+      message: 'block name "Bad" must match [a-z][a-z0-9-]*',
+    },
+    {
       member: 'ModeHandle.toggleSideBar',
       misuse({ modes }) {
         const gone = modes.add({ ...browseMode, id: 'gone' });

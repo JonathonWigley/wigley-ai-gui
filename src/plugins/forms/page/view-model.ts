@@ -11,7 +11,6 @@ import type {
   FindingAction,
   FormsScreen,
   ItemKind,
-  PageKind,
 } from '../contract';
 import { activeForm, formById } from '../../../shared/page/session-forms';
 import type { FormsAction, FormsState } from './form-state';
@@ -34,7 +33,7 @@ import {
   type RailItem,
   railItems,
   railPosition,
-  type RoundItem,
+  requireKind,
   type RoundState,
 } from './round-model';
 import { itemLabel } from './kinds/formats';
@@ -75,7 +74,7 @@ export interface ReviewRow {
 // The answerable kinds' items, as answerableItems orders them.
 export function reviewRows(round: RoundState): ReviewRow[] {
   return answerableItems(round).map((item, row): ReviewRow => {
-    const kind = requireKind(round, item);
+    const kind = requireKind(round.kinds, item);
     const pick = kind.reduce.pick;
     if (pick === undefined) {
       throw new Error(`page kind ${item.kind} takes no answer`);
@@ -113,16 +112,6 @@ export function reviewRows(round: RoundState): ReviewRow[] {
       isCursor: row === round.reviewRow,
     };
   });
-}
-
-// The item's kind as the round was derived with it; throws for a kind the
-// round has no registration for.
-export function requireKind(round: RoundState, item: RoundItem): PageKind {
-  const kind = round.kinds.get(item.kind);
-  if (kind === undefined) {
-    throw new Error(`round ${round.formId} has no page kind ${item.kind}`);
-  }
-  return kind;
 }
 
 // The dot a rail entry shows for its item's status: answered is success, an
@@ -187,7 +176,8 @@ export function pagerText(round: RoundState): string {
 // (`N`) for the notices stop.
 export function railEntryLabel(round: RoundState, item: RailItem): string {
   return isNoticesStop(item)
-    ? requireKind(round, { kind: 'notice', index: 1 }).cardInput.railPrefix
+    ? requireKind(round.kinds, { kind: 'notice', index: 1 }).cardInput
+        .railPrefix
     : itemLabel(round.kinds, item);
 }
 
@@ -198,7 +188,7 @@ export function railEntryTitle(round: RoundState, item: RailItem): string {
     return `Notices · ${kindItems(round.round, 'notice').length}`;
   }
   const kindItem = kindItems(round.round, item.kind)[item.index - 1];
-  return requireKind(round, item).cardInput.title(kindItem);
+  return requireKind(round.kinds, item).cardInput.title(kindItem);
 }
 
 // The rail header's save text: `Sending…` while the round's finish is with

@@ -20,8 +20,9 @@ export interface PageKindTable {
 
 // `register` throws, registering nothing, on a kind `requireRegistrable`
 // rejects or when an `onChanged` listener throws; its `Disposable` removes
-// the kind and notifies once, a second dispose doing nothing. `table()` is the same object until the next change.
-// `onChanged` hears each register and each removal.
+// the kind and notifies once, a second dispose doing nothing. `table()` is the
+// same object until the next change. `onChanged` hears each register and each
+// removal.
 export interface PageKinds {
   register(kind: PageKind): Disposable;
   table(): PageKindTable;

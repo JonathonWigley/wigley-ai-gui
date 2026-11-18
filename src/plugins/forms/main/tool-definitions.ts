@@ -40,7 +40,7 @@ function askRoundDescription(): string {
     "other open decision. Pass 'notices' for anything already fixed, " +
     'dispatched, decided by you alone, or otherwise settled before this round ' +
     "opened: each one draws as one line on the round's notices page, after " +
-    "every finding and question, badged 'Applied', 'Dispatched' or 'Decided', " +
+    "every other item, badged 'Applied', 'Dispatched' or 'Decided', " +
     'and opens to its context and one comment box — no choices and nothing to ' +
     'decide. Never bundle a decided ' +
     'fix into a question or a finding. A round and each item may name a ' +

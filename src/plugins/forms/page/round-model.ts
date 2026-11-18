@@ -71,6 +71,15 @@ export type TextTarget = { field: 'note' } | { field: string; item: RoundItem };
 
 export const NOTICE_KIND: ItemKind = 'notice';
 
+// The item's registered kind; throws for a kind `kinds` lacks.
+export function requireKind(kinds: PageKindTable, item: RoundItem): PageKind {
+  const kind = kinds.get(item.kind);
+  if (kind === undefined) {
+    throw new Error(`no page kind ${item.kind}`);
+  }
+  return kind;
+}
+
 // The kind's items in the round, in order; none for a kind the round lacks.
 export function kindItems(round: Round, kind: ItemKind): readonly unknown[] {
   return round.items[kind] ?? [];

@@ -44,6 +44,10 @@ function draftEntries(
   return Array.isArray(entries) ? entries : [];
 }
 
+function answerCount(n: number): string {
+  return `${n} ${n === 1 ? 'answer' : 'answers'}`;
+}
+
 // The kind's answers to round `formId`'s `items` as its `restore.decode` reads
 // them from `entries`. A decode that gives a count other than the items' is
 // logged, and the kind's empty draft takes its place.
@@ -59,12 +63,12 @@ function decodeAnswers(
     return answers;
   }
   log(
-    `round ${formId}: page kind ${kind.spec.id} decoded ${answers.length} answers where its items need ${items.length}; its draft starts empty`,
+    `round ${formId}: page kind ${kind.spec.id} decoded ${answerCount(answers.length)} where its items need ${items.length}; its draft starts empty`,
   );
   const empty = kind.restore.decode(items, []);
   if (empty.length !== items.length) {
     throw new Error(
-      `page kind ${kind.spec.id} decodes no entries to ${empty.length} answers where its items need ${items.length}`,
+      `page kind ${kind.spec.id} decodes no entries to ${answerCount(empty.length)} where its items need ${items.length}`,
     );
   }
   return empty;

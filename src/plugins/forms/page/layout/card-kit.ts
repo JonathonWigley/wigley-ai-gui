@@ -36,11 +36,12 @@ import {
   kindAnswer,
   pickNumber,
 } from '../round-answers';
-import type {
-  AnswerableItem,
-  RoundItem,
-  RoundState,
-  TextTarget,
+import {
+  type AnswerableItem,
+  requireKind,
+  type RoundItem,
+  type RoundState,
+  type TextTarget,
 } from '../round-model';
 import {
   appendBoxKeys,
@@ -57,7 +58,6 @@ import type {
   CardInputs,
   CardKits,
 } from '../kinds/item-format';
-import { requireKind } from '../view-model';
 import type { KeyHints } from '../../../../contracts/plugin';
 
 type ReasonsMode = Parameters<FindingKit['choiceGroups']>[1];
@@ -308,7 +308,7 @@ function cardContext(
   position: number,
   deps: CardDeps,
 ): CardContext {
-  const pageKind = requireKind(round, item);
+  const pageKind = requireKind(round.kinds, item);
   const mount = createMarkdownMount(deps.markdown, deps.log);
   deps.recordMount(mount);
   return {

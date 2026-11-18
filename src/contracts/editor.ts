@@ -219,10 +219,14 @@ export interface EditorHost {
   // Defines `:name` in every editor this host created or will create: vim
   // runs it when the typed name is a start of `name` no shorter than `prefix`,
   // and `handler` hears the editor it ran in. Throws on a name that is not
-  // letters only, on a name defined already (`write`, `quit`, `wq` and `xit`
-  // among them), on a prefix another definition holds, and on a name or
-  // prefix that would take one of vim's own commands. After the returned
-  // handle's `dispose`, `:name` reports an unknown command.
+  // letters only or starts `wigleybind`, on a prefix that is not a non-empty
+  // start of the name, on a name defined already (`write`, `quit`, `wq` and
+  // `xit` among them), on a name that is one of vim's commands or its short
+  // form, and on a prefix another live definition holds. It also throws on a
+  // prefix that vim would run another command for when typed alone, whether
+  // that command is vim's own or a live definition's (the host's included): a
+  // prefix that would take a typed form from it. After the returned handle's
+  // `dispose`, `:name` reports an unknown command.
   defineEx(name: string, prefix: string, handler: ExHandler): Disposable;
   // Replaces the keymap every editor follows, at once in every open editor and
   // in every editor created after. The caller has checked the keymap with

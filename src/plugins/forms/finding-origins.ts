@@ -70,7 +70,8 @@ export const FINDING_ORIGIN_SPECS: readonly FindingOriginSpec[] = [
 
 export interface FindingOriginRegistry {
   // Throws, registering nothing, on a spec that breaks a registration rule
-  // or when an `onChanged` listener throws; the handle's first `dispose` retires the spec, and a second does nothing.
+  // or when an `onChanged` listener throws; the handle's first `dispose`
+  // retires the spec, and a second does nothing.
   register(spec: FindingOriginSpec): Disposable;
   // The registered spec, else the retired one, else undefined: a round
   // parsed before its origin left keeps reading it.

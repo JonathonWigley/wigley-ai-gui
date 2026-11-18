@@ -14,9 +14,9 @@ import type { FormsSession } from '../contract';
 // Forms' tools contributed to every agent session, over one forms session per
 // agent session id. The first contribution is made at once, and a throw from
 // it propagates. `refresh` contributes `tools()` again, keeping every forms
-// session and its open round; a refresh whose `tools()` or contribution throws
-// logs it and contributes the last good list once more. `dispose` ends every forms
-// session, and a `refresh` after it does nothing.
+// session and its open round; a refresh whose `tools()` or contribution
+// throws logs it and contributes the last good list once more. `dispose` ends
+// every forms session, and a `refresh` after it does nothing.
 export function contributeFormsTools(deps: {
   sessions: Pick<SessionsMainExports, 'contributeTools'>;
   tools: () => ToolDefinition[];

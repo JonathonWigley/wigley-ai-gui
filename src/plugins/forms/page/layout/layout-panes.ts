@@ -50,6 +50,7 @@ import {
   kindItems,
   type RailItem,
   railItems,
+  requireKind,
   type RoundState,
   type TextTarget,
 } from '../round-model';
@@ -66,7 +67,6 @@ import {
   railDotStatus,
   railEntryLabel,
   railEntryTitle,
-  requireKind,
   type ReviewRow,
   reviewRows,
   reviewRowsChanged,
@@ -488,7 +488,7 @@ function drawReview(
       row,
       kind: item.kind,
       label: itemLabel(round.kinds, item),
-      title: requireKind(round, item).cardInput.title(
+      title: requireKind(round.kinds, item).cardInput.title(
         kindItems(round.round, item.kind)[item.index - 1],
       ),
     })),
