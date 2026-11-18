@@ -827,11 +827,9 @@ because the earlier items rewrite many of these tests anyway.
   Options: resolve a sentinel the page channel swallows once the caller's part has stopped, or wrap the page channel
   so a stopped part's invoke never settles, which would also close the whole task 24 Rule 1 class (no continuation
   runs after stop) at once.
-- **Docs draft restore reaches only some open paths** — *needs a feature plan*: `applyDraft`
-  (`src/plugins/docs/page/docs-view.ts:839`) runs from `openAndTell` (:888), the tree search's open (:687) and the
-  place restore (:1946). An open inside the doc view (a link, history, the recent list) skips it, so a restorable draft
-  drops as "not restored" once the user types. The saved place also holds one `edits` (`writePlace`, :832): editing
-  another doc while a draft is held drops the draft from the saved place, though it stays in memory.
+- **A docs saved place holds one doc's edits, so a held draft leaves it** — *needs a feature plan*: `writePlace`
+  (`src/plugins/docs/page/docs-view.ts:829`) writes `edits: doc.edits() ?? draft`. Editing another doc while a beaten
+  restore's draft is held saves only that doc's edits, so a reload then loses the draft, though it stays in memory.
 - **The pane tree's draw pass drops stale boxes in a plain loop** — *agent-ready*: in
   `src/shared/page/pane-tree/pane-tree-view.ts:304-310` a throwing `box.divider.dispose()` leaves that box in `boxes`
   and skips the rest, so the next pass disposes it again. Hold the stale boxes, delete them from the map, then run
@@ -848,3 +846,15 @@ because the earlier items rewrite many of these tests anyway.
   `writeQuit` (`src/plugins/practice/page/problem-workspace.ts:1066`); the audio-picker and primer main teardowns
   cannot make their first step (`service.detach()`) throw without a fake form service; and
   `src/plugins/scheduling/page/task-editor.ts` has no test file.
+- **A Chat tab whose build throws stays half-built and live** — *agent-ready*: `hold`
+  (`src/plugins/chat/page/chat-view.ts:546-547`) puts a tab in `tabs` only after `createTab` (:1289) returns. When a
+  step of `createTab` throws, the tab is not in `tabs`, so the view's `dispose` (:893-907, which tears down only what
+  `tabs` holds) never reaches it. That step can be `entries.rebuild` (:1418), `attach` (:1423),
+  `deps.editor.create` (:1425) or a later step. What it already built stays live:
+  - its side sections (`deps.sideSections.openTab`, :1377)
+  - its `rootSize` ResizeObserver (:1412)
+  - its entry list and composer surface
+  - from :1423 on, its mounted host
+  Options: `createTab` tears down what it built when a step throws and rethrows, or `hold` sets the tab in `tabs`
+  before building it, so `dispose` reaches a partly built tab (and `tearDownTab` then copes with null `box`/`host`).
+  Add a row where `rebuild` throws on arrival, then stop, and assert every registration was released.
