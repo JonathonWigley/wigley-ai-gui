@@ -301,6 +301,12 @@ Review base: 7c3eb9665
 - Nested tracked roots keep their touches when the outer root is read, restoring 06's /r/o/d.ts row (finding 10) — lead
 - The user's mirror posts are the user's own word and count as read for the user (finding 22) — lead
 - Follow-ups at close: a viewer resolve action (8); a cap or hash for long room file names (21); hook.py following cd and other git globals (26); a room rewrite when a claim expires (32); the learning-candidate pointer check_pointers fails on (40) — lead
+- Headless pick at re-review 1: a restored row not yet started counts as resting, so no wake starts it until the user runs it; wording fixed, follow-up for wakes that start restored rows — lead
+- Headless pick at re-review 1: the pre-existing short-option cluster misread in hook.py is fixed in cycle 2, beside the bare add -A fix in the same parser — lead
 ### Review rounds
 - Round 1 · implementation review of e23142c0e..0b2771d12 · six lanes (3 correctness, 3 plan-and-design) · NEEDS FIXES: 40 findings (9 Important, 30 Minor, 1 pre-existing), report scratchpad review-0b2771d12.md · lead-applied f8c1e3654 (36, 37, 38, 40's note in 12) · five fix workers dispatched (store, main-a, main-b, page, relay)
+- Round 1 fixes 23178d271: risk High (relay hello protocol, delivery wake rule, hook commit parsing across 41 files) — correctness re-review
+- Re-review cycle 1 of 23178d271: 2 Important (resting rule silences restored rows; bare git add -A under-reports below the top level), 4 Minor, 1 pre-existing (short-option clusters) — cycle 2 fixes
+- Round 2 fixes f48754c9f: risk Low (one hook parser rule with passing unittests, a type guard move, a test row, wording) — closes on commit and compile; tests at the gate
 ### Test gate
+- At 6b475ff27: vitest chatroom, sessions, chat, workflow, agent-forms, keymap, manifests, page — 159 files, 4395 tests pass after fixes in 6b475ff27 (page harness markdown fake; joined test advances the read window; first connected no longer double-refreshes); rebuilds_InOrder goes red with the per-room queue removed; tsc and lint clean; python chatroom 14 OK, forms 103 OK (3 Windows skipped); check_manifests and --against origin/main pass; check_pointers fails only on the expected learning-candidate line; claude plugin validate passes
