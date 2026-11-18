@@ -1487,7 +1487,7 @@ describe('the sessions list in the page part', () => {
     { case: 'the part is live', stopsFirst: false, refocused: true },
     { case: 'the part stopped first', stopsFirst: true, refocused: false },
   ])(
-    'listClose_CloseLands_RefocusesTheListOnlyWhileLive ($case)',
+    'a list close that lands refocuses the list only while the part runs ($case)',
     async ({ stopsFirst, refocused }) => {
       const answer = Promise.withResolvers<null>();
       const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {

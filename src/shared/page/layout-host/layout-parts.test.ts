@@ -114,7 +114,7 @@ describe('createLayoutParts', () => {
     ]);
   });
 
-  it('dispose_OneDrawThrows_TheRestStillDisposeAndTheErrorRethrows', () => {
+  it('dispose still disposes every other draw when one throws, then rethrows', () => {
     const undone: string[] = [];
     const { parts } = partsSetup(undone);
     const parent = asHtml(new FakeElement('div'));
