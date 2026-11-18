@@ -14,6 +14,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import {
   type FollowupDraft,
   type FollowupItem,
@@ -26,6 +27,7 @@ import {
   type DocsMainExports,
   docsMainKey,
   MACHINE_SOURCE_ID,
+  type SampleDocs,
   type SourceRead,
 } from '../../docs/contract';
 import { scopedAgentsMainKey } from '../../scoped-agents/contract';
@@ -60,6 +62,7 @@ import {
 } from './backlog-tools';
 import { createChunkStarter } from './chunk-start';
 import { createChunkStore, titlesByRepo } from './chunk-store';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import {
   type NoteEdit,
@@ -81,7 +84,11 @@ import { repoFolderOf } from './repo-folder';
 import { backlogRows } from './rows';
 import { hasBacklogFixture, writeBacklogFixture } from './selftest-fixture';
 import { backlogSelfTestScript } from './selftest-script';
-import { createStalenessReader } from './staleness';
+import {
+  createStalenessReader,
+  type StalenessDeps,
+  type StalenessReader,
+} from './staleness';
 
 type BacklogApi = MainApi<
   typeof backlogManifest,
@@ -376,6 +383,8 @@ function createBacklogMain(deps: BacklogDeps) {
   let watches: Disposable[] = [];
   // Counts loads, so only the newest load keeps its watches.
   let loads = 0;
+  // Once disposed, a load that lands closes its watches at once.
+  let isDisposed = false;
 
   function homeAt(homeRoot: string): BacklogHome {
     const home = last?.read.homes.find((candidate) =>
@@ -408,11 +417,12 @@ function createBacklogMain(deps: BacklogDeps) {
       ),
     );
     const next = fileWatches.filter((watch) => watch !== null);
-    const superseded = load !== loads ? next : watches;
+    const isKept = load === loads && !isDisposed;
+    const superseded = isKept ? watches : next;
     for (const watch of superseded) {
       watch.dispose();
     }
-    if (load === loads) {
+    if (isKept) {
       watches = next;
     }
   }
@@ -775,8 +785,28 @@ function createBacklogMain(deps: BacklogDeps) {
     lastLoaded,
     lastRead,
     fileNote,
+    // Closes the follow-up file watches.
+    dispose() {
+      isDisposed = true;
+      for (const watch of watches) {
+        watch.dispose();
+      }
+      watches = [];
+    },
   };
 }
+
+type BacklogMain = ReturnType<typeof createBacklogMain>;
+
+// What the page's channel reads from: the user's backlog, or a demo step's
+// sample.
+interface ServedBacklog {
+  backlog: BacklogMain;
+  staleness: StalenessReader;
+}
+
+const SAMPLE_CHUNKS_TEXT =
+  'The sample backlog keeps no chunks and starts no sessions.';
 
 // Writes the fixture repo into a self-test or drive run's home that has none
 // yet; a drive run's restart keeps the home, and its repo.
@@ -808,7 +838,9 @@ async function startFixture(
 // and gives it the `read_backlog_state` and `set_backlog_chunks` tools; a
 // drive run gets the `callTool` action. Outside a live run it writes the
 // self-test's fixture repo at start, before Docs' self-test counts the files
-// the index lists.
+// the index lists. While a demo step holds its sample, the channel's reads
+// serve the sample repo, its chunks are empty and its chunk edits, starts and
+// sweeps reject.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
@@ -819,7 +851,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     fixture.catch((error: unknown) =>
       services.log(`fixture not written: ${errorText(error)}`),
     );
-    const backlog = createBacklogMain({
+    const backlogDeps: BacklogDeps = {
       docs,
       git: services.git,
       files: services.files,
@@ -830,14 +862,69 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       emit: (event, data) => api.events.emit(event, data),
       homeDir: services.homeDir,
       repoFolders: () => api.settings().repoFolders,
-    });
-    const staleness = createStalenessReader({
+    };
+    const backlog = createBacklogMain(backlogDeps);
+    const stalenessDeps: StalenessDeps = {
       git: services.git,
       files: services.files,
       data: api.data,
       paths: services.paths,
       log: services.log,
       send: (entries) => channel.send('stalenessRead', { entries }),
+    };
+    const staleness = createStalenessReader(stalenessDeps);
+    const real: ServedBacklog = { backlog, staleness };
+    // A demo step's sample, which the channel serves while it is held; the
+    // exports, the tools and the assistant keep `real`.
+    let heldSample: ServedBacklog | null = null;
+    const served = () => heldSample ?? real;
+    const refuseWhileSample = () => {
+      if (heldSample !== null) {
+        throw new Error(SAMPLE_CHUNKS_TEXT);
+      }
+    };
+    // A second backlog over `sample` in place of the machine index, which
+    // emits no event, with staleness cached in memory only.
+    const holdSample = (sample: SampleDocs): Disposable => {
+      if (heldSample !== null) {
+        throw new Error('Backlog already serves a sample');
+      }
+      const sampleDocs: DocsMainExports = {
+        ...docs,
+        machineIndex: () => sample.load(),
+        rebuildMachineIndex: () => sample.load(),
+      };
+      const held: ServedBacklog = {
+        backlog: createBacklogMain({
+          ...backlogDeps,
+          docs: sampleDocs,
+          emit: () => undefined,
+        }),
+        staleness: createStalenessReader({
+          ...stalenessDeps,
+          data: createMemoryFiles(),
+        }),
+      };
+      heldSample = held;
+      channel.send('changed', { homeRoot: null });
+      return {
+        dispose() {
+          if (heldSample !== held) {
+            return;
+          }
+          heldSample = null;
+          held.backlog.dispose();
+          held.staleness.dispose();
+          channel.send('changed', { homeRoot: null });
+        },
+      };
+    };
+    registerDemoSteps(services, {
+      files: services.files,
+      processes: services.processes,
+      paths: services.paths,
+      addSampleDocs: (scratchDir) => docs.addSampleDocs(scratchDir),
+      holdSample,
     });
     const store = createChunkStore({
       data: api.data,
@@ -900,15 +987,22 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       tags: () => api.settings().tags,
       fileNote: backlog.fileNote,
     };
-    channel.handle('load', backlog.load);
-    channel.handle('rescan', backlog.rescan);
-    channel.handle('chunks', () => store.chunks());
+    channel.handle('load', () => served().backlog.load());
+    channel.handle('rescan', () => served().backlog.rescan());
+    channel.handle('chunks', async () =>
+      heldSample === null ? store.chunks() : [],
+    );
     channel.handle('editChunks', async (edit) => {
+      refuseWhileSample();
       await store.prune(await prunableTitles());
       return store.edit(edit);
     });
-    channel.handle('startChunks', (chunkIds) => starter.start(chunkIds));
+    channel.handle('startChunks', async (chunkIds) => {
+      refuseWhileSample();
+      return starter.start(chunkIds);
+    });
     channel.handle('sweep', async (repo) => {
+      refuseWhileSample();
       const read = await backlog.lastRead();
       const homes = read.homes.filter((home) => home.repo === repo);
       if (homes.length === 0) {
@@ -932,14 +1026,20 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
           ),
         );
     });
-    channel.handle('staleness', async () => staleness.read(await lastRows()));
+    channel.handle('staleness', async () => {
+      const current = served();
+      return current.staleness.read(
+        backlogRows(await current.backlog.lastRead()),
+      );
+    });
     channel.handle('commitsSince', async (key) => {
-      const rows = await lastRows();
+      const current = served();
+      const rows = backlogRows(await current.backlog.lastRead());
       const row = rows.find((candidate) => candidate.key === key);
       if (row === undefined) {
         throw new Error(`No Backlog row ${key.replaceAll('\n', ' — ')}`);
       }
-      return staleness.commitsSince(row);
+      return current.staleness.commitsSince(row);
     });
     api.events.on('docs.indexLoaded', ({ sourceId }) => {
       if (sourceId === MACHINE_SOURCE_ID) {

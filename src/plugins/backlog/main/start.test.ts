@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { Files } from '../../../contracts/files';
 import type { Git, GitCommit } from '../../../contracts/git';
 import {
   followupTitleProblem,
   parseFollowups,
 } from '../../../shared/followups/followup-file';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -65,6 +67,9 @@ const UI_TEXT = '# UI\n\n- **Button** — *agent-ready*: bigger button\n';
 
 // The session the harness's assistant holds.
 const ASSISTANT_ROW = 'row-1';
+
+// The demo's scratch folder.
+const SCRATCH = '/scratch';
 
 const BAD_TITLE_FOLLOWUPS_TEXT = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
 
@@ -217,8 +222,10 @@ function chunkOf(
 // plugin data folder; `pushSettings` replaces the settings and tells each
 // `onSettingsChanged` listener. `specs` holds each `addScopedAgent` spec, and
 // `asked` each of its agent's asks, which resolve `sess-a`; `contributed`
-// holds each `contributeTools` call's tool names. The page never opened
-// Backlog, and the run is no drive run.
+// holds each `contributeTools` call's tool names. `enterStep` enters the
+// Backlog demo step in SCRATCH, whose sample docs read `index.sample`, its
+// fixture's git runs all succeeding; `trash` spies on `Files.trash`. The page
+// never opened Backlog, and the run is no drive run.
 function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
@@ -244,8 +251,10 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const emitted: [string, unknown][] = [];
   const logged: string[] = [];
   const git = fakeGit();
-  const index = { read: indexRead(entries) };
+  const index = { read: indexRead(entries), sample: indexRead([]) };
   const data = createMemoryFiles();
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
+  const trash = vi.spyOn(listed, 'trash');
   let settings = SETTINGS;
   const settingsListeners: ((next: BacklogSettings) => void)[] = [];
   const held = new Set<string>();
@@ -283,6 +292,10 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   } as unknown as SessionsMainExports;
   const docs: DocsMainExports = {
     addSource: () => ({ dispose: () => undefined }),
+    addSampleDocs: async () => ({
+      load: async () => index.sample,
+      dispose: () => undefined,
+    }),
     machineIndex: async () => index.read,
     rebuildMachineIndex: async () => index.read,
     readDoc: async (path) => {
@@ -340,6 +353,14 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
         stat: (path: string) => listed.stat(path),
         list: (...args: Parameters<Files['list']>) => listed.list(...args),
         watch: (...args: Parameters<Files['watch']>) => listed.watch(...args),
+        makeFolder: (path: string) => listed.makeFolder(path),
+        write: (path: string, text: string) => listed.write(path, text),
+        rename: (from: string, to: string) => listed.rename(from, to),
+        trash: (path: string) => listed.trash(path),
+      },
+      // Every git run of the fixture succeeds.
+      processes: {
+        run: async () => ({ code: 0, stdout: '', stderr: '', timedOut: false }),
       },
       paths: posixPaths,
       clock: { now: () => NOW },
@@ -347,6 +368,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       homeDir: '/home/me',
       log: (message: string) => logged.push(message),
       randomHex: () => 'c-new',
+      demoSteps,
     },
     dependency: (key: { id: string }) => dependencies[key.id],
     settings: () => settings,
@@ -374,10 +396,26 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   };
   const emit = (name: string, payload: unknown) =>
     listeners.get(name)?.(payload);
+  // Enters the Backlog demo step's main half in SCRATCH.
+  const enterStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'backlog.mode');
+    if (step === undefined) {
+      throw new Error('backlog registered no backlog.mode step');
+    }
+    return step.enter({
+      scratchDir: SCRATCH,
+      launchSession: () => Promise.reject(new Error('no launch')),
+      processEvents: () => {
+        throw new Error('no process events in this test');
+      },
+    });
+  };
   return {
     part,
     exports: part.exports?.(createRegistrations()) as BacklogMainExports,
     docs,
+    enterStep,
+    trash,
     calls,
     refuse,
     listed,
@@ -1330,5 +1368,58 @@ describe('backlog main part', () => {
       reason: expect.stringContaining(elsewhere),
     });
     expect(callsOf(backlog.calls, 'writeBytes')).toEqual([]);
+  });
+});
+
+describe('backlog demo step', () => {
+  const SAMPLE_HOME = `${SCRATCH}/sample-home`;
+  const SAMPLE_REPO = `${SAMPLE_HOME}/dev/backlog-repo`;
+  const SAMPLE_FEATURES = `${SAMPLE_REPO}/docs/features`;
+  const SAMPLE_FOLLOWUPS = `${SAMPLE_FEATURES}/followups.md`;
+
+  it('serves the sample without rebuilding the machine index', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+      [SAMPLE_FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+    backlog.index.sample = indexRead([
+      {
+        ...entry('followup', SAMPLE_FOLLOWUPS, {}, SAMPLE_FEATURES),
+        repo: 'backlog-repo',
+      },
+    ]);
+    const rebuild = vi.spyOn(backlog.docs, 'rebuildMachineIndex');
+    const machineIndex = vi.spyOn(backlog.docs, 'machineIndex');
+    await backlog.enterStep();
+
+    const read = await backlog.invoke<BacklogRead>('rescan');
+
+    expect(rebuild).not.toHaveBeenCalled();
+    expect(read.homes.map((home) => home.repo)).toEqual(['backlog-repo']);
+    await expect(
+      backlog.invoke('editChunks', {
+        type: 'rename',
+        chunkId: 'c1',
+        name: 'Renamed',
+      }),
+    ).rejects.toThrow('keeps no chunks');
+    await expect(backlog.invoke('startChunks', ['c1'])).rejects.toThrow(
+      'keeps no chunks',
+    );
+    expect(await backlog.data.stat('chunks.json')).toBeNull();
+    const exported = await backlog.exports.load();
+    expect(exported.homes.map((home) => home.repo)).toEqual(['r']);
+    expect(machineIndex).toHaveBeenCalled();
+  });
+
+  it('moves an emptied earlier repo aside before it writes', async () => {
+    const backlog = startBacklog([], {});
+    await backlog.listed.makeFolder(SAMPLE_REPO);
+
+    await backlog.enterStep();
+
+    expect(await backlog.listed.stat(`${SCRATCH}/old-backlog/1`)).not.toBeNull();
+    expect(await backlog.listed.stat(SAMPLE_FOLLOWUPS)).not.toBeNull();
+    expect(backlog.trash).not.toHaveBeenCalled();
   });
 });

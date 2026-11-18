@@ -14,6 +14,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { BacklogLayout } from '../layouts/layout';
 import { backlogManifest } from '../manifest';
 import { createBacklogView } from './backlog-view';
+import { registerDemoSteps } from './demo-steps';
 import { readBacklogLayout } from './layout/read-layout';
 import {
   keyRunner,
@@ -118,6 +119,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
     );
     api.channel.on('chunksChanged', ({ chunks }) => view.chunksChanged(chunks));
     view.load();
+    registerDemoSteps(services, { commands: api.commands });
 
     return {
       commands: {
