@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   fakeDependency,
   startMainPart,
@@ -65,16 +67,49 @@ function startPractice() {
       };
     },
   };
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const harness = startMainPart(practiceMainPart, {
     dependencies: [
       fakeDependency(chatMainKey, () => chat),
       fakeDependency(sessionsMainKey, () => sessions),
       fakeDependency(scopedAgentsMainKey, () => scopedAgents),
     ],
-    services: { homeDir: '/home/u' },
+    services: { homeDir: '/home/u', demoSteps },
   });
-  return Object.assign(harness, { contributed, specs, scopeAsked });
+  // Enters the Practice demo step's main half in SCRATCH.
+  const enterStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'practice.mode');
+    if (step === undefined) {
+      throw new Error('practice registered no practice.mode step');
+    }
+    return step.enter({
+      scratchDir: SCRATCH,
+      launchSession: () => Promise.reject(new Error('no launch')),
+      processEvents: () => {
+        throw new Error('no process events in this test');
+      },
+    });
+  };
+  return Object.assign(harness, {
+    contributed,
+    specs,
+    scopeAsked,
+    enterStep,
+  });
 }
+
+const SCRATCH = '/scratch';
+
+// A session the interviewer's scope answers `two-sum` for.
+const INTERVIEWER_SESSION = {
+  id: 'row-1',
+  info: {
+    sessionId: 'host-1',
+    projectDir: PRACTICE_FOLDER,
+    harness: null,
+    rowId: null,
+  },
+} as AgentSession;
 
 describe('practice main part', () => {
   it('list leaves out a bad problem and logs it', async () => {
@@ -152,26 +187,62 @@ describe('practice main part', () => {
   it("read_practice_state answers for the problem the interviewer's scope names", async () => {
     const harness = startPractice();
     await writeProblem(harness.files, TWO_SUM);
-    const session = {
-      id: 'row-1',
-      info: {
-        sessionId: 'host-1',
-        projectDir: PRACTICE_FOLDER,
-        harness: null,
-        rowId: null,
-      },
-    } as AgentSession;
 
     const result = await harness.contributed[0]
-      .start(session)
+      .start(INTERVIEWER_SESSION)
       .call(
         'read_practice_state',
         {},
         { toolUseId: null, signal: new AbortController().signal },
       );
 
-    expect(harness.scopeAsked).toEqual([session]);
+    expect(harness.scopeAsked).toEqual([INTERVIEWER_SESSION]);
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain(`# ${TWO_SUM.title}`);
+  });
+});
+
+describe('practice demo step', () => {
+  it('serves the sample folder to the page only', async () => {
+    const harness = startPractice();
+    await writeProblem(harness.files, TWO_SUM);
+    const realCode = `${PRACTICE_FOLDER}/problems/two-sum/solution.cpp`;
+    await harness.files.write(realCode, 'int setting_folder;');
+    await harness.enterStep();
+
+    await harness.invoke('saveCode', 'two-sum', 'int sample_folder;');
+
+    expect(
+      await harness.files.read(
+        `${SCRATCH}/practice/1/problems/two-sum/solution.cpp`,
+      ),
+    ).toBe('int sample_folder;');
+    expect(await harness.files.read(realCode)).toBe('int setting_folder;');
+    const state = await harness.contributed[0]
+      .start(INTERVIEWER_SESSION)
+      .call(
+        'read_practice_state',
+        {},
+        { toolUseId: null, signal: new AbortController().signal },
+      );
+    expect(state.content[0].text).toContain('int setting_folder;');
+    await expect(
+      harness.invoke('startImport', { text: 'a problem' }) as Promise<unknown>,
+    ).rejects.toThrow('imports nothing');
+  });
+
+  it('writes the sample into a folder that does not exist', async () => {
+    const harness = startPractice();
+    const earlier = `${SCRATCH}/practice/1/problems/old/problem.json`;
+    await harness.files.write(earlier, '{}');
+
+    await harness.enterStep();
+
+    expect(await harness.files.read(earlier)).toBe('{}');
+    expect(
+      await harness.files.stat(
+        `${SCRATCH}/practice/2/problems/two-sum/problem.json`,
+      ),
+    ).not.toBeNull();
   });
 });

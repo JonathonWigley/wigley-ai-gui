@@ -16,6 +16,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { PracticeLayout } from '../layouts/layout';
 import { practiceManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readPracticeLayout } from './layout/read-layout';
 import { createPracticeView } from './practice-view';
 
@@ -109,6 +110,10 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
 
     api.channel.on('changed', () => view.reload());
     view.load();
+    registerDemoSteps(services, {
+      commands: api.commands,
+      openProblemRow: (slug) => view.openProblemRow(slug),
+    });
 
     // The core logs the side bar's hiding and showing.
     const showMode = () => {

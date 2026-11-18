@@ -12,9 +12,10 @@ import type {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { practiceManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { interviewerAgentSpec } from './interviewer-agent';
-import { createJudge } from './judge';
-import { createPracticeRuns } from './practice-runs';
+import { createJudge, type Judge } from './judge';
+import { createPracticeRuns, type PracticeRuns } from './practice-runs';
 import { createPracticeSessions } from './practice-sessions';
 import {
   ADD_PRACTICE_PROBLEM_TOOL,
@@ -31,6 +32,14 @@ import { practiceSelfTestScript } from './selftest-script';
 
 type PracticeApi = MainApi<typeof practiceManifest, PracticeChannel>;
 
+// What the page's channel serves from: one practice folder's problems.
+interface ServedPractice {
+  store: ProblemStore;
+  progress: Progress;
+  judge: Judge;
+  runs: PracticeRuns;
+}
+
 // Serves the page the practice folder's problems through the problem store,
 // progress and the judge, and from the page's first `list` watches
 // `problems/`, sending `changed` with the slug of each change; a change of the
@@ -38,7 +47,9 @@ type PracticeApi = MainApi<typeof practiceManifest, PracticeChannel>;
 // registers the interviewer with scoped-agents, and gives every session the
 // `add_practice_problem` and `read_practice_state` tools. Registers the
 // Practice layout contract. Hands the self-test its script, telling it of each
-// submit, and offers a drive run the `writeFixture` action.
+// submit, and offers a drive run the `writeFixture` action. While a demo step
+// holds a sample folder, the channel serves it, the watch moves to it, and an
+// import rejects; the tools and the interviewer keep the setting's folder.
 export const practiceMainPart: MainPart<typeof practiceManifest> = {
   manifest: practiceManifest,
   start(api: PracticeApi) {
@@ -46,34 +57,45 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
     api.layouts.register({ layoutTypes });
     const folder = () =>
       services.paths.expandTilde(api.settings().folder, services.homeDir);
-    const store = createProblemStore({
-      files: services.files,
-      paths: services.paths,
-      log: services.log,
-      folder,
-    });
-    const progress = createProgress({
-      store,
-      clock: services.clock,
-      randomHex: services.randomHex,
-      steps: () => api.settings().reviewSteps,
-    });
-    const judge = createJudge({
-      files: services.files,
-      processes: services.processes,
-      paths: services.paths,
-      clock: services.clock,
-      settings: () => {
-        const settings = api.settings();
-        return {
-          buildFolder: store.buildFolder(),
-          compiler: settings.compiler,
-          flags: settings.flags,
-          timeLimitMs: settings.timeLimitMs,
-        };
-      },
-    });
-    const runs = createPracticeRuns({ store, progress, judge });
+    // The problem store, progress, judge and runs over the practice folder
+    // `folderOf` names.
+    const servePractice = (folderOf: () => string): ServedPractice => {
+      const store = createProblemStore({
+        files: services.files,
+        paths: services.paths,
+        log: services.log,
+        folder: folderOf,
+      });
+      const progress = createProgress({
+        store,
+        clock: services.clock,
+        randomHex: services.randomHex,
+        steps: () => api.settings().reviewSteps,
+      });
+      const judge = createJudge({
+        files: services.files,
+        processes: services.processes,
+        paths: services.paths,
+        clock: services.clock,
+        settings: () => {
+          const settings = api.settings();
+          return {
+            buildFolder: store.buildFolder(),
+            compiler: settings.compiler,
+            flags: settings.flags,
+            timeLimitMs: settings.timeLimitMs,
+          };
+        },
+      });
+      const runs = createPracticeRuns({ store, progress, judge });
+      return { store, progress, judge, runs };
+    };
+    const real = servePractice(folder);
+    const { store, progress, judge, runs } = real;
+    // A demo step's sample folder, which the channel serves while it is held;
+    // the tools and the interviewer keep `real`.
+    let heldSample: ServedPractice | null = null;
+    const served = () => heldSample ?? real;
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
     const scopedAgents = api.dependency(scopedAgentsMainKey);
@@ -110,46 +132,83 @@ export const practiceMainPart: MainPart<typeof practiceManifest> = {
             reload,
           });
     channel.handle('list', () => {
-      store.startWatching();
-      return listProblems(store, progress, services.log);
+      const current = served();
+      current.store.startWatching();
+      return listProblems(current.store, current.progress, services.log);
     });
-    channel.handle('open', (slug) => openProblem(store, progress, slug));
+    channel.handle('open', (slug) => {
+      const current = served();
+      return openProblem(current.store, current.progress, slug);
+    });
     channel.handle('saveCode', (slug, text) =>
-      store.writeText(slug, 'solution.cpp', text),
+      served().store.writeText(slug, 'solution.cpp', text),
     );
     channel.handle('saveNotes', (slug, text) =>
-      store.writeText(slug, 'notes.md', text),
+      served().store.writeText(slug, 'notes.md', text),
     );
     channel.handle('saveCustomCases', (slug, text) =>
-      store.writeText(slug, 'custom-cases.json', text),
+      served().store.writeText(slug, 'custom-cases.json', text),
     );
-    channel.handle('run', (slug) => runs.run(slug));
+    channel.handle('run', (slug) => served().runs.run(slug));
     channel.handle('submit', (slug) => {
       selfTestScript?.submitStarted(slug);
-      return runs.submit(slug);
+      return served().runs.submit(slug);
     });
     channel.handle('peek', async (slug) => {
-      await progress.peek(slug);
+      const current = served();
+      await current.progress.peek(slug);
       const [approach, reference] = await Promise.all([
-        store.readText(slug, 'approach.md'),
-        store.readText(slug, 'reference.cpp'),
+        current.store.readText(slug, 'approach.md'),
+        current.store.readText(slug, 'reference.cpp'),
       ]);
       return { approach: approach ?? '', reference: reference ?? '' };
     });
-    channel.handle('startImport', (request) =>
-      practiceSessions.startImport(request),
-    );
+    channel.handle('startImport', async (request) => {
+      if (heldSample !== null) {
+        throw new Error('The sample practice folder imports nothing.');
+      }
+      return practiceSessions.startImport(request);
+    });
+    // The served store's `problems/`, watched again on each change of the
+    // folder setting and each take and release of a sample.
     const watchProblems = (): Disposable =>
-      store.watch((slug) => channel.send('changed', { slug }));
+      served().store.watch((slug) => channel.send('changed', { slug }));
     let watchedFolder = folder();
     let watch = watchProblems();
+    const moveWatch = () => {
+      watch.dispose();
+      watch = watchProblems();
+    };
     api.onSettingsChanged(() => {
       if (folder() === watchedFolder) {
         return;
       }
-      watch.dispose();
       watchedFolder = folder();
-      watch = watchProblems();
+      moveWatch();
+    });
+    const holdSample = (sampleFolder: string): Disposable => {
+      if (heldSample !== null) {
+        throw new Error('Practice already serves a sample');
+      }
+      const held = servePractice(() => sampleFolder);
+      heldSample = held;
+      moveWatch();
+      reload();
+      return {
+        dispose() {
+          if (heldSample !== held) {
+            return;
+          }
+          heldSample = null;
+          moveWatch();
+          reload();
+        },
+      };
+    };
+    registerDemoSteps(services, {
+      files: services.files,
+      paths: services.paths,
+      holdSample,
     });
     if (selfTestScript !== null) {
       services.selfTest?.run(selfTestScript);
