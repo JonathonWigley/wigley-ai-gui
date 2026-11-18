@@ -4,6 +4,7 @@ import {
   type PluginStatus,
 } from '../../../contracts/core-state';
 import type { DemoStep } from '../../../contracts/demo';
+import type { EditorHost } from '../../../contracts/editor';
 import type { RightBarOptions } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
@@ -171,7 +172,10 @@ function startDemo({
   };
   const harness = startPagePart(part, {
     dependencies: [sessions, scopedAgents],
-    services: { demoSteps, editor: { contains: () => false } },
+    services: {
+      demoSteps,
+      editor: { contains: () => false } as unknown as EditorHost,
+    },
     async invoke(method, ...args) {
       if (method !== 'describeStep') {
         const stepId = typeof args[0] === 'string' ? ` ${args[0]}` : '';
