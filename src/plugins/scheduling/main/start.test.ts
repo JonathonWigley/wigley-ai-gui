@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentHarness, SessionControl } from '../../../contracts/agent';
 import type { AlertNoun } from '../../../contracts/alerts';
+import type { DemoMainStep } from '../../../contracts/demo';
 import { readIfPresent } from '../../../contracts/files';
 import type { LoginStartStatus } from '../../../contracts/login-start';
 import type { PartStop, RunMode } from '../../../contracts/plugin';
@@ -11,6 +12,7 @@ import type {
   SessionHost,
 } from '../../../contracts/session-host';
 import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createFakeLoginStart } from '../../../shared/fake-login-start';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import {
@@ -40,6 +42,7 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
+  DEMO_TASK_IDS,
   type RunHistoryEntry,
   type ScheduledTask,
   schedulingStateSlot,
@@ -236,7 +239,7 @@ interface StartOptions {
 // counts its prepares in the ids and whose `adopt` opens the row `part.session` describes (null: a relay row, with no
 // chat session), a sessions that records its holds, replays and contributions, the fake host and login start. `calls`
 // is one log across the fakes; `history add` stands where the part logged `adopted run of …`, which it writes right
-// after its history add.
+// after its history add. `enterStep` enters the Scheduled tasks demo step's main half, its demo session `row-demo`.
 function startPart(options: StartOptions = {}) {
   let now = TODAY_12;
   const clock = { now: () => now };
@@ -374,6 +377,7 @@ function startPart(options: StartOptions = {}) {
     },
   } as unknown as SessionsMainExports;
 
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const harness = startMainPart(schedulingMainPart, {
     services: {
       runMode: options.runMode ?? 'live',
@@ -393,6 +397,7 @@ function startPart(options: StartOptions = {}) {
       alerts: {
         setOpenCount: (_source, count, noun) => alerts.push({ count, noun }),
       },
+      demoSteps,
     },
     dependencies: [
       fakeDependency(chatMainKey, () => chat),
@@ -486,6 +491,21 @@ function startPart(options: StartOptions = {}) {
     },
     async taskFile(): Promise<string | null> {
       return readIfPresent(harness.files, TASK_PATH);
+    },
+    enterStep() {
+      const step = demoSteps
+        .list()
+        .find(({ id }) => id === 'scheduling.schedules');
+      if (step === undefined) {
+        throw new Error('scheduling registered no scheduling.schedules step');
+      }
+      return step.enter({
+        scratchDir: '/scratch',
+        launchSession: async () => 'row-demo',
+        processEvents: () => {
+          throw new Error('no process events in this test');
+        },
+      });
     },
     async listTool(): Promise<string> {
       const session = contributions[0].start({
@@ -1268,5 +1288,91 @@ describe('schedulingMainPart', () => {
     expect(
       part.contributions.map(({ tools, options }) => ({ tools, options })),
     ).toEqual([{ tools: TASK_TOOLS, options: { mainAgentOnly: true } }]);
+  });
+});
+
+describe('demo tasks', () => {
+  const DEMO_TASK_TEXT =
+    'Demo tasks are samples: they never run and are never saved.';
+
+  it('never plans, saves or fires a demo task', async () => {
+    const part = startPart();
+    await settle();
+    const before = await part.taskFile();
+
+    await part.enterStep();
+    part.changeInstructions();
+    await settle();
+
+    expect(
+      part
+        .lastPending()
+        ?.map((entry) => (entry.record as ScheduledRunRecord).taskId),
+    ).toEqual([TASK_ID]);
+    expect(await part.taskFile()).toBe(before);
+    expect(part.state()?.tasks.map((view) => view.task.id)).toEqual([
+      TASK_ID,
+      DEMO_TASK_IDS.triage,
+      DEMO_TASK_IDS.sweep,
+      DEMO_TASK_IDS.dependencies,
+    ]);
+  });
+
+  it.each<{
+    call: 'saveTask' | 'runNow' | 'removeTask';
+    args: unknown[];
+  }>([
+    {
+      call: 'saveTask',
+      args: [draftOf(task({ id: DEMO_TASK_IDS.sweep }))],
+    },
+    { call: 'runNow', args: [DEMO_TASK_IDS.triage] },
+    { call: 'removeTask', args: [DEMO_TASK_IDS.triage] },
+  ])('refuses $call of a demo task', async ({ call, args }) => {
+    const part = startPart();
+    await settle();
+    await part.enterStep();
+    await settle();
+    const before = await part.taskFile();
+
+    await expect(
+      Promise.resolve().then(() => part.harness.invoke(call, ...args)),
+    ).rejects.toThrow(DEMO_TASK_TEXT);
+    await settle();
+    expect(await part.taskFile()).toBe(before);
+    expect(await part.historyFile()).toEqual([]);
+  });
+
+  it('counts no demo run in the Dock badge and leaves at dispose', async () => {
+    const part = startPart();
+    await settle();
+
+    const stage = await part.enterStep();
+    await settle();
+    expect(part.state()?.unviewedRows).toEqual(['row-demo']);
+    expect(part.alerts.at(-1)?.count).toBe(0);
+
+    stage.dispose();
+    await settle();
+    expect(part.state()?.runRows).not.toContain('row-demo');
+    expect(part.state()?.tasks.map((view) => view.task.id)).toEqual([TASK_ID]);
+  });
+
+  it('pauses a demo task through the channel without the task store', async () => {
+    const part = startPart();
+    await settle();
+    await part.enterStep();
+    await settle();
+    const before = await part.taskFile();
+
+    await part.harness.invoke('setPaused', DEMO_TASK_IDS.triage, true);
+    await settle();
+
+    expect(
+      part
+        .state()
+        ?.tasks.find((view) => view.task.id === DEMO_TASK_IDS.triage),
+    ).toMatchObject({ task: { paused: true }, nextRun: null });
+    expect(await part.taskFile()).toBe(before);
   });
 });

@@ -15,6 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { SchedulingLayout } from '../layouts/layout';
 import { schedulingManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readSchedulingLayout } from './layout/read-scheduling-layout';
 import { startRunRows } from './run-rows';
 import { createSchedulesView } from './schedules-view';
@@ -29,6 +30,7 @@ const SESSIONS_MODE = 'sessions.sessions';
 // place: a page load selects the first task with the editor closed. A history row opens its run's row through
 // sessions' `activate`. The page may not stop while the editor's draft changed. In Sessions mode's side bar, the
 // Scheduled runs section claims the open run rows and marks the unviewed ones done, while the slot holds a value.
+// Registers the Scheduled tasks demo step's page half.
 export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
   manifest: schedulingManifest,
   start(api: SchedulingApi) {
@@ -125,6 +127,13 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
     });
     view.stateChanged(state.get());
     runRowsChanged(state.get());
+    registerDemoSteps(services, {
+      commands: api.commands,
+      state,
+      timers: services.timers,
+      selectTask: (taskId) => view.selectTask(taskId),
+      openRunRow: (rowId) => view.openRunRow(rowId),
+    });
 
     // The core logs the side bar's hiding and showing.
     const showMode = () => {

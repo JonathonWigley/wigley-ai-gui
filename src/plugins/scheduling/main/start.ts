@@ -40,6 +40,8 @@ import {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { schedulingManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
+import { createDemoTasks, isDemoTaskId } from './demo-tasks';
 import { createHistoryStore, HISTORY_FILE } from './history-store';
 import { type PlannedRun, planRuns } from './planner';
 import {
@@ -79,6 +81,14 @@ const ALERT_NOUN: AlertNoun = {
 const RUNS_RETRY_MS = 10_000;
 const NEVER_FIRES =
   'This app never fires scheduled tasks; Run now works in the installed app.';
+const DEMO_TASK_TEXT =
+  'Demo tasks are samples: they never run and are never saved.';
+
+function refuseDemoTask(taskId: string | null): void {
+  if (taskId !== null && isDemoTaskId(taskId)) {
+    throw new Error(DEMO_TASK_TEXT);
+  }
+}
 
 function isRunRowOutcome(entry: RunHistoryEntry): boolean {
   return entry.outcome === 'running' || entry.outcome === 'finished';
@@ -115,7 +125,9 @@ function uniqueRows(entries: readonly RunHistoryEntry[]): string[] {
 // it in history, and tracks the finished, unviewed run rows for the page and the Dock badge. Every event, push,
 // timer and channel call that changes state runs as one step of a serial chain. Where the app does not fire (the dev
 // app's live run) it shows and edits the tasks and never touches the host's queue or the login start. Hands the
-// self-test its script.
+// self-test its script. A demo step's tasks and run row show after the real ones in `scheduling.state` alone: the
+// planner, history, the task file, the tools and the Dock badge never see them, and the channel never runs, saves or
+// removes one.
 export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
   manifest: schedulingManifest,
   start(api: SchedulingApi) {
@@ -141,6 +153,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       log,
     });
     const history = createHistoryStore(api.data, log);
+    const demoTasks = createDemoTasks();
 
     api.layouts.register({ layoutTypes });
     const state = api.state.publish(schedulingStateSlot);
@@ -216,12 +229,12 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         open.filter((entry) => entry.outcome === 'finished' && !entry.viewed),
       );
       state.set({
-        tasks: views(),
+        tasks: [...views(), ...demoTasks.views()],
         fileError: taskStore.error(),
         fires,
         loginStart: fires ? loginStatus : null,
-        runRows: uniqueRows(open),
-        unviewedRows,
+        runRows: [...uniqueRows(open), ...demoTasks.runRows()],
+        unviewedRows: [...unviewedRows, ...demoTasks.unviewedRows()],
       });
       services.alerts.setOpenCount(
         'scheduling',
@@ -633,6 +646,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     }
 
     const saveTask = async (draft: TaskDraft): Promise<string> => {
+      refuseDemoTask(draft.id);
       if (!profileNames().includes(draft.profile)) {
         throw new Error(`No profile ${draft.profile}.`);
       }
@@ -654,11 +668,20 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     };
 
     api.channel.handle('saveTask', saveTask);
-    api.channel.handle('setPaused', (id, paused) =>
-      taskStore.setPaused(id, paused),
-    );
-    api.channel.handle('removeTask', (id) => taskStore.remove(id));
+    api.channel.handle('setPaused', async (id, paused) => {
+      if (demoTasks.has(id)) {
+        demoTasks.setPaused(id, paused);
+        return;
+      }
+      refuseDemoTask(id);
+      await taskStore.setPaused(id, paused);
+    });
+    api.channel.handle('removeTask', async (id) => {
+      refuseDemoTask(id);
+      await taskStore.remove(id);
+    });
     api.channel.handle('runNow', (id) => {
+      refuseDemoTask(id);
       if (!fires) {
         throw new Error(NEVER_FIRES);
       }
@@ -730,7 +753,16 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       added: () => serial(() => undefined),
       removed: (rowId) => serial(() => finishRowRun(rowId)),
     });
-    selectionSlot.on((rowId) => serial(() => markViewed(rowId)));
+    selectionSlot.on((rowId) =>
+      serial(() => {
+        markViewed(rowId);
+        if (rowId !== null && rowId !== undefined) {
+          demoTasks.markViewed(rowId);
+        }
+      }),
+    );
+    subscriptions.push(demoTasks.onChanged(() => serial(() => undefined)));
+    registerDemoSteps(services, { clock, demoTasks });
     api.events.on('chat.turnFinished', ({ sessionId }) =>
       serial(() => finishRowRun(sessionId)),
     );

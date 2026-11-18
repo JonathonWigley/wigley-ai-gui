@@ -26,6 +26,13 @@ export interface ScheduledTask {
   updatedAt: number; // epoch ms of the app's last write of this task
 }
 
+// The demo step's sample tasks, which main holds in memory only. Not 8 hex characters, so no saved task's id equals one.
+export const DEMO_TASK_IDS = {
+  triage: 'demo-001',
+  sweep: 'demo-002',
+  dependencies: 'demo-003',
+} as const;
+
 // `~/.config/wigley-ai-gui/scheduled-tasks.json`.
 export interface TaskFile {
   tasks: ScheduledTask[];
