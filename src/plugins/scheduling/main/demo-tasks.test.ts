@@ -4,9 +4,13 @@ import type {
   ScheduledTask,
   ScheduledTaskView,
 } from '../contract';
+import { nextOccurrence } from '../schedule';
 import { createDemoTasks } from './demo-tasks';
 
 const NOW = Date.parse('2026-11-17T12:00:00Z');
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const CLOCK = { now: () => NOW };
+const DAILY_AT_NINE = { kind: 'daily', time: '09:00' } as const;
 
 function view(
   id: string,
@@ -20,7 +24,7 @@ function view(
       target: { projectDir: '/scratch' },
       profile: 'demo',
       prompt: 'Do the thing.',
-      schedule: { kind: 'daily', time: '09:00' },
+      schedule: DAILY_AT_NINE,
       controls: {},
       paused: false,
       updatedAt: NOW,
@@ -46,7 +50,7 @@ function finished(taskId: string, rowId: string, at: number): RunHistoryEntry {
 
 describe('createDemoTasks', () => {
   it('pauses only the named task', () => {
-    const tasks = createDemoTasks();
+    const tasks = createDemoTasks(CLOCK);
     tasks.show([view('demo-a'), view('demo-b')]);
 
     tasks.setPaused('demo-b', true);
@@ -64,7 +68,7 @@ describe('createDemoTasks', () => {
   });
 
   it('marks a finished run row viewed', () => {
-    const tasks = createDemoTasks();
+    const tasks = createDemoTasks(CLOCK);
     tasks.show([
       view('demo-a', [finished('demo-a', 'row-2', NOW - 1_000)]),
       view('demo-b', [finished('demo-b', 'row-1', NOW - 5_000)]),
@@ -82,7 +86,7 @@ describe('createDemoTasks', () => {
   });
 
   it('leaves a later show alone when an earlier one is disposed', () => {
-    const tasks = createDemoTasks();
+    const tasks = createDemoTasks(CLOCK);
     const first = tasks.show([view('demo-a')]);
     const second = tasks.show([view('demo-b')]);
 
@@ -91,5 +95,17 @@ describe('createDemoTasks', () => {
     expect(tasks.views().map(({ task }) => task.id)).toEqual(['demo-b']);
     second.dispose();
     expect(tasks.views()).toEqual([]);
+  });
+
+  it('counts a resumed task next run from the moment it resumes', () => {
+    const resumedAt = NOW + 3 * DAY_MS;
+    const tasks = createDemoTasks({ now: () => resumedAt });
+    tasks.show([view('demo-a', [], { paused: true })]);
+
+    tasks.setPaused('demo-a', false);
+
+    const nextRun = tasks.views()[0]?.nextRun;
+    expect(nextRun).toBe(nextOccurrence(DAILY_AT_NINE, resumedAt));
+    expect(nextRun).toBeGreaterThan(resumedAt);
   });
 });

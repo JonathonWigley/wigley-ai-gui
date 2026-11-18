@@ -1068,7 +1068,10 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     return {
       commands: {},
       exports: () => exports,
-      dispose: () => staleness.dispose(),
+      dispose: () => {
+        backlog.dispose();
+        staleness.dispose();
+      },
     };
   },
 };

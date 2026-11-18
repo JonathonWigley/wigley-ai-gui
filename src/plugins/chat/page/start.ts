@@ -412,7 +412,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       fillComposer: fillComposerOf,
       setHeadless,
       typeInto: (element, keys) => services.editor.typeInto(element, keys),
-      openStartPrompt: () => startPrompt.open(),
+      startPrompt: {
+        runCommand: (id) => void api.commands.run(id),
+        scope: api.state.read(coreScopeSlot),
+        timers: services.timers,
+        log: services.log,
+      },
       pickModel: () => api.commands.run(chatCommand('pickModel')),
       cancelPicker: () => picker.close(),
       isPickerOpen: () => picker.isOpen(),
@@ -430,8 +435,16 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         consumer.track(view.mount(element, sessionId)),
       addEntryRenderer: (renderer) =>
         consumer.track(entryRenderers.add(renderer)),
-      showHubForNow: (sectionId) =>
-        consumer.track(sideSections.showForNow(sectionId)),
+      showHubForNow: (sectionId) => {
+        const hold = sideSections.showForNow(sectionId);
+        view.hub.hiddenChanged();
+        return consumer.track({
+          dispose() {
+            hold.dispose();
+            view.hub.hiddenChanged();
+          },
+        });
+      },
     });
     return {
       commands: {

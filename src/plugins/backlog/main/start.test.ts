@@ -633,16 +633,19 @@ describe('backlog main part', () => {
     expect(machineIndex).toHaveBeenCalledTimes(1);
   });
 
-  it('dispose_Part_DisposesTheReader', async () => {
+  it('dispose_Part_DisposesTheReaderAndTheWatches', async () => {
     const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
       [FOLLOWUPS]: FOLLOWUPS_TEXT,
     });
     await backlog.invoke('load');
+    const watchesBefore = backlog.watched.length;
 
     await backlog.part.dispose?.('end');
     const cached = await backlog.invoke('staleness');
     await settle();
 
+    expect(watchesBefore).toBeGreaterThan(0);
+    expect(backlog.watched).toEqual([]);
     expect(cached).toEqual({});
     expect(backlog.git.firstAdded).not.toHaveBeenCalled();
     expect(backlog.sent).toEqual([]);

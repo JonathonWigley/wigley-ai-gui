@@ -41,7 +41,7 @@ function fakeStore(initial: SessionFormsState<SessionForm, string>) {
     },
     set(next: SessionFormsState<SessionForm, string>) {
       state = next;
-      for (const listener of [...listeners]) {
+      for (const listener of listeners) {
         listener();
       }
     },

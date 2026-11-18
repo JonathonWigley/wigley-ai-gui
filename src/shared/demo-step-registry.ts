@@ -11,7 +11,7 @@ export function createDemoStepRegistry<
   const steps = new Map<string, S>();
   const listeners = new Set<() => void>();
   const notify = () => {
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       listener();
     }
   };

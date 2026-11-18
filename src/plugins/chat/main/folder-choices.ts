@@ -54,7 +54,7 @@ export function mergeFolderChoices(
 
 export interface FolderChoices {
   // The start prompt's folders: chat's recent folders merged with the project
-  // folders of every profile each registered listed harness publishes, leaving out
+  // folders of every profile each listed harness publishes, leaving out
   // each folder inside one of the OS's temp folders, each that is no longer a
   // folder, and each it cannot check (logged); the newest MAX_FOLDER_CHOICES of
   // the rest. A profile whose listing rejects is logged and lists none.

@@ -757,8 +757,16 @@ describe('chatroom demo step', () => {
     expect(roomView(DEMO_ROOM)?.threads.map(({ thread }) => thread)).toContain(
       FIXTURE_THREAD,
     );
+    const leadRow = roomView(DEMO_ROOM)?.board.find(
+      ({ rowId }) => rowId === 'rL',
+    );
+    expect(leadRow?.claims.map(({ target }) => target)).toEqual([
+      { paths: ['src/**'] },
+    ]);
 
     stage.dispose();
+    harness.emit('sessions.ended', { sessionId: 'rL' });
+    harness.emit('sessions.ended', { sessionId: 'rP' });
     await settle();
     expect(roomView(DEMO_ROOM)).toBeUndefined();
   });

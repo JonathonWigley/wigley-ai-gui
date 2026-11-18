@@ -1,3 +1,4 @@
+import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import {
   DEMO_TASK_IDS,
@@ -27,15 +28,15 @@ export function isDemoTaskId(taskId: string): boolean {
 }
 
 // The demo step's task views, in memory only: nothing here reaches the task file, history, the planner or the
-// session host. A resumed task's next run is its schedule's next occurrence after the moment it was shown.
-export function createDemoTasks(): DemoTasks {
+// session host. A resumed task's next run is its schedule's next occurrence after the moment it was resumed.
+export function createDemoTasks(clock: Clock): DemoTasks {
   let shown: ScheduledTaskView[] = [];
   // Each `show` gets a fresh token, so a stale dispose leaves a later show alone.
   let showToken: object | null = null;
   const listeners = new Set<() => void>();
 
   const changed = () => {
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       listener();
     }
   };
@@ -80,7 +81,7 @@ export function createDemoTasks(): DemoTasks {
               task: { ...view.task, paused },
               nextRun: paused
                 ? null
-                : nextOccurrence(view.task.schedule, view.task.updatedAt),
+                : nextOccurrence(view.task.schedule, clock.now()),
             }
           : view,
       );

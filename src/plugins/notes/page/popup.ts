@@ -229,8 +229,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // picker or autosave starts, and no box takes focus; typing in a box already
   // focused still lands.
   const isLocked = () => inFlight !== null;
-  // Each image's bytes and thumbnail URL, by id.
+  // Each image's bytes and thumbnail URL, by id, from the channel `routed` names.
   const images = new Map<number, { bytes: Uint8Array; url: string }>();
+  // Counts the changes of `routed`, so bytes fetched before one stay out of
+  // `images`.
+  let routeChanges = 0;
 
   // A new element the core draws the keys of `command` into while `scope` is
   // in force. Each is made once: the anchor is disposed when notes stops.
@@ -595,8 +598,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     if (held !== undefined) {
       return held.bytes;
     }
+    const route = routeChanges;
     const bytes = await channel.invoke('image', id);
-    cacheImage(id, bytes);
+    if (routeChanges === route) {
+      cacheImage(id, bytes);
+    }
     return bytes;
   };
 
@@ -938,6 +944,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       return 'popup reopened';
     }
     routed = sample;
+    routeChanges += 1;
     images.clear();
     isPlaceHeld = true;
     return null;
@@ -980,6 +987,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         }
         close();
         routed = null;
+        routeChanges += 1;
         images.clear();
         isPlaceHeld = false;
       },

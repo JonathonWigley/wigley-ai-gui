@@ -119,7 +119,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       stageFinishes: (flow) => workflow.stageFinishes(flow),
       activities: () => activitySlot.all(),
       pools: () => poolSlot.get() ?? null,
-      claims: (roomName) => room.claims(roomName),
+      claims: (roomName) => serviceFor(roomName).claims(roomName),
       log,
     });
 
@@ -143,7 +143,10 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       participants: (roomName) => roster.participants(roomName),
       log,
       rewriteRoom: (roomName) => rewriteRoom(roomName),
-      released: (roomName) => restoreRoom(roomName),
+      released: (roomName) => {
+        rewriteRoom(roomName);
+        refreshRoom(roomName);
+      },
     });
     const serviceFor = (roomName: string): RoomService =>
       demoRooms.serviceFor(roomName) ?? room;
@@ -163,8 +166,11 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       });
     };
 
+    // A room with no demo hold, no saved message and no session on its board
+    // has no view.
     const writeRoomView = async (roomName: string): Promise<void> => {
-      const source = serviceFor(roomName);
+      const held = demoRooms.serviceFor(roomName);
+      const source = held ?? room;
       const [threads, claims, userUnread, messages] = await Promise.all([
         source.threads(roomName),
         source.claims(roomName),
@@ -174,12 +180,20 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       if (isStopped) {
         return;
       }
+      const board = boardFeed.rows(roomName);
+      const isHeld = held !== null;
+      const isSaved = messages.length > 0;
+      const hasSessions = board.length > 0;
+      if (!isHeld && !isSaved && !hasSessions) {
+        roomsSlot.delete(roomName);
+        return;
+      }
       roomsSlot.set(
         roomName,
         buildRoomView({
           room: roomName,
           threads,
-          board: boardFeed.rows(roomName),
+          board,
           claims,
           userUnread,
           messages,
@@ -189,19 +203,6 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
 
     const rewriteRoom = (roomName: string): void =>
       queueRebuild(roomName, () => writeRoomView(roomName));
-
-    // After a demo hold: the view of the room in plugin data, or no view when
-    // plugin data holds no room of that name.
-    const restoreRoom = (roomName: string): void =>
-      queueRebuild(roomName, async () => {
-        const isHeldAgain = demoRooms.serviceFor(roomName) !== null;
-        const isSaved = (await room.rooms()).includes(roomName);
-        if (isHeldAgain || isSaved) {
-          await writeRoomView(roomName);
-        } else if (!isStopped) {
-          roomsSlot.delete(roomName);
-        }
-      });
 
     const refreshRoom = (roomName: string | null): void => {
       if (roomName !== null && !isStopped) {
@@ -464,7 +465,19 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     );
     registerDemoSteps(services, {
       fixtureDeps: fixtureBase,
-      holdRoom: (roomName) => demoRooms.hold(roomName),
+      // The board reads the held room's claims at each refresh.
+      holdRoom: (roomName) => {
+        const held = demoRooms.hold(roomName);
+        refreshRoom(roomName);
+        return {
+          ...held,
+          claim: async (request) => {
+            const result = await held.claim(request);
+            refreshRoom(roomName);
+            return result;
+          },
+        };
+      },
     });
     api.drive?.add('seed', {
       description:

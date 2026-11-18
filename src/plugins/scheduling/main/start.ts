@@ -153,7 +153,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       log,
     });
     const history = createHistoryStore(api.data, log);
-    const demoTasks = createDemoTasks();
+    const demoTasks = createDemoTasks(clock);
 
     api.layouts.register({ layoutTypes });
     const state = api.state.publish(schedulingStateSlot);
