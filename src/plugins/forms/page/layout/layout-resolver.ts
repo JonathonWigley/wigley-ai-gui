@@ -101,7 +101,8 @@ export function pickLayout(
     ),
   );
   return (
-    picks.find((pick) => pick.name !== DEFAULT_NAME) ?? picks[picks.length - 1]
+    picks.find((pick) => pick.name !== DEFAULT_LAYOUT_NAME) ??
+    picks[picks.length - 1]
   );
 }
 
