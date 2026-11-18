@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { DEMO_HARNESS_ID, type DemoMainStep } from '../../../contracts/demo';
 import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Git } from '../../../contracts/git';
 import type { RunMode } from '../../../contracts/plugin';
@@ -14,6 +15,7 @@ import {
 } from '../../../shared/fake-agent-harness';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -28,7 +30,11 @@ import {
   sessionsMainKey,
   type SessionsMainExports,
 } from '../../sessions/contract';
-import type { DocsMainExports, IndexDocument } from '../contract';
+import {
+  type DocsMainExports,
+  type IndexDocument,
+  SAMPLE_HOME_FOLDER,
+} from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { docsFixtureInstalls } from './selftest-fixture';
 import { addDriveActions, docsMainPart, startDocs } from './start';
@@ -206,6 +212,7 @@ function startDocsPart() {
   const emitted: [string, unknown][] = [];
   const processes = new FakeProcesses();
   const files = createMemoryFiles();
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const git = {
     topLevel: vi.fn<Git['topLevel']>(async () => '/r'),
     log: vi.fn<Git['log']>(async () => []),
@@ -234,6 +241,7 @@ function startDocsPart() {
       paths: posixPaths,
       selfTest: null,
       agentHarnesses: harnessRegistryOf([]),
+      demoSteps,
     },
     state: {
       read: () => ({
@@ -256,8 +264,38 @@ function startDocsPart() {
     listeners.get(name)?.(payload);
   };
   const exports = part.exports?.(createRegistrations()) as DocsMainExports;
-  return { part, exports, files, processes, git, invoke, emit, emitted };
+  // Enters the registered main half `id` in `/scratch` with `launchSession`.
+  const enterStep = (
+    id: string,
+    launchSession: () => Promise<string> = () => Promise.resolve('row-demo'),
+  ) => {
+    const step = demoSteps.list().find((each) => each.id === id);
+    if (step === undefined) {
+      throw new Error(`docs registered no step ${id}`);
+    }
+    return step.enter({
+      scratchDir: SCRATCH,
+      launchSession,
+      processEvents: () => {
+        throw new Error('no process events in this test');
+      },
+    });
+  };
+  return {
+    part,
+    exports,
+    files,
+    processes,
+    git,
+    invoke,
+    emit,
+    emitted,
+    enterStep,
+  };
 }
+
+const SCRATCH = '/scratch';
+const SAMPLE_HOME = `${SCRATCH}/${SAMPLE_HOME_FOLDER}`;
 
 const INDEX_DOCUMENT: IndexDocument = {
   schemaVersion: 5,
@@ -674,6 +712,108 @@ describe('docs main part', () => {
     await docs.exports.rebuildMachineIndex();
 
     expect(docs.emitted).toEqual([]);
+  });
+});
+
+describe('demo sample docs', () => {
+  const OUTSIDE = '/outside/notes.md';
+  const SAMPLE_DOC = `${SAMPLE_HOME}/.claude/CLAUDE.md`;
+
+  // Docs with the sample docs held and loaded, so their entries allow changes.
+  async function startHoldingSample() {
+    const docs = startDocsPart();
+    await docs.files.makeFolder(SCRATCH);
+    await docs.files.makeFolder('/outside');
+    await docs.files.write(OUTSIDE, 'one');
+    const sample = await docs.exports.addSampleDocs(SCRATCH);
+    await sample.load();
+    return docs;
+  }
+
+  it('runs no index script for a demo session', async () => {
+    const docs = startDocsPart();
+    const info: SessionInfo = {
+      sessionId: 'abc',
+      projectDir: SCRATCH,
+      harness: DEMO_HARNESS_ID,
+      rowId: null,
+    };
+    docs.emit('sessions.connected', { id: 'row-1', info, owned: true });
+
+    await docs.invoke('loadIndex', 'session:row-1');
+
+    expect(docs.processes.runs).toEqual([]);
+  });
+
+  it.each<{
+    call: string;
+    act: (docs: ReturnType<typeof startDocsPart>) => unknown;
+  }>([
+    {
+      call: 'writeDoc',
+      act: (docs) => docs.invoke('writeDoc', OUTSIDE, 'two', null),
+    },
+    {
+      call: 'writeDoc (export)',
+      act: (docs) => docs.exports.writeDoc(OUTSIDE, 'two', null),
+    },
+    {
+      call: 'writeBytes',
+      act: (docs) => docs.invoke('writeBytes', OUTSIDE, new Uint8Array([1])),
+    },
+    {
+      call: 'writeBytes (export)',
+      act: (docs) => docs.exports.writeBytes(OUTSIDE, new Uint8Array([1])),
+    },
+    { call: 'trashDoc', act: (docs) => docs.invoke('trashDoc', OUTSIDE) },
+    {
+      call: 'trashDoc (export)',
+      act: (docs) => docs.exports.trashDoc(OUTSIDE),
+    },
+    {
+      call: 'createDoc by path',
+      act: (docs) =>
+        docs.invoke('createDoc', { type: 'path', path: '/outside/new.md' }),
+    },
+    {
+      call: 'createDoc by kind',
+      act: (docs) =>
+        docs.invoke('createDoc', {
+          type: 'kind',
+          kind: 'rule',
+          place: { title: 'outside', folder: '/outside', source: 'global' },
+          name: 'new',
+        }),
+    },
+    {
+      call: 'renameDoc from outside',
+      act: (docs) =>
+        docs.invoke('renameDoc', OUTSIDE, `${SAMPLE_HOME}/moved.md`),
+    },
+    {
+      call: 'renameDoc to outside',
+      act: (docs) => docs.invoke('renameDoc', SAMPLE_DOC, '/outside/moved.md'),
+    },
+  ])(
+    'refuses $call outside the sample home while it is held',
+    async ({ act }) => {
+      const docs = await startHoldingSample();
+
+      await expect(act(docs)).rejects.toThrow('only the sample docs change');
+    },
+  );
+
+  it('releases the sample docs when an enter fails', async () => {
+    const docs = startDocsPart();
+    await docs.files.makeFolder(SCRATCH);
+
+    await expect(
+      docs.enterStep('docs.sessionTab', () =>
+        Promise.reject(new Error('no launch')),
+      ),
+    ).rejects.toThrow('no launch');
+
+    await expect(docs.exports.addSampleDocs(SCRATCH)).resolves.toBeDefined();
   });
 });
 

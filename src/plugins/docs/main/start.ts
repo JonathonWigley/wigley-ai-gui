@@ -1,5 +1,6 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
@@ -37,10 +38,14 @@ import {
   type IndexEntry,
   type IndexSource,
   MACHINE_SOURCE_ID,
+  SAMPLE_HOME_FOLDER,
+  SAMPLE_SOURCE_ID,
+  type SampleDocs,
   sessionSourceId,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { docsManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createHarnessFolders } from './harness-folders';
 import {
@@ -51,6 +56,7 @@ import {
   type IndexSourcesDeps,
   MACHINE_INDEX_FILE,
   MACHINE_SOURCE_TITLE,
+  NO_INDEX_MESSAGE,
   SESSION_SOURCE_TITLE,
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
@@ -142,6 +148,38 @@ export async function startDocs(
     entries,
   });
   return { indexDeps, docFiles };
+}
+
+const SAMPLE_SOURCE_TITLE = 'Sample docs';
+
+const SAMPLE_ONLY_TEXT =
+  'While the demo shows sample docs, only the sample docs change.';
+
+// The machine source's read of the docs home `homeDir`, with no `rebuild`, so
+// no script runs; null reads as a home with no index.
+function sampleLoad(
+  deps: IndexSourcesDeps,
+  homeDir: string | null,
+): IndexSource['load'] {
+  if (homeDir === null) {
+    return () => Promise.resolve({ document: null, message: NO_INDEX_MESSAGE });
+  }
+  return createMachineSource({ ...deps, homeDir }).load;
+}
+
+// A demo session's index source: the sample home in its project folder.
+function createDemoSessionSource(
+  deps: IndexSourcesDeps,
+  sessionId: string,
+  projectDir: string | null,
+): IndexSource {
+  const homeDir =
+    projectDir === null ? null : deps.paths.join(projectDir, SAMPLE_HOME_FOLDER);
+  return {
+    id: sessionSourceId(sessionId),
+    title: SESSION_SOURCE_TITLE,
+    load: sampleLoad(deps, homeDir),
+  };
 }
 
 // Registers, under `id` and `title` now, a source that runs `inner` once it
@@ -267,6 +305,8 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
 // touching named docs. A source's index entries stay writable while it is
 // registered. The page's own index reads emit `indexLoaded`; the exports' reads
 // do not. A change that lands emits its event, from the page or an export alike.
+// While a demo step holds the sample docs, only changes inside the sample home
+// land.
 export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
@@ -290,7 +330,8 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       docs.then(({ indexDeps }) => createMachineSource(indexDeps)),
       true,
     );
-    // Keyed by the session row's id.
+    // Keyed by the session row's id. A demo session's source reads the
+    // sample home in its folder and runs no script.
     const sessionSources = new Map<string, Disposable>();
     const addSessionSource = ({ id, info }: AgentSession) => {
       const spec = {
@@ -298,11 +339,16 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         projectDir: info.projectDir,
         harness: info.harness,
       };
+      const isDemo = info.harness === DEMO_HARNESS_ID;
       const added = addStartedSource(
         registry,
         sessionSourceId(id),
         SESSION_SOURCE_TITLE,
-        docs.then(({ indexDeps }) => createSessionSource(indexDeps, id, spec)),
+        docs.then(({ indexDeps }) =>
+          isDemo
+            ? createDemoSessionSource(indexDeps, id, info.projectDir)
+            : createSessionSource(indexDeps, id, spec),
+        ),
         false,
       );
       sessionSources.set(id, added);
@@ -328,12 +374,56 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       async (path, changed) => (await docs).docFiles.watch(path, changed),
       (change) => channel.send('docChanged', change),
     );
+    // The sample docs a demo step holds, else null.
+    let heldSample: { home: string } | null = null;
+    // Throws while a sample is held and a target lies outside its home.
+    const requireInsideSample = (...targets: string[]) => {
+      const held = heldSample;
+      if (held === null) {
+        return;
+      }
+      const isOutside = targets.some(
+        (target) => !services.paths.isInside(target, held.home),
+      );
+      if (isOutside) {
+        throw new Error(SAMPLE_ONLY_TEXT);
+      }
+    };
+    const addSampleDocs = async (scratchDir: string): Promise<SampleDocs> => {
+      const { indexDeps } = await docs;
+      const { files, paths } = services;
+      const home = paths.join(
+        await files.realPath(scratchDir),
+        SAMPLE_HOME_FOLDER,
+      );
+      await files.makeFolder(home);
+      if (!(await hasDocsFixture(files, home, paths))) {
+        await writeDocsFixture(files, home, paths);
+      }
+      const source = registry.add({
+        id: SAMPLE_SOURCE_ID,
+        title: SAMPLE_SOURCE_TITLE,
+        load: sampleLoad(indexDeps, home),
+      });
+      const held = { home };
+      heldSample = held;
+      return {
+        load: () => registry.load(SAMPLE_SOURCE_ID),
+        dispose() {
+          source.dispose();
+          if (heldSample === held) {
+            heldSample = null;
+          }
+        },
+      };
+    };
     const readDoc = async (path: string) => (await docs).docFiles.read(path);
     const writeDoc = async (
       path: string,
       text: string,
       expectedText: string | null,
     ) => {
+      requireInsideSample(path);
       const result = await (
         await docs
       ).docFiles.write(path, text, expectedText);
@@ -343,11 +433,13 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       return result;
     };
     const writeBytes = async (path: string, bytes: Uint8Array) => {
+      requireInsideSample(path);
       const result = await (await docs).docFiles.writeBytes(path, bytes);
       api.events.emit('docSaved', { path });
       return result;
     };
     const trashDoc = async (path: string) => {
+      requireInsideSample(path);
       const result = await (await docs).docFiles.trash(path);
       if (result.trashed.length > 0) {
         api.events.emit('docTrashed', { path, trashed: result.trashed });
@@ -374,11 +466,15 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     channel.handle('writeDoc', writeDoc);
     channel.handle('writeBytes', writeBytes);
     channel.handle('createDoc', async (request) => {
+      requireInsideSample(
+        request.type === 'path' ? request.path : request.place.folder,
+      );
       const created = await (await docs).docFiles.create(request);
       api.events.emit('docCreated', { path: created.path });
       return created;
     });
     channel.handle('renameDoc', async (from, to) => {
+      requireInsideSample(from, to);
       const renamed = await (await docs).docFiles.rename(from, to);
       api.events.emit('docRenamed', { from, to: renamed });
       return renamed;
@@ -421,6 +517,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         log: services.log,
       }),
     );
+    registerDemoSteps(services, { addSampleDocs });
     const sessions = api.dependency(sessionsMainKey);
     services.selfTest?.run(
       docsSelfTestScript({
@@ -444,6 +541,8 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       commands: {},
       exports: (consumer): DocsMainExports => ({
         addSource: (source) => consumer.track(registry.add(source)),
+        addSampleDocs: async (scratchDir) =>
+          consumer.track(await addSampleDocs(scratchDir)),
         machineIndex: () => registry.load(MACHINE_SOURCE_ID),
         rebuildMachineIndex: () => registry.rebuild(MACHINE_SOURCE_ID),
         readDoc,

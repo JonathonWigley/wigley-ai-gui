@@ -46,6 +46,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
+import { type DocsSampleView, registerDemoSteps } from './demo-steps';
 import type { DocChangeRecord } from './docs-state';
 import {
   createDocsView,
@@ -108,11 +109,16 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 // The machine view's id; each view `addView` hands out is `view:<n>`.
 const machineViewId = 'machine';
 
+// The id of the view `showSample` builds.
+const SAMPLE_VIEW_ID = 'sample';
+
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
 // side in a split: the `docs-session-tab` plugin's Docs tab in each session
-// among them. Each command acts on the active view: the machine view while
-// Docs mode shows, else the added view that is visible. A change made in one
+// among them. A demo step's sample view (`showSample`) takes the machine
+// view's place in Docs mode while it is held. Each command acts on the active
+// view: the view Docs mode shows while it shows, else the added view that is
+// visible. A change made in one
 // view reaches every other and the star set every view shares, and a view
 // showing closes the others' overlays, since two views' pane scopes may be
 // equal. `toggleTree` hides or shows the active view's tree. `openDoc` opens a
@@ -144,6 +150,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       .catch((error) => log(`watches not cleared: ${errorText(error)}`));
 
     let isDocsModeShown = false;
+    // The sample view a demo step shows in Docs mode in place of the machine
+    // view, else null; `didHideSideBar` is whether its show hid the side bar.
+    let heldSample: { added: AddedView; didHideSideBar: boolean } | null =
+      null;
     // View id → the added view.
     const addedViews = new Map<string, AddedView>();
     let addedCount = 0;
@@ -283,7 +293,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       machineViewId,
       MACHINE_SOURCE_ID,
       placeOf(MACHINE_SOURCE_ID),
-      () => isDocsModeShown,
+      () => isDocsModeShown && heldSample === null,
       (path) =>
         mode.setContext(
           path === null
@@ -345,6 +355,37 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
     };
 
+    // The view Docs mode shows: a held sample view, else the machine view.
+    const modeView = (): DocsView => heldSample?.added.view ?? machineView;
+
+    // What `shown` gives the machine view.
+    const showMachineView = () => {
+      closeOverlaysBesides(machineView);
+      api.keys.setScope(machineView.focusScope());
+      api.panes.setResizeTarget(null);
+      api.panes.setFocusTarget(machineView.focusTarget);
+      machineView.focusHeldAside();
+      machineView.showFirstTime();
+      showTreeEdge(machineView);
+    };
+
+    // What `shown` gives a held sample view: the side bar hidden first, so
+    // the sample alone shows, then its keys and first index read.
+    const showSampleView = (held: NonNullable<typeof heldSample>) => {
+      if (mode.sideBarShown()) {
+        mode.toggleSideBar();
+        held.didHideSideBar = true;
+      }
+      const { view, split } = held.added;
+      split.reloadWidth();
+      closeOverlaysBesides(view);
+      api.keys.setScope(view.focusScope());
+      api.panes.setResizeTarget(split);
+      api.panes.setFocusTarget(view.focusTarget);
+      view.focusHeldAside();
+      view.showFirstTime();
+    };
+
     // `add` calls `shown` before it returns only for the first mode added;
     // Sessions mode starts before Docs mode. Focus leaves the tree for the
     // doc as the side bar hides, and moves to the tree as it opens over the
@@ -352,7 +393,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // doc enters the tree as the side bar, and its way back closes a narrow
     // window's side bar overlay, as a pick does, and returns to main's last
     // pane. A shown view's scope coming back as the right column's focuses the
-    // column (`focusHeldAside`).
+    // column (`focusHeldAside`). While a sample view is held, `shown`,
+    // `focusSideBar` and `focusMain` act on it instead of the machine view.
     const mode = api.modes.add({
       id: 'docs',
       title: 'Docs',
@@ -361,13 +403,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       sideBar: machineView.tree,
       shown() {
         isDocsModeShown = true;
-        closeOverlaysBesides(machineView);
-        api.keys.setScope(machineView.focusScope());
-        api.panes.setResizeTarget(null);
-        api.panes.setFocusTarget(machineView.focusTarget);
-        machineView.focusHeldAside();
-        machineView.showFirstTime();
-        showTreeEdge(machineView);
+        if (heldSample === null) {
+          showMachineView();
+        } else {
+          showSampleView(heldSample);
+        }
       },
       hidden: () => undefined,
       sideBarHidden: () => {
@@ -378,10 +418,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeOpenedOverIn(machineView);
         showTreeEdge(machineView);
       },
-      focusSideBar: () => machineView.focusTree(),
+      focusSideBar: () => modeView().focusTree(),
       focusMain: () => {
         mode.picked();
-        machineView.focusMain();
+        modeView().focusMain();
       },
     });
     // A narrowing hides the side bar without telling the mode, so the machine
@@ -411,16 +451,15 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
     };
 
-    // A docs view over the source `sourceId`, its tree and doc in a split
-    // whose width every added view shares, and its handle; its keys act while
-    // `isVisible`.
-    const addView = (
+    // A docs view `viewId` over the source `sourceId`, its tree and doc in a
+    // split whose width every added view shares, its place written through
+    // `place`, filed in `addedViews`; its keys act while `isVisible`.
+    const createAddedView = (
+      viewId: string,
       sourceId: string,
-      options: { isVisible(): boolean },
-    ): DocsViewHandle => {
-      addedCount += 1;
-      const place = placeOf(sourceId);
-      const viewId = `view:${String(addedCount)}`;
+      place: PlaceWrites<DocsPlace>,
+      isVisible: () => boolean,
+    ): AddedView => {
       const split = createSplit({
         ...SESSION_TREE_SPLIT,
         uiState: services.uiState,
@@ -433,7 +472,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           viewId,
           sourceId,
           place,
-          () => options.isVisible(),
+          isVisible,
           () => undefined,
           () => {
             if (added.isTreeHidden) {
@@ -446,12 +485,32 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         sourceId,
         split,
         isTreeHidden: false,
-        isVisible: () => options.isVisible(),
+        isVisible,
       };
       split.element.classList.add('docs-split');
       split.start.append(added.view.tree);
       split.end.append(added.view.doc);
       addedViews.set(viewId, added);
+      return added;
+    };
+
+    const disposeAddedView = (viewId: string, added: AddedView) => {
+      addedViews.delete(viewId);
+      callEach([added.view, added.split], (part) => part.dispose());
+    };
+
+    // A docs view over the source `sourceId`, as `createAddedView` builds
+    // it, and its handle.
+    const addView = (
+      sourceId: string,
+      options: { isVisible(): boolean },
+    ): DocsViewHandle => {
+      addedCount += 1;
+      const viewId = `view:${String(addedCount)}`;
+      const added = createAddedView(viewId, sourceId, placeOf(sourceId), () =>
+        options.isVisible(),
+      );
+      const { split } = added;
       return {
         element: split.element,
         shown() {
@@ -468,9 +527,46 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         },
         hasUnsavedEdits: () => added.view.hasUnsavedEdits(),
         sourceReplaced: () => added.view.sourceReplaced(),
+        dispose: () => disposeAddedView(viewId, added),
+      };
+    };
+
+    // A demo step's view over the source `sourceId`, built as `addView`
+    // builds one but with its place written nowhere, shown in Docs mode's
+    // sheet in place of the machine view's doc until the dispose. Docs mode
+    // reads no machine index while it is held, and its side bar comes back at
+    // the dispose when the sample's show hid it.
+    const showSample = (sourceId: string): DocsSampleView => {
+      if (heldSample !== null) {
+        throw new Error('Docs mode already shows a sample');
+      }
+      const added = createAddedView(
+        SAMPLE_VIEW_ID,
+        sourceId,
+        { write: () => undefined, reset: () => undefined },
+        () => isDocsModeShown,
+      );
+      const held = { added, didHideSideBar: false };
+      heldSample = held;
+      machineView.doc.replaceWith(added.split.element);
+      if (mode.isShown()) {
+        showSampleView(held);
+      }
+      return {
+        openDoc: (path, line) => added.view.openDoc(path, line),
         dispose() {
-          addedViews.delete(viewId);
-          callEach([added.view, split], (part) => part.dispose());
+          if (heldSample !== held) {
+            return;
+          }
+          heldSample = null;
+          added.split.element.replaceWith(machineView.doc);
+          disposeAddedView(SAMPLE_VIEW_ID, added);
+          if (held.didHideSideBar && !mode.sideBarShown()) {
+            mode.toggleSideBar();
+          }
+          if (mode.isShown()) {
+            showMachineView();
+          }
         },
       };
     };
@@ -516,7 +612,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     const activeView = (): DocsView | null => {
       if (isDocsModeShown) {
-        return machineView;
+        return modeView();
       }
       for (const added of addedViews.values()) {
         if (added.isVisible()) {
@@ -540,6 +636,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       machineView.openDoc(path, line);
     };
     api.channel.on('openDoc', ({ path, line }) => openDoc(path, line));
+
+    registerDemoSteps(services, {
+      showSample,
+      commands: api.commands,
+      paths: services.paths,
+    });
 
     // On a docs view whose tree is hidden — Docs mode's side bar by `Space k
     // d`, `Space v t` or a narrow window, or an added view's tree by `Space v

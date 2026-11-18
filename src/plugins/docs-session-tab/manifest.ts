@@ -8,6 +8,8 @@ export const docsSessionTabManifest = definePlugin({
   label: 'Docs session tab',
   description:
     'Adds a Docs tab in each session, over the docs that session reads.',
+  demoSkip:
+    "Its Docs tab shows in docs' docs.sessionTab step, which needs a demo session from docs' main half.",
   dependsOn: { main: [], page: ['docs', 'sessions'] },
   reads: { main: [], page: [] },
   commands: {},

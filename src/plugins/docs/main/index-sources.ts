@@ -21,7 +21,8 @@ import { locateScript } from './script-locator';
 // The machine index `docs_index.py build` writes, under the home folder.
 export const MACHINE_INDEX_FILE = '.agents/wigley-docs/index.json';
 
-const NO_INDEX_MESSAGE = 'No docs index yet — building…';
+// What the machine source reads with no index file.
+export const NO_INDEX_MESSAGE = 'No docs index yet — building…';
 const NO_SCRIPT_MESSAGE = 'docs_index.py not found — set docs.scriptPath';
 const NO_FOLDER_MESSAGE = 'No project folder is known for this session';
 

@@ -198,16 +198,35 @@ export interface SourceRead extends IndexLoad {
   canRebuild: boolean;
 }
 
+// The folder, under a demo's scratch folder, that holds its sample docs home.
+export const SAMPLE_HOME_FOLDER = 'sample-home';
+
+// The id the docs main part registers the demo's sample docs under.
+export const SAMPLE_SOURCE_ID = 'sample';
+
+// The demo's sample docs, registered as `SAMPLE_SOURCE_ID` until `dispose`;
+// `load` reads them as `loadIndex` does.
+export interface SampleDocs extends Disposable {
+  load(): Promise<SourceRead>;
+}
+
 // The docs main part's exports, each running the same code as the channel
-// method of its name, except `addSource`, which has none, `machineIndex` and
-// `rebuildMachineIndex`, which run `loadIndex` and `rebuildIndex` on the
-// machine source, and `watchDoc`, which takes a callback. `addSource` throws
-// on an id already registered; while the source is registered, the entries it
-// last loaded allow changes to their docs. None of them emits `indexLoaded`.
-// A source and a watch are filed under the dependent, so its stop disposes them,
-// and a watch that lands after that stop closes at once.
+// method of its name, except `addSource` and `addSampleDocs`, which have none,
+// `machineIndex` and `rebuildMachineIndex`, which run `loadIndex` and
+// `rebuildIndex` on the machine source, and `watchDoc`, which takes a
+// callback. `addSource` throws on an id already registered; while the source
+// is registered, the entries it last loaded allow changes to their docs. None
+// of them emits `indexLoaded`. A source, a sample and a watch are filed under
+// the dependent, so its stop disposes them, and a watch that lands after that
+// stop closes at once.
 export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
+  // Writes the docs self-test fixture into `<scratchDir>/SAMPLE_HOME_FOLDER`
+  // when it holds no index, and registers it as a load-only source that runs
+  // no script. While it is held, every write, create, rename and trash outside
+  // that home rejects, from the page and the exports alike. Rejects while
+  // another sample is held.
+  addSampleDocs(scratchDir: string): Promise<SampleDocs>;
   // The machine index source's load, as Docs mode reads it.
   machineIndex(): Promise<SourceRead>;
   // The machine index source's rebuild.
