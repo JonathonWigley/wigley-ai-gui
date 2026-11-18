@@ -520,7 +520,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
   The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. An
   opened activity line lists one plain row per step (the plain collapsible: a tool's status dot and its mono
-  summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
+  summary, `Thinking`, `Raw event`; under a layout that sets `activityInTranscript`, each tool and thinking row ending
+  with its time, dim, in tabular numerals), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'

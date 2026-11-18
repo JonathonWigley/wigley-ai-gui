@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { EntryKind } from '../layouts/layout';
-import { cursorStops, type ListRow, listRows, runIdOf } from './activity-runs';
+import {
+  cursorStops,
+  type ListRow,
+  listRows,
+  runIdOf,
+  stepDurationMs,
+} from './activity-runs';
 
 function entry(kind: EntryKind, id: string, at = 1000): ChatEntry {
   switch (kind) {
@@ -76,6 +82,12 @@ function entries(...specs: string[]): ChatEntry[] {
     const [kind, id] = kindAndId.split(':');
     return entry(kind as EntryKind, id, at === undefined ? 1000 : Number(at));
   });
+}
+
+// A tool call `agentId` made, a subagent's when it is not MAIN_AGENT_ID.
+function toolOf(agentId: string, id: string, at: number): ChatEntry {
+  const tool = entry('tool', id, at);
+  return tool.kind === 'tool' ? { ...tool, agentId } : tool;
 }
 
 function rowLabel(row: ListRow): string {
@@ -274,4 +286,71 @@ describe('activity runs', () => {
       );
     },
   );
+
+  // A main agent's call, two of subagent x's, then the main agent's text.
+  const subagentBetween = [
+    toolOf(MAIN_AGENT_ID, 't1', 2000),
+    toolOf('x', 's1', 2500),
+    toolOf('x', 's2', 3000),
+    ...entries('assistant:a@9000'),
+  ];
+
+  it.each([
+    {
+      given: 'a step before the next main entry',
+      list: entries('user:u@1000', 'tool:t1@2000', 'assistant:a@6200'),
+      index: 1,
+      expected: 4200,
+    },
+    {
+      given: "a main step with another agent's steps after it, skipped",
+      list: subagentBetween,
+      index: 0,
+      expected: 7000,
+    },
+    {
+      given: "a subagent step ending at its own agent's next entry",
+      list: subagentBetween,
+      index: 1,
+      expected: 500,
+    },
+    {
+      given: "a subagent's last step with only other agents after it",
+      list: subagentBetween,
+      index: 2,
+      expected: null,
+    },
+    {
+      given: 'the last entry',
+      list: entries('user:u@1000', 'tool:t1@2000'),
+      index: 1,
+      expected: null,
+    },
+    {
+      given: 'a step at 0',
+      list: entries('tool:t1@0', 'assistant:a@6200'),
+      index: 0,
+      expected: null,
+    },
+    {
+      given: 'an ending entry at 0',
+      list: entries('tool:t1@2000', 'assistant:a@0'),
+      index: 0,
+      expected: null,
+    },
+    {
+      given: 'a raw step ended by a notice',
+      list: entries('raw:w@2000', 'notice:n@2600'),
+      index: 0,
+      expected: 600,
+    },
+    {
+      given: "a raw step ended by the main agent's next entry",
+      list: entries('raw:w@2000', 'assistant:a@2900'),
+      index: 0,
+      expected: 900,
+    },
+  ])('stepDurationMs of $given → $expected', ({ list, index, expected }) => {
+    expect(stepDurationMs(list, index)).toBe(expected);
+  });
 });

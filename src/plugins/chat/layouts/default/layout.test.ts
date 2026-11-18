@@ -427,6 +427,7 @@ describe('default chat layout', () => {
       id: 't1',
       text: 'step 1',
       streaming: true,
+      durationMs: null,
       raw: [] as unknown[],
     };
 
@@ -453,9 +454,82 @@ describe('default chat layout', () => {
     input: { command: 'ls -la' } as unknown,
     summary: 'ls -la',
     result: null as { text: string; isError: boolean } | null,
+    durationMs: null as number | null,
     raw: [] as unknown[],
   };
   const inputJson = `json:${JSON.stringify({ command: 'ls -la' })}`;
+  const thinkingEntry = {
+    kind: 'thinking' as const,
+    id: 'k1',
+    text: 'step',
+    streaming: false,
+    durationMs: null as number | null,
+    raw: [] as unknown[],
+  };
+
+  // Draws a `kind` step row holding `durationMs`; returns its time element and
+  // an update to another duration.
+  function drawStepTime(
+    kind: 'tool' | 'thinking',
+    durationMs: number | null,
+    kit: ChatKit,
+    trailing: () => HTMLElement | null | undefined,
+  ): { time: FakeElement; update(next: number | null): void } {
+    if (kind === 'tool') {
+      const view = draw<'tool'>({ ...toolEntry, durationMs }, kit);
+      return {
+        time: asFake(trailing() as HTMLElement),
+        update: (next) => view.update?.({ ...toolEntry, durationMs: next }),
+      };
+    }
+    const view = draw<'thinking'>({ ...thinkingEntry, durationMs }, kit);
+    return {
+      time: asFake(trailing() as HTMLElement),
+      update: (next) => view.update?.({ ...thinkingEntry, durationMs: next }),
+    };
+  }
+
+  // The fake kit's `duration` is whole seconds; the kit owns the real format.
+  it.each(
+    (['tool', 'thinking'] as const).flatMap((kind) => [
+      { kind, case: 'null', drawn: null, next: null, text: '', hidden: true },
+      {
+        kind,
+        case: '4200',
+        drawn: 4200,
+        next: 4200,
+        text: '· 4s',
+        hidden: false,
+      },
+      {
+        kind,
+        case: 'null then update 65000',
+        drawn: null,
+        next: 65000,
+        text: '· 65s',
+        hidden: false,
+      },
+    ]),
+  )(
+    '$kind duration: the trailing time shows and updates ($case)',
+    ({ kind, drawn, next, text, hidden }) => {
+      const { kit, calls } = fakeKit();
+      const { time, update } = drawStepTime(
+        kind,
+        drawn,
+        kit,
+        () => calls.collapsibleRows[0].trailing,
+      );
+      expect(time.className).toBe('chat-step-time');
+      if (drawn === null) {
+        expect([time.textContent, time.hidden]).toEqual(['', true]);
+      }
+
+      update(next);
+
+      expect([time.textContent, time.hidden]).toEqual([text, hidden]);
+    },
+  );
 
   it.each([
     { summary: 'ls -la', line: 'Bash · ls -la' },

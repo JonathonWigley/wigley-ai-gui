@@ -1,4 +1,4 @@
-import type { ChatEntry } from '../../../contracts/agent';
+import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { StepInput } from '../layouts/layout';
 import { blockStopId } from './entry-focus';
 
@@ -80,13 +80,12 @@ export function listRows(
   let steps: StepEntry[] = [];
   let previousAt: number | null = null;
   const closeRun = (endedAt: number | null, live: boolean): void => {
-    const startedAt = previousAt || steps[0].at;
     rows.push({
       kind: 'run',
       runId: runIdOf(steps[0].id),
       steps,
       live,
-      startedAt: startedAt === 0 ? null : startedAt,
+      startedAt: knownAt(previousAt || steps[0].at),
       endedAt,
     });
     steps = [];
@@ -106,6 +105,38 @@ export function listRows(
     closeRun(working ? null : steps[steps.length - 1].at, working);
   }
   return rows;
+}
+
+// How long the step at `index` of `entries` took: from its `at` to the next
+// entry that is not another agent's. A raw step is the main agent's. Null when
+// nothing after it ends it, or when either time is unknown.
+export function stepDurationMs(
+  entries: readonly ChatEntry[],
+  index: number,
+): number | null {
+  const step = entries[index];
+  const agentId = agentIdOf(step) ?? MAIN_AGENT_ID;
+  for (let next = index + 1; next < entries.length; next++) {
+    const nextAgentId = agentIdOf(entries[next]);
+    if (nextAgentId !== null && nextAgentId !== agentId) {
+      continue;
+    }
+    const startedAt = knownAt(step.at);
+    const endedAt = knownAt(entries[next].at);
+    return startedAt === null || endedAt === null ? null : endedAt - startedAt;
+  }
+  return null;
+}
+
+// The agent that wrote `entry`; null for an entry no agent wrote.
+function agentIdOf(entry: ChatEntry): string | null {
+  return 'agentId' in entry ? entry.agentId : null;
+}
+
+// An entry's time; null for an `at` of 0, an entry restored from a line with
+// no time.
+function knownAt(at: number): number | null {
+  return at === 0 ? null : at;
 }
 
 // Whether the entry cursor stops on `row`: every row but a turn or compaction

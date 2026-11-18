@@ -40,6 +40,7 @@ import {
   type ListStop,
   listRows,
   rowStops,
+  stepDurationMs,
 } from './activity-runs';
 import {
   createEntryKit,
@@ -494,13 +495,30 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   // Redraws each user entry of `next` whose slot's input holds another delivery
   // or latest flag than its input now would.
   const redrawChangedUserEntries = (next: readonly ChatEntry[]) => {
-    for (const entry of next) {
+    for (const [index, entry] of next.entries()) {
       const slot = slots.get(entry.id);
       if (slot === undefined || entry.kind !== 'user') {
         continue;
       }
-      const input = entryInput(entry, next);
+      const input = entryInput(entry, next, index);
       if (isDeliveryChanged(slot.input, input)) {
+        redrawSlot(slot, entry, input, deps);
+        readSlot(slot);
+      }
+    }
+  };
+
+  // Redraws each step slot whose input holds no duration yet when `next` now
+  // holds the entry that ends its step.
+  const redrawEndedSteps = (next: readonly ChatEntry[]) => {
+    for (const [index, entry] of next.entries()) {
+      const slot = slots.get(entry.id);
+      if (slot === undefined || !isUnendedStep(slot.input)) {
+        continue;
+      }
+      const input = entryInput(entry, next, index);
+      const hasEnded = !isUnendedStep(input);
+      if (hasEnded) {
         redrawSlot(slot, entry, input, deps);
         readSlot(slot);
       }
@@ -850,20 +868,27 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     put(entry, next) {
       entries = transcriptEntries(next, activityInTranscript);
       const slot = slots.get(entry.id);
+      const index = next.findIndex((held) => held.id === entry.id);
       const isNewSlot =
         slot === undefined && isInTranscript(entry, activityInTranscript);
       if (isNewSlot) {
-        const created = buildSlot(entry, entryInput(entry, next), deps);
+        const created = buildSlot(entry, entryInput(entry, next, index), deps);
         readSlot(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.insertBefore(created.element, deps.turnLine);
       } else if (slot !== undefined) {
-        redrawSlot(slot, entry, entryInput(entry, next), deps);
+        redrawSlot(slot, entry, entryInput(entry, next, index), deps);
         readSlot(slot);
       }
       if (entry.kind === 'user') {
         redrawChangedUserEntries(next);
+      }
+      // An entry with no slot before this put is new to the list, or one the
+      // transcript leaves out, either of which may end a drawn step.
+      const mayEndAStep = activityInTranscript && slot === undefined;
+      if (mayEndAStep) {
+        redrawEndedSteps(next);
       }
       changed();
     },
@@ -885,8 +910,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       queuedSlots.clear();
       slotSizes.disconnect();
       list.replaceChildren();
-      for (const entry of entries) {
-        const created = buildSlot(entry, entryInput(entry, next), deps);
+      for (const [index, entry] of next.entries()) {
+        if (!isInTranscript(entry, activityInTranscript)) {
+          continue;
+        }
+        const created = buildSlot(entry, entryInput(entry, next, index), deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
         readSlot(created);
         slots.set(entry.id, created);
@@ -1131,14 +1159,20 @@ function transcriptEntries(
 
 // What a layout draws `entry` from: the entry, a harness kind's included; a
 // result with its turn's step count from the session's `entries`, steps out of
-// the transcript included; a user entry with whether it is the latest delivery
-// entry, and with its sender and body when another session's agent sent it.
+// the transcript included; a tool or thinking step with its duration, `index`
+// being its place in `entries`; a user entry with whether it is the latest
+// delivery entry, and with its sender and body when another session's agent
+// sent it.
 function entryInput(
   entry: ChatEntry,
   entries: readonly ChatEntry[],
+  index: number,
 ): EntryInput<AnyEntryKind> {
   if (entry.kind === 'result') {
     return { ...entry, stepCount: resultStepCount(entries, entry.id) };
+  }
+  if (entry.kind === 'tool' || entry.kind === 'thinking') {
+    return { ...entry, durationMs: stepDurationMs(entries, index) };
   }
   if (entry.kind === 'user') {
     const frame = readAgentFrame(entry.text);
@@ -1150,6 +1184,14 @@ function entryInput(
     };
   }
   return entry;
+}
+
+// Whether `input` is a tool or thinking step's with no duration yet.
+function isUnendedStep(input: EntryInput<AnyEntryKind>): boolean {
+  return (
+    (input.kind === 'tool' || input.kind === 'thinking') &&
+    input.durationMs === null
+  );
 }
 
 // Whether `entry` is the last user entry of `entries` holding a delivery.

@@ -77,4 +77,28 @@ describe('createCollapsibleCard', () => {
       expect(collapsible.isOpen()).toBe(true);
     }
   });
+
+  it.each([
+    { case: 'given', withTrailing: true },
+    { case: 'left out', withTrailing: false },
+  ])(
+    'trailing: sits in the head after the summary ($case)',
+    ({ withTrailing }) => {
+      const trailing = new FakeElement('span');
+      const collapsible = createCollapsibleCard({
+        summary: 's',
+        trailing: withTrailing ? asHtml(trailing) : undefined,
+        body: () => asHtml(new FakeElement('div')),
+      });
+
+      const children = head(collapsible.element).children;
+      const summaryAt = children.findIndex((child) =>
+        child.classList.contains('ui-collapsible-summary'),
+      );
+      expect(summaryAt).toBeGreaterThan(-1);
+      expect(children.slice(summaryAt + 1)).toEqual(
+        withTrailing ? [trailing] : [],
+      );
+    },
+  );
 });

@@ -21,6 +21,8 @@ export interface CollapsibleCardOptions {
   // A one-line row with no card chrome in place of a card.
   plain?: boolean;
   leading?: HTMLElement | null;
+  // Sits in the head after the summary.
+  trailing?: HTMLElement | null;
   open?: boolean;
   // Build the body once, at creation, and hide it while closed.
   keepBody?: boolean;
@@ -67,6 +69,9 @@ export function createCollapsibleCard(
     summary.classList.add('ui-collapsible-summary--mono');
   }
   head.append(summary);
+  if (options.trailing) {
+    head.append(options.trailing);
+  }
   root.append(head);
   const keptBody =
     options.keepBody === true ? element('div', 'ui-collapsible-body') : null;

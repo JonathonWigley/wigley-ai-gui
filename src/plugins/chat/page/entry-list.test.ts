@@ -681,6 +681,35 @@ function recordingActivity(calls: ActivityCall[]): ShownLayouts<ChatLayout> {
   );
 }
 
+// A user layout with activity in the transcript whose tool and thinking parts
+// record the duration of each input they draw or update with, by entry id.
+function recordingStepDurations() {
+  const durations = new Map<string, (number | null)[]>();
+  const record = (input: { id: string; durationMs: number | null }) =>
+    durations.set(input.id, [
+      ...(durations.get(input.id) ?? []),
+      input.durationMs,
+    ]);
+  const drawStep = (
+    parent: HTMLElement,
+    input: { id: string; durationMs: number | null },
+    kit: ChatKit,
+  ) => {
+    record(input);
+    return { element: kit.el(parent, 'div', 'recorded'), update: record };
+  };
+  const shown = activityShown(
+    {
+      entries: {
+        tool: (parent, input, kit) => drawStep(parent, input, kit),
+        thinking: (parent, input, kit) => drawStep(parent, input, kit),
+      },
+    },
+    'recording',
+  );
+  return { durations, shown };
+}
+
 describe('entry list', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -1166,6 +1195,32 @@ describe('activity lines', () => {
       'chat-entry-slot chat-step-slot',
       'chat-entry-slot',
     ]);
+  });
+
+  it('put of an entry ending a step redraws the step with its duration', () => {
+    const { durations, shown } = recordingStepDurations();
+    const { put } = setUpList(shown);
+    put(timed(user('u1'), 1000));
+    put(timed(tool('t1'), 2000));
+    expect(durations.get('t1')?.at(-1)).toBeNull();
+
+    put(timed(assistant('done'), 6200));
+
+    expect(durations.get('t1')?.at(-1)).toBe(4200);
+  });
+
+  it('rebuild draws each step between entries with its duration', () => {
+    const { durations, shown } = recordingStepDurations();
+    const { list } = setUpList(shown);
+
+    list.rebuild([
+      timed(user('u1'), 1000),
+      timed(tool('t1'), 2000),
+      timed(thinking('k1'), 2500),
+      timed(assistant('done'), 6200),
+    ]);
+
+    expect([durations.get('t1'), durations.get('k1')]).toEqual([[500], [3700]]);
   });
 });
 

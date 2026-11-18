@@ -236,7 +236,8 @@ interview on 2026-10-23; this file is the record of both.
     `· 1 failed` in the error colour before the time.
   - **Open**: Enter on the focused activity line, or a click on it, opens it, and again closes it. The open line keeps
     its summary line and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry
-    builder; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
+    builder; under a layout that sets `activityInTranscript`, the built-in tool and thinking rows end with the step's
+    time (`· 4s`), from the step to the next entry that is not another agent's, shown once that entry arrives; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
     result in place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
     following the last activity line stays on it as steps arrive, and `G` lands on that line, until the open run
     overflows: at the bottom, whether or not the list had to scroll there, the cursor moves to the nearest step in view, and it follows the last step from there. A line stays open or
