@@ -33,7 +33,8 @@ export interface SettingKindRead {
 // one line, `document` the document editor over `<path>.json`; `text` is the
 // text it opens with for a set value (the box opens empty for an unset or null
 // one), and `parse` reads its text back. A `picker` opens the list picker on
-// `items`, each row's line its `label`, the cursor on the row's value.
+// `items`, each row's line its `label`, the cursor on the row's value; the open
+// list reads `items` again on each newer user config read.
 export type SettingKindEditor =
   | {
       type: 'box';

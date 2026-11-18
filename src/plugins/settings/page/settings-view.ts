@@ -3,7 +3,10 @@ import type { PluginStatus } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
-import type { ListPickerService } from '../../../contracts/list-picker';
+import type {
+  ListPickerRequest,
+  ListPickerService,
+} from '../../../contracts/list-picker';
 import type { UserKeymap } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -186,6 +189,10 @@ export interface PickRequest<T> {
   file: ConfigFile;
   title: string;
   items: readonly T[];
+  // The items a newer read holds, while the list is open: when they differ,
+  // the list takes them in place, keeping its filter and its cursor item. Left
+  // out, the open list keeps `items`.
+  itemsOf?(read: UserConfigRead): readonly T[];
   label(item: T): string;
   // The keys a row's item holds, printed for the platform; null for none.
   keysOf?(item: T): string | null;
@@ -297,7 +304,8 @@ export type SettingsCommand =
 // writes behind them, logging under `settings`. The panes, rows and picker
 // rows draw through the settings layout; `default` draws until the first
 // `setLayouts`. `load` reads the schema and both files; `reread` reads the
-// files again and redraws (the channel's `changed`); `shown` runs as the mode
+// files again and redraws (the channel's `changed`), an open picker whose
+// request has `itemsOf` taking the new items in place; `shown` runs as the mode
 // shows: the first time it opens the first section with focus on the side
 // bar, and each time it sets the scope where focus was left. Each change of
 // focus logs `sections focused` or `rows focused`. The keys show
@@ -455,6 +463,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     keymap: null,
   };
   let readCount = 0;
+  // Takes a newer read's items into the open picker; null when the request
+  // the picker last opened has no `itemsOf`.
+  let takeOpenPickerItems: ((read: UserConfigRead) => void) | null = null;
   let sectionsCursor = 0;
   let openSectionId = 'core';
   let openSectionTitle = '';
@@ -759,6 +770,9 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       draw();
       log('redrawn');
     }
+    if (picker.isOpen()) {
+      takeOpenPickerItems?.(read);
+    }
     return read;
   };
 
@@ -998,13 +1012,13 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       log(`box problem ${box.key}: ${problem}`);
       box.showMessage(problem);
     },
-    openPicker(request) {
+    openPicker<T>(request: PickRequest<T>) {
       const expectedText = latest?.[request.file].text ?? null;
       const focused = document.activeElement;
       if (focused instanceof HTMLElement) {
         focused.blur();
       }
-      picker.open({
+      const listRequest: ListPickerRequest<T> = {
         title: request.title,
         items: request.items,
         label: request.label,
@@ -1037,7 +1051,29 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
           request.cancelled?.();
           restoreFocus();
         },
-      });
+      };
+      let shown = request.items;
+      const { itemsOf } = request;
+      takeOpenPickerItems =
+        itemsOf === undefined
+          ? null
+          : (read) => {
+              const items = itemsOf(read);
+              if (isSameJson(items, shown)) {
+                return;
+              }
+              const cursor = picker.cursorIndex();
+              const selected =
+                cursor === null ? -1 : items.indexOf(shown[cursor]);
+              shown = items;
+              picker.open({
+                ...listRequest,
+                items,
+                selected,
+                keepFilter: true,
+              });
+            };
+      picker.open(listRequest);
     },
     commitSettings(layer, via) {
       commitQuietly(

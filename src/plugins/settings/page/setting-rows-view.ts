@@ -1,4 +1,7 @@
-import type { SettingSection } from '../../../contracts/user-config';
+import type {
+  SettingSection,
+  UserConfigRead,
+} from '../../../contracts/user-config';
 import type { SettingControlKind, SettingKindEditor } from '../contract';
 import { PLUGIN_LIST_PATH } from './plugin-rows';
 import { matchesSetting } from './row-filter';
@@ -52,18 +55,21 @@ function openKindBox(row: SettingRow, editor: BoxKindEditor, ctx: RowContext) {
   });
 }
 
-// Opens the list picker on the kind's items, the cursor on the row's value.
+// Opens the list picker on the kind's items, the cursor on the row's value;
+// the open list follows the kind's items in each newer read.
 function openKindPicker(
   row: SettingRow,
   editor: PickerKindEditor,
   ctx: RowContext,
 ) {
   const { leaf } = row;
-  const items = editor.items({ leaf, config: ctx.read() });
+  const itemsOf = (config: UserConfigRead) => editor.items({ leaf, config });
+  const items = itemsOf(ctx.read());
   ctx.openPicker({
     file: 'settings',
     title: leaf.label,
     items,
+    itemsOf,
     label: (item) => editor.label(item),
     selected: items.indexOf(row.value),
     chosen: (item, expectedText) =>

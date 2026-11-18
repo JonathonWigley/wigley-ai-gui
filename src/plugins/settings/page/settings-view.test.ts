@@ -118,7 +118,7 @@ function fakeChannel(
     invoke,
     on: () => ({ dispose: () => undefined }),
   } as unknown as PageChannel<SettingsChannel>;
-  return { channel, written, writtenKeymaps, asked };
+  return { channel, written, writtenKeymaps, asked, read };
 }
 
 interface ShownViewOptions {
@@ -158,7 +158,7 @@ async function shownView({
   controlKind = builtInKind,
   beforeLoad = () => undefined,
 }: ShownViewOptions = {}) {
-  const { channel, written, writtenKeymaps, asked } = fakeChannel(
+  const { channel, written, writtenKeymaps, asked, read } = fakeChannel(
     schema,
     keymap,
     mayDisable,
@@ -235,6 +235,7 @@ async function shownView({
   return {
     view,
     overlay,
+    read,
     written,
     writtenKeymaps,
     asked,
@@ -605,6 +606,51 @@ describe('createSettingsView', () => {
     await settle();
 
     expect(written).toEqual([{ p: { mode: 'b' } }]);
+  });
+
+  it('an open kind picker takes a newer read’s items in place, keeping its cursor item', async () => {
+    const { view, overlay, read, written } = await shownView({
+      schema: {
+        ...SCHEMA,
+        sections: [
+          {
+            id: 'docs',
+            title: 'Docs',
+            leaves: [
+              {
+                path: 'docs.layout',
+                label: 'Layout',
+                description: 'The docs layout',
+                control: { kind: 'layout', choices: null },
+                fallback: { value: 'default' },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    read.layoutNames = { docs: ['default', 'zeta'] };
+    view.commands.edit();
+    await settle();
+    view.commands.pickerDown();
+
+    read.layoutNames = { docs: ['alpha', 'default', 'zeta'] };
+    view.reread();
+    await settle();
+
+    const rows = findAll(overlay, 'ui-row').map((row) => [
+      row.textContent,
+      row.classList.contains('is-cursor'),
+    ]);
+    view.commands.pickerChoose();
+    await settle();
+
+    expect(rows).toEqual([
+      ['alpha', false],
+      ['default', false],
+      ['zeta', true],
+    ]);
+    expect(written).toEqual([{ docs: { layout: 'zeta' } }]);
   });
 
   it("a picker row's anchors are disposed as the picker closes", async () => {
