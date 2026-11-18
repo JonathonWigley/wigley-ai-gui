@@ -331,11 +331,7 @@ describe('createDemoRun', () => {
 
     await run.stop();
 
-    expect(calls).toEqual([
-      'stage disposed',
-      'close s1 finished',
-      ...TEARDOWN,
-    ]);
+    expect(calls).toEqual(['stage disposed', 'close s1 finished', ...TEARDOWN]);
     expect(run.isRunning()).toBe(false);
     expect(logged).toContain('run stopped');
   });
@@ -353,10 +349,6 @@ describe('createDemoRun', () => {
     await run.stop();
 
     expect(logged).toContain('leave p.one failed: broke');
-    expect(calls).toEqual([
-      'stage disposed',
-      'close s1 finished',
-      ...TEARDOWN,
-    ]);
+    expect(calls).toEqual(['stage disposed', 'close s1 finished', ...TEARDOWN]);
   });
 });

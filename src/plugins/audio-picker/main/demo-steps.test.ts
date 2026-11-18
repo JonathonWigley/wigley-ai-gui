@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  DemoMainContext,
-  DemoMainStep,
-} from '../../../contracts/demo';
+import type { DemoMainContext, DemoMainStep } from '../../../contracts/demo';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { fakeChat } from '../../agent-form-fakes.test-support';

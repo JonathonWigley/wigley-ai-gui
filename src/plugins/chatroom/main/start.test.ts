@@ -754,9 +754,9 @@ describe('chatroom demo step', () => {
         : await harness.files.list(DATA_FOLDER, { recursive: true });
     expect(dataFiles).toEqual([]);
     expect(stage.sessions).toEqual({ lead: 'rL', peer: 'rP' });
-    expect(
-      roomView(DEMO_ROOM)?.threads.map(({ thread }) => thread),
-    ).toContain(FIXTURE_THREAD);
+    expect(roomView(DEMO_ROOM)?.threads.map(({ thread }) => thread)).toContain(
+      FIXTURE_THREAD,
+    );
 
     stage.dispose();
     await settle();

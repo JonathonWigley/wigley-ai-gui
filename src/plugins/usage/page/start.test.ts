@@ -186,9 +186,7 @@ describe('usagePagePart', () => {
         .filter((message) => message.startsWith('details'));
 
     await stage.beats[1].show();
-    expect(detailsLines()).toEqual([
-      expect.stringMatching(/^details shown: /),
-    ]);
+    expect(detailsLines()).toEqual([expect.stringMatching(/^details shown: /)]);
 
     stage.dispose();
     expect(detailsLines()).toEqual([

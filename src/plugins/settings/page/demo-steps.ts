@@ -25,8 +25,7 @@ export function registerDemoSteps(
     section: 'shell',
     order: 3,
     title: 'Settings',
-    caption:
-      'Settings mode edits every setting, plugin and key bind in place.',
+    caption: 'Settings mode edits every setting, plugin and key bind in place.',
     files: [
       'src/plugins/settings/page/start.ts',
       'src/plugins/settings/page/settings-view.ts',

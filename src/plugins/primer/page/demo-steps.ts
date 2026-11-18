@@ -1,9 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
-import type {
-  PageServices,
-  PluginCommands,
-} from '../../../contracts/plugin';
+import type { PageServices, PluginCommands } from '../../../contracts/plugin';
 import {
   type DemoFormWaitDeps,
   demoFormBeat,

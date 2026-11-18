@@ -195,7 +195,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         const harnesses = deps.harnesses();
         const isDemoRunning = harnesses.has(DEMO_HARNESS_ID);
         if (isDemoRunning) {
-          log('start prompt: the demo runs, projects and recent folders hidden');
+          log(
+            'start prompt: the demo runs, projects and recent folders hidden',
+          );
         }
         const recent = isDemoRunning ? [] : userRecent;
         const projects = isDemoRunning ? [] : userProjects;

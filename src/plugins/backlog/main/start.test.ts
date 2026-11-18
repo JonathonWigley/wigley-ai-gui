@@ -1418,7 +1418,9 @@ describe('backlog demo step', () => {
 
     await backlog.enterStep();
 
-    expect(await backlog.listed.stat(`${SCRATCH}/old-backlog/1`)).not.toBeNull();
+    expect(
+      await backlog.listed.stat(`${SCRATCH}/old-backlog/1`),
+    ).not.toBeNull();
     expect(await backlog.listed.stat(SAMPLE_FOLLOWUPS)).not.toBeNull();
     expect(backlog.trash).not.toHaveBeenCalled();
   });

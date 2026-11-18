@@ -1227,7 +1227,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     deps.sectionPicked();
   };
 
-  const moveSections =(to: (count: number) => number) => {
+  const moveSections = (to: (count: number) => number) => {
     const count = sectionList().length;
     sectionsCursor = Math.max(0, Math.min(count - 1, to(count)));
     markCursor();

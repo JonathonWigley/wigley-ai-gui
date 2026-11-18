@@ -7,11 +7,7 @@ import { createAgentFormService } from './form-service';
 import { globalTimers } from './global-timers.test-support';
 import { createMemoryFormStore } from './memory-form-store';
 import { ScriptedFormPresenter } from './scripted-presenter';
-import {
-  TEST_FORM_TYPE,
-  type TestBody,
-  type TestForm,
-} from './test-form-type';
+import { TEST_FORM_TYPE, type TestBody, type TestForm } from './test-form-type';
 
 const DEADLINE_SECONDS = 30;
 

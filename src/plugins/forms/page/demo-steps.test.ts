@@ -42,9 +42,7 @@ function storeWith(activeSessionId: string) {
 }
 
 // The forms.round page half over `store`, entered on the demo session.
-async function enter(
-  store: ReturnType<typeof storeWith>,
-): Promise<DemoStage> {
+async function enter(store: ReturnType<typeof storeWith>): Promise<DemoStage> {
   const demoSteps = createDemoStepRegistry<DemoStep>();
   registerDemoSteps({ demoSteps } as unknown as PageServices, {
     store,
@@ -60,7 +58,10 @@ async function enter(
     log: (line) => logged.push(line),
   });
   const [step] = demoSteps.list();
-  return step.enter({ scratchDir: '/scratch', sessions: { session: DEMO_SESSION } });
+  return step.enter({
+    scratchDir: '/scratch',
+    sessions: { session: DEMO_SESSION },
+  });
 }
 
 beforeEach(() => {

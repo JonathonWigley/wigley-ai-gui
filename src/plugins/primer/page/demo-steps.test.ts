@@ -35,7 +35,10 @@ async function enter(activeSessionId: string): Promise<DemoStage> {
     log: (line) => logged.push(line),
   });
   const [step] = demoSteps.list();
-  return step.enter({ scratchDir: '/scratch', sessions: { session: DEMO_SESSION } });
+  return step.enter({
+    scratchDir: '/scratch',
+    sessions: { session: DEMO_SESSION },
+  });
 }
 
 beforeEach(() => {

@@ -1369,9 +1369,7 @@ describe('demo tasks', () => {
     await settle();
 
     expect(
-      part
-        .state()
-        ?.tasks.find((view) => view.task.id === DEMO_TASK_IDS.triage),
+      part.state()?.tasks.find((view) => view.task.id === DEMO_TASK_IDS.triage),
     ).toMatchObject({ task: { paused: true }, nextRun: null });
     expect(await part.taskFile()).toBe(before);
   });

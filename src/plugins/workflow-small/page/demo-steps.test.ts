@@ -46,30 +46,33 @@ describe('workflow-small page demo steps', () => {
     { name: 'Check', stage: 'check', done: 2, turnRunning: true },
     { name: 'Land', stage: 'land', done: 3, turnRunning: true },
     { name: 'Done', stage: 'done', done: 3, turnRunning: false },
-  ])('beat $name shows its flow', async ({ name, stage, done, turnRunning }) => {
-    const { step, shown } = registerStep();
-    const entered = await step.enter({
-      scratchDir: '/scratch',
-      sessions: { session: 's1' },
-    });
+  ])(
+    'beat $name shows its flow',
+    async ({ name, stage, done, turnRunning }) => {
+      const { step, shown } = registerStep();
+      const entered = await step.enter({
+        scratchDir: '/scratch',
+        sessions: { session: 's1' },
+      });
 
-    await entered.beats.find((beat) => beat.name === name)?.show();
+      await entered.beats.find((beat) => beat.name === name)?.show();
 
-    const flow = shown.at(-1);
-    expect({
-      sessionId: flow?.sessionId,
-      workflow: flow?.workflow,
-      stage: flow?.stage,
-      done: flow === undefined ? null : leadingDone(flow),
-      turnRunning: flow?.turnRunning,
-      state: flow?.state,
-    }).toEqual({
-      sessionId: 's1',
-      workflow: SMALL_WORKFLOW_ID,
-      stage,
-      done,
-      turnRunning,
-      state: null,
-    });
-  });
+      const flow = shown.at(-1);
+      expect({
+        sessionId: flow?.sessionId,
+        workflow: flow?.workflow,
+        stage: flow?.stage,
+        done: flow === undefined ? null : leadingDone(flow),
+        turnRunning: flow?.turnRunning,
+        state: flow?.state,
+      }).toEqual({
+        sessionId: 's1',
+        workflow: SMALL_WORKFLOW_ID,
+        stage,
+        done,
+        turnRunning,
+        state: null,
+      });
+    },
+  );
 });

@@ -37,8 +37,7 @@ function startOnHarness() {
     dependencies: [
       fakeDependency(
         sessionsPageKey,
-        () =>
-          ({ activate: () => undefined }) as unknown as SessionsPageExports,
+        () => ({ activate: () => undefined }) as unknown as SessionsPageExports,
       ),
     ],
   });

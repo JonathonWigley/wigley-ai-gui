@@ -174,7 +174,9 @@ function createDemoSessionSource(
   projectDir: string | null,
 ): IndexSource {
   const homeDir =
-    projectDir === null ? null : deps.paths.join(projectDir, SAMPLE_HOME_FOLDER);
+    projectDir === null
+      ? null
+      : deps.paths.join(projectDir, SAMPLE_HOME_FOLDER);
   return {
     id: sessionSourceId(sessionId),
     title: SESSION_SOURCE_TITLE,

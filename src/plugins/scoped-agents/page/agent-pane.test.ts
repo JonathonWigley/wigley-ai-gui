@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
-import {
-  PANE_DIRECTIONS,
-  type PaneDirection,
-} from '../../../contracts/panes';
+import { PANE_DIRECTIONS, type PaneDirection } from '../../../contracts/panes';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, installFocusFakeDom } from '../../../shared/page/test-dom';
 import { deferred } from '../../../shared/plugin-part-harness.test-support';
@@ -953,9 +950,9 @@ describe('createAgentPane', () => {
     await setup.answerAsk({ sessionId: 's1' });
 
     expect(setup.pane.holdsKeys()).toBe(true);
-    expect(
-      setup.mounts.map((mount) => [mount.sessionId, mount.shown]),
-    ).toEqual([['s1', 1]]);
+    expect(setup.mounts.map((mount) => [mount.sessionId, mount.shown])).toEqual(
+      [['s1', 1]],
+    );
     expect(setup.held).not.toContain('null');
     expect(
       setup.activeAtMount.map((active) => active === setup.pane.element),

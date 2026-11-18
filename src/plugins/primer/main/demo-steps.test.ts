@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PresentedAgentForm } from '../../../contracts/agent-forms';
-import type {
-  DemoMainContext,
-  DemoMainStep,
-} from '../../../contracts/demo';
+import type { DemoMainContext, DemoMainStep } from '../../../contracts/demo';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   fakeDependency,
@@ -11,7 +8,11 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatMainExports, chatMainKey } from '../../chat/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
-import { type Primer, type PrimerBody, SAVED_PRIMERS_FOLDER } from '../contract';
+import {
+  type Primer,
+  type PrimerBody,
+  SAVED_PRIMERS_FOLDER,
+} from '../contract';
 import { primerMainPart } from './start';
 
 const HOME = '/home/user';

@@ -14,7 +14,8 @@ import { nextOccurrence } from '../schedule';
 import type { DemoTasks } from './demo-tasks';
 
 const HOUR = 3_600_000;
-const SWEEP_PROMPT = 'Run the test suite and report each failure with its file.';
+const SWEEP_PROMPT =
+  'Run the test suite and report each failure with its file.';
 
 export interface SchedulingDemoMainDeps {
   clock: Clock;

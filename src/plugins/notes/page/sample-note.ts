@@ -40,7 +40,9 @@ type SampleHandlers = {
 // A note channel over `SAMPLE_NOTE` held in memory, which reaches no main
 // handler: edits, images and markup change only the copy, discard resets it,
 // every send is refused and a capture rejects.
-export function createSampleNoteChannel(deps: SampleNoteDeps): NoteDraftChannel {
+export function createSampleNoteChannel(
+  deps: SampleNoteDeps,
+): NoteDraftChannel {
   const sample = (): NoteDraft => ({
     ...SAMPLE_NOTE,
     tags: [...SAMPLE_NOTE.tags],

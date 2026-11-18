@@ -134,7 +134,10 @@ describe('createSessionRecency', () => {
   );
 
   const claudeRow = sessionRow('c', { hostSessionId: 'h1', project: 'alpha' });
-  const newClaudeRow = sessionRow('n', { hostSessionId: 'h2', project: 'beta' });
+  const newClaudeRow = sessionRow('n', {
+    hostSessionId: 'h2',
+    project: 'beta',
+  });
   const demoRow = (hostSessionId: string) =>
     sessionRow('d', {
       harness: DEMO_HARNESS_ID,

@@ -22,7 +22,9 @@ const CARRY_ON = { text: 'Carry on with the plan.', images: [] };
 
 // Counts the turns each session finished idle, from the moment it is made.
 // `idle(id, n)` resolves once session `id` finished `n` or more idle turns.
-function idleTurnCounter(deps: Pick<AutoCompactDemoMainDeps, 'onTurnFinished'>) {
+function idleTurnCounter(
+  deps: Pick<AutoCompactDemoMainDeps, 'onTurnFinished'>,
+) {
   const counts = new Map<string, number>();
   const waits: { sessionId: string; count: number; resolve(): void }[] = [];
   const subscription = deps.onTurnFinished(({ sessionId, how }) => {

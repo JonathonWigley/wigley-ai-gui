@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  DemoMainContext,
-  DemoMainStep,
-} from '../../../contracts/demo';
+import type { DemoMainContext, DemoMainStep } from '../../../contracts/demo';
 import type { CommandInfo, MainServices } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import type { ConfirmRequest } from '../../forms/contract';
@@ -62,10 +59,12 @@ describe('agent commands demo steps', () => {
     expect((await stage).sessions).toEqual({ session: 'demo-1' });
     await flush();
 
-    expect(confirmSample.mock.calls.map(([sessionId, request]) => [
-      sessionId,
-      request.title,
-    ])).toEqual([['demo-1', 'Run close the session?']]);
+    expect(
+      confirmSample.mock.calls.map(([sessionId, request]) => [
+        sessionId,
+        request.title,
+      ]),
+    ).toEqual([['demo-1', 'Run close the session?']]);
     expect(confirmSample.mock.calls[0]?.[1].detail).toContain(
       'sessions.closeSession',
     );
@@ -79,9 +78,7 @@ describe('agent commands demo steps', () => {
     await flush();
 
     expect(confirmSample).not.toHaveBeenCalled();
-    expect(logged).toEqual([
-      'demo confirm: sessions.closeSession not listed',
-    ]);
+    expect(logged).toEqual(['demo confirm: sessions.closeSession not listed']);
   });
 
   it('leaving aborts the confirm and logs no answer', async () => {

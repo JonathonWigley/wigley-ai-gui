@@ -90,8 +90,6 @@ describe('demoMainPart', () => {
     await harness.stop();
 
     expect(closedFolders).toEqual(['/data/demo/scratch']);
-    expect(harness.logs.map(({ message }) => message)).toContain(
-      'run stopped',
-    );
+    expect(harness.logs.map(({ message }) => message)).toContain('run stopped');
   });
 });

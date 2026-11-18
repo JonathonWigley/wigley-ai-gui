@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PresentedAgentForm } from '../../../contracts/agent-forms';
-import type {
-  DemoMainContext,
-  DemoMainStep,
-} from '../../../contracts/demo';
+import type { DemoMainContext, DemoMainStep } from '../../../contracts/demo';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   fakeDependency,
@@ -130,9 +127,9 @@ describe('forms demo steps', () => {
     await flush();
 
     expect(stage.sessions).toEqual({ session: 'demo-1' });
-    expect(
-      shown.map((round) => [round.sessionId, round.form.heading]),
-    ).toEqual([['demo-1', 'Daily quests: first pass']]);
+    expect(shown.map((round) => [round.sessionId, round.form.heading])).toEqual(
+      [['demo-1', 'Daily quests: first pass']],
+    );
     expect(await savedRoundFiles(harness)).toEqual([]);
     expect(chat.send).not.toHaveBeenCalled();
     stage.dispose();

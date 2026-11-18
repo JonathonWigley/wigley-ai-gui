@@ -7,7 +7,10 @@ import {
   type RoomServiceDeps,
 } from './room-service';
 
-export interface DemoRoomsDeps extends Omit<RoomServiceDeps, 'store' | 'files'> {
+export interface DemoRoomsDeps extends Omit<
+  RoomServiceDeps,
+  'store' | 'files'
+> {
   // Called with the room of each message a held room takes.
   rewriteRoom(roomName: string): void;
   // Called once a hold ends.

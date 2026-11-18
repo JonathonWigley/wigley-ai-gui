@@ -91,7 +91,8 @@ export const autoCompactMainPart: MainPart<typeof autoCompactManifest> = {
     registerDemoSteps(api.services, {
       chat,
       harnesses: api.services.agentHarnesses,
-      onTurnFinished: (listener) => api.events.on('chat.turnFinished', listener),
+      onTurnFinished: (listener) =>
+        api.events.on('chat.turnFinished', listener),
     });
     return { commands: {} };
   },

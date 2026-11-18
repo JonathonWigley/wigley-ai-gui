@@ -22,9 +22,14 @@ export function registerDemoSteps(
       title: 'Subagents and tasks',
       caption:
         'Each session keeps a roster of its subagents and background tasks, with their tools, models and spend.',
-      files: ['src/plugins/agents/roster.ts', 'src/plugins/agents/main/preview.ts'],
+      files: [
+        'src/plugins/agents/roster.ts',
+        'src/plugins/agents/main/preview.ts',
+      ],
       enter: async ({ sessions }: DemoPageContext) => ({
-        beats: [{ name: 'roster', show: () => deps.activate(sessions.session) }],
+        beats: [
+          { name: 'roster', show: () => deps.activate(sessions.session) },
+        ],
         dispose() {},
       }),
     }),

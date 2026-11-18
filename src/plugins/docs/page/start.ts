@@ -152,8 +152,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     let isDocsModeShown = false;
     // The sample view a demo step shows in Docs mode in place of the machine
     // view, else null; `didHideSideBar` is whether its show hid the side bar.
-    let heldSample: { added: AddedView; didHideSideBar: boolean } | null =
-      null;
+    let heldSample: { added: AddedView; didHideSideBar: boolean } | null = null;
     // View id → the added view.
     const addedViews = new Map<string, AddedView>();
     let addedCount = 0;

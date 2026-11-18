@@ -34,12 +34,10 @@ export function registerDemoSteps(
       'src/plugins/app-update/layouts/default/layout.js',
     ],
     async enter() {
-      const beats = BEATS.map(
-        ({ name, kind }): DemoBeat => ({
-          name,
-          show: () => deps.showDemoStatus(kind),
-        }),
-      );
+      const beats = BEATS.map(({ name, kind }): DemoBeat => ({
+        name,
+        show: () => deps.showDemoStatus(kind),
+      }));
       return { beats, dispose() {} };
     },
   });

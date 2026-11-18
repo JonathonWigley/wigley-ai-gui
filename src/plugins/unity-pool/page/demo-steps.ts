@@ -42,15 +42,13 @@ export function registerDemoSteps(
       if (sessionId === undefined) {
         throw new Error('unity-pool.pool: no demo session');
       }
-      const beats = BEATS.map(
-        ({ name, stage }): DemoBeat => ({
-          name,
-          async show() {
-            await deps.showStage(stage);
-            deps.activate(sessionId);
-          },
-        }),
-      );
+      const beats = BEATS.map(({ name, stage }): DemoBeat => ({
+        name,
+        async show() {
+          await deps.showStage(stage);
+          deps.activate(sessionId);
+        },
+      }));
       return { beats, dispose() {} };
     },
   });
