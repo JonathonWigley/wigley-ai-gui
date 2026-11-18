@@ -1,6 +1,6 @@
 # 02 — Playtest watch and the app's pick in LiveTools
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · crosses chat's replay lifecycle and LiveTools' async show (in-flight picks, generations)
 Wave: 2 · Depends on: 01

@@ -1,6 +1,6 @@
 # 01 — Playtest command parser
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the PlaytestSignal contract that 02 consumes
 Wave: 1 · Depends on: none
@@ -130,4 +130,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 16a017f9b · proof: diff read: both Produces present in playtest-command.ts; wave 1 tsc --noEmit passes · concerns: tab is a separator, CR is not; TS narrowing through a const boolean

@@ -313,12 +313,14 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `addSidePart`: the sources' bar, the window's fill, a row per source that opens into its items),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
   live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), window-pick.ts (the
-                 editor window lookup, the crop and the moved check, as pure functions), main/ (the `show_live_view`
-                 and `hide_live_view` tools, the window list through `services.screenCapture`, the preview sample, its
-                 self-test script), page/ (live-section.ts, the session hub's Live section through chat's
-                 `addSidePart` with `shrinksLast`, streaming only while on screen; stream-source.ts, the capture or
-                 `sample:` stream; layout/, the layout reader), layouts/ (its Layout contract and `default` layout);
-                 `docs/features/live-view/design.md`
+                 editor window lookup, the crop and the moved check, as pure functions), playtest-command.ts (a Bash
+                 command's playtest signal, a pure function), main/ (the `show_live_view` and `hide_live_view` tools,
+                 the window list through `services.screenCapture`, the playtest watch: opens a session's Live view when
+                 a live `editor_play` / `capture.py start` Bash call succeeds, read through chat's entries, and closes
+                 the view it opened on `editor_stop` for the same project; the preview sample, its self-test script),
+                 page/ (live-section.ts, the session hub's Live section through chat's `addSidePart` with `shrinksLast`,
+                 streaming only while on screen; stream-source.ts, the capture or `sample:` stream; layout/, the layout
+                 reader), layouts/ (its Layout contract and `default` layout); `docs/features/live-view/design.md`
   auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
                  close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section

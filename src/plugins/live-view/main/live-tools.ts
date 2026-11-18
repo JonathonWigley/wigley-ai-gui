@@ -97,14 +97,26 @@ export interface LiveTools {
   startSession(session: AgentSession): ToolSession;
   // `show_live_view` for the session, with its args already checked: writes
   // the session's pick and replies, or replies with the error and leaves the
-  // pick as it was. A session that hides or ends while it waits, or a call
-  // whose `signal` aborts, gets no pick and the interrupted error reply.
+  // pick as it was. A pick it writes is the agent's, an app-opened one
+  // included. A session that hides or ends while it waits, or a call whose
+  // `signal` aborts, gets no pick and the interrupted error reply.
   show(
     sessionId: string,
     args: ShowArgs,
     signal?: AbortSignal,
   ): Promise<ToolResult>;
-  // Deletes the session's pick, and keeps a `show` still waiting from writing one.
+  // The app's show for a session's playtest: the whole editor of
+  // `projectPath`, only while the session has no pick, marked as opened for
+  // `projectPath`. A failed lookup logs a line and writes no pick. Writes
+  // nothing when a pick, a hide, a stop, the session's end or a later
+  // `playtestStarted` came while it waited. Never rejects.
+  playtestStarted(sessionId: string, projectPath: string): Promise<void>;
+  // Deletes the pick the app opened for `projectPath` (one trailing `/`
+  // ignored), and keeps a `playtestStarted` still waiting from writing one; a
+  // null path, another project, or an agent's pick stays.
+  playtestStopped(sessionId: string, projectPath: string | null): void;
+  // Deletes the session's pick, and keeps a `show` or `playtestStarted` still
+  // waiting from writing one.
   sessionEnded(sessionId: string): void;
 }
 
@@ -153,10 +165,58 @@ function editorProcessId(text: string | null): number | null {
   return isProcessId ? (processId as number) : null;
 }
 
-// `show_live_view` and `hide_live_view`: each session's agent picks the
-// window its Live section streams, in the picks slot under the session's id.
+// The pick for the editor that has `projectPath` open, or the error text a
+// `show_live_view` reply carries. Never rejects.
+async function lookUpPick(
+  { files, paths, screenCapture }: Omit<LiveToolsDeps, 'picks' | 'log'>,
+  projectPath: string,
+  gameRect: GameRectTuple | null,
+): Promise<{ pick: LivePick } | { error: string }> {
+  const folder = paths.base(projectPath);
+  if (!paths.isAbsolute(projectPath) || folder === '') {
+    return { error: PROJECT_PATH_NOT_ABSOLUTE };
+  }
+  try {
+    // Read before the window list, so with no editor the no-editor error
+    // wins and no blocked pick is written.
+    const editorFile = paths.join(
+      projectPath,
+      'Library',
+      'EditorInstance.json',
+    );
+    const processId = editorProcessId(await readIfPresent(files, editorFile));
+    if (processId === null) {
+      return {
+        error: `No Unity editor has ${folder} open: ${editorFile} is missing or has no process_id.`,
+      };
+    }
+    return pickOf(
+      await screenCapture.listWindows(),
+      processId,
+      gameRect === null ? null : rectOfTuple(gameRect),
+      folder,
+    );
+  } catch (error) {
+    return { error: errorText(error) };
+  }
+}
+
+// What a pick's log line names.
+function pickText(pick: LivePick): string {
+  return pick.kind === 'stream' ? pick.summary : 'Screen Recording off';
+}
+
+function withoutTrailingSlash(path: string): string {
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+// `show_live_view` and `hide_live_view`, and the app's playtest show and stop:
+// each session's agent, or the app on a playtest while the session has no
+// pick, picks the window its Live section streams, in the picks slot under
+// the session's id. The agent's pick wins; a playtest stop closes only a pick
+// the app opened.
 export function createLiveTools(deps: LiveToolsDeps): LiveTools {
-  const { files, paths, screenCapture, picks, log } = deps;
+  const { paths, picks, log } = deps;
   // Bumped per session id by each hide and end, so a `show` that was waiting
   // through either writes no pick; a row id can come back after a restart, so
   // the id alone does not bar it.
@@ -164,67 +224,103 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
   const generationOf = (sessionId: string) => generations.get(sessionId) ?? 0;
   const bumpGeneration = (sessionId: string) =>
     generations.set(sessionId, generationOf(sessionId) + 1);
+  // Bumped per session id by each app show at its start, app stop, hide, end,
+  // and agent show that writes, so an app show that was waiting through any of
+  // them writes no pick.
+  const appCounters = new Map<string, number>();
+  const appCounterOf = (sessionId: string) => appCounters.get(sessionId) ?? 0;
+  const bumpAppCounter = (sessionId: string) =>
+    appCounters.set(sessionId, appCounterOf(sessionId) + 1);
+  // The project path the app opened each session's current pick for, for the
+  // sessions whose current pick the app's playtest show wrote.
+  const appOpened = new Map<string, string>();
+
+  const forget = (sessionId: string) => {
+    bumpGeneration(sessionId);
+    bumpAppCounter(sessionId);
+    appOpened.delete(sessionId);
+    picks.delete(sessionId);
+  };
 
   const show = async (
     sessionId: string,
     { projectPath, gameRect }: ShowArgs,
     signal?: AbortSignal,
   ): Promise<ToolResult> => {
-    const folder = paths.base(projectPath);
-    if (!paths.isAbsolute(projectPath) || folder === '') {
-      return errorResult(PROJECT_PATH_NOT_ABSOLUTE);
-    }
     const generationBefore = generationOf(sessionId);
-    try {
-      // Read before the window list, so with no editor the no-editor error
-      // wins and no blocked pick is written.
-      const editorFile = paths.join(
-        projectPath,
-        'Library',
-        'EditorInstance.json',
-      );
-      const processId = editorProcessId(await readIfPresent(files, editorFile));
-      if (processId === null) {
-        return errorResult(
-          `No Unity editor has ${folder} open: ${editorFile} is missing or has no process_id.`,
-        );
-      }
-      const result = pickOf(
-        await screenCapture.listWindows(),
-        processId,
-        gameRect === null ? null : rectOfTuple(gameRect),
-        folder,
-      );
-      if ('error' in result) {
-        return errorResult(result.error);
-      }
-      if (
-        signal?.aborted === true ||
-        generationOf(sessionId) !== generationBefore
-      ) {
-        return errorResult(ABORTED_REPLY);
-      }
-      const { pick } = result;
-      picks.set(sessionId, pick);
-      log(
-        `${sessionId} shows ${pick.kind === 'stream' ? pick.summary : 'Screen Recording off'}`,
-      );
-      if (pick.kind === 'blocked') {
-        return errorResult(BLOCKED_REPLY);
-      }
-      return textResult(
-        gameRect === null
-          ? `Streaming ${folder}'s whole editor window in the Live section. It streams while the user has the section on screen.`
-          : `Streaming the Game View of ${folder} in the Live section. It streams while the user has the section on screen.`,
-      );
-    } catch (error) {
-      return errorResult(errorText(error));
+    const result = await lookUpPick(deps, projectPath, gameRect);
+    if ('error' in result) {
+      return errorResult(result.error);
     }
+    if (
+      signal?.aborted === true ||
+      generationOf(sessionId) !== generationBefore
+    ) {
+      return errorResult(ABORTED_REPLY);
+    }
+    const { pick } = result;
+    picks.set(sessionId, pick);
+    appOpened.delete(sessionId);
+    bumpAppCounter(sessionId);
+    log(`${sessionId} shows ${pickText(pick)}`);
+    if (pick.kind === 'blocked') {
+      return errorResult(BLOCKED_REPLY);
+    }
+    const folder = paths.base(projectPath);
+    return textResult(
+      gameRect === null
+        ? `Streaming ${folder}'s whole editor window in the Live section. It streams while the user has the section on screen.`
+        : `Streaming the Game View of ${folder} in the Live section. It streams while the user has the section on screen.`,
+    );
+  };
+
+  const playtestStarted = async (
+    sessionId: string,
+    projectPath: string,
+  ): Promise<void> => {
+    if (picks.get(sessionId) !== undefined) {
+      return;
+    }
+    bumpAppCounter(sessionId);
+    const generationBefore = generationOf(sessionId);
+    const appCounterBefore = appCounterOf(sessionId);
+    const result = await lookUpPick(deps, projectPath, null);
+    const isInterrupted =
+      generationOf(sessionId) !== generationBefore ||
+      appCounterOf(sessionId) !== appCounterBefore ||
+      picks.get(sessionId) !== undefined;
+    if (isInterrupted) {
+      return;
+    }
+    if ('error' in result) {
+      log(`${sessionId} opened no Live view for a playtest: ${result.error}`);
+      return;
+    }
+    picks.set(sessionId, result.pick);
+    appOpened.set(sessionId, projectPath);
+    log(`${sessionId} shows ${pickText(result.pick)} for a playtest`);
+  };
+
+  const playtestStopped = (
+    sessionId: string,
+    projectPath: string | null,
+  ): void => {
+    bumpAppCounter(sessionId);
+    const openedFor = appOpened.get(sessionId);
+    const isTheOpenedProject =
+      openedFor !== undefined &&
+      projectPath !== null &&
+      withoutTrailingSlash(openedFor) === withoutTrailingSlash(projectPath);
+    if (!isTheOpenedProject) {
+      return;
+    }
+    appOpened.delete(sessionId);
+    picks.delete(sessionId);
+    log(`${sessionId} closed the Live view its playtest opened`);
   };
 
   const hide = (sessionId: string): ToolResult => {
-    bumpGeneration(sessionId);
-    picks.delete(sessionId);
+    forget(sessionId);
     log(`${sessionId} hid its Live section`);
     return textResult(HIDDEN_REPLY);
   };
@@ -247,9 +343,8 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
       end: () => undefined,
     }),
     show,
-    sessionEnded(sessionId) {
-      bumpGeneration(sessionId);
-      picks.delete(sessionId);
-    },
+    playtestStarted,
+    playtestStopped,
+    sessionEnded: forget,
   };
 }

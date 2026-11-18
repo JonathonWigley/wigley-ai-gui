@@ -236,7 +236,7 @@ Boundary rules:
 Critical path: 01 → 02 → 03 → 04
 
 ### Wave 1
-- [ ] [Playtest command parser](01-playtest-command.md)
+- [x] [Playtest command parser](01-playtest-command.md)
 
 ### Wave 2
 - [ ] [Playtest watch and the app's pick in LiveTools](02-playtest-watch.md) — after 01
@@ -253,7 +253,10 @@ Critical path: 01 → 02 → 03 → 04
 Review base: c4cbc082a0f39eaa57c3550b3f50f3513872e0e2
 
 ### Groups
+- 01 · hard · 16a017f9b · diff read: both Produces present in playtest-command.ts; wave 1 tsc --noEmit passes · concerns: tab is a separator, CR is not; TS narrowing through a const boolean
 ### Contract changes
 ### Rulings
+- A missing or empty --project-path value keeps an earlier path (rule 4 "sets no path" read as no assignment) — no table row covers it — a stale path in one edge case · group 01 · group 01
+- Bare redirection regex takes any fd digit (1>, 3<), same shape as the joined form — wider than the listed forms — none in practice · group 01 · group 01
 ### Review rounds
 ### Test gate
