@@ -82,6 +82,7 @@ export function definePlugin<
     >;
     themeTokens: Readonly<Record<string, TokenDecl>>;
     readsEverySlot?: true;
+    demoSkip?: string;
   } & NullKindsDeclared<NoInfer<T>>,
 ): typeof manifest {
   const idProblem = pluginIdProblem(manifest.id);

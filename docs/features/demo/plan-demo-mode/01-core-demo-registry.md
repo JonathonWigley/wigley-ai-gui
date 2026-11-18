@@ -1,6 +1,6 @@
 # 01 — Core demo registry, demoSkip, in-memory plugin start
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the plugin lifecycle (per-plugin registrations disposed at stop) and the plugin switch's serial queue and applied list in main
 Wave: 1 · Depends on: none

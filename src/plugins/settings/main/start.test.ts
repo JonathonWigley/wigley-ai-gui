@@ -44,6 +44,7 @@ describe('settings main part', () => {
             heard.push(pluginId);
             return 'x';
           },
+          runDisabledForNow: () => Promise.reject(new Error('unread')),
         },
       },
     });

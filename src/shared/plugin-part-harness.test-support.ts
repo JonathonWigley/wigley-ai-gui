@@ -9,6 +9,7 @@ import {
   coreRuntimePageSlot,
   type RuntimeCatalog,
 } from '../contracts/core-state';
+import type { DemoMainStep, DemoStep } from '../contracts/demo';
 import type { Disposable, Registrations } from '../contracts/disposable';
 import { harnessRegistryOf } from './agent-harness-registry.test-support';
 import type { EditorHost } from '../contracts/editor';
@@ -65,6 +66,7 @@ import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
 import { dataUrl } from './data-url';
+import { createDemoStepRegistry, pluginDemoSteps } from './demo-step-registry';
 import { createEventBus, type EventBus, pluginEvents } from './event-bus';
 import { gateExternalLinks } from './external-links';
 import { createFakeLoginStart } from './fake-login-start';
@@ -258,8 +260,9 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
 }
 
 // `services` replaces the named default services, and a replaced service counts
-// nothing. A replaced `files`, `processes`, `alerts`, `agentHarnesses` or `userConfig` still runs
-// through its per-plugin view, as `createMainApi` does. `parts` holds real
+// nothing. A replaced `files`, `processes`, `alerts`, `agentHarnesses`, `demoSteps` or `userConfig` still runs
+// through its per-plugin view, as `createMainApi` does; left out, `demoSteps` is a
+// fresh registry. `parts` holds real
 // providers, started before the part in listed order and stopped after it.
 // `state` replaces the harness's own slot store, to seed a slot before the start.
 export interface MainPartHarnessOptions<M extends PluginManifest> {
@@ -272,8 +275,9 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 }
 
 // `invoke` answers the `channel.invoke` of the part under test, which otherwise
-// never settles. A replaced `editor` or `markdown` still runs through its
-// per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
+// never settles. A replaced `editor`, `markdown` or `demoSteps` still runs
+// through its per-plugin view, as `createPageApi` does; left out, `demoSteps` is
+// a fresh registry. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
 // added. `holdsRestores` holds the restore window each start of the part under
 // test opens until the harness's `settleRestores`. `parts` and `state` are as on main.
@@ -1024,6 +1028,7 @@ function fakeMainApi(
       selfTest: null,
       appInstance: DEV_APP,
       appBuild: null,
+      cloneDir: null,
       window: {
         show() {},
         summon: () => false,
@@ -1038,8 +1043,11 @@ function fakeMainApi(
       images: notFaked<ImageEncoder>('images'),
       systemStats: notFaked<SystemStats>('systemStats'),
       screenCapture: notFaked<ScreenCapture>('screenCapture'),
-      // Refuses no switch-off.
-      pluginSwitch: { mayDisable: async () => null },
+      // Refuses no switch-off, and its holds start nothing.
+      pluginSwitch: {
+        mayDisable: async () => null,
+        runDisabledForNow: async () => ({ dispose() {} }),
+      },
       loginStart: createFakeLoginStart(),
       ...replaced,
       files:
@@ -1060,6 +1068,11 @@ function fakeMainApi(
       ),
       agentHarnesses: trackedAgentHarnesses(
         replaced.agentHarnesses ?? harnessRegistryOf([]),
+        context.registrations,
+      ),
+      demoSteps: pluginDemoSteps(
+        replaced.demoSteps ?? createDemoStepRegistry<DemoMainStep>(),
+        manifest.id,
         context.registrations,
       ),
       log: common.log,
@@ -1662,6 +1675,11 @@ function fakePageApi(
         replaced.markdown === undefined
           ? fakeMarkdown(world, record.counts, context.registrations)
           : trackedMarkdown(replaced.markdown, context.registrations),
+      demoSteps: pluginDemoSteps(
+        replaced.demoSteps ?? createDemoStepRegistry<DemoStep>(),
+        manifest.id,
+        context.registrations,
+      ),
       log: common.log,
       timers: common.timers,
     },

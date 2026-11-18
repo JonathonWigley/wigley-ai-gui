@@ -168,6 +168,7 @@ export const manifestSchema: object = {
       },
     },
     readsEverySlot: { const: true },
+    demoSkip: STRING,
   },
   additionalProperties: false,
 };

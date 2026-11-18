@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
 import type { Bridge } from '../../contracts/bridge';
+import type { DemoStep } from '../../contracts/demo';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   DocumentEditor,
@@ -42,6 +43,7 @@ import type { SlotKey } from '../../contracts/state';
 import type { BaseKit } from '../../shared/page/layout-host/kit';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
+import { createDemoStepRegistry } from '../../shared/demo-step-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { fakeFuzzyMatcher } from '../../shared/fake-fuzzy-matcher.test-support';
 import { createListeners } from '../../shared/listeners';
@@ -262,6 +264,23 @@ describe('createPageApi', () => {
 
     second.dispose();
     expect(isHidden()).toBe(false);
+  });
+
+  it('demoSteps_PartStops_LeavesTheRegistry', () => {
+    const registry = createDemoStepRegistry<DemoStep>();
+    const registrations = createRegistrations();
+    const api = createPageApi(
+      manifest,
+      deps({
+        services: { demoSteps: registry } as PageApiServices,
+        registrations,
+      }),
+    );
+    api.services.demoSteps.register({ id: 'p.step' } as DemoStep);
+
+    registrations.dispose();
+
+    expect(registry.list()).toEqual([]);
   });
 
   it('captureKey_Armed_CancelsThePendingSequenceFirst', () => {

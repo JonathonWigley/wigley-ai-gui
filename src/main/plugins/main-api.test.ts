@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentHarness, AgentHarnessRegistry } from '../../contracts/agent';
 import type { AlertNoun, Alerts } from '../../contracts/alerts';
 import type { Timers } from '../../contracts/ambient';
+import type { DemoMainStep, DemoStepRegistry } from '../../contracts/demo';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
 import type {
@@ -10,6 +11,7 @@ import type {
   MainChannel,
   MainCommandContext,
   PluginManifest,
+  PluginSwitchService,
   SelfTestHost,
 } from '../../contracts/plugin';
 import type { SpawnExit } from '../../contracts/processes';
@@ -212,7 +214,7 @@ type TestApi = ReturnType<typeof apiOver>['api'];
 const RETURNED_HANDLE_ROWS: {
   member: string;
   deps(handle: Disposable): Partial<MainApiDeps>;
-  register(api: TestApi): void;
+  register(api: TestApi): unknown;
 }[] = [
   {
     member: 'channel.handle',
@@ -265,6 +267,33 @@ const RETURNED_HANDLE_ROWS: {
       api.services.agentHarnesses.register({
         id: 'h',
       } as unknown as AgentHarness),
+  },
+  {
+    member: 'services.demoSteps.register',
+    deps: (handle) => ({
+      services: {
+        paths: posixPaths,
+        demoSteps: {
+          register: () => handle,
+        } as unknown as DemoStepRegistry<DemoMainStep>,
+      } as MainApiServices,
+    }),
+    register: (api) =>
+      api.services.demoSteps.register({
+        id: 'p.step',
+      } as unknown as DemoMainStep),
+  },
+  {
+    member: 'services.pluginSwitch.runDisabledForNow',
+    deps: (handle) => ({
+      services: {
+        paths: posixPaths,
+        pluginSwitch: {
+          runDisabledForNow: async () => handle,
+        } as unknown as PluginSwitchService,
+      } as MainApiServices,
+    }),
+    register: (api) => api.services.pluginSwitch.runDisabledForNow(),
   },
   {
     member: 'state.publish',
@@ -610,7 +639,7 @@ describe('createMainApi', () => {
 describe('createMainApi recording', () => {
   it.each(RETURNED_HANDLE_ROWS)(
     "disposes what $member returned when the plugin's registrations are disposed",
-    ({ member, deps, register }) => {
+    async ({ member, deps, register }) => {
       const disposed: string[] = [];
       const { api, registrations } = apiOver(
         liveSettings({ p: {} }),
@@ -619,7 +648,7 @@ describe('createMainApi recording', () => {
         deps({ dispose: () => disposed.push(member) }),
       );
 
-      register(api);
+      await register(api);
       expect(disposed).toEqual([]);
 
       registrations.dispose();

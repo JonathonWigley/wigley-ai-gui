@@ -12,6 +12,19 @@ describe('validateManifest', () => {
     expect(check).toEqual({ ok: true, manifest: expected });
   });
 
+  it('validateManifest_EmptyDemoSkip_Passes', () => {
+    const { $schema: _schema, ...expected } = validManifest();
+    const raw = validManifest();
+    raw.demoSkip = '';
+
+    const check = validateManifest(raw);
+
+    expect(check).toEqual({
+      ok: true,
+      manifest: { ...expected, demoSkip: '' },
+    });
+  });
+
   // A change to `validManifest()` making one fault, or a function returning the
   // raw value checked in its place.
   type Fault = (manifest: RawManifest) => unknown;
@@ -490,6 +503,12 @@ describe('validateManifest', () => {
       'readsEverySlot must be true',
       (m) => {
         m.readsEverySlot = 1;
+      },
+    ],
+    [
+      'demoSkip must be a string',
+      (m) => {
+        m.demoSkip = 7;
       },
     ],
     [

@@ -72,13 +72,14 @@ export interface PluginStatus {
   readonly neededBy: readonly string[];
   readonly origin: PluginOrigin;
   readonly problem: string | null;
+  readonly demoSkip: string | null;
 }
 
 // Every plugin in the catalog, in catalog order, then each plugin that failed
-// its first load: its label, its description, its origin, whether a version of
-// it runs now, the ids of the plugins that run now and depend on it, and its
-// problem or null. Main's plugin switch writes it at start and after each
-// change.
+// its first load: its label, its description, its origin, its `demoSkip`, or
+// null, whether a version of it runs now, the ids of the plugins that run now
+// and depend on it, and its problem or null. Main's plugin switch writes it at
+// start and after each change.
 export const corePluginsSlot: SlotKey<readonly PluginStatus[], 'main', 'core'> =
   {
     id: 'core.plugins',

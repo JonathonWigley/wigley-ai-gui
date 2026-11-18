@@ -980,6 +980,7 @@ describe('createSettingsView', () => {
       neededBy,
       origin: 'built-in',
       problem: null,
+      demoSkip: null,
     };
   }
 

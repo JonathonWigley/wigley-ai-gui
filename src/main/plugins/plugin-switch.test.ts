@@ -606,6 +606,7 @@ describe('createPluginSwitch', () => {
           label: 'Usage tab line',
           description: 'Shows usage on the tab.',
           dependsOn: { main: [], page: ['usage'] },
+          demoSkip: 'Shows nothing.',
         }),
       ],
     });
@@ -622,6 +623,7 @@ describe('createPluginSwitch', () => {
         neededBy: ['usage-tab-line'],
         origin: 'built-in',
         problem: null,
+        demoSkip: null,
       },
       {
         id: 'usage-tab-line',
@@ -631,6 +633,7 @@ describe('createPluginSwitch', () => {
         neededBy: [],
         origin: 'built-in',
         problem: null,
+        demoSkip: 'Shows nothing.',
       },
     ]);
     expect(
@@ -1944,6 +1947,136 @@ describe('createPluginSwitch', () => {
     });
 
     await expect(pluginSwitch.restart(id)).rejects.toThrow(expected);
+    expect(calls).toEqual([]);
+  });
+
+  // Built-ins `a` and `b` and user plugin `u`, the config switching off `a`
+  // and `u`.
+  const heldSwitch = () =>
+    setup({
+      entries: [entry('a'), entry('b'), user('u')],
+      applied: ['a', 'u'],
+    });
+
+  // The calls `step` adds, from the settled switch until it settles again.
+  async function callsDuring(
+    switched: ReturnType<typeof setup>,
+    step: () => unknown,
+  ): Promise<string[]> {
+    await switched.pluginSwitch.settled();
+    const before = switched.calls.length;
+    await step();
+    await switched.pluginSwitch.settled();
+    return switched.calls.slice(before);
+  }
+
+  const A_SWITCHES_OFF = [
+    'main mayStop a',
+    'page mayStop a',
+    'applied u,a',
+    'servedChanged',
+    'page stop a',
+    'main stop a',
+    'clearOwner a',
+  ];
+
+  it('runDisabledForNow_StartsTheDisabledBuiltIns', async () => {
+    const switched = heldSwitch();
+
+    const calls = await callsDuring(switched, () =>
+      switched.pluginSwitch.runDisabledForNow(),
+    );
+
+    expect(calls).toEqual([
+      'main start a',
+      'applied u',
+      'servedChanged',
+      'page start a',
+    ]);
+    expect(switched.configDisabled.list).toEqual(['a', 'u']);
+    expect(switched.handed).toEqual([]);
+  });
+
+  it('runDisabledForNow_Dispose_SwitchesThemOffAgain', async () => {
+    const switched = heldSwitch();
+    const hold = await switched.pluginSwitch.runDisabledForNow();
+
+    const calls = await callsDuring(switched, () => hold.dispose());
+
+    expect(calls).toEqual(A_SWITCHES_OFF);
+  });
+
+  it('runDisabledForNow_ConfigChangesWhileHeld_ConfigWins', async () => {
+    const switched = heldSwitch();
+    const hold = await switched.pluginSwitch.runDisabledForNow();
+
+    const onConfigChange = await callsDuring(switched, () => {
+      switched.configDisabled.list = ['a', 'b', 'u'];
+      return switched.pluginSwitch.apply(['a', 'b', 'u']);
+    });
+    const onDispose = await callsDuring(switched, () => hold.dispose());
+
+    expect(onConfigChange).toEqual([
+      'main mayStop a,b',
+      'page mayStop a,b',
+      'applied u,a,b',
+      'servedChanged',
+      'page stop a,b',
+      'main stop a',
+      'main stop b',
+      'clearOwner a',
+      'clearOwner b',
+    ]);
+    expect(onDispose).toEqual([]);
+  });
+
+  it('runDisabledForNow_TwoHolds_LastDisposeRestores', async () => {
+    const switched = heldSwitch();
+    const first = await switched.pluginSwitch.runDisabledForNow();
+    const second = await switched.pluginSwitch.runDisabledForNow();
+
+    const onFirst = await callsDuring(switched, () => first.dispose());
+    const onSecond = await callsDuring(switched, () => second.dispose());
+
+    expect(onFirst).toEqual([]);
+    expect(onSecond).toEqual(A_SWITCHES_OFF);
+  });
+
+  it('runDisabledForNow_DisposeTwice_LowersOnce', async () => {
+    const switched = heldSwitch();
+    const first = await switched.pluginSwitch.runDisabledForNow();
+    const second = await switched.pluginSwitch.runDisabledForNow();
+
+    const onFirst = await callsDuring(switched, () => {
+      first.dispose();
+      first.dispose();
+    });
+    const onSecond = await callsDuring(switched, () => second.dispose());
+
+    expect(onFirst).toEqual([]);
+    expect(onSecond).toEqual(A_SWITCHES_OFF);
+  });
+
+  it('runDisabledForNow_StartRejects_CountsNoHold', async () => {
+    const switched = heldSwitch();
+    switched.main.startErrors.a = ['boom'];
+
+    await expect(switched.pluginSwitch.runDisabledForNow()).rejects.toThrow(
+      'boom',
+    );
+    const hold = await switched.pluginSwitch.runDisabledForNow();
+    const onDispose = await callsDuring(switched, () => hold.dispose());
+
+    expect(onDispose).toEqual(A_SWITCHES_OFF);
+  });
+
+  it('runDisabledForNow_HoldDisposedAfterSwitchDispose_DoesNothing', async () => {
+    const switched = heldSwitch();
+    const hold = await switched.pluginSwitch.runDisabledForNow();
+    switched.pluginSwitch.dispose();
+
+    const calls = await callsDuring(switched, () => hold.dispose());
+
     expect(calls).toEqual([]);
   });
 });

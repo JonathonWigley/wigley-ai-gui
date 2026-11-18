@@ -59,5 +59,6 @@ export function validManifest(): RawManifest {
     settingControls: { filter: 'string' },
     themeTokens: { accent: { kind: 'color', default: '#3366ff' } },
     readsEverySlot: true,
+    demoSkip: 'It draws nothing the user sees.',
   };
 }

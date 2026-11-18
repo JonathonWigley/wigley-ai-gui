@@ -79,6 +79,7 @@ const MANIFEST_FIELDS = membersOf({
   settingControls: true,
   themeTokens: true,
   readsEverySlot: true,
+  demoSkip: true,
 } satisfies Record<keyof PluginManifest, true>);
 
 const SCHEMA_FIELD = '$schema';
@@ -218,6 +219,9 @@ function shapeProblems(raw: JsonObject): string[] {
   addThemeTokensProblems(raw.themeTokens, problems);
   if (raw.readsEverySlot !== undefined && raw.readsEverySlot !== true) {
     problems.push('readsEverySlot must be true');
+  }
+  if (raw.demoSkip !== undefined && typeof raw.demoSkip !== 'string') {
+    problems.push('demoSkip must be a string');
   }
   return problems;
 }

@@ -4,6 +4,7 @@ import type {
   PluginPartsRequest,
 } from '../../contracts/bridge';
 import type { PluginStatus } from '../../contracts/core-state';
+import type { Disposable } from '../../contracts/disposable';
 import type { Log } from '../../contracts/log';
 import type {
   MainPart,
@@ -73,6 +74,11 @@ export interface PluginSwitch extends PluginSwitchService {
   // The reason turning `pluginId` off would be refused now, in words Settings
   // shows (neededBy, then mayStop), or null.
   mayDisable(pluginId: string): Promise<string | null>;
+  // Applies `configDisabled()` without the admitted built-ins, then resolves to
+  // a hold; a rejected apply rejects and holds nothing. The last live hold's
+  // first `dispose` applies `configDisabled()` again without waiting, logging a
+  // rejection. Writes no config: `deps` holds no writer.
+  runDisabledForNow(): Promise<Disposable>;
   // Stops `pluginId` and its dependents, page parts first, then starts each
   // main part that stopped, one at a time in start order and guarded as a
   // reload's are, then the page parts of `pluginId` and its dependents that
@@ -261,6 +267,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
         neededBy: neededBy(id, disabled, manifests),
         origin: shown.origin,
         problem: problemOf(id),
+        demoSkip: shown.manifest.demoSkip ?? null,
       };
     });
     const failedIds = [
@@ -274,6 +281,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
       neededBy: [],
       origin: 'user',
       problem: problemOf(id),
+      demoSkip: null,
     }));
     deps.status.set([...entryRows, ...failedRows]);
   };
@@ -1098,6 +1106,41 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
     return applyQueued(() => disabled);
   };
 
+  // The holds `runDisabledForNow` handed out or is handing out; a call counts
+  // from its start, so a hold disposed while another call waits on its apply
+  // does not switch off what that call starts.
+  let holdCount = 0;
+
+  const releaseHold = () => {
+    holdCount -= 1;
+    if (holdCount === 0) {
+      apply(deps.configDisabled()).catch(logFailure);
+    }
+  };
+
+  const runDisabledForNow = async (): Promise<Disposable> => {
+    const builtIns = config
+      .plugins()
+      .filter((entry) => entry.origin === 'built-in')
+      .map(idOf);
+    holdCount += 1;
+    try {
+      await apply(deps.configDisabled().filter((id) => !builtIns.includes(id)));
+    } catch (error) {
+      releaseHold();
+      throw error;
+    }
+    let isReleased = false;
+    return {
+      dispose() {
+        if (!isReleased) {
+          isReleased = true;
+          releaseHold();
+        }
+      },
+    };
+  };
+
   // The launch job: each held id the user did not switch off (the withheld
   // ones) starts guarded, in start order, then one catalog job catches a
   // change made before now.
@@ -1121,6 +1164,7 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   });
   return {
     apply,
+    runDisabledForNow,
     async mayDisable(pluginId) {
       const disabled = applied.disabled();
       if (disabled.includes(pluginId)) {

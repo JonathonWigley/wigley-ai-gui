@@ -45,6 +45,7 @@ import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
 } from '../contracts/core-state';
+import type { DemoMainStep } from '../contracts/demo';
 import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import { LOGIN_START_FLAG, type LoginStart } from '../contracts/login-start';
@@ -72,6 +73,7 @@ import { manifests, withoutRealHarnessPlugins } from '../plugins/manifests';
 import { appEndpointDir } from '../shared/app-endpoint-dir';
 import { commandHopOf } from '../shared/command-args';
 import { CommandRegistry } from '../shared/command-registry';
+import { createDemoStepRegistry } from '../shared/demo-step-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { gateExternalLinks } from '../shared/external-links';
@@ -1233,6 +1235,8 @@ function createWindow(
   for (const harness of harnesses) {
     agentHarnesses.register(harness);
   }
+  // Lives as long as the window, as the harness registry does.
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
   let isLaunchStartDone = false;
@@ -1263,9 +1267,11 @@ function createWindow(
         inputs.repoDir,
         runMode === 'live',
       ),
+      cloneDir: inputs.repoDir,
       sessionHost,
       loginStart: loginStartOf(),
       agentHarnesses,
+      demoSteps,
       agentEnvironment: agentEnvironmentOf(
         process.env,
         appEndpointDir(paths, inputs.homeDir, appInstance.id),
@@ -1275,6 +1281,10 @@ function createWindow(
           pluginSwitch === null
             ? Promise.reject(new Error('The plugin switch is not ready'))
             : pluginSwitch.mayDisable(id),
+        runDisabledForNow: () =>
+          pluginSwitch === null
+            ? Promise.reject(new Error('The plugin switch is not ready'))
+            : pluginSwitch.runDisabledForNow(),
       },
       ...windowServices,
     },

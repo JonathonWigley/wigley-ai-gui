@@ -12,6 +12,7 @@ import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
 } from '../contracts/core-state';
+import type { DemoStep } from '../contracts/demo';
 import {
   PANE_DIRECTIONS,
   PANE_FOCUS_COMMANDS,
@@ -27,6 +28,7 @@ import type { ServedPlugin } from '../contracts/plugin-catalog';
 import type { AppConfig } from '../contracts/settings';
 import { pageParts } from '../plugins/page';
 import { CommandRegistry } from '../shared/command-registry';
+import { createDemoStepRegistry } from '../shared/demo-step-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
@@ -400,6 +402,7 @@ async function start() {
     runMode: config.runMode,
     chooseFolder: () => bridge.chooseFolder(),
     openExternal: (url) => bridge.openExternal(url),
+    demoSteps: createDemoStepRegistry<DemoStep>(),
   };
   // Starts with no binds, since `createPendingKeys` needs it first and binds wait
   // for the parts: a key pressed while they start matches nothing.

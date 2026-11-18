@@ -12,6 +12,7 @@ import type {
   CommandRunContext,
   CommandSessions,
 } from './commands';
+import type { DemoMainStep, DemoStep, DemoStepRegistry } from './demo';
 import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
@@ -238,6 +239,8 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // process reads or whose events it hears with no start order, so a disabled or
 // unlisted plugin there is no problem and reads `undefined`; `readsEverySlot`
 // lets the main part read any slot by its id, as `MainPluginState` says.
+// `demoSkip` is one sentence on why the plugin has no demo step; the demo's
+// coverage check accepts it in place of a step.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -266,6 +269,7 @@ export interface PluginManifest<
   settingControls?: Readonly<Record<string, string>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
   readsEverySlot?: true;
+  demoSkip?: string;
 }
 
 // The plugins whose slots `M`'s part in process `P` may read: itself, its
@@ -741,6 +745,9 @@ export interface PageServices {
   runMode: RunMode;
   // This plugin's own ui state, its keys kept apart from every other plugin's.
   uiState: UiState;
+  // The demo-step registry: a plugin registers its steps there, each id
+  // starting `<plugin id>.`, and stopping the plugin disposes its registrations.
+  demoSteps: DemoStepRegistry<DemoStep>;
 }
 
 // A scope `keys.pushScope` laid over the set scope. `pop` removes it wherever
@@ -1124,7 +1131,12 @@ export interface DriveHost {
 // process outlives the app (`docs/features/session-host/design.md`).
 // `loginStart` starts the session host when the user logs in, and answers
 // `unsupported` where the app does not (`src/contracts/login-start.ts`).
-// `pluginSwitch` tells whether a plugin may switch off now.
+// `demoSteps` is the demo-step registry: a plugin registers its steps there,
+// each id starting `<plugin id>.`, and stopping the plugin disposes its
+// registrations. `cloneDir` is the clone the app runs from, or null when none
+// resolves. `pluginSwitch` tells whether a plugin may switch off now, and runs
+// the built-in plugins the user switched off, in memory, as
+// `PluginSwitchService` says.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -1144,6 +1156,7 @@ export interface MainServices {
   systemStats: SystemStats;
   screenCapture: ScreenCapture;
   agentHarnesses: AgentHarnessRegistry;
+  demoSteps: DemoStepRegistry<DemoMainStep>;
   agentEnvironment: Readonly<Record<string, string>>;
   agentHomeDir: string;
   sessionHost: SessionHost;
@@ -1159,14 +1172,21 @@ export interface MainServices {
   runMode: RunMode;
   appInstance: AppInstance;
   appBuild: AppBuild | null;
+  cloneDir: string | null;
   selfTest: SelfTestHost | null;
   pluginSwitch: PluginSwitchService;
 }
 
-// The part of main's plugin switch a main part reaches: the reason turning
-// `pluginId` off would be refused now, or null.
+// The part of main's plugin switch a main part reaches. `mayDisable` gives the
+// reason turning `pluginId` off would be refused now, or null.
+// `runDisabledForNow` starts every built-in plugin the user switched off, in
+// memory, until the last hold's `dispose`, which applies the config's
+// `plugins.disabled` again; it never writes `settings.json`, a refused
+// switch-off retries as a config switch-off does, and stopping the calling
+// plugin disposes its hold.
 export interface PluginSwitchService {
   mayDisable(pluginId: string): Promise<string | null>;
+  runDisabledForNow(): Promise<Disposable>;
 }
 
 // `dependency` takes the main key from a provider's contract, for a plugin the

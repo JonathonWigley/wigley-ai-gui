@@ -32,6 +32,7 @@ import type {
 import type { AppConfig } from '../../contracts/settings';
 import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
+import { pluginDemoSteps } from '../../shared/demo-step-registry';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { keysFor } from '../../shared/keys-for';
 import { element } from '../../shared/page/dom';
@@ -152,7 +153,8 @@ export function liveKeysFor(
 // `deps.registrations`. Editors, timers, pane targets and the transparency
 // override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
 // `services.picker` builds lists under its scopes, log, editor and overlay,
-// owned by its id for the picker commands;
+// owned by its id for the picker commands; its demo steps are filed with its
+// registrations;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -270,6 +272,11 @@ export function createPageApi(
       markdown: trackedMarkdown(deps.services.markdown, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
       uiState: deps.uiState.scoped(manifest.id),
+      demoSteps: pluginDemoSteps(
+        deps.services.demoSteps,
+        manifest.id,
+        registrations,
+      ),
     },
     dependency: <E>(key: DependencyKey<E, 'page'>) =>
       deps.dependency(key.id) as E,

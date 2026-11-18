@@ -8,9 +8,11 @@ import type {
   MainCommandContext,
   MainServices,
   PluginManifest,
+  PluginSwitchService,
   SelfTestHost,
   UntypedEvents,
 } from '../../contracts/plugin';
+import { pluginDemoSteps } from '../../shared/demo-step-registry';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { pluginLog } from '../../shared/plugin-log';
 import {
@@ -67,6 +69,8 @@ export interface MainApiDeps {
 // (`data`'s included), running processes and alert counts are held per plugin
 // and filed as one entry each, so a run timer or a disposed watch leaves nothing
 // in the store; `services.git` is not recorded, since it makes only short runs.
+// Its demo steps, and the holds `pluginSwitch.runDisabledForNow` gives it, are
+// filed there too.
 // `onSettingsChanged` calls its listener only when the JSON of this plugin's
 // settings differs from the last it saw, so another plugin's change calls
 // nothing.
@@ -117,6 +121,15 @@ export function createMainApi(
         deps.services.agentHarnesses,
         registrations,
       ),
+      demoSteps: pluginDemoSteps(
+        deps.services.demoSteps,
+        manifest.id,
+        registrations,
+      ),
+      pluginSwitch: trackedPluginSwitch(
+        deps.services.pluginSwitch,
+        registrations,
+      ),
       timers: trackedTimers(deps.services.timers, registrations),
       userConfig: trackedUserConfig(deps.services.userConfig, registrations),
       selfTest: deps.selfTestFor(manifest.id),
@@ -154,5 +167,19 @@ function trackedDrive(
   }
   return {
     add: (name, action) => registrations.track(drive.add(name, action)),
+  };
+}
+
+// One plugin's view of `pluginSwitch`: `registrations` disposing it disposes
+// every hold `runDisabledForNow` gave the plugin, and a hold that resolves after
+// that is disposed at once.
+function trackedPluginSwitch(
+  pluginSwitch: PluginSwitchService,
+  registrations: Registrations,
+): PluginSwitchService {
+  return {
+    mayDisable: (pluginId) => pluginSwitch.mayDisable(pluginId),
+    runDisabledForNow: async () =>
+      registrations.track(await pluginSwitch.runDisabledForNow()),
   };
 }
