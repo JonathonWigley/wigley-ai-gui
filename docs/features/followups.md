@@ -55,10 +55,18 @@ Core seams that most items below assume.
 - **Built-in plugin hot reload** — *needs a feature plan*: built-ins still need a rebuild to change. Reloading one
   with new code compiles TypeScript inside the running app, so a compiler ships with it (a third-party ask). The
   runtime loader's `PluginSource` seam and `reload` are the base: a third source over the repo clone.
+- **A confirm prompt's own buttons outlive their view** — *agent-ready*: `ConfirmPrompt`
+  (`src/shared/page/confirm-prompt.ts`) disposes its buttons' key anchors only on its next `redraw`, and has no
+  `dispose`, so the forms, primer and audio picker views' `dispose` leave the last two button anchors live. Add
+  `ConfirmPrompt.dispose` and call it from each owner's view dispose.
 
 ## Bugs seen in use
 
 Defects seen in a drive run, a transcript or the user's own use.
+
+- **Practice's Solution tab sits under the file name** — *agent-ready*: in a drive run at 1400x900, the practice
+  Solution tab lay under `span.practice-file-name`, so a real click on the tab was refused and only a DOM `.click()`
+  opened its confirm. Find the overlap in practice's tab row layout and keep the tab clickable.
 
 - **Chat self-test fails the minimum-width fit on the session tab bar** — *needs a feature plan*:
   `npm run selftest -- --plugin chat` fails 8 steps with `<keys> fits the minimum width: nav.ui-tabs.session-tabs
