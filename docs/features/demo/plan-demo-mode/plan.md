@@ -299,10 +299,10 @@ gate record that failure as known and pass on the rest; from 07 on, lint passes 
 Critical path: 01 → 06 → 07 → 08 → 16 → 17
 
 ### Wave 1
-- [ ] [Core demo registry, demoSkip, in-memory plugin start](01-core-demo-registry.md)
-- [ ] [Unlisted harness](02-unlisted-harness.md)
-- [ ] [Ephemeral chat launch](03-ephemeral-launch.md)
-- [ ] [Sessions showOnly](04-sessions-show-only.md)
+- [x] [Core demo registry, demoSkip, in-memory plugin start](01-core-demo-registry.md)
+- [x] [Unlisted harness](02-unlisted-harness.md)
+- [x] [Ephemeral chat launch](03-ephemeral-launch.md)
+- [x] [Sessions showOnly](04-sessions-show-only.md)
 
 ### Wave 2
 - [ ] [Host-owned agent pane](05-host-owned-agent-pane.md) — after 01
@@ -332,7 +332,13 @@ Critical path: 01 → 06 → 07 → 08 → 16 → 17
 Review base: 7811ca8a2
 
 ### Groups
+- 01 · deep · 42b096917 · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: oxlint no-useless-spread warning on the listener copy in demo-step-registry.ts (kept: a listener may dispose mid-notify); AGENTS.md § A slot, § A disabled plugin, § An ambient service do not name demoSkip, runDisabledForNow, demoSteps, cloneDir (task 16)
+- 02 · hard · 960bf7621 · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: sessions/main/start.ts and notes/main/start.ts read registeredInfos for label lookups only, left unfiltered; fake harness's literal true typechecked
+- 03 · deep · 81ef5cb02 · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: docs/features/agent-chat/design.md § Saved sessions now stale (every session saved); workflow main's chat.sessionOpened handler still opens a flow for demo rows; chat tests lean on the fake's host-id numbering
+- 04 · hard · ab83ff6ed · diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: AGENTS.md's sessions entry does not name showOnly (task 16); the start test sorts claimed ids
 ### Contract changes
 ### Rulings
+- 01: runDisabledForNow counts a hold from its call's start and releases it if the apply rejects, so a hold disposed while a second call applies does not switch off what that call starts — literal reading had the race; cost if wrong: none for the cases the plan names · group 01
+- 03: prepareLaunch rejects ephemeral before its other checks; toggleHidden still logs the user's uiState choice during a hold · group 03
 ### Review rounds
 ### Test gate

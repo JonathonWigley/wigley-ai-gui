@@ -1,6 +1,6 @@
 # 03 — Ephemeral chat launch
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · changes what chat saves to `open-sessions.json` and recent folders, and what session-log and session-stash write to disk, across a clear and a process relaunch; adds a session hub hold that must leave the user's hub uiState untouched
 Wave: 1 · Depends on: none
@@ -188,3 +188,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 81ef5cb02 · proof: diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: docs/features/agent-chat/design.md § Saved sessions now stale (every session saved); workflow main's chat.sessionOpened handler still opens a flow for demo rows; chat tests lean on the fake's host-id numbering

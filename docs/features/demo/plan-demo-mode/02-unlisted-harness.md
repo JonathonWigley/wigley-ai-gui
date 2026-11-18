@@ -1,6 +1,6 @@
 # 02 — Unlisted harness
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `unlisted` flag that 06 consumes, and changes eight readers of `core.agentHarnesses` in five plugins
 Wave: 1 · Depends on: none
@@ -141,3 +141,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 960bf7621 · proof: diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: sessions/main/start.ts and notes/main/start.ts read registeredInfos for label lookups only, left unfiltered; fake harness's literal true typechecked

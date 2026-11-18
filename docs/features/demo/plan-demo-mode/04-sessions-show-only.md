@@ -1,6 +1,6 @@
 # 04 — Sessions showOnly
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `showOnly`, which 07 and 10 consume, and changes the side bar's drawn rows, cursor, step keys and post-close selection
 Wave: 1 · Depends on: none
@@ -128,3 +128,5 @@ Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit ab83ff6ed · proof: diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: AGENTS.md's sessions entry does not name showOnly (task 16); the start test sorts claimed ids

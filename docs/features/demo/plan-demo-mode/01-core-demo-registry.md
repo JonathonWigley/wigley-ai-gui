@@ -1,6 +1,6 @@
 # 01 — Core demo registry, demoSkip, in-memory plugin start
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the plugin lifecycle (per-plugin registrations disposed at stop) and the plugin switch's serial queue and applied list in main
 Wave: 1 · Depends on: none
@@ -129,3 +129,5 @@ Done when: `npm run typecheck` passes; `npm run lint` passes; the test gate runs
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 42b096917 · proof: diff read against Shared names; Wave 1 typecheck and lint pass (edb28c428 formats) · concerns: oxlint no-useless-spread warning on the listener copy in demo-step-registry.ts (kept: a listener may dispose mid-notify); AGENTS.md § A slot, § A disabled plugin, § An ambient service do not name demoSkip, runDisabledForNow, demoSteps, cloneDir (task 16)
