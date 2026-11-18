@@ -112,13 +112,13 @@ export interface Kit extends FormsBaseKit {
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
-  // Mounts the item's text box for `field`: `notes`, `dontAskReason` and `comment` on the built-in kinds, a plugin
-  // kind's own fields on its card. Each box mounts once per card. Any box the card leaves unmounted, the app appends
+  // Places the item's text box for `field`: `notes`, `dontAskReason` and `comment` on the built-in kinds, a plugin
+  // kind's own fields on its card. Each box places once per card. Any box the card leaves out, the app appends
   // in its default field at the end of the card, so the box keys always reach it.
   textBox(parent: HTMLElement, field: string): HTMLElement;
   // `div.card-parts`, holding one `div.card-part` (`data-part="<id>"`) per part other plugins added for this card's
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
-  // leaves it out gets the parts appended at the end of its element, after the boxes it left unmounted. A part that
+  // leaves it out gets the parts appended at the end of its element, after the boxes it left out. A part that
   // throws is logged and draws nothing. On the card of a kind that takes an answer, each part updates after the
   // card's own `update`; on any other card (a notice's included), the parts never update.
   contributedParts(parent: HTMLElement): HTMLElement;
@@ -153,7 +153,7 @@ export interface FindingKit extends AnswerKit {
   ): HTMLElement;
 }
 
-// `element` is the card's own node, appended to `parent` before the card mounts any text box; the app shows, hides and
+// `element` is the card's own node, appended to `parent` before the card places any text box; the app shows, hides and
 // marks that node. On the card of a kind that takes an answer (question, finding, an answerable plugin kind),
 // `update` runs with the item's current answer while the card shows; on any other card it never runs. The kit's parts
 // update themselves.
@@ -171,8 +171,8 @@ export interface OtherCard {
   round: RoundInfo;
 }
 
-// A plugin kind's card kit: `answerControls` is present when the kind takes an answer. It mounts the Not applicable
-// and Don't ask toggles always, and the Notes and reason boxes when the kind has those fields.
+// A plugin kind's card kit: `answerControls` is present when the kind takes an answer. It draws the Not applicable
+// and Don't ask toggles always, and places the Notes and reason boxes when the kind has those fields.
 export interface KindKit extends Kit {
   answerControls?(parent: HTMLElement): HTMLElement;
 }
@@ -243,7 +243,7 @@ export interface NoticesInput {
   notices: NoticeLineInput[];
 }
 
-// `element` is the pane's own node, appended to `parent` before the pane mounts any text box. The app shows and hides
+// `element` is the pane's own node, appended to `parent` before the pane places any text box. The app shows and hides
 // that node and sets `data-layout-owner="forms"` and `data-layout="<name>"` on it, `<name>` being the layout that drew
 // it.
 export interface LayoutPane {
@@ -271,7 +271,7 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   progress(parent: HTMLElement): HTMLElement;
   // `p.review-summary`: the progress, and how many items are sent untouched.
   summary(parent: HTMLElement): HTMLElement;
-  // The round note's field with its text box; returns the field. It mounts once per pane: a pane that leaves it out
+  // The round note's field with its text box; returns the field. It places once per pane: a pane that leaves it out
   // gets it appended at the end of its element, so the note keys always reach a box.
   roundNote(parent: HTMLElement): HTMLElement;
   // `Send answers`, the primary button, with its keys; a click sends the round.

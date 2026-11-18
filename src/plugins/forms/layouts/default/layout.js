@@ -1,18 +1,18 @@
 // @ts-check
 
 // The built-in forms look. Every card and pane appends its element to
-// `parent` first, so the text boxes mount into an attached element.
+// `parent` first, so the text boxes are placed into an attached element.
 //
 // What a user layout may leave out of a card or pane it defines, and what the
 // app does then:
 // - question and finding cards: `itemHead` (the card still carries
-//   `data-status`), `answerControls` and `textBox` (each box left unmounted is
+//   `data-status`), `answerControls` and `textBox` (each box left out is
 //   appended at the end of the card), and `contributedParts` (other plugins'
 //   parts are appended after those boxes)
 // - notice card: `textBox` (the comment box is appended at the end) and
 //   `contributedParts` (appended after it)
 // - `other` card and `kinds` cards (a plugin kind's): `itemHead`,
-//   `answerControls` and `textBox` (each box left unmounted is appended at the
+//   `answerControls` and `textBox` (each box left out is appended at the
 //   end of the card), and `contributedParts` (appended after those boxes); a
 //   layout leaving out `other` has its plugin kinds' cards drawn by the next
 //   layout in the chain defining it
