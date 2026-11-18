@@ -15,6 +15,8 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { visualManifest } from '../manifest';
+import { sessionsPageKey } from '../../sessions/contract';
+import { registerDemoSteps } from './demo-steps';
 import { createHtmlFence } from './html-fence';
 import { readVisualLayout } from './layout/read-visual-layout';
 import { createVisualParts } from './layout/visual-parts';
@@ -35,7 +37,8 @@ type VisualApi = PageApi<
 // visuals of the entry `chat.focus` names and each visual's expand control on
 // that visual, and `w` and each visual's widen control flip a visual's width;
 // each live view and the open overlay draw again on each layouts set. A stop
-// closes the overlay and disposes every live view.
+// closes the overlay and disposes every live view. Registers the visuals' demo
+// step, which shows its session through sessions' `activate`.
 export const visualPagePart: PagePart<typeof visualManifest> = {
   manifest: visualManifest,
   start(api: VisualApi) {
@@ -72,6 +75,11 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
       expand: (source) => void api.commands.run(visualExpandCommand, source),
     });
     services.markdown.addFence(fence.contribution);
+    const sessions = api.dependency(sessionsPageKey);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      overlay,
+    });
 
     api.layouts.show<Layout>({
       defaultLayout,

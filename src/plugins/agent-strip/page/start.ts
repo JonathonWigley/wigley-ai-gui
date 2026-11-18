@@ -20,6 +20,7 @@ import type { Layout } from '../layouts/layout';
 import { agentStripToggleBoxAtCommand } from '../contract';
 import { agentStripManifest } from '../manifest';
 import { createAgentStrip } from './agent-strip';
+import { registerDemoSteps } from './demo-steps';
 import { readAgentStripLayout } from './layout/read-agent-strip-layout';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
@@ -28,7 +29,8 @@ type AgentStripApi = PageApi<typeof agentStripManifest, ChannelShape>;
 // Draws each Chat tab's agent strip above its composer box through chat's
 // composer parts and the `agent-strip.layout` layout, reading `agents.rosters`,
 // and runs the strip's keys while its stop holds the entry cursor. Names each
-// session by its side-bar label for the page log.
+// session by its side-bar label for the page log. Registers the strip's demo
+// step.
 export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
   manifest: agentStripManifest,
   start(api: AgentStripApi) {
@@ -55,6 +57,13 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       run: (arg) => void api.commands.run(agentStripToggleBoxAtCommand, arg),
     });
     chat.addComposerPart(strip.part);
+    const sessions = api.dependency(sessionsPageKey);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      runCommand: (key, arg) => api.commands.run(key, arg),
+      firstAgentKey: (sessionId) =>
+        rosters.get(sessionId)?.agents[0]?.agentId ?? null,
+    });
 
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });
 

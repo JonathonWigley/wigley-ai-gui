@@ -63,6 +63,7 @@ import {
   requireHarnessOfProfile,
 } from './lookups';
 import { createOpenSessions } from './open-sessions';
+import { registerDemoSteps } from './demo-steps';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
@@ -417,6 +418,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       paths: services.paths,
     });
     harnessFollower.follow(chat);
+    registerDemoSteps(services, { chat });
     const namer = sessions.addProjectNamer(
       (projectDir) =>
         projectOf(

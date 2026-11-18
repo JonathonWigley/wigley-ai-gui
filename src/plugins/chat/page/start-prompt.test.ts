@@ -4,6 +4,7 @@ import type {
   AgentHarnessInfo,
   HarnessProfile,
 } from '../../../contracts/agent';
+import { DEMO_HARNESS_ID, DEMO_PROFILE } from '../../../contracts/demo';
 import type { ToastTone } from '../../../contracts/plugin';
 import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
@@ -306,6 +307,18 @@ const closedElsewhere: ResumeSectionRow = {
   at: 6,
 };
 
+// The listed `claude` harness beside the demo harness, as a demo run holds them.
+const withDemoHarness: ReadonlyMap<string, AgentHarnessInfo> = new Map([
+  ['claude', harnessInfo({ profiles: [work, personal] })],
+  [
+    DEMO_HARNESS_ID,
+    harnessInfo({
+      profiles: [{ name: DEMO_PROFILE, configDir: '/demo' }],
+      unlisted: true,
+    }),
+  ],
+]);
+
 function folderSectionLabel(row: ResumeSectionRow, base: string): string {
   return `${row.title} · ${base} · ${row.profile} · ${sessionTime(row.at)}`;
 }
@@ -540,6 +553,44 @@ describe('start prompt', () => {
     expect(run.resumed.map(({ profile }) => profile)).toEqual(['gone']);
     expect(run.toasts).toEqual([
       { text: expect.stringContaining('no profile gone'), tone: 'error' },
+    ]);
+  });
+
+  it('hides projects and recent folders while the demo harness is registered', async () => {
+    const run = setUp({
+      harnesses: withDemoHarness,
+      answers: {
+        projects: () => Promise.resolve([newGames, aiDev]),
+        resumeSections: recentlyClosed(closedAlpha),
+      },
+    });
+    await flush();
+
+    expect(titlesOf(run)).toEqual(['Folder']);
+    expect(run.last().labels).toEqual([
+      folderSectionLabel(closedAlpha, 'app'),
+      CHOOSE_FOLDER_LABEL,
+    ]);
+  });
+
+  it('a sample section row resumes nothing', async () => {
+    const sample: ResumeSectionRow = {
+      ...closedAlpha,
+      harness: DEMO_HARNESS_ID,
+      profile: DEMO_PROFILE,
+    };
+    const run = setUp({
+      harnesses: withDemoHarness,
+      answers: { resumeSections: recentlyClosed(sample) },
+    });
+    await flush();
+
+    pickFolder(run.last(), folderSectionLabel(sample, 'app'));
+    await flush();
+
+    expect(run.invoked).not.toContain('resume');
+    expect(run.toasts).toEqual([
+      { text: 'A sample session: the demo resumes nothing', tone: 'info' },
     ]);
   });
 
@@ -802,8 +853,9 @@ describe('start prompt', () => {
     const run = setUp({
       harnesses: new Map([
         ['claude', harnessInfo({ profiles: [work] })],
+        // Not the demo harness's id, which hides every project.
         [
-          'demo',
+          'unlisted',
           harnessInfo({
             profiles: [{ name: 'demo', configDir: '/demo' }],
             unlisted: true,

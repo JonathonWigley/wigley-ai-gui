@@ -1,4 +1,5 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
+import { DEMO_HARNESS_ID, DEMO_PROFILE } from '../../../contracts/demo';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
@@ -82,7 +83,9 @@ export interface StartPromptDeps {
 // no further. The target's harness is chat's `defaultHarness`, a picked recent
 // folder's recorded harness while it is registered, or a fixed profile's
 // harness; with `defaultHarness` not registered the prompt toasts and opens
-// nothing.
+// nothing. While the demo harness is registered the prompt lists no projects
+// and no recent folders, so its first step is the folder step, and a section
+// row on the demo profile is a sample that toasts and resumes nothing.
 // `openForNewSession` asks the same way but lists no sections and no saved
 // sessions, so it starts a new session once the profile is signed in.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
@@ -185,11 +188,17 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       offersSavedSessions ? readSections() : [],
       readProjects(),
     ]).then(
-      ([recent, sections, projects]) => {
+      ([userRecent, sections, userProjects]) => {
         if (isStale(isCurrent, 'recent folders')) {
           return;
         }
         const harnesses = deps.harnesses();
+        const isDemoRunning = harnesses.has(DEMO_HARNESS_ID);
+        if (isDemoRunning) {
+          log('start prompt: the demo runs, projects and recent folders hidden');
+        }
+        const recent = isDemoRunning ? [] : userRecent;
+        const projects = isDemoRunning ? [] : userProjects;
         const defaultHarness = deps.defaultHarness();
         const defaultInfo = harnesses.get(defaultHarness);
         if (defaultInfo === undefined) {
@@ -300,6 +309,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Resumes a first step's section row once its profile is signed in; a profile
   // no longer in the settings goes straight to `resume`, which rejects it.
   const resumeSectionRow = (context: PromptContext, row: ResumeSectionRow) => {
+    if (row.profile === DEMO_PROFILE) {
+      log(`sample session ${row.title} not resumed`);
+      deps.toast('A sample session: the demo resumes nothing', 'info');
+      return;
+    }
     const goOn = () =>
       resumeSession(
         context,

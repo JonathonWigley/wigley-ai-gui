@@ -3,14 +3,14 @@ import { definePlugin } from '../../shared/define-plugin';
 // Holds a send to an idle session whose prompt cache is cold and whose context
 // is above `minTokens`, and compacts first, through chat's send gate; and
 // compacts a workflow session whose main turn ended while its subagents run,
-// when its context is above `agentWaitMinTokens`, through chat's `compact`. Main
-// only: it has no surface and no layout.
+// when its context is above `agentWaitMinTokens`, through chat's `compact`. It
+// has no surface and no layout; its page part only registers the demo step.
 export const autoCompactManifest = definePlugin({
   id: 'auto-compact',
   label: 'Auto compact',
   description:
     'Compacts an idle session whose prompt cache is cold before the next message, when its context is large.',
-  dependsOn: { main: ['chat'], page: [] },
+  dependsOn: { main: ['chat'], page: ['sessions'] },
   reads: { main: ['workflow'], page: [] },
   commands: {},
   scopes: {},

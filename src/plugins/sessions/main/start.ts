@@ -36,6 +36,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { sessionsMainView } from './consumer-view';
+import { registerDemoSteps } from './demo-steps';
 import { serveMcp } from './mcp/mcp-server';
 import {
   OFFLINE_CALLS_FOLDER,
@@ -386,6 +387,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       );
     }
     api.layouts.register({ layoutTypes });
+    registerDemoSteps(api.services);
     api.services.selfTest?.run(
       sessionsSelfTestScript(exports, () => list.state()),
     );

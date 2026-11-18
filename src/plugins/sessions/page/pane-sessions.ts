@@ -1,3 +1,4 @@
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { SessionRow } from '../contract';
 
 // Each chat pane's id and the app session id it shows, null for an empty pane.
@@ -198,7 +199,8 @@ export function liveWaits(
 
 // What the panes save, pane id to host session id: a pane showing a session
 // saves its row's host session id, a waiting pane the one it waits for, so a
-// relaunch before that session comes back keeps it; null otherwise.
+// relaunch before that session comes back keeps it; null otherwise, a pane
+// showing a demo row (harness `demo`) included, so a restart closes it.
 export function savedPaneSessions(
   panes: PaneSessions,
   waiting: PaneWaits,
@@ -206,11 +208,15 @@ export function savedPaneSessions(
 ): Record<string, string | null> {
   const saved: Record<string, string | null> = {};
   for (const [paneId, sessionId] of panes) {
+    if (sessionId === null) {
+      saved[paneId] = waiting.get(paneId) ?? null;
+      continue;
+    }
+    const row = rows.find((candidate) => candidate.sessionId === sessionId);
     saved[paneId] =
-      sessionId === null
-        ? (waiting.get(paneId) ?? null)
-        : (rows.find((row) => row.sessionId === sessionId)?.hostSessionId ??
-          null);
+      row === undefined || row.harness === DEMO_HARNESS_ID
+        ? null
+        : row.hostSessionId;
   }
   return saved;
 }

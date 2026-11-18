@@ -7,17 +7,19 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import {
+  fakeDependency,
   noCounts,
   probePart,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { chatFocusSlot } from '../../chat/contract';
+import { sessionsPageKey } from '../../sessions/contract';
 import { visualPagePart } from './start';
 
 // The part on the harness, over fake frames and a `chat.focus` naming `entry`,
 // marked as chat marks it inside its tab, with the harness's own markdown, which
-// records the fence as the page API does. `runs` holds each page command run,
-// with its arg.
+// records the fence as the page API does, and a sessions page whose `activate`
+// does nothing. `runs` holds each page command run, with its arg.
 function startOnHarness() {
   const { frames, opened } = fakeVisualFrames();
   const tab = new FakeElement('div');
@@ -29,6 +31,9 @@ function startOnHarness() {
   const harness = startPagePart(visualPagePart, {
     services: { visualFrames: frames },
     parts: [probePart(runs)],
+    dependencies: [
+      fakeDependency(sessionsPageKey, () => ({ activate: () => undefined })),
+    ],
   });
   harness.state
     .publish(chatFocusSlot)

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { SessionRow } from '../contract';
 import { sessionRow } from '../contract.test-support';
 import {
@@ -217,15 +218,25 @@ describe('pane-sessions', () => {
     {
       name: 'a waiting pane saves the host session it waits for',
       waiting: new Map([['p3', 'h9']]),
+      rows: ROWS,
       expected: { p1: 'h1', p2: 'h2', p3: 'h9' },
     },
     {
       name: 'an empty pane that waits for nothing saves null',
       waiting: new Map<string, string>(),
+      rows: ROWS,
       expected: { p1: 'h1', p2: 'h2', p3: null },
     },
-  ])('savedPaneSessions: $name', ({ waiting, expected }) => {
-    expect(savedPaneSessions(PANES, waiting, ROWS)).toEqual(expected);
+    {
+      name: 'a pane showing a demo row saves null',
+      waiting: new Map<string, string>(),
+      rows: ROWS.map((row) =>
+        row.sessionId === 's2' ? { ...row, harness: DEMO_HARNESS_ID } : row,
+      ),
+      expected: { p1: 'h1', p2: null, p3: null },
+    },
+  ])('savedPaneSessions: $name', ({ waiting, rows, expected }) => {
+    expect(savedPaneSessions(PANES, waiting, rows)).toEqual(expected);
   });
 
   it.each([

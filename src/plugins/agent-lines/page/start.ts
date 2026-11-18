@@ -15,6 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { agentLinesManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readAgentLinesLayout } from './layout/read-agent-lines-layout';
 import { createWorkingLines } from './working-lines';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
@@ -25,6 +26,7 @@ type AgentLinesApi = PageApi<typeof agentLinesManifest, ChannelShape>;
 // or task, through sessions' row parts and the `agent-lines.layout` layout.
 // Reads `agents.rosters`, redrawing a session's line each time its roster
 // changes, and names each session by its side-bar label for the page log.
+// Registers the lines' demo step.
 export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
   manifest: agentLinesManifest,
   start(api: AgentLinesApi) {
@@ -47,6 +49,9 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
       roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
     });
     sessions.addRowPart(lines.part);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+    });
 
     followRows(rows, { removed: (sessionId) => lines.forget(sessionId) });
 

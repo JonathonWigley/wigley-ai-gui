@@ -46,6 +46,7 @@ import type { Layout, SectionInput } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { cutTitle, titleLimit } from '../session-title';
 import { sessionsPageView } from './consumer-view';
+import { registerDemoSteps } from './demo-steps';
 import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   type ActivationTarget,
@@ -284,7 +285,8 @@ function createExports(
 // bar hiding, the mode hiding and a press or a focus in the chat panes, each
 // setting main's scope again. A pane key move, like a key leaving the list,
 // hands the keys to the focused pane's transcript in normal mode; a release
-// into a pane focuses its Chat box.
+// into a pane focuses its Chat box. The page registers the session card and
+// pane demo steps (`demo-steps.ts`).
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -761,6 +763,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       log('waiting panes closed');
     };
+
+    registerDemoSteps(api.services, {
+      activate: exports.activate,
+      panes: view.panes,
+      closeWaiting,
+    });
 
     // Applies the selection rules (`selectionAction`) to the state `apply`
     // took in. A notice that leaves the selection alone answers no echo, however

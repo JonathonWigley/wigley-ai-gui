@@ -50,7 +50,9 @@ import {
   createPermissionActions,
   fillComposer,
 } from './chat-commands';
+import { chatCommand } from '../ids';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
+import { registerDemoSteps } from './demo-steps';
 import { createChatLayouts } from './chat-layouts';
 import { createEntryRenderers } from './entry-renderers';
 import { addClearCommands } from './clear-commands';
@@ -401,17 +403,29 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         },
       }),
     );
+    const fillComposerOf = (sessionId: string, text: string) =>
+      fillComposer({ tabs: view, log: services.log }, sessionId, text);
+    const setHeadless = (sessionId: string, headless: boolean) =>
+      api.channel.invoke('setHeadless', sessionId, headless);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      fillComposer: fillComposerOf,
+      setHeadless,
+      typeInto: (element, keys) => services.editor.typeInto(element, keys),
+      openStartPrompt: () => startPrompt.open(),
+      pickModel: () => api.commands.run(chatCommand('pickModel')),
+      cancelPicker: () => picker.close(),
+      isPickerOpen: () => picker.isOpen(),
+    });
     const exports = (consumer: Registrations): ChatPageExports => ({
       addSlashCommand: (command) => consumer.track(slashCommands.add(command)),
       addCompletionRow: (draw) => consumer.track(completionRows.add(draw)),
-      fillComposer: (sessionId, text) =>
-        fillComposer({ tabs: view, log: services.log }, sessionId, text),
+      fillComposer: fillComposerOf,
       addComposerPart: (part) => consumer.track(composerParts.add(part)),
       addStatusPart: (part) => consumer.track(statusParts.add(part)),
       addSidePart: (part) => consumer.track(sideParts.add(part)),
       activeTime: (sessionId) => view.activeTime(sessionId),
-      setHeadless: (sessionId, headless) =>
-        api.channel.invoke('setHeadless', sessionId, headless),
+      setHeadless,
       mountChat: (element, sessionId) =>
         consumer.track(view.mount(element, sessionId)),
       addEntryRenderer: (renderer) =>

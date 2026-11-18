@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
+import { DEMO_HARNESS_ID, type DemoMainStep } from '../../../contracts/demo';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
@@ -11,7 +13,9 @@ import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import {
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import {
   agentsRostersSlot,
   type Roster,
@@ -158,7 +162,8 @@ interface Notice {
 // a qualified event, `notices` records every notice of the rosters slot,
 // `rosters` reads the slot and `invoke` calls a handled channel method.
 // Sessions' `open` hands back a row `PREVIEW_ROW`, so `openPreview` opens the
-// preview there.
+// preview there. `sessionRows` writes `sessions.rows` in the same store, and
+// `enterRosterStep` enters the roster demo step the part registered.
 function startAgentsPart() {
   const handlers = new Map<string, () => unknown>();
   const listeners = new Map<string, ((data: unknown) => void)[]>();
@@ -167,6 +172,8 @@ function startAgentsPart() {
   const reader = store.read(agentsRostersSlot, 'test');
   reader.on((sessionId, roster) => notices.push({ sessionId, roster }));
   const data = createMemoryFiles();
+  const sessionRows = store.publish(sessionsRowsSlot);
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const sessions: Pick<SessionsMainExports, 'open' | 'activate'> = {
     open: (info) => ({
       session: { id: PREVIEW_ROW, info },
@@ -181,7 +188,10 @@ function startAgentsPart() {
       handle: (name: string, handler: () => unknown) =>
         handlers.set(name, handler),
     },
-    state: { publish: () => store.publish(agentsRostersSlot) },
+    state: {
+      publish: () => store.publish(agentsRostersSlot),
+      read: (slot: typeof sessionsRowsSlot) => store.read(slot, 'test'),
+    },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
@@ -192,6 +202,7 @@ function startAgentsPart() {
     services: {
       log: () => undefined,
       clock: { now: () => 50_000 },
+      demoSteps,
     },
     dependency: (key: { id: string }) =>
       key.id === 'sessions' ? sessions : {},
@@ -216,7 +227,27 @@ function startAgentsPart() {
     });
   const invoke = (name: string) => handlers.get(name)?.();
   const rosters = () => Object.fromEntries(reader.all());
-  return { notices, rosters, data, emit, agentEvent, invoke };
+  // Enters agents' roster demo step with its one launch answering `s1`.
+  const enterRosterStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'agents.roster');
+    return step.enter({
+      scratchDir: '/scratch',
+      launchSession: () => Promise.resolve('s1'),
+      processEvents: () => {
+        throw new Error('no process events in this test');
+      },
+    });
+  };
+  return {
+    notices,
+    rosters,
+    data,
+    emit,
+    agentEvent,
+    invoke,
+    sessionRows,
+    enterRosterStep,
+  };
 }
 
 const settled = () => new Promise((settle) => setImmediate(settle));
@@ -414,6 +445,51 @@ describe('agentsMainPart', () => {
       ]);
     },
   );
+
+  it.each<{
+    name: string;
+    row: 'demo' | 'claude' | 'demo-then-removed';
+    lines: number;
+  }>([
+    { name: 'a demo row', row: 'demo', lines: 0 },
+    { name: 'a claude row', row: 'claude', lines: 1 },
+    { name: 'a demo row already removed', row: 'demo-then-removed', lines: 0 },
+  ])('agentLog_DemoSession_AppendsNoLine: $name', async ({ row, lines }) => {
+    const agents = startAgentsPart();
+    const harness = row === 'claude' ? 'claude' : DEMO_HARNESS_ID;
+    agents.sessionRows.set('s1', sessionRow('s1', { harness }));
+    const logLines = async () =>
+      (await agents.data.read('logs/h1.jsonl').catch(() => ''))
+        .split('\n')
+        .filter((line) => line !== '').length;
+    if (row === 'demo-then-removed') {
+      agents.agentEvent(spawned);
+      agents.sessionRows.delete('s1');
+    }
+    await settled();
+    const before = await logLines();
+
+    agents.agentEvent(spawnedB);
+    await settled();
+
+    expect((await logLines()) - before).toBe(lines);
+  });
+
+  it('a held sample roster outlasts the fold', async () => {
+    const agents = startAgentsPart();
+    const stage = await agents.enterRosterStep();
+    const sample = agents.rosters().s1;
+
+    agents.agentEvent(spawned);
+
+    expect(sample.agents.length).toBeGreaterThan(0);
+    expect(agents.rosters()).toEqual({ s1: sample });
+
+    stage.dispose();
+    agents.agentEvent(spawnedB);
+
+    expect(agents.rosters()).toEqual({ s1: roster([runningA, runningB]) });
+  });
 
   it("the slot holds the row's merged roster and the preview's", () => {
     const agents = startAgentsPart();

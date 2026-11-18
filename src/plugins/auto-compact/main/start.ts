@@ -14,6 +14,7 @@ import {
   withFlow,
   withWaitEvent,
 } from './agent-wait';
+import { registerDemoSteps } from './demo-steps';
 import { type LatestUsage, sendGateVerdict, withAgentEvent } from './send-gate';
 
 type AutoCompactApi = MainApi<
@@ -29,7 +30,8 @@ type AutoCompactApi = MainApi<
 // the next send or process start. It also compacts a session waiting on its
 // subagents through chat's `compact`, asked at each `workflow.flows` change and
 // each `chat.turnFinished`: the flow's turn end folds after chat's idle, and an
-// idle can come after the flow's last change.
+// idle can come after the flow's last change. It registers the auto compact
+// demo step's main half, which launches its cold sessions on the demo harness.
 export const autoCompactMainPart: MainPart<typeof autoCompactManifest> = {
   manifest: autoCompactManifest,
   start(api: AutoCompactApi) {
@@ -85,6 +87,11 @@ export const autoCompactMainPart: MainPart<typeof autoCompactManifest> = {
     chat.addIdleCompactThreshold(() => {
       const { minTokens } = api.settings();
       return minTokens > 0 ? minTokens : null;
+    });
+    registerDemoSteps(api.services, {
+      chat,
+      harnesses: api.services.agentHarnesses,
+      onTurnFinished: (listener) => api.events.on('chat.turnFinished', listener),
     });
     return { commands: {} };
   },

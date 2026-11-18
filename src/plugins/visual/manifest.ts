@@ -8,13 +8,14 @@ import { definePlugin } from '../../shared/define-plugin';
 // visuals and each visual's expand control on that visual. A visual takes the
 // reading width until its agent marks it wide, or `w` or its widen control
 // flips it. Its main part registers that layout contract and hands chat the
-// session note that tells agents about visuals.
+// session note that tells agents about visuals. Its page names `sessions` for
+// `activate`, which its demo step shows its session with.
 export const visualManifest = definePlugin({
   id: 'visual',
   label: 'Visuals',
   description:
     'Draws the html code blocks an agent writes as live visuals, with a full-size view.',
-  dependsOn: { main: ['chat'], page: [] },
+  dependsOn: { main: ['chat'], page: ['sessions'] },
   reads: { main: [], page: ['chat'] },
   commands: {
     openVisuals: {

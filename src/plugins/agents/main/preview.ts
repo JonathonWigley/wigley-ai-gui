@@ -33,8 +33,8 @@ const PREVIEW_PROJECT_DIR = 'Agents preview';
 // `now`, the second in the background, and two running tasks, started 95 s and
 // 60 s before `now`: one the main agent's, one the 185 s subagent's. The second
 // subagent's and the second task's descriptions are long enough to end in an
-// ellipsis.
-function sampleRoster(now: number): Roster {
+// ellipsis. The roster demo step shows it too.
+export function sampleRoster(now: number): Roster {
   const agents: RosterAgent[] = [
     {
       agentId: 'preview-agent-1',

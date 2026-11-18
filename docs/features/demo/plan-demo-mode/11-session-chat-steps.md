@@ -1,6 +1,6 @@
 # 11 — Session card and chat steps
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: deep · crosses chat, sessions and agents through the async session lifecycle (turn ends, held compactions, held rosters) and changes what agents writes to its log
 Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/chat/page/start-prompt.ts`, its test and `src/plugins/chat/main/start.ts`), 03 (both modify `src/plugins/chat/page/start.ts`: 03 adds the `showHubForNow` export, this task registers chat's demo steps), 04 (both modify `src/plugins/sessions/page/start.ts`)

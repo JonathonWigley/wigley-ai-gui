@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { UiState } from '../../../contracts/ui-state';
 import type { SessionRow } from '../contract';
 import { sessionRow } from '../contract.test-support';
@@ -129,6 +130,88 @@ describe('createSessionRecency', () => {
       recency.rowsChanged(before, after);
 
       expect(state.get('recency')).toEqual({ stamps: saved });
+    },
+  );
+
+  const claudeRow = sessionRow('c', { hostSessionId: 'h1', project: 'alpha' });
+  const newClaudeRow = sessionRow('n', { hostSessionId: 'h2', project: 'beta' });
+  const demoRow = (hostSessionId: string) =>
+    sessionRow('d', {
+      harness: DEMO_HARNESS_ID,
+      hostSessionId,
+      project: 'scratch',
+    });
+
+  it.each<{
+    case: string;
+    stamps: Record<string, number>;
+    projects: Record<string, number>;
+    before: SessionRow[];
+    after: SessionRow[];
+    saved: { recency: unknown; projectRecency: unknown } | 'no write';
+  }>([
+    {
+      case: 'a demo row arrives',
+      stamps: { h1: 5 },
+      projects: { alpha: 5 },
+      before: [claudeRow],
+      after: [claudeRow, demoRow('hd')],
+      saved: 'no write',
+    },
+    {
+      case: 'a demo row leaves',
+      stamps: { h1: 5, hd: 6 },
+      projects: { alpha: 5, scratch: 6 },
+      before: [claudeRow, demoRow('hd')],
+      after: [claudeRow],
+      saved: 'no write',
+    },
+    {
+      case: 'a demo row moves to a new host id',
+      stamps: { h1: 5, hd: 6 },
+      projects: { alpha: 5, scratch: 6 },
+      before: [claudeRow, demoRow('hd')],
+      after: [claudeRow, demoRow('he')],
+      saved: 'no write',
+    },
+    {
+      case: 'a demo row and a claude row arrive together',
+      stamps: { h1: 5 },
+      projects: { alpha: 5 },
+      before: [claudeRow],
+      after: [claudeRow, demoRow('hd'), newClaudeRow],
+      saved: {
+        recency: { stamps: { h1: 5, h2: 100 } },
+        projectRecency: { alpha: 5, beta: 100 },
+      },
+    },
+  ])(
+    'recency_DemoRows_AreNeverStamped: $case',
+    ({ stamps, projects, before, after, saved }) => {
+      const state = fakeUiState([
+        ['recency', { stamps }],
+        ['projectRecency', projects],
+      ]);
+      const writes: string[] = [];
+      const recording: UiState = {
+        get: (key) => state.get(key),
+        set: (key, value) => {
+          writes.push(key);
+          state.set(key, value);
+        },
+      };
+      const recency = createSessionRecency({ now: () => 100 }, recording);
+
+      recency.rowsChanged(before, after);
+
+      if (saved === 'no write') {
+        expect(writes).toEqual([]);
+      } else {
+        expect({
+          recency: state.get('recency'),
+          projectRecency: state.get('projectRecency'),
+        }).toEqual(saved);
+      }
     },
   );
 

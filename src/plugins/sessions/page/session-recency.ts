@@ -1,4 +1,5 @@
 import type { Clock } from '../../../contracts/ambient';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { UiState } from '../../../contracts/ui-state';
 import { isJsonObject } from '../../../shared/json';
 import type { SessionRow } from '../contract';
@@ -20,7 +21,9 @@ const MAX_SAVED_STAMPS = 200;
 // `rowsChanged` takes each state main sends, `before` null for the first one: a
 // row in `after` with no stamp is stamped, all of them with one time so they tie
 // and keep main's order; a row whose host id changed takes its stamp along; a
-// row that left loses its stamp, so it stamps again if it comes back. Two rows
+// row that left loses its stamp, so it stamps again if it comes back. A demo row
+// (harness `demo`) is left out of both states, so it is never stamped and never
+// stamps its project; `stampsOf` finds none for it. Two rows
 // can share a host id, so a row leaving or moving off a key leaves the stamp
 // there while a row in `after` holds that key. A row merely absent keeps its
 // stamp, since a relaunch's first state lacks the rows main has yet to resume.
@@ -70,8 +73,9 @@ export function createSessionRecency(
       return found;
     },
     projectStamps: () => projectStamps,
-    rowsChanged(before, after) {
-      const beforeRows = before ?? [];
+    rowsChanged(before, rowsAfter) {
+      const beforeRows = withoutDemoRows(before ?? []);
+      const after = withoutDemoRows(rowsAfter);
       const { added, removed, changed } = rowChanges(beforeRows, after);
       const rowsBefore = new Map(beforeRows.map((row) => [row.sessionId, row]));
       const heldKeys = new Set(after.map((row) => stampKey(row)));
@@ -88,6 +92,10 @@ export function createSessionRecency(
       }
     },
   };
+}
+
+function withoutDemoRows(rows: readonly SessionRow[]): SessionRow[] {
+  return rows.filter((row) => row.harness !== DEMO_HARNESS_ID);
 }
 
 function stampKey(row: SessionRow): string {
