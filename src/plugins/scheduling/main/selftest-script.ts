@@ -176,7 +176,7 @@ export function schedulingSelfTestScript(
     });
     const startedAt = now();
     for (const fixture of FIXTURE_RUNS) {
-      const launch = chat.prepareLaunch(
+      const launch = await chat.prepareLaunch(
         {
           projectDir,
           profile: PROFILE,

@@ -1,12 +1,14 @@
+import type { InstalledPlugin } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
+import { FAKE_HARNESS_ID } from '../../../shared/fake-agent-harness';
 import type {
   IndexContext,
   IndexDocument,
   IndexEntry,
   LoadStateRecord,
 } from '../contract';
-import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
+import { WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
@@ -20,7 +22,7 @@ const LONG_SECTION = `\n## Long section\n\n${Array.from(
 ).join('\n')}`;
 const KEPT_RULE = 'style.md';
 // One global doc per index load state other than `launch`, each written to
-// `<state>.md` in the load-states folder and judged for Claude only.
+// `<state>.md` in the load-states folder and judged for the fake harness only.
 const LOAD_STATE_DOCS: readonly LoadStateRecord[] = [
   { state: 'on-demand', reason: 'loads when invoked' },
   { state: 'listed', reason: 'listed by name only' },
@@ -132,7 +134,7 @@ export async function writeDocsFixture(
       doc.path,
       `# ${doc.title}\n`,
     ]),
-    [installedPluginsFile(fixture.claudeDir, paths), installedPlugins(fixture)],
+    [fixture.installedPlugins, installedPluginsText(fixture)],
     [paths.join(fixture.scriptFolder, 'index.fixture.json'), json(index)],
     [
       paths.join(fixture.scriptFolder, 'session.fixture.json'),
@@ -180,6 +182,11 @@ function fixturePaths(home: string, paths: Paths) {
     rules: paths.join(claudeDir, 'rules'),
     loadStates: paths.join(claudeDir, 'load-states'),
     claudeMd: paths.join(claudeDir, 'CLAUDE.md'),
+    installedPlugins: paths.join(
+      claudeDir,
+      'plugins',
+      'installed_plugins.json',
+    ),
     styleRule: paths.join(claudeDir, 'rules', KEPT_RULE),
     settings: paths.join(claudeDir, 'settings.json'),
     repo,
@@ -214,8 +221,32 @@ function fixturePaths(home: string, paths: Paths) {
   };
 }
 
-// The plugin's key sits on line 3.
-function installedPlugins(fixture: FixturePaths): string {
+// The installs the fixture's `installed_plugins.json` lists, as a harness's
+// `installedPlugins` gives them: what a run on the fake harness hands it for
+// each profile, since the fake reads no file.
+export function docsFixtureInstalls(
+  home: string,
+  paths: Paths,
+): InstalledPlugin[] {
+  const fixture = fixturePaths(home, paths);
+  return [
+    {
+      key: WIGLEY_PLUGIN_KEY,
+      installDir: fixture.wigleyInstall,
+      version: '0.0.0',
+      listedAt: { path: fixture.installedPlugins, line: 2 },
+    },
+    {
+      key: FIXTURE_PLUGIN_KEY,
+      installDir: fixture.pluginRoot,
+      version: '1.0.0',
+      listedAt: { path: fixture.installedPlugins, line: 3 },
+    },
+  ];
+}
+
+// The wigley key sits on line 2, the fixture plugin's on line 3.
+function installedPluginsText(fixture: FixturePaths): string {
   const install = (installPath: string) =>
     `[{"scope":"user","installPath":${JSON.stringify(installPath)}}]`;
   return (
@@ -245,11 +276,15 @@ function entry(
   };
 }
 
+// A doc's load states, keyed by the fake's id: a fake run registers it, so its
+// chips draw; no `codex` harness registers, so a `codex` record draws none.
 function state(
-  claude: LoadStateRecord,
+  primary: LoadStateRecord,
   codex?: LoadStateRecord,
-): Partial<Record<'claude' | 'codex', LoadStateRecord>> {
-  return codex === undefined ? { claude } : { claude, codex };
+): Partial<Record<string, LoadStateRecord>> {
+  return codex === undefined
+    ? { [FAKE_HARNESS_ID]: primary }
+    : { [FAKE_HARNESS_ID]: primary, codex };
 }
 
 // The Backlog self-test's git repo (written by Backlog's fixture): its
@@ -429,7 +464,7 @@ function indexDocument(
       path: fixture.pluginRoot,
       title: FIXTURE_PLUGIN_KEY,
       meta: {
-        harness: 'claude',
+        harness: FAKE_HARNESS_ID,
         version: '1.0.0',
         installs: [{ scope: 'user', projectPath: null }],
       },

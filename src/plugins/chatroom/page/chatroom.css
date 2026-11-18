@@ -1,0 +1,33 @@
+/* Chatroom mode's app-owned containers: the side bar's pane, which holds the layout's thread list, and the sheet,
+   which stacks the board, the scrolling log and the composer. */
+.chatroom-side {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+/* The sheet is the main cell's direct child: its margins lie outside the box, so it takes the cell's height less its
+   two gutters. */
+.chatroom-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .chatroom-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.chatroom-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.chatroom-log {
+  overflow-y: auto;
+  padding-block: var(--wg-space-2);
+}

@@ -58,7 +58,12 @@ export const TEST_FORM_TYPE: AgentFormType<TestForm, TestBody, TestPayload> = {
   openTool: 'open_form',
   collectTool: 'collect_last_form',
   noun: 'form',
-  argsErrorName: TEST_FORM_ERROR_NAME,
+  // The prefix shows a test that the shared code words an args error with
+  // this text, not the error's message.
+  argsErrorText: (error) =>
+    error instanceof Error && error.name === TEST_FORM_ERROR_NAME
+      ? `Bad form: ${error.message}`
+      : null,
   parse: parseTestForm,
   // A re-send under a reworded heading matches, as a round's does.
   fingerprint: (form) => form.items.join('\n'),

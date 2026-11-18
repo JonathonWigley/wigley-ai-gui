@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSettingsFor } from '../config/settings';
-import { fakePlatform } from '../shared/platform.test-support';
+import { coreDefaultSettings } from '../config/settings';
+import type { MainPart } from '../contracts/plugin';
 import {
   disabledDependencyProblem,
   pluginSettingInfo,
   requireNoSettingsUnderCoreNames,
 } from '../shared/plugin-manifests';
-import { manifests } from './manifests';
+import {
+  builtInManifests,
+  manifests,
+  withoutRealHarnessPlugins,
+} from './manifests';
 
 // The shipped manifests are the subject here: a leaf setting without a
 // declaration makes the settings schema throw.
@@ -17,17 +21,14 @@ describe('manifests', () => {
 
   it('manifests_CoreSettingNames_HoldNoPluginSettings', () => {
     expect(() =>
-      requireNoSettingsUnderCoreNames(
-        manifests,
-        defaultSettingsFor(fakePlatform('macos').programs),
-      ),
+      requireNoSettingsUnderCoreNames(manifests, coreDefaultSettings()),
     ).not.toThrow();
   });
 
   it('manifests_DefaultDisabled_BreaksNoDependency', () => {
     expect(
       disabledDependencyProblem(
-        defaultSettingsFor(fakePlatform('macos').programs).plugins.disabled,
+        coreDefaultSettings().plugins.disabled,
         manifests,
       ),
     ).toBeNull();
@@ -89,5 +90,30 @@ describe('manifests', () => {
 
     expect(Object.keys(spike?.settings ?? {})).toEqual(['layout']);
     expect(spike?.themeTokens?.badge.default).toBe('var(--wg-fg-secondary)');
+  });
+});
+
+describe('withoutRealHarnessPlugins', () => {
+  const ids = (list: readonly { id: string }[]) => list.map(({ id }) => id);
+  const inputIds = ids(builtInManifests);
+  const parts: readonly MainPart[] = builtInManifests.map((manifest) => ({
+    manifest,
+    start: () => ({ commands: {} }),
+  }));
+
+  it.each([
+    {
+      given: 'a fake run',
+      isFake: true,
+      expected: inputIds.filter((id) => id !== 'claude-code'),
+    },
+    { given: 'a real run', isFake: false, expected: inputIds },
+  ])('withoutRealHarnessPlugins_given $given', ({ isFake, expected }) => {
+    const kept = withoutRealHarnessPlugins(builtInManifests, parts, isFake);
+
+    expect(ids(kept.manifests)).toEqual(expected);
+    expect(ids(kept.mainParts.map(({ manifest }) => manifest))).toEqual(
+      expected,
+    );
   });
 });

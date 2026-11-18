@@ -7,7 +7,9 @@ import type {
   SessionsMainExports,
 } from '../../../sessions/contract';
 import type { FormsService } from '../../contract';
+import { roundErrorText } from '../mcp-wording';
 import { parseRound, requireKnownLayouts } from '../round';
+import { RoundError } from '../round-error';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
 // No project, so the row and its title bar carry the label alone.
@@ -15,6 +17,7 @@ const PREVIEW_SESSION: SessionInfo = {
   sessionId: 'layout-preview',
   projectDir: null,
   harness: null,
+  rowId: null,
   label: 'Layout preview',
 };
 
@@ -35,7 +38,10 @@ function nextRound(
       requireKnownLayouts(parseRound(saved[index]), layoutNames);
       return { cursor: index, args: saved[index] };
     } catch (error) {
-      log(`preview skipped a saved round: ${errorText(error)}`);
+      // A RoundError's message drops the item location its round text names.
+      const text =
+        error instanceof RoundError ? roundErrorText(error) : errorText(error);
+      log(`preview skipped a saved round: ${text}`);
     }
   }
   return { cursor: SAMPLE, args: PREVIEW_ROUND_ARGS };

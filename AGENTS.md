@@ -100,6 +100,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-login-start.ts`: the
                  login start's test double, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
+                 `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
+                 (pure, so both OSes' rules are tested anywhere),
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,
@@ -108,7 +110,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `keys-for.ts`: the keys that run a command, as help and hints read them,
                  `plan-progress.ts`: a plan's boxes, waves, review rounds and task statuses from its plan.md and task
                  documents, and `plan-copies.ts`: a plan folder's copies across a clone and its git worktrees and the
-                 moved one among them (progress unlike the main tree's and not behind it), both read by workflow-large and backlog)
+                 moved one among them (progress unlike the main tree's and not behind it), both read only by workflow-large)
   plugin-catalog/ `validateManifest` and the manifest JSON Schema: the checks a user plugin's manifest meets at load →
                  pure, no I/O
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
@@ -215,13 +217,18 @@ src/main/        core main process; main.ts is its composition root
                  EPERM or EBUSY holds is tried again), append, rename, trash, file deletes, folder lists and
                  watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
-  processes/     runs a program, killed past an optional timeout, and returns its exit code and output, or starts one
-                 detached, its output appended to a log file, so it outlives the app's quit, behind ProcessRunner;
-                 `limitRuns` caps how many of a runner's programs run at once (git's runner: 4);
+  processes/     runs a program to its end, killed past an optional timeout, and returns its exit code and output;
+                 spawns one with its stdin, stdout and stderr as text, its exit and its kill; or starts one detached,
+                 its output appended to a log file when one is given, so it outlives the app's quit, behind
+                 ProcessRunner; `resolveProgram` finds a program from the core `programs.python` setting or the
+                 Platform record's per-OS candidates; on Windows a bare name is looked up over PATH × PATHEXT and a
+                 `.cmd` or `.bat` starts through `cmd.exe /d /s /c` (`src/shared/program-lookup.ts`);
+                 `limitRuns` caps how many of a runner's runs go at once (git's runner: 4), not its spawns;
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
                  run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
-                 answers, drains an older protocol's host, and hands out hosted processes;
+                 answers through `ProcessRunner.startDetached`, drains an older protocol's host, and hands out hosted
+                 processes;
                  `docs/features/session-host/design.md`
   login-start/   the adapters behind LoginStart, which start the session host at login: Electron's `agentService`
                  login item, which `main.ts` uses in the live stable app on macOS; a LaunchAgent file, built and tested
@@ -277,7 +284,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
                  count and hidden popups, `followRows`, and the row's `owner`: the plugin a row with no place in the side bar belongs to), session-title.ts (the title rules main and page share), main/ (the
                  session list — rows, their titles and project names (a registered namer's, chat's projects, else the origin repo's), the selected session, written to the `rows` and `selection` slots, tool routing — the
-                 `set_session_title` tool, relay, endpoint files, the offline table for the closed app (`offlineEnv`, the relay's offline env; `replayCalls`, the calls the relay logged while the app was closed), `holdConnects` (relay connects wait on a promise), MCP adapter → the only @modelcontextprotocol import),
+                 `set_session_title` tool, relay, the hook route (`addHookHandler`: a relay hello with a `hook` field is one request and one reply, opening no session), endpoint files, the offline table for the closed app (`offlineEnv`, the relay's offline env; `replayCalls`, the calls the relay logged while the app was closed), `holdConnects` (relay connects wait on a promise), MCP adapter → the only @modelcontextprotocol import),
                  page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections, then
                  the sections other plugins register through `addSection`, each claiming its own rows —
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
@@ -337,15 +344,23 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  contract and `default` layout); `docs/features/session-stash/design.md`
   window/        manifest.ts and main/ only (the `window.summon` command, which brings the app forward through
                  `services.window.summon`)
+  agent-commands/ manifest.ts (declares `readsEverySlot`) and main/ only (the `list_commands`, `run_command` and
+                 `read_state` tools through sessions' `contributeTools`, for every session, subagents included; a
+                 risky command asks the user through forms' `confirm` and is refused for a headless or unattended
+                 caller; its drive actions call a tool as a session); `docs/features/agent-commands/design.md`
   claude-code/   manifest.ts (the `command` and `profiles` settings), main/ (the Claude Code CLI adapter behind
                  AgentHarness, registered through `services.agentHarnesses`: it resolves a profile's config folder,
                  lists and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and
-                 status and `claude -p /usage` (the plan usage poll), asks each session for `get_context_usage` and
-                 `get_settings`, and contributes Claude's `permission_prompt` MCP tool, routed to the session's
-                 process) → the only place the app spawns `claude`; `docs/features/agent-harnesses/design.md`
-  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
-                 round; the agents' service auto-answers a headless chat session's rounds with every item's
-                 recommendation, outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the Layout contract and the built-in `default` layout)
+                 status and `claude -p /usage` (the plan usage poll), each one-shot started through
+                 `ProcessRunner.spawn`, asks each session for `get_context_usage` and `get_settings`, and contributes
+                 Claude's `permission_prompt` MCP tool, routed to the session's process; an empty `command` looks
+                 `claude` up on PATH, then in `~/.local/bin`) → the only place the app spawns `claude`;
+                 `docs/features/agent-harnesses/design.md`
+  forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview round; the
+                 agents' service auto-answers a headless chat session's rounds with every item's recommendation,
+                 outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the
+                 Layout contract and the built-in `default` layout); main exports `confirm` (an Allow or Deny round
+                 in the calling session's own forms session, a fresh round each call) to agent-commands
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -400,16 +415,19 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  first message, then the session's chat view through chat's `mountChat`; the `scoped-agents.ask`
                  keys), layouts/ (the scoped-agents Layout contract with its `askBox` part and the built-in `default`
                  layout); `docs/features/scoped-agents/design.md`
-  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the `chat.session`, `chat.entries`,
-                 `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned` slots through `chat-slots.ts`, the
-                 start_session and set_headless MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
-                 layout preview's sample session, held with no process), page/ (the
-                 Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
-                 the start prompt with its project, folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
-                 and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
-                 parts share; main exports `launch` (a background session with a first message) and
+  chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the
+                 `chat.session`, `chat.entries`, `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned`
+                 slots through `chat-slots.ts`, the start_session and set_headless MCP tools, recent folders,
+                 archived sessions, resume, sign-in, preview/: the layout preview's sample session, held with no
+                 process), page/ (the Chat tab with its attached images and image viewer, app slash commands and the
+                 sign-in dialog, the start prompt with its project, folder, profile, sign-in and session steps),
+                 layouts/ (the chat Layout contract and the built-in `default` chat layout); `image-rules.ts` at the
+                 root holds the attach rules both parts share; `agent-frame.ts` at the root holds the frame line an
+                 agent's `chat.sendTo` opens its text with and the page reads back as a "from" tag, `chat.sendTo` runs
+                 in main, and main exports `isHeadless`, `isUnattended` and `senderName` (the frame's cleaned sender
+                 name) to agent-commands; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow-large, `activeTime` (a session's clock) to workflow, `isHeadless` (whether a session is headless) to forms, workflow and workflow-large, `launchedHeadless` (whether its process started headless) to workflow, `launch` (with `unattended`: every permission prompt denied at once) and `close` (one owned session, with a reason) to auto-retro, `addInstructions` (text every session chat starts carries to its harness, before `HEADLESS_NOTE` while the row is headless)
-                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, `prepareLaunch` (a launch the session host starts later), `adopt` (opens the row of a run the host started), `projects`, `profiles`, `profileOf`, `defaultProfile`, `restored` and `onInstructionsChanged` (an `addInstructions` registration or disposal) to scheduling, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
+                 to visual and workflow, `addSendGate`, `addIdleCompactThreshold` and `compact` (an app compaction of an idle session) to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-stash and session-log, `addPoolProvider` (a pool project's clone folders, `docs/features/projects/design.md`) to unity-pool, `launch` and `resume` (each with `instructions`, text that one session alone carries to its harness, and `owner`, the plugin whose row it is), `defaultProfile`, `profileOf`, `send` and `close` to scoped-agents, `launch` and `defaultProfile` to practice (its import session), `launch`, `defaultProfile`, `profileOf` and `restored` (settles once chat's restore of saved sessions has run) to backlog, `prepareLaunch` (a launch the session host starts later), `adopt` (opens the row of a run the host started), `projects`, `profileOf`, `defaultProfile`, `restored` and `onInstructionsChanged` (an `addInstructions` registration or disposal) to scheduling, and `launch` and `closeSessionsIn` to self-test scripts; page exports `mountChat` (a session's chat view built into another plugin's element) to scoped-agents, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock), `setHeadless` (turns a session's headless flag on or off) to workflow; its page publishes the `chat.focus` slot (the visible Chat tab's focused session, entry and block), which visual reads; the `start_session` tool and workflow-large's make-in-new-session copy the asking session's headless flag into their launch; its page also draws each session's run time and profile under its row, through
                  sessions' `addRowPart` and the `rowClock` and `rowProfile` layout parts; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts (types `KeysPageEvents`), main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the leader search (`leader-search.ts`), the title bar's Keys button, and the placement check over the core's anchors), layouts/
@@ -466,6 +484,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `unity-pool hold|release|open` for the panel, gives chat its pools' clone folders, hands its self-test script), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
+  chatroom/      manifest.ts, contract.ts (the records, the `chatroom.rooms` slot holding each room's view and board, and the
+                 page's `chatroom.place` slot), main/ (the store behind `RoomStore` with its jsonl and memory adapters, the room
+                 service, the board, the five `chatroom_*` tools through sessions' `contributeTools`, the `chatroom.pre` and
+                 `chatroom.post` hook handlers through sessions' `addHookHandler`, delivery through chat's `send`, the dispatch
+                 and hand-back entries from `chat.agentEvent`, `addMirror`, its self-test script and the `seed` drive action),
+                 page/ (Chatroom mode, the row badge through sessions' `addRowPart`, the row activity, the layout preview),
+                 layouts/ (its Layout contract and `default` layout); `docs/features/chatroom/design.md`
   system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a
                  page shows the panel, folds two samples into the snapshot with rates, groups and 60 s history, joins
                  `chat.session` pids with `sessions.rows` titles into one group per session's process tree, hands its
@@ -501,14 +526,17 @@ again once every close guard allows, as the form presenter does after every form
 any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
 which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
 while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
-round), unless the user picked another row first; later, it comes back marked. A session the
-app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
-row id (`WIGLEY_SESSION_ROW` in the process's environment) joins that row instead of adding one, and the host
-session id is set when the harness reports it (a newer relay takes the join from an older one still
-connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
+round), unless the user picked another row first; later, it comes back marked. A session the app starts (`open`) is an
+owned session: its row exists from start, the relay connection whose hello carries the owned row's app id (the hello's
+`row_id`, when the row has no host session id yet, the hello carries none, or the two match) or the host session id the
+owned session holds (the hello's `session_id`) joins that row instead of adding one, and the host session id moves when
+the harness reports a new one (a newer relay takes the join from an older one still connected, as when the harness
+restarts its MCP connection), and the row ends when its owner ends it: chat keeps
 its rows through its own restart or reload, its stop `keep`ing each one for the restarted part's restore to adopt
 (`OwnedSession.keep`), so the places of the session's tabs survive it, and across a relaunch, re-attaching each one whose process the session host still runs, and after a process
-exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
+exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A relay
+hello carrying a `hook` field is one request, routed to the handler a plugin registers with `sessions.addHookHandler`
+and answered with one line, opening no session (the chatroom's edit and commit hooks). A plugin's close
 guard (`addCloseGuard`) refuses a close while the plugin still has something open there (forms: an open round; primer:
 an open primer; audio-picker: an open picker), since main, not the page, decides. The user's close key ends the hold
 first: a tab or popup that `closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through
@@ -579,7 +607,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   `wigley-plugin:` scheme. A save reloads the plugin once the edits settle, and `core.reloadPlugin` (no default key)
   reloads it with no change; a reload stops its dependents too. A load that fails keeps the last good version and shows the error as a
   config problem and on its Settings row. Settings and binds under a plugin that is not loaded are kept and ignored.
-  Each load copies the folder to `<userData>/plugin-code/<id>/<revision>/` and no step deletes an old revision.
+  Each load copies the folder to `<userData>/plugin-code/<id>/<revision>/`; a plugin's first load in a launch deletes the revisions an earlier launch left, and `loadAll` deletes the copies of plugins no longer in the folder.
   A user plugin draws only through its layout kit and bundles its own packages
   (`docs/features/plugin-framework/design.md` § Runtime loader (Wave 4 step 3)).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
@@ -608,18 +636,31 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   base change before the window settles is a restore's, so notes' restored popup stays open through it.
   `sessions.activity` clears itself at each page start, since its sources set their activities again, and
   `sessions.active` goes back to null until the first panes are placed. A new start publishes the same key and reads the
-  last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only reads a slot or hears
-  an event lists its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a
-  moment in an event. The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`,
-  `core.agentHarnesses` (each registered harness's label and declarations, keyed by harness id),
-  `core.plugins` (each catalog plugin's label, origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the two runtime command
+  last value. Slot values are JSON; what is not stays in the owner's closure. A main part whose manifest declares
+  `readsEverySlot: true` reads any slot by id through `api.state.readAny` and lists the ids through `api.state.slotIds`,
+  page-owned slots included; `agent-commands` alone declares it. A plugin that only reads a slot or hears an event lists
+  its owner in the manifest's `reads`, which carries no start order. A value belongs in a slot and a moment in an event.
+  The core's own slots are `core.mode`, `core.scope`, `core.theme`, `core.windowFocused`, `core.agentHarnesses` (each
+  registered harness's label and declarations, keyed by harness id), `core.plugins` (each catalog plugin's label,
+  origin, whether it runs, what depends on it and its load problem, then each plugin that failed its first load) and the
+  two runtime command
   catalogs (`src/contracts/core-state.ts`) (`docs/features/plugin-framework/design.md` § Commands and state).
 - **A command** takes at most one argument, declared in the manifest as a number, a string or a small record;
   a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
   process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
   the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
   argument as `arg`, checked at load. A click runs a command too: a layout's `kit.button(parent, label, command, { arg })`
-  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would.
+  and `kit.command(qualifiedId, arg)` name one by id, and a view's own click handler runs the command a key would. A run
+  also carries two optional session ids beside its argument, `targetSessionId` (the session the command acts on) and
+  `callerSessionId` (the session whose agent asked), on `PageCommandContext` and `MainCommandContext` and across the
+  page hop both ways. Only a command whose declaration carries `targets: true` (it acts on a session without that
+  session's UI shown or focused) reads the target, and a target passes a mode-shown guard; a run that gives any other
+  command a target is refused. The core router's and registry's runs and `commands.runFor` resolve `'ran'` or
+  `'skipped'` (an intercept kept the handler from running); a plugin's plain `api.commands.run` resolves no value.
+  `commands.runFor(id, arg, sessions)` is a reporting run, which rejects with the failure where `run` logs and resolves,
+  a page handler's failure coming back to main with the done message; `commands.list()` gives every live command the
+  process knows. A declaration's `risky: true` marks a command an agent runs only on the user's Allow
+  (`docs/features/agent-commands/design.md`).
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`closed` in plugin
   `sessions` is `sessions.closed`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`, and the core has no events of its own: a part that needs
@@ -740,8 +781,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w` and
-  the audio picker's on `Space z l m`; the gallery's `Space z g`, which shows Gallery
+  `Space z l c`, agents' on `Space z l a`, workflow's (Large's sample session in every stage) on `Space z l w`,
+  the audio picker's on `Space z l m` and chatroom's on `Space z l r`; the gallery's `Space z g`, which shows Gallery
   mode, and its `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
@@ -848,7 +889,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
   its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
   folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
-  fixed keys (`parseRound`, `readFormBody`, the answers payload) and the per-kind records: `ROUND_ITEM_LISTS` and
+  fixed keys (`parseRound`, `readFormBody`, the answers result) and `mcp-wording.ts`'s answers payload, and the
+  per-kind records: `ROUND_ITEM_LISTS` and
   `FINGERPRINT_LISTS` in `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
   `round-type.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
   `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's
@@ -880,7 +922,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   `core.agentHarnesses`, and no code outside a harness's plugin names its CLI, files, environment or ids
   (`docs/features/agent-harnesses/design.md`). The fake in `src/shared/`, registered by the composition root under
   the id `fake`, drives the tests and the self-test. A harness also prepares a run the session host starts later
-  (`prepareRun`, pure: the spawn with its opening stdin lines, carried env and unset names), declares the controls a
+  (`prepareRun`, which spawns and writes nothing but may look up the harness's program: the spawn with its opening
+  stdin lines, carried env and unset names), declares the controls a
   new session starts from (`startControls`) and lowers a task's controls to the calling session's (`capControls`).
   The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
   events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
@@ -921,19 +964,24 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool. Before it runs a call, sessions asks each **tool-call guard** (`addToolCallGuard`, beside
-  `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with `{ mainAgentOnly: true }` (the
-  workflow tools, `set_session_title` and the four scheduling tools); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
-  changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
+  `addCloseGuard`), so a rule over calls is one registration. A contribution marks its tools main-agent-only with
+  `{ mainAgentOnly: true }` (the workflow tools, `set_session_title` and the four scheduling tools); chat's guard,
+  which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that changes
+  nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
   `notifications/tools/list_changed`. A contribution also declares each tool's answer while the app is closed, and
   whether the call replays onto its row when the app opens, through `contributeTools(…, { offline })`; sessions
   writes them to `offline.json` for the relay, and a tool left out answers that it did not run
-  (`docs/features/scheduled-tasks/design.md` § With the app closed). Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
-  relay answers `tools/list` from `tools.json` while the app is away.
+  (`docs/features/scheduled-tasks/design.md` § With the app closed). Stopping sessions leaves `endpoint.json` and
+  `tools.json` in place, since the relay answers `tools/list` from `tools.json` while the app is away. Claude Code
+  keeps the tool schemas a session started with, so a new tool reaches only sessions started after it lands. An agent
+  reaches every app action through `agent-commands`' three tools, `list_commands`, `run_command` and `read_state`, so
+  a new agent ability is a new command, never a new tool.
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), starting the session host at login (`loginStart`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
-  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
+  watches, aborts its running processes and kills its spawned ones (a detached start outlives it), destroys its
+  editors and zeroes its alert counts. `services.log` is
   scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's services add `picker` (the shared list picker,
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
   `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder
@@ -1025,7 +1073,12 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
-  drew it: `default`, or a bare line when `default` throws too.
+  drew it: `default`, or a bare line when `default` throws too. An entry of a harness kind (`<harness id>:<kind>`)
+  carries only `raw`. A plugin draws entries of any kind, known or a harness's, through the `chat` page export
+  `addEntryRenderer({ kind, match?, build })`, whose `build` takes an entry builder's arguments. An entry draws with
+  the user's layout when it names the kind; else with the plugin renderers, the latest added first, the first whose
+  `kind` matches and whose `match` passes when given; else with `default`, whose `raw` builder draws a harness kind. A
+  harness kind joins no activity run.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail`, `review` and `notices` panes. The `notices` pane is the round's one notices page, after every finding and
   question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
@@ -1171,7 +1224,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker,
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to

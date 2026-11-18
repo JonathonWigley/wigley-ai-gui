@@ -41,7 +41,7 @@ function keymap(
 }
 
 describe('whichKeyModel', () => {
-  it('whichKeyModel_PageScope_GroupsByNextKeyInKeyOrder', () => {
+  it('groups a page scope by next key in key order', () => {
     const map = keymap([
       { keys: [' ', ' '], scope: 's', command: 'openReview' },
       { keys: [' ', ';'], scope: 'any', command: 'closeTab' },
@@ -100,7 +100,7 @@ describe('whichKeyModel', () => {
       pending: '<Space>',
     },
   ])(
-    'whichKeyModel_KeySpellings_SortToOnePlace: $where',
+    'sorts the spellings of a key to one place: $where',
     ({ where, map, pending }) => {
       const model = whichKeyModel(
         { where, keys: [pending], scope: 's' },
@@ -120,7 +120,7 @@ describe('whichKeyModel', () => {
     },
   );
 
-  it('whichKeyModel_PrefixSpanningGroups_JoinsGroups', () => {
+  it('joins groups that a prefix spans', () => {
     const map = keymap([
       { keys: [' ', 'e', 'n'], scope: 's', command: 'nextUnanswered' },
       { keys: [' ', 'e', 'r'], scope: 's', command: 'submit' },
@@ -179,7 +179,7 @@ describe('whichKeyModel', () => {
     lookup: (id: string) => CommandInfo | undefined;
     shown: string;
   }[])(
-    'whichKeyModel_DigitRun_PrintsOneRangeLine $case',
+    'prints a digit run as one range line $case',
     ({ binds, lookup, shown }) => {
       const model = whichKeyModel(
         { where: 'page', keys: [' '], scope: 's' },
@@ -195,7 +195,7 @@ describe('whichKeyModel', () => {
     },
   );
 
-  it('whichKeyModel_Editor_ReadsLeaderTokens', () => {
+  it('reads leader tokens in the editor', () => {
     const map = keymap(
       [],
       [
@@ -219,7 +219,7 @@ describe('whichKeyModel', () => {
     });
   });
 
-  it('whichKeyModel_NoCandidates_ReturnsNull', () => {
+  it('returns null with no candidates', () => {
     const map = keymap([
       { keys: [' ', ' '], scope: 's', command: 'openReview' },
       { keys: ['g'], scope: 's', command: 'other' },
@@ -358,7 +358,7 @@ describe('whichKeyModel', () => {
     pending: Parameters<typeof whichKeyModel>[0];
     name: string | null;
   }[])(
-    'whichKeyModel_PendingKeys_NameTheHeaderByTheirGroup $case',
+    'names the header of the pending keys by their group $case',
     ({ page, editor, groups, pending, name }) => {
       const map = keymap(page, editor, groups);
 
@@ -368,7 +368,7 @@ describe('whichKeyModel', () => {
     },
   );
 
-  it('whichKeyModel_UnnamedPrefix_KeepsCommandGroups', () => {
+  it('keeps command groups under an unnamed prefix', () => {
     const map = keymap([
       { keys: [' ', 'k', 's'], scope: 's', command: 'splitRight' },
       { keys: [' ', 'k', 'd'], scope: 's', command: 'splitDown' },

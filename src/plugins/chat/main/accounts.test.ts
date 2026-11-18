@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import type { HarnessProfile } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { createMemoryFiles } from '../../../shared/memory-files';
-import type { ChatChannel, ChatProfile } from '../contract';
+import type { ChatChannel } from '../contract';
 import { createAccounts } from './accounts';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 
 type Message = {
   [K in keyof ChatChannel['messages']]: {
@@ -16,7 +19,7 @@ type Message = {
   };
 }[keyof ChatChannel['messages']];
 
-const PROFILES: ChatProfile[] = [
+const PROFILES: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
@@ -37,16 +40,17 @@ function setUp() {
   const messages: Message[] = [];
   const logged: string[] = [];
   let logIns = 0;
+  // The harness that declares PROFILES, counting its sign-ins.
   const counted = {
     ...harness,
+    info: () => ({ ...harness.info(), profiles: PROFILES }),
     logIn: (...args: Parameters<typeof harness.logIn>) => {
       logIns++;
       return harness.logIn(...args);
     },
   };
   const accounts = createAccounts({
-    harness: () => counted,
-    profiles: () => PROFILES,
+    harnesses: chatHarnessesOfRegistry(harnessRegistryOf([counted])),
     send: (message, data) => messages.push({ message, data } as Message),
     log: (message) => logged.push(message),
   });
@@ -198,16 +202,15 @@ describe('createAccounts', () => {
     });
   });
 
-  it('status_NoHarness_Rejects', async () => {
+  it('status_ProfileOfNoHarness_Rejects', async () => {
     const accounts = createAccounts({
-      harness: () => {
-        throw new Error('no agent harness "claude"');
-      },
-      profiles: () => PROFILES,
+      harnesses: chatHarnessesOfRegistry(harnessRegistryOf([])),
       send: () => undefined,
       log: () => undefined,
     });
 
-    await expect(accounts.status('work')).rejects.toThrow('claude');
+    await expect(accounts.status('work')).rejects.toThrow(
+      'chat has no profile "work"',
+    );
   });
 });

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
@@ -46,7 +46,7 @@ export interface WorkflowLargeSelfTestDeps {
   files: Pick<Files, 'append' | 'makeFolder' | 'realPath' | 'trash' | 'write'>;
   chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
   hooks: WorkflowSelfTestHooks;
   // The folder the report watch watches.
   planRunsFolder: string;
@@ -354,7 +354,7 @@ export function workflowLargeSelfTestScript(
     // The strip wraps, and the chip's one tag keeps its width.
     scrollsItself: [],
     open() {
-      marks = markRun(harnesses);
+      marks = markRun(harnesses.list());
       turnEndListener?.dispose();
       turnEndListener = null;
       return {

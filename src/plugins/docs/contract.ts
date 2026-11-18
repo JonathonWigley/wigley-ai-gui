@@ -44,7 +44,8 @@ export type LoadState =
   | 'shadowed'
   | 'not-loaded';
 
-export type IndexHarness = 'claude' | 'codex';
+// A harness's id; one no adapter registered shows as itself.
+export type IndexHarness = string;
 
 export interface LoadStateRecord {
   state: LoadState;
@@ -371,7 +372,8 @@ export interface TrashResult {
 }
 
 // One file's git statuses: changed from HEAD, HEAD ahead of its upstream, and
-// each harness whose installed copy differs from the upstream's file.
+// each registered harness whose installed copy differs from the upstream's
+// file.
 export interface FileStatus {
   uncommitted: boolean;
   unpushed: boolean;
@@ -446,7 +448,9 @@ export interface DocsChannel extends ChannelShape {
     watchDoc(viewId: string, path: string | null): Promise<void>;
     unwatchAll(): Promise<void>;
     // The config file that lists plugin `key` (`<plugin>@<marketplace>`) and
-    // the 1-based line holding it; null when none lists it.
+    // the 1-based line holding it, as the adapter registered under `harness`
+    // reports it for a registered profile; null when none lists it or no
+    // adapter is registered under `harness`.
     pluginConfigFile(
       key: string,
       harness: IndexHarness,

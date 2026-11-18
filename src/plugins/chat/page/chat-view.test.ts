@@ -13,6 +13,7 @@ import type {
   ResizeTarget,
 } from '../../../contracts/panes';
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
@@ -53,6 +54,7 @@ import {
 import type { PermissionEntry } from './chat-state';
 import type { ComposerPieces } from './composer-kit';
 import type { EntryListDeps } from './entry-list';
+import { createEntryRenderers } from './entry-renderers';
 import { createSideSections, type SideTab } from './side-sections';
 
 // Each call the view makes to a tab's entry list that draws it, by method name.
@@ -109,6 +111,7 @@ function stateOf(
   return {
     sessionId: 'row-1',
     projectDir: '/w/app',
+    harness: 'fake',
     profile: 'work',
     entries: NO_ENTRIES,
     controls: [],
@@ -152,7 +155,8 @@ const returnedTwo: ReturnedMessage = {
 // does, and `setActive` names the focused pane's session. `keyCalls` records
 // each `setScope`, `setResizeTarget` and `setFocusTarget` in order, a
 // `setScope` reporting its scope in force as the core does, and
-// `boxCalls` each `focus` and `blur` on the box with its options, the fake box
+// `boxCalls` each `focus` and `blur` on the box with its options, `renderers`
+// the view's entry renderers, the fake box
 // reporting focus and blur as the editor does. `visible` is what every tab's
 // `isVisible` answers, `show` runs a session's tab's `shown`, `scopeChanged`
 // reports a scope in force, and `sideTabs` holds each tab's hub. `hide` runs a
@@ -228,6 +232,7 @@ function mounted(
     writers.session.set(state.sessionId, info);
   };
   const layouts = createChatLayouts(log);
+  const renderers = createEntryRenderers(log);
   const kit = {
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
@@ -264,6 +269,7 @@ function mounted(
     },
     paths: posixPaths,
     homeDir: '/w',
+    harnesses: store.read(coreAgentHarnessesSlot, 'chat'),
     sessions: {
       addTab: (
         sessionId: string,
@@ -351,6 +357,7 @@ function mounted(
     setFocusTarget: (target: FocusTarget | null) =>
       keyCalls.push(['setFocusTarget', target]),
     layouts,
+    renderers,
     composerParts,
     statusParts: createPartStore(),
     sideParts,
@@ -435,6 +442,7 @@ function mounted(
     tab,
     tabElements,
     layouts,
+    renderers,
     sideParts,
     composerParts,
     invoked,
@@ -704,6 +712,37 @@ describe('mountChatView side parts', () => {
     view.layouts.set(view.layouts.shown());
 
     expect({ builds, disposes }).toEqual({ builds: 2, disposes: 1 });
+  });
+});
+
+describe('mountChatView entry renderers', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renderers_AddAndDispose_RedrawsEveryTabsEntries', () => {
+    const mount = mounted();
+    mount.open(
+      stateOf([], {
+        entries: [{ kind: 'fake:card', id: 'h1', at: 1000, raw: [] }],
+      }),
+    );
+    const drawn = () =>
+      findAll(mount.tab.element!, 'chat-entry-slot')[0].children[0].className;
+    expect(drawn()).toBe('chat-entry chat-raw');
+
+    const added = mount.renderers.add({
+      kind: 'fake:card',
+      build: (parent, _input, kit) => ({
+        element: kit.el(parent, 'div', 'plugin'),
+      }),
+    });
+    const withRenderer = drawn();
+    added.dispose();
+
+    expect(withRenderer).toBe('plugin');
+    expect(drawn()).toBe('chat-entry chat-raw');
   });
 });
 

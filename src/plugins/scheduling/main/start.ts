@@ -8,9 +8,10 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import type { HostedRun, PendingSpawn } from '../../../contracts/session-host';
+import { registeredInfos } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import {
-  CHAT_HARNESS_ID,
   type ChatMainEvents,
   chatControlsSlot,
   chatMainKey,
@@ -166,18 +167,20 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     const taskName = (taskId: string): string =>
       taskStore.tasks().find((task) => task.id === taskId)?.name ?? taskId;
 
-    const chatHarness = (): AgentHarness => {
-      const harness = services.agentHarnesses.find(
-        (candidate) => candidate.id === CHAT_HARNESS_ID,
-      );
-      if (!harness) {
-        throw new Error(`no agent harness "${CHAT_HARNESS_ID}"`);
+    // The harness whose controls the editor and the task tools offer: the first registered one.
+    const controlsHarness = (): AgentHarness => {
+      const [harness] = services.agentHarnesses.list();
+      if (harness === undefined) {
+        throw new Error('no agent harness is registered');
       }
       return harness;
     };
 
+    // Every registered harness's profile names, in registration order.
     const profileNames = (): string[] =>
-      chat.profiles().map((profile) => profile.name);
+      registeredProfiles(registeredInfos(services.agentHarnesses)).map(
+        (profile) => profile.name,
+      );
 
     const views = (): ScheduledTaskView[] => {
       const entries = history.entries();
@@ -354,12 +357,12 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     };
 
     // Plans every task and prepares each planned run, reusing a launch `prepares` or the last plan holds.
-    const queueRuns = (
+    const queueRuns = async (
       tasks: readonly ScheduledTask[],
       runNow: readonly string[],
       now: number,
       prepares: Map<string, PreparedLaunch>,
-    ): PlannedQueue => {
+    ): Promise<PlannedQueue> => {
       const planned = planRuns({
         tasks,
         history: history.entries(),
@@ -383,7 +386,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         let launch = prepares.get(key) ?? kept.get(key);
         if (launch === undefined) {
           try {
-            launch = chat.prepareLaunch(
+            launch = await chat.prepareLaunch(
               launchRequest(task),
               sessions.offlineEnv(),
             );
@@ -427,11 +430,11 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       const prepares = new Map<string, PreparedLaunch>();
       let runNow = presses;
       presses = [];
-      let queue = queueRuns(tasks, runNow, now, prepares);
+      let queue = await queueRuns(tasks, runNow, now, prepares);
       while (queue.dueFailures.size > 0) {
         const failed = queue.dueFailures;
         runNow = runNow.filter((id) => !failed.has(id));
-        queue = queueRuns(tasks, runNow, now, prepares);
+        queue = await queueRuns(tasks, runNow, now, prepares);
       }
       kept = queue.prepared;
       nextRuns = queue.nextRuns;
@@ -667,7 +670,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     api.channel.handle('editorChoices', () => ({
       profiles: profileNames(),
       projects: chat.projects().map((project) => project.name),
-      controls: chatHarness().startControls(),
+      controls: controlsHarness().startControls(),
     }));
 
     const toolDeps: TaskToolsDeps = {
@@ -680,7 +683,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       profileNames,
       projects: () => chat.projects(),
       controlIds: () =>
-        chatHarness()
+        controlsHarness()
           .startControls()
           .map((control) => control.id),
       sessionControls: (sessionId) =>
@@ -690,7 +693,8 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
               control.value === null ? [] : [[control.id, control.value]],
           ),
         ),
-      capControls: (controls, cap) => chatHarness().capControls(controls, cap),
+      capControls: (controls, cap) =>
+        controlsHarness().capControls(controls, cap),
       isAbsolute: (path) => services.paths.isAbsolute(path),
       stat: (path) => services.files.stat(path),
       log,

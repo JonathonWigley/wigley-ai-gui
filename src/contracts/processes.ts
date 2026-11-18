@@ -1,3 +1,5 @@
+import type { ProgramCandidate, ProgramName } from './platform';
+
 // What a finished program left: its exit code, -1 when a signal ended it or
 // the timeout killed it, and everything it wrote to stdout and stderr as UTF-8.
 export interface ProcessResult {
@@ -26,15 +28,20 @@ export interface ProcessRunOptions {
   setEnv?: Readonly<Record<string, string>>;
 }
 
-// How one `ProcessRunner.startDetached` starts its program: `logPath` is the
-// full path of the file its stdout and stderr are appended to, made when
-// missing.
+// How one `ProcessRunner.startDetached` starts its program.
 export interface DetachedStartOptions {
   cwd?: string;
-  logPath: string;
+  // The full path of the file its stdout and stderr are appended to, made when
+  // missing. Unset, both are dropped.
+  logPath?: string;
+  // Names set for this start over the app's environment, as `run`'s `setEnv`.
+  setEnv?: Readonly<Record<string, string>>;
 }
 
-// Runs the machine's programs.
+// Runs the machine's programs. On Windows a bare command is looked up over
+// PATH × PATHEXT first, and a `.cmd` or `.bat` starts through
+// `cmd.exe /d /s /c`; there "no shell" below means no shell of the app's
+// choosing.
 export interface ProcessRunner {
   // Runs `command` with `args`, no shell, in `cwd` when given, in the app's
   // environment without the names in `unsetEnv`, then with `setEnv`'s names
@@ -50,9 +57,10 @@ export interface ProcessRunner {
     options?: ProcessRunOptions,
   ): Promise<ProcessResult>;
   // Starts `command` with `args`, no shell, in `cwd` when given and in the
-  // app's environment, detached from the app: in its own process group (on
-  // Windows, its own console-less process), its stdout and stderr appended to
-  // `logPath`, and not waited on, so it outlives the app's quit. Resolves once
+  // app's environment with `setEnv`'s names set, detached from the app: in its
+  // own process group (on Windows, its own console-less process), its stdout
+  // and stderr appended to `logPath` when one is given, dropped otherwise, and
+  // not waited on, so it outlives the app's quit. Resolves once
   // the program has started; rejects with `Could not run <command>: <reason>`
   // when it cannot start or `logPath` cannot be opened. Nothing stops it: a
   // plugin's stop and the app's quit leave it running.
@@ -61,4 +69,64 @@ export interface ProcessRunner {
     args: string[],
     options: DetachedStartOptions,
   ): Promise<void>;
+  // Starts `command` with `args` in `cwd`, with `env` as its whole environment,
+  // and streams it: no shell; stdin, stdout and stderr are pipes; output
+  // arrives as UTF-8 text, a character never split across chunks. `closed` is
+  // called exactly once, on the first of the program's exit and its failure to
+  // start or run. A failure sets `startError` with the OS's message as it is
+  // (or the lookup's refusal of an argument cmd.exe cannot pass), `notFound`
+  // true for `ENOENT` (a missing program or `cwd`), and `code` and `signal`
+  // null. `kill()` sends `SIGTERM`. A `write`, `endInput` or `kill`
+  // after `closed` does nothing, and an error on stdin (`EPIPE` after the
+  // exit) is dropped. A plugin's stop kills it with `SIGKILL`.
+  spawn(
+    command: string,
+    args: readonly string[],
+    options: SpawnOptions,
+  ): SpawnedProcess;
+  // The program to run as `name`: the core setting that names it when set
+  // (`programs.python`), `~` expanded and not looked up; else the first of the
+  // Platform record's candidates found on PATH or at its path, as the found
+  // file with the candidate's leading args. Null when none is found.
+  resolveProgram(name: ProgramName): Promise<ProgramCandidate | null>;
+}
+
+export type SpawnSignal = 'SIGTERM' | 'SIGKILL';
+
+// Why a spawned program did not start or run: the OS's message as it is, or
+// the lookup's refusal of an argument cmd.exe cannot pass, and whether it was
+// `ENOENT`.
+export interface SpawnStartError {
+  message: string;
+  notFound: boolean;
+}
+
+// How a spawned program ended: its exit code, or the signal that ended it, or
+// `startError` with both null.
+export interface SpawnExit {
+  code: number | null;
+  signal: string | null;
+  startError: SpawnStartError | null;
+}
+
+// What a spawned program reports, from its start.
+export interface SpawnEvents {
+  stdout(chunk: string): void;
+  stderr(chunk: string): void;
+  closed(exit: SpawnExit): void;
+}
+
+// How one `ProcessRunner.spawn` runs its program: `env` is its whole
+// environment, and nothing of the app's passes through.
+export interface SpawnOptions {
+  cwd: string;
+  env: Readonly<Record<string, string>>;
+  events: SpawnEvents;
+}
+
+// A program `ProcessRunner.spawn` started: its stdin and its stop.
+export interface SpawnedProcess {
+  write(text: string): void;
+  endInput(): void;
+  kill(signal?: SpawnSignal): void;
 }

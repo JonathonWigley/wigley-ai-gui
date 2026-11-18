@@ -6,7 +6,6 @@ import type {
   IndexContext,
   IndexDocument,
   IndexEntry,
-  IndexHarness,
   IndexHeading,
   IndexLink,
   InstalledCopy,
@@ -37,8 +36,6 @@ export const DOC_KINDS: readonly DocKind[] = [
 ];
 
 const DOC_OWNERS: readonly DocOwner[] = ['mine', 'third-party'];
-
-export const INDEX_HARNESSES: readonly IndexHarness[] = ['claude', 'codex'];
 
 const LINK_FORMS: readonly IndexLink['form'][] = ['markdown', 'section'];
 
@@ -137,7 +134,7 @@ export function installedCopies(entry: IndexEntry): InstalledCopy[] | null {
 function isInstalledCopy(value: unknown): value is InstalledCopy {
   return (
     isJsonObject(value) &&
-    (INDEX_HARNESSES as readonly unknown[]).includes(value.harness) &&
+    typeof value.harness === 'string' &&
     typeof value.version === 'string' &&
     typeof value.path === 'string'
   );

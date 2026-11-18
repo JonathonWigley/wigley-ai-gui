@@ -15,7 +15,12 @@ export const sessionStashManifest = definePlugin({
   reads: { main: [], page: [] },
   commands: {
     stash: { label: 'stash the session', group: 'sessions', runsIn: 'page' },
-    noteAccept: { label: 'stash', group: 'stash', runsIn: 'page' },
+    noteAccept: {
+      label: 'stash',
+      group: 'stash',
+      runsIn: 'page',
+      risky: true,
+    },
     noteCancel: { label: 'cancel', group: 'stash', runsIn: 'page' },
   },
   scopes: { note: 'In the stash dialog' },

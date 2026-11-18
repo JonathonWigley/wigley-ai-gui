@@ -32,8 +32,9 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
   a box, in that vim mode. A chord's key is a lowercase letter, a digit or symbol written as the
   character it types (`<C-/>`, `<C-?>`) except `<`, `\`, `|` and space, written `lt`, `Bslash`,
   `Bar` and `Space` (`<C-lt>`), Enter, Tab, F1–F12, an arrow, Home, End, PageUp, PageDown,
-  BS or Del, and a chord matches the character typed rather than the key's place (`AGENTS.md`
-  § Architecture, the **A key** bullet, holds the full rule). Shift is in the character (`<C-!>`,
+  BS or Del, and a chord matches the character typed, except an Option chord on macOS and a key
+  that types no ASCII character, which match the physical key (`AGENTS.md` § Architecture, the
+  **A key** bullet, holds the full rule). Shift is in the character (`<C-!>`,
   not `<C-S-1>`), and a `keymap.json` holding the old form is refused whole.
 - `arg` hands the command its argument: a number, a string or a small record of numbers and
   strings. A command that declares an argument needs one on each of its binds, and a command that
@@ -139,9 +140,16 @@ hjkl is the direction in every layer; the modifier picks the verb.
   **Alt+w** closes the focused chat pane and leaves its session in the side bar
   (`docs/features/chat-panes/design.md`).
 - **Alt+o / Alt+i** next and previous tab: the shown mode's own tabs when it has them (Practice's problem pane or
-  console, through the mode's `stepTab`), else the session tabs, showing Sessions; **Alt+Shift+o / Alt+Shift+i** next
+  console, through the mode's `stepTab`), else the session tabs in Sessions mode; **Alt+Shift+o / Alt+Shift+i** next
   and previous session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
+- **A key bound in every scope acts on the shown mode only.** A session key (`Alt+o`/`Alt+i` with no mode tabs,
+  `Alt+Shift+o`/`Alt+Shift+i`, the pane keys, `<Leader>bp`, `br`, `bd`, `bs`, `;`, `'`, and the `<Leader>w` and
+  `<Leader>p` keys) does nothing outside Sessions mode, and a mode's
+  view key (Backlog's and Practice's `<Leader>v` keys) does nothing while that mode is hidden: in another mode the key
+  belongs to that mode, never jumping the user away. A key switches modes or areas only when that is its job:
+  `<Leader>k`, `Alt+hjkl`, `<Leader>bn` (a new session), `<Leader>wo` (opens the plan in Docs), the `<Leader>z`
+  previews and `Cmd+,` (Settings).
 - **Cmd** is for OS-convention app actions only: `Cmd+Enter` send or submit, `Cmd+w` close, the
   summon chord, `Cmd+,` Settings. Nothing else takes Cmd, but Practice's `Cmd+'` Run, which
   matches LeetCode's own key, beside its `Cmd+Enter` Submit. The two
@@ -168,7 +176,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `;`                | none: close                          | close session, the same as `bd`, kept one key from the leader                                                                                                                                                                                                                                                                                                                                                                             |
 | `'`                | none: stash                          | stash session, the same as `bs`, kept one key from the leader                                                                                                                                                                                                                                                                                                                                                                             |
 | `b`                | session                              | `bn` new session, `br` rename, `bd` close, `bs` stash (a note dialog, then the close; the start prompt lists it under Stashed), `bX` stop every session's process (`chat.stopAll`; the rows stay, resting), `bp` hide or show the session's popup, `bh` hide or show the session hub                                                                                                                                                      |
-| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `kp` Practice, `kt` Schedules, `k,` Settings                                                                                                                                                                                                                                                                                                                                                      |
+| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `kp` Practice, `kt` Schedules, `kc` Chatroom, `k,` Settings                                                                                                                                                                                                                                                                                                                                       |
 | `n`                | notes                                | `nn` open or close the note popup; in the popup `nf` new follow-up, `na` append to a follow-up, `ns` new session, `nc` capture the window, `nd` discard                                                                                                                                                                                                                                                                                   |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                                                                                                                                                                                                                                                      |
 | `v`                | view                                 | `vt` hide or show the docs tree, `vw` switch the docs sidebar between the wiki and All pages, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vb` show or hide the Backlog assistant, `vr` pick the Backlog repo, `vc` hide chunked follow-ups, `vs` stale follow-ups first, `vi` focus or leave the Practice interviewer, `vu` hide or show usage details, `vy` hide or show the system stats panel |
@@ -177,7 +185,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `c`                | chat controls                        | on the page or in a box: `ci` show the attached images (`x` removes the shown one); in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog)                                                                                                                                             |
 | `a`                | answer                               | in a form's box and on the form's page: `a1`…`a9` pick the numbered choice or action header (in the audio picker's notes box, `a1`…`a6` pick the numbered candidate), `ac` clear, `ax` not applicable                                                                                                                                                                                                                                     |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview, `zlm` audio picker preview                                                                                                                                                                                                                                                                           |
+| `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview, `zlm` audio picker preview, `zlr` chatroom preview                                                                                                                                                                                                                                                   |
 
 A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
 groups, and its description here is only for readers of this table.

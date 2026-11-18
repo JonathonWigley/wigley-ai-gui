@@ -26,9 +26,11 @@ or output format. Every decision below serves that.
   settings change.
 - The registry writes the core slot `core.agentHarnesses`, keyed by harness id, holding each harness's
   `AgentHarnessInfo`: label, capabilities, clear aliases, profiles and project config folder name. Pages and layouts
-  read labels and declarations from it; there is no label map outside an adapter. The slot's `on` is the change
-  signal, so the registry has no listener API of its own.
-- A harness id no adapter registered (a relay hello from a Codex terminal session today) shows as its raw id.
+  read labels and declarations from it, through `harnessLabel` (`src/shared/agent-harness-label.ts`). The slot's `on`
+  is the change signal, so the registry has no listener API of its own.
+- A harness id no adapter registered shows a stand-in label from `harnessLabel`'s small table of known ids (`codex` →
+  `Codex`, for a Codex terminal session's relay hello), else its raw id. The table is a stand-in until the Codex
+  adapter lands and registers its own label; an adapter's label always wins over it.
 - `capabilities` is a closed record of required booleans. Every reader is chat code that branches per flag, so the
   compiler checking that each adapter declares each flag is worth more than an open set nobody reads.
 
@@ -91,7 +93,10 @@ or output format. Every decision below serves that.
 
 Agent processes run in the session host, so a harness plugin's stop drops only the adapter object. Chat detaches a
 leaving harness's sessions, shows them waiting, and re-attaches each live one through `attach` when the harness
-registers again, the path an app relaunch already takes.
+registers again, the path an app relaunch already takes. A process that has not reported its session id yet, or is a
+clear's fresh process, cannot be found again, so chat ends it instead, logged, and its row waits with none
+(`agent-chat/design.md`). An adapter's stop disposes its registration before it tears down its process objects:
+chat's leave handling ends that kind of process through them, and on a torn-down object the end does nothing.
 
 ## Rejected
 

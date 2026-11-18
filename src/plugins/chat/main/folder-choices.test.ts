@@ -1,34 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
+import type {
+  AgentHarness,
+  HarnessProfile,
+  ProjectFolder,
+} from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { ChatProfile, RecentFolder } from '../contract';
+import type { RecentFolder } from '../contract';
 import {
   createFolderChoices,
   MAX_FOLDER_CHOICES,
   mergeFolderChoices,
 } from './folder-choices';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 
-const PROFILES: ChatProfile[] = [
+const PROFILES: HarnessProfile[] = [
   { name: 'work', configDir: '~/.claude' },
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
 
-// A fake harness whose `listProjects` answers from `listed` by config folder,
-// rejecting for a folder `listed` holds an Error for.
+// A fake harness `id` declaring `profiles`, whose `listProjects` answers from
+// `listed` by config folder, rejecting for a folder `listed` holds an Error
+// for.
 function harnessListing(
+  id: string,
+  profiles: HarnessProfile[],
   listed: Record<string, ProjectFolder[] | Error>,
 ): AgentHarness {
+  const fake = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
   return {
-    ...createFakeAgentHarness(
-      { now: () => 1000 },
-      createMemoryFiles(),
-      FAKE_MICROTASK_TIMERS,
-    ),
+    ...fake,
+    id,
+    info: () => ({ ...fake.info(), profiles }),
     async listProjects(profileDir) {
       const answer = listed[profileDir ?? ''] ?? [];
       if (answer instanceof Error) {
@@ -47,6 +59,9 @@ function setUp(options: {
   tempFolders?: string[];
   // Paths whose `stat` rejects, as for a folder the app may not read.
   statRejects?: string[];
+  // The registered harnesses; one `claude` declaring PROFILES and listing
+  // from `listed` when left out.
+  harnesses?: AgentHarness[];
 }) {
   const memory = createMemoryFiles();
   const files = {
@@ -59,14 +74,18 @@ function setUp(options: {
     },
   };
   const logged: string[] = [];
-  const harness = harnessListing(options.listed);
   const choices = createFolderChoices({
     recent: {
       list: async () => options.recent,
       record: async () => undefined,
     },
-    harness: () => harness,
-    profiles: () => PROFILES,
+    harnesses: chatHarnessesOfRegistry(
+      harnessRegistryOf(
+        options.harnesses ?? [
+          harnessListing('claude', PROFILES, options.listed),
+        ],
+      ),
+    ),
     files,
     paths: posixPaths,
     tempFolders: options.tempFolders ?? [],
@@ -85,23 +104,47 @@ function setUp(options: {
 describe('mergeFolderChoices', () => {
   it('mergeFolderChoices_SameFolderTwice_KeepsNewestUse', () => {
     const merged = mergeFolderChoices(
-      [{ projectDir: '/a', profile: 'personal', lastUsed: 5 }],
-      [{ profile: 'work', folder: { projectDir: '/a', modified: 9 } }],
+      [
+        {
+          projectDir: '/a',
+          harness: 'claude',
+          profile: 'personal',
+          lastUsed: 5,
+        },
+      ],
+      [
+        {
+          harness: 'fake',
+          profile: 'work',
+          folder: { projectDir: '/a', modified: 9 },
+        },
+      ],
       posixPaths,
     );
 
     expect(merged).toEqual([
-      { projectDir: '/a', profile: 'work', lastUsed: 9 },
+      { projectDir: '/a', harness: 'fake', profile: 'work', lastUsed: 9 },
     ]);
   });
 
   it('mergeFolderChoices_NewestFirst', () => {
     const merged = mergeFolderChoices(
       [
-        { projectDir: '/old', profile: 'work', lastUsed: 1 },
-        { projectDir: '/new', profile: 'work', lastUsed: 30 },
+        { projectDir: '/old', harness: 'claude', profile: 'work', lastUsed: 1 },
+        {
+          projectDir: '/new',
+          harness: 'claude',
+          profile: 'work',
+          lastUsed: 30,
+        },
       ],
-      [{ profile: 'personal', folder: { projectDir: '/mid', modified: 20 } }],
+      [
+        {
+          harness: 'claude',
+          profile: 'personal',
+          folder: { projectDir: '/mid', modified: 20 },
+        },
+      ],
       posixPaths,
     );
 
@@ -116,7 +159,9 @@ describe('mergeFolderChoices', () => {
 describe('createFolderChoices', () => {
   it('list_TempAndMissingFolders_LeftOut', async () => {
     const test = setUp({
-      recent: [{ projectDir: '/p', profile: 'work', lastUsed: 3 }],
+      recent: [
+        { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 3 },
+      ],
       listed: {
         '~/.claude': [
           { projectDir: '/p', modified: 2 },
@@ -130,15 +175,20 @@ describe('createFolderChoices', () => {
     await test.madeFolders;
 
     expect(await test.choices.list()).toEqual([
-      { projectDir: '/p', profile: 'work', lastUsed: 3 },
+      { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 3 },
     ]);
   });
 
   it('list_PathHoldsAFile_LeftOut', async () => {
     const test = setUp({
       recent: [
-        { projectDir: '/p', profile: 'work', lastUsed: 1 },
-        { projectDir: '/now-a-file', profile: 'work', lastUsed: 2 },
+        { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 1 },
+        {
+          projectDir: '/now-a-file',
+          harness: 'claude',
+          profile: 'work',
+          lastUsed: 2,
+        },
       ],
       listed: {},
       folders: ['/p'],
@@ -147,15 +197,20 @@ describe('createFolderChoices', () => {
     await test.madeFolders;
 
     expect(await test.choices.list()).toEqual([
-      { projectDir: '/p', profile: 'work', lastUsed: 1 },
+      { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 1 },
     ]);
   });
 
   it('list_StatRejects_LeftOutAndLogged', async () => {
     const test = setUp({
       recent: [
-        { projectDir: '/p', profile: 'work', lastUsed: 1 },
-        { projectDir: '/locked', profile: 'work', lastUsed: 2 },
+        { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 1 },
+        {
+          projectDir: '/locked',
+          harness: 'claude',
+          profile: 'work',
+          lastUsed: 2,
+        },
       ],
       listed: {},
       folders: ['/p', '/locked'],
@@ -164,7 +219,7 @@ describe('createFolderChoices', () => {
     await test.madeFolders;
 
     expect(await test.choices.list()).toEqual([
-      { projectDir: '/p', profile: 'work', lastUsed: 1 },
+      { projectDir: '/p', harness: 'claude', profile: 'work', lastUsed: 1 },
     ]);
     expect(test.logged).toEqual([expect.stringContaining('/locked')]);
   });
@@ -174,13 +229,24 @@ describe('createFolderChoices', () => {
       { length: MAX_FOLDER_CHOICES },
       (_, index) => ({
         projectDir: index % 2 === 0 ? `/tmp/t${index}` : `/gone${index}`,
+        harness: 'claude',
         profile: 'work',
         lastUsed: 1000 + index,
       }),
     );
     const olderKept: RecentFolder[] = [
-      { projectDir: '/kept-a', profile: 'work', lastUsed: 2 },
-      { projectDir: '/kept-b', profile: 'work', lastUsed: 1 },
+      {
+        projectDir: '/kept-a',
+        harness: 'claude',
+        profile: 'work',
+        lastUsed: 2,
+      },
+      {
+        projectDir: '/kept-b',
+        harness: 'claude',
+        profile: 'work',
+        lastUsed: 1,
+      },
     ];
     const test = setUp({
       recent: [...newerLeftOut, ...olderKept],
@@ -198,6 +264,7 @@ describe('createFolderChoices', () => {
       { length: MAX_FOLDER_CHOICES + 5 },
       (_, index) => ({
         projectDir: `/f${index}`,
+        harness: 'claude',
         profile: 'work',
         lastUsed: index,
       }),
@@ -228,10 +295,47 @@ describe('createFolderChoices', () => {
     await test.madeFolders;
 
     expect(await test.choices.list()).toEqual([
-      { projectDir: '/home-app', profile: 'personal', lastUsed: 7 },
+      {
+        projectDir: '/home-app',
+        harness: 'claude',
+        profile: 'personal',
+        lastUsed: 7,
+      },
     ]);
     expect(test.logged).toEqual([
       expect.stringMatching(/work.*projects folder unreadable/),
+    ]);
+  });
+
+  it('list_TwoHarnesses_ListsEachProfilesFoldersWithItsHarness', async () => {
+    const test = setUp({
+      recent: [],
+      listed: {},
+      folders: ['/claude-app', '/fake-app'],
+      harnesses: [
+        harnessListing('claude', [PROFILES[0]], {
+          '~/.claude': [{ projectDir: '/claude-app', modified: 2 }],
+        }),
+        harnessListing('fake', [{ name: 'spare', configDir: '~/.fake' }], {
+          '~/.fake': [{ projectDir: '/fake-app', modified: 3 }],
+        }),
+      ],
+    });
+    await test.madeFolders;
+
+    expect(await test.choices.list()).toEqual([
+      {
+        projectDir: '/fake-app',
+        harness: 'fake',
+        profile: 'spare',
+        lastUsed: 3,
+      },
+      {
+        projectDir: '/claude-app',
+        harness: 'claude',
+        profile: 'work',
+        lastUsed: 2,
+      },
     ]);
   });
 });

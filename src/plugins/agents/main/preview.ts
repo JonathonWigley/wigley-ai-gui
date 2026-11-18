@@ -134,6 +134,7 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
           sessionId: PREVIEW_HOST_ID,
           projectDir: PREVIEW_PROJECT_DIR,
           harness: null,
+          rowId: null,
         },
         { select: true },
       );

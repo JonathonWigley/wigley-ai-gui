@@ -6,6 +6,7 @@ const ADOPT: AdoptRequest = {
   processId: 'host-1-1-1794300000000',
   rowId: 'r-1',
   projectDir: '/p',
+  harness: 'claude',
   profile: 'work',
   headless: true,
   unattended: false,

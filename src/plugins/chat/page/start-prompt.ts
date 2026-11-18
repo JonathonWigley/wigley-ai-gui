@@ -1,10 +1,15 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
+import {
+  type RegisteredProfile,
+  registeredProfiles,
+} from '../../../shared/harness-profiles';
 import type {
   ChatChannel,
-  ChatProfile,
   ChatProject,
   ProjectPastSessionRow,
   RecentFolder,
@@ -43,6 +48,7 @@ import {
   projectSection,
   preselectedProfile,
   profileLabel,
+  recentFolderHarness,
 } from './start-prompt-items';
 
 export interface StartPromptDeps {
@@ -50,7 +56,10 @@ export interface StartPromptDeps {
   signIn: Pick<SignInDialog, 'open'>;
   channel: Pick<PageChannel<ChatChannel>, 'invoke'>;
   chooseFolder(): Promise<string | null>;
-  profiles(): readonly ChatProfile[];
+  // `core.agentHarnesses`, read at each open.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
+  // Chat's `defaultHarness` setting, read at each open.
+  defaultHarness(): string;
   reveal(sessionId: string): void;
   paths: Paths;
   homeDir: string;
@@ -59,16 +68,20 @@ export interface StartPromptDeps {
 }
 
 // `open` asks for a project — or, through `Other folder…` or with no
-// projects, a folder — then a profile unless the project fixes one or there
-// is one, then signs a signed-out profile in through the sign-in dialog,
-// then asks for a new session or one of the project's or folder's saved
-// sessions, and starts or resumes a chat session there, revealing its Chat
-// tab. With no saved sessions to list, archived ones counted, it skips that
-// step and starts a new session at once. Its first step also lists the resume
-// sections' rows at the top, a pick resuming that session at once, and its
-// session step those of its folders and profile. Esc at any step starts
-// nothing. Opening the prompt again drops the earlier one: an answer or a
-// sign-in that arrives for it is logged and goes no further.
+// projects, a folder — then a profile of the target's harness unless the
+// project fixes one or that harness has one, then signs a signed-out profile
+// in through the sign-in dialog, then asks for a new session or one of the
+// project's or folder's saved sessions, and starts or resumes a chat session
+// there, revealing its Chat tab. With no saved sessions to list, archived
+// ones counted, it skips that step and starts a new session at once. Its
+// first step also lists the resume sections' rows at the top, a pick resuming
+// that session at once, and its session step those of its folders and
+// profile. Esc at any step starts nothing. Opening the prompt again drops the
+// earlier one: an answer or a sign-in that arrives for it is logged and goes
+// no further. The target's harness is chat's `defaultHarness`, a picked recent
+// folder's recorded harness while it is registered, or a fixed profile's
+// harness; with `defaultHarness` not registered the prompt toasts and opens
+// nothing.
 // `openForNewSession` asks the same way but lists no sections and no saved
 // sessions, so it starts a new session once the profile is signed in.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
@@ -79,9 +92,10 @@ export interface StartPrompt {
   showArchived(): void;
 }
 
-// Where the prompt starts a session: a folder, or a project.
+// Where the prompt starts a session: a folder, with the harness it starts on,
+// or a project.
 type PromptTarget =
-  | { kind: 'folder'; projectDir: string }
+  | { kind: 'folder'; projectDir: string; harness: string }
   | { kind: 'project'; project: ChatProject };
 
 // The session step: its saved sessions, each resuming in its own folder, the
@@ -89,7 +103,7 @@ type PromptTarget =
 interface SessionStep {
   context: PromptContext;
   target: PromptTarget;
-  profile: ChatProfile;
+  profile: RegisteredProfile;
   rows: ProjectPastSessionRow[];
   showArchived: boolean;
   items: SessionItem<ProjectPastSessionRow>[];
@@ -100,7 +114,8 @@ interface SessionStep {
 
 // What the prompt has gathered once its first answers arrive. `isCurrent`
 // is false once the prompt has opened again. `projects` are chat's checked
-// projects; none when they cannot be read.
+// projects; none when they cannot be read. `profiles` are every registered
+// harness's, and `defaultHarness` is registered.
 interface PromptContext {
   deps: StartPromptDeps;
   isCurrent(): boolean;
@@ -108,7 +123,9 @@ interface PromptContext {
   recent: readonly RecentFolder[];
   sections: readonly ResumeSectionRows[];
   projects: readonly ChatProject[];
-  profiles: readonly ChatProfile[];
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>;
+  defaultHarness: string;
+  profiles: readonly RegisteredProfile[];
 }
 
 export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
@@ -142,6 +159,14 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       return [];
     });
 
+  // Logs and toasts that the harness has no profiles to start under, the
+  // toast naming it by `harnessLabel`.
+  const reportNoProfiles = (harness: string) => {
+    log(`harness ${harness} has no profiles`);
+    const label = harnessLabel(deps.harnesses(), harness);
+    deps.toast(`Add a profile to ${label}'s profiles setting first`, 'error');
+  };
+
   // Chat's projects; none when they cannot be read.
   const readProjects = (): Promise<ChatProject[]> =>
     channel.invoke('projects').catch((error: unknown) => {
@@ -163,10 +188,17 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         if (isStale(isCurrent, 'recent folders')) {
           return;
         }
-        const profiles = deps.profiles();
-        if (profiles.length === 0) {
-          log('no profiles in the chat settings');
-          deps.toast("Add a profile to chat's profiles setting first", 'error');
+        const harnesses = deps.harnesses();
+        const defaultHarness = deps.defaultHarness();
+        const defaultInfo = harnesses.get(defaultHarness);
+        if (defaultInfo === undefined) {
+          const text = `No agent harness "${defaultHarness}" is registered. Set chat's defaultHarness to a registered harness.`;
+          log(text);
+          deps.toast(text, 'error');
+          return;
+        }
+        if (defaultInfo.profiles.length === 0) {
+          reportNoProfiles(defaultHarness);
           return;
         }
         for (const { title, rows } of sections) {
@@ -179,7 +211,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           recent,
           sections,
           projects,
-          profiles,
+          harnesses,
+          defaultHarness,
+          profiles: registeredProfiles(harnesses),
         };
         if (projects.length === 0) {
           openFolderStep(context);
@@ -249,6 +283,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           openProfileStep(context, {
             kind: 'folder',
             projectDir: item.folder.projectDir,
+            harness: recentFolderHarness(
+              item.folder,
+              context.harnesses,
+              context.defaultHarness,
+            ),
           });
         } else {
           chooseFolder(context);
@@ -264,6 +303,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       resumeSession(
         context,
         row.projectDir,
+        row.harness,
         row.profile,
         row.hostSessionId,
         row.title,
@@ -289,7 +329,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           openFolderStep(context);
           return;
         }
-        openProfileStep(context, { kind: 'folder', projectDir });
+        openProfileStep(context, {
+          kind: 'folder',
+          projectDir,
+          harness: context.defaultHarness,
+        });
       },
       (error: unknown) => {
         log(`folder dialog failed: ${errorText(error)}`);
@@ -298,12 +342,16 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     );
   };
 
-  // Asks for the profile to start `target` under: none for a project that
-  // fixes one or with one profile in the settings. A folder, or a folder
-  // project's folder, pre-selects the profile last used there; a pool
-  // project pre-selects the first.
+  // Asks for the profile of the target's harness to start `target` under:
+  // none for a project that fixes one or when that harness has one. A folder,
+  // or a folder project's folder, pre-selects the profile last used there; a
+  // pool project pre-selects the first.
   const openProfileStep = (context: PromptContext, target: PromptTarget) => {
-    const { profiles } = context;
+    const harness =
+      target.kind === 'folder' ? target.harness : context.defaultHarness;
+    const profiles = context.profiles.filter(
+      (profile) => profile.harnessId === harness,
+    );
     const fixed =
       target.kind === 'project'
         ? fixedProfileOrReport(context, target.project)
@@ -315,27 +363,31 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       checkProfile(context, target, fixed);
       return;
     }
+    if (profiles.length === 0) {
+      reportNoProfiles(harness);
+      return;
+    }
     if (profiles.length === 1) {
       checkProfile(context, target, profiles[0]);
       return;
     }
-    deps.picker.open<ChatProfile>({
+    deps.picker.open<RegisteredProfile>({
       title: 'Profile',
       items: profiles,
       label: profileLabel,
       rowInput: profileRowInput,
-      selected: preselectedProfileOf(context, target),
+      selected: preselectedProfileOf(context, target, profiles),
       picked: (profile) => checkProfile(context, target, profile),
     });
   };
 
-  // The profile `project` fixes, from the profiles the prompt opened with;
-  // null when it fixes none. One missing from them is logged and toasted, and
-  // answers false.
+  // The profile `project` fixes, from every registered harness's profiles the
+  // prompt opened with; null when it fixes none. One missing from them is
+  // logged and toasted, and answers false.
   const fixedProfileOrReport = (
     context: PromptContext,
     project: ChatProject,
-  ): ChatProfile | null | false => {
+  ): RegisteredProfile | null | false => {
     if (project.profile === null) {
       return null;
     }
@@ -343,7 +395,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     if (fixed !== undefined) {
       return fixed;
     }
-    const text = `Profile ${project.profile} of ${project.name} is not in chat's profiles setting`;
+    const text = `Profile ${project.profile} of ${project.name} is not a profile of any registered harness`;
     log(text);
     deps.toast(text, 'error');
     return false;
@@ -352,14 +404,10 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const preselectedProfileOf = (
     context: PromptContext,
     target: PromptTarget,
+    profiles: readonly RegisteredProfile[],
   ): number => {
     const preselectedIn = (projectDir: string) =>
-      preselectedProfile(
-        context.profiles,
-        context.recent,
-        projectDir,
-        deps.paths,
-      );
+      preselectedProfile(profiles, context.recent, projectDir, deps.paths);
     if (target.kind === 'folder') {
       return preselectedIn(target.projectDir);
     }
@@ -376,7 +424,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const checkProfile = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: RegisteredProfile,
   ) => {
     checkAccount(context, profile, () => {
       if (context.offersSavedSessions) {
@@ -393,7 +441,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // again.
   const checkAccount = (
     context: PromptContext,
-    profile: ChatProfile,
+    profile: RegisteredProfile,
     goOn: () => void,
   ) => {
     void channel.invoke('accountStatus', profile.name).then(
@@ -432,7 +480,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const openSessionStepOn = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: RegisteredProfile,
     rows: ProjectPastSessionRow[],
   ) => {
     if (rows.length === 0) {
@@ -462,7 +510,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const listSessions = (
     context: PromptContext,
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: RegisteredProfile,
   ) => {
     const openWith = (rows: ProjectPastSessionRow[]) =>
       openSessionStepOn(context, target, profile, rows);
@@ -487,7 +535,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // The target's saved sessions, each with the folder it ran in.
   const readSavedSessions = (
     target: PromptTarget,
-    profile: ChatProfile,
+    profile: RegisteredProfile,
   ): Promise<ProjectPastSessionRow[]> => {
     if (target.kind === 'project') {
       return channel.invoke(
@@ -544,6 +592,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           resumeSession(
             opened.context,
             item.row.projectDir,
+            opened.profile.harnessId,
             opened.profile.name,
             item.row.hostSessionId,
             shownTitle(item),
@@ -633,9 +682,11 @@ function shownTitle(item: Exclude<SessionItem, { kind: 'new' }>): string {
   return item.kind === 'section' ? item.closed.title : item.row.title;
 }
 
+// `harness` undefined resumes on the harness that declares the profile.
 function resumeSession(
   context: PromptContext,
   projectDir: string,
+  harness: string | undefined,
   profileName: string,
   hostSessionId: string,
   title: string,
@@ -648,6 +699,7 @@ function resumeSession(
   void deps.channel
     .invoke('resume', {
       projectDir,
+      ...(harness === undefined ? {} : { harness }),
       profile: profileName,
       hostSessionId,
       title,
@@ -666,7 +718,7 @@ function resumeSession(
 function startSession(
   context: PromptContext,
   target: PromptTarget,
-  profile: ChatProfile,
+  profile: RegisteredProfile,
 ) {
   const { deps } = context;
   deps.log(
@@ -675,6 +727,7 @@ function startSession(
   void deps.channel
     .invoke('start', {
       ...startTargetOf(target),
+      harness: profile.harnessId,
       profile: profile.name,
     })
     .then(

@@ -113,6 +113,7 @@ describe('set_session_title', () => {
         sessionId: 'host-1',
         projectDir: null,
         harness: 'claude',
+        rowId: null,
       },
     });
 

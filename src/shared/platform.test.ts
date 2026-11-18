@@ -25,6 +25,7 @@ describe('platformFor', () => {
       );
       expect(relay.username).toBe('tester');
       expect(relay.pid).toBe(4242);
+      expect(relay.serverName).toBe('wigley-forms');
     },
   );
 
@@ -38,6 +39,42 @@ describe('platformFor', () => {
   ] as const)('gives $os its chord matching flags', ({ os, keys }) => {
     expect(platformFor(os, INPUTS).keys).toEqual(keys);
   });
+
+  const posixPrograms = {
+    python: [
+      { command: 'python3', args: [] },
+      { command: 'python', args: [] },
+    ],
+    claude: [
+      { command: 'claude', args: [] },
+      { command: '~/.local/bin/claude', args: [] },
+    ],
+  };
+
+  // The order decides which Python runs.
+  it.each([
+    { os: 'macos', programs: posixPrograms },
+    {
+      os: 'windows',
+      programs: {
+        python: [
+          { command: 'py', args: ['-3'] },
+          { command: 'python', args: [] },
+          { command: 'python3', args: [] },
+        ],
+        claude: [
+          { command: 'claude.exe', args: [] },
+          { command: '~/.local/bin/claude.exe', args: [] },
+        ],
+      },
+    },
+    { os: 'linux', programs: posixPrograms },
+  ] as const)(
+    'gives $os its program candidates in lookup order',
+    ({ os, programs }) => {
+      expect(platformFor(os, INPUTS).programs).toEqual(programs);
+    },
+  );
 });
 
 describe('launchCommand', () => {

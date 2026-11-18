@@ -17,10 +17,19 @@ export interface PlatformKeys {
   readonly altGraphTypes: boolean;
 }
 
-export interface PlatformPrograms {
-  // The default of the `claude.command` setting.
-  readonly claude: string;
+// One way to start a program: the command and the arguments that lead every run (`py` with `-3`).
+export interface ProgramCandidate {
+  readonly command: string;
+  readonly args: readonly string[];
 }
+
+// Each program's candidates, tried in order.
+export interface PlatformPrograms {
+  readonly python: readonly ProgramCandidate[];
+  readonly claude: readonly ProgramCandidate[];
+}
+
+export type ProgramName = keyof PlatformPrograms;
 
 export interface PlatformRelay {
   // The user part of the relay's channel path.
@@ -32,6 +41,8 @@ export interface PlatformRelay {
     readonly command: readonly string[];
     readonly cwd: string;
   };
+  // The name the relay's MCP server gives itself, which agents' tool names embed.
+  readonly serverName: string;
 }
 
 // What differs by the OS the app runs on, as JSON: main serves it in the config,

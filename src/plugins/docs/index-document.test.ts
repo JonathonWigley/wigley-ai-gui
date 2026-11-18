@@ -326,7 +326,7 @@ describe('installedCopies', () => {
       given: 'copies of the wrong shape',
       meta: {
         installed: [
-          { harness: 'vim', version: '1', path: '/p' },
+          { harness: 7, version: '1', path: '/p' },
           { harness: 'claude', version: 2, path: '/p' },
           'x',
           null,
@@ -335,6 +335,13 @@ describe('installedCopies', () => {
         ],
       },
       expected: [{ harness: 'claude', version: '1.0.0', path: '/ok' }],
+    },
+    {
+      given: 'a harness id no harness registers',
+      meta: {
+        installed: [{ harness: 'other', version: '1.0.0', path: '/o/a.md' }],
+      },
+      expected: [{ harness: 'other', version: '1.0.0', path: '/o/a.md' }],
     },
   ])('installedCopies given $given → $expected', ({ meta, expected }) => {
     expect(installedCopies(entry({ path: '/a', meta }))).toEqual(expected);

@@ -282,6 +282,7 @@ export function sessionsSelfTestScript(
             sessionId: `${projectDir}-${run}`,
             projectDir,
             harness: DRIVE_SESSION_DEFAULTS.harness,
+            rowId: null,
           },
           { select: false },
         ),

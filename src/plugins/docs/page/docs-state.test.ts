@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
@@ -732,6 +733,8 @@ describe('expandNewGroups', () => {
   });
 });
 
+const HARNESSES = new Map([['claude', harnessInfo({ label: 'Claude Code' })]]);
+
 describe('chips', () => {
   it('chips_StatesPresent_TextAndReason', () => {
     const withStates: IndexContext = {
@@ -741,24 +744,48 @@ describe('chips', () => {
       states: { e: { claude: { state: 'launch', reason: 'user CLAUDE.md' } } },
     };
 
-    expect(chips(withStates, 'e', false)).toMatchObject({
-      claude: { tooltip: 'user CLAUDE.md', state: 'launch' },
-      codex: { tooltip: '', state: 'none' },
-    });
+    expect(chips(withStates, 'e', false, HARNESSES)).toEqual([
+      {
+        harness: 'claude',
+        text: 'Claude Code launch',
+        tooltip: 'user CLAUDE.md',
+        state: 'launch',
+      },
+    ]);
   });
 
   it('chips_Pending_PendingText', () => {
-    const result = chips(context('/Users/u'), 'e', true);
+    const result = chips(context('/Users/u'), 'e', true, HARNESSES);
 
-    expect(result.claude.state).toBe('pending');
-    expect(result.codex.state).toBe('pending');
+    expect(result.map((chip) => chip.state)).toEqual(['pending']);
   });
 
   it('chips_NoContext_Dashes', () => {
-    const result = chips(null, 'e', false);
+    const result = chips(null, 'e', false, HARNESSES);
 
-    expect(result.claude.state).toBe('none');
-    expect(result.codex.state).toBe('none');
+    expect(result.map((chip) => chip.state)).toEqual(['none']);
+  });
+
+  it('chips_TwoHarnesses_RegistrationOrderAndLabels', () => {
+    const harnesses = new Map([
+      ['b', harnessInfo({ label: 'Bee' })],
+      ['claude', harnessInfo({ label: 'Claude Code' })],
+    ]);
+    const withCodex: IndexContext = {
+      ...context('/Users/u'),
+      states: { e: { codex: { state: 'launch', reason: 'r' } } },
+    };
+
+    const result = chips(withCodex, 'e', false, harnesses);
+
+    expect(result.map((chip) => [chip.harness, chip.text])).toEqual([
+      ['b', 'Bee —'],
+      ['claude', 'Claude Code —'],
+    ]);
+  });
+
+  it('chips_NoHarnesses_Empty', () => {
+    expect(chips(context('/Users/u'), 'e', false, new Map())).toEqual([]);
   });
 });
 
@@ -1885,7 +1912,7 @@ describe('detailFields', () => {
       meta: { event: 'PreToolUse', matcher: null, command: 'lint' },
     });
 
-    expect(detailFields(hook, '/Users/u', posixPaths)).toEqual([
+    expect(detailFields(hook, '/Users/u', posixPaths, HARNESSES)).toEqual([
       ['Event', 'PreToolUse'],
       ['Matcher', '—'],
       ['Command', 'lint'],
@@ -1906,11 +1933,24 @@ describe('detailFields', () => {
       },
     });
 
-    expect(detailFields(plugin, '/Users/u', posixPaths)).toEqual([
-      ['Harness', 'Claude'],
+    expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)).toEqual([
+      ['Harness', 'Claude Code'],
       ['Version', '1.0.0'],
       ['Enabled', '—'],
       ['Installs', 'user, project · ~/dev/r'],
+    ]);
+  });
+
+  it('detailFields_UnregisteredHarness_RawId', () => {
+    const plugin = entry({
+      path: '/Users/u/.gemini/plugins/cache/m/p/1',
+      kind: 'plugin',
+      meta: { harness: 'gemini' },
+    });
+
+    expect(detailFields(plugin, '/Users/u', posixPaths, HARNESSES)[0]).toEqual([
+      'Harness',
+      'gemini',
     ]);
   });
 });
@@ -2050,24 +2090,35 @@ describe('statusTexts', () => {
     });
 
     expect(
-      statusTexts(pluginFile([claudeCopy]), status, { 'w@m': '1.9.0' }),
+      statusTexts(
+        pluginFile([claudeCopy]),
+        status,
+        { 'w@m': '1.9.0' },
+        HARNESSES,
+      ),
     ).toEqual([
-      expect.any(String),
-      expect.any(String),
-      expect.stringContaining('Claude'),
-      expect.stringContaining('Codex'),
-      expect.any(String),
+      'Uncommitted',
+      'Unpushed',
+      'Not installed · Claude Code',
+      'Session stale',
     ]);
   });
 
   it('statusTexts_LoadedSameVersion_NotStale', () => {
     expect(
-      statusTexts(pluginFile([claudeCopy]), undefined, { 'w@m': '1.9.1' }),
+      statusTexts(
+        pluginFile([claudeCopy]),
+        undefined,
+        { 'w@m': '1.9.1' },
+        HARNESSES,
+      ),
     ).toEqual([]);
   });
 
   it('statusTexts_KeyNotLoaded_NotStale', () => {
-    expect(statusTexts(pluginFile([claudeCopy]), undefined, {})).toEqual([]);
+    expect(
+      statusTexts(pluginFile([claudeCopy]), undefined, {}, HARNESSES),
+    ).toEqual([]);
   });
 
   it('statusTexts_NoClaudeCopy_NotStale', () => {
@@ -2078,12 +2129,22 @@ describe('statusTexts', () => {
     };
 
     expect(
-      statusTexts(pluginFile([codexCopy]), undefined, { 'w@m': '0.1.0' }),
+      statusTexts(
+        pluginFile([codexCopy]),
+        undefined,
+        { 'w@m': '0.1.0' },
+        HARNESSES,
+      ),
     ).toEqual([]);
   });
 });
 
 describe('rollupText', () => {
+  const BOTH = new Map([
+    ['claude', harnessInfo({ label: 'Claude Code' })],
+    ['codex', harnessInfo({ label: 'Codex' })],
+  ]);
+
   it('rollupText_Counts_InOrderZerosLeftOut', () => {
     const counts = {
       uncommitted: 3,
@@ -2091,7 +2152,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 0, codex: 12 },
     };
 
-    expect(rollupText(counts)).toMatch(/3.*1.*12.*Codex/);
+    expect(rollupText(counts, BOTH)).toMatch(/3.*1.*12.*Codex/);
   });
 
   it('rollupText_BothHarnesses_ClaudeFirst', () => {
@@ -2101,7 +2162,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 2, codex: 5 },
     };
 
-    expect(rollupText(counts)).toMatch(/2.*Claude.*5.*Codex/);
+    expect(rollupText(counts, BOTH)).toMatch(/2.*Claude Code.*5.*Codex/);
   });
 
   it('rollupText_AllZero_Null', () => {
@@ -2111,7 +2172,7 @@ describe('rollupText', () => {
       notInstalled: { claude: 0, codex: 0 },
     };
 
-    expect(rollupText(counts)).toBe(null);
+    expect(rollupText(counts, BOTH)).toBe(null);
   });
 });
 
@@ -2162,7 +2223,15 @@ describe('treeRowStatus', () => {
     ]);
 
     expect(
-      treeRowStatus(starredGroup, noTexts, uncommittedA, [], asIs, posixPaths),
+      treeRowStatus(
+        starredGroup,
+        noTexts,
+        uncommittedA,
+        [],
+        asIs,
+        posixPaths,
+        HARNESSES,
+      ),
     ).toEqual({ mark: null, detail: null });
   });
 
@@ -2172,21 +2241,29 @@ describe('treeRowStatus', () => {
     { node: WIKI_LABEL, detail: null },
   ])('treeRowStatus_WikiRows ($node.type)', ({ node, detail }) => {
     expect(
-      treeRowStatus(node, noTexts, uncommittedA, [], asIs, posixPaths),
+      treeRowStatus(
+        node,
+        noTexts,
+        uncommittedA,
+        [],
+        asIs,
+        posixPaths,
+        HARNESSES,
+      ),
     ).toEqual({ mark: null, detail });
   });
 
   it('treeRowStatus_LeafWithTexts_MarkJoined', () => {
-    const texts = () => ['Uncommitted', 'Not installed · Codex'];
+    const texts = () => ['Uncommitted', 'Not installed · codex'];
 
     expect(
-      treeRowStatus(leafA, texts, new Map(), [], asIs, posixPaths),
-    ).toEqual({ mark: 'Uncommitted · Not installed · Codex', detail: null });
+      treeRowStatus(leafA, texts, new Map(), [], asIs, posixPaths, HARNESSES),
+    ).toEqual({ mark: 'Uncommitted · Not installed · codex', detail: null });
   });
 
   it('treeRowStatus_LeafNoTexts_Nothing', () => {
     expect(
-      treeRowStatus(leafA, noTexts, new Map(), [], asIs, posixPaths),
+      treeRowStatus(leafA, noTexts, new Map(), [], asIs, posixPaths, HARNESSES),
     ).toEqual({ mark: null, detail: null });
   });
 
@@ -2208,9 +2285,9 @@ describe('treeRowStatus', () => {
       ['b', fileStatus({ uncommitted: true, unpushed: true })],
     ]);
 
-    expect(treeRowStatus(plugin, noTexts, files, [], asIs, posixPaths)).toEqual(
-      { mark: null, detail: expect.stringMatching(/2.*1/) },
-    );
+    expect(
+      treeRowStatus(plugin, noTexts, files, [], asIs, posixPaths, HARNESSES),
+    ).toEqual({ mark: null, detail: expect.stringMatching(/2.*1/) });
   });
 
   it('treeRowStatus_RepoNodeFetchFailed_RollupThenOrigin', () => {
@@ -2223,6 +2300,7 @@ describe('treeRowStatus', () => {
       [failedClone],
       asIs,
       posixPaths,
+      HARNESSES,
     );
 
     expect(status.detail).toMatch(/^1 /);
@@ -2239,6 +2317,7 @@ describe('treeRowStatus', () => {
       [failedClone],
       asIs,
       posixPaths,
+      HARNESSES,
     );
 
     expect(status.detail).toMatch(/^1 /);
@@ -2249,7 +2328,15 @@ describe('treeRowStatus', () => {
     const kind = group('repo:m/skill', 'Skills', [leafA]);
 
     expect(
-      treeRowStatus(kind, noTexts, uncommittedA, [], asIs, posixPaths),
+      treeRowStatus(
+        kind,
+        noTexts,
+        uncommittedA,
+        [],
+        asIs,
+        posixPaths,
+        HARNESSES,
+      ),
     ).toEqual({ mark: null, detail: null });
   });
 });

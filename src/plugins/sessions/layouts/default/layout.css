@@ -25,7 +25,9 @@
   --session-edge-inset: var(--wg-space-6);
 }
 
-/* The side bar: the "Sessions" header over the sections. */
+/* The side bar: the "Sessions" header over the sections. The title stays on one
+   line; when the bar is too narrow for it and the prompts, the prompts wrap
+   under it. */
 .session-side {
   display: flex;
   flex-direction: column;
@@ -34,7 +36,14 @@
 }
 
 .session-side > .ui-section-header {
+  flex-wrap: wrap;
+  column-gap: var(--wg-space-1);
   padding: 0 var(--wg-space-2);
+}
+
+.session-side > .ui-section-header > .ui-section-header-text {
+  flex: none;
+  white-space: nowrap;
 }
 
 .session-sidebar {

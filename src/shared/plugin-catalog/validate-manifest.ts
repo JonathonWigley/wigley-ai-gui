@@ -1,5 +1,6 @@
 import type { CommandArgShape } from '../../contracts/commands';
 import type {
+  CommandDecl,
   PluginManifest,
   ProcessName,
   SettingKind,
@@ -74,10 +75,20 @@ const MANIFEST_FIELDS = membersOf({
   optionalSettings: true,
   settingInfo: true,
   themeTokens: true,
+  readsEverySlot: true,
 } satisfies Record<keyof PluginManifest, true>);
 
 const SCHEMA_FIELD = '$schema';
-const COMMAND_FIELDS = ['label', 'group', 'runsIn', 'arg'];
+const COMMAND_FIELDS = membersOf({
+  label: true,
+  group: true,
+  runsIn: true,
+  arg: true,
+  risky: true,
+  targets: true,
+} satisfies Record<keyof CommandDecl, true>);
+// The command fields that hold only `true` when set.
+const COMMAND_FLAGS = ['risky', 'targets'];
 const KEYS_FIELDS = ['binds', 'groups', 'app', 'global', 'intercept'];
 const SETTING_INFO_FIELDS = ['label', 'description'];
 const TOKEN_FIELDS = ['kind', 'default'];
@@ -201,6 +212,9 @@ function shapeProblems(raw: JsonObject): string[] {
   addOptionalSettingsProblems(raw.optionalSettings, problems);
   addSettingInfoProblems(raw.settingInfo, problems);
   addThemeTokensProblems(raw.themeTokens, problems);
+  if (raw.readsEverySlot !== undefined && raw.readsEverySlot !== true) {
+    problems.push('readsEverySlot must be true');
+  }
   return problems;
 }
 
@@ -263,6 +277,11 @@ function addCommandsProblems(commands: unknown, problems: string[]) {
       problems.push(
         `${name} arg must be "number", "string" or an object of those`,
       );
+    }
+    for (const flag of COMMAND_FLAGS) {
+      if (decl[flag] !== undefined && decl[flag] !== true) {
+        problems.push(`${name} ${flag} must be true`);
+      }
     }
   }
 }

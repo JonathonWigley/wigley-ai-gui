@@ -16,7 +16,7 @@ import type {
   ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
-import type { ChatEntryKind } from '../../../contracts/agent';
+import type { AgentHarnessInfo, ChatEntryKind } from '../../../contracts/agent';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { PluginLog } from '../../../contracts/log';
 import type {
@@ -94,6 +94,7 @@ import {
 } from './composer-stop-holder';
 import { blockIndexOfStop, entryIdOfStop } from './entry-focus';
 import { createEntryList, type EntryList } from './entry-list';
+import type { EntryRenderers } from './entry-renderers';
 import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
 import { completionCommands } from './slash-commands';
@@ -190,7 +191,8 @@ export interface HubKeys {
 // session's row shows, as a message sent there does. `composerOf` is a held
 // session's composer surface, for the part that places its activity dock.
 // `sessionFactsSource` is a held session's facts for the hub's Session section,
-// read live: `onChanged` fires after each status line draw. `hub` is the
+// read live: `onChanged` fires after each status line draw and on each change
+// of `core.agentHarnesses`. `hub` is the
 // session hub's keys. `mount` builds the Chat tab of a session whose row has an
 // owner into `element`, with the throws and the wait `ChatMount` states.
 export interface ChatTabs extends ChatView {
@@ -246,7 +248,9 @@ export type ChatTabScope = 'chat' | 'hub';
 // or Deny, a thumbnail, an expander's head, an activity line, a stop, a pending
 // row or an attached image's remove, each naming the tab's session; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
-// the composer draw with; `paths` names each tab by its project folder, and with
+// the composer draw with, and `renderers` the plugins' entry renderers, which
+// draw an entry whose kind the user's layout does not name; `paths` names each
+// tab by its project folder, and with
 // `homeDir` shows that folder in the hub's Session section. `placeOf` hands
 // each tab made its session's place: the tab puts the saved draft, images and
 // entry place back, and writes its place on each change.
@@ -268,6 +272,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   slots: ChatSlotReaders;
   paths: Paths;
   homeDir: string;
+  // `core.agentHarnesses`, for the Session facts' harness label.
+  harnesses: Pick<KeyedSlotReader<AgentHarnessInfo>, 'all' | 'on'>;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'setActivity'>;
   activeSessionId(): string | null;
   ownerOf(sessionId: string): string | null | undefined;
@@ -284,6 +290,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   run(command: CommandId): void;
   runKey<A>(key: CommandKey<A>, arg: A): void;
   layouts: ChatLayouts;
+  renderers: Pick<EntryRenderers, 'pick' | 'onChanged'>;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts' | 'onChanged'>;
   sideParts: Pick<PartStore<ChatSidePart>, 'onChanged'>;
@@ -403,8 +410,10 @@ function stateInSlots(
 // A tab added once the restore window settled is selected in its session; one
 // added before, which a reload or chat's restore reopens, leaves the selection
 // to the session's saved place. A layout change draws every tab's
-// entries, pending rows and composer again and builds its side parts again, and
-// a composer or status part added or removed draws every tab's composer again,
+// entries, pending rows and composer again and builds its side parts again; an
+// entry renderer added or removed draws every tab's entries and pending rows
+// again; and a composer or status part added or removed draws every tab's
+// composer again,
 // each box keeping its text, vim mode and focus. A side part added or removed
 // builds or removes that part alone in every tab, and no composer draw touches
 // one. Each session's row
@@ -414,7 +423,8 @@ function stateInSlots(
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
-  // The kinds whose failed draw has toasted since the layouts were shown.
+  // The kinds whose failed draw has toasted since the layouts were shown or
+  // the entry renderers changed.
   const toastedKinds = new Set<ChatEntryKind>();
   // The scope keys fire in, as `onScopeChanged` last reported it.
   let scopeInForce: ViewScope | undefined;
@@ -434,6 +444,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       drawComposer(tab);
       tab.side.rebuild();
       leaveUnreachableHub(tab);
+    }
+  });
+  deps.renderers.onChanged(() => {
+    toastedKinds.clear();
+    for (const tab of tabs.values()) {
+      tab.entries.rebuild(tab.state.entries);
     }
   });
   const drawEveryComposer = () => {
@@ -973,15 +989,27 @@ function drawStatusLine(tab: HeldTab) {
 
 function sessionFactsSourceOf(
   tab: HeldTab,
-  deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
+  deps: Pick<ChatViewDeps, 'homeDir' | 'paths' | 'harnesses'>,
 ): SessionFactsSource {
   return {
-    input: () => sessionFactsOf(composerInputOf(tab), tab.state, deps),
+    input: () =>
+      sessionFactsOf(composerInputOf(tab), tab.state, {
+        homeDir: deps.homeDir,
+        paths: deps.paths,
+        harnesses: deps.harnesses.all(),
+      }),
     onChanged(listener) {
       // A wrapper per subscription, so each handle removes only its own.
       const wrapped = () => listener();
       tab.factsListeners.add(wrapped);
-      return { dispose: () => tab.factsListeners.delete(wrapped) };
+      // A label that registers late redraws the harness tag.
+      const harnessChanges = deps.harnesses.on(wrapped);
+      return {
+        dispose: () => {
+          tab.factsListeners.delete(wrapped);
+          harnessChanges.dispose();
+        },
+      };
     },
   };
 }
@@ -1268,6 +1296,7 @@ function createTab(
   );
   const entries = createEntryList({
     layouts: deps.layouts,
+    renderers: deps.renderers,
     toastedKinds,
     kit: {
       markdown: deps.markdown,
@@ -1595,7 +1624,7 @@ function drawActivity(
   deps.log(`row activity ${tab.name} ${activity?.word ?? 'none'}`);
 }
 
-// A session closes at once unless Claude is still working on it: then the
+// A session closes at once unless the agent is still working on it: then the
 // Chat tab shows and the end-session confirmation answers. A close another
 // tab asked to make at once asks nothing.
 function mayClose(

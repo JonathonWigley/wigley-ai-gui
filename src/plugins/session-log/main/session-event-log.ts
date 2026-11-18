@@ -6,7 +6,7 @@ import type {
   SessionCloseReason,
   SessionOrigin,
 } from '../../chat/contract';
-import type { Harness, SessionTitles } from '../../sessions/contract';
+import type { SessionTitles } from '../../sessions/contract';
 
 export const SESSION_EVENTS_FILE = 'session-events.jsonl';
 
@@ -67,7 +67,7 @@ export type SessionLogEntry =
       sessionId: string;
       hostSessionId: string | null;
       projectDir: string | null;
-      harness: Harness | null;
+      harness: string | null;
     }
   | {
       at: number;

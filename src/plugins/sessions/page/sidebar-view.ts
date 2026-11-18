@@ -1,4 +1,6 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
@@ -30,7 +32,7 @@ import {
   type SidebarGroup,
   type SidebarSections,
 } from './sidebar-order';
-import { harnessText, hasOtherSession } from './tabs';
+import { hasOtherSession } from './tabs';
 
 // What a row draws beside its session: its shown title and its activity, each
 // null for none, its row parts' tooltips, read at each draw and each time the
@@ -121,12 +123,13 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // group header drags; it takes focus by script alone (`tabIndex` -1) while the
 // list holds the keys, drawing no outline of its own. The view keeps each row's
 // click, which activates its session, its tooltip, the selected row's mark, the
-// cursor's ring, each star's click and each
-// header's tooltip and drag.
+// cursor's ring, each star's click and each header's tooltip and drag. A row
+// names its harness by the label in `harnesses`, read at each draw.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
   timers: Timers,
+  harnesses: () => ReadonlyMap<string, AgentHarnessInfo>,
 ): SidebarView {
   const host = element('div', 'session-side-host');
   host.style.display = 'contents';
@@ -231,6 +234,7 @@ export function mountSidebarView(
           null,
           events.activate,
           promptOf(cursor, session, isFavorite),
+          harnesses,
         ),
       );
     }
@@ -299,6 +303,7 @@ export function mountSidebarView(
           section.id,
           events.activate,
           promptOf(cursor, session, shownFavorites.includes(session.project)),
+          harnesses,
         ),
       );
     }
@@ -381,6 +386,15 @@ export function activityInput(
       };
 }
 
+// A session's harness as a row names it: the label in `harnesses`, nothing when
+// the relay did not say.
+export function harnessInput(
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
+  harness: string | null,
+): string {
+  return harness === null ? '' : harnessLabel(harnesses, harness);
+}
+
 function drawRow(
   parts: SessionsParts,
   list: HTMLElement,
@@ -393,12 +407,13 @@ function drawRow(
     isPrompted,
     prompt,
   }: { isPrompted: boolean; prompt: readonly PromptActionInput[] },
+  harnesses: () => ReadonlyMap<string, AgentHarnessInfo>,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(list, {
     sessionId: session.sessionId,
     title,
     label: session.label,
-    harness: harnessText(session.harness),
+    harness: harnessInput(harnesses(), session.harness),
     marked: session.marked && !isSelected,
     activity: activityInput(activity),
     onScreen,

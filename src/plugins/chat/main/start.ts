@@ -1,6 +1,10 @@
 import path from 'node:path';
-import type { AgentHarness } from '../../../contracts/agent';
-import type { Registrations } from '../../../contracts/disposable';
+import type {
+  AgentHarnessInfo,
+  PermissionDecision,
+} from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
@@ -10,21 +14,27 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import type { KeyedSlotReader } from '../../../contracts/state';
 import {
   argsObject,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
-import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import {
+  createFakeAgentHarness,
+  isFakeAgentHarness,
+} from '../../../shared/fake-agent-harness';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import { isSameJson } from '../../../shared/json';
 import {
+  editableTitle,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
   sessionsSelectionSlot,
-  type ToolResult,
 } from '../../sessions/contract';
+import { frameAgentMessage, frameSenderName } from '../agent-frame';
 import {
   type ChatChannel,
   chatCommandsSlot,
@@ -44,17 +54,16 @@ import { type ChatSessions, createChatSessions } from './chat-sessions';
 import { createChatSlots } from './chat-slots';
 import { askFixturePermission } from './fixtures';
 import { createFolderChoices } from './folder-choices';
-import { requireChatHarness } from './lookups';
-import { createOpenSessions } from './open-sessions';
 import {
-  PERMISSION_OFFLINE,
-  PERMISSION_TOOL_NAME,
-  PERMISSION_TOOLS,
-} from './permission-tool';
+  type ChatHarnesses,
+  chatHarnessesOf,
+  requireHarnessOfProfile,
+} from './lookups';
+import { createOpenSessions } from './open-sessions';
 import { createChatPreview } from './preview/chat-preview';
 import { createPoolProviders, projectOf, readProjects } from './projects';
 import { createRecentFolders } from './recent-folders';
-import { chatSelfTestScript } from './selftest-script';
+import { chatSelfTestScript, RETURN_FIXTURE_IDENTITY } from './selftest-script';
 import {
   SET_HEADLESS_OFFLINE,
   SET_HEADLESS_TOOL,
@@ -117,37 +126,34 @@ const DEFAULT_PERMISSION_INPUT = { command: 'ls' };
 // Where a permission `chat.askPermission` raised stands.
 type DrivePermission =
   | { state: 'pending' }
-  | { state: 'answered'; reply: ToolResult }
+  | { state: 'answered'; decision: PermissionDecision }
   | { state: 'failed'; error: unknown };
 
 interface ChatDriveDeps {
   services: Pick<MainServices, 'homeDir' | 'randomUuid' | 'log'> & {
     files: Pick<Files, 'makeFolder'>;
   };
-  // Chat's profiles' names, in settings order, read at each `chat.start`.
-  profileNames: () => string[];
+  // The profile `chat.start` takes when the agent names none, read at each
+  // call: the first profile of chat's `defaultHarness`, null when it has none.
+  defaultProfile: () => string | null;
   chat: Pick<
     ChatSessions,
-    | 'start'
-    | 'hostSessionIdOf'
-    | 'closed'
-    | 'sessions'
-    | 'permissionToolSession'
+    'start' | 'hostSessionIdSettled' | 'closed' | 'sessions'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: ChatHarnesses;
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
 // selects its row, `chat.askPermission` raises a permission card in one whose
-// process runs, `chat.permissionAnswer` reads that card's reply, and
+// fake process runs, `chat.permissionAnswer` reads that card's decision, and
 // `chat.holdCompactions` and `chat.releaseCompactions` hold a fake harness's
 // compactions open and end them.
 export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
-  const { services, profileNames, chat, sessions, harnesses } = deps;
+  const { services, defaultProfile, chat, sessions, harnesses } = deps;
   const permissions = new Map<string, DrivePermission>();
   const fakeHarness = () => {
-    const fake = harnesses.find(isFakeAgentHarness);
+    const fake = harnesses.list().find(isFakeAgentHarness);
     if (fake === undefined) {
       throw new Error('chat runs on no fake harness');
     }
@@ -155,36 +161,32 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   };
   drive.add('start', {
     description:
-      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, "fake: blocks" a reply of three paragraphs, a two-item list and a ts code block, "fake: cold" an echo whose usage reads 200k of context with the cache already cold, so with auto-compact on the next message is held for a compaction, "fake: compact" a turn that runs an autocompact, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
+      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first profile of chat\'s defaultHarness), on the harness that declares that profile, and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, "fake: blocks" a reply of three paragraphs, a two-item list and a ts code block, "fake: cold" an echo whose usage reads 200k of context with the cache already cold, so with auto-compact on the next message is held for a compaction, "fake: compact" a turn that runs an autocompact, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
     args: '{ projectDir?: string; profile?: string }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
       const projectDir =
         optionalString(args, 'projectDir') ??
         path.join(services.homeDir, DRIVE_PROJECT_FOLDER);
-      const profile = optionalString(args, 'profile') ?? profileNames()[0];
-      if (profile === undefined) {
+      const profile = optionalString(args, 'profile') ?? defaultProfile();
+      if (profile === null) {
         throw new Error('chat has no profiles');
       }
+      const harness = requireHarnessOfProfile(harnesses, profile).id;
       await services.files.makeFolder(projectDir);
-      const sessionId = chat.start({ projectDir, profile });
+      const sessionId = chat.start({ projectDir, harness, profile });
       try {
         sessions.activate(sessionId);
       } catch (error) {
         chat.closed(sessionId, 'start-failed');
         throw error;
       }
-      const hostSessionId = chat.hostSessionIdOf(sessionId);
-      if (hostSessionId === null) {
-        throw new Error(
-          `chat started ${sessionId} but holds no host id for it`,
-        );
-      }
+      const hostSessionId = await chat.hostSessionIdSettled(sessionId);
       return { sessionId, hostSessionId };
     },
   });
   drive.add('askPermission', {
-    description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has no running process.`,
+    description: `Under the fake harness, raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}), through the session's fake process. Returns the call's toolUseId at once, which chat.permissionAnswer reads the decision by; the main output logs the decision once the user answers. Fails when chat holds no session sessionId, when that session has no running process, or when chat runs on no fake harness.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -198,17 +200,18 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
       if (!state.running) {
         throw new Error(`session ${sessionId} has no running process`);
       }
+      const fake = fakeHarness();
       const toolUseId = services.randomUuid();
       permissions.set(toolUseId, { state: 'pending' });
-      askFixturePermission(chat, sessionId, state.projectDir, {
+      askFixturePermission(fake, sessionId, {
         toolName: optionalString(args, 'toolName') ?? DEFAULT_PERMISSION_TOOL,
         input: args.input === undefined ? DEFAULT_PERMISSION_INPUT : args.input,
         toolUseId,
       }).then(
-        (reply) => {
-          permissions.set(toolUseId, { state: 'answered', reply });
+        (decision) => {
+          permissions.set(toolUseId, { state: 'answered', decision });
           services.log(
-            `drive permission ${toolUseId} answered: ${reply.content[0]?.text}`,
+            `drive permission ${toolUseId} answered: ${JSON.stringify(decision)}`,
           );
         },
         (error: unknown) => {
@@ -223,7 +226,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   });
   drive.add('permissionAnswer', {
     description:
-      "The permission_prompt tool's reply to the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.",
+      'The decision { allowed, reason } on the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.',
     args: '{ toolUseId: string }',
     async run(rawArgs) {
       const toolUseId = requiredString(argsObject(rawArgs), 'toolUseId');
@@ -235,7 +238,7 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
         throw permission.error;
       }
       return permission.state === 'answered'
-        ? permission.reply
+        ? permission.decision
         : { pending: true };
     },
   });
@@ -259,24 +262,73 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   });
 }
 
-// Starts, resumes and runs the Claude Code sessions the page asks for, keeps
-// the open ones saved with their titles and queued messages, and on start
+// Chat's view of `core.agentHarnesses`: the ids present when it was made and
+// the last label read for each id. `follow` tells `chat` of each later change:
+// a present id's key deleted is a leave, a key set for an id not present (a
+// first registration included) a return, and a present id's key set again (a
+// refresh) neither. `labelOf` is the last label read for an id, else the id.
+export interface HarnessFollower {
+  labelOf(harnessId: string): string;
+  follow(
+    chat: Pick<ChatSessions, 'harnessLeft' | 'harnessReturned'>,
+  ): Disposable;
+}
+
+export function createHarnessFollower(
+  slot: KeyedSlotReader<AgentHarnessInfo>,
+  log: (line: string) => void,
+): HarnessFollower {
+  const present = new Set(slot.all().keys());
+  const labels = new Map(
+    [...slot.all()].map(([harnessId, info]) => [harnessId, info.label]),
+  );
+  return {
+    labelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
+    follow: (chat) =>
+      slot.on((harnessId, info) => {
+        if (info === undefined) {
+          if (present.delete(harnessId)) {
+            chat.harnessLeft(harnessId);
+          }
+          return;
+        }
+        labels.set(harnessId, info.label);
+        if (present.has(harnessId)) {
+          return;
+        }
+        present.add(harnessId);
+        chat.harnessReturned(harnessId).catch((error: unknown) => {
+          log(`harness ${harnessId} not re-attached: ${errorText(error)}`);
+        });
+      }),
+  };
+}
+
+// Starts, resumes and runs the agent sessions the page asks for, each on its
+// harness (a new one on the `defaultHarness` setting's, or its profile's),
+// reading profiles as the registry publishes them in `core.agentHarnesses`;
+// keeps the open ones saved with their titles and queued messages, and on start
 // restores them, re-attaching each to its process the session host still runs,
 // holding relay connects until the rows are open, and on a restart keeps
-// their rows for the restarted part's restore to adopt; stops every process on
+// their rows for the restarted part's restore to adopt; lets a harness's
+// sessions wait, detached, while it is gone from `core.agentHarnesses` (ending
+// a process with no settled host id, which it cannot find again) and
+// re-attaches them when it is back; stops every process on
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives
-// the saved ones, answers their permission prompts through the
-// `permission_prompt` tool, starts a session for any agent that calls the
+// the saved ones, shows their processes' permission requests and hands the
+// user's answers back, starts a session for any agent that calls the
 // `start_session` tool, sets a session's headless flag for its main agent's
 // `set_headless` call, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
-// chat's sessions, with no process), offers a drive run its fixtures, and
-// exports to other plugins a background launch, a send, clear and active time
-// read on the sessions it holds, a close of every session in a folder or of one
-// session, a registration of
+// chat's sessions, with no process), offers a drive run its fixtures, runs
+// `chat.sendTo`, which sends to a session it holds, framed when an agent asks,
+// and exports to other plugins a background launch, a send, clear, active time,
+// headless, unattended and sender-name reads on the sessions it holds, the agent
+// that made a tool call in one of them, a close of every session in a folder or
+// of one session, a registration of
 // instructions every later session start carries, a registration of send gates,
 // one of the idle compaction threshold a start passes, one of the resume
 // sections the start prompt lists, and one of the pool provider a pool
@@ -295,13 +347,18 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       paths: services.paths,
       log: services.log,
     });
-    const harness = () => requireChatHarness(services.agentHarnesses);
-    const profiles = () => api.settings().profiles;
-    const profileNames = () => profiles().map((profile) => profile.name);
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
+    const harnesses = chatHarnessesOf(services.agentHarnesses, harnessSlot);
+    // Every profile name the registry publishes, in registration order.
+    const profileNames = () =>
+      registeredProfiles(harnessSlot.all()).map((profile) => profile.name);
+    // The first profile published for chat's `defaultHarness`; null when it is
+    // not registered or has no profiles.
+    const defaultHarnessProfile = () =>
+      harnesses.profilesOf(api.settings().defaultHarness).at(0)?.name ?? null;
     const folderChoices = createFolderChoices({
       recent,
-      harness,
-      profiles,
+      harnesses,
       files: services.files,
       paths: services.paths,
       tempFolders: services.tempFolders,
@@ -315,8 +372,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     // The page's list and the `projects` export's, read at each call.
     const projectList = () => [...projects];
     const accounts = createAccounts({
-      harness,
-      profiles,
+      harnesses,
       send: (message, data) => api.channel.send(message, data),
       log: services.log,
     });
@@ -330,12 +386,12 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       returned: api.state.publish(chatReturnedSlot),
     });
     const toolCallers = createToolCallers(services.timers);
+    const harnessFollower = createHarnessFollower(harnessSlot, services.log);
     const chat = createChatSessions({
-      harnesses: services.agentHarnesses,
+      harnesses,
+      harnessLabelOf: (harnessId) => harnessFollower.labelOf(harnessId),
       sessions,
       selectedSessionId: () => selection.get() ?? null,
-      profiles,
-      randomUuid: services.randomUuid,
       recent,
       archived: createArchivedSessions(api.data),
       saved,
@@ -348,12 +404,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       toolCallers,
       log: services.log,
       clock: services.clock,
+      randomUuid: services.randomUuid,
       sessionHost: services.sessionHost,
       projects: () => projects,
       poolProvider,
       homeDir: services.homeDir,
       paths: services.paths,
     });
+    harnessFollower.follow(chat);
     const namer = sessions.addProjectNamer(
       (projectDir) =>
         projectOf(
@@ -365,11 +423,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         )?.name ?? null,
     );
     namer.changed();
+    // True for a row whose stream chat reads, which names its calls' agents.
+    const readsStreamOf = (sessionId: string) =>
+      chat.activeTimeOf(sessionId) !== null;
     sessions.addToolCallGuard(
-      callerGuard({
-        callers: toolCallers,
-        owns: (sessionId) => chat.hostSessionIdOf(sessionId) !== null,
-      }),
+      callerGuard({ callers: toolCallers, owns: readsStreamOf }),
     );
     const preview = createChatPreview({
       sessions,
@@ -496,11 +554,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     );
     // The registration lives and dies with the part.
     chat.addInstructions(SESSION_TITLE_INSTRUCTION);
-    sessions.contributeTools(
-      PERMISSION_TOOLS,
-      (session) => chat.permissionToolSession(session),
-      { offline: { [PERMISSION_TOOL_NAME]: PERMISSION_OFFLINE } },
-    );
     const holds = (sessionId: string) =>
       chat.sessions().some((held) => held.sessionId === sessionId);
     const profileOf = (sessionId: string) =>
@@ -508,8 +561,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       null;
     const defaultProfile = (sessionId: string | null) =>
       (sessionId === null ? null : profileOf(sessionId)) ??
-      profileNames().at(0) ??
-      null;
+      defaultHarnessProfile();
     sessions.contributeTools(
       [START_SESSION_TOOL],
       startSessionToolSession({
@@ -563,22 +615,31 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       projects = readProjects(projectSettings, services.log);
       namer.changed();
     });
-    services.selfTest?.run(
-      chatSelfTestScript({
-        homeDir: services.homeDir,
-        files: services.files,
-        chat,
-        sessions,
-        harnesses: services.agentHarnesses,
-      }),
-    );
+    if (services.selfTest !== null) {
+      services.selfTest.run(
+        chatSelfTestScript({
+          homeDir: services.homeDir,
+          files: services.files,
+          chat,
+          sessions,
+          harnesses: services.agentHarnesses,
+          defaultHarness: () => api.settings().defaultHarness,
+          returnFixture: createFakeAgentHarness(
+            services.clock,
+            services.files,
+            services.timers,
+            RETURN_FIXTURE_IDENTITY,
+          ),
+        }),
+      );
+    }
     if (api.drive !== null) {
       addDriveActions(api.drive, {
         services,
-        profileNames,
+        defaultProfile: defaultHarnessProfile,
         chat,
         sessions,
-        harnesses: services.agentHarnesses,
+        harnesses,
       });
     }
     api.layouts.register({ layoutTypes });
@@ -586,6 +647,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       if (!holds(sessionId)) {
         throw new Error(`chat holds no session ${sessionId}`);
       }
+    };
+    const senderName = (sessionId: string) => {
+      const titles = sessions.titles(sessionId);
+      return frameSenderName(
+        titles === null ? null : editableTitle(titles),
+        sessions.label(sessionId),
+        sessionId,
+      );
     };
     const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
@@ -600,10 +669,15 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         return adopting;
       },
       resume: (request) => chat.resume(request),
-      profiles,
       profileOf,
       activeTime: (sessionId) => chat.activeTimeOf(sessionId),
+      toolCaller: (sessionId, toolUseId) =>
+        readsStreamOf(sessionId)
+          ? toolCallers.agentOf(sessionId, toolUseId)
+          : Promise.resolve(null),
       isHeadless: (sessionId) => chat.isHeadless(sessionId),
+      isUnattended: (sessionId) => chat.isUnattended(sessionId),
+      senderName,
       launchedHeadless: (sessionId) => chat.launchedHeadless(sessionId),
       defaultProfile,
       restored: () => restored,
@@ -614,6 +688,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       clear: async (sessionId) => {
         requireHeld(sessionId);
         chat.clear(sessionId);
+        await chat.hostSessionIdSettled(sessionId);
       },
       closeSessionsIn: async (projectDir) => {
         const closing = chat
@@ -669,7 +744,28 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       },
     });
     return {
-      commands: {},
+      commands: {
+        // Sends as chat's own send does, so it queues behind a running turn;
+        // an agent's run opens the text with the frame line naming its
+        // session. It never runs an app slash command.
+        sendTo: async ({ arg, callerSessionId }) => {
+          const { sessionId, text } = arg;
+          if (text.trim() === '') {
+            throw new Error('chat.sendTo: no text');
+          }
+          if (sessionId === callerSessionId) {
+            throw new Error('chat.sendTo: a session cannot send to itself');
+          }
+          if (!holds(sessionId)) {
+            throw new Error(`chat.sendTo: no chat session ${sessionId}`);
+          }
+          const sent =
+            callerSessionId === undefined
+              ? text
+              : frameAgentMessage(senderName(callerSessionId), text);
+          await chat.send(sessionId, { text: sent, images: [] });
+        },
+      },
       exports,
       dispose: (stop) => {
         if (stop === 'restart') {

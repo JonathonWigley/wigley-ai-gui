@@ -15,13 +15,14 @@ import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { pluginLog } from '../../shared/plugin-log';
 import {
   abortableProcesses,
+  trackedAgentHarnesses,
   trackedAlerts,
   trackedFiles,
   trackedUserConfig,
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
 import type { RuntimeCommands } from '../../shared/runtime-commands';
-import { pluginState, type SlotStore } from '../../shared/state/slot-store';
+import { mainPluginState, type SlotStore } from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
@@ -112,6 +113,10 @@ export function createMainApi(
       files,
       processes: abortableProcesses(deps.services.processes, registrations),
       alerts: trackedAlerts(deps.services.alerts, registrations),
+      agentHarnesses: trackedAgentHarnesses(
+        deps.services.agentHarnesses,
+        registrations,
+      ),
       timers: trackedTimers(deps.services.timers, registrations),
       userConfig: trackedUserConfig(deps.services.userConfig, registrations),
       selfTest: deps.selfTestFor(manifest.id),
@@ -132,7 +137,7 @@ export function createMainApi(
         ),
       names: () => deps.layouts.names(manifest.id),
     },
-    state: pluginState(deps.state, manifest.id, 'main', (handle) =>
+    state: mainPluginState(deps.state, manifest, (handle) =>
       registrations.track(handle),
     ),
     commands: pluginCommands.commands,

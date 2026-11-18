@@ -10,6 +10,7 @@ import type {
   PendingSpawn,
   SessionHost,
 } from '../../../contracts/session-host';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { createFakeLoginStart } from '../../../shared/fake-login-start';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import {
@@ -132,6 +133,7 @@ function adoptRequest(rowId: string, hostSessionId: string): AdoptRequest {
     processId: `${hostSessionId}-1-0`,
     rowId,
     projectDir: '/home/me/dev/a',
+    harness: 'claude',
     profile: 'work',
     headless: true,
     unattended: false,
@@ -176,6 +178,7 @@ function sessionInfo(
   return {
     sessionId,
     projectDir: '/home/me/dev/a',
+    harness: 'claude',
     profile: 'work',
     background: 0,
     activeTime: { totalMs: 0, since: null },
@@ -302,6 +305,12 @@ function startPart(options: StartOptions = {}) {
 
   const chatHarness = {
     id: 'claude',
+    info: () => ({
+      profiles: [
+        { name: 'work', configDir: '~/.claude-work' },
+        { name: 'personal', configDir: '~/.claude' },
+      ],
+    }),
     startControls: () => START_CONTROLS,
     capControls: (controls: Readonly<Record<string, string>>) => ({
       ...controls,
@@ -309,10 +318,10 @@ function startPart(options: StartOptions = {}) {
   } as unknown as AgentHarness;
 
   const chat = {
-    prepareLaunch(
+    async prepareLaunch(
       request: LaunchRequest,
       env: Readonly<Record<string, string>>,
-    ): PreparedLaunch {
+    ): Promise<PreparedLaunch> {
       const error = part.prepareErrors.shift();
       if (error !== undefined) {
         throw new Error(error);
@@ -329,10 +338,6 @@ function startPart(options: StartOptions = {}) {
       adopts.push(run);
       return part.answerAdopt(run);
     },
-    profiles: () => [
-      { name: 'work', configDir: '~/.claude-work' },
-      { name: 'personal', configDir: '~/.claude' },
-    ],
     projects: () => PROJECTS,
     profileOf: () => 'work',
     defaultProfile: () => 'work',
@@ -379,7 +384,7 @@ function startPart(options: StartOptions = {}) {
       clock,
       sessionHost,
       loginStart,
-      agentHarnesses: [chatHarness],
+      agentHarnesses: harnessRegistryOf([chatHarness]),
       alerts: {
         setOpenCount: (_source, count, noun) => alerts.push({ count, noun }),
       },

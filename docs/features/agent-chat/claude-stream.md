@@ -7,7 +7,7 @@ and § Interrupt's idle case measured on 2.1.317, 2026-11-02. § Compaction's su
 # Claude Code stream-json wire facts
 
 What the installed `claude` CLI prints and accepts in stream-json mode, measured live by the agent-chat spike (plan A,
-task 01). The Claude adapter (`src/main/claude-code/`) reads this doc; each section is named by the adapter task as
+task 01). The Claude adapter (`src/plugins/claude-code/main/`) reads this doc; each section is named by the adapter task as
 `claude-stream.md § <section>`.
 
 **How every probe ran.** A `python3` stdlib driver started the binary with `subprocess.Popen` (stdin, stdout and
@@ -73,7 +73,8 @@ and every `CLAUDE_CODE_*` (`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXPERIMENTAL_A
 these variables, and `CLAUDE_EFFORT` in particular may set the child's effort. The app's launch strips the named ones
 and `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, which it sets from its own setting; any other `CLAUDE_CODE_*` passes through.
 It also strips `WIGLEY_SESSION_ROW` and sets it to the row's id, for `unity-pool`
-(`~/wigley-agents/tools/unity-pool/README.md`).
+(`~/wigley-agents/tools/unity-pool/README.md`); the relay's hello carries it as `row_id`, by which the app joins the
+relay to the row.
 
 ## User message
 
@@ -189,7 +190,9 @@ The inner `response` keys: `commands`, `agents`, `output_style`, `available_outp
   word and the alias the qualified one (`docx` → `anthropic-skills:docx`), while `init.slash_commands` lists the
   qualified one.
 - Anthropic's Agent SDK sends this request at every start; the app's Claude adapter sends it too, as the first stdin
-  line of a started process, and reads `commands` from its answer.
+  line of a started process, and reads `commands`, `models` (the model control's choices) and
+  `current_permission_mode` (the mode control's value) from its answer; `models` follows the Agent SDK's `ModelInfo`,
+  documented, not measured here.
 
 ## Stream events
 

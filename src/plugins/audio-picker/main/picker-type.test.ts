@@ -10,6 +10,7 @@ import type { AgentFormStore } from '../../../shared/agent-forms/form-store';
 import { globalTimers } from '../../../shared/agent-forms/global-timers.test-support';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { ScriptedFormPresenter } from '../../../shared/agent-forms/scripted-presenter';
+import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   AudioPickerBody,
@@ -203,5 +204,36 @@ describe('the audio picker type through the agent form service', () => {
       'Market',
     ]);
     expect(presenter.shown).toEqual([]);
+  });
+});
+
+describe('the audio picker type through its tool session', () => {
+  it("returns a malformed open_audio_picker's message as its tool error text", async () => {
+    let message = '';
+    try {
+      parseAudioPicker('nope', posixPaths);
+    } catch (error) {
+      message = (error as AudioPickerError).message;
+    }
+    const session: AgentFormSession<AudioPickerPayload> = {
+      open: async (args) => {
+        type.parse(args);
+        throw new Error('the picker parsed');
+      },
+      collect: () => Promise.reject(new Error('collect is not called here')),
+      end: () => {},
+    };
+
+    const result = await createAgentFormToolSession(session, type).call(
+      'open_audio_picker',
+      'nope',
+      { toolUseId: null, signal: new AbortController().signal },
+    );
+
+    expect(message).not.toBe('');
+    expect(result).toEqual({
+      content: [{ type: 'text', text: message }],
+      isError: true,
+    });
   });
 });

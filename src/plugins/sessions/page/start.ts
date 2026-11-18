@@ -1,4 +1,5 @@
 import './sessions.css';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { PaneDirection } from '../../../contracts/panes';
 import type {
   PageApi,
@@ -153,27 +154,40 @@ const RESERVED_SECTION_IDS: readonly string[] = [
 // A choice in the split picker: a session no pane shows, or a new session.
 type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 
+// How a close asks: `viewsAtOnce` asks the session's tabs and popups for a
+// close at once, so none confirms; `cancelsHolds` has main cancel what its
+// close guards hold before they answer.
+interface CloseAsk {
+  viewsAtOnce: boolean;
+  cancelsHolds: boolean;
+}
+
+const PLAIN_CLOSE: CloseAsk = { viewsAtOnce: false, cancelsHolds: false };
+
 // Asks the session's tabs in order, then its popups, then main, to close it,
-// resolving to whether the row closed; `atOnce` says the close key found a tab
-// or popup asking for an instant close, so main cancels what its guards hold
-// first. Main's refusal is logged and toasted, and a failed ask logged.
+// as `ask` says, resolving to whether the row closed. Main's refusal is logged
+// and toasted, and a failed ask logged.
 async function closeSession(
   api: SessionsApi,
   view: SessionsView,
   labelOf: (sessionId: string) => string,
   sessionId: string,
-  atOnce: boolean,
+  ask: CloseAsk,
 ): Promise<boolean> {
   const { log } = api.services;
   const viewsNow = () => [
     ...view.tabs.tabsOf(sessionId),
     ...view.tabs.popupsOf(sessionId),
   ];
-  if (!(await mayClose(viewsNow, atOnce))) {
+  if (!(await mayClose(viewsNow, ask.viewsAtOnce))) {
     return false;
   }
   try {
-    const refusal = await api.channel.invoke('closeSession', sessionId, atOnce);
+    const refusal = await api.channel.invoke(
+      'closeSession',
+      sessionId,
+      ask.cancelsHolds,
+    );
     if (refusal !== null) {
       log(`session close kept by main: ${labelOf(sessionId)}`);
       api.services.toast(refusal, 'info');
@@ -215,7 +229,7 @@ function createExports(
     },
     activate,
     closeSession: (sessionId) =>
-      closeSession(api, view, labelOf, sessionId, false),
+      closeSession(api, view, labelOf, sessionId, PLAIN_CLOSE),
     shownSessionId,
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
@@ -276,6 +290,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const { uiState } = api.services;
     const rows = api.state.read(sessionsRowsSlot);
     const selection = api.state.read(sessionsSelectionSlot);
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const active = api.state.publish(sessionsActiveSlot);
     active.set(null);
     const activities = api.state.publish(sessionsActivitySlot);
@@ -547,6 +562,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       keys: api.keys,
       timers: api.services.timers,
+      harnesses: () => harnesses.all(),
       panesChanged() {
         waiting = liveWaits(waiting, view.panes.sessions());
         savePanes();
@@ -862,9 +878,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Steps the focused pane, in drawn order, over the sessions no other pane
-    // shows.
+    // shows; a key pressed in another mode belongs to that mode, so it does
+    // nothing there.
     const stepToSession = (by: 1 | -1) => {
-      mode.show();
+      if (!mode.isShown()) {
+        log('session keys ignored: Sessions mode is hidden');
+        return;
+      }
       if (view.isPreviewShown()) {
         view.stepPreview(by);
         return;
@@ -884,12 +904,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
-    // The shown mode steps its own tabs first; one with none shows Sessions.
+    // The shown mode steps its own tabs first; in any other mode but Sessions
+    // the keys do nothing.
     const stepToTab = (by: 1 | -1) => {
       if (api.modes.stepTab(by)) {
         return;
       }
-      mode.show();
+      if (!mode.isShown()) {
+        log('tab keys ignored: the shown mode has no tabs');
+        return;
+      }
       const sessionId = view.panes.focusedSessionId();
       if (sessionId === null) {
         return;
@@ -911,9 +935,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Hides the focused pane's session's open popup, else opens the one it hid
-    // last, showing the mode first.
+    // last; nothing while Sessions mode is hidden.
     const togglePopup = () => {
-      mode.show();
+      if (!mode.isShown()) {
+        log('popup key ignored: Sessions mode is hidden');
+        return;
+      }
       const sessionId = view.panes.focusedSessionId();
       if (sessionId === null) {
         log('no popup: no session shown');
@@ -960,23 +987,28 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const openPreview = previewToggle(mode, view, log);
 
-    // Acts on the focused pane's session, as `closeSession` does.
-    const renameSession = () => {
-      if (!mode.isShown()) {
+    // Acts on the run's target when it names one, showing Sessions mode first
+    // since the dialog waits on the user's typing; else on the focused pane's
+    // session, as `closeSession` does.
+    const renameSession = ({ targetSessionId }: PageCommandContext) => {
+      if (targetSessionId === undefined && !mode.isShown()) {
         log('rename ignored: Sessions mode is hidden');
         return;
       }
-      const sessionId = view.panes.focusedSessionId();
+      const sessionId = targetSessionId ?? view.panes.focusedSessionId();
       const row = sessionId === null ? undefined : rowOf(sessionId);
       if (row === undefined) {
         log('no session to rename');
         return;
       }
+      if (!mode.isShown()) {
+        mode.show();
+      }
       renameDialog.open(row);
     };
 
     // Runs a project key on the focused pane's session's project, as
-    // `renameSession` acts on its session.
+    // `renameSession` with no target acts on its session.
     const projectKey = (run: (project: string) => void) => () => {
       if (!mode.isShown()) {
         log('projects ignored: Sessions mode is hidden');
@@ -1135,20 +1167,31 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         nextTab: () => stepToTab(1),
         prevTab: () => stepToTab(-1),
         togglePopup,
-        // Acts on the focused pane's session, whichever box the key fired in;
-        // never on a row the user cannot see.
-        closeSession: () => {
-          if (!mode.isShown()) {
+        // Acts on the run's target when it names one, shown or not; else on the
+        // focused pane's session, whichever box the key fired in, and never on
+        // a row the user cannot see. The close key closes at once when a tab
+        // or popup says so. A targeted run asks the tabs and popups at once,
+        // since only an agent's run names a target and the user's Allow
+        // confirmed it, but has main cancel no hold: the Allow did not cover
+        // an open form's answers, so main's guards refuse that close.
+        closeSession: ({ targetSessionId }: PageCommandContext) => {
+          const isTargeted = targetSessionId !== undefined;
+          if (!isTargeted && !mode.isShown()) {
             log('close ignored: Sessions mode is hidden');
             return;
           }
-          const sessionId = view.panes.focusedSessionId();
+          const sessionId = targetSessionId ?? view.panes.focusedSessionId();
           if (sessionId !== null) {
-            const atOnce = closesAtOnce([
-              ...view.tabs.tabsOf(sessionId),
-              ...view.tabs.popupsOf(sessionId),
-            ]);
-            void closeSession(api, view, labelOf, sessionId, atOnce);
+            const isKeyAtOnce =
+              !isTargeted &&
+              closesAtOnce([
+                ...view.tabs.tabsOf(sessionId),
+                ...view.tabs.popupsOf(sessionId),
+              ]);
+            void closeSession(api, view, labelOf, sessionId, {
+              viewsAtOnce: isTargeted || isKeyAtOnce,
+              cancelsHolds: isKeyAtOnce,
+            });
           }
         },
         splitDown: paneKey(unlessPicking(() => split('column'))),

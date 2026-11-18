@@ -31,7 +31,7 @@ The work touches these systems:
 - **Session host** (`src/session-host/`, `src/contracts/session-host*.ts`): a persisted deferred-spawn queue, run
   records, an env overlay and stdin lines on each spawn, one protocol bump.
 - **Session host client** (`src/main/session-host/`): the queue and run members of `SessionHost`.
-- **Agent harness** (`src/contracts/agent.ts`, `src/main/claude-code/`, `src/shared/fake-agent-harness.ts`): a pure
+- **Agent harness** (`src/contracts/agent.ts`, `src/plugins/claude-code/main/`, `src/shared/fake-agent-harness.ts`): a pure
   prepare-a-run member, the start controls, the permission cap.
 - **Chat plugin** (`src/plugins/chat/`): `controls` on `LaunchRequest`, the `prepareLaunch` and `adopt` exports.
 - **Sessions plugin** (`src/plugins/sessions/`): the `offline` option of `contributeTools`, the offline table file,
@@ -290,12 +290,12 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `src/session-host/host-server.ts` | `SessionHostDeps.env` (02); the queue messages, the exit rule, `runStarted` pushes (07) | 02, 07 |
 | `src/session-host/session-host.ts` | hands `process.env` to the host (02); any wiring the pending queue needs (07) | 02, 07 |
 | `src/session-host/session-host-test-doubles.ts` | spawn literals carry the new fields | 02 |
-| `src/main/claude-code/claude-launch.ts` | `claudeUnsetEnv`, `ClaudeLaunch.unsetEnv` (02); the pure spec builder `claudeSpawn`, `CLAUDE_CARRIED_ENV`, the moved `CLAUDE_IDLE_RULE`, `CLAUDE_DROPPED_OUT_KEYS` and `definedEnv` (08) | 02, 08 |
-| `src/main/claude-code/claude-code-harness.ts` | `start` passes `unsetEnv` and `stdin: []` (02); `start` and `prepareRun` share one spec builder (08) | 02, 08 |
+| `src/plugins/claude-code/main/claude-launch.ts` | `claudeUnsetEnv`, `ClaudeLaunch.unsetEnv` (02); the pure spec builder `claudeSpawn`, `CLAUDE_CARRIED_ENV`, the moved `CLAUDE_IDLE_RULE`, `CLAUDE_DROPPED_OUT_KEYS` and `definedEnv` (08) | 02, 08 |
+| `src/plugins/claude-code/main/claude-code-harness.ts` | `start` passes `unsetEnv` and `stdin: []` (02); `start` and `prepareRun` share one spec builder (08) | 02, 08 |
 | `src/shared/fake-session-host.ts` | accepts the new spawn fields (02); the queue members (13) | 02, 13 |
 | `src/session-host/process-table.test.ts`, `src/session-host/host-server.test.ts` | the env, stdin and validation cases (02); `isBusy`, the queue, the exit rule and drain cases (07) | 02, 07 |
 | `src/shared/fake-session-host.test.ts` | a stdin line (02); the queue members (13) | 02, 13 |
-| `src/main/claude-code/claude-code-harness.test.ts` | the unset names (02); `prepareRun` (08); `childHost`'s stubs for the new `SessionHost` members (13) | 02, 08, 13 |
+| `src/plugins/claude-code/main/claude-code-harness.test.ts` | the unset names (02); `prepareRun` (08); `childHost`'s stubs for the new `SessionHost` members (13) | 02, 08, 13 |
 | `src/main/session-host/session-host-client.test.ts` | spawn literals carry the new fields (02); the queue members and `sessionHostLaunch` (13) | 02, 13 |
 | `src/plugins/manifests.ts` | lists `schedulingManifest` | 03 |
 | `src/plugins/sessions/contract.ts` | `OfflineAnswer`, `ContributeToolsOptions.offline`, `offlineEnv`, `replayCalls` | 05 |
@@ -310,7 +310,7 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `scripts/check-layers.mts` | `CORE_LAYERS` entry for `src/main/login-start` (06); edited again only if lint shows a gap (18) | 06, 18 |
 | `src/contracts/session-host-protocol.ts` | protocol 4, the queue messages, `pendingFile`, `runsFile` | 07 |
 | `src/contracts/agent.ts` | `AgentHarness.prepareRun`, `startControls`, `capControls` | 08 |
-| `src/main/claude-code/claude-controls.ts` | `claudeStartControls`, `capClaudeControls`, `CLAUDE_PERMISSION_ORDER`, `claudeOpeningLines`, `CLAUDE_OPENING_REQUESTS`, `controlRequest` | 08 |
+| `src/plugins/claude-code/main/claude-controls.ts` | `claudeStartControls`, `capClaudeControls`, `CLAUDE_PERMISSION_ORDER`, `claudeOpeningLines`, `CLAUDE_OPENING_REQUESTS`, `controlRequest` | 08 |
 | `src/shared/fake-agent-harness.ts` | the three members, `preparedRuns`, `FakePreparedRun`, `FAKE_AGENT_COMMAND` | 08 |
 | `src/shared/app-endpoint-dir.ts` | `APP_ENDPOINT_ENV` | 08 |
 | `src/plugins/chat/main/start.ts` | offline answers for its two contributions that declare one (09); the new exports (14) | 09, 14 |
@@ -341,7 +341,7 @@ Decided by the agent while planning (implementation shape; each with its reason)
 | `src/shared/agent-forms/form-service.ts` (+ `.test.ts`) | reads a session's deadline at each use | 23 |
 | `src/shared/local-channel/local-channel.ts` (+ `.test.ts`) | `<channel>.lock` held for the server's life | 24 |
 | `src/session-host/host-server.ts` (+ `.test.ts`) | `shutDown` removes the record only when it holds its own pid | 24 (after 02, 07) |
-| `src/contracts/session-host.ts`, `src/session-host/process-table.ts` (+ `.test.ts`), `src/main/claude-code/claude-launch.ts` (+ `.test.ts`), the `IdleRule` literals in `session-host-test-doubles.ts`, `host-server.test.ts`, `session-host-client.test.ts`, `fake-session-host.test.ts`, `claude-code-harness.test.ts` | `IdleRule` gains `sideKey`, `messageIdKey`, `messageEnd`, `turnEndIdsKey`, `background`; busy from open messages, a main turn and background work | 25 (after 02, 07, 08, 13) |
+| `src/contracts/session-host.ts`, `src/session-host/process-table.ts` (+ `.test.ts`), `src/plugins/claude-code/main/claude-launch.ts` (+ `.test.ts`), the `IdleRule` literals in `session-host-test-doubles.ts`, `host-server.test.ts`, `session-host-client.test.ts`, `fake-session-host.test.ts`, `claude-code-harness.test.ts` | `IdleRule` gains `sideKey`, `messageIdKey`, `messageEnd`, `turnEndIdsKey`, `background`; busy from open messages, a main turn and background work | 25 (after 02, 07, 08, 13) |
 | `docs/features/session-host/design.md` | § The host: the lock (24); the busy rule (25) | 24, 25 |
 | `docs/features/followups.md` | each task removes the entries it lands | 22, 23, 24, 25 |
 

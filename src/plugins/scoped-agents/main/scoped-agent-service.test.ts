@@ -192,7 +192,7 @@ async function timeOut() {
 function sessionWith(id: string, hostId: string | null): AgentSession {
   return {
     id,
-    info: { sessionId: hostId, projectDir: null, harness: null },
+    info: { sessionId: hostId, projectDir: null, harness: null, rowId: null },
   } as AgentSession;
 }
 

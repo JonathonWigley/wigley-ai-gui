@@ -16,6 +16,7 @@ describe('readChatLayout', () => {
     { layout: { rowClock: builder } },
     { layout: { activityInTranscript: true } },
     { layout: { activityInTranscript: false, working: builder } },
+    { layout: { entries: { 'fake:card': builder } } },
   ])(
     'readChatLayout_PartsItChanges_ReturnsTheDefaultExport ($layout)',
     ({ layout }) => {
@@ -33,6 +34,14 @@ describe('readChatLayout', () => {
     {
       layout: { entries: { toast: builder } },
       error: 'entries.toast is not a layout part',
+    },
+    {
+      layout: { entries: { 'fake:card': 'card' } },
+      error: 'entries.fake:card is not a function',
+    },
+    {
+      layout: { entries: { card: builder } },
+      error: 'entries.card is not a layout part',
     },
     { layout: { composer: 'panel' }, error: 'composer is not a function' },
     { layout: { compose: builder }, error: 'compose is not a layout part' },

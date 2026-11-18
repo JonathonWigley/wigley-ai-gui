@@ -1,6 +1,9 @@
-import type { ControlChoice, SessionControl } from '../../../contracts/agent';
+import type {
+  ControlChoice,
+  HarnessProfile,
+  SessionControl,
+} from '../../../contracts/agent';
 import type { Paths } from '../../../contracts/paths';
-import type { ChatProfile } from '../contract';
 import type { PickerItemInput } from '../layouts/layout';
 import { valueLabel } from './chat-state';
 import { type SessionItem, sessionTime, withNote } from './resume-items';
@@ -50,7 +53,7 @@ export function projectRowInput(
   return { list: 'choices', label: item.label, isCurrent: false };
 }
 
-export function profileRowInput(profile: ChatProfile): PickerItemInput {
+export function profileRowInput(profile: HarnessProfile): PickerItemInput {
   return { list: 'profile', name: profile.name, configDir: profile.configDir };
 }
 

@@ -147,6 +147,7 @@ function harness(setup: Setup = {}) {
     id: 'caller',
     info: {
       sessionId: 'host-1',
+      rowId: null,
       projectDir:
         setup.callerFolder === undefined ? '/caller' : setup.callerFolder,
       harness: 'claude',

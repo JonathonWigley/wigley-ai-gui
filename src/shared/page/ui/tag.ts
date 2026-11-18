@@ -4,6 +4,7 @@ import { element } from '../dom';
 export type TagTone =
   | 'neutral'
   | 'accent'
+  | 'info'
   | 'running'
   | 'success'
   | 'warning'

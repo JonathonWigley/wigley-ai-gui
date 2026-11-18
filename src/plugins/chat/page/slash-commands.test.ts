@@ -46,6 +46,29 @@ describe('slash commands', () => {
     );
   });
 
+  it('addAlias_LaterAddOfTheName_DropsTheAliasAndCallsOnDropped', () => {
+    const commands = createSlashCommands();
+    let dropped = 0;
+    commands.addAlias(command('reset'), () => {
+      dropped += 1;
+    });
+    const added = command('reset');
+
+    commands.add(added);
+
+    expect(dropped).toBe(1);
+    expect(commands.list()).toEqual([added]);
+  });
+
+  it('addAlias_HeldName_Throws', () => {
+    const commands = createSlashCommands();
+    commands.add(command('login'));
+
+    expect(() => commands.addAlias(command('login'), () => undefined)).toThrow(
+      'App slash command /login is already registered',
+    );
+  });
+
   it('dispose_RemovesCommand', () => {
     const commands = createSlashCommands();
     const added = commands.add(command('login'));

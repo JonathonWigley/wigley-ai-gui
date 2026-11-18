@@ -13,7 +13,6 @@ import {
   shell,
   type WebContents,
 } from 'electron';
-import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -22,14 +21,14 @@ import path from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { coreCommands, coreScopes } from '../config/keymap';
 import {
-  defaultSettingsFor,
+  coreDefaultSettings,
   optionalSettings,
   settingChoices,
   settingInfo,
 } from '../config/settings';
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
-import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
+import type { AgentHarness } from '../contracts/agent';
 import type { Alerts } from '../contracts/alerts';
 import type {
   Clock,
@@ -40,6 +39,7 @@ import type {
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import { CORE_RELOAD_PLUGIN } from '../contracts/commands';
 import {
+  coreAgentHarnessesSlot,
   corePluginsSlot,
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -52,7 +52,7 @@ import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
 import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
-import type { AppConfig } from '../contracts/settings';
+import type { AppConfig, Settings } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
@@ -67,8 +67,9 @@ import type {
 import type { PluginCatalog } from '../contracts/plugin-catalog';
 import { defaultKeymap } from '../plugins/keymap';
 import { mainParts } from '../plugins/main';
-import { manifests } from '../plugins/manifests';
-import { APP_ENDPOINT_ENV, appEndpointDir } from '../shared/app-endpoint-dir';
+import { manifests, withoutRealHarnessPlugins } from '../plugins/manifests';
+import { appEndpointDir } from '../shared/app-endpoint-dir';
+import { commandHopOf } from '../shared/command-args';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
@@ -96,11 +97,12 @@ import { scopedFiles } from '../shared/scoped-files';
 import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
+import { agentEnvironmentOf } from './agent-environment';
+import { createAgentHarnessRegistry } from './agent-harness-registry';
 import { createMacAlerts } from './alerts/mac-alerts';
 import { silentAlerts } from './alerts/silent-alerts';
 import { createWindowsAlerts } from './alerts/windows-alerts';
 import { appBuildOf, appInstanceOf } from './app-instance';
-import { createClaudeCodeHarness } from './claude-code/claude-code-harness';
 import {
   type ConfigStore,
   type ConfigStoreDeps,
@@ -180,7 +182,12 @@ import { createWindowsWindowList } from './screen-capture/windows-window-list';
 import { createMacSystemStats } from './system-stats/mac-system-stats';
 import { createUnavailableSystemStats } from './system-stats/unavailable-system-stats';
 import { createWindowsSystemStats } from './system-stats/windows-system-stats';
-import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
+import {
+  applySelfTestConfig,
+  fakeRunPluginSettings,
+  isFakeHarnessRun,
+  selfTestFilterOf,
+} from './selftest-config';
 import {
   SELFTEST_USER_ID,
   seedSelfTestUserPlugin,
@@ -251,7 +258,8 @@ const loginShellEnv =
 
 // The services that differ by run mode. `trashItem` backs the files service,
 // which loads the config before the window exists; `forWindow` builds the
-// rest once the window is created.
+// rest once the window is created, `harnesses` being the adapters the
+// composition root registers in `services.agentHarnesses`.
 interface ModeServices {
   trashItem(file: string): Promise<void>;
   forWindow(
@@ -259,55 +267,26 @@ interface ModeServices {
   ): Pick<
     MainServices,
     | 'alerts'
-    | 'agentHarnesses'
     | 'window'
     | 'openExternal'
     | 'systemStats'
     | 'screenCapture'
-  >;
+    | 'agentHomeDir'
+  > &
+    RunAgents;
 }
 
 interface ModeServicesContext {
   window: BrowserWindow;
-  store: ConfigStore;
   homeDir: string;
   log: Log;
-  sessionHost: SessionHost;
 }
 
-// Claude Code run as the user of `homeDir`, its command and profile folders
-// expanded against that home, its sessions on `host`.
-function claudeHarness(
-  store: ConfigStore,
-  homeDir: string,
-  env: NodeJS.ProcessEnv,
-  log: Log,
-  host: SessionHost,
-) {
-  return createClaudeCodeHarness({
-    command: () =>
-      paths.expandTilde(store.current().settings.claude.command, homeDir),
-    permissionTool: CLAUDE_PERMISSION_TOOL,
-    env,
-    log,
-    host,
-    spawn,
-    files,
-    homeDir,
-    paths,
-    clock,
-    randomUuid,
-  });
-}
-
-// The app's environment with `WIGLEY_AI_GUI_ENDPOINT_DIR` set to the app
-// instance's endpoint folder in `endpointHome`, so the relays of the Claude
-// sessions this app starts send their rounds to this app.
-function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    [APP_ENDPOINT_ENV]: appEndpointDir(paths, endpointHome, appInstance.id),
-  };
+// The harnesses the composition root registers in a run, and the home folder
+// an agent harness runs as (`services.agentHomeDir`).
+interface RunAgents {
+  harnesses: readonly AgentHarness[];
+  agentHomeDir: string;
 }
 
 // The icon badge of the OS `osName`. Linux has none.
@@ -360,18 +339,16 @@ function screenCaptureFor(
   }
 }
 
-// The user's app: the OS Trash, the icon badge, native dialogs, Claude Code, whose
-// relays find this app's endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, links
-// opened in the user's browser, the machine's own readings, and the OS's own
-// windows to stream.
+// The user's app: the OS Trash, the icon badge, native dialogs, the agent
+// harnesses its plugins register, run as the user, links opened in the user's
+// browser, the machine's own readings, and the OS's own windows to stream.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
-    forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
+    forWindow: ({ window, homeDir }) => ({
       alerts: alertsFor(platform.os, window),
-      agentHarnesses: [
-        claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
-      ],
+      harnesses: [],
+      agentHomeDir: homeDir,
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
       systemStats: systemStatsFor(platform.os, processes),
@@ -385,11 +362,12 @@ function liveServices(): ModeServices {
 // collects nothing; alerts are silent, the window stays offscreen and shows no
 // dialog, and no link takes the user's foreground. `runName` names the run in
 // the line a window not shown or a link not opened logs; sessions run over the
-// harness `harness` builds, and plugins read the machine `systemStats` builds
-// and the windows `screenCapture` builds.
+// harnesses `agents` builds for the run's home, as the home it names, and
+// plugins read the machine `systemStats` builds and the windows `screenCapture`
+// builds.
 function offscreenRunServices(
   runName: string,
-  harness: (context: ModeServicesContext) => AgentHarness,
+  agents: (homeDir: string) => RunAgents,
   systemStats: () => SystemStats,
   screenCapture: () => ScreenCapture,
 ): ModeServices {
@@ -397,7 +375,7 @@ function offscreenRunServices(
     trashItem: (file) => rm(file, { recursive: true }),
     forWindow: (context) => ({
       alerts: silentAlerts,
-      agentHarnesses: [harness(context)],
+      ...agents(context.homeDir),
       window: offscreenWindowService(context.window, runName, context.log),
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
@@ -408,24 +386,22 @@ function offscreenRunServices(
   };
 }
 
-// A drive run's agent harness, as `WIGLEY_DRIVE_HARNESS` named it: the fake
-// harness, or Claude Code logged in as the user, whose relays find this run's
-// endpoint through `WIGLEY_AI_GUI_ENDPOINT_DIR`, the app instance's endpoint
-// folder in the run's home.
-function driveHarness(
-  name: DriveHarnessName,
-  { store, homeDir, log, sessionHost }: ModeServicesContext,
-): AgentHarness {
-  if (name === 'fake') {
-    return createFakeAgentHarness(clock, files, timers);
-  }
-  return claudeHarness(
-    store,
-    os.homedir(),
-    endpointEnv(homeDir),
-    log,
-    sessionHost,
-  );
+// The fake harness, registered by the composition root, run in `homeDir`.
+function fakeAgents(homeDir: string): RunAgents {
+  return {
+    harnesses: [createFakeAgentHarness(clock, files, timers)],
+    agentHomeDir: homeDir,
+  };
+}
+
+// A drive run's agents, as `WIGLEY_DRIVE_HARNESS` named them: the fake harness
+// in the run's home `homeDir`, or none, the built-in harness plugins
+// registering theirs to run as the user, logged in in their real home; their
+// relays still find this run's endpoint through `services.agentEnvironment`.
+function driveAgents(name: DriveHarnessName, homeDir: string): RunAgents {
+  return name === 'fake'
+    ? fakeAgents(homeDir)
+    : { harnesses: [], agentHomeDir: os.homedir() };
 }
 
 // A drive run's system stats, as `WIGLEY_DRIVE_SYSTEM_STATS` named them: the
@@ -443,14 +419,14 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
     case 'selfTest':
       return offscreenRunServices(
         'the self-test',
-        () => createFakeAgentHarness(clock, files, timers),
+        fakeAgents,
         () => createFakeSystemStats(clock),
         () => createFakeScreenCapture(),
       );
     case 'drive':
       return offscreenRunServices(
         'a drive run',
-        (context) => driveHarness(environment.harness, context),
+        (homeDir) => driveAgents(environment.harness, homeDir),
         () => driveSystemStats(environment.systemStats),
         () => createFakeScreenCapture(),
       );
@@ -476,10 +452,23 @@ const files = createNodeFiles({
   trashItem: modeServices.trashItem,
   os: platform.os,
 });
-const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = platform.os === 'windows' ? windowsPaths : posixPaths;
+// The core settings as the config store holds them now; null until the store
+// loads, so a program lookup before then reads no core setting.
+let currentSettings: (() => Settings) | null = null;
+// Programs install under the user's real home, never a self-test's or drive
+// run's temp home.
+const processes = createNodeProcesses({
+  files,
+  paths,
+  os: platform.os,
+  homeDir: os.homedir(),
+  programs: platform.programs,
+  programSetting: (name) =>
+    name === 'python' ? (currentSettings?.().programs.python ?? '') : '',
+});
 // Git runs at most this many at once, so a burst of reads cannot pile up
 // exited children faster than main's event loop reaps them.
 const MAX_GIT_RUNS = 4;
@@ -794,7 +783,13 @@ function startCatalog(
   inputs: StartInputs,
 ): Promise<PluginCatalog & Disposable> {
   return startPluginCatalog({
-    builtIn: createBuiltInSource({ manifests, mainParts }),
+    builtIn: createBuiltInSource(
+      withoutRealHarnessPlugins(
+        manifests,
+        mainParts,
+        isFakeHarnessRun(runEnvironment),
+      ),
+    ),
     user: createUserFolderSource({
       pluginsFolder: scopedFiles(files, inputs.pluginsFolder, paths),
       userRoot: inputs.pluginsFolder,
@@ -802,6 +797,7 @@ function startCatalog(
       codeRoot: inputs.pluginCode,
       paths,
       importModule: importModuleFrom,
+      removeFolder: (folder) => rm(folder, { recursive: true, force: true }),
       log: pageLog.log,
     }),
     log: pageLog.log,
@@ -817,7 +813,7 @@ function layoutsFolder(homeDir: string): string {
 // the default `plugins.disabled` is empty, so the store's list and the applied
 // list agree and the plugin switch stops nothing at the first config change.
 function defaultSettings() {
-  const defaults = defaultSettingsFor(platform.programs);
+  const defaults = coreDefaultSettings();
   return runMode === 'selfTest'
     ? { ...defaults, plugins: { disabled: [] } }
     : defaults;
@@ -1022,9 +1018,17 @@ function startMainParts(
       const started = part.start(
         createMainApi(part.manifest, {
           channels,
-          pluginSettings: () => store.current().pluginSettings,
+          pluginSettings: () =>
+            fakeRunPluginSettings(
+              store.current().pluginSettings,
+              runEnvironment,
+            ),
           onPluginSettingsChanged: (listener) =>
-            store.onChanged((config) => listener(config.pluginSettings)),
+            store.onChanged((config) =>
+              listener(
+                fakeRunPluginSettings(config.pluginSettings, runEnvironment),
+              ),
+            ),
           services,
           selfTestFor: (pluginId) =>
             isLaunchStartDone() ? null : (selfTest?.hostFor(pluginId) ?? null),
@@ -1196,17 +1200,28 @@ function createWindow(
     leader: () => store.current().keymap.editor.leader,
     remote: pageCommands.run,
   });
+  // The hop comes from the page, so only its typed fields are read.
   ipcMain.handle(
     BRIDGE_CHANNELS.commandRun,
-    (_event, id: string, arg: unknown) => commands.router.run(id, arg),
+    (_event, id: string, arg: unknown, hop: unknown) => {
+      const { reportErrors, ...sessions } = commandHopOf(hop);
+      return commands.router.run(id, arg, sessions, { reportErrors });
+    },
   );
-  const windowServices = modeServices.forWindow({
+  const { harnesses, ...windowServices } = modeServices.forWindow({
     window,
-    store,
     homeDir: inputs.homeDir,
     log,
-    sessionHost,
   });
+  // Registered before the main parts start, so every part and page finds them;
+  // the registrations live as long as the window, as the shell layout's does.
+  const agentHarnesses = createAgentHarnessRegistry(
+    slots.publish(coreAgentHarnessesSlot),
+    (message) => log('agent-harnesses', message),
+  );
+  for (const harness of harnesses) {
+    agentHarnesses.register(harness);
+  }
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
   let isLaunchStartDone = false;
@@ -1239,6 +1254,11 @@ function createWindow(
       ),
       sessionHost,
       loginStart: loginStartOf(),
+      agentHarnesses,
+      agentEnvironment: agentEnvironmentOf(
+        process.env,
+        appEndpointDir(paths, inputs.homeDir, appInstance.id),
+      ),
       pluginSwitch: {
         mayDisable: (id) =>
           pluginSwitch === null
@@ -1296,7 +1316,16 @@ function createWindow(
   // current config.
   const served = () =>
     withAppliedList(
-      applySelfTestConfig(store.current(), selfTestConfig),
+      applySelfTestConfig(
+        {
+          ...store.current(),
+          pluginSettings: fakeRunPluginSettings(
+            store.current().pluginSettings,
+            runEnvironment,
+          ),
+        },
+        selfTestConfig,
+      ),
       applied.disabled(),
       applied.paused(),
     );
@@ -1530,6 +1559,7 @@ function startApp() {
         inputs.homeDir,
         catalog,
       );
+      currentSettings = () => store.current().settings;
       onSelfTestExit('the config store', () => store.dispose());
       // Logs its own failure and never rejects, so the start goes on.
       await writePluginTypes({
@@ -1562,8 +1592,7 @@ function startApp() {
           sessionHostFolder(inputs.homeDir),
           inputs.homeDir,
         ),
-        env: process.env,
-        spawn,
+        processes,
         clock,
         timers,
         log: pageLog.log,
@@ -1627,23 +1656,17 @@ function startSessionHostAtLogin() {
       os.homedir(),
     ),
   );
-  const host = spawn(launch.command, launch.args, {
-    detached: true,
-    stdio: 'ignore',
-    env: { ...process.env, ...launch.env },
-  });
-  // Node reports a failed spawn as an `error` event after `spawn` returns, and
-  // emits `spawn` or `error` for every child.
-  host.once('spawn', () => {
-    host.unref();
-    app.exit(0);
-  });
-  host.once('error', (error) => {
-    process.stderr.write(
-      `wigley-ai-gui could not start the session host: ${errorText(error)}\n`,
+  processes
+    .startDetached(launch.command, launch.args, { setEnv: launch.env })
+    .then(
+      () => app.exit(0),
+      (error: unknown) => {
+        process.stderr.write(
+          `wigley-ai-gui could not start the session host: ${errorText(error)}\n`,
+        );
+        app.exit(1);
+      },
     );
-    app.exit(1);
-  });
 }
 
 // The self-test and a drive run run beside the user's own app, so they take

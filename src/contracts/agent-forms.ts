@@ -101,8 +101,8 @@ export interface AgentFormChannel<Form, Body> extends ChannelShape {
 // One connected session; the app keeps at most one open form of a type per
 // session.
 export interface AgentFormSession<Payload> {
-  // `args` is the raw tool input; invalid input rejects with the type's args
-  // error message. A call runs only after every earlier call has returned, and
+  // `args` is the raw tool input; invalid input rejects with the error the
+  // type's `parse` threw. A call runs only after every earlier call has returned, and
   // a call for a form other than the one the user is answering opens its form
   // only once that form finishes. Its own deadline passing first returns,
   // without a second wait, the open form's draft when that form is its own, or
@@ -144,8 +144,10 @@ export interface AgentFormType<Form, Body, Payload> {
   collectTool: string;
   // The word for one form in texts and logs: 'round', 'primer'.
   noun: string;
-  // The `name` of the Error `parse` throws for a malformed call; the tool session returns its message as the tool error.
-  argsErrorName: string;
+  // The model-facing text of an error `parse` threw for a malformed call, or
+  // null when `error` is not one; the tool session returns the text as the
+  // tool error.
+  argsErrorText(error: unknown): string | null;
   parse(args: unknown): Form;
   fingerprint(form: Form): string;
   heading(form: Form): string;

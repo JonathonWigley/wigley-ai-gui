@@ -1,7 +1,7 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-// Plan usage and session usage, always on screen: main polls each chat
-// profile's plan windows through the Claude harness and folds in the live rows
+// Plan usage and session usage, always on screen: main polls every profile's
+// plan windows through each registered harness and folds in the live rows
 // and usage events chat forwards; the page draws the status-bar plan line, each
 // session's context line above its Chat box (a chat composer part), its spend in
 // its Chat status line (a chat status part) and the right-bar details through

@@ -1,6 +1,6 @@
 import type { IdleRule } from '../contracts/session-host';
 
-// A copy of claude-launch.ts's CLAUDE_IDLE_RULE, which the layer rules keep this folder's tests from importing;
+// A copy of src/plugins/claude-code/main/claude-launch.ts's CLAUDE_IDLE_RULE, which the layer rules keep this folder's tests from importing;
 // scripts/claude-idle-rule-copies.test.mts holds the two together.
 export const CLAUDE_IDLE_RULE_COPY: IdleRule = {
   key: 'type',

@@ -318,6 +318,7 @@ function toolSession(row: Row) {
       sessionId: 'host-1',
       projectDir: row.callerFolder === undefined ? '/caller' : row.callerFolder,
       harness: 'claude',
+      rowId: null,
     },
   });
   return { launch, stat, log, session };
@@ -361,5 +362,12 @@ describe('start_session', () => {
     const { session } = toolSession({ name: 'other', args: {} });
 
     await expect(session.call('other', {}, CONTEXT)).rejects.toThrow('other');
+  });
+
+  it('startSessionTool_Description_NamesNoHarness', () => {
+    expect(START_SESSION_TOOL.description).not.toContain('Claude');
+    expect(START_SESSION_TOOL.description).toContain(
+      'It runs on the agent harness of the profile it starts under',
+    );
   });
 });

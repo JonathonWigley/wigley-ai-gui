@@ -12,6 +12,7 @@ import { fakePlatform } from '../shared/platform.test-support';
 import {
   applySelfTestConfig,
   checkGroups,
+  fakeRunPluginSettings,
   type HandedScript,
   mergeSelfTestConfigs,
   SELFTEST_FILTER_ENV,
@@ -19,6 +20,7 @@ import {
   selectScripts,
   selfTestFilterOf,
 } from './selftest-config';
+import type { RunEnvironment } from './run-mode';
 import { SELFTEST_USER_ID } from './selftest-user-plugin';
 
 function handed(
@@ -66,12 +68,12 @@ describe('mergeSelfTestConfigs', () => {
 
     const merged = mergeSelfTestConfigs([
       handed('forms', [formsBind], { forms: { previewDelayMs: 5 } }),
-      handed('chat', [chatBind], { chat: { profiles: [] } }),
+      handed('chat', [chatBind], { chat: { keepIdleMinutes: 5 } }),
     ]);
 
     expect(merged).toEqual({
       pageBinds: [formsBind, chatBind],
-      settings: { forms: { previewDelayMs: 5 }, chat: { profiles: [] } },
+      settings: { forms: { previewDelayMs: 5 }, chat: { keepIdleMinutes: 5 } },
     });
   });
 
@@ -152,9 +154,9 @@ describe('applySelfTestConfig', () => {
           transparency: 'system',
           fonts: {},
           keySequenceTimeoutMs: 1,
-          claude: { command: 'claude' },
           shell: { layout: 'default' },
           plugins: { disabled: ['p'] },
+          programs: { python: '' },
         },
         keymap: {
           editor: { leader: ' ', remaps: [], binds: [] },
@@ -579,4 +581,65 @@ describe('selfTestFilterOf', () => {
       expect(select).toThrow(why);
     },
   );
+});
+
+describe('fakeRunPluginSettings', () => {
+  const SETTINGS = {
+    chat: { defaultHarness: 'claude', other: 1 },
+    docs: { scriptPath: '' },
+  };
+  const drive = (harness: 'fake' | 'claude'): RunEnvironment => ({
+    mode: 'drive',
+    runDir: '/r',
+    harness,
+    systemStats: 'fake',
+  });
+
+  it.each<{
+    run: string;
+    environment: RunEnvironment;
+    expected: Record<string, object> | 'unchanged';
+  }>([
+    {
+      run: 'selfTest',
+      environment: { mode: 'selfTest' },
+      expected: {
+        chat: { defaultHarness: 'fake', other: 1 },
+        docs: { scriptPath: '' },
+      },
+    },
+    {
+      run: 'drive on the fake',
+      environment: drive('fake'),
+      expected: {
+        chat: { defaultHarness: 'fake', other: 1 },
+        docs: { scriptPath: '' },
+      },
+    },
+    {
+      run: 'drive on claude',
+      environment: drive('claude'),
+      expected: 'unchanged',
+    },
+    { run: 'live', environment: { mode: 'live' }, expected: 'unchanged' },
+  ])(
+    'fakeRunPluginSettings_ByRun_SetsDefaultHarnessOnlyOnFakeRuns given $run',
+    ({ environment, expected }) => {
+      const result = fakeRunPluginSettings(SETTINGS, environment);
+
+      if (expected === 'unchanged') {
+        expect(result).toBe(SETTINGS);
+      } else {
+        expect(result).toEqual(expected);
+      }
+    },
+  );
+
+  it('fakeRunPluginSettings_NoChatSettings_ReturnsThemUnchanged', () => {
+    const settings = { docs: { scriptPath: '' } };
+
+    expect(fakeRunPluginSettings(settings, { mode: 'selfTest' })).toBe(
+      settings,
+    );
+  });
 });

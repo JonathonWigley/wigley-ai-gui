@@ -33,8 +33,9 @@ start one whenever a check needs it.
    the home's config stays: `start` prints that it skipped the copy.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
-   `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
-   to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another. It
+   `chat.start` uses the first profile of the run's harness: the first in the `claude-code.profiles`
+   setting under `--harness claude`, where only a profile logged in to Claude reaches it, and the
+   fake's `work` under the fake; `{"profile":"<name>"}` picks another. It
    returns `{ sessionId, hostSessionId }`: pass `hostSessionId` as the open actions' `sessionId`
    to open a form in that chat session.
    `forms.openRound` and `primer.openPrimer` open their form in the live session their own
@@ -62,24 +63,26 @@ start one whenever a check needs it.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
-   recording to finish and ends the run's Claude sessions before the app exits, then deletes the
+   recording to finish and ends the run's agent sessions before the app exits, then deletes the
    run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
    `videos/` and `app.log` stay for reading back. `quit --keep-sessions` instead keeps the run's
-   Claude sessions running on the session host, and its `home/` and `user-data/`, so `start --run
+   agent sessions running on the session host, and its `home/` and `user-data/`, so `start --run
    <id>` brings it back and re-attaches them. That start takes the flags in the run's `start.json`
    when its command line names none, and copies no user config over the kept home. While the host
    still answers, a plain `quit` of the stopped run refuses and deletes nothing: end it with `start
-   --run <id>`, then `quit`. Every `start` deletes each other run folder untouched for over a day
-   whose app is not running, a kept run's included. `.drive/` is git-ignored.
+   --run <id>`, then `quit`. A plain `quit` also waits up to 15 s after its app exits for the
+   session host to end, and if the host still answers, it refuses the same way, deleting nothing.
+   Every `start` deletes each other run folder untouched for over a day whose app and session host
+   are not running. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
-survives a restart runs the same way. `restart` also keeps the run's Claude sessions running on
+survives a restart runs the same way. `restart` also keeps the run's agent sessions running on
 the session host and re-attaches them. The docs fixture survives a `restart` as the agent left it;
 `docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
-keeps the Docs tree's "Claude pending" chip on screen long enough to see; default 0).
+keeps the Docs tree's pending chips on screen long enough to see; default 0).
 A drive run starts with the default settings, so `docs-session-tab` is off and no session shows a Docs tab. A
 Docs-tab check first runs `setting plugins.disabled '["agent-lines","usage-tab-line"]'` (the default list without
 `docs-session-tab`), then `restart`, because turning a plugin on takes effect on the next app start.
@@ -147,9 +150,9 @@ Conventions:
   <selector> is held; release it first`; `release` with nothing held rejects with `No drag is
   held; drag --hold first`.
 - `wait-log` matches a whole page log line, its source prefix included (`[page] …`), logged after the call starts; a line already in the log does not count.
-- `chat.askPermission` returns a `toolUseId` at once; `chat.permissionAnswer` with that id answers
-  `{ pending: true }` until the card is answered, then the reply, as `forms.answers` does for a
-  round.
+- `chat.askPermission` under the fake harness returns a `toolUseId` at once; `chat.permissionAnswer`
+  with that id answers `{ pending: true }` until the card is answered, then the decision
+  `{ allowed, reason }`, as `forms.answers` does for a round.
 - `eval` runs its script in a block of its own: `const`, `let` and `class` end with the call, while
   `var` and `function` reach the page's globals and persist to the next `eval`.
 - Flags come before a lone `--`; every argument after it is positional, for a value that begins

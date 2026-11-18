@@ -24,6 +24,7 @@ import {
   chatToggleSectionCommand,
   type SlashCommandContext,
 } from '../contract';
+import { frameAgentMessage } from '../agent-frame';
 import { chatManifest } from '../manifest';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -45,6 +46,7 @@ import { createSlashCommands, type SlashCommands } from './slash-commands';
 const mode: SessionControl = {
   id: 'mode',
   label: 'Mode',
+  role: 'permissionMode',
   choices: [
     { value: 'auto', label: 'Auto' },
     { value: 'plan', label: 'Plan' },
@@ -128,6 +130,7 @@ function session(
   const state: ChatSessionState = {
     sessionId: 'row-1',
     projectDir: '/Users/u/dev/app',
+    harness: 'fake',
     profile: 'work',
     entries: [],
     controls: [mode],
@@ -456,6 +459,39 @@ describe('chat commands', () => {
     expect(request.sessionBound).toBe(true);
     expect(run.invoked).toEqual([['setControl', 'row-1', 'mode', 'plan']]);
   });
+
+  it('pickMode_ControlFoundByRole_SetsTheControlById', () => {
+    const approval = { ...mode, id: 'approval' };
+    const run = setUp(session(true, undefined, { controls: [approval] }));
+
+    run.handlers.pickMode({ arg: undefined });
+    run.opened[0].picked(approval.choices[1]);
+
+    expect(run.invoked).toEqual([['setControl', 'row-1', 'approval', 'plan']]);
+  });
+
+  it.each([
+    {
+      command: 'pickModel',
+      controls: [mode],
+      log: 'app has no model control',
+    },
+    {
+      command: 'pickMode',
+      controls: [{ ...mode, id: 'llm', label: 'Model', role: 'model' }],
+      log: 'app has no permissionMode control',
+    },
+  ] as const)(
+    'pickControlKey_NoControlOfTheRole_LogsAndOpensNothing ($command)',
+    ({ command, controls, log }) => {
+      const run = setUp(session(true, undefined, { controls: [...controls] }));
+
+      run.handlers[command]({ arg: undefined });
+
+      expect(run.opened).toEqual([]);
+      expect(run.logs).toEqual([log]);
+    },
+  );
 
   it('pickMode_mainApplies_logsTheChangeOnceMainAnswers', async () => {
     const run = setUp(session(true));
@@ -1384,6 +1420,18 @@ describe('chat commands', () => {
     expect(run.marked).toEqual(['row-1']);
   });
 
+  it('putBack_FramedMessage_BoxHoldsTheBodyOnly', () => {
+    const message = box('');
+    const shown = Object.assign(session(true), { box: message });
+    const tabs = { session: () => shown } as unknown as ChatTabs;
+
+    putBack({ tabs }, shown, [
+      { text: frameAgentMessage('Planner', 'go'), images: [] },
+    ]);
+
+    expect(message.held.text).toBe('go');
+  });
+
   it('putBack_TwoReturnedOverADraft_OldestOnTopImagesAheadOfAttached', () => {
     const message = box('draft');
     const shown = Object.assign(session(true), { box: message });
@@ -1563,6 +1611,121 @@ describe('chat commands', () => {
 
       expect(effect(run, other)).toEqual(expected);
       expect(shown.attachments.images()).toEqual([gif]);
+    },
+  );
+
+  // Breaks: a targeted run acting on the visible tab's session, or stopped by
+  // the fired-in-another-box check. B is `row-2`, held beside the shown A,
+  // each with its own box text and a pending permission.
+  it.each<{
+    case: string;
+    command: 'send' | 'sendNow' | 'interrupt' | 'allowOrCopy';
+    targetSessionId: string;
+    inShownBox?: boolean;
+    isResting?: boolean;
+    invoked: unknown[][];
+    answered: string[][];
+    logs: string[];
+  }>([
+    {
+      case: 'send',
+      command: 'send',
+      targetSessionId: 'row-2',
+      invoked: [['send', 'row-2', { text: 'for B', images: [] }]],
+      answered: [],
+      logs: ['sent a message in other'],
+    },
+    {
+      case: 'sendNow',
+      command: 'sendNow',
+      targetSessionId: 'row-2',
+      invoked: [['sendAllNow', 'row-2', { text: 'for B', images: [] }]],
+      answered: [],
+      logs: ['sending now in other'],
+    },
+    {
+      case: 'interrupt',
+      command: 'interrupt',
+      targetSessionId: 'row-2',
+      invoked: [['interrupt', 'row-2']],
+      answered: [],
+      logs: ['interrupted other'],
+    },
+    {
+      case: "interrupt fired in A's box",
+      command: 'interrupt',
+      targetSessionId: 'row-2',
+      inShownBox: true,
+      invoked: [['interrupt', 'row-2']],
+      answered: [],
+      logs: ['interrupted other'],
+    },
+    {
+      case: 'allowOrCopy',
+      command: 'allowOrCopy',
+      targetSessionId: 'row-2',
+      invoked: [],
+      answered: [['allow', 'row-2', 'permission-1']],
+      logs: [],
+    },
+    {
+      case: 'an unknown target',
+      command: 'send',
+      targetSessionId: 'Z',
+      invoked: [],
+      answered: [],
+      logs: ['no chat session Z'],
+    },
+    {
+      case: 'interrupt on a resting target',
+      command: 'interrupt',
+      targetSessionId: 'row-2',
+      isResting: true,
+      invoked: [],
+      answered: [],
+      logs: ['other has no running process'],
+    },
+  ])(
+    'a target picks the session over the visible tab: $case',
+    ({
+      command,
+      targetSessionId,
+      inShownBox = false,
+      isResting = false,
+      invoked,
+      answered,
+      logs,
+    }) => {
+      const other = Object.assign(
+        otherSession({ entries: [pendingPermission] }),
+        { box: box('for B'), running: !isResting },
+      );
+      const shown = Object.assign(
+        session(true, undefined, { entries: [pendingPermission] }),
+        { box: box('for A') },
+      );
+      for (const held of [other, shown]) {
+        Object.assign(held.entries, {
+          focused: () => null,
+          isRangeOpen: () => false,
+        });
+      }
+      const run = setUp(shown, undefined, true, undefined, undefined, [other]);
+      Object.assign(run.deps.tabs, {
+        sessionOfEditor: (editor: TextEditor) =>
+          editor === shown.box ? shown : undefined,
+      });
+
+      run.handlers[command]({
+        arg: undefined,
+        editor: inShownBox ? shown.box : undefined,
+        targetSessionId,
+      });
+
+      expect(run.invoked).toEqual(invoked);
+      expect(run.answered).toEqual(answered);
+      expect(run.logs).toEqual(logs);
+      expect(shown.box.held.text).toBe('for A');
     },
   );
 

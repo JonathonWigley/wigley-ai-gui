@@ -15,7 +15,12 @@ function toolSession(owned: boolean, startHeadless: boolean) {
     log: () => undefined,
   })({
     id: 'row-3',
-    info: { sessionId: 'host-3', projectDir: '/p', harness: 'claude' },
+    info: {
+      sessionId: 'host-3',
+      projectDir: '/p',
+      harness: 'claude',
+      rowId: null,
+    },
   });
   return { flags, setHeadless, session };
 }

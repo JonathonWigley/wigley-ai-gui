@@ -1,9 +1,34 @@
 import type {
   CommandArg,
   CommandArgShape,
+  CommandHop,
   CommandId,
 } from '../contracts/commands';
 import { isJsonObject } from './json';
+
+// The hop `value` holds, which may come from another process: `targetSessionId`
+// and `callerSessionId` when each is a string, `reportErrors` when it is `true`.
+// Every other field, and a field of another type, is left out.
+export function commandHopOf(value: unknown): CommandHop {
+  if (!isJsonObject(value)) {
+    return {};
+  }
+  const hop: {
+    targetSessionId?: string;
+    callerSessionId?: string;
+    reportErrors?: true;
+  } = {};
+  if (typeof value.targetSessionId === 'string') {
+    hop.targetSessionId = value.targetSessionId;
+  }
+  if (typeof value.callerSessionId === 'string') {
+    hop.callerSessionId = value.callerSessionId;
+  }
+  if (value.reportErrors === true) {
+    hop.reportErrors = true;
+  }
+  return hop;
+}
 
 function isKind(value: unknown, kind: 'number' | 'string'): boolean {
   return kind === 'number'

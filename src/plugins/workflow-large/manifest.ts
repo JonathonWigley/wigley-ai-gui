@@ -13,9 +13,9 @@ export const workflowLargeManifest = definePlugin({
     'Tracks a planned run from primer to close, with its stage actions and Clear & make.',
   dependsOn: {
     main: ['workflow', 'chat', 'sessions'],
-    page: ['workflow', 'docs'],
+    page: ['workflow', 'docs', 'sessions'],
   },
-  reads: { main: [], page: ['sessions'] },
+  reads: { main: [], page: [] },
   commands: LARGE_COMMANDS,
   scopes: {},
   settings: {

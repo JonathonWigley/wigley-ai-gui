@@ -18,6 +18,8 @@ import {
 
 const HOME = '/Users/u';
 const SCRIPT = '/s/docs_index.py';
+// No profile lists an install, so an empty script path finds no script.
+const NO_INSTALLS = { installedPlugins: async () => [] };
 const INDEX_FILE = '/Users/u/.agents/wigley-docs/index.json';
 const BUILD = ['-X', 'utf8', SCRIPT, 'build'];
 
@@ -71,6 +73,7 @@ function setUp(scriptPath = SCRIPT) {
     processes,
     homeDir: HOME,
     scriptPath: () => scriptPath,
+    folders: NO_INSTALLS,
     log: (message: string) => logged.push(message),
     paths: posixPaths,
   };
@@ -115,9 +118,11 @@ describe('machine source', () => {
           );
           return result;
         },
+        resolveProgram: (name) => test.processes.resolveProgram(name),
       },
       homeDir: HOME,
       scriptPath: () => SCRIPT,
+      folders: NO_INSTALLS,
       log: () => undefined,
       paths: posixPaths,
     });
@@ -177,6 +182,31 @@ describe('machine source', () => {
 
     expect(load.message).toBe('docs_index.py not found — set docs.scriptPath');
     expect(test.processes.runs).toEqual([]);
+  });
+
+  it('rebuild_PythonFromResolveProgram_LeadsWithItsArgs', async () => {
+    const test = setUp();
+    test.processes.scriptProgram('python', { command: 'py', args: ['-3'] });
+    test.processes.script('py', ['-3', ...BUILD], exited(0));
+
+    await rebuildOf(test.machine);
+
+    expect(
+      test.processes.runs.map(({ command, args }) => ({ command, args })),
+    ).toEqual([{ command: 'py', args: ['-3', ...BUILD] }]);
+  });
+
+  it('rebuild_NoPython_NotFoundMessageAndNoRun', async () => {
+    const test = setUp();
+    test.processes.scriptProgram('python', null);
+
+    const load = await rebuildOf(test.machine);
+
+    expect(load.message).toBe(
+      'Python was not found on PATH; set programs.python',
+    );
+    expect(test.processes.runs).toEqual([]);
+    expect(test.logged).toEqual([expect.stringContaining('not run')]);
   });
 
   it('rebuild_CalledTwiceWhileRunning_OneMoreBuild', async () => {
@@ -322,6 +352,25 @@ describe('session source', () => {
     });
     expect(test.processes.runs).toEqual([]);
     expect(test.logged).toEqual([]);
+  });
+
+  it('load_NoPython_NoContextFallback', async () => {
+    const test = setUp();
+    test.processes.scriptProgram('python', null);
+
+    const load = await test
+      .session({
+        hostSessionId: 'abc',
+        projectDir: '/p',
+        harness: 'claude',
+      })
+      .load();
+
+    expect(load.message).toBe(
+      'Python was not found on PATH; set programs.python',
+    );
+    expect(test.processes.runs).toEqual([]);
+    expect(test.logged).toEqual([expect.stringContaining('not run')]);
   });
 
   it('load_SessionFailsNoFolder_SessionMessage', async () => {

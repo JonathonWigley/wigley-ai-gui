@@ -24,9 +24,9 @@ const DEFAULTS: Settings = {
   transparency: 'system',
   fonts: {},
   keySequenceTimeoutMs: 1000,
-  claude: { command: 'claude' },
   shell: { layout: 'default' },
   plugins: { disabled: [] },
+  programs: { python: '' },
 };
 
 const DEFAULT_KEYMAP: DefaultKeymap = {

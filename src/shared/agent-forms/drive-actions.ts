@@ -6,7 +6,6 @@ import type { DriveHost } from '../../contracts/plugin';
 import {
   argsObject,
   nullableStringOr,
-  optionalOneOf,
   optionalString,
   requiredString,
 } from '../drive-args';
@@ -17,13 +16,15 @@ export interface AgentFormDriveSession extends AgentFormToolSession {
   session: { id: string };
 }
 
-export interface AgentFormDriveSessions<Harness extends string> {
+export interface AgentFormDriveSessions {
   // Connects a session for the host session id, with no row until a form
-  // shows, or joins the owned session holding it.
+  // shows, or joins the owned session holding it. A drive session names no
+  // row, so `rowId` is null.
   connect(info: {
     sessionId: string;
     projectDir: string | null;
-    harness: Harness;
+    harness: string;
+    rowId: null;
   }): AgentFormDriveSession;
 }
 
@@ -42,12 +43,10 @@ export interface AgentFormDriveWords {
   answersDescription: string;
 }
 
-// The harnesses a drive session may name, and what a session is connected
-// with when the caller leaves a field out.
-export interface AgentFormDriveSessionDefaults<Harness extends string> {
-  harnesses: readonly Harness[];
+// What a drive session is connected with when the caller leaves a field out.
+export interface AgentFormDriveSessionDefaults {
   projectDir: string;
-  harness: Harness;
+  harness: string;
 }
 
 // A session the drive actions connected, whether it has since ended, and
@@ -74,10 +73,8 @@ export function openFixtureForm(
   });
 }
 
-function sessionArgsText(harnesses: readonly string[]): string {
-  const harnessUnion = harnesses.map((harness) => `"${harness}"`).join(' | ');
-  return `sessionId?: string, projectDir?: string | null, harness?: ${harnessUnion}`;
-}
+const SESSION_ARGS_TEXT =
+  'sessionId?: string, projectDir?: string | null, harness?: string';
 
 // Adds a form type's two drive actions: `words.openAction` opens a form
 // without waiting for its answers, and `answers` reads the latest form's tool
@@ -88,10 +85,10 @@ function sessionArgsText(harnesses: readonly string[]): string {
 // A session's id is `drive-<pluginId>-<n>` unless the
 // caller names one. `onSessionEnded` hears each session that ends, by its row
 // id. The plugin's stop removes the actions and ends every session connected.
-export function addAgentFormDriveActions<Harness extends string>(deps: {
+export function addAgentFormDriveActions(deps: {
   host: DriveHost;
-  sessions: AgentFormDriveSessions<Harness>;
-  sessionDefaults: AgentFormDriveSessionDefaults<Harness>;
+  sessions: AgentFormDriveSessions;
+  sessionDefaults: AgentFormDriveSessionDefaults;
   onSessionEnded: (listener: (rowId: string) => void) => void;
   words: AgentFormDriveWords;
 }): void {
@@ -108,14 +105,14 @@ export function addAgentFormDriveActions<Harness extends string>(deps: {
   const sessionFor = (spec: {
     sessionId: string;
     projectDir: string | null;
-    harness: Harness;
+    harness: string;
   }): DriveFormSession => {
     const known = opened.get(spec.sessionId);
     if (known !== undefined && !known.ended) {
       return known;
     }
     const session: DriveFormSession = {
-      connected: sessions.connect(spec),
+      connected: sessions.connect({ ...spec, rowId: null }),
       ended: false,
       latest: { state: 'pending' },
     };
@@ -124,7 +121,7 @@ export function addAgentFormDriveActions<Harness extends string>(deps: {
   };
   host.add(words.openAction, {
     description: words.openDescription,
-    args: `{ ${sessionArgsText(sessionDefaults.harnesses)}, ${words.formArg}?: object }`,
+    args: `{ ${SESSION_ARGS_TEXT}, ${words.formArg}?: object }`,
     async run(rawArgs) {
       const args = argsObject(rawArgs);
       const sessionId =
@@ -136,8 +133,7 @@ export function addAgentFormDriveActions<Harness extends string>(deps: {
         sessionDefaults.projectDir,
       );
       const harness =
-        optionalOneOf(args, 'harness', sessionDefaults.harnesses) ??
-        sessionDefaults.harness;
+        optionalString(args, 'harness') ?? sessionDefaults.harness;
       const form =
         args[words.formArg] === undefined
           ? words.defaultForm

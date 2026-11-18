@@ -34,23 +34,11 @@ export const sessionsFavoriteProjectAtCommand: CommandKey<
   'sessions.favoriteProjectAt'
 > = { id: 'sessions.favoriteProjectAt' };
 
-// Every agent harness a session can run in; the relay hello's parse reads a
-// harness missing from this list as none.
-export const HARNESSES = ['claude', 'codex'] as const;
-
-// The agent harness a session runs in.
-export type Harness = (typeof HARNESSES)[number];
-
 // What a drive action connects a fixture session with when its caller leaves
-// a field out, and the harnesses its caller may name.
-export const DRIVE_SESSION_DEFAULTS = {
-  harnesses: HARNESSES,
+// a field out.
+export const DRIVE_SESSION_DEFAULTS: { projectDir: string; harness: string } = {
   projectDir: 'drive',
   harness: 'claude',
-} as const satisfies {
-  harnesses: readonly Harness[];
-  projectDir: string;
-  harness: Harness;
 };
 
 // Every source a session title comes from, in the order the row prefers them:
@@ -72,8 +60,11 @@ export function editableTitle(titles: SessionTitles): string {
 export interface SessionInfo {
   sessionId: string | null;
   projectDir: string | null;
-  // Null when the relay did not say, or named a harness the app does not know.
-  harness: Harness | null;
+  // The agent harness's id. Null when the relay did not say.
+  harness: string | null;
+  // The owned row a relay's hello names (`row_id`, the process's `WIGLEY_SESSION_ROW`); null when the hello names
+  // none, and for every info a plugin builds itself.
+  rowId: string | null;
   // The session's harness config folder, as `AgentStart` holds one, which a form
   // source has no use for; absent for the harness default.
   profileDir?: string;
@@ -93,21 +84,44 @@ export interface ToolDefinition {
 
 export const RELAY_PROTOCOL = 1;
 
+// A hook hello's own protocol, so an app that knows no hook calls refuses one
+// at once rather than opening a session for it.
+export const HOOK_PROTOCOL = 2;
+
 // The first line the relay sends, before any MCP message. Every other field
-// is the host's own, and lands in `SessionInfo.host`.
+// is the host's own, and lands in `SessionInfo.host`. A hook hello carries
+// HOOK_PROTOCOL and a string `hook`, and only it does: one request line
+// follows, and the app answers it with one `HookReply` line and closes,
+// opening no session.
 export interface RelayHello {
   protocol: number;
   session_id: string | null;
   project_dir: string | null;
-  // Absent reads as null, as does a harness the app does not know.
+  // Absent reads as null.
   harness?: string | null;
   // Absent reads as null.
   config_dir?: string | null;
+  // Absent reads as null.
+  row_id?: string | null;
+  // Absent reads as null.
+  hook?: string | null;
   [field: string]: unknown;
 }
 
 // The app's one-line answer to a hello; MCP follows only after `ok: true`.
 export type RelayHelloReply = { ok: true } | { ok: false; error: string };
+
+// Answers one hook request from the session it came from; the request is the
+// parsed request line, which the handler checks itself.
+export type HookHandler = (
+  session: AgentSession,
+  request: unknown,
+) => Promise<Record<string, unknown>>;
+
+// The app's one-line answer to a hook hello and its request line.
+export type HookReply =
+  | { ok: true; reply: Record<string, unknown> }
+  | { ok: false; error: string };
 
 // `~/.agents/<instance id>/endpoint.json`.
 export interface RelayEndpoint {
@@ -159,12 +173,14 @@ export interface ConnectedSession extends ToolSession {
 }
 
 // A session the app started itself. `end` ends its tool sessions and removes
-// its row; a second call does nothing. `setHostSessionId` moves the session
-// and its row to a new host id, keeping its app id, by changing `sessionId`
-// inside the session's one info object, and emits `hostSessionChanged`. The
-// relay joined under the old id loses its join and has its later calls
-// refused, and a relay saying hello with the old id is refused while the
-// session lasts, unless another owned session holds that id. It throws when
+// its row; a second call does nothing. `setHostSessionId` gives a session
+// opened with no host id its first one, or moves the session and its row to a
+// new host id, keeping its app id, by changing `sessionId` inside the
+// session's one info object, and emits `hostSessionChanged` either way. A
+// first id retires nothing and keeps the relay's join. On a move the relay
+// joined under the old id loses its join and has its later calls refused,
+// and a relay saying hello with the old id is refused while the session
+// lasts, unless another owned session holds that id. It throws when
 // another session holds that host id and does nothing after `end`. `keep`
 // hands the session to its owner's restart: it ends nothing, and its owner's
 // stop no longer ends it; the next `open` naming its row id adopts it as it
@@ -252,21 +268,27 @@ export interface SessionsMainExports {
     start: (session: AgentSession) => ToolSession,
     options?: ContributeToolsOptions,
   ): Disposable;
-  // Connects the session with no row, writing none, or joins the owned
-  // session whose host id the info carries, a join taking the info's `host`
-  // into the session's own info when it has one; `mark` or `activate` adds a
-  // connected session's row, and `release` closes it. A newer relay for that
-  // host id takes the join from an older one still connected; the older
-  // handle's `end` then leaves the join alone. Throws for a host id an owned
-  // session moved away from, unless another owned session holds it.
+  // Joins an owned session, or connects the session with no row, writing
+  // none; `mark` or `activate` adds a connected session's row, and `release`
+  // closes it. In order: an `info.rowId` naming an owned session joins it
+  // while that session has no host id, `info.sessionId` is null or it equals
+  // the session's host id; else an owned session holding `info.sessionId`
+  // is joined; else a host id an owned session moved away from throws; else
+  // the session connects as its own, keeping `info.rowId`. A row id naming a
+  // connected session, or none, counts as none. A join takes the info's `host`
+  // into the session's own info when it has one. A newer relay takes the join
+  // from an older one still connected, whichever way each joined; the older
+  // handle's `end` then leaves the join alone.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was; with
-  // `options.owner`, added unmarked and never selected. Throws when
-  // `info.sessionId` is null, any session already holds that host id, or one
-  // already holds `options.rowId`, except a session its owner kept
-  // (`OwnedSession.keep`) under that row id, which it adopts: no `connected`
-  // is emitted, and its host id moves to `info.sessionId`.
+  // `options.owner`, added unmarked and never selected. A null
+  // `info.sessionId` opens the row with no host id, which its owner's
+  // `setHostSessionId` sets later. Throws when any session already holds
+  // `info.sessionId`, or one already holds `options.rowId`, except a session
+  // its owner kept (`OwnedSession.keep`) under that row id, which it adopts:
+  // no `connected` is emitted, and its host id moves to a non-null
+  // `info.sessionId`. `info.rowId` is ignored: the row id is `options.rowId`.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
@@ -338,9 +360,21 @@ export interface SessionsMainExports {
   // namer and re-asks every session; `changed()` after that does nothing. Each
   // call is its own registration, so one function added twice is two namers.
   addProjectNamer(namer: ProjectNamer): ProjectNamerHandle;
+  // Answers each hook request named `name` with `handler`, given the live
+  // session the hook hello names, found as `connect` finds the session it
+  // joins; a hook opens no session. A handler that rejects answers the hook
+  // with its error. Throws on a name another live registration holds. The
+  // handle's `dispose` frees the name; a second `dispose` does nothing.
+  addHookHandler(name: string, handler: HookHandler): Disposable;
+  // The session's project, as its row shows it, also for a connected session
+  // with no row; null for a session not connected. It can change at a namer's
+  // `changed()` and when the origin lookup lands, so a caller reads it at each
+  // use.
+  project(sessionId: string): string | null;
   // Holds each relay's connect until `until` settles, up to a bound, so a
   // relaunched relay joins the row a plugin is about to open rather than
-  // opening its own. Only a relay's hello waits: `connect` does not.
+  // opening its own. Only a relay's hello waits: a hook hello and `connect`
+  // do not.
   holdConnects(until: Promise<unknown>): void;
   // The environment a run the host may start while the app is closed carries: `WIGLEY_FORMS_OFFLINE` set to the
   // calls folder. Empty in the self-test, which writes no endpoint files.
@@ -367,8 +401,9 @@ export interface ConnectedSessionEvent extends AgentSession {
 
 // `closed` is a row the user closed, or one `release` closed, every guard
 // allowing; the session itself stays until it ends.
-// `hostSessionChanged` is an owned session moved to a new host id, emitted
-// after the row write that carries it, with the session's info already updated.
+// `hostSessionChanged` is an owned session given its first host id or moved
+// to a new one, emitted after the row write that carries it, with the
+// session's info already updated.
 // `titleChanged` is a session's titles changing, after the row write that carries
 // them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
@@ -396,7 +431,7 @@ export interface SessionRow {
   // no-folder label. Re-asked at each namer's `changed()` and `dispose()` and
   // at the lookup's landing.
   project: string;
-  harness: Harness | null;
+  harness: string | null;
   marked: boolean;
   markToast: MarkOptions | null;
   projectDir: string | null;
@@ -441,14 +476,15 @@ export interface SessionsChannel extends ChannelShape {
 // false keeping it, for what only the page knows or must ask; a promise
 // answers once the tab has asked the user (chat's end-session confirm).
 // `atOnce` is true when the user's close key runs while any of the session's
-// tabs or popups closes at once. `shown` runs each time this tab becomes the
-// visible tab: the selected tab of the focused chat pane's session while
-// Sessions mode shows and that session has no open popup. Its plugin sets its
-// base key scope there. `hidden` runs when it stops being the visible tab, the
-// mode hiding or a popup opening over it included, before the next surface's
-// `shown`; a tab removed first gets none. `shown` may run inside `addTab`,
-// before its handle returns, so it must not read that handle. `order` places
-// the tab in the strip, as `addTab` says.
+// tabs or popups closes at once, and on an agent's targeted `closeSession`
+// run, which the user's Allow already confirmed. `shown` runs each time this
+// tab becomes the visible tab: the selected tab of the focused chat pane's
+// session while Sessions mode shows and that session has no open popup. Its
+// plugin sets its base key scope there. `hidden` runs when it stops being the
+// visible tab, the mode hiding or a popup opening over it included, before the
+// next surface's `shown`; a tab removed first gets none. `shown` may run
+// inside `addTab`, before its handle returns, so it must not read that handle.
+// `order` places the tab in the strip, as `addTab` says.
 export interface SessionTabView {
   id: string;
   title: string;
@@ -638,8 +674,8 @@ export interface SessionsPageExports {
   // popup or main kept it, or the ask to main failed (logged).
   closeSession(sessionId: string): Promise<boolean>;
   // The focused pane's session while Sessions mode shows, the session the
-  // close and rename keys act on; null while the mode is hidden or the pane is
-  // empty.
+  // close, rename, stash and workflow keys act on; null while the mode is
+  // hidden or the pane is empty.
   shownSessionId(): string | null;
   setActivity(
     sessionId: string,

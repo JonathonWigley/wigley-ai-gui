@@ -1,10 +1,8 @@
 import { createHash } from 'node:crypto';
 import type {
-  AnswerableKind,
   AnswerEntry,
   AnswerResult,
   AnswerStatus,
-  AnswersPayload,
   Finding,
   FindingAnswerEntry,
   FindingResult,
@@ -12,6 +10,7 @@ import type {
   ItemKind,
   Notice,
   NoticeResult,
+  Outcome,
   Round,
   RoundEnd,
 } from '../contract';
@@ -23,100 +22,129 @@ import {
   quotedList,
   requireText,
 } from './kinds/fields';
-import { ANSWERABLE_KINDS, FORMATS, ITEM_KINDS } from './kinds/formats';
+import { FORMATS, ITEM_KINDS } from './kinds/formats';
 import type {
   AnswerSubject,
   ItemFormat,
   ItemOf,
   PythonJsonValue,
 } from './kinds/item-format';
-import { RoundError } from './round-error';
-import { capitalised } from '../../../shared/capitalised';
+import { RoundError, type RoundErrorPath } from './round-error';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
 
 const ITEM_FIELDS = ITEM_KINDS.map((kind) => FORMATS[kind].argsKey);
 const ROUND_FIELDS = ['heading', 'overview', 'layout', ...ITEM_FIELDS];
 
-// The `where` prefix of a message about the round's own fields.
-const ROUND_WHERE = "ask_round's ";
+const LAYOUT_PATH: RoundErrorPath = { at: 'field', field: 'layout' };
 
 export type FinishedOutcome = RoundEnd['kind'];
 
 // The outcomes a round that ran can report.
 export type RoundOutcome = FinishedOutcome | 'draft' | 'auto_answered';
 
-const NEXT_ON_DRAFT =
-  'The user has not submitted yet. Call collect_last_round to keep waiting. ' +
-  'Do not re-ask these questions and do not open a second round.';
+// Why a round result holds what it holds.
+export type RoundReason =
+  | { kind: 'finished' } // submitted or cancelled, returned plainly
+  | { kind: 'stillOpen' } // a draft of the round the call waits on
+  | { kind: 'autoAnswered' }
+  | { kind: 'handedBack'; heading: string } // an earlier round's answers
+  | { kind: 'notShown'; heading: string; blockingHeading: string | null }
+  | { kind: 'noRound' };
 
-export const NEXT_ON_AUTO_ANSWERED =
-  'This session is headless until a tool result says the session is no ' +
-  'longer headless: the app showed no form and answered every item with its ' +
-  'recommendation. Build no more rounds, and list every pick as a Decided ' +
-  'notice in your reply. An auto-answered pick never approves a hard-gated ' +
-  'action (third-party code, destroying user state, a push): name what the ' +
-  'gate needs in the reply and end the turn.';
+// A round call's result as records. `answers`, `findings` and `notices` are
+// index-parallel with the round's questions, findings and notices; notes
+// appear only when the user wrote some; `dont_ask` only on a pressed answer.
+export interface RoundResult {
+  outcome: Outcome;
+  reason: RoundReason;
+  answers: AnswerResult[];
+  findings: FindingResult[];
+  notices: NoticeResult[];
+  // '' when the user wrote none.
+  note: string;
+}
 
-const NEXT_ON_NO_ROUND =
-  'No round is open for this session, and no finished answers are waiting ' +
-  'for it. If you sent a round whose answers you never received, send the ' +
-  "same round again with ask_round: the user's saved answers fill in. Do not " +
-  'move the questions into the reply.';
+const REASON_OF_OUTCOME: Record<RoundOutcome, RoundReason> = {
+  submitted: { kind: 'finished' },
+  cancelled: { kind: 'finished' },
+  draft: { kind: 'stillOpen' },
+  auto_answered: { kind: 'autoAnswered' },
+};
 
 // a, b or c
 function eitherList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
 }
 
-function parseItems<Item>(format: ItemFormat<Item>, raw: unknown): Item[] {
+function parseItems<Item>(
+  kind: ItemKind,
+  format: ItemFormat<Item>,
+  raw: unknown,
+): Item[] {
   if (!Array.isArray(raw)) {
-    throw new RoundError(
-      `ask_round's ${format.argsKey} must be a list of objects.`,
-    );
+    throw new RoundError({
+      path: { at: 'field', field: format.argsKey },
+      problem: `${format.argsKey} must be a list of objects.`,
+    });
   }
-  const noun = capitalised(format.noun);
-  return raw.map((item, i) => format.parse(item, `${noun} ${i + 1}: `));
+  return raw.map((item, i) =>
+    format.parse(item, { at: 'item', kind, number: i + 1 }),
+  );
 }
 
 // Every error fires here, before anything is shown, so a malformed round
 // costs the caller one retry and the user sees nothing.
 export function parseRound(args: unknown): Round {
   if (!isJsonObject(args)) {
-    throw new RoundError(
-      `ask_round takes an object with ${quotedList(ROUND_FIELDS)}. Each list ` +
-        `is optional, but the round needs at least one item.`,
-    );
+    throw new RoundError({
+      path: { at: 'call' },
+      problem: `takes an object with ${quotedList(ROUND_FIELDS)}.`,
+      detail: 'Each list is optional, but the round needs at least one item.',
+    });
   }
   const unknownFields = fieldsOutside(args, ROUND_FIELDS);
   if (unknownFields.length > 0) {
-    throw new RoundError(
-      `ask_round got unknown field(s): ${unknownFields.join(', ')}. ` +
-        `It takes ${quotedList(ROUND_FIELDS)}.`,
-    );
+    throw new RoundError({
+      path: { at: 'call' },
+      problem: `got unknown field(s): ${unknownFields.join(', ')}.`,
+      detail: `It takes ${quotedList(ROUND_FIELDS)}.`,
+    });
   }
-  const heading = requireText(args.heading, 'heading', '');
+  const heading = requireText(args.heading, 'heading', {
+    at: 'field',
+    field: 'heading',
+  });
   // Optional here, required in the tool schema: a round saved before the
   // field existed still rebuilds from its stored args.
   const overview = Object.hasOwn(args, 'overview') ? args.overview : '';
   if (typeof overview !== 'string') {
-    throw new RoundError("ask_round's overview must be a string.");
+    throw new RoundError({
+      path: { at: 'field', field: 'overview' },
+      problem: 'overview must be a string.',
+    });
   }
-  const layout = parseLayoutField(args, ROUND_WHERE);
+  const layout = parseLayoutField(args, LAYOUT_PATH);
   const notices = parseItems(
+    'notice',
     FORMATS.notice,
     args[FORMATS.notice.argsKey] ?? [],
   );
   const findings = parseItems(
+    'finding',
     FORMATS.finding,
     args[FORMATS.finding.argsKey] ?? [],
   );
   const questions = parseItems(
+    'question',
     FORMATS.question,
     args[FORMATS.question.argsKey] ?? [],
   );
   if (notices.length + findings.length + questions.length === 0) {
     const nouns = ITEM_KINDS.map((kind) => FORMATS[kind].noun);
-    throw new RoundError(`ask_round needs at least one ${eitherList(nouns)}.`);
+    throw new RoundError({
+      path: { at: 'call' },
+      problem: `needs at least one ${eitherList(nouns)}.`,
+    });
   }
   return {
     heading,
@@ -139,15 +167,17 @@ const ROUND_ITEM_LISTS: {
 
 function requireKnownLayout(
   name: string | null,
-  where: string,
+  at: RoundErrorPath,
   layoutNames: readonly string[],
 ): void {
   if (name !== null && !layoutNames.includes(name)) {
-    throw new RoundError(
-      `${where}layout '${name}' is not in the layouts folder, which holds ` +
-        `${quotedList(layoutNames)}. Write ${name}/layout.js there first, or ` +
-        `leave layout out.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `layout '${name}' is not in the layouts folder, which holds ` +
+        `${quotedList(layoutNames)}.`,
+      detail: `Write ${name}/layout.js there first, or leave layout out.`,
+    });
   }
 }
 
@@ -159,11 +189,14 @@ export function requireKnownLayouts(
   round: Round,
   layoutNames: readonly string[],
 ): void {
-  requireKnownLayout(round.layout, ROUND_WHERE, layoutNames);
+  requireKnownLayout(round.layout, LAYOUT_PATH, layoutNames);
   for (const kind of ITEM_KINDS) {
-    const noun = capitalised(FORMATS[kind].noun);
     ROUND_ITEM_LISTS[kind](round).forEach((item, i) =>
-      requireKnownLayout(item.layout, `${noun} ${i + 1}: `, layoutNames),
+      requireKnownLayout(
+        item.layout,
+        { at: 'item', kind, number: i + 1 },
+        layoutNames,
+      ),
     );
   }
 }
@@ -344,40 +377,12 @@ function noticeResult(
   return result;
 }
 
-function countOf(n: number, noun: string): string {
-  return `${n} ${noun}${n !== 1 ? 's' : ''}`;
-}
-
-// Counted from the same statuses the answers carry, so the two never disagree.
-function summarise(
-  results: Record<AnswerableKind, AnswerResult[]>,
-  stillOpen: boolean,
-): string {
-  const counted = ANSWERABLE_KINDS.filter((kind) => results[kind].length > 0);
-  const parts = counted.map((kind) =>
-    countOf(results[kind].length, FORMATS[kind].noun),
-  );
-  const items =
-    parts.length > 0 ? parts.join(', ') : countOf(0, FORMATS.question.noun);
-  const statuses = ANSWERABLE_KINDS.flatMap((kind) =>
-    results[kind].map((result) => result.status),
-  );
-  const count = (status: AnswerStatus) =>
-    statuses.filter((each) => each === status).length;
-  const line =
-    `${items}: ${count('answered')} answered, ` +
-    `${count('not_applicable')} not applicable, ${count('untouched')} untouched.`;
-  return stillOpen ? `${line} The form is still open.` : line;
-}
-
-// The tool result for a round that ran. `answers`, `findings` and `notices`
-// are index-parallel with the round's questions, findings and notices; notes
-// appear only when the user wrote some; `dont_ask` only on a pressed answer.
-export function answersPayload(
+// The result for a round that ran, its reason read from `outcome`.
+export function answersResult(
   round: Round,
   outcome: RoundOutcome,
   body: FormBody,
-): AnswersPayload {
+): RoundResult {
   const read = readFormBody(round, body);
   const answers = round.questions.map((question, i) =>
     answerResult(FORMATS.question.answerSubject(question), read.answers[i]),
@@ -388,35 +393,51 @@ export function answersPayload(
   const notices = round.notices.map((notice, i) =>
     noticeResult(notice, i + 1, read.notice_comments[i].comment),
   );
-  const stillOpen = outcome === 'draft';
-  const payload: AnswersPayload = {
+  return {
     outcome,
-    summary: summarise({ finding: findings, question: answers }, stillOpen),
-    next: stillOpen ? NEXT_ON_DRAFT : '',
+    reason: REASON_OF_OUTCOME[outcome],
     answers,
     findings,
     notices,
+    note: read.note,
   };
-  if (read.note) {
-    payload.note = read.note;
-  }
-  return payload;
 }
 
-// An earlier round's finished answers, returned by an ask_round that did not
+// An earlier round's finished answers, returned by an open call that did not
 // open its own round.
-export function handedBackPayload(
+export function handedBackResult(
   round: Round,
   outcome: FinishedOutcome,
   body: FormBody,
-): AnswersPayload {
-  const payload = answersPayload(round, outcome, body);
-  payload.next =
-    `These answers are for an earlier round, '${round.heading}', that you ` +
-    `never received. Read them as that round's answers. The round you just ` +
-    `sent was not opened: send it again with ask_round.`;
-  payload.earlier_heading = round.heading;
-  return payload;
+): RoundResult {
+  return {
+    ...answersResult(round, outcome, body),
+    reason: { kind: 'handedBack', heading: round.heading },
+  };
+}
+
+// A round never shown, so its answers are blank; `blockingHeading` names the
+// open round it waited behind, when one is open.
+export function notShownResult(
+  round: Round,
+  blockingHeading: string | null,
+): RoundResult {
+  return {
+    ...answersResult(round, 'draft', readFormBody(round, {})),
+    reason: { kind: 'notShown', heading: round.heading, blockingHeading },
+  };
+}
+
+// A collect call with nothing to collect: a normal result, not an error.
+export function noRoundResult(): RoundResult {
+  return {
+    outcome: 'no_round',
+    reason: { kind: 'noRound' },
+    answers: [],
+    findings: [],
+    notices: [],
+    note: '',
+  };
 }
 
 // Every question and finding on its recommendation, every note and comment
@@ -443,28 +464,6 @@ export function recommendedBody(round: Round): FormBody {
       index: i + 1,
       comment: '',
     })),
-  };
-}
-
-// A round the app answered with `body` and never showed.
-export function autoAnsweredPayload(
-  round: Round,
-  body: FormBody,
-): AnswersPayload {
-  const payload = answersPayload(round, 'auto_answered', body);
-  payload.next = NEXT_ON_AUTO_ANSWERED;
-  return payload;
-}
-
-// collect_last_round with nothing to collect: a normal payload, not an error.
-export function noRoundPayload(): AnswersPayload {
-  return {
-    outcome: 'no_round',
-    summary: 'No round is open.',
-    next: NEXT_ON_NO_ROUND,
-    answers: [],
-    findings: [],
-    notices: [],
   };
 }
 
@@ -515,7 +514,7 @@ const FINGERPRINT_LISTS = {
 } satisfies Record<ItemKind, FingerprintList>;
 
 // What a re-sent round is matched on: every field of its items but their
-// layouts, keyed by each kind's ask_round field, never the heading, overview
+// layouts, keyed by each kind's round field, never the heading, overview
 // or round layout, which a re-send may change and still match the open round.
 // An empty list joins only for a kind the Python server's fingerprint holds,
 // so a round it could send with no questions hashes the same and its saved

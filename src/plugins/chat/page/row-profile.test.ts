@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { HarnessProfile } from '../../../contracts/agent';
+import type { RegisteredProfile } from '../../../shared/harness-profiles';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   recordingAnchors,
@@ -11,20 +13,22 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
-import type { ChatProfile } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
-import { DEFAULT_PROFILES } from '../manifest';
 import { createChatLayouts } from './chat-layouts';
 import { createRowProfile, profileNameOf } from './row-profile';
 
 const HOME = '/Users/u';
+const PROFILES: RegisteredProfile[] = [
+  { harnessId: 'claude', name: 'work', configDir: '~/.claude' },
+  { harnessId: 'claude', name: 'personal', configDir: '~/.claude-personal' },
+];
 
 // A row profile over rows' folders and profiles the test sets.
 function setUp() {
   const folders = new Map<string, string>();
   const held = new Map<string, string>();
-  let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
+  let profiles: readonly HarnessProfile[] = PROFILES;
   const log = () => undefined;
   const layouts = createChatLayouts(log);
   const rowProfile = createRowProfile({
@@ -58,7 +62,7 @@ function setUp() {
     const drawn = rowProfile.part.build(asHtml(wrapper), sessionId);
     return { wrapper, dispose: () => drawn.dispose?.() };
   };
-  const setProfiles = (next: readonly ChatProfile[]) => {
+  const setProfiles = (next: readonly RegisteredProfile[]) => {
     profiles = next;
   };
   return { rowProfile, layouts, folders, held, drawRow, setProfiles };
@@ -71,9 +75,7 @@ describe('profileNameOf', () => {
     { folder: '~/.claude-personal', name: 'personal' },
     { folder: `${HOME}/.claude-other`, name: '.claude-other' },
   ])('$folder reads as $name', ({ folder, name }) => {
-    expect(profileNameOf(folder, DEFAULT_PROFILES, posixPaths, HOME)).toBe(
-      name,
-    );
+    expect(profileNameOf(folder, PROFILES, posixPaths, HOME)).toBe(name);
   });
 });
 
@@ -92,6 +94,19 @@ describe('createRowProfile', () => {
     expect(wrapper.textContent).toBe('personal');
   });
 
+  it('build_RowsOfTwoHarnesses_EachDrawsItsOwnProfileName', () => {
+    const { folders, drawRow, setProfiles } = setUp();
+    setProfiles([
+      { harnessId: 'claude', name: 'work', configDir: '~/.claude' },
+      { harnessId: 'lab', name: 'lab', configDir: '~/.lab' },
+    ]);
+    folders.set('s1', `${HOME}/.claude`);
+    folders.set('s2', `${HOME}/.lab`);
+
+    expect(drawRow('s1').wrapper.textContent).toBe('work');
+    expect(drawRow('s2').wrapper.textContent).toBe('lab');
+  });
+
   it('build_RowWithNoFolder_DrawsNothing', () => {
     const { drawRow } = setUp();
 
@@ -105,7 +120,7 @@ describe('createRowProfile', () => {
     folders.set('s1', `${HOME}/.claude`);
     const { wrapper } = drawRow('s1');
 
-    setProfiles([{ name: 'job', configDir: '~/.claude' }]);
+    setProfiles([{ harnessId: 'claude', name: 'job', configDir: '~/.claude' }]);
     rowProfile.profilesChanged();
 
     expect(wrapper.textContent).toBe('job');

@@ -1,4 +1,5 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
+import { registeredInfos } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
 import { backlogMainKey } from '../../backlog/contract';
 import { chatMainKey } from '../../chat/contract';
@@ -43,6 +44,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       homeDir,
       log: services.log,
       emit: (event, data) => api.events.emit(event, data),
+      harnesses: () => registeredInfos(services.agentHarnesses),
     });
     channel.handle('loadDraft', () => store.draft());
     channel.handle('saveDraft', (fields) => store.saveFields(fields));

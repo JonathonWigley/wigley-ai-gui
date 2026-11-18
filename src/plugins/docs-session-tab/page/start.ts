@@ -38,13 +38,14 @@ function disposeSessionDocs(held: SessionDocs): void {
 
 // A Docs tab in every session over that session's index, a docs view `addView`
 // builds, rebuilt once shown when the session's host id changes; a close is
-// refused while the view holds unsaved edits.
+// refused while the view holds unsaved edits, and a switch-off while any does.
 export const docsSessionTabPagePart: PagePart<typeof docsSessionTabManifest> = {
   manifest: docsSessionTabManifest,
   start(api: DocsSessionTabApi) {
     const { services } = api;
     const docs = api.dependency(docsPageKey);
     const sessions = api.dependency(sessionsPageKey);
+    const rows = api.state.read(sessionsRowsSlot);
     const sessionDocs = new Map<string, SessionDocs>();
 
     const addSessionDocs = ({ sessionId, projectDir }: SessionRow) => {
@@ -87,13 +88,22 @@ export const docsSessionTabPagePart: PagePart<typeof docsSessionTabManifest> = {
     return {
       commands: {},
       ready() {
-        followRows(api.state.read(sessionsRowsSlot), {
+        followRows(rows, {
           added: addSessionDocs,
           removed: removeSessionDocs,
           // Main replaces a session's index source when its host id changes.
           hostChanged: ({ sessionId }) =>
             sessionDocs.get(sessionId)?.view.sourceReplaced(),
         });
+      },
+      mayStop() {
+        for (const [sessionId, held] of sessionDocs) {
+          if (held.view.hasUnsavedEdits()) {
+            const label = rows.get(sessionId)?.label ?? sessionId;
+            return `Save or discard the edits in ${label}'s Docs tab first`;
+          }
+        }
+        return null;
       },
       dispose() {
         const held = [...sessionDocs.values()];

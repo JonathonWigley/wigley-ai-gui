@@ -6,7 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentHarness, AgentHarnessInfo } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import {
@@ -36,13 +41,15 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../contract';
-import { addDriveActions, sessionsMainPart } from './start';
+import { addDriveActions, harnessToolUseId, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
+// `connect` joins the opened row its info's `rowId` names, as the session list would for a row with no host id.
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
   const openedInfo: SessionInfo[] = [];
   const ended: string[] = [];
+  const openedRowIds = new Set<string>();
   return {
     connectedInfo,
     openedInfo,
@@ -50,7 +57,10 @@ function fakeSessions() {
     activate: vi.fn<(sessionId: string) => void>(),
     connect(info: SessionInfo): ConnectedSession {
       connectedInfo.push(info);
-      const id = `row-${String(info.sessionId)}`;
+      const id =
+        info.rowId !== null && openedRowIds.has(info.rowId)
+          ? info.rowId
+          : `row-${String(info.sessionId)}`;
       return {
         session: { id, info },
         call: () => Promise.reject(new Error('no tools')),
@@ -60,6 +70,7 @@ function fakeSessions() {
     open(info: SessionInfo): OwnedSession {
       openedInfo.push(info);
       const id = `owned-${String(info.sessionId)}`;
+      openedRowIds.add(id);
       return {
         session: { id, info },
         end: () => ended.push(id),
@@ -97,8 +108,24 @@ describe('sessions drive actions', () => {
         sessionId: 'drive-session-1',
         projectDir: 'drive',
         harness: 'claude',
+        rowId: null,
       },
     ]);
+  });
+
+  it('connect_RowIdArg_JoinsOpenedRow', async () => {
+    const drive = fakeDriveHost();
+    const sessions = fakeSessions();
+    addDriveActions(drive.host, sessions, fakeEndedEvent().on);
+    const opened = (await drive.run('open')) as { rowId: string };
+
+    const joined = (await drive.run('connect', {
+      sessionId: 'other',
+      rowId: opened.rowId,
+    })) as { rowId: string };
+
+    expect(joined.rowId).toBe(opened.rowId);
+    expect(sessions.connectedInfo[0]?.rowId).toBe(opened.rowId);
   });
 
   it('open opens an owned session with the fixture defaults, which end ends', async () => {
@@ -117,6 +144,7 @@ describe('sessions drive actions', () => {
         sessionId: 's',
         projectDir: 'drive',
         harness: 'claude',
+        rowId: null,
       },
     ]);
     expect(sessions.connectedInfo).toEqual([]);
@@ -133,7 +161,7 @@ describe('sessions drive actions', () => {
     expect(sessions.connectedInfo[0]?.projectDir).toBeNull();
   });
 
-  it('connect rejects a field of the wrong type and an unknown harness', async () => {
+  it('connect rejects a field of the wrong type and takes any harness id', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
     addDriveActions(drive.host, sessions, fakeEndedEvent().on);
@@ -141,10 +169,12 @@ describe('sessions drive actions', () => {
     await expect(drive.run('connect', { sessionId: 7 })).rejects.toThrow(
       /sessionId/,
     );
-    await expect(drive.run('connect', { harness: 'gpt' })).rejects.toThrow(
-      /"gpt"/,
+    await expect(drive.run('connect', { harness: 7 })).rejects.toThrow(
+      /harness/,
     );
-    expect(sessions.connectedInfo).toEqual([]);
+    await drive.run('connect', { harness: 'gpt' });
+
+    expect(sessions.connectedInfo.map((info) => info.harness)).toEqual(['gpt']);
   });
 
   it('activate and end reject missing args instead of passing undefined on', async () => {
@@ -173,6 +203,39 @@ describe('sessions drive actions', () => {
   });
 });
 
+describe('harnessToolUseId', () => {
+  it.each([
+    { harness: 'claude', expected: 'toolu_01', asked: [{ k: 'v' }] },
+    { harness: null, expected: null, asked: [] },
+    { harness: 'codex', expected: null, asked: [] },
+  ])(
+    'harnessToolUseId_ByHelloHarness_AsksThatAdapter: $harness',
+    ({ harness, expected, asked }) => {
+      const metas: (Readonly<Record<string, unknown>> | null)[] = [];
+      const claude = {
+        id: 'claude',
+        toolUseIdOf(meta: Readonly<Record<string, unknown>> | null) {
+          metas.push(meta);
+          return 'toolu_01';
+        },
+      } as unknown as AgentHarness;
+      const info: SessionInfo = {
+        sessionId: 'host-1',
+        projectDir: null,
+        harness,
+        rowId: null,
+      };
+
+      const toolUseId = harnessToolUseId(harnessRegistryOf([claude]), info, {
+        k: 'v',
+      });
+
+      expect(toolUseId).toBe(expected);
+      expect(metas).toEqual(asked);
+    },
+  );
+});
+
 const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
 
 const ASK_TOOL = { name: 'ask', description: 'Ask.', inputSchema: {} };
@@ -184,6 +247,7 @@ function hostInfo(sessionId: string): SessionInfo {
     sessionId,
     projectDir: null,
     harness: 'claude',
+    rowId: null,
   };
 }
 
@@ -222,6 +286,7 @@ function startSessionsPart(
     originRepoName?: (projectDir: string) => Promise<string | null>;
     agentHarnesses?: {
       id: string;
+      info(): AgentHarnessInfo;
       sessionName: unknown;
       configFolder: unknown;
     }[];
@@ -245,7 +310,9 @@ function startSessionsPart(
       selfTest: null,
       git: { originRepoName },
       platform,
-      agentHarnesses,
+      agentHarnesses: harnessRegistryOf(
+        agentHarnesses as unknown as AgentHarness[],
+      ),
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -338,7 +405,12 @@ describe('sessions main part', () => {
       const exports = viewOf(
         startSessionsPart(30, {
           agentHarnesses: [
-            { id: 'claude', sessionName, configFolder: () => '/resolved' },
+            {
+              id: 'claude',
+              info: () => harnessInfo({ label: 'Claude Code' }),
+              sessionName,
+              configFolder: () => '/resolved',
+            },
           ],
         }),
       );
@@ -346,6 +418,7 @@ describe('sessions main part', () => {
         sessionId,
         projectDir,
         harness,
+        rowId: null,
         profileDir: '/home/.claude-work',
       });
 
@@ -375,6 +448,7 @@ describe('sessions main part', () => {
         sessionId: 'host-1',
         projectDir: '/work/folder',
         harness: 'claude',
+        rowId: null,
       });
       exports.mark(session.id, { text: 'Round from folder', action: 'answer' });
       if (disposed) {
@@ -397,6 +471,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: null,
       harness: 'claude',
+      rowId: null,
     });
     viewOf(started).mark(session.id, {
       text: 'Round from folder',
@@ -417,6 +492,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: null,
       harness: 'claude',
+      rowId: null,
     });
     const context = { toolUseId: null, signal: new AbortController().signal };
     const guarded: GuardedToolCall[] = [];
@@ -497,6 +573,7 @@ describe('sessions main part', () => {
       sessionId: 'host-1',
       projectDir: '/p/clone',
       harness: 'claude',
+      rowId: null,
     });
 
     viewOf(started, dependent)

@@ -8,7 +8,7 @@ Plan: [plan.md](plan.md)
 Files:     modify `src/contracts/session-host.ts` · modify `src/main/session-host/session-host-client.ts` ·
            modify `src/main/session-host/host-link.ts` · modify `src/shared/fake-session-host.ts` ·
            test `src/main/session-host/session-host-client.test.ts` · test `src/shared/fake-session-host.test.ts` ·
-           test `src/main/claude-code/claude-code-harness.test.ts`
+           test `src/plugins/claude-code/main/claude-code-harness.test.ts`
 
 Consumes:  `PendingSpawn`, `HostedRun` ← 07 · `SetPendingMessage`, `ListRunsMessage`, `ListRunsReply`,
            `ForgetRunsMessage`, `RunStartedEvent`, `SESSION_HOST_PROTOCOL = 4` ← 07. Tree members: `Disposable`

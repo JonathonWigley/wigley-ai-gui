@@ -1,10 +1,5 @@
 import type { AgentFormType } from '../../../contracts/agent-forms';
-import {
-  type Primer,
-  type PrimerBody,
-  PRIMER_ERROR_NAME,
-  type PrimerPayload,
-} from '../contract';
+import type { Primer, PrimerBody, PrimerPayload } from '../contract';
 import {
   noPrimerPayload,
   parsePrimer,
@@ -15,6 +10,7 @@ import {
   readPrimerBody,
   savedPrimerHeading,
 } from './primer';
+import { PrimerError } from './primer-error';
 
 // The feature primer as an agent form type: `open_primer` opens one and
 // `collect_last_primer` collects it. A primer has no Don't-ask state, so a
@@ -23,7 +19,8 @@ export const primerType: AgentFormType<Primer, PrimerBody, PrimerPayload> = {
   openTool: 'open_primer',
   collectTool: 'collect_last_primer',
   noun: 'primer',
-  argsErrorName: PRIMER_ERROR_NAME,
+  argsErrorText: (error) =>
+    error instanceof PrimerError ? error.message : null,
   parse: parsePrimer,
   fingerprint: primerFingerprint,
   heading: (primer) => primer.feature.name,

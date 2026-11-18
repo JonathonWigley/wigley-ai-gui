@@ -1,36 +1,20 @@
-import type { ToolResult } from '../../sessions/contract';
-import { CHAT_HARNESS_ID } from '../contract';
-import type { ChatSessions } from './chat-sessions';
-import { PERMISSION_TOOL_NAME } from './permission-tool';
+import type { PermissionDecision } from '../../../contracts/agent';
+import type {
+  FakeAgentHarness,
+  FakePermissionCall,
+} from '../../../shared/fake-agent-harness';
 
 // Fixtures the self-test script and the drive actions share.
 
-// Asks a permission prompt in the chat session `sessionId` through chat's
-// own `permission_prompt` tool, as Claude Code would for a tool call in
-// `projectDir`, drawing its permission card. Resolves to the tool's reply
-// once the user answers.
+// Raises a permission request for `call` on the fake harness's live process for
+// the chat row `rowId`, as a tool call in that process would, which draws the
+// row's permission card. Resolves to the user's decision once answered, or the
+// cancelled one when the process ends first; rejects when the row has no live
+// fake process.
 export function askFixturePermission(
-  chat: Pick<ChatSessions, 'permissionToolSession'>,
-  sessionId: string,
-  projectDir: string,
-  request: { toolName: string; input: unknown; toolUseId: string },
-): Promise<ToolResult> {
-  return chat
-    .permissionToolSession({
-      id: sessionId,
-      info: {
-        sessionId: null,
-        projectDir,
-        harness: CHAT_HARNESS_ID,
-      },
-    })
-    .call(
-      PERMISSION_TOOL_NAME,
-      {
-        tool_name: request.toolName,
-        input: request.input,
-        tool_use_id: request.toolUseId,
-      },
-      { toolUseId: request.toolUseId, signal: new AbortController().signal },
-    );
+  fake: Pick<FakeAgentHarness, 'askPermission'>,
+  rowId: string,
+  call: FakePermissionCall,
+): Promise<PermissionDecision> {
+  return fake.askPermission(rowId, call);
 }

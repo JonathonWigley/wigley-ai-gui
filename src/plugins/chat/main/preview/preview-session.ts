@@ -1,4 +1,5 @@
 import {
+  CONTROL_ROLES,
   type ChatEntry,
   MAIN_AGENT_ID,
   type SessionControl,
@@ -38,8 +39,9 @@ const PREVIEW_ENTRY_STEP_MS = 2000;
 const previewAt = (index: number) =>
   PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
 
-// One entry of every kind, a user message in each delivery state, a tool and a
-// permission in each of their states, both notice tones, a reply holding two
+// One entry of every kind, a harness's own kind among them, a user message in
+// each delivery state, a tool and a permission in each of their states, both
+// notice tones, a reply holding two
 // visuals, and a streaming reply last, its visual still open.
 export function previewEntries(): ChatEntry[] {
   return [
@@ -193,6 +195,12 @@ export function previewEntries(): ChatEntry[] {
       raw: [{ preview: 'compaction' }],
     },
     {
+      kind: 'preview:sample',
+      id: 'preview-harness',
+      at: previewAt(13) + PREVIEW_ENTRY_STEP_MS / 2,
+      raw: [{ preview: 'harness kind' }],
+    },
+    {
       kind: 'assistant',
       id: 'preview-15',
       at: previewAt(14),
@@ -220,6 +228,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'mode',
       label: 'Mode',
+      role: CONTROL_ROLES.permissionMode,
       choices: [
         { value: 'default', label: 'Manual' },
         { value: 'auto', label: 'Auto' },
@@ -230,6 +239,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'effort',
       label: 'Effort',
+      role: CONTROL_ROLES.effort,
       choices: [
         { value: 'low', label: 'Low' },
         { value: 'medium', label: 'Medium' },
@@ -240,6 +250,7 @@ export function previewControls(): SessionControl[] {
     {
       id: 'model',
       label: 'Model',
+      role: CONTROL_ROLES.model,
       choices: [
         { value: 'sonnet', label: 'Sonnet' },
         { value: 'opus', label: 'Opus' },

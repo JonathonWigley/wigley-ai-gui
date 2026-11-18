@@ -53,7 +53,8 @@ export const PLUGIN_RETRY_MS = 2000;
 // either process, and its slots clear. A reload or restart starts on the page
 // the plugin and each dependent it paused that runs, so a page part whose
 // earlier start failed starts again; a page start that starts a part clears
-// the problem an earlier page start recorded for it. A reload or restart
+// the problem an earlier page start recorded for it, and each page start names
+// the running dependents of the ids it starts. A reload or restart
 // stops each main part it starts again as a `restart` (`PartStop`), as does a
 // reload whose new part's handlers differ when a last good version is there
 // to start in its place; every other stop is an `end`.
@@ -314,11 +315,20 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
       catalog.entries().map((entry) => inPlace.get(idOf(entry)) ?? entry),
     );
 
-  // Starts `ids` on the page, which skips a part already started. The
-  // problem an earlier page start recorded for an id the reply started clears
-  // when it is still the id's problem; the reply's problems replace it.
+  // Starts `ids` on the page, and each dependent of them (`dependsOn.main` or
+  // `.page`, transitively) the applied list does not name, in start order; the
+  // page skips a part already started. The problem an earlier page start
+  // recorded for an id the reply started clears when it is still the id's
+  // problem; the reply's problems replace it.
   const pageStart = async (ids: readonly string[]) => {
-    const reply = await deps.page({ kind: 'start', ids });
+    const manifests = admittedManifests();
+    const dependents = ids.flatMap((id) =>
+      dependentsOf(id, applied.disabled(), manifests),
+    );
+    const reply = await deps.page({
+      kind: 'start',
+      ids: inOrder(startOrder(), [...ids, ...dependents]),
+    });
     for (const id of startedOf(reply)) {
       const recorded = pageProblems.get(id);
       if (recorded !== undefined && startProblems.get(id) === recorded) {

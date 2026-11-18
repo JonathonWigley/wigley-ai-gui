@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { RoundError } from '../../round-error';
+import { roundErrorText } from '../../mcp-wording';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import { questionFormat } from './question-format';
+
+const QUESTION_1: RoundItemPath = { at: 'item', kind: 'question', number: 1 };
 
 function question(overrides: Record<string, unknown> = {}) {
   return {
@@ -25,13 +28,14 @@ function withFields(fields: Record<string, unknown>) {
   return item;
 }
 
-// The message of the RoundError the question format throws for this item.
+// The tool error text of the RoundError the question format throws for this
+// item.
 function parseError(raw: unknown): string {
   try {
-    questionFormat.parse(raw, 'Question 1: ');
+    questionFormat.parse(raw, QUESTION_1);
   } catch (error) {
     if (error instanceof RoundError) {
-      return error.message;
+      return roundErrorText(error);
     }
     throw error;
   }
@@ -65,9 +69,9 @@ describe('questionFormat.parse', () => {
   ])(
     "reads the summary from summary, or from a saved round's question: $summary",
     ({ fields, summary }) => {
-      expect(
-        questionFormat.parse(withFields(fields), 'Question 1: ').summary,
-      ).toBe(summary);
+      expect(questionFormat.parse(withFields(fields), QUESTION_1).summary).toBe(
+        summary,
+      );
     },
   );
 
@@ -132,10 +136,9 @@ describe('questionFormat.parse', () => {
 
   it('accepts an optional layout', () => {
     expect(
-      questionFormat.parse(question({ layout: 'compact' }), 'Question 1: ')
-        .layout,
+      questionFormat.parse(question({ layout: 'compact' }), QUESTION_1).layout,
     ).toBe('compact');
-    expect(questionFormat.parse(question(), 'Question 1: ').layout).toBeNull();
+    expect(questionFormat.parse(question(), QUESTION_1).layout).toBeNull();
   });
 
   it('refuses a fractional recommend', () => {
@@ -149,7 +152,7 @@ describe('questionFormat.answerSubject', () => {
   it('gives the result builder its title, choices and recommend', () => {
     const parsed = questionFormat.parse(
       question({ choices: ['a', 'b'], recommend: 2 }),
-      'Question 1: ',
+      QUESTION_1,
     );
 
     expect(questionFormat.answerSubject(parsed)).toEqual({

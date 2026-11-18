@@ -4,6 +4,7 @@ import {
   BRIDGE_CHANNELS,
   type PluginPartsRequest,
 } from '../contracts/bridge';
+import type { CommandHop, CommandOutcome } from '../contracts/commands';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
@@ -70,18 +71,36 @@ const bridge: Bridge = {
   },
   onStateChange: (listener) =>
     stateChanges.add(({ seq, change }) => listener(seq, change)),
-  runCommand: async (id, arg) => {
-    await invokeMain(BRIDGE_CHANNELS.commandRun, id, arg);
-  },
+  runCommand: (id, arg, hop) =>
+    invokeMain<CommandOutcome>(BRIDGE_CHANNELS.commandRun, id, arg, hop),
   onRunCommand: (listener) => {
     ipcRenderer.on(
       BRIDGE_CHANNELS.commandRunInPage,
-      (_event, request: number, id: string, arg: unknown) => {
-        const tellDone = () =>
-          ipcRenderer.send(BRIDGE_CHANNELS.commandRunDone, request);
+      (
+        _event,
+        request: number,
+        id: string,
+        arg: unknown,
+        hop: CommandHop | undefined,
+      ) => {
         void Promise.resolve()
-          .then(() => listener(id, arg))
-          .then(tellDone, tellDone);
+          .then(() => listener(id, arg, hop ?? {}))
+          .then(
+            (outcome) =>
+              ipcRenderer.send(
+                BRIDGE_CHANNELS.commandRunDone,
+                request,
+                outcome,
+                null,
+              ),
+            (error) =>
+              ipcRenderer.send(
+                BRIDGE_CHANNELS.commandRunDone,
+                request,
+                'skipped',
+                errorText(error),
+              ),
+          );
       },
     );
   },

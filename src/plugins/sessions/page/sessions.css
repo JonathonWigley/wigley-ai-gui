@@ -201,15 +201,3 @@
   isolation: isolate;
   min-height: 0;
 }
-
-/* The rename dialog's box. */
-.session-rename-box {
-  background: transparent;
-  border: 0;
-  color: var(--wg-fg);
-  font: inherit;
-  min-width: 0;
-  outline: none;
-  padding: 0;
-  width: 100%;
-}

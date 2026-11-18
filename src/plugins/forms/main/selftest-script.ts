@@ -4,11 +4,7 @@ import type { OsName } from '../../../contracts/platform';
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { UserConfig } from '../../../contracts/user-config';
 import { emptyUserFiles } from '../../../shared/empty-user-files';
-import type {
-  Harness,
-  SessionsMainExports,
-  ToolResult,
-} from '../../sessions/contract';
+import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
 import type { AnswersPayload } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import { askFixtureRound } from './fixtures';
@@ -1356,12 +1352,13 @@ export function formsSelfTestScript(
   const connect = (
     sessionId: string,
     projectDir: string | null,
-    harness: Harness,
+    harness: string,
   ) =>
     sessions.connect({
       sessionId,
       projectDir,
       harness,
+      rowId: null,
       host: { [HOST_DEADLINE_FIELD]: 120 },
     });
   return {
@@ -1425,6 +1422,7 @@ export function formsSelfTestScript(
               sessionId: idleSessionId,
               projectDir: null,
               harness: 'codex',
+              rowId: null,
               host: { [HOST_DEADLINE_FIELD]: 120 },
             },
             { select: false },

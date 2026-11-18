@@ -98,6 +98,8 @@ function startWorkflow() {
               holdsPart(consumer, rowParts, part),
             addTab: noHandle(consumer),
             setActivity: () => undefined,
+            shownSessionId: () =>
+              harness.state.read(sessionsActiveSlot, 'test').get() ?? null,
           }) as unknown as SessionsPageExports,
       ),
       fakeDependency(
@@ -394,28 +396,55 @@ describe('workflow page part', () => {
     }
   });
 
-  it.each(['mainAction', 'toggleFinishedWaves', 'toggleHeadless'] as const)(
-    'engineKeys_RunStageActionOnTheSelectedSession %s',
-    async (command) => {
+  // Breaks: a targeted run acting on the selected session instead.
+  it.each([
+    ['mainAction', undefined, 's1'],
+    ['toggleFinishedWaves', undefined, 's1'],
+    ['toggleHeadless', undefined, 's1'],
+    ['mainAction', 's2', 's2'],
+    ['toggleHeadless', 's2', 's2'],
+  ] as const)(
+    'engineKeys_RunStageActionOnTheSelectedSession %s, target %s',
+    async (command, targetSessionId, sessionId) => {
       const { harness, runs } = startWorkflow();
       harness.state.publish(sessionsActiveSlot).set('s1');
 
-      harness.started().commands[command]({ arg: undefined });
+      harness.started().commands[command]({ arg: undefined, targetSessionId });
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(
         runs.filter(([id]) => id === workflowStageActionCommand.id),
       ).toEqual([
-        [workflowStageActionCommand.id, { sessionId: 's1', action: command }],
+        [workflowStageActionCommand.id, { sessionId, action: command }],
       ]);
     },
   );
+
+  // Breaks: a workflow key acting on a session the user cannot see, from
+  // another mode.
+  it.each([
+    'mainAction',
+    'toggleFinishedWaves',
+    'toggleHeadless',
+    'toggleSidePane',
+  ] as const)('engineKeys_NoShownSession_DoNothing %s', async (command) => {
+    const { harness, runs } = startWorkflow();
+
+    harness.started().commands[command]({ arg: undefined });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(runs).toEqual([]);
+    expect(harness.logs.map((line) => line.message)).not.toContain(
+      'side pane hidden',
+    );
+  });
 
   // Chat's `chat.session` value for s1, as chat writes it.
   function chatInfo(fields: Partial<ChatSessionInfo> = {}): ChatSessionInfo {
     return {
       sessionId: 's1',
       projectDir: '/p',
+      harness: 'fake',
       profile: 'work',
       activity: 'idle',
       background: 0,

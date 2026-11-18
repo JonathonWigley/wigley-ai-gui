@@ -1,4 +1,4 @@
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
@@ -47,7 +47,7 @@ export interface LevelSelfTestDeps {
   paths: Pick<Paths, 'join'>;
   chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
   hooks: WorkflowSelfTestHooks;
 }
 
@@ -165,7 +165,7 @@ export function levelSelfTestScript(
     settings: {},
     scrollsItself: [],
     open() {
-      marks = markRun(harnesses);
+      marks = markRun(harnesses.list());
       turnEndListener?.dispose();
       turnEndListener = null;
       return {

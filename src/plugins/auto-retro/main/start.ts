@@ -1,3 +1,4 @@
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   MainApi,
@@ -5,6 +6,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import {
   type ChatMainEvents,
   type ChatSessionInfo,
@@ -74,6 +76,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const rowsSlot = api.state.read(sessionsRowsSlot);
     const sessionSlot = api.state.read(chatSessionSlot);
+    const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const file = createQueueFile(api.data);
 
     let queue: RetroQueue = EMPTY_QUEUE;
@@ -298,7 +301,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       const before = queue.running;
       queue = nextQueue(queue, {
         kind: 'started',
-        profiles: chat.profiles().map((profile) => profile.name),
+        profiles: registeredProfiles(harnessSlot.all()).map(
+          (profile) => profile.name,
+        ),
       });
       if (before?.hostSessionId != null && queue.running === null) {
         log(

@@ -88,7 +88,8 @@ function applyKeys(
 // plugins' listeners, its editor keys, page keys and sequence timeout the ones
 // the page and editor run on, so help, which-key and key hints show only
 // installed binds; then the problems, a refusal of the keys among them,
-// toasting each one not shown before.
+// toasting each one not shown before; and logs `applied a new config` when the
+// installed config differs from the last.
 export function createConfigPush(
   installed: AppliedKeys,
   targets: PushTargets,
@@ -108,6 +109,8 @@ export function createConfigPush(
       targets.toasts,
       log,
     );
-    log('config', 'applied a new config');
+    if (!isSameJson(config, previous)) {
+      log('config', 'applied a new config');
+    }
   };
 }

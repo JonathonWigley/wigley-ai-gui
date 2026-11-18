@@ -6,7 +6,10 @@ const ON = `text\n${HEADLESS_NOTE}`;
 const OFF = `text\n${HEADLESS_OFF_NOTE}`;
 
 function session(id: string, hostId: string): HeadlessLineSession {
-  return { id, info: { sessionId: hostId, projectDir: null, harness: null } };
+  return {
+    id,
+    info: { sessionId: hostId, projectDir: null, harness: null, rowId: null },
+  };
 }
 
 describe('createHeadlessLines', () => {

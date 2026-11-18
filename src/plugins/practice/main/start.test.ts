@@ -154,7 +154,12 @@ describe('practice main part', () => {
     await writeProblem(harness.files, TWO_SUM);
     const session = {
       id: 'row-1',
-      info: { sessionId: 'host-1', projectDir: PRACTICE_FOLDER, harness: null },
+      info: {
+        sessionId: 'host-1',
+        projectDir: PRACTICE_FOLDER,
+        harness: null,
+        rowId: null,
+      },
     } as AgentSession;
 
     const result = await harness.contributed[0]

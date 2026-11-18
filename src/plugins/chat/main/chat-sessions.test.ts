@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { SlotChange } from '../../../contracts/state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentCommand,
@@ -9,7 +10,9 @@ import {
   type AgentProcessEvents,
   type ChatEntry,
   type CompactionTrigger,
+  type HarnessProfile,
   MAIN_AGENT_ID,
+  type PermissionDecision,
   type ProcessActivity,
   type SessionControl,
   type UserMessage,
@@ -19,12 +22,15 @@ import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
   FAKE_AGENT_PID,
+  FAKE_CANCELLED_REASON,
   FAKE_END_TEXT,
+  FAKE_HARNESS_ID,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   type FakeAgentCall,
   type FakeAgentHarness,
+  type FakePermissionCall,
   fakePlanRowUpdate,
   fakeUsageEvent,
 } from '../../../shared/fake-agent-harness';
@@ -38,7 +44,6 @@ import type {
   SessionInfo,
   SessionTitles,
   TitleSource,
-  ToolResult,
 } from '../../sessions/contract';
 import {
   type AdoptRequest,
@@ -46,7 +51,6 @@ import {
   chatControlsSlot,
   chatEntriesSlot,
   type ChatMainEvents,
-  type ChatProfile,
   type ChatProject,
   chatQueuedSlot,
   chatReturnedSlot,
@@ -62,7 +66,6 @@ import {
   type SessionCompaction,
 } from '../contract';
 import { MAX_IMAGE_BASE64 } from '../image-rules';
-import { DEFAULT_PROFILES } from '../manifest';
 import {
   ARCHIVED_SESSIONS_FILE,
   createArchivedSessions,
@@ -71,15 +74,22 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
+  PERMISSION_CANCELLED_REASON,
+  UNATTENDED_REASON,
 } from './chat-sessions';
 import type {
   OpenSessions,
   SavedSession,
   SavedSessions,
 } from './open-sessions';
-import { CANCELLED_REASON, UNATTENDED_REASON } from './permission-tool';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
 import { createChatSlots } from './chat-slots';
+
+const PROFILES: HarnessProfile[] = [
+  { name: 'work', configDir: '~/.claude' },
+  { name: 'personal', configDir: '~/.claude-personal' },
+];
 
 // What one recorded slot change, or `sessionRested`, told the page: named by the
 // value it changed in the slot, each `chat.session` write by the fields that
@@ -244,10 +254,10 @@ const HOSTED_PAST_ONE: HostedProcessInfo = {
   current: true,
 };
 
-const BASH_ARGS = {
-  tool_name: 'Bash',
+const BASH_CALL: FakePermissionCall = {
+  toolName: 'Bash',
   input: { command: 'ls' },
-  tool_use_id: 'tu-1',
+  toolUseId: 'tu-1',
 };
 
 const NO_TITLES: SessionTitles = {
@@ -292,6 +302,7 @@ function record(
   return {
     hostSessionId,
     projectDir: '/w/app',
+    harness: FAKE_HARNESS_ID,
     profile: 'work',
     sent: false,
     busy: false,
@@ -320,6 +331,7 @@ function keptSessionInfo(rowId: string): ChatSessionInfo {
   return {
     sessionId: rowId,
     projectDir: '/w/app',
+    harness: FAKE_HARNESS_ID,
     profile: 'work',
     activity: 'idle',
     background: 0,
@@ -461,14 +473,17 @@ function setUp(
   const keptRows: string[] = [];
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
-  let uuidCalls = 0;
   const hostIdChanges: string[] = [];
-  // Host ids whose `open` throws, row ids another session holds, and what
-  // each owned `end` also does.
+  // Host ids whose `open` throws, row ids another session holds, host ids
+  // `setHostSessionId` refuses, and what each owned `end` also does.
   const refusedOpens = new Set<string>();
+  const refusedHostIds = new Set<string>();
   const heldRowIds = new Set<string>();
   let onOwnedEnd = () => {};
-  let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
+  let profiles: readonly HarnessProfile[] = PROFILES;
+  // `setProfiles` changes the profiles the default harness declares.
+  const fakeInfo = harness.info;
+  harness.info = () => ({ ...fakeInfo(), profiles });
   const archived = createArchivedSessions(data);
   const saved = fakeOpenSessions();
   // Every `setTitle` call, and the titles of each row opened.
@@ -494,6 +509,9 @@ function setUp(
           onOwnedEnd();
         },
         setHostSessionId: (hostSessionId) => {
+          if (refusedHostIds.has(hostSessionId)) {
+            throw new Error(`host ${hostSessionId} is held by another row`);
+          }
           hostIdChanges.push(hostSessionId);
         },
         keep: () => {
@@ -519,15 +537,30 @@ function setUp(
       return held === undefined ? null : { ...held };
     },
   };
+  // Each harness registers under its own handle, so a test can let one leave
+  // and register it again; `labels` holds the label of each id registered so
+  // far, which `harnessLabelOf` reads as `start.ts`'s follower does.
+  const registry = harnessRegistryOf([]);
+  const registrations = new Map<string, () => void>();
+  const labels = new Map<string, string>();
+  const register = (each: FakeAgentHarness) => {
+    const registration = registry.register(each);
+    registrations.set(each.id, () => registration.dispose());
+    labels.set(each.id, each.info().label);
+  };
+  for (const each of harnesses) {
+    register(each);
+  }
+  let uuidCalls = 0;
   const chat = createChatSessions({
-    harnesses,
-    sessions,
-    selectedSessionId: () => selectedSessionId,
-    profiles: () => profiles,
     randomUuid: () => {
       uuidCalls++;
       return `uuid-${uuidCalls}`;
     },
+    harnesses: chatHarnessesOfRegistry(registry),
+    harnessLabelOf: (harnessId) => labels.get(harnessId) ?? harnessId,
+    sessions,
+    selectedSessionId: () => selectedSessionId,
     recent: createRecentFolders({
       data,
       clock,
@@ -572,14 +605,6 @@ function setUp(
     homeDir: '/home/me',
     paths: posixPaths,
   });
-  const agentSession: AgentSession = {
-    id: ROW_ID,
-    info: {
-      sessionId: 'uuid-1',
-      projectDir: PROJECT_DIR,
-      harness: 'claude',
-    },
-  };
   return {
     chat,
     harness,
@@ -597,7 +622,6 @@ function setUp(
     messages: () => messagesFrom(timeline),
     emitted,
     notesAndEmits,
-    agentSession,
     archived,
     saved,
     titleCalls,
@@ -605,7 +629,6 @@ function setUp(
     // Changes a row's titles as sessions would, recording no call.
     setRowTitles: (sessionId: string, next: SessionTitles) =>
       titles.set(sessionId, next),
-    uuidCalls: () => uuidCalls,
     setNow: (now: number) => {
       clockNow = now;
     },
@@ -619,6 +642,7 @@ function setUp(
       selectedSessionId = sessionId;
     },
     refuseOpen: (hostId: string) => refusedOpens.add(hostId),
+    refuseHostId: (hostId: string) => refusedHostIds.add(hostId),
     holdRowId: (rowId: string) => heldRowIds.add(rowId),
     // Runs as each event is emitted, while chat's emit is on the stack.
     setOnEmit: (listen: (emitted: Emitted) => void) => {
@@ -627,8 +651,17 @@ function setUp(
     setOnOwnedEnd: (act: () => void) => {
       onOwnedEnd = act;
     },
-    setProfiles: (next: readonly ChatProfile[]) => {
+    setProfiles: (next: readonly HarnessProfile[]) => {
       profiles = next;
+    },
+    registry,
+    register,
+    // Drops `harnessId` from the registry, then tells chat it left, as the
+    // registry and `start.ts`'s follower do when its key is deleted.
+    leave: (harnessId: string) => {
+      registrations.get(harnessId)?.();
+      registrations.delete(harnessId);
+      chat.harnessLeft(harnessId);
     },
     sent: <K extends Message['message']>(message: K) =>
       messagesFrom(timeline)
@@ -653,7 +686,11 @@ function setUp(
 
 async function started(options?: Parameters<typeof setUp>[0]) {
   const test = setUp(options);
-  test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+  test.chat.start({
+    harness: FAKE_HARNESS_ID,
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+  });
   await flush();
   const process = test.harness.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
@@ -668,6 +705,7 @@ function connected(id: string, hostId: string): AgentSession {
       sessionId: hostId,
       projectDir: '/w/app',
       harness: 'claude',
+      rowId: null,
     },
   };
 }
@@ -748,7 +786,11 @@ async function startedRefusing() {
     },
   };
   const test = setUp({ harnesses: [refusing] });
-  test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+  test.chat.start({
+    harness: FAKE_HARNESS_ID,
+    projectDir: PROJECT_DIR,
+    profile: 'personal',
+  });
   await flush();
   const process = fake.processes[0];
   const activity = (value: ProcessActivity) => process.events.activity(value);
@@ -770,27 +812,27 @@ function sendCall(message: UserMessage) {
   };
 }
 
-function signal(): AbortController {
-  return new AbortController();
-}
-
-// The call's result, or 'pending' when it has not settled after a flush.
-async function settled(
-  call: Promise<ToolResult>,
-): Promise<ToolResult | 'pending'> {
-  let result: ToolResult | 'pending' = 'pending';
-  void call.then((value) => {
-    result = value;
+// Raises a permission request for `BASH_CALL` on the row's live fake process,
+// as a tool call in it would, and flushes so the request reaches chat.
+// Returns a reader of the request's decision: 'pending' until it settles.
+async function askBash(
+  test: { harness: FakeAgentHarness },
+  rowId = ROW_ID,
+): Promise<() => PermissionDecision | 'pending'> {
+  let decision: PermissionDecision | 'pending' = 'pending';
+  void test.harness.askPermission(rowId, BASH_CALL).then((value) => {
+    decision = value;
   });
   await flush();
-  return result;
+  return () => decision;
 }
 
-function replyText(result: ToolResult | 'pending'): string {
-  if (result === 'pending') {
-    throw new Error('the call is still pending');
-  }
-  return result.content[0].text;
+// The `answerPermission` calls chat made on the fake process.
+function permissionAnswers(process: { calls: FakeAgentCall[] }) {
+  return process.calls.filter(
+    (call): call is Extract<FakeAgentCall, { method: 'answerPermission' }> =>
+      call.method === 'answerPermission',
+  );
 }
 
 describe('createChatSessions', () => {
@@ -799,7 +841,11 @@ describe('createChatSessions', () => {
       given: 'a started process',
       expected: FAKE_AGENT_PID,
       run: async (test: ReturnType<typeof setUp>) => {
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         await flush();
       },
     },
@@ -807,7 +853,11 @@ describe('createChatSessions', () => {
       given: 'the process ended',
       expected: null,
       run: async (test: ReturnType<typeof setUp>) => {
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         await flush();
         test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
         await flush();
@@ -850,6 +900,7 @@ describe('createChatSessions', () => {
     const test = setUp();
 
     const sessionId = test.chat.start({
+      harness: FAKE_HARNESS_ID,
       projectDir: PROJECT_DIR,
       profile: 'personal',
     });
@@ -858,16 +909,17 @@ describe('createChatSessions', () => {
     expect(sessionId).toBe(ROW_ID);
     expect(test.opened).toEqual([
       {
-        sessionId: 'uuid-1',
+        sessionId: null,
         projectDir: PROJECT_DIR,
-        harness: 'claude',
+        harness: FAKE_HARNESS_ID,
+        rowId: null,
         profileDir: '~/.claude-personal',
       },
     ]);
     expect(test.harness.processes.map((process) => process.request)).toEqual([
       {
-        processId: 'uuid-1-1-1000',
-        sessionId: 'uuid-1',
+        processId: 'row-1-1-1000',
+        sessionId: null,
         resume: false,
         projectDir: PROJECT_DIR,
         profileDir: '~/.claude-personal',
@@ -881,6 +933,7 @@ describe('createChatSessions', () => {
       {
         sessionId: ROW_ID,
         projectDir: PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
         profile: 'personal',
         entries: [],
         controls: [],
@@ -902,26 +955,61 @@ describe('createChatSessions', () => {
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
-      { projectDir: PROJECT_DIR, profile: 'personal', lastUsed: 1000 },
+      {
+        projectDir: PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
+        profile: 'personal',
+        lastUsed: 1000,
+      },
     ]);
   });
 
   it.each([
-    { row: 'the started row', sessionId: ROW_ID, expected: 'uuid-1' },
-    { row: 'a row chat does not hold', sessionId: 'row-9', expected: null },
-  ])('hostSessionIdOf_$row_ReturnsItsHostId', ({ sessionId, expected }) => {
-    const test = setUp();
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    {
+      row: 'the started row once its harness reported',
+      reported: true,
+      sessionId: ROW_ID,
+      expected: 'fake-session-1',
+    },
+    {
+      row: 'the started row before its harness reported',
+      reported: false,
+      sessionId: ROW_ID,
+      expected: null,
+    },
+    {
+      row: 'a row chat does not hold',
+      reported: true,
+      sessionId: 'row-9',
+      expected: null,
+    },
+  ])(
+    'hostSessionIdOf_$row_ReturnsItsHostId',
+    async ({ reported, sessionId, expected }) => {
+      const test = setUp();
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
+      if (reported) {
+        await flush();
+      }
 
-    expect(test.chat.hostSessionIdOf(sessionId)).toBe(expected);
-  });
+      expect(test.chat.hostSessionIdOf(sessionId)).toBe(expected);
+    },
+  );
 
   it('addInstructions_EachStartCarriesTheRegisteredOnes', async () => {
     const test = setUp();
     const first = test.chat.addInstructions('first note');
     test.chat.addInstructions('second note');
 
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     expect(test.harness.processes[0].request.instructions).toEqual([
       'first note',
@@ -962,7 +1050,11 @@ describe('createChatSessions', () => {
       message: { text: 'go', images: [] },
       instructions: ['own note'],
     });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     expect(
       test.harness.processes.map((process) => process.request.instructions),
@@ -1060,7 +1152,11 @@ describe('createChatSessions', () => {
     {
       entryPoint: 'start',
       call: (chat: ChatSessions) =>
-        chat.start({ projectDir: PROJECT_DIR, profile: 'home' }),
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'home',
+        }),
     },
   ])(
     '$entryPoint with an unknown profile refuses and calls nothing',
@@ -1091,7 +1187,8 @@ describe('createChatSessions', () => {
       {
         sessionId: hostId,
         projectDir: '/w/app',
-        harness: 'claude',
+        harness: FAKE_HARNESS_ID,
+        rowId: null,
         profileDir: '~/.claude',
       },
     ]);
@@ -1117,9 +1214,14 @@ describe('createChatSessions', () => {
       idleCompactMinTokens: null,
       rowId: ROW_ID,
     });
-    expect(test.uuidCalls()).toBe(0);
+    expect(test.hostIdChanges).toEqual([]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
-      { projectDir: '/w/app', profile: 'work', lastUsed: 1000 },
+      {
+        projectDir: '/w/app',
+        harness: FAKE_HARNESS_ID,
+        profile: 'work',
+        lastUsed: 1000,
+      },
     ]);
   });
 
@@ -1335,6 +1437,93 @@ describe('createChatSessions', () => {
     },
   );
 
+  // Breaks if a resume finds the session's running process by its id's prefix
+  // alone (a row's process id starts with the row id), or by the id a row
+  // moved off: that process now runs the row's new conversation.
+  it.each([
+    {
+      given: 'a new row closed while its harness was gone',
+      arrange: async () => {
+        const test = await started();
+        const { processId } = test.process.request;
+        expect(processId).toBe('row-1-1-1000');
+        test.leave(FAKE_HARNESS_ID);
+        test.chat.closed(ROW_ID, 'user');
+        test.register(test.harness);
+        const resumed = {
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          hostSessionId: test.process.sessionId,
+        };
+        return { test, processId, resumed };
+      },
+      attaches: true,
+      starts: 1,
+    },
+    {
+      given: 'a restored row closed while its harness was gone',
+      arrange: async () => {
+        const test = setUp();
+        const processId = 'row-1-1-900';
+        const hosted = {
+          id: processId,
+          startedAt: 900,
+          running: true,
+          current: true,
+        };
+        test.leave(FAKE_HARNESS_ID);
+        restoreOne(test, hostedRecord({ processId }), [hosted]);
+        test.chat.closed(ROW_ID, 'user');
+        test.register(test.harness);
+        const resumed = {
+          projectDir: '/w/app',
+          profile: 'work',
+          hostSessionId: 'host-a',
+        };
+        return { test, processId, resumed };
+      },
+      attaches: true,
+      starts: 0,
+    },
+    {
+      given: 'a row since moved to another host id',
+      arrange: async () => {
+        const test = await started();
+        const { processId } = test.process.request;
+        test.process.events.sessionId('fake-session-9');
+        const resumed = {
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          hostSessionId: test.process.sessionId,
+        };
+        return { test, processId, resumed };
+      },
+      attaches: false,
+      starts: 2,
+    },
+  ])(
+    'resume_ProcessOfHostByKnownId given $given',
+    async ({ arrange, attaches, starts }) => {
+      const { test, processId, resumed } = await arrange();
+      test.sessionHost.setList([
+        { id: processId, startedAt: 900, running: true, current: true },
+      ]);
+      test.harness.scriptAttach(processId, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      await test.chat.resume({ ...resumed, title: 'a session' });
+      await flush();
+
+      expect(
+        test.harness.attachCalls.map((attach) => attach.processId),
+      ).toEqual(attaches ? [processId] : []);
+      expect(startsOf(test)).toHaveLength(starts);
+    },
+  );
+
   it('resume_ProcessRunningHere_ReadsHistoryUpToItsStart', async () => {
     const test = setUp({
       sessionHost: { list: () => Promise.resolve([HOSTED_PAST_ONE]) },
@@ -1484,7 +1673,7 @@ describe('createChatSessions', () => {
     const sessionId = await test.chat.resume({
       projectDir: '/w/app',
       profile: 'work',
-      hostSessionId: 'uuid-1',
+      hostSessionId: 'fake-session-1',
       title: 'go',
       owner: 'practice',
     });
@@ -1528,14 +1717,14 @@ describe('createChatSessions', () => {
       const resumed = test.chat.resume({
         projectDir: '/w/app',
         profile: 'work',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         title: 'go',
         instructions: ['own note'],
         ...asked,
       });
 
       await expect(resumed).rejects.toThrow(
-        new RegExp(`uuid-1.*${named[0]}.*${named[1]}`),
+        new RegExp(`fake-session-1.*${named[0]}.*${named[1]}`),
       );
       expect(test.activated).toEqual([]);
       expect(test.opened).toHaveLength(openedBefore);
@@ -1591,7 +1780,11 @@ describe('createChatSessions', () => {
   it('start_OpensSelected', () => {
     const test = setUp();
 
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
 
     expect(test.openOptions).toEqual([{ select: true }]);
   });
@@ -1610,7 +1803,7 @@ describe('createChatSessions', () => {
 
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'fix the chip', images: [] },
         ...owner,
       });
@@ -1635,20 +1828,68 @@ describe('createChatSessions', () => {
     expect(() =>
       test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'fix the chip', images: [oversized] },
       }),
     ).toThrow(/5 MB/);
     expect(test.opened).toEqual([]);
   });
 
-  it('start_noClaudeHarness_throwsAndOpensNothing', () => {
+  it('start_HarnessNotRegistered_ThrowsNamingItAndOpensNothing', () => {
     const test = setUp({ harnesses: [] });
 
     expect(() =>
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' }),
-    ).toThrow(/claude/);
+      test.chat.start({
+        projectDir: PROJECT_DIR,
+        harness: 'claude',
+        profile: 'work',
+      }),
+    ).toThrow('no agent harness "claude"');
     expect(test.opened).toEqual([]);
+  });
+
+  it('start_ProfileTheHarnessLacks_ThrowsAndOpensNothing', () => {
+    const test = setUp();
+
+    expect(() =>
+      test.chat.start({
+        projectDir: PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
+        profile: 'other',
+      }),
+    ).toThrow('other');
+    expect(test.opened).toEqual([]);
+  });
+
+  it('resume_NoHarnessInTheRequest_RunsOnTheProfilesHarness', async () => {
+    const fakeOf = (
+      id: string,
+      profiles: HarnessProfile[],
+    ): FakeAgentHarness => {
+      const fake = createFakeAgentHarness(
+        { now: () => 1000 },
+        createMemoryFiles(),
+        FAKE_MICROTASK_TIMERS,
+      );
+      return { ...fake, id, info: () => ({ ...fake.info(), profiles }) };
+    };
+    const claude = fakeOf('claude', [{ name: 'work', configDir: '~/.claude' }]);
+    const fake = fakeOf(FAKE_HARNESS_ID, [
+      { name: 'spare', configDir: '~/.spare' },
+    ]);
+    const test = setUp({ harnesses: [claude, fake] });
+
+    await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'spare',
+      hostSessionId: PAST_ONE.sessionId,
+      title: PAST_ONE.title,
+    });
+    await flush();
+
+    expect(claude.processes).toEqual([]);
+    expect(fake.processes).toHaveLength(1);
+    expect(test.opened.map((info) => info.harness)).toEqual([FAKE_HARNESS_ID]);
   });
 
   // The sessions plugin selects a neighbouring row inside the failed row's
@@ -1669,7 +1910,11 @@ describe('createChatSessions', () => {
       test.harness.failNextStart('spawn failed');
 
       expect(() =>
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' }),
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'work',
+        }),
       ).toThrow('spawn failed');
       expect(test.ownedEnds()).toBe(1);
       expect(test.sent('sessionRested')).toEqual([]);
@@ -1721,6 +1966,14 @@ describe('createChatSessions', () => {
       expect.objectContaining({ kind: 'user', text: 'second' }),
     ]);
   });
+
+  // The role each reported control declares, by id.
+  const REPORTED_ROLES: Readonly<Record<string, string>> = {
+    mode: 'permissionMode',
+    approval: 'permissionMode',
+    model: 'model',
+    effort: 'effort',
+  };
 
   // `opus` is the alias Claude's `claude-opus-5-5[1m]` shows as. A row whose
   // pick the process never confirms has its own reports dropped meanwhile.
@@ -1777,6 +2030,14 @@ describe('createChatSessions', () => {
       reported: { mode: 'plan', model: 'opus', effort: 'high' },
       controls: { mode: 'plan' },
     },
+    {
+      case: 'ModeHeldByRoleNotId',
+      picks: [],
+      confirms: true,
+      clears: false,
+      reported: { approval: 'plan', model: 'opus', effort: 'high' },
+      controls: { approval: 'plan' },
+    },
   ])(
     'restart_StartCarriesHeldModeAndConfirmedPicks ($case)',
     async ({ picks, confirms, clears, reported, later, controls }) => {
@@ -1803,6 +2064,7 @@ describe('createChatSessions', () => {
           Object.entries(report).map(([id, value]) => ({
             id,
             label: id,
+            role: REPORTED_ROLES[id],
             choices: [],
             value,
           })),
@@ -1889,7 +2151,7 @@ describe('createChatSessions', () => {
       const test = setUp();
       const sessionId = test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'go', images: [] },
         ...flag,
       });
@@ -2263,6 +2525,18 @@ describe('createChatSessions', () => {
     },
   );
 
+  it('ended_UncleanExit_NoticeNamesTheHarnessLabel', async () => {
+    const test = await started();
+
+    test.process.events.ended({ code: 3, error: 'boom' });
+
+    expect(test.chat.sessions()[0].entries.at(-1)).toMatchObject({
+      kind: 'notice',
+      tone: 'error',
+      text: `${test.harness.info().label} stopped (exit code 3): boom. Your next message resumes this session.`,
+    });
+  });
+
   it('processExit_WhileWorking_ShowsIdleAndAnnouncesNothing', async () => {
     const test = await started();
     test.setFocused(false);
@@ -2331,8 +2605,16 @@ describe('createChatSessions', () => {
 
   it('detachAll_DetachesHeldProcesses_KillsAClosedRowsStillEnding', async () => {
     const test = await started();
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
     await flush();
     const [heldProcess, closedProcess, exitedProcess] = test.harness.processes;
     exitedProcess.events.ended({ code: 0, error: null });
@@ -2388,7 +2670,11 @@ describe('createChatSessions', () => {
       }),
     };
     const test = setUp({ harnesses: [failingExit] });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.closed(ROW_ID, 'user');
@@ -2413,7 +2699,11 @@ describe('createChatSessions', () => {
       }),
     };
     const test = setUp({ harnesses: [failingEnd] });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.closed(ROW_ID, 'user');
@@ -2480,12 +2770,7 @@ describe('createChatSessions', () => {
 
   it('send_HarnessIdleWithPermissionWaiting_WritesAtOnce', async () => {
     const test = await started();
-    void test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
+    await askBash(test);
     const message: UserMessage = { text: 'go on', images: [] };
 
     test.chat.send(ROW_ID, message);
@@ -2594,6 +2879,39 @@ describe('createChatSessions', () => {
       expect(test.harness.processes[1].calls).toEqual([sendCall(again)]);
     },
   );
+
+  it('sendNow_HarnessWithoutMidTurnSend_WritesPlainly', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const plain: FakeAgentHarness = {
+      ...fake,
+      info: () => ({
+        ...fake.info(),
+        capabilities: { ...fake.info().capabilities, midTurnSend: false },
+      }),
+    };
+    const test = setUp({ harnesses: [plain] });
+    test.chat.start({
+      projectDir: PROJECT_DIR,
+      harness: FAKE_HARNESS_ID,
+      profile: 'personal',
+    });
+    await flush();
+    const process = fake.processes[0];
+    const message: UserMessage = { text: 'first', images: [] };
+    process.events.activity('working');
+    test.chat.send(ROW_ID, message);
+
+    test.chat.sendNow(ROW_ID, 'queued-1');
+
+    expect(process.calls).toEqual([sendCall(message)]);
+    expect(test.chat.sessions()[0].queued[0].sentEntryId).toEqual(
+      expect.any(String),
+    );
+  });
 
   it('sendNow_NewerOfTwoRows_WritesItAndKeepsItMarkedSent', async () => {
     const test = await started();
@@ -3035,24 +3353,20 @@ describe('createChatSessions', () => {
   it('permission_callAddsAWaitingEntry', async () => {
     const test = await started();
     test.activity('working');
-    const tools = test.chat.permissionToolSession(test.agentSession);
 
-    const call = tools.call('permission_prompt', BASH_ARGS, {
-      toolUseId: 'tu-1',
-      signal: signal().signal,
-    });
+    const decision = await askBash(test);
 
     expect(test.sent('entry')).toEqual([
       {
         sessionId: ROW_ID,
         entry: {
           kind: 'permission',
-          id: 'permission-1',
+          id: 'fake-permission-1',
           at: 1000,
           toolName: 'Bash',
           input: { command: 'ls' },
           answer: null,
-          raw: [BASH_ARGS],
+          raw: [{ fake: 'permission', toolUseId: 'tu-1' }],
         },
       },
     ]);
@@ -3060,51 +3374,63 @@ describe('createChatSessions', () => {
       sessionId: ROW_ID,
       activity: 'waiting',
     });
-    expect(await settled(call)).toBe('pending');
+    expect(decision()).toBe('pending');
   });
 
-  it.each([
+  it.each<{
+    given: string;
+    flag: { unattended?: boolean };
+    decision: PermissionDecision | 'pending';
+    answers: PermissionDecision[];
+    // The answer of each permission card sent: null for one still waiting.
+    shown: (PermissionDecision | null)[];
+    sentByPrompt: string[];
+  }>([
     {
       given: 'unattended: true',
       flag: { unattended: true },
-      reply: JSON.stringify({ behavior: 'deny', message: UNATTENDED_REASON }),
-      answer: { allowed: false, reason: UNATTENDED_REASON },
+      decision: { allowed: false, reason: UNATTENDED_REASON },
+      answers: [{ allowed: false, reason: UNATTENDED_REASON }],
+      shown: [{ allowed: false, reason: UNATTENDED_REASON }],
       sentByPrompt: [],
     },
     {
       given: 'unattended absent',
       flag: {},
-      reply: 'pending',
-      answer: null,
+      decision: 'pending',
+      answers: [],
+      shown: [null],
       sentByPrompt: ['waiting'],
     },
   ])(
-    'permission_LaunchedRow_AnswersByUnattended: $given → $reply',
-    async ({ flag, reply, answer, sentByPrompt }) => {
+    'permission_LaunchedRow_AnswersByUnattended: $given',
+    async ({ flag, decision, answers, shown, sentByPrompt }) => {
       const test = setUp();
       test.chat.launch({
         projectDir: PROJECT_DIR,
-        profile: DEFAULT_PROFILES[0].name,
+        profile: PROFILES[0].name,
         message: { text: 'go', images: [] },
         ...flag,
       });
       await flush();
-      test.harness.processes[0].events.activity('working');
+      const process = test.harness.processes[0];
+      process.events.activity('working');
       const activitiesBefore = test.sent('activity').length;
 
-      const call = test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
-      const result = await settled(call);
+      const settled = await askBash(test);
 
-      expect(result === 'pending' ? result : replyText(result)).toBe(reply);
-      expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-        kind: 'permission',
-        answer,
-      });
+      expect(settled()).toEqual(decision);
+      expect(permissionAnswers(process).map((call) => call.decision)).toEqual(
+        answers,
+      );
+      expect(
+        test.sent('entry').filter((sent) => sent.entry.kind === 'permission'),
+      ).toEqual(
+        shown.map((answer) => ({
+          sessionId: ROW_ID,
+          entry: expect.objectContaining({ answer }),
+        })),
+      );
       expect(
         test
           .sent('activity')
@@ -3117,23 +3443,24 @@ describe('createChatSessions', () => {
   it('permission_allow_repliesWithTheInput', async () => {
     const test = await started();
     test.activity('working');
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
-    expect(replyText(await settled(call))).toBe(
-      '{"behavior":"allow","updatedInput":{"command":"ls"}}',
-    );
+    expect(permissionAnswers(test.process)).toEqual([
+      {
+        method: 'answerPermission',
+        requestId: 'fake-permission-1',
+        decision: { allowed: true, reason: null },
+      },
+    ]);
+    expect(decision()).toEqual({ allowed: true, reason: null });
     expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-      id: 'permission-1',
+      id: 'fake-permission-1',
       answer: { allowed: true, reason: null },
     });
     expect(test.sent('activity').at(-1)).toEqual({
@@ -3144,265 +3471,123 @@ describe('createChatSessions', () => {
 
   it('permission_deny_defaultAndReason', async () => {
     const test = await started();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    const context = { toolUseId: null, signal: signal().signal };
-    const plainDeny = tools.call('permission_prompt', BASH_ARGS, context);
-    const reasonDeny = tools.call('permission_prompt', BASH_ARGS, context);
+    await askBash(test);
+    await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: false,
       reason: null,
     });
-    test.chat.answerPermission(ROW_ID, 'permission-2', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-2', {
       allowed: false,
       reason: 'use rg',
     });
 
-    expect(replyText(await settled(plainDeny))).toBe(
-      '{"behavior":"deny","message":"The user denied this tool call."}',
-    );
-    expect(replyText(await settled(reasonDeny))).toBe(
-      '{"behavior":"deny","message":"use rg"}',
-    );
+    expect(
+      permissionAnswers(test.process).map(({ requestId, decision }) => ({
+        requestId,
+        decision,
+      })),
+    ).toEqual([
+      {
+        requestId: 'fake-permission-1',
+        decision: { allowed: false, reason: null },
+      },
+      {
+        requestId: 'fake-permission-2',
+        decision: { allowed: false, reason: 'use rg' },
+      },
+    ]);
   });
 
   it('permission_twoPending_staysWaiting', async () => {
     const test = await started();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    const context = { toolUseId: null, signal: signal().signal };
-    void tools.call('permission_prompt', BASH_ARGS, context);
-    void tools.call('permission_prompt', BASH_ARGS, context);
+    await askBash(test);
+    await askBash(test);
     const activitiesBefore = test.sent('activity').length;
 
-    test.chat.answerPermission(ROW_ID, 'permission-1', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
     expect(test.sent('activity')).toHaveLength(activitiesBefore);
     expect(test.chat.sessions()[0].activity).toBe('waiting');
   });
 
-  it('permission_abort_answersDenied', async () => {
-    const test = await started();
-    const controller = signal();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: controller.signal,
-      });
-
-    controller.abort();
-
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry').at(-1)?.entry).toMatchObject({
-      id: 'permission-1',
-      answer: { allowed: false, reason: CANCELLED_REASON },
-    });
-  });
-
-  it.each([
-    { given: 'its turn running', harnessActivity: 'working' as const },
-    { given: 'a card left after its turn', harnessActivity: 'idle' as const },
-  ])(
-    'permission_abortAfterDetachAll_AnswersTheCallAndChangesNothing given $given',
-    async ({ harnessActivity }) => {
-      const test = setUp();
-      test.chat.restore(NOTHING_SAVED, []);
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
-      await flush();
-      test.setFocused(false);
-      const { events } = test.harness.processes[0];
-      events.activity('working');
-      const controller = signal();
-      const call = test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: controller.signal,
-        });
-      await flush();
-      events.activity(harnessActivity);
-      test.chat.detachAll();
-      const savesBefore = test.saved.saves();
-      const messagesBefore = test.messages().length;
-
-      controller.abort();
-
-      expect(replyText(await settled(call))).toBe(
-        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-      );
-      expect(test.saved.saves()).toBe(savesBefore);
-      expect(test.saved.last()?.sessions[0].busy).toBe(true);
-      expect(test.messages()).toHaveLength(messagesBefore);
-      expect(test.marked).toEqual([]);
-    },
-  );
-
   it('permission_sessionEnds_answersCancelledAndShowsIt', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.process.events.ended({ code: 0, error: null });
+    await test.chat.send(ROW_ID, { text: FAKE_END_TEXT, images: [] });
+    await flush();
 
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
     expect(test.chat.sessions()[0].entries).toContainEqual(
       expect.objectContaining({
-        id: 'permission-1',
-        answer: { allowed: false, reason: CANCELLED_REASON },
+        id: 'fake-permission-1',
+        answer: { allowed: false, reason: FAKE_CANCELLED_REASON },
       }),
     );
+    expect(test.chat.sessions()[0].activity).not.toBe('waiting');
   });
-
-  it.each([
-    {
-      case: 'a resting session',
-      arrange: (test: Awaited<ReturnType<typeof started>>) =>
-        test.process.events.ended({ code: 0, error: null }),
-    },
-    {
-      case: 'after detachAll',
-      arrange: (test: Awaited<ReturnType<typeof started>>) =>
-        void test.chat.detachAll(),
-    },
-  ])(
-    'permission_NoLiveRow_answersCancelledWithNoEntry ($case)',
-    async ({ arrange }) => {
-      const test = await started();
-      arrange(test);
-      const entriesBefore = test.sent('entry').length;
-
-      const result = await test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
-
-      expect(replyText(result)).toBe(
-        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-      );
-      expect(test.sent('entry')).toHaveLength(entriesBefore);
-    },
-  );
 
   it('permission_rowCloses_answersCancelledWithNoEntry', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
     const entriesBefore = test.sent('entry').length;
 
     test.chat.closed(ROW_ID, 'user');
-
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry')).toHaveLength(entriesBefore);
-  });
-
-  it('permission_alreadyAborted_noEntry', async () => {
-    const test = await started();
-    const controller = signal();
-    controller.abort();
-
-    const result = await test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: controller.signal,
-      });
-
-    expect(replyText(result)).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
-    expect(test.sent('entry')).toEqual([]);
-  });
-
-  it('permission_unownedSession_errorResult', async () => {
-    const test = await started();
-
-    const result = await test.chat
-      .permissionToolSession({ ...test.agentSession, id: 'row-relay' })
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
-
-    expect(result).toEqual({
-      content: [
-        {
-          type: 'text',
-          text: 'permission_prompt answers only for sessions the wigley-ai-gui app started.',
-        },
-      ],
-      isError: true,
-    });
-  });
-
-  it('permission_toolSessionBeforeStart_reachesFlowAfterStart', async () => {
-    const test = setUp();
-    const tools = test.chat.permissionToolSession(test.agentSession);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' });
     await flush();
 
-    const call = tools.call('permission_prompt', BASH_ARGS, {
-      toolUseId: 'tu-1',
-      signal: signal().signal,
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
     });
-
-    expect(test.sent('entry')).toHaveLength(1);
-    expect(await settled(call)).toBe('pending');
-  });
-
-  it('permission_badArgs_errorResult', async () => {
-    const test = await started();
-
-    const result = await test.chat
-      .permissionToolSession(test.agentSession)
-      .call(
-        'permission_prompt',
-        { tool_name: 7, input: {} },
-        { toolUseId: null, signal: signal().signal },
-      );
-
-    expect(result).toEqual({
-      content: [
-        { type: 'text', text: 'permission_prompt: tool_name must be a string' },
-      ],
-      isError: true,
-    });
-    expect(test.sent('entry')).toEqual([]);
+    expect(test.sent('entry')).toHaveLength(entriesBefore);
+    expect(permissionAnswers(test.process)).toEqual([]);
   });
 
   it('permission_unknownEntry_ignored', async () => {
     const test = await started();
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
-    test.chat.answerPermission(ROW_ID, 'permission-9', {
+    test.chat.answerPermission(ROW_ID, 'fake-permission-9', {
       allowed: true,
       reason: null,
     });
+    await flush();
 
-    expect(await settled(call)).toBe('pending');
+    expect(decision()).toBe('pending');
+    expect(permissionAnswers(test.process)).toEqual([]);
+    expect(test.logged).toContain(
+      'answerPermission for unknown entry fake-permission-9 ignored',
+    );
+  });
+
+  it('permission_AnswerForAnOldProcess_Ignored', async () => {
+    const test = await started();
+    test.activity('working');
+    await askBash(test);
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
+    await flush();
+
+    expect(
+      test.harness.processes.flatMap((process) => permissionAnswers(process)),
+    ).toEqual([]);
+    expect(test.logged).toContain(
+      'answerPermission for unknown entry fake-permission-1 ignored',
+    );
   });
 });
 
@@ -3485,11 +3670,17 @@ describe('createChatSessions saved sessions', () => {
   it.each([
     {
       given: 'a host id chat holds',
-      arrange: (test: ReturnType<typeof setUp>) =>
-        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
-      saved: ['host-a', 'uuid-1', 'host-b'],
-      opened: ['uuid-1', 'host-a', 'host-b'],
-      logged: 'session uuid-1 already open; not restored',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
+        await flush();
+      },
+      saved: ['host-a', 'fake-session-1', 'host-b'],
+      opened: [null, 'host-a', 'host-b'],
+      logged: 'session fake-session-1 already open; not restored',
     },
     {
       given: 'a host id open on a relay row',
@@ -3515,9 +3706,9 @@ describe('createChatSessions saved sessions', () => {
     },
   ])(
     'restore_RecordNotOpenable_SkippedAndLogged given $given',
-    ({ arrange, saved, opened, logged }) => {
+    async ({ arrange, saved, opened, logged }) => {
       const test = setUp();
-      arrange(test);
+      await arrange(test);
 
       test.chat.restore(
         {
@@ -3549,6 +3740,17 @@ describe('createChatSessions saved sessions', () => {
         },
       ],
     },
+    {
+      given: 'a harness not registered',
+      saved: record('host-a', { harness: 'gone' }),
+      entries: [
+        {
+          kind: 'notice',
+          tone: 'info',
+          text: 'gone is not loaded. This session waits for it to load again.',
+        },
+      ],
+    },
     { given: 'neither', saved: record('host-a'), entries: [] },
   ])('restore_RecordFlags_AddNotices given $given', ({ saved, entries }) => {
     const test = setUp();
@@ -3558,6 +3760,35 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.sessions()[0].entries).toEqual(
       entries.map((entry) => expect.objectContaining(entry)),
     );
+  });
+
+  it('restore_HarnessNotRegistered_WaitsAndAttachesWhenItRegisters', async () => {
+    const test = setUp();
+    const gone = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+      { id: 'gone', label: 'Gone', profiles: PROFILES },
+    );
+    gone.scriptAttach('p1', { outcome: 'process', replay() {} });
+    test.sessionHost.setList([hostedP1()]);
+
+    restoreOne(test, hostedRecord({ harness: 'gone' }), [hostedP1()]);
+
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: 'gone is not loaded. This session waits for it to load again.',
+    });
+
+    test.register(gone);
+    await test.chat.harnessReturned('gone');
+    await flush();
+
+    expect(gone.attachCalls.map((attach) => attach.processId)).toEqual(['p1']);
+    expect(test.chat.sessions()[0].running).toBe(true);
+    expect(test.harness.attachCalls).toEqual([]);
   });
 
   it.each([
@@ -3720,7 +3951,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a new session then a send',
       act: (chat: ChatSessions) => {
-        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
         chat.send(ROW_ID, { text: 'hi', images: [] });
       },
       sent: true,
@@ -3738,7 +3973,11 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a new session with no send',
       act: (chat: ChatSessions) =>
-        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
       sent: false,
     },
   ])('send_NewSession_SavesSentTrue given $given', async ({ act, sent }) => {
@@ -3750,13 +3989,14 @@ describe('createChatSessions saved sessions', () => {
 
     expect(test.saved.last()?.sessions).toEqual([
       {
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         projectDir: PROJECT_DIR,
+        harness: FAKE_HARNESS_ID,
         profile: 'personal',
         sent,
         busy: false,
         titles: { ...NO_TITLES, firstMessage: sent ? 'hi' : null },
-        processId: 'uuid-1-1-1000',
+        processId: 'row-1-1-1000',
         queued: [],
         returned: [],
         launchControls: {},
@@ -3792,7 +4032,11 @@ describe('createChatSessions saved sessions', () => {
         instructions: ['own note'],
         owner: 'practice',
       });
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
       await flush();
       if (clear) {
         test.chat.clear(launchedId);
@@ -3843,6 +4087,50 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless('row-unknown')).toBe(false);
   });
 
+  it.each([
+    {
+      given: 'a launch with unattended: true',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: { text: 'go', images: [] },
+          unattended: true,
+        }),
+      expected: true,
+    },
+    {
+      given: 'a restored unattended row',
+      open: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, record('host-a', { unattended: true }), []);
+        return ROW_ID;
+      },
+      expected: true,
+    },
+    {
+      given: 'a plain start',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
+      expected: false,
+    },
+    {
+      given: 'an unknown id',
+      open: () => 'row-unknown',
+      expected: false,
+    },
+  ])('isUnattended reads the held flag: $given', async ({ open, expected }) => {
+    const test = setUp();
+
+    const sessionId = open(test);
+    await flush();
+
+    expect(test.chat.isUnattended(sessionId)).toBe(expected);
+  });
+
   // The flag at the last process start, whatever it was set to since.
   it.each([
     { given: 'turned on, not cleared', clears: false, expected: false },
@@ -3880,6 +4168,7 @@ describe('createChatSessions saved sessions', () => {
     const test = setUp();
 
     const sessionId = test.chat.start({
+      harness: FAKE_HARNESS_ID,
       projectDir: PROJECT_DIR,
       profile: 'personal',
     });
@@ -4007,6 +4296,7 @@ describe('createChatSessions saved sessions', () => {
       const test = setUp();
       test.chat.addInstructions('registered');
       const sessionId = test.chat.start({
+        harness: FAKE_HARNESS_ID,
         projectDir: PROJECT_DIR,
         profile: 'personal',
       });
@@ -4058,20 +4348,19 @@ describe('createChatSessions saved sessions', () => {
     await test.chat.send(ROW_ID, { text: 'hi', images: [] });
     await flush();
 
-    const result = await settled(
-      test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        }),
-    );
+    const decision = await askBash(test);
 
-    expect(result).not.toBe('pending');
-    expect(JSON.parse(replyText(result))).toEqual({
-      behavior: 'deny',
-      message: UNATTENDED_REASON,
-    });
+    const unattended = { allowed: false, reason: UNATTENDED_REASON };
+    expect(decision()).toEqual(unattended);
+    expect(
+      permissionAnswers(test.harness.processes[0]).map((call) => call.decision),
+    ).toEqual([unattended]);
+    expect(
+      test
+        .sent('entry')
+        .filter((sent) => sent.entry.kind === 'permission')
+        .map((sent) => (sent.entry as { answer: unknown }).answer),
+    ).toEqual([unattended]);
   });
 
   it.each([
@@ -4125,7 +4414,11 @@ describe('createChatSessions saved sessions', () => {
 
   it('save_BeforeRestore_WritesNothing', async () => {
     const test = setUp();
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     test.chat.send(ROW_ID, { text: 'hi', images: [] });
     await flush();
     expect(test.saved.saves()).toBe(0);
@@ -4140,7 +4433,7 @@ describe('createChatSessions saved sessions', () => {
 
     expect(
       test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
-    ).toEqual(['uuid-1', 'host-a']);
+    ).toEqual(['fake-session-1', 'host-a']);
   });
 
   it.each([
@@ -4190,7 +4483,11 @@ describe('createChatSessions saved sessions', () => {
       given: 'a running row',
       open: (chat: ChatSessions) => {
         chat.restore(NOTHING_SAVED, []);
-        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        });
       },
     },
   ])('closed_Row_DropsItsRecord given $given', async ({ open }) => {
@@ -4207,7 +4504,11 @@ describe('createChatSessions saved sessions', () => {
   it('detachAll_ThenExits_SavesNothingAndSendsNothing', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { events } = test.harness.processes[0];
     events.activity('working');
@@ -4231,7 +4532,11 @@ describe('createChatSessions saved sessions', () => {
   it('activity_IdleFlip_SavesBusy', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { events } = test.harness.processes[0];
 
@@ -4363,7 +4668,7 @@ describe('createChatSessions saved sessions', () => {
     await test.chat.loadHistory(ROW_ID);
     const callsWhileMissing = historyCalls().length;
     test.setProfiles([
-      ...DEFAULT_PROFILES,
+      ...PROFILES,
       { name: 'gone', configDir: '/Users/u/.claude-gone' },
     ]);
     await test.chat.loadHistory(ROW_ID);
@@ -4543,8 +4848,12 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'a start',
       open: (chat: ChatSessions) =>
-        chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
-      selected: 'uuid-1',
+        chat.start({
+          harness: FAKE_HARNESS_ID,
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+        }),
+      selected: 'fake-session-1',
     },
     {
       given: 'a launch',
@@ -4815,7 +5124,7 @@ describe('createChatSessions usage forwarding', () => {
         data: {
           sessionId: ROW_ID,
           profileDir: '~/.claude-personal',
-          hostSessionId: 'uuid-1',
+          hostSessionId: 'fake-session-1',
           event,
           replayed: false,
         },
@@ -4853,7 +5162,7 @@ describe('createChatSessions usage forwarding', () => {
           data: {
             sessionId: ROW_ID,
             profileDir: '~/.claude-personal',
-            hostSessionId: 'uuid-1',
+            hostSessionId: 'fake-session-1',
             event: fakeUsageEvent(1, 1000),
             replayed: false,
           },
@@ -4906,7 +5215,11 @@ describe('createChatSessions clear', () => {
   it('clear_RunningRow_RestartsUnderNewIdWithOneNotice', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const old = test.harness.processes[0];
     test.chat.send(ROW_ID, { text: 'first', images: [] });
@@ -4923,26 +5236,28 @@ describe('createChatSessions clear', () => {
       sessionId: ROW_ID,
       entries: [CLEARED],
     });
-    expect(old.request.sessionId).toBe('uuid-1');
+    expect(old.sessionId).toBe('fake-session-1');
     expect(old.request.rowId).toBe(ROW_ID);
     expect(test.harness.processes[1].request).toMatchObject({
-      sessionId: 'uuid-2',
+      sessionId: null,
       rowId: ROW_ID,
       resume: false,
       controls: { model: 'fake-large' },
     });
+    expect(test.harness.processes[1].sessionId).toBe('fake-session-2');
     expect(old.calls).toContainEqual({ method: 'end' });
-    expect(test.hostIdChanges).toEqual(['uuid-2']);
+    expect(test.hostIdChanges).toEqual(['fake-session-1', 'fake-session-2']);
     expect(test.saved.last()).toEqual({
       sessions: [
         {
-          hostSessionId: 'uuid-2',
+          hostSessionId: 'fake-session-2',
           projectDir: PROJECT_DIR,
+          harness: FAKE_HARNESS_ID,
           profile: 'personal',
           sent: false,
           busy: false,
           titles: { ...NO_TITLES, firstMessage: 'first' },
-          processId: 'uuid-2-2-1000',
+          processId: 'row-1-2-1000',
           queued: [],
           returned: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
@@ -4959,7 +5274,7 @@ describe('createChatSessions clear', () => {
           owner: null,
         },
       ],
-      selectedHostSessionId: 'uuid-2',
+      selectedHostSessionId: 'fake-session-2',
     });
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(test.logged).toContain('conversation cleared in app');
@@ -4968,12 +5283,7 @@ describe('createChatSessions clear', () => {
   it('clear_MidTurn_StopsOldProcessAndIgnoresItsLateEvents', async () => {
     const test = await started();
     test.activity('working');
-    const call = test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: 'tu-1',
-        signal: signal().signal,
-      });
+    const decision = await askBash(test);
 
     test.chat.clear(ROW_ID);
     await flush();
@@ -4984,9 +5294,10 @@ describe('createChatSessions clear', () => {
       { method: 'interrupt' },
       { method: 'end' },
     ]);
-    expect(replyText(await settled(call))).toBe(
-      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
-    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
     expect(test.chat.sessions()[0].entries).toEqual([CLEARED]);
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(test.sent('sessionRested')).toEqual([]);
@@ -4996,7 +5307,7 @@ describe('createChatSessions clear', () => {
         ? [emitted.data.hostSessionId]
         : [],
     );
-    expect(sessionEndedHostIds).toEqual(['uuid-1']);
+    expect(sessionEndedHostIds).toEqual(['fake-session-1']);
   });
 
   it('clear_RowWithRunTime_ResetsTheClockAndSavesZero', async () => {
@@ -5028,7 +5339,7 @@ describe('createChatSessions clear', () => {
 
     expect(test.harness.processes).toHaveLength(2);
     expect(test.harness.processes[1].request).toMatchObject({
-      sessionId: 'uuid-2',
+      sessionId: null,
       resume: false,
     });
     expect(test.process.calls).not.toContainEqual({ method: 'end' });
@@ -5092,11 +5403,18 @@ describe('createChatSessions clear', () => {
     },
   );
 
-  it('clear_StartThrows_RowRestsUnderNewIdAndRethrows', async () => {
+  // Breaks if a clear whose start throws moves the row to a host id no
+  // harness reported, or loses the clear before the next start reports.
+  it('clear_StartThrows_ClearPendingUntilNextStartReports', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
+    await test.chat.send(ROW_ID, IDLE_SEND);
     test.harness.failNextStart('spawn failed');
 
     expect(() => test.chat.clear(ROW_ID)).toThrow('spawn failed');
@@ -5106,10 +5424,30 @@ describe('createChatSessions clear', () => {
       entries: [CLEARED],
     });
     expect(test.saved.last()?.sessions).toEqual([
-      expect.objectContaining({ hostSessionId: 'uuid-2', sent: false }),
+      expect.objectContaining({
+        hostSessionId: 'fake-session-1',
+        sent: true,
+        processId: null,
+      }),
     ]);
     expect(test.sent('sessionRested')).toEqual([
       { sessionId: ROW_ID, error: null },
+    ]);
+    expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    expect(test.harness.processes.at(-1)?.request.sessionId).toBeNull();
+    expect(emittedOf(test, 'sessionCleared')).toEqual([
+      expect.objectContaining({
+        oldHostSessionId: 'fake-session-1',
+        newHostSessionId: 'fake-session-2',
+        sent: true,
+      }),
+    ]);
+    expect(test.saved.last()?.sessions).toEqual([
+      expect.objectContaining({ hostSessionId: 'fake-session-2' }),
     ]);
   });
 
@@ -5136,7 +5474,8 @@ describe('createChatSessions clear', () => {
       await flush();
 
       expect(test.harness.processes).toHaveLength(1);
-      expect(test.hostIdChanges).toEqual([]);
+      // The start's own report alone: the clear moved the row nowhere.
+      expect(test.hostIdChanges).toEqual(['fake-session-1']);
       expect(test.logged).toContain(logged);
     },
   );
@@ -5150,7 +5489,8 @@ describe('createChatSessions clear', () => {
     expect(() => test.chat.clear(ROW_ID)).toThrow('personal');
 
     expect(test.chat.sessions()[0].entries).toEqual(entriesBefore);
-    expect(test.hostIdChanges).toEqual([]);
+    // The start's own report alone: the clear moved the row nowhere.
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
     expect(test.process.calls).toEqual([]);
     expect(test.harness.processes).toHaveLength(1);
   });
@@ -5222,14 +5562,21 @@ function runClockSteps(
     } else if ('background' in step) {
       test.process.events.agentEvent(backgroundEvent(step.at, step.background));
     } else if (step.permission === 'asked') {
-      void test.chat
-        .permissionToolSession(test.agentSession)
-        .call('permission_prompt', BASH_ARGS, {
-          toolUseId: 'tu-1',
-          signal: signal().signal,
-        });
+      // Raised straight through the process's events, as the fake would one
+      // microtask later, so the step lands at its own clock time.
+      test.process.events.permission({
+        entry: {
+          kind: 'permission',
+          id: 'fake-permission-1',
+          at: step.at,
+          toolName: 'Bash',
+          input: { command: 'ls' },
+          answer: null,
+          raw: [],
+        },
+      });
     } else {
-      test.chat.answerPermission(ROW_ID, 'permission-1', {
+      test.chat.answerPermission(ROW_ID, 'fake-permission-1', {
         allowed: true,
         reason: null,
       });
@@ -5613,7 +5960,7 @@ describe('createChatSessions active time', () => {
     runClockSteps(test, [{ at: 1000, activity: 'working' }]);
     test.setNow(3000);
 
-    restoreOne(test, record('uuid-1', { activeMs: 42000 }), []);
+    restoreOne(test, record('fake-session-1', { activeMs: 42000 }), []);
 
     expect(test.chat.sessions()[0].activeTime).toEqual({
       totalMs: 42000,
@@ -5648,6 +5995,15 @@ describe('createChatSessions titles', () => {
       act: (chat: ChatSessions) =>
         chat.send(ROW_ID, { text: `${' '.repeat(250)}fix it`, images: [] }),
       expected: [[ROW_ID, 'firstMessage', 'fix it']],
+    },
+    {
+      given: "a first message from another session's agent",
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, {
+          text: '[Message from the agent in session "Planner" — not typed by the user]\n run the tests',
+          images: [],
+        }),
+      expected: [[ROW_ID, 'firstMessage', 'run the tests']],
     },
     {
       given: 'a whitespace-only first message',
@@ -5692,6 +6048,12 @@ describe('createChatSessions titles', () => {
       title: '🙂a'.repeat(150),
       expected: '🙂a'.repeat(100),
     },
+    {
+      given: "a title framed by another session's agent",
+      title:
+        '[Message from the agent in session "Planner" — not typed by the user]\nrun the tests',
+      expected: 'run the tests',
+    },
   ])(
     'resume_SetsTheRequestTitleAndSavesIt given $given',
     async ({ title, expected }) => {
@@ -5735,7 +6097,11 @@ describe('createChatSessions titles', () => {
   it('titleChanged_HeldRow_SavesItsCurrentTitles', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const renamed = { ...NO_TITLES, agent: 'Named by agent' };
     test.setRowTitles(ROW_ID, renamed);
@@ -5750,7 +6116,11 @@ describe('createChatSessions titles', () => {
   it('titleChanged_RowChatDoesNotHold_SavesNothing', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const savesBefore = test.saved.saves();
 
@@ -5807,10 +6177,16 @@ function attachedOf(test: ReturnType<typeof setUp>) {
 }
 
 describe('createChatSessions process ids and the saved queue', () => {
-  it('startProcess_ProcessId_HostIdStartCountAndTime', async () => {
+  // Breaks if a process id starts with the host id before the row has one,
+  // or with the row id once it does, which a later resume could not find.
+  it('startProcess_ProcessId_RowIdUntilTheHostIdIsKnown', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const firstSaved = test.saved.last()?.sessions[0];
     await test.chat.send(ROW_ID, { text: 'hi', images: [] });
@@ -5821,18 +6197,22 @@ describe('createChatSessions process ids and the saved queue', () => {
 
     expect(
       test.harness.processes.map((each) => each.request.processId),
-    ).toEqual(['uuid-1-1-1000', 'uuid-1-2-1000']);
-    expect(firstSaved?.processId).toBe('uuid-1-1-1000');
+    ).toEqual(['row-1-1-1000', 'fake-session-1-2-1000']);
+    expect(firstSaved?.processId).toBe('row-1-1-1000');
     expect(firstSaved?.launchResume).toBe(false);
     const lastSaved = test.saved.last()?.sessions[0];
-    expect(lastSaved?.processId).toBe('uuid-1-2-1000');
+    expect(lastSaved?.processId).toBe('fake-session-1-2-1000');
     expect(lastSaved?.launchResume).toBe(true);
   });
 
   it('save_QueuedChange_SavesUnsentRowsWithImages', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     test.harness.processes[0].events.activity('working');
     const image = { mediaType: 'image/png' as const, data: 'AAAA' };
@@ -5948,9 +6328,12 @@ describe('createChatSessions restoring hosted processes', () => {
     },
   );
 
+  // Each control declares its role, as the fake does: chat holds the mode by
+  // its `permissionMode` role, not its id.
   const heldControl = (id: string, value: string | null): SessionControl => ({
     id,
     label: id,
+    role: id === 'mode' ? 'permissionMode' : id,
     choices: [],
     value,
   });
@@ -6053,7 +6436,11 @@ describe('createChatSessions restoring hosted processes', () => {
   it('controls_ConfirmedPick_SavedWithTheRow', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED, []);
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const controls = [
       heldControl('mode', 'auto'),
@@ -6212,8 +6599,7 @@ describe('createChatSessions attaching', () => {
       calls: [],
       ownedEnds: 0,
       callsAtOwnedEnd: [],
-      resting:
-        'Claude stopped (exit code 0). Your next message resumes this session.',
+      resting: 'stopped (exit code 0). Your next message resumes this session.',
     },
   ])(
     'attach_LateResult_DetachesOrEnds given $given',
@@ -6246,7 +6632,9 @@ describe('createChatSessions attaching', () => {
       }
       if (resting !== null) {
         expect(test.chat.sessions()[0].running).toBe(false);
-        expect(noticesOf(test).map((notice) => notice.text)).toEqual([resting]);
+        expect(noticesOf(test).map((notice) => notice.text)).toEqual([
+          `${test.harness.info().label} ${resting}`,
+        ]);
       }
     },
   );
@@ -6297,7 +6685,6 @@ describe('createChatSessions attaching', () => {
 
       expect(attachedOf(test)[0].calls).toEqual(calls);
       expect(test.hostIdChanges).toEqual([]);
-      expect(test.uuidCalls()).toBe(0);
     },
   );
 
@@ -6581,6 +6968,17 @@ describe('createChatSessions attaching', () => {
       const attach = test.harness.attach.bind(test.harness);
       test.harness.attach = (request, events) => {
         events.activity('working');
+        events.permission({
+          entry: {
+            kind: 'permission',
+            id: 'replayed-permission',
+            at: 0,
+            toolName: 'Bash',
+            input: { command: 'ls' },
+            answer: null,
+            raw: [],
+          },
+        });
         events.agentEvent({
           type: 'taskStarted',
           at: 0,
@@ -6600,6 +6998,16 @@ describe('createChatSessions attaching', () => {
       expect(test.chat.sessions()[0].background).toBe(0);
       expect(test.saved.last()?.sessions[0].busy).toBe(false);
       expect(test.chat.sessions()[0].running).toBe(false);
+      expect(test.chat.sessions()[0].activity).toBe('idle');
+      expect(
+        test.chat
+          .sessions()[0]
+          .entries.find((entry) => entry.kind === 'permission'),
+      ).toEqual(
+        expect.objectContaining({
+          answer: { allowed: false, reason: PERMISSION_CANCELLED_REASON },
+        }),
+      );
       expect(test.sent('sessionRested')).toEqual([
         { sessionId: ROW_ID, error: null },
       ]);
@@ -6667,29 +7075,6 @@ describe('createChatSessions attaching', () => {
     expect(startsOf(test)).toEqual([]);
     expect(attachedOf(test)[0].calls).toEqual([sendCall(message)]);
   });
-
-  it('permission_RowAttaching_WaitsThenAsks', async () => {
-    const test = setUp();
-    test.harness.scriptAttach('p1', {
-      outcome: 'process',
-      turns: 0,
-      replay() {},
-    });
-    restoreOne(test, hostedRecord(), [hostedP1()]);
-
-    void test.chat
-      .permissionToolSession(test.agentSession)
-      .call('permission_prompt', BASH_ARGS, {
-        toolUseId: null,
-        signal: signal().signal,
-      });
-    expect(test.chat.sessions()[0].entries).toEqual([]);
-    await flush();
-
-    expect(test.chat.sessions()[0].entries).toEqual([
-      expect.objectContaining({ kind: 'permission', answer: null }),
-    ]);
-  });
 });
 
 describe('createChatSessions unheld processes', () => {
@@ -6701,10 +7086,7 @@ describe('createChatSessions unheld processes', () => {
       restoreOne(test, hostedRecord({ sent: true, profile: 'gone' }), [
         hostedP1(),
       ]);
-      test.setProfiles([
-        ...DEFAULT_PROFILES,
-        { name: 'gone', configDir: '/gone' },
-      ]);
+      test.setProfiles([...PROFILES, { name: 'gone', configDir: '/gone' }]);
     } else {
       test.harness.scriptAttach('p1', {
         outcome: 'reject',
@@ -6941,8 +7323,16 @@ describe('createChatSessions unheld processes', () => {
 describe('createChatSessions stopAll', () => {
   it('stopAll_KillsEveryRunningProcess_RowsRestWithStoppedNotice', async () => {
     const test = setUp();
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'work' });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'work',
+    });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
 
     test.chat.stopAll();
@@ -7156,7 +7546,7 @@ describe('createChatSessions send gate and hold', () => {
     expect(inputs).toEqual([
       {
         sessionId: 'row-1',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         text: IDLE_SEND.text,
         now: 5000,
       },
@@ -7612,7 +8002,7 @@ describe('createChatSessions send gate and hold', () => {
       {
         sessionId: ROW_ID,
         profileDir: '~/.claude-personal',
-        hostSessionId: 'uuid-1',
+        hostSessionId: 'fake-session-1',
         replayed: false,
         event: {
           type: 'compactionEnded',
@@ -7858,7 +8248,11 @@ describe('createChatSessions send gate and hold', () => {
         },
       ],
     });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     const { calls, events } = fake.processes[0];
     test.chat.addSendGate(answerA);
@@ -7934,7 +8328,11 @@ describe('createChatSessions send gate and hold', () => {
       const test = setUp();
       register(test.chat);
 
-      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+      test.chat.start({
+        harness: FAKE_HARNESS_ID,
+        projectDir: PROJECT_DIR,
+        profile: 'personal',
+      });
 
       expect(test.harness.processes[0].request.idleCompactMinTokens).toBe(
         tokens,
@@ -8094,7 +8492,11 @@ describe('createChatSessions compact', () => {
         },
       ],
     });
-    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+    });
     await flush();
     test.setFocused(false);
 
@@ -8146,11 +8548,15 @@ const AGENT_TITLES: SessionTitles = {
 };
 
 describe('createChatSessions lifecycle events', () => {
-  const START = { projectDir: PROJECT_DIR, profile: 'personal' };
+  const START = {
+    projectDir: PROJECT_DIR,
+    harness: FAKE_HARNESS_ID,
+    profile: 'personal',
+  };
   const OPENED_NEW = {
     sessionId: ROW_ID,
     profileDir: '~/.claude-personal',
-    hostSessionId: 'uuid-1',
+    hostSessionId: 'fake-session-1',
     projectDir: PROJECT_DIR,
     profile: 'personal',
     origin: 'new',
@@ -8285,7 +8691,7 @@ describe('createChatSessions lifecycle events', () => {
       expect(closedAtOwnedEnd).toEqual([
         {
           sessionId: ROW_ID,
-          hostSessionId: 'uuid-1',
+          hostSessionId: 'fake-session-1',
           projectDir: PROJECT_DIR,
           profile: 'personal',
           titles: AGENT_TITLES,
@@ -8303,7 +8709,7 @@ describe('createChatSessions lifecycle events', () => {
     { given: 'an unsent row', sends: false, failsRestart: false, sent: false },
     { given: 'a failed restart', sends: true, failsRestart: true, sent: true },
   ])(
-    'sessionCleared_EachRow_CarriesBothIds given $given',
+    'sessionCleared_EachRow_CarriesBothIdsOnceReported given $given',
     async ({ sends, failsRestart, sent }) => {
       const test = await started();
       if (sends) {
@@ -8316,18 +8722,24 @@ describe('createChatSessions lifecycle events', () => {
       } else {
         test.chat.clear(ROW_ID);
       }
+      expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+      await flush();
 
-      expect(emittedOf(test, 'sessionCleared')).toEqual([
-        {
-          sessionId: ROW_ID,
-          oldHostSessionId: 'uuid-1',
-          newHostSessionId: 'uuid-2',
-          projectDir: PROJECT_DIR,
-          profile: 'personal',
-          titles: AGENT_TITLES,
-          sent,
-        },
-      ]);
+      expect(emittedOf(test, 'sessionCleared')).toEqual(
+        failsRestart
+          ? []
+          : [
+              {
+                sessionId: ROW_ID,
+                oldHostSessionId: 'fake-session-1',
+                newHostSessionId: 'fake-session-2',
+                projectDir: PROJECT_DIR,
+                profile: 'personal',
+                titles: AGENT_TITLES,
+                sent,
+              },
+            ],
+      );
     },
   );
 
@@ -8367,7 +8779,7 @@ describe('createChatSessions lifecycle events', () => {
       test.process.events.ended(exit);
 
       expect(emittedOf(test, 'processEnded')).toEqual([
-        { sessionId: ROW_ID, hostSessionId: 'uuid-1', reason, ...exit },
+        { sessionId: ROW_ID, hostSessionId: 'fake-session-1', reason, ...exit },
       ]);
     },
   );
@@ -8415,24 +8827,19 @@ describe('createChatSessions lifecycle events', () => {
     expect(emittedOf(test, 'processEnded')).toEqual([]);
   });
 
-  it('sessionClosed_FailedStart_SaysStartFailed', () => {
+  // Breaks if a new row whose start throws fires lifecycle events or saves a
+  // record under a host id no harness reported.
+  it('openAndStart_StartThrows_NoOpenedNoClosedNoRecord', async () => {
     const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
     test.harness.failNextStart('spawn failed');
 
     expect(() => test.chat.start(START)).toThrow('spawn failed');
+    await flush();
 
-    expect(emittedOf(test, 'sessionClosed')).toEqual([
-      {
-        sessionId: ROW_ID,
-        hostSessionId: 'uuid-1',
-        projectDir: PROJECT_DIR,
-        profile: 'personal',
-        titles: NO_TITLES,
-        sent: false,
-        headless: false,
-        reason: 'start-failed',
-      },
-    ]);
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+    expect(emittedOf(test, 'sessionClosed')).toEqual([]);
+    expect(test.saved.last()?.sessions ?? []).toEqual([]);
   });
 
   it.each([
@@ -8699,7 +9106,11 @@ describe('createChatSessions message and turn events', () => {
 });
 
 describe('createChatSessions resume sections', () => {
-  const START = { projectDir: PROJECT_DIR, profile: 'personal' };
+  const START = {
+    projectDir: PROJECT_DIR,
+    harness: FAKE_HARNESS_ID,
+    profile: 'personal',
+  };
 
   function rowFor(hostSessionId: string) {
     return {
@@ -8733,9 +9144,10 @@ describe('createChatSessions resume sections', () => {
       given: 'one held, one archived and one free session',
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
+        await flush();
         await test.archived.set('host-archived', true);
       },
-      ids: ['uuid-1', 'host-archived', 'host-free'],
+      ids: ['fake-session-1', 'host-archived', 'host-free'],
       resumable: ['host-free'],
     },
     {
@@ -8751,12 +9163,12 @@ describe('createChatSessions resume sections', () => {
       arrange: async (test: ReturnType<typeof setUp>) => {
         test.chat.start(START);
         await flush();
-        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
+        test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-1'));
         test.chat.clear(ROW_ID);
         await flush();
       },
-      ids: ['uuid-1', 'uuid-2'],
-      resumable: ['uuid-1'],
+      ids: ['fake-session-1', 'fake-session-2'],
+      resumable: ['fake-session-1'],
     },
     {
       given: 'an unreadable archived file',
@@ -8812,14 +9224,14 @@ describe('createChatSessions resume sections', () => {
     {
       given: 'a row closed',
       clears: false,
-      ids: ['uuid-1'],
+      ids: ['fake-session-1'],
       whileEnding: [],
     },
     {
       given: 'a row /clear moved to a new host id, then closed',
       clears: true,
-      ids: ['uuid-1', 'uuid-2'],
-      whileEnding: ['uuid-1'],
+      ids: ['fake-session-1', 'fake-session-2'],
+      whileEnding: ['fake-session-1'],
     },
   ])(
     'isResumable_JustClosedRowEnding_IsFalseUntilEnded given $given',
@@ -8827,10 +9239,10 @@ describe('createChatSessions resume sections', () => {
       const test = setUp();
       test.chat.start(START);
       await flush();
-      test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-1'));
+      test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-1'));
       if (clears) {
         test.chat.clear(ROW_ID);
-        test.chat.recordOpenHostId(connected(ROW_ID, 'uuid-2'));
+        test.chat.recordOpenHostId(connected(ROW_ID, 'fake-session-2'));
         await flush();
       }
       test.harness.holdEnd();
@@ -8984,7 +9396,11 @@ describe('createChatSessions projects', () => {
       poolProvider: fakePoolProvider(CLONES),
     });
 
-    test.chat.start({ project: 'AI Dev', profile: 'personal' });
+    test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      project: 'AI Dev',
+      profile: 'personal',
+    });
     await flush();
 
     expect(test.opened[0].projectDir).toBe('/home/me/ai-dev');
@@ -9050,7 +9466,9 @@ describe('createChatSessions projects', () => {
         poolProvider: folders === null ? null : fakePoolProvider(folders),
       });
 
-      expect(() => test.chat.start({ project, profile })).toThrow(fragment);
+      expect(() =>
+        test.chat.start({ harness: FAKE_HARNESS_ID, project, profile }),
+      ).toThrow(fragment);
       expect(test.opened).toEqual([]);
     },
   );
@@ -9064,7 +9482,11 @@ describe('createChatSessions projects', () => {
     });
     test.chat.restore(NOTHING_SAVED, []);
 
-    const rowId = test.chat.start({ project: 'New Games', profile: 'work' });
+    const rowId = test.chat.start({
+      harness: FAKE_HARNESS_ID,
+      project: 'New Games',
+      profile: 'work',
+    });
     await flush();
 
     expect(rowId).toBe(ROW_ID);
@@ -9073,7 +9495,7 @@ describe('createChatSessions projects', () => {
     const { request } = test.harness.processes[0];
     expect([request.projectDir, request.sessionId]).toEqual([
       '/pool/ng-1',
-      'uuid-1',
+      null,
     ]);
     expect(noticesOf(test)).toEqual([]);
     expect(
@@ -9159,6 +9581,680 @@ describe('createChatSessions projects', () => {
   });
 });
 
+describe('createChatSessions host session ids', () => {
+  const START = {
+    projectDir: PROJECT_DIR,
+    harness: FAKE_HARNESS_ID,
+    profile: 'personal',
+  };
+
+  // Breaks if a new row starts under an id chat made up, or fires
+  // `sessionOpened` or saves before its harness reports the id.
+  it('startNew_NewSession_StartsWithNullAndAdoptsReportedId', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    test.chat.start(START);
+
+    expect(test.harness.processes[0].request.sessionId).toBeNull();
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBeNull();
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+
+    await flush();
+
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-1');
+    expect(emittedOf(test, 'sessionOpened')).toEqual([
+      expect.objectContaining({
+        sessionId: ROW_ID,
+        hostSessionId: 'fake-session-1',
+        origin: 'new',
+      }),
+    ]);
+    expect(
+      test.saved.last()?.sessions.map((saved) => saved.hostSessionId),
+    ).toEqual(['fake-session-1']);
+  });
+
+  // Breaks if a known conversation's process id stops starting with its host
+  // id, or a clear's fresh process takes the old conversation's.
+  it.each([
+    {
+      given: 'a restored row with a known host id',
+      act: async (test: ReturnType<typeof setUp>) => {
+        test.chat.restore(
+          {
+            sessions: [record('host-b', { rowId: 'kept-row' })],
+            selectedHostSessionId: null,
+          },
+          [],
+        );
+        await test.chat.send('kept-row', IDLE_SEND);
+      },
+      processIds: ['host-b-1-1000'],
+    },
+    {
+      given: 'a cleared row',
+      act: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+      },
+      processIds: ['row-1-1-1000', 'row-1-2-1000'],
+    },
+  ])(
+    'startProcess_ProcessId_Cases given $given',
+    async ({ act, processIds }) => {
+      const test = setUp({ keptRowIds: ['kept-row'] });
+
+      await act(test);
+
+      expect(
+        test.harness.processes.map((process) => process.request.processId),
+      ).toEqual(processIds);
+    },
+  );
+
+  // Breaks if a row that was never sent a message restarts as a new
+  // conversation instead of under the id its harness reported.
+  it('restart_NeverSentRow_PassesKnownHostId', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    expect(test.harness.processes[1].request).toMatchObject({
+      sessionId: 'fake-session-1',
+      resume: false,
+    });
+    expect(test.hostIdChanges).toEqual(['fake-session-1']);
+  });
+
+  // Breaks if a clear names the new conversation itself, or fires
+  // `sessionCleared` before the fresh process reports its id.
+  it('clear_FreshProcess_StartsWithNullAndFiresClearedOnReport', async () => {
+    const test = await started();
+
+    test.chat.clear(ROW_ID);
+
+    expect(test.harness.processes[1].request.sessionId).toBeNull();
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-1');
+    expect(emittedOf(test, 'sessionCleared')).toEqual([]);
+
+    await flush();
+
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBe('fake-session-2');
+    expect(emittedOf(test, 'sessionCleared')).toEqual([
+      expect.objectContaining({
+        oldHostSessionId: 'fake-session-1',
+        newHostSessionId: 'fake-session-2',
+      }),
+    ]);
+  });
+
+  // Breaks if a reported id another row holds moves the row anyway, or
+  // fires `sessionOpened` for it.
+  it('adoptHostId_IdHeldElsewhere_LogsAndKeepsRow', async () => {
+    const test = setUp();
+    test.refuseHostId('fake-session-1');
+
+    test.chat.start(START);
+    await flush();
+
+    expect(test.logged).toContain(
+      `session ${ROW_ID} not moved to host fake-session-1: host fake-session-1 is held by another row`,
+    );
+    expect(test.chat.hostSessionIdOf(ROW_ID)).toBeNull();
+    expect(test.chat.sessions()).toHaveLength(1);
+    expect(emittedOf(test, 'sessionOpened')).toEqual([]);
+  });
+
+  // Breaks if a send gate runs for a row with no host id to name.
+  it('sendGate_NoHostId_NotRun', async () => {
+    const test = setUp();
+    const inputs: SendGateInput[] = [];
+    test.chat.addSendGate((input) => {
+      inputs.push(input);
+      return null;
+    });
+    test.chat.start(START);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(inputs).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'a row with a known host id',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.restore(
+          { sessions: [record('host-a')], selectedHostSessionId: null },
+          [],
+        );
+      },
+      settles: 'host-a',
+    },
+    {
+      given: 'a new row once its harness reports',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+      },
+      settles: 'fake-session-1',
+    },
+    {
+      given: 'a cleared row once its fresh process reports',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+      },
+      settles: 'fake-session-2',
+    },
+  ])(
+    'hostSessionIdSettled_Cases resolve given $given',
+    async ({ arrange, settles }) => {
+      const test = setUp();
+      await arrange(test);
+
+      await expect(test.chat.hostSessionIdSettled(ROW_ID)).resolves.toBe(
+        settles,
+      );
+    },
+  );
+
+  it.each([
+    {
+      given: 'a row chat does not hold',
+      settle: (test: ReturnType<typeof setUp>) =>
+        test.chat.hostSessionIdSettled('row-9'),
+      rejects: 'chat holds no session row-9',
+    },
+    {
+      given: 'a new row closed before its harness reports',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.chat.closed(ROW_ID, 'user');
+        return settling;
+      },
+      rejects: `session ${ROW_ID} closed before its harness reported a session id`,
+    },
+    {
+      given: 'a new row whose process ends before its harness reports',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.harness.processes[0].events.ended({ code: 1, error: null });
+        return settling;
+      },
+      rejects: `session ${ROW_ID} ended before its harness reported a session id`,
+    },
+    {
+      given: 'a cleared row whose fresh process ends before it reports',
+      settle: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.clear(ROW_ID);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        test.harness.processes[1].events.ended({ code: 1, error: null });
+        return settling;
+      },
+      rejects: `session ${ROW_ID} ended before its harness reported a session id`,
+    },
+    {
+      given: 'detachAll while it waits',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        const settling = test.chat.hostSessionIdSettled(ROW_ID);
+        void test.chat.detachAll();
+        return settling;
+      },
+      rejects: `session ${ROW_ID} not settled: chat is stopping`,
+    },
+    {
+      given: 'a call after detachAll that would wait',
+      settle: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        void test.chat.detachAll();
+        return test.chat.hostSessionIdSettled(ROW_ID);
+      },
+      rejects: `session ${ROW_ID} not settled: chat is stopping`,
+    },
+  ])(
+    'hostSessionIdSettled_Cases reject given $given',
+    async ({ settle, rejects }) => {
+      const test = setUp();
+
+      await expect(settle(test)).rejects.toThrow(rejects);
+    },
+  );
+
+  // Breaks if the selection is kept by host id again, which a new row lacks
+  // when it is selected.
+  it('snapshot_SelectedNewRow_SavedByRowOnceIdArrives', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    test.chat.start(START);
+    expect(test.saved.last()?.selectedHostSessionId ?? null).toBeNull();
+    await flush();
+
+    expect(test.saved.last()?.selectedHostSessionId).toBe('fake-session-1');
+  });
+});
+
+const WAITING_NOTICE =
+  'Fake is not loaded. This session waits for it to load again.';
+const WAITING_REFUSAL = 'Fake is not loaded. Send again once it is.';
+const START_ON_FAKE = {
+  harness: FAKE_HARNESS_ID,
+  projectDir: PROJECT_DIR,
+  profile: 'personal',
+};
+
+// A row resumed on the fake from `PAST_ONE`, whose history the fake reads, with
+// its process `<PAST_ONE's id>-1-1000` running.
+async function resumedOnFake(options?: Parameters<typeof setUp>[0]) {
+  const test = setUp(options);
+  await test.chat.resume({
+    projectDir: '/w/app',
+    profile: 'work',
+    hostSessionId: PAST_ONE.sessionId,
+    title: PAST_ONE.title,
+  });
+  await flush();
+  return { ...test, process: test.harness.processes[0] };
+}
+
+// A restored row of `PAST_ONE`, sent before, that rests with no process and no
+// unheld process.
+function restoredResting(options?: Parameters<typeof setUp>[0]) {
+  const test = setUp(options);
+  restoreOne(test, record(PAST_ONE.sessionId, { sent: true }), []);
+  return test;
+}
+
+function historyCallsOf(test: ReturnType<typeof setUp>) {
+  return test.harness.pastSessionCalls.filter(
+    (call) => call.method === 'history',
+  );
+}
+
+describe('createChatSessions harness leave and return', () => {
+  it('harnessLeft_RunningRow_DetachesAndRestsWithTheNotice', async () => {
+    const test = await started();
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    test.leave(FAKE_HARNESS_ID);
+
+    expect(test.registry.get(FAKE_HARNESS_ID)).toBeNull();
+    expect(test.process.detached).toBe(true);
+    expect(test.process.calls).not.toContainEqual({ method: 'kill' });
+    expect(test.process.calls).not.toContainEqual({ method: 'end' });
+    const [session] = test.chat.sessions();
+    expect(session).toEqual(
+      expect.objectContaining({ running: false, activity: 'idle' }),
+    );
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    expect(test.sent('sessionRested')).toEqual([
+      { sessionId: ROW_ID, error: null },
+    ]);
+  });
+
+  it.each([
+    {
+      given: 'send',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.send(ROW_ID, IDLE_SEND),
+    },
+    {
+      given: 'sendAllNow',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendAllNow(ROW_ID, IDLE_SEND),
+    },
+    {
+      given: 'clear',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.clear(ROW_ID),
+    },
+    {
+      given: 'setControl',
+      queues: false,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.setControl(ROW_ID, 'mode', 'plan'),
+    },
+    {
+      given: 'sendNow',
+      queues: true,
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendNow(ROW_ID, test.chat.sessions()[0].queued[0].id),
+    },
+  ])(
+    'send_HarnessLeft_RejectsNamingTheLabel given $given',
+    async ({ queues, act }) => {
+      const test = await started();
+      if (queues) {
+        test.activity('working');
+        await test.chat.send(ROW_ID, PENDING);
+      }
+      test.leave(FAKE_HARNESS_ID);
+      const queuedBefore = test.chat.sessions()[0].queued;
+      const callsBefore = test.process.calls.length;
+
+      await expect(Promise.resolve().then(() => act(test))).rejects.toThrow(
+        WAITING_REFUSAL,
+      );
+      await flush();
+
+      expect(test.chat.sessions()[0].queued).toEqual(queuedBefore);
+      expect(test.process.calls).toHaveLength(callsBefore);
+      expect(test.harness.processes).toHaveLength(1);
+    },
+  );
+
+  it('harnessLeft_PullBackHeadlessInterrupt_WorkAsOnAnyRestingRow', async () => {
+    const test = await started();
+    test.activity('working');
+    await test.chat.send(ROW_ID, PENDING);
+    const [queued] = test.chat.sessions()[0].queued;
+    test.leave(FAKE_HARNESS_ID);
+    const callsBefore = test.process.calls.length;
+
+    test.chat.pullBack(ROW_ID, queued.id);
+    test.chat.setHeadless(ROW_ID, true);
+    const entriesBefore = test.chat.sessions()[0].entries;
+    test.chat.interrupt(ROW_ID);
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [PENDING] },
+    ]);
+    const [session] = test.chat.sessions();
+    expect(session.queued).toEqual([]);
+    expect(session.headless).toBe(true);
+    expect(session.entries).toEqual(entriesBefore);
+    expect(test.process.calls).toHaveLength(callsBefore);
+  });
+
+  it('harnessLeft_AttachingRow_DetachesOnceTheAttachSettles', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', { outcome: 'process', replay() {} });
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    const [attached] = attachedOf(test);
+    expect(attached.detached).toBe(true);
+    expect(attached.calls).not.toContainEqual({ method: 'kill' });
+    expect(test.chat.sessions()[0].running).toBe(false);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
+  });
+
+  // Breaks if a process whose conversation has no settled host id is kept
+  // unheld, which the return would attach with no session id or the old one.
+  // `arrange` may wait; `act` starts the process and must not, since the fake
+  // reports the session id a microtask after the start.
+  it.each([
+    {
+      given: 'a new row before its harness reports',
+      arrange: async () => {},
+      act: (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START_ON_FAKE);
+        return test.harness.processes[0];
+      },
+    },
+    {
+      given: 'a cleared row before its fresh process reports',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START_ON_FAKE);
+        await flush();
+      },
+      act: (test: ReturnType<typeof setUp>) => {
+        test.chat.clear(ROW_ID);
+        return test.harness.processes[1];
+      },
+    },
+  ])(
+    'harnessLeft_NoSettledHostId_EndsTheProcess given $given',
+    async ({ arrange, act }) => {
+      const test = setUp();
+      await arrange(test);
+      const process = act(test);
+      const settling = test.chat.hostSessionIdSettled(ROW_ID);
+
+      test.leave(FAKE_HARNESS_ID);
+
+      await expect(settling).rejects.toThrow(
+        `session ${ROW_ID} ended before its harness reported a session id`,
+      );
+      await flush();
+      expect(process.calls).toContainEqual({ method: 'end' });
+      expect(process.detached).toBe(false);
+      expect(test.logged).toContain(
+        `session ${ROW_ID} ended process ${process.request.processId}: its harness left before it reported a session id`,
+      );
+      test.register(test.harness);
+      await test.chat.harnessReturned(FAKE_HARNESS_ID);
+      await test.chat.send(ROW_ID, IDLE_SEND);
+      await flush();
+      expect(test.harness.attachCalls).toEqual([]);
+      expect(test.harness.processes.at(-1)?.request.sessionId).toBeNull();
+    },
+  );
+
+  it('harnessLeft_AfterDetachAll_ChangesNoRow', async () => {
+    const test = await started();
+    await test.chat.detachAll();
+    const timelineBefore = test.timeline.length;
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.timeline).toHaveLength(timelineBefore);
+    expect(test.logged).toContain('harness fake left; chat is stopping');
+  });
+
+  it('harnessReturned_ProcessRunningHere_AttachesThroughAttach', async () => {
+    const test = await resumedOnFake();
+    const { processId } = test.process.request;
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.setList([
+      { id: processId, startedAt: 5000, running: true, current: true },
+    ]);
+    test.harness.scriptAttach(processId, {
+      outcome: 'process',
+      replay(events) {
+        events.entry(assistant('r1', 'replayed'));
+      },
+    });
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls.map((attach) => attach.processId)).toEqual([
+      processId,
+    ]);
+    const [session] = test.chat.sessions();
+    expect(session.running).toBe(true);
+    expect(noticesOf(test).map((notice) => notice.text)).not.toContain(
+      WAITING_NOTICE,
+    );
+    const ids = session.entries.map((entry) => entry.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('harnessReturned_ProcessEnded_RestsAndReadsTheHistory', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.setList([]);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    const [session] = test.chat.sessions();
+    expect(session.running).toBe(false);
+    expect(session.entries.map((entry) => entry.id)).toEqual([
+      `history:${PAST_ONE.sessionId}-user`,
+      `history:${PAST_ONE.sessionId}-assistant`,
+    ]);
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    await flush();
+
+    const starts = startsOf(test);
+    expect(starts).toHaveLength(2);
+    expect(starts[1].request.resume).toBe(true);
+  });
+
+  it('harnessReturned_ProfileGone_RestsWithTheMissingProfileNotice', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.setProfiles([{ name: 'personal', configDir: '~/.claude-personal' }]);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'error',
+      text: 'Profile work is not declared by Fake; add it back to resume this session.',
+    });
+  });
+
+  it('harnessLeft_WaitingPermissionCard_SettlesAsAborted', async () => {
+    const test = await started();
+    const decision = await askBash(test);
+
+    test.leave(FAKE_HARNESS_ID);
+    await flush();
+
+    const card = test.chat
+      .sessions()[0]
+      .entries.find((entry) => entry.kind === 'permission');
+    expect(card).toEqual(
+      expect.objectContaining({
+        answer: { allowed: false, reason: PERMISSION_CANCELLED_REASON },
+      }),
+    );
+    expect(decision()).toEqual({
+      allowed: false,
+      reason: FAKE_CANCELLED_REASON,
+    });
+    expect(test.chat.sessions()[0].activity).toBe('idle');
+  });
+
+  it('loadHistory_HarnessLeft_ReadsNothingAndLaterTriesAgain', async () => {
+    const test = restoredResting();
+    test.leave(FAKE_HARNESS_ID);
+
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(historyCallsOf(test)).toEqual([]);
+
+    test.register(test.harness);
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(historyCallsOf(test)).toHaveLength(1);
+  });
+
+  it('harnessLeft_RestingRowWithNoProcess_StillWaits', async () => {
+    const test = restoredResting();
+
+    test.leave(FAKE_HARNESS_ID);
+
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
+    expect(noticesOf(test).at(-1)).toEqual({
+      kind: 'notice',
+      tone: 'info',
+      text: WAITING_NOTICE,
+    });
+    expect(test.harness.processes).toEqual([]);
+  });
+
+  it('harnessReturned_NoUnheldProcessId_ChangesNothingMore', async () => {
+    let lists = 0;
+    const test = restoredResting({
+      sessionHost: {
+        list: () => {
+          lists++;
+          return Promise.resolve([]);
+        },
+      },
+    });
+    const entriesBefore = test.chat.sessions()[0].entries;
+    test.leave(FAKE_HARNESS_ID);
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.chat.sessions()[0].entries).toEqual(entriesBefore);
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(lists).toBe(0);
+    expect(historyCallsOf(test)).toEqual([]);
+    // The history the row had pending before the leave is still pending.
+    await test.chat.loadHistory(ROW_ID);
+    expect(historyCallsOf(test)).toHaveLength(1);
+  });
+
+  it('harnessReturned_ListRejects_KeepsTheGuard', async () => {
+    const test = await resumedOnFake();
+    test.leave(FAKE_HARNESS_ID);
+    test.sessionHost.failList('boom');
+    test.register(test.harness);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+    await flush();
+
+    expect(test.harness.attachCalls).toEqual([]);
+    expect(noticesOf(test).map((notice) => notice.text)).not.toContain(
+      WAITING_NOTICE,
+    );
+    // The send lists the host again, which still rejects.
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow('boom');
+    expect(test.harness.processes).toHaveLength(1);
+  });
+
+  it('harnessReturned_NotInTheRegistry_ChangesNothing', async () => {
+    const test = await started();
+    test.leave(FAKE_HARNESS_ID);
+
+    await test.chat.harnessReturned(FAKE_HARNESS_ID);
+
+    expect(test.logged).toContain(
+      'harness fake set in core.agentHarnesses but not registered',
+    );
+    await expect(test.chat.send(ROW_ID, IDLE_SEND)).rejects.toThrow(
+      WAITING_REFUSAL,
+    );
+  });
+});
+
 describe('createChatSessions prepare and adopt', () => {
   const MESSAGE: UserMessage = { text: '  run the task', images: [] };
   const LAUNCH = {
@@ -9185,6 +10281,7 @@ describe('createChatSessions prepare and adopt', () => {
       processId: 'host-run-1-4000',
       rowId: 'row-run',
       projectDir: '/w/app',
+      harness: FAKE_HARNESS_ID,
       profile: 'work',
       headless: true,
       unattended: true,
@@ -9239,7 +10336,7 @@ describe('createChatSessions prepare and adopt', () => {
     expect(startsOf(test)[0].request.controls).toEqual({});
   });
 
-  it.each([
+  it.each<{ act: string; run: (chat: ChatSessions) => unknown }>([
     {
       act: 'launch',
       run: (chat: ChatSessions) =>
@@ -9252,16 +10349,16 @@ describe('createChatSessions prepare and adopt', () => {
     },
   ])(
     'launchAndPrepare_UnknownControlId_ThrowsAndOpensNothing given $act',
-    ({ run }) => {
+    async ({ run }) => {
       const test = setUp();
       const ids = test.harness
         .startControls()
         .map((control) => control.id)
         .join(', ');
 
-      expect(() => run(test.chat)).toThrow(
-        `Unknown control "mdoe". Controls: ${ids}.`,
-      );
+      await expect(
+        Promise.resolve().then(() => run(test.chat)),
+      ).rejects.toThrow(`Unknown control "mdoe". Controls: ${ids}.`);
       expect(test.opened).toEqual([]);
       expect(test.harness.processes).toEqual([]);
       expect(test.harness.preparedRuns).toEqual([]);
@@ -9276,7 +10373,7 @@ describe('createChatSessions prepare and adopt', () => {
     const prepareRun = vi.spyOn(test.harness, 'prepareRun');
     const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
 
-    const prepared = test.chat.prepareLaunch(
+    const prepared = await test.chat.prepareLaunch(
       {
         ...LAUNCH,
         headless: true,
@@ -9303,12 +10400,13 @@ describe('createChatSessions prepare and adopt', () => {
     });
     expect(message).toBe(MESSAGE);
     expect(passedEnv).toBe(env);
-    expect(prepared.spawn).toBe(prepareRun.mock.results[0].value);
+    expect(prepared.spawn).toBe(await prepareRun.mock.results[0].value);
     expect(prepared.adopt).toEqual({
       hostSessionId,
       processId: `${hostSessionId}-1-4000`,
       rowId,
       projectDir: PROJECT_DIR,
+      harness: FAKE_HARNESS_ID,
       profile: 'personal',
       headless: true,
       unattended: false,
@@ -9322,24 +10420,29 @@ describe('createChatSessions prepare and adopt', () => {
     expect(test.saved.saves()).toBe(savesBefore);
   });
 
-  it('prepareLaunch_TwoCalls_FreshIds', () => {
+  it('prepareLaunch_TwoCalls_FreshIds', async () => {
     const test = setUp();
 
-    const ids = [LAUNCH, LAUNCH].flatMap((request) => {
-      const { adopt } = test.chat.prepareLaunch(request, {});
-      return [adopt.hostSessionId, adopt.rowId, adopt.processId];
-    });
+    const prepared = [
+      await test.chat.prepareLaunch(LAUNCH, {}),
+      await test.chat.prepareLaunch(LAUNCH, {}),
+    ];
+    const ids = prepared.flatMap(({ adopt }) => [
+      adopt.hostSessionId,
+      adopt.rowId,
+      adopt.processId,
+    ]);
 
     expect(new Set(ids).size).toBe(6);
   });
 
-  it('prepareLaunch_PoolProject_StartsInTheLowestClone', () => {
+  it('prepareLaunch_PoolProject_StartsInTheLowestClone', async () => {
     const test = setUp({
       projects: [POOL_PROJECT],
       poolProvider: POOL_PROVIDER,
     });
 
-    const prepared = test.chat.prepareLaunch(
+    const prepared = await test.chat.prepareLaunch(
       { project: POOL_PROJECT.name, profile: 'personal', message: MESSAGE },
       {},
     );
@@ -9400,8 +10503,8 @@ describe('createChatSessions prepare and adopt', () => {
       images: [],
     },
   ])(
-    'prepareLaunch_RefusedTarget_ThrowsAsLaunch given $refusal',
-    ({ options, target, profile, images }) => {
+    'prepareLaunch_RefusedTarget_RejectsAsLaunchThrows given $refusal',
+    async ({ options, target, profile, images }) => {
       const test = setUp(options);
       const request = {
         ...target,
@@ -9416,7 +10519,9 @@ describe('createChatSessions prepare and adopt', () => {
       }
 
       expect(launchError).not.toBe('');
-      expect(() => test.chat.prepareLaunch(request, {})).toThrow(launchError);
+      await expect(test.chat.prepareLaunch(request, {})).rejects.toThrow(
+        launchError,
+      );
       expect(test.opened).toEqual([]);
       expect(test.harness.preparedRuns).toEqual([]);
     },
@@ -9511,7 +10616,7 @@ describe('createChatSessions prepare and adopt', () => {
       });
       const history = vi
         .spyOn(test.harness, 'history')
-        .mockResolvedValue([toolEntry('main', 'Bash', BASH_ARGS.input)]);
+        .mockResolvedValue([toolEntry('main', 'Bash', BASH_CALL.input)]);
 
       const sessionId = await test.chat.adopt(adoptRun({ profile }));
 
@@ -9595,7 +10700,7 @@ describe('createChatSessions prepare and adopt', () => {
       given: 'a resting restored row whose history holds a main-agent call',
       arrange: (test: ReturnType<typeof setUp>) => {
         vi.spyOn(test.harness, 'history').mockResolvedValue([
-          toolEntry('main', 'Bash', BASH_ARGS.input),
+          toolEntry('main', 'Bash', BASH_CALL.input),
         ]);
         test.chat.restore(
           {
@@ -9672,7 +10777,7 @@ describe('createChatSessions prepare and adopt', () => {
     const test = setUp();
     await test.chat.detachAll();
 
-    const prepared = test.chat.prepareLaunch(LAUNCH, {});
+    const prepared = await test.chat.prepareLaunch(LAUNCH, {});
 
     expect(prepared.spawn).toBe(test.harness.preparedRuns[0].spawn);
     expect(test.opened).toEqual([]);

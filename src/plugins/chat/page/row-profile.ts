@@ -1,9 +1,9 @@
+import type { HarnessProfile } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { callEach } from '../../../shared/call-each';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { SessionPart } from '../../sessions/contract';
-import type { ChatProfile } from '../contract';
 import type { RowProfileInput } from '../layouts/layout';
 import {
   type ChatLayouts,
@@ -21,13 +21,13 @@ export interface RowProfileDeps {
   paths: Paths;
   homeDir: string;
   log: PluginLog;
-  profiles(): readonly ChatProfile[];
+  profiles(): readonly HarnessProfile[];
   heldProfile(sessionId: string): string | null;
   profileDirOf(sessionId: string): string | null;
 }
 
 // `part` is the row part sessions draws under each session row. `profilesChanged`
-// draws every kept row again, after chat's profiles setting changed. `changed`
+// draws every kept row again, after a harness's profiles changed. `changed`
 // draws the session's row again when its name changed, after chat's state for
 // it changed; a session with no row drawn is ignored.
 export interface RowProfile {
@@ -50,7 +50,7 @@ interface KeptRow {
 // last segment.
 export function profileNameOf(
   folder: string,
-  profiles: readonly ChatProfile[],
+  profiles: readonly HarnessProfile[],
   paths: Paths,
   homeDir: string,
 ): string {

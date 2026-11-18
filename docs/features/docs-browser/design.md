@@ -99,9 +99,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   and opens the doc there at that 1-based line once the machine view's first index read settles, or, when that read
   does not list the path and a rebuild is coming or running, once that rebuild settles; a path still not listed is
   refused with a toast. A waiting request is dropped when a newer one is asked meanwhile.
-- The script is found through `installPath` in each configured Claude config folder's
-  `plugins/installed_plugins.json`; a `docs.scriptPath` setting, empty by default, overrides it. `python3 -X utf8`
-  runs it: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.
+- The script is found through the wigley install each registered harness profile lists (the adapter's
+  `installedPlugins`), the first whose `docs_index.py` exists; a `docs.scriptPath` setting, empty by default, overrides it. The Python
+  `resolveProgram('python')` gives runs it with `-X utf8`: UTF-8 mode lets it print the index's `→` to a Windows console's cp1252 pipe.
 - The tree shows the last `index.json` at once; a full `build` (12.7 s, 629 entries, 4 MB measured 2026-10-19) runs
   in the background on launch and on Rescan. After create, rename or delete the tree updates at once and a background
   build fills in load states; until then the changed entry's chips read `pending`.
@@ -128,7 +128,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   goes in as a markdown link relative to the doc (`![name](path)` for an image); a pasted screenshot is saved beside the
   doc as `images/<doc name>-<yyyyMMdd-HHmmss>[-<n>].<ext>` (`docs/features/file-drop/design.md`). The rendered view shows
   `![…]` as its alt text, not the picture.
-- **Load states**: a Claude and a Codex chip on each doc (state; reason on hover), judged for a folder the user picks
+- **Load states**: one chip per registered harness on each doc, in registration order and named by the adapter's
+  label (state; reason on hover); a harness no adapter registered draws no chip. Judged for a folder the user picks
   from the index's contexts (`c`), the home folder by default. A session's Docs tab uses that session's own states.
 - **Create**: `a` new doc by kind, `A` new file by path. By kind covers instructions, rule, skill, subagent, command,
   learning, reference, feature doc and follow-up; each kind offers only the places the index finds it in, and writes
@@ -148,15 +149,17 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   goes. In a chain of links only the first link and the final target go; a link in between stays, dangling. When the
   link's trash fails after its target went, the target's removal still shows and the failure is toasted.
 - Main writes, renames and deletes only files the index lists, files inside a repo or feature home the index lists,
-  and files inside a folder the index walks for global docs: each Claude config folder, `~/.codex`, `~/.agents` and
-  `~/wigley-agents`. Never the home folder itself, and never a third-party entry or anything inside a plugin cache or
-  a config folder's `skills/synced`.
+  and files inside a folder the index walks for global docs: each registered harness profile's config folder,
+  `~/.agents` and `~/wigley-agents`. Never the home folder itself, and never a third-party entry or anything inside a
+  plugin cache the profile's adapter declares or a config folder's `skills/synced`. A harness with no adapter (Codex
+  today) adds no folder, so `~/.codex` is outside the indexed folders.
 - **Read-only docs**: a `third-party` entry, and any file inside a plugin cache (an installed-only file), opens
   read-only with one line: `Downloaded copy — <plugin, or synced skill>. Edits are lost on its next update.` for a
   third-party entry, `Installed copy — <plugin key>. Edits are lost on its next update.` for an installed-only file;
   `i`, rename and delete refuse it with that line, and so does main's write guard. Create offers no place inside one.
 - **Hook and plugin entries** show a detail view (event, matcher, command / version, enabled) whose edit key opens
-  the settings or config file holding it in the same editor.
+  the settings or config file holding it in the same editor; a plugin's file and line come from its harness adapter's
+  `installedPlugins` (`listedAt`), and a plugin of a harness with no adapter toasts `No config file lists <key>`.
 - **Disk changes**: the open file is watched, through a one-level watch (`recursive: false`) on its folder, so a doc
   directly in `~/.claude` hears no transcript write under `~/.claude/projects`. The rendered view reloads by itself; while editing, a banner says the
   file changed, and `:w` asks reload-or-overwrite.
@@ -234,10 +237,10 @@ sessions load.
 
   "Not installed" hashes each installed copy's bytes (and again with CRLF turned to LF) as a git blob and compares it
   with the file's blob in `git ls-tree @{u}`, which works for Codex, whose install records no commit; it is judged
-  only for a harness the plugin is installed for. A clone branch with no upstream shows Uncommitted alone. "Session
+  only for a registered harness the plugin is installed for. A clone branch with no upstream shows Uncommitted alone. "Session
   stale" compares the session context's `loadedPlugins` version with the Claude installed copy's; a session that
   named no file of the plugin shows none. A file with every status clear shows none. A plugin, repo or clone node
-  shows the rollup (`3 uncommitted · 12 not installed for Codex`).
+  shows the rollup (`3 uncommitted · 12 not installed for Claude Code`).
 - **Fetch**: when Docs first opens and on Rescan, each clone with plugin files runs `git fetch` in the background,
   capped at 15 s; statuses show at once from the last fetch and refresh after it. A failed or capped fetch shows
   `origin as of <time>` on the repo node (the clone node in a split repo), the time of the clone's last fetch, or

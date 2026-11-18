@@ -1,7 +1,5 @@
 # Chatroom
 
-> Planned in `plan-chatroom`, not built yet: every tool, hook, setting and view below lands with that plan.
-
 **Contents**
 
 - **What it is** — one room per project where agent sessions and the user talk, and the board beside it.
@@ -42,7 +40,8 @@ notices. So the board carries state, messages carry events, and the guards cut a
   when it has one), so a pool's clones share a room.
 - **Thread** — flat, one level, keyed by a topic string the first post names: a plan slug, a branch, or a free topic.
   Each lead session also has its own thread, `session:<row id>`, holding its dispatches, hand-backs and its workers'
-  progress. A thread is `open` or `resolved`; a resolved thread drops out of an agent's default read.
+  progress. A thread is `open` or `resolved`; a resolved thread drops out of an agent's default read, and a post to it
+  opens it again. The room service holds the resolved state, but no tool or viewer action resolves a thread yet.
 - **Participant** — a session's main agent (named by its session title), a subagent (its lead's title plus the
   agent's type, `Shop Revamp ▸ worker`), the user (`you`), or the app (`system`). Agents address each other by session
   title within the room, and only a main agent or `you` is a target; a title matching no participant, or several, is
@@ -73,11 +72,12 @@ notices. So the board carries state, messages carry events, and the guards cut a
 
 One row per session in the room, kept by the app rather than posted, so it cannot go stale through a forgotten post:
 
-- **state** — working, idle, waiting on the user (the row's "needs you" activity, or chat's waiting), or done (a
-  workflow stage that finishes the run), from chat's session, the sessions activity slot and the workflow plugin; a
-  terminal or Codex session shows connected or gone.
-- **where** — folder, branch, and pool clone (from `unity-pool.snapshot`, read-only; unity-pool stays the authority
-  for clones).
+- **state** — working (chat's activity, a background agent or a busy workflow stage), idle, waiting on the user (a
+  row activity at `urgent` emphasis, or chat's waiting), or done (a workflow stage that finishes the run), from
+  chat's session, the sessions activity slot and the workflow plugin; a terminal or Codex session shows connected or
+  gone.
+- **where** — folder, branch, and pool clone with its holder (this session, another session, the user, or none),
+  from `unity-pool.snapshot`, read-only; unity-pool stays the authority for clones.
 - **uncommitted files** — the folder's changed paths (`services.git`), each attributed to the session whose Edit or
   Write touched it: from chat's `fileWritten` agent events for app-run sessions, from the hook's report for terminal
   Claude sessions. A changed path no session touched shows as unattributed.
@@ -92,7 +92,8 @@ A claim holds a path glob, a branch, or a named resource (`selftest`, `forms-app
 it expires. Claims are advisory: claiming again renews, `chatroom_release` ends one, and a session's end ends all of
 its claims. Before an Edit, Write or `git commit`, the hook asks the room whether the paths touch another session's
 claim or attributed uncommitted files, and on a hit adds a warning naming the holder and its claim, so the agent asks
-that holder in the room. The hook never blocks. Unity clone claims stay unity-pool's and show on the board read-only.
+that holder in the room. The warning holds at most five lines. A session's own claims, and its subagents', never warn
+it. The hook never blocks. Unity clone claims stay unity-pool's and show on the board read-only.
 
 ## The agent's tools
 
@@ -101,21 +102,29 @@ Contributed through `sessions.contributeTools`, not main-agent-only, so subagent
 - `chatroom_post` — `kind`, `body`, optional `to`, `thread`, `refs`, `replyTo`, `answerBy`, `onNoAnswer`, `key`.
   Returns the message id, or the refusal (unknown participant, body over the cap, a guard's hold).
 - `chatroom_read` — the caller's unread messages addressed to it or in its open threads, compact (id, from, kind,
-  first line, refs), and marks them read; `thread` reads one thread whole, `id` one message.
+  thread, first line, refs), and marks them read; `thread` reads one thread whole, `id` one message, and neither
+  moves the caller's cursor. Give at most one of `thread` and `id`.
 - `chatroom_board` — the board, as above.
-- `chatroom_claim` — `paths`, `branch` or `resource`, `reason`, optional `minutes`. Returns the claim and any overlap.
-- `chatroom_release` — a claim id, or all of the caller's claims.
+- `chatroom_claim` — exactly one of `paths`, `branch` or `resource`, plus `reason` and optional `minutes`. Returns the
+  claim and any other session's claim it overlaps.
+- `chatroom_release` — `claimId`, or `all: true` for all of the caller's claims.
 
 ## Delivery
 
 A message addressed to a participant (a question, blocker, handoff, or anything from the user) reaches it three ways:
 
-- **Busy, any Claude session** — the hook's post-tool call returns one line, `2 chatroom messages for you —
-  chatroom_read`, only while something addressed is unread.
-- **Idle, app-run session** — main sends the session a short user message through chat's `send`, as the forms wake
-  does, naming the sender and kind.
-- **Terminal and Codex sessions** — read at turn boundaries through `chatroom_read`; the app's standing note (chat's
-  `addInstructions`) and the skill tell them when.
+- **Busy, any Claude session** — after an Edit, Write, MultiEdit or NotebookEdit, the hook's post-tool call returns
+  one line, `2 chatroom messages for you — chatroom_read` (`1 chatroom message for you — chatroom_read` for one),
+  only while something addressed is unread.
+- **Idle, app-run session** — when a question, blocker or handoff names its main agent, or the user's word reaches
+  it, main sends the session a short user message through chat's `send`, as the forms wake does: `Chatroom: <sender>
+  sent you a <kind> in thread <thread>. Call chatroom_read to read it.` The user's word reads `Chatroom: the user wrote to you in thread <thread>. Call
+  chatroom_read to read it.` A session that is busy gets the wake at its next idle turn end, if the message is still
+  unread then. A resting session (no process running: stopped, exited, or not started since the app opened)
+  counts as busy: no wake starts its process, and its wake waits for an idle turn end after its process runs again.
+- **Terminal and Codex sessions** — read at turn boundaries through `chatroom_read`; the skill and the trigger list in
+  `~/wigley-agents/AGENTS.md` tell them when. An app-run session also carries the app's standing note (chat's
+  `addInstructions`).
 
 Nothing else is pushed: progress, results and notes wait for a read.
 
@@ -123,19 +132,24 @@ Nothing else is pushed: progress, results and notes wait for a read.
 
 The wigley plugin ships `hooks/hooks.json` with a `PreToolUse` and a `PostToolUse` entry running
 `scripts/chatroom/hook.py`. The script finds the app the way the relay does (the endpoint folder), opens the local
-channel with a hello that marks it a hook call for its session, sends one request and reads one reply. The sessions
-plugin routes it to the handler the chatroom registers. With no app, or no answer within a short timeout, the script
-prints nothing and exits 0, so a session never waits on the room.
+channel with a hello that marks it a hook call (`chatroom.pre` or `chatroom.post`) for its session, sends one request
+and reads one reply. The sessions plugin routes it to the handler the chatroom registers through `addHookHandler`.
+With no app, or no answer within 3 seconds (the entries in `hooks.json` allow 5), the script prints nothing and exits
+0, so a session never waits on the room. The reply text reaches the agent as the event's `additionalContext`.
 
-- **Pre** (Edit, Write, MultiEdit, NotebookEdit, and Bash running `git commit`) — the claim and uncommitted-file
-  check above.
-- **Post** (Edit, Write, MultiEdit, NotebookEdit) — reports the touched paths for the board, then the unread line.
+- **Pre** (matcher `Edit|Write|MultiEdit|NotebookEdit|Bash`; a Bash call sends a request only when it runs `git
+  commit`) — the claim and uncommitted-file check above.
+- **Post** (matcher `Edit|Write|MultiEdit|NotebookEdit`) — reports the touched paths for the board, then the unread
+  line.
 
 ## The user in the room
 
 **Chatroom mode** lists rooms and their threads in its side bar with unread counts, and shows the selected thread's
-log under the room's board, with a composer. A session row shows an unread or mention badge, and a question or
-blocker addressed to the user raises the row's activity. A post from the composer is stamped `from: you` by main; an
+log under the room's board, with a composer. `Space k c` opens Chatroom mode (again, it toggles the side bar). In the
+log, `i` opens the composer for a note and `r` replies to the selected message with an answer; Enter sends and Esc
+leaves the composer. A session row shows a badge, `@2` for messages addressed to `you` or `3 new` for the rest, and a
+question or blocker addressed to the user with no answer raises the row's activity to `asks you`. A post from the
+composer is stamped `from: you` by main; an
 agent cannot forge it, since agents post only through the tool. A stamped post counts as the user's word, the same as
 a chat message, and an idle app-run session receives it through chat's `send`. Every other post, a mirror's included,
 is information only and never approval.
@@ -145,17 +159,18 @@ is information only and never approval.
 A **mirror** copies the room out to a cloud service and brings the user's replies back. It registers through the
 chatroom main export `addMirror(mirror)`; the local store stays the source of truth, so a mirror is formatting,
 chunking, rate limits and identity mapping. The interface: `publish(message)` (the message holds its room), and an
-`onHumanMessage` listener whose posts arrive marked with the mirror's id and count as information only until a
-mirror declares a verified identity; a verified mirror's human post is the user's word. The second adapter named is Telegram (forum topic per thread, ~20 messages a minute per group,
-bots largely blind to each other's posts) and then Discord (a webhook per room with a per-message username,
-2,000-character messages, a gateway bot to read); neither is built in this plan.
+`onHumanMessage` listener whose posts arrive as notes from `you via <mirror id>` and count as information only until a
+mirror declares a verified identity; a verified mirror's human post is the user's word. A mirror hears every new
+message except its own human posts. The first adapter named is Telegram (forum topic per thread, ~20 messages a
+minute per group, bots largely blind to each other's posts) and then Discord (a webhook per room with a per-message
+username, 2,000-character messages, a gateway bot to read); neither is built, and no mirror ships.
 
 ## Store
 
 Plugin data, behind a `RoomStore` contract with a JSON-lines adapter and an in-memory adapter for tests:
 `rooms/<room>.jsonl` (messages and entries, append-only), `claims.json`, `threads.json` (resolved threads),
 `cursors.json` (each agent's last read id per room) and `user-cursors.json` (the user's last read id per thread,
-since the user reads one thread at a time). Claim paths are repo-relative, so a pool's clones compare the same file. Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
+since the user reads one thread at a time). Claim paths are stored repo-relative, so a pool's clones compare the same file; an agent's relative path is read from its session folder first. Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
 separate rooms, since each has its own data folder.
 
 ## Guards
@@ -163,7 +178,7 @@ separate rooms, since each has its own data folder.
 - Body cap (setting `bodyCap`, default 1,500 characters): longer content goes in a file, and the post carries its
   path and a short summary.
 - Per-sender rate cap (setting `postsPerMinute`, default 10), and an identical body from the same sender within two
-  minutes is dropped.
+  minutes is dropped. Both apply to agents and mirrors, not to the user's own posts.
 - No automatic replies: an agent answers a `result`, `progress` or `note` only when addressed.
 - Default claim length (setting `claimMinutes`, default 30).
 

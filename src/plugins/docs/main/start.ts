@@ -1,3 +1,5 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
@@ -17,6 +19,10 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
+import {
+  FAKE_PROFILES,
+  isFakeAgentHarness,
+} from '../../../shared/fake-agent-harness';
 import type { JsonObject } from '../../../shared/json';
 import {
   type AgentSession,
@@ -36,6 +42,7 @@ import {
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { docsManifest } from '../manifest';
 import { createDocFiles, type DocFiles } from './doc-files';
+import { createHarnessFolders } from './harness-folders';
 import {
   createIndexSourceRegistry,
   createMachineSource,
@@ -48,7 +55,7 @@ import {
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
 import { readRecentChanges } from './recent-changes';
-import { writeDocsFixture } from './selftest-fixture';
+import { docsFixtureInstalls, writeDocsFixture } from './selftest-fixture';
 import { docsSelfTestScript, openDocsFixtureSession } from './selftest-script';
 import { createViewWatches } from './view-watches';
 
@@ -79,26 +86,61 @@ async function hasDocsFixture(
 
 // The index uses real paths, so the home folder every `~` expands to is the
 // real one. `scriptPath` is read at each index run, `entries` at each doc
-// change. A drive run's restart keeps the home, so the fixture is written
-// only into a home without one.
+// change, `infos` (`core.agentHarnesses`) at each guard and lookup. A drive
+// run's restart keeps the home, so the fixture is written only into a home
+// without one; every run other than a live one hands each fake harness the
+// fixture's installs for each of its profiles, since a restart builds a new
+// fake.
 export async function startDocs(
   services: Pick<
     MainServices,
-    'files' | 'processes' | 'log' | 'homeDir' | 'runMode' | 'paths'
+    | 'files'
+    | 'processes'
+    | 'log'
+    | 'homeDir'
+    | 'runMode'
+    | 'paths'
+    | 'agentHarnesses'
   >,
   scriptPath: () => string,
   entries: () => readonly IndexEntry[],
+  infos: () => ReadonlyMap<string, AgentHarnessInfo>,
 ): Promise<DocsMain> {
-  const { files, processes, log, paths } = services;
+  const { files, processes, log, paths, agentHarnesses } = services;
   const homeDir = await files.realPath(services.homeDir);
-  const needsFixture =
-    services.runMode !== 'live' &&
-    !(await hasDocsFixture(files, homeDir, paths));
-  if (needsFixture) {
-    await writeDocsFixture(files, homeDir, paths);
+  if (services.runMode !== 'live') {
+    if (!(await hasDocsFixture(files, homeDir, paths))) {
+      await writeDocsFixture(files, homeDir, paths);
+    }
+    const installs = docsFixtureInstalls(homeDir, paths);
+    for (const harness of agentHarnesses.list().filter(isFakeAgentHarness)) {
+      for (const profile of FAKE_PROFILES) {
+        harness.setInstalledPlugins(profile.configDir, installs);
+      }
+    }
   }
-  const indexDeps = { files, processes, homeDir, scriptPath, log, paths };
-  const docFiles = createDocFiles({ files, homeDir, log, paths, entries });
+  const folders = createHarnessFolders({
+    harnesses: agentHarnesses,
+    infos,
+    log,
+  });
+  const indexDeps = {
+    files,
+    processes,
+    homeDir,
+    scriptPath,
+    folders,
+    log,
+    paths,
+  };
+  const docFiles = createDocFiles({
+    files,
+    homeDir,
+    log,
+    paths,
+    folders,
+    entries,
+  });
   return { indexDeps, docFiles };
 }
 
@@ -166,7 +208,7 @@ export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
   let opens = 0;
   drive.add('seed', {
     description:
-      'Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree\'s "Claude pending" chip (default 0). Returns the home\'s real path.',
+      "Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree's pending chips (default 0). Returns the home's real path.",
     args: '{ loadStates?: boolean, indexDelayMs?: number }',
     async run(rawArgs) {
       await started;
@@ -231,10 +273,12 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     const { services, channel } = api;
     api.layouts.register({ layoutTypes });
     const registry = createIndexSourceRegistry();
+    const harnessInfos = api.state.read(coreAgentHarnessesSlot);
     const docs = startDocs(
       services,
       () => api.settings().scriptPath,
       () => registry.loadedEntries(),
+      () => harnessInfos.all(),
     );
     docs.catch((error: unknown) =>
       services.log(`docs not started: ${errorText(error)}`),
@@ -366,7 +410,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
           paths: services.paths,
           log: services.log,
         },
-        { fetch },
+        { fetch, harnesses: [...harnessInfos.all().keys()] },
       ),
     );
     channel.handle('recentChanges', async (paths) =>

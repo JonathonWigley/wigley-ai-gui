@@ -17,8 +17,9 @@ plan is written from them. A decision here stands unless the user changes it.
 
 - Settings mode edits `settings.json` and `keymap.json` in the user config folder (`~/.config/wigley-ai-gui/`).
   Themes stay hand-edited; a theme editor is a follow-up.
-- The key-hints setting and moving `claude.command` to the Claude harness plugin are separate follow-ups. Each one
-  shows in Settings mode when it lands, through its own setting declaration, with no change to the mode.
+- The core `claude.command` setting moved to the `claude-code` plugin as `claude-code.command`, and shows in Settings
+  mode under that plugin through its own setting declaration, with no change to the mode. The key-hints setting is
+  still a follow-up, and will show the same way when it lands.
 - A key is recorded as the user presses it when it is one key or one chord; a sequence (`gg`, `Space b r`) is typed in
   vim notation, since a press cannot tell when a sequence ends. Accelerators are never recorded: synthetic keys never
   reach a global shortcut, so they stay in the advanced box (2026-11-08 leader keys interview,
@@ -48,7 +49,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - Every setting declares a label and a one-line description by its dotted path: core settings in
   `src/config/settings.ts` (`settingInfo`), a plugin's in its manifest (`settingInfo`). The type derives every leaf
   path from the settings type, so a missing or misspelled path fails the build. An array is one leaf
-  (`chat.profiles`), and so is an optional member (`fonts.ui`).
+  (`claude-code.profiles`), and so is an optional member (`fonts.ui`).
 - One row per leaf: label, description, the value in force, and its control. A row the user set shows a "Set" tag and
   the default in `fg-tertiary`; `r` resets it, removing the key from `settings.json` (an object left empty drops too).
 - Controls by kind, opened by Enter or `i` on the row:

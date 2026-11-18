@@ -10,7 +10,7 @@ export const FORMATS: FormatTable = {
   question: questionFormat,
 };
 
-// The order ask_round's lists parse and the schema lists them in.
+// The order a round's lists parse and the schema lists them in.
 export const ITEM_KINDS: readonly ItemKind[] = [
   'notice',
   'finding',

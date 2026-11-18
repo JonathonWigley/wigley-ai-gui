@@ -8,6 +8,7 @@ import {
   type AgentStart,
   type ChatEntry,
   type LogInEvents,
+  type PermissionDecision,
 } from '../contracts/agent';
 import type { Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
@@ -20,14 +21,17 @@ import {
   FAKE_AGENTS_TEXT,
   FAKE_BLOCKS_REPLY,
   FAKE_BLOCKS_TEXT,
+  FAKE_CANCELLED_REASON,
   FAKE_COLD_TEXT,
   FAKE_COMPACT_TEXT,
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
+  FAKE_HARNESS_ID,
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   FAKE_PERMISSION_TEXT,
+  FAKE_PROFILES,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
@@ -66,16 +70,25 @@ const request: AgentStart = {
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
 // except the agent events other than `usage`, which `agentEvents` holds.
-// `timeline` holds every event, those included, in emit order.
+// `timeline` holds every event, those included, in emit order. `sessionIds`
+// holds each reported session id, and `firstEvents` each event's name in emit
+// order, `sessionId` included, which `heard` and `timeline` leave out.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
   const agentEvents: AgentEvent[] = [];
   const timeline: [string, unknown][] = [];
+  const sessionIds: string[] = [];
+  const firstEvents: string[] = [];
   const hear = (name: string, payload: unknown) => {
     heard.push([name, payload]);
     timeline.push([name, payload]);
+    firstEvents.push(name);
   };
   const events: AgentProcessEvents = {
+    sessionId: (id) => {
+      sessionIds.push(id);
+      firstEvents.push('sessionId');
+    },
     entry: (entry) => hear('entry', entry),
     controls: (controls) => hear('controls', controls),
     activity: (activity) => hear('activity', activity),
@@ -89,11 +102,13 @@ function recordingEvents() {
       }
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
+      firstEvents.push('agentEvent');
     },
     messageDropped: (entryId) => hear('messageDropped', entryId),
+    permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),
   };
-  return { heard, agentEvents, timeline, events };
+  return { heard, agentEvents, timeline, sessionIds, firstEvents, events };
 }
 
 // One timeline event as a line: an entry as its kind, id and tool result text,
@@ -212,6 +227,37 @@ describe('createFakeAgentHarness', () => {
     expect(heard[3]).toEqual(['activity', 'idle']);
   });
 
+  it('start_NoSessionId_MintsCountingIds', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const runs = [null, null, 's-9'].map((sessionId) => {
+      const recording = recordingEvents();
+      harness.start({ ...request, sessionId }, recording.events);
+      return recording;
+    });
+    await flush();
+
+    expect(runs.map((run) => run.sessionIds)).toEqual([
+      ['fake-session-1'],
+      ['fake-session-2'],
+      ['s-9'],
+    ]);
+    expect(runs.map((run) => run.firstEvents[0])).toEqual([
+      'sessionId',
+      'sessionId',
+      'sessionId',
+    ]);
+    expect(harness.processes.map((record) => record.sessionId)).toEqual([
+      'fake-session-1',
+      'fake-session-2',
+      's-9',
+    ]);
+    expect(harness.processes[0].request.sessionId).toBeNull();
+  });
+
   it('start_RequestControls_ReplaceStartingValues', async () => {
     const harness = createFakeAgentHarness(
       clock,
@@ -234,7 +280,7 @@ describe('createFakeAgentHarness', () => {
     ]);
   });
 
-  it('failNextStart_ThrowsOnce', () => {
+  it('failNextStart_ThrowsOnce', async () => {
     const harness = createFakeAgentHarness(
       clock,
       createMemoryFiles(),
@@ -250,11 +296,13 @@ describe('createFakeAgentHarness', () => {
     expect(harness.processes).toHaveLength(1);
     harness.failNextStart('no agent');
     const message = { text: 'go', images: [] };
-    expect(() => harness.prepareRun(request, message, {})).toThrow('no agent');
-    expect(harness.prepareRun(request, message, {}).id).toBe('p-1');
+    await expect(harness.prepareRun(request, message, {})).rejects.toThrow(
+      'no agent',
+    );
+    expect((await harness.prepareRun(request, message, {})).id).toBe('p-1');
   });
 
-  it('prepareRun_ReturnsTheSpecAndRecordsIt_StartsNothing', () => {
+  it('prepareRun_ReturnsTheSpecAndRecordsIt_StartsNothing', async () => {
     const harness = createFakeAgentHarness(
       clock,
       createMemoryFiles(),
@@ -263,7 +311,7 @@ describe('createFakeAgentHarness', () => {
     const message = { text: 'go', images: [] };
     const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
 
-    const spawn = harness.prepareRun(request, message, env);
+    const spawn = await harness.prepareRun(request, message, env);
 
     expect(spawn.command).toBe(FAKE_AGENT_COMMAND);
     expect(spawn.env).toEqual({
@@ -447,50 +495,26 @@ describe('createFakeAgentHarness', () => {
   it.each([
     {
       given: 'allowed',
-      ask: () => Promise.resolve(true),
+      decision: { allowed: true, reason: null },
       result: { text: 'fake', isError: false },
       reply: 'fake agent ran an allowed tool',
     },
     {
-      given: 'refused',
-      ask: () => Promise.resolve(false),
+      given: 'denied',
+      decision: { allowed: false, reason: null },
       result: { text: 'Permission denied', isError: true },
-      reply: 'fake agent was refused',
-    },
-    {
-      given: 'the ask failing',
-      ask: () => Promise.reject(new Error('no chat session')),
-      result: { text: 'no chat session', isError: true },
-      reply: 'fake agent was refused',
-    },
-    {
-      given: 'no ask set',
-      ask: null,
-      result: {
-        text: 'fake harness has no permission ask',
-        isError: true,
-      },
       reply: 'fake agent was refused',
     },
   ])(
     'send_PermissionText_AsksThenFinishesTheTool given $given',
-    async ({ ask, result, reply }) => {
-      const { harness, agent, heard } = await startedProcess();
-      const asked: unknown[][] = [];
-      let answer: () => void = () => undefined;
-      if (ask !== null) {
-        harness.askPermissionsWith((...args) => {
-          asked.push(args);
-          return new Promise<boolean>((resolve, reject) => {
-            answer = () => ask().then(resolve, reject);
-          });
-        });
-      }
+    async ({ decision, result, reply }) => {
+      const { agent, heard } = await startedProcess();
 
       agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
       await flush();
+      await flush();
       const whileAsking = heard.map(timelineLine);
-      answer();
+      agent.answerPermission('fake-permission-1', decision);
       await flush();
       await flush();
 
@@ -504,25 +528,25 @@ describe('createFakeAgentHarness', () => {
         input: { command: 'rm fake.txt' },
         summary: 'rm fake.txt',
       };
-      if (ask !== null) {
-        expect(whileAsking).toEqual([
-          'user user-1',
-          'activity working',
-          'tool tool-1',
-        ]);
-        expect(asked).toEqual([
-          [
-            request,
-            {
-              toolName: 'Bash',
-              input: tool.input,
-              toolUseId: 'fake-permission-1',
-            },
-          ],
-        ]);
-      }
-      expect(heard.slice(2, 5)).toEqual([
+      const permission = {
+        kind: 'permission',
+        id: 'fake-permission-1',
+        at: 1000,
+        toolName: 'Bash',
+        input: tool.input,
+        answer: null,
+        raw: [{ fake: 'permission', toolUseId: 'fake-permission-1' }],
+      };
+      expect(whileAsking).toEqual([
+        'user user-1',
+        'activity working',
+        'tool tool-1',
+        'permission',
+      ]);
+      expect(heard.slice(2, 7)).toEqual([
         ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
+        ['permission', { entry: permission }],
+        ['entry', { ...permission, answer: decision }],
         [
           'entry',
           {
@@ -549,26 +573,113 @@ describe('createFakeAgentHarness', () => {
   );
 
   it('send_PermissionText_InterruptedWhileAsking_EmitsNothingOnTheAnswer', async () => {
-    const { harness, agent, heard } = await startedProcess();
-    let allow: (allowed: boolean) => void = () => undefined;
-    harness.askPermissionsWith(
-      () =>
-        new Promise<boolean>((resolve) => {
-          allow = resolve;
-        }),
-    );
+    const { agent, heard } = await startedProcess();
     agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
+    await flush();
     await flush();
     agent.interrupt();
     await flush();
+    await flush();
     const interrupted = heard.length;
 
-    allow(true);
+    agent.answerPermission('fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
+    await flush();
     await flush();
 
     expect(heard.slice(interrupted)).toEqual([]);
+    expect(heard).toContainEqual([
+      'entry',
+      expect.objectContaining({
+        id: 'fake-permission-1',
+        answer: { allowed: false, reason: FAKE_CANCELLED_REASON },
+      }),
+    ]);
     expect(heard.at(-1)).toEqual(['activity', 'idle']);
   });
+
+  const ALLOW: PermissionDecision = { allowed: true, reason: null };
+  const CANCELLED: PermissionDecision = {
+    allowed: false,
+    reason: FAKE_CANCELLED_REASON,
+  };
+
+  it.each<{
+    given: string;
+    rowId: string;
+    act: (agent: AgentProcess) => void;
+    outcome: { resolves: PermissionDecision } | { rejects: string };
+    raised: number;
+    shown: PermissionDecision[];
+  }>([
+    {
+      given: 'a live row, answered',
+      rowId: 'row-1',
+      act: (agent: AgentProcess) =>
+        agent.answerPermission('fake-permission-1', ALLOW),
+      outcome: { resolves: ALLOW },
+      raised: 1,
+      shown: [ALLOW],
+    },
+    {
+      given: 'no live record',
+      rowId: 'r9',
+      act: () => undefined,
+      outcome: { rejects: 'fake harness has no live process for row r9' },
+      raised: 0,
+      shown: [],
+    },
+    {
+      given: 'the process ending first',
+      rowId: 'row-1',
+      act: (agent: AgentProcess) => void agent.end(),
+      outcome: { resolves: CANCELLED },
+      raised: 1,
+      shown: [CANCELLED],
+    },
+  ])(
+    'askPermission_RaisesOnTheRowsLiveProcess given $given',
+    async ({ rowId, act, outcome, raised, shown }) => {
+      const { harness, agent, heard } = await startedProcess();
+      const entry = {
+        kind: 'permission',
+        id: 'fake-permission-1',
+        at: 1000,
+        toolName: 'Bash',
+        input: { command: 'ls' },
+        answer: null,
+        raw: [{ fake: 'permission', toolUseId: 'tu-1' }],
+      };
+      const settled = harness
+        .askPermission(rowId, {
+          toolName: 'Bash',
+          input: { command: 'ls' },
+          toolUseId: 'tu-1',
+        })
+        .then(
+          (decision) => ({ resolves: decision }),
+          (error: Error) => ({ rejects: error.message }),
+        );
+      await flush();
+
+      act(agent);
+      await flush();
+      await flush();
+
+      expect(await settled).toEqual(outcome);
+      expect(heard.filter(([name]) => name === 'permission')).toEqual(
+        Array.from({ length: raised }, () => ['permission', { entry }]),
+      );
+      expect(
+        heard.filter(
+          ([name, payload]) =>
+            name === 'entry' && (payload as ChatEntry).kind === 'permission',
+        ),
+      ).toEqual(shown.map((answer) => ['entry', { ...entry, answer }]));
+    },
+  );
 
   it('send_VisualText_StreamsAnOpenBlockThenBothVisuals', async () => {
     const timers = heldTimers();
@@ -1640,6 +1751,94 @@ describe('createFakeAgentHarness', () => {
     ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
   });
+
+  it('declarations_AnswerEveryNewMember', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const plugin = {
+      key: 'p@m',
+      installDir: '/cache/p',
+      version: '1.0',
+      listedAt: { path: '~/p/plugins/installed_plugins.json', line: 3 },
+    };
+
+    expect(
+      harness
+        .controls(null)
+        .map(({ id, role, value }) => ({ id, role, value })),
+    ).toEqual([
+      { id: 'mode', role: 'permissionMode', value: 'auto' },
+      { id: 'effort', role: 'effort', value: 'medium' },
+      { id: 'model', role: 'model', value: 'fake-small' },
+      { id: 'verbosity', role: undefined, value: 'brief' },
+    ]);
+    expect(harness.id).toBe('fake');
+    expect(FAKE_HARNESS_ID).toBe('fake');
+    expect(harness.info()).toEqual({
+      label: 'Fake',
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: ['reset'],
+      projectConfigFolder: '.claude',
+      profiles: FAKE_PROFILES,
+    });
+    expect(harness.toolUseIdOf({ 'fake/toolUseId': 'u' })).toBe('u');
+    expect(harness.toolUseIdOf(null)).toBeNull();
+    expect(harness.configRoots('~/p')).toEqual({
+      configDir: '~/p',
+      pluginCacheDirs: ['~/p/plugins/cache'],
+    });
+    expect(await harness.installedPlugins('~/p')).toEqual([]);
+
+    harness.setInstalledPlugins('~/p', [plugin]);
+
+    expect(await harness.installedPlugins('~/p')).toEqual([plugin]);
+    expect(await harness.installedPlugins(null)).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'no identity',
+      identity: undefined,
+      expected: { id: 'fake', label: 'Fake', profiles: FAKE_PROFILES },
+    },
+    {
+      given: 'an identity',
+      identity: {
+        id: 'fake-return',
+        label: 'Fake return',
+        profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+      },
+      expected: {
+        id: 'fake-return',
+        label: 'Fake return',
+        profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+      },
+    },
+  ])(
+    'createFakeAgentHarness_Identity_IdLabelAndProfilesAsGiven given $given',
+    ({ identity, expected }) => {
+      const harness = createFakeAgentHarness(
+        clock,
+        createMemoryFiles(),
+        FAKE_MICROTASK_TIMERS,
+        identity,
+      );
+
+      expect({
+        id: harness.id,
+        label: harness.info().label,
+        profiles: harness.info().profiles,
+      }).toEqual(expected);
+    },
+  );
 });
 
 describe('createFakeAgentHarness compaction', () => {
@@ -2183,14 +2382,8 @@ describe('createFakeAgentHarness compaction', () => {
 
   it('heldCompaction_LateAnswerToAnInterruptedPermissionTurn_LeavesItOpen', async () => {
     const { harness, agent, timeline } = await startedProcess();
-    let allow: (allowed: boolean) => void = () => undefined;
-    harness.askPermissionsWith(
-      () =>
-        new Promise<boolean>((resolve) => {
-          allow = resolve;
-        }),
-    );
     sendText(agent, FAKE_PERMISSION_TEXT);
+    await flush();
     await flush();
     agent.interrupt();
     await flush();
@@ -2199,7 +2392,10 @@ describe('createFakeAgentHarness compaction', () => {
     await flush();
     timeline.length = 0;
 
-    allow(true);
+    agent.answerPermission('fake-permission-1', {
+      allowed: true,
+      reason: null,
+    });
     await flush();
     await flush();
 

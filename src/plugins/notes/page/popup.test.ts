@@ -10,6 +10,7 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
@@ -418,6 +419,8 @@ async function openPopup(
     onPageHide: () => ({ dispose: () => undefined }),
     restoresSettled: () => restoresSettled,
     placeChanged: (place) => places.push(place),
+    harnesses: () =>
+      new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
   });
   if (restored === undefined) {
     popup.commands.open(NO_ARG);

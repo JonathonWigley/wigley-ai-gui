@@ -1,7 +1,10 @@
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import {
   fakeDependency,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import { type ChatMainExports, chatMainKey } from '../../chat/contract';
 import {
   type SessionsMainExports,
@@ -20,23 +23,30 @@ export const FAKE_SESSIONS = fakeDependency(
     }) as unknown as SessionsMainExports,
 );
 
-// Chat for a harness's parts: every instruction taken and disposable, and the
-// one profile `personal`.
+// Chat for a harness's parts: every instruction taken and disposable.
 export const FAKE_CHAT = fakeDependency(
   chatMainKey,
   (consumer) =>
     ({
       addInstructions: () => consumer.track({ dispose: () => undefined }),
       activeTime: () => null,
-      profiles: () => [{ name: 'personal', configDir: '~/.c' }],
     }) as unknown as ChatMainExports,
 );
 
-// The real engine main part over the fakes, and its exports as the dependency a
+// The real engine main part over the fakes, with the one profile `personal`
+// registered under harness `claude`, and its exports as the dependency a
 // workflow plugin's part under test takes.
 export function startEngineMainPart(options: { drive?: boolean } = {}) {
+  const state = createSlotStore(() => undefined);
+  state
+    .publish(coreAgentHarnessesSlot)
+    .set(
+      'claude',
+      harnessInfo({ profiles: [{ name: 'personal', configDir: '~/.c' }] }),
+    );
   const engine = startMainPart(workflowMainPart, {
     drive: options.drive,
+    state,
     dependencies: [FAKE_SESSIONS, FAKE_CHAT],
   });
   const dependency = fakeDependency(

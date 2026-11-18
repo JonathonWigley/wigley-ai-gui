@@ -5,7 +5,6 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import {
-  HARNESSES,
   NEEDS_YOU_ACTIVITY,
   type RowActivity,
   type SessionRow,
@@ -76,7 +75,7 @@ describe('sessions preview', () => {
     expect(rows.some((row) => row.marked)).toBe(true);
     expect(rows.some((row) => !row.marked)).toBe(true);
     expect(new Set(rows.map((row) => row.harness))).toEqual(
-      new Set([...HARNESSES, null]),
+      new Set(['claude', 'codex', null]),
     );
     expect(
       previewSections(PREVIEW_STATE).plugins.map((claimed) =>

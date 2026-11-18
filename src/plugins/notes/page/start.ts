@@ -1,4 +1,5 @@
 import './notes.css';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { onPageHide } from '../../../shared/page/page-hide';
@@ -72,6 +73,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       restoresSettled = true;
     });
 
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const popup = createNotePopup({
       channel: api.channel,
       services,
@@ -88,6 +90,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       onPageHide,
       restoresSettled: () => restoresSettled,
       placeChanged: (value) => place.write(value),
+      harnesses: () => harnesses.all(),
     });
     const savedPlace = placeWriter.get();
     if (savedPlace !== undefined) {

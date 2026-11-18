@@ -14,6 +14,7 @@ import {
   hostRecordFile,
 } from '../src/contracts/session-host-protocol.ts';
 import {
+  type HostEndDeps,
   hostMayBeRunning,
   idleRunIds,
   quitRefusal,
@@ -22,6 +23,7 @@ import {
   type StartOptions,
   startPlanOf,
   startRefusal,
+  waitForHostEnd,
 } from './drive-runs.mts';
 
 const NOW = 1_000_000_000_000;
@@ -37,6 +39,12 @@ describe('idleRunIds', () => {
     ],
     ['exactly at the limit', false, { lastUsedMs: NOW - RUN_IDLE_MS }, 'other'],
     ['idle but its app is live', false, { isLive: true }, 'other'],
+    [
+      'idle but its session host may still run',
+      false,
+      { hostMayBeRunning: true },
+      'other',
+    ],
     ['idle but the run being started', false, {}, 'old'],
   ])(
     'GIVEN a run %s WHEN a start sweeps THEN its deletion is %s',
@@ -45,12 +53,62 @@ describe('idleRunIds', () => {
         id: 'old',
         lastUsedMs: NOW - RUN_IDLE_MS - 1,
         isLive: false,
+        hostMayBeRunning: false,
         ...overrides,
       };
 
       expect(idleRunIds([run], startingRun, NOW)).toEqual(
         isDeleted ? ['old'] : [],
       );
+    },
+  );
+});
+
+describe('waitForHostEnd', () => {
+  it.each<{
+    name: string;
+    answers: readonly boolean[];
+    ended: boolean;
+    probeCount: number;
+    clockAfter: number;
+  }>([
+    {
+      name: 'true, true, then false',
+      answers: [true, true, false],
+      ended: true,
+      probeCount: 3,
+      clockAfter: 500,
+    },
+    {
+      name: 'true until the deadline',
+      answers: [true],
+      ended: false,
+      probeCount: 6,
+      clockAfter: 1250,
+    },
+  ])(
+    'GIVEN a host whose probe answers $name THEN the wait answers $ended',
+    async ({ answers, ended, probeCount, clockAfter }) => {
+      let clock = 0;
+      let probes = 0;
+      const deps: HostEndDeps = {
+        probe: () => {
+          const answer = answers[Math.min(probes, answers.length - 1)];
+          probes += 1;
+          return Promise.resolve(answer);
+        },
+        pollMs: 250,
+        timeoutMs: 1000,
+        now: () => clock,
+        wait: (ms) => {
+          clock += ms;
+          return Promise.resolve();
+        },
+      };
+
+      expect(await waitForHostEnd('run', deps)).toBe(ended);
+      expect(probes).toBe(probeCount);
+      expect(clock).toBe(clockAfter);
     },
   );
 });

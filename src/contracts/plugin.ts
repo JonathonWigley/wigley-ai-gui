@@ -1,4 +1,4 @@
-import type { AgentHarness } from './agent';
+import type { AgentHarnessRegistry } from './agent';
 import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppBuild, AppInstance } from './app-instance';
@@ -8,7 +8,9 @@ import type {
   CommandArgShape,
   CommandId,
   CommandKey,
+  CommandOutcome,
   CommandRunContext,
+  CommandSessions,
 } from './commands';
 import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
@@ -51,6 +53,7 @@ import type {
   ListSlotWriter,
   SlotKey,
   SlotReader,
+  SlotSnapshot,
   SlotWriter,
 } from './state';
 import type { SystemStats } from './system-stats';
@@ -75,12 +78,17 @@ export interface DependencyKey<
 }
 
 // A command as a manifest declares it, under its short id. `arg` is the one
-// argument it takes; with none, it takes no argument.
+// argument it takes; with none, it takes no argument. `risky` marks a command an
+// agent runs only on the user's Allow. `targets` marks a command that acts on a
+// run's `targetSessionId` without that session's UI shown or focused; only such a
+// command takes a target.
 export interface CommandDecl {
   label: string;
   group: string;
   runsIn: ProcessName;
   arg?: CommandArgShape;
+  risky?: true;
+  targets?: true;
 }
 
 // A command under its qualified id, `<pluginId>.<short>`, or the core's own id
@@ -92,7 +100,8 @@ export interface CommandInfo extends CommandDecl {
 }
 
 // What runs a command. A command acts and returns no result; a failure is logged
-// under the plugin that owns the handler, and the run's promise resolves.
+// under the plugin that owns the handler, and the run's promise resolves, or
+// rejects with the failure for a run that reports (`PluginCommands.runFor`).
 // `any`: one registry holds handlers of different arguments.
 export type CommandHandler<
   Context = PageCommandContext<any> | MainCommandContext<any>,
@@ -112,7 +121,16 @@ type DeclaredArg<
 // A part's commands. `run` starts a handler in this process before it returns, or
 // sends the run to the process that declares the command, and resolves once the
 // handler settles; it throws at the call for an unknown id or a bad argument, and
-// a run a page cannot take is logged and resolves. `register` adds a command while
+// a failure, or a run no started page can take, is logged and resolves. `runFor`
+// is a reporting run carrying `sessions`: it never throws at the call, and
+// rejects for an unknown id (`Unknown command <id>`), a bad argument, a command of
+// this process with no handler (`<id> has no handler`), a `targetSessionId` for a
+// command not declared `targets` (`<id> takes no session`), the first failure of
+// a handler or wrap, no started page, and a page that goes before the run
+// settles; otherwise it resolves the run's outcome. `list` gives one entry per
+// live command id, sorted by id: this process's catalog, then the other
+// process's, then the served config, the first holding an id winning, with a
+// served runtime entry neither catalog holds left out. `register` adds a command while
 // the part runs, qualified by the plugin's id, and throws when `decl.runsIn` is the
 // other process or the id is taken. `intercept` wraps every run of a command in the
 // process that runs its handler: the last registered is outermost, `next` runs the
@@ -125,6 +143,12 @@ type DeclaredArg<
 export interface PluginCommands {
   run(id: CommandId): Promise<void>;
   run<A>(key: CommandKey<A>, arg: A): Promise<void>;
+  runFor(
+    id: CommandId,
+    arg: unknown,
+    sessions: CommandSessions,
+  ): Promise<CommandOutcome>;
+  list(): readonly CommandInfo[];
   register(
     short: string,
     decl: CommandDecl,
@@ -208,7 +232,8 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // they start before this plugin's part in that process; each `reads` list names
 // the plugins whose slots that process reads or whose events it hears with no
 // start order, so a disabled or unlisted plugin there is no problem and reads
-// `undefined`.
+// `undefined`; `readsEverySlot` lets the main part read any slot by its id, as
+// `MainPluginState` says.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -235,6 +260,7 @@ export interface PluginManifest<
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   settingInfo: Readonly<Record<string, SettingInfo>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
+  readsEverySlot?: true;
 }
 
 // The plugins whose slots `M`'s part in process `P` may read: itself, its
@@ -267,6 +293,20 @@ export interface PluginState<M extends PluginManifest, P extends ProcessName> {
   read<V extends { readonly id: string }>(
     key: ListSlotKey<V, ProcessName, ReadableOwner<M, P>>,
   ): ListSlotReader<V>;
+}
+
+// A main part's slots: `PluginState`, and for a manifest declaring
+// `readsEverySlot`, any slot main holds, page-owned ones included. `readAny` is a
+// copy of the slot as it is now, with no listener: an unwritten slot's empty
+// snapshot, or `undefined` for an id main holds no slot for. `slotIds` lists every
+// slot id in code-unit order. For any other manifest each throws
+// `Plugin "<id>" does not declare readsEverySlot`.
+export interface MainPluginState<M extends PluginManifest> extends PluginState<
+  M,
+  'main'
+> {
+  readAny(id: string): SlotSnapshot | undefined;
+  slotIds(): readonly string[];
 }
 
 // The short ids of the commands in `Cmds` that run in process `P`.
@@ -661,8 +701,9 @@ export interface PageLayoutShow<L> extends LayoutShow {
   ): DrawnLayoutPart<LayoutPartBuilt<L, K>>;
 }
 
-// `editor` is the text box a key fired in. `arg` is the command's argument.
-export interface PageCommandContext<A = undefined> {
+// `editor` is the text box a key fired in. `arg` is the command's argument. The
+// run's sessions are as `CommandSessions` says.
+export interface PageCommandContext<A = undefined> extends CommandSessions {
   editor?: TextEditor;
   arg: A;
 }
@@ -1049,8 +1090,14 @@ export interface DriveHost {
 // the user's attention, and stopping the plugin zeroes the open counts it set.
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
-// with `Stopped <command>`. `agentHarnesses` lists every
-// harness adapter the app runs, found by `id`. `window.summon` brings the app
+// with `Stopped <command>`, and kills its spawned ones with `SIGKILL`.
+// `agentHarnesses` is the harness registry: a harness
+// plugin registers its adapter there, and stopping the plugin disposes its
+// registrations. `agentEnvironment` is the whole environment an agent process
+// the app starts gets: the app's own plus the relay's endpoint folder as
+// `WIGLEY_AI_GUI_ENDPOINT_DIR`. `agentHomeDir` is the home folder an agent
+// harness runs as: the user's real home in a drive run on a real harness,
+// `homeDir` in every other run. `window.summon` brings the app
 // forward from behind another app and returns whether the window came forward.
 // `window.chooseFolder` opens the native folder dialog over the window and
 // resolves to null when the user cancels; `window.isFocused` is true while the app's window has focus;
@@ -1091,7 +1138,9 @@ export interface MainServices {
   images: ImageEncoder;
   systemStats: SystemStats;
   screenCapture: ScreenCapture;
-  agentHarnesses: readonly AgentHarness[];
+  agentHarnesses: AgentHarnessRegistry;
+  agentEnvironment: Readonly<Record<string, string>>;
+  agentHomeDir: string;
   sessionHost: SessionHost;
   loginStart: LoginStart;
   window: {
@@ -1133,7 +1182,7 @@ export interface PluginSwitchService {
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`
 // before the folder has been listed or while unregistered. `state` is as
-// `PluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
+// `MainPluginState` says. `commands` is as `PluginCommands` says. `keys.bind` adds an
 // app or intercept bind while the part runs, as `PageApi.keys.bind` does a page one.
 export interface MainApi<
   M extends PluginManifest,
@@ -1156,14 +1205,15 @@ export interface MainApi<
     register(options: { layoutTypes: string }): Disposable;
     names(): string[];
   };
-  state: PluginState<M, 'main'>;
+  state: MainPluginState<M>;
   commands: PluginCommands;
   keys: { bind(bind: RuntimeBind<'main'>): Disposable };
 }
 
 // `chord` is the chord that fired the command; a run from code or the page has
-// none. `arg` is the command's argument.
-export interface MainCommandContext<A = undefined> {
+// none. `arg` is the command's argument. The run's sessions are as
+// `CommandSessions` says.
+export interface MainCommandContext<A = undefined> extends CommandSessions {
   chord?: string;
   arg: A;
 }

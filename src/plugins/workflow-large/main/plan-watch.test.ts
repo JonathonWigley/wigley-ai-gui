@@ -761,3 +761,28 @@ describe('createPlanWatch', () => {
     expect(signals).toEqual([changed(PLAN_TICKED)]);
   });
 });
+
+describe('createPlanWatch worktree list failures', () => {
+  it('logs a failing worktree list once per clone across follows and checks', async () => {
+    const files = createMemoryFiles();
+    await files.write('/r/docs/features/f/plan-a/plan.md', PLAN);
+    const git: WatchDeps['git'] = {
+      ...cloneGit(['/r']),
+      worktrees: async () => {
+        throw new Error('git worktree exited 128');
+      },
+    };
+    const { watch, logs } = startWatch(files, git);
+
+    watch.follow('s1', followed('/r/docs/features/f/plan-a'));
+    await settled();
+    watch.check('s1');
+    await settled();
+
+    expect(
+      logs.filter((line) => line.startsWith('git worktree list failed')),
+    ).toEqual([
+      "git worktree list failed in /r: git worktree exited 128; reading the plan's own copy only",
+    ]);
+  });
+});

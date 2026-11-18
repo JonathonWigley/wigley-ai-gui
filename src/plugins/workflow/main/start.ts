@@ -1,3 +1,4 @@
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
@@ -8,6 +9,7 @@ import type {
 import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { registeredProfiles } from '../../../shared/harness-profiles';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import {
   type ChatMainEvents,
@@ -75,7 +77,8 @@ type WorkflowApi = MainApi<
 // meters each session's active time and spend and appends a line to `runs.jsonl`
 // when a fold enters a stage that finishes its workflow, writes each open session's
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
-// actions. Exports `addWorkflow`, `signal`, `setState` and `observe`.
+// actions. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
+// `stageFinishes` for whether a flow sits in a stage that finishes its run.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -85,6 +88,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const rows = api.state.read(sessionsRowsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
+    const harnesses = api.state.read(coreAgentHarnessesSlot);
     const workflows = createStageList<MainWorkflow>();
     const store = createFlowStore({
       flows: api.state.publish(workflowFlowsSlot),
@@ -121,15 +125,21 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const tellFolded = (event: FoldEvent) =>
       tellObservers((observer) => observer.folded(event));
 
+    // The registered workflow holding `flow`; undefined with no flow, a null
+    // workflow, or a workflow no plugin holds.
+    const workflowOf = (flow: SessionFlow | null) =>
+      workflows.all().find((held) => held.id === flow?.workflow);
+
+    const stageFinishes = (flow: SessionFlow) =>
+      workflowOf(flow)?.stages.find((held) => held.id === flow.stage)
+        ?.finishes === true;
+
     // Writes the run's line when the fold entered a stage that finishes its
     // workflow, and starts the meter's next run.
     const logFinishedRun = (before: SessionFlow, after: SessionFlow) => {
-      const workflow = workflows
-        .all()
-        .find((held) => held.id === after.workflow);
-      const stage = workflow?.stages.find((held) => held.id === after.stage);
+      const workflow = workflowOf(after);
       const entered = after.stage !== before.stage;
-      if (workflow === undefined || !entered || stage?.finishes !== true) {
+      if (workflow === undefined || !entered || !stageFinishes(after)) {
         return;
       }
       const { sessionId, projectDir, movedUpFrom } = after;
@@ -208,12 +218,9 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       }
     };
 
-    // The registered workflow holding the session's flow; undefined with no flow,
-    // a null workflow, or a workflow no plugin holds.
-    const heldWorkflowOf = (sessionId: string) => {
-      const flow = store.get(sessionId);
-      return workflows.all().find((held) => held.id === flow?.workflow);
-    };
+    // The registered workflow holding the session's flow, as `workflowOf` says.
+    const heldWorkflowOf = (sessionId: string) =>
+      workflowOf(store.get(sessionId));
 
     // Folds a reported step as a live event; resolves whether the flow is now in
     // the stage its own workflow reports as `step`. No such stage, or a stage rule
@@ -324,11 +331,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     };
 
     // A start while chat runs hears no `sessionOpened` for the rows it already
-    // holds, so each row chat holds under a profile in its settings opens here
+    // holds, so each row chat holds under a registered harness's profile opens here
     // under its row's host id, as that event would have opened it. A row an
     // event opened first is left.
     const openRowsAlreadyOpen = () => {
-      const profileNames = new Set(chat.profiles().map(({ name }) => name));
+      const profileNames = new Set(
+        registeredProfiles(harnesses.all()).map(({ name }) => name),
+      );
       for (const [sessionId, info] of chatSessions.all()) {
         const row = rows.get(sessionId);
         const hostSessionId = row?.hostSessionId ?? null;
@@ -423,6 +432,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         sessionId: store.hostIdOf(sessionId),
         projectDir: null,
         harness: null,
+        rowId: null,
       },
     });
     const selfTestHooks: WorkflowSelfTestHooks = {
@@ -463,6 +473,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
         flowOf: (sessionId) => store.get(sessionId),
         flows: () => store.all(),
+        stageFinishes,
         setState(sessionId, state) {
           const flow = store.get(sessionId);
           if (flow === null) {

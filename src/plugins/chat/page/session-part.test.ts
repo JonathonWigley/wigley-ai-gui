@@ -5,6 +5,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -19,7 +20,7 @@ import { createSessionPart, sessionFactsOf } from './session-part';
 const HOME = '/Users/u';
 
 function control(id: string, value: string) {
-  return { id, label: id, value, enabled: true };
+  return { id, label: id, value, enabled: true, role: null };
 }
 
 function composerInput(
@@ -54,6 +55,7 @@ function factsWithBranch(branch: string): SessionFactsInput {
     folder: '~/dev/app',
     worktrees: [],
     harness: 'claude',
+    harnessLabel: 'Claude Code',
     modelEffort: null,
   };
 }
@@ -103,6 +105,7 @@ describe('sessionFactsOf', () => {
     case: string;
     input: ComposerInput;
     worktrees?: string[];
+    harness?: string;
     expected: Partial<SessionFactsInput>;
   }>([
     {
@@ -126,26 +129,37 @@ describe('sessionFactsOf', () => {
       worktrees: ['app-fix', 'docs-fix'],
       expected: { worktrees: ['app-fix', 'docs-fix'] },
     },
-  ])('sessionFactsOf_$case', ({ input, worktrees = [], expected }) => {
-    expect(
-      sessionFactsOf(
-        input,
-        { projectDir: `${HOME}/dev/app`, worktrees },
-        {
-          homeDir: HOME,
-          paths: posixPaths,
-        },
-      ),
-    ).toEqual({
-      repo: 'app-repo',
-      branch: 'main',
-      folder: '~/dev/app',
-      worktrees: [],
-      harness: 'claude',
-      modelEffort: null,
-      ...expected,
-    });
-  });
+    {
+      case: 'HarnessNotRegistered_LabelIsTheId',
+      input: composerInput('main', null),
+      harness: 'gone',
+      expected: { harness: 'gone', harnessLabel: 'gone' },
+    },
+  ])(
+    'sessionFactsOf_$case',
+    ({ input, worktrees = [], harness = 'fake', expected }) => {
+      expect(
+        sessionFactsOf(
+          input,
+          { projectDir: `${HOME}/dev/app`, worktrees, harness },
+          {
+            homeDir: HOME,
+            paths: posixPaths,
+            harnesses: new Map([['fake', harnessInfo({ label: 'Fake' })]]),
+          },
+        ),
+      ).toEqual({
+        repo: 'app-repo',
+        branch: 'main',
+        folder: '~/dev/app',
+        worktrees: [],
+        harness: 'fake',
+        harnessLabel: 'Fake',
+        modelEffort: null,
+        ...expected,
+      });
+    },
+  );
 });
 
 describe('Session part', () => {

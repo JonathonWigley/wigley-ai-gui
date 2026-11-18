@@ -23,11 +23,15 @@ import { pickLayout } from '../../../shared/page/layout-host/pick';
 import type { ChatScopeName } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
+  AnyEntryKind,
   ChatLayout,
   CompleteChatLayout,
+  EntryInput,
+  HarnessEntryKind,
   PartView,
 } from '../layouts/layout';
 import { chatManifest } from '../manifest';
+import type { EntryRenderers } from './entry-renderers';
 
 // The chat layout's parts beside the entries.
 export type ChatPartName = Exclude<
@@ -87,6 +91,51 @@ export function pickEntry(
     shown.layouts,
     (layout) => layout.entries?.[kind] !== undefined,
   );
+}
+
+// What draws an entry, and the builder it reads: the user's layout when it
+// names the entry's kind; else the latest-added renderer that draws the
+// entry; else `default`, whose `raw` builder draws a harness kind. `source`
+// says whether the pick is a layout or a renderer.
+export interface EntryDrawPick {
+  pick: PartPick<ChatLayout>;
+  builderKind: AnyEntryKind;
+  source: 'layout' | 'renderer';
+}
+
+export function pickEntryDraw(
+  shown: ShownLayouts<ChatLayout>,
+  renderers: Pick<EntryRenderers, 'pick'>,
+  input: EntryInput<AnyEntryKind>,
+): EntryDrawPick {
+  const named = pickEntry(shown, input.kind);
+  if (named.name !== DEFAULT_ENTRY_PICK.name) {
+    return { pick: named, builderKind: input.kind, source: 'layout' };
+  }
+  const rendered = renderers.pick(input);
+  if (rendered !== null) {
+    return { pick: rendered, builderKind: input.kind, source: 'renderer' };
+  }
+  return {
+    pick: named,
+    builderKind: defaultBuilderKind(input.kind),
+    source: 'layout',
+  };
+}
+
+// Whether `a` and `b` draw with the same layout and builder.
+export function isSameEntryDraw(a: EntryDrawPick, b: EntryDrawPick): boolean {
+  return a.pick.layout === b.pick.layout && a.builderKind === b.builderKind;
+}
+
+// The kind whose builder `default` draws an entry of `kind` with: `raw` for a
+// harness kind, else the kind itself.
+export function defaultBuilderKind(kind: AnyEntryKind): AnyEntryKind {
+  return isHarnessKind(kind) ? 'raw' : kind;
+}
+
+export function isHarnessKind(kind: string): kind is HarnessEntryKind {
+  return kind.includes(':');
 }
 
 // Whether the entry list draws runs and result entries: the user's layout's

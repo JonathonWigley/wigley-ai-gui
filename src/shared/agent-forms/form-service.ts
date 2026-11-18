@@ -199,7 +199,7 @@ function handedBackFinishedPayload<Form, Body, Payload>(
 function unreadableFormError<Form, Body, Payload>(
   type: AgentFormType<Form, Body, Payload>,
   record: SavedAgentForm,
-  cause: Error,
+  causeText: string,
 ): Error {
   const { noun, openTool } = type;
   const heading = type.savedHeading(record.args);
@@ -211,7 +211,7 @@ function unreadableFormError<Form, Body, Payload>(
   return new Error(
     `${named} (file ${record.id}.json) ${state}, and ` +
       `its answers cannot be read: it was saved in a shape this app no longer ` +
-      `accepts (${cause.message}). Its file is left as it was. Tell the user ` +
+      `accepts (${causeText}). Its file is left as it was. Tell the user ` +
       `its answers were not returned. Later calls in this session pass over ` +
       `it, so send your ${noun} again with ${openTool}.`,
   );
@@ -227,9 +227,10 @@ function formFromRecord<Form, Body, Payload>(
   try {
     return session.type.parse(record.args);
   } catch (error) {
-    if (error instanceof Error && error.name === session.type.argsErrorName) {
+    const text = session.type.argsErrorText(error);
+    if (text !== null) {
       session.reportedUnreadable.add(record.id);
-      throw unreadableFormError(session.type, record, error);
+      throw unreadableFormError(session.type, record, text);
     }
     throw error;
   }

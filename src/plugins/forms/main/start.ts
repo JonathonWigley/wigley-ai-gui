@@ -26,7 +26,6 @@ import { errorText } from '../../../shared/error-text';
 import { chatMainKey, type ChatMainExports } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
-  type Harness,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
@@ -34,16 +33,19 @@ import {
 import {
   type FormBody,
   type FormsChannel,
+  type FormsMainExports,
   type FormsService,
+  type FormsSession,
   type Round,
   SAVED_ROUNDS_FOLDER,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
+import { askConfirm } from './confirm';
 import { createLayoutPreview } from './preview/layout-preview';
 import { PREVIEW_ROUND_ARGS } from './preview/preview-round';
-import { autoAnsweredPayload, recommendedBody } from './round';
-import { roundType, withKnownLayouts } from './round-type';
+import { recommendedBody } from './round';
+import { autoAnsweredPayload, roundType, withKnownLayouts } from './round-type';
 import {
   FORMS_LAYOUTS_FOLDER,
   formsSelfTestScript,
@@ -190,6 +192,37 @@ export function withShownWaits<Form, Body>(
   };
 }
 
+// Serves forms' two tools to every agent session through `forms`, `ask_round`
+// with its offline answer, and keeps
+// each session's FormsSession by its app id until its tool session ends; a
+// newer tool session of the same id replaces the entry, and the older one's
+// end leaves it.
+function contributeRoundTools(
+  sessions: SessionsMainExports,
+  forms: FormsService,
+): ReadonlyMap<string, FormsSession> {
+  const formSessions = new Map<string, FormsSession>();
+  sessions.contributeTools(
+    FORMS_TOOLS,
+    (session) => {
+      const formSession = forms.startSession(session);
+      formSessions.set(session.id, formSession);
+      const toolSession = createAgentFormToolSession(formSession, roundType);
+      return {
+        call: (name, args, context) => toolSession.call(name, args, context),
+        end: () => {
+          if (formSessions.get(session.id) === formSession) {
+            formSessions.delete(session.id);
+          }
+          toolSession.end();
+        },
+      };
+    },
+    { offline: { ask_round: ASK_ROUND_OFFLINE } },
+  );
+  return formSessions;
+}
+
 // Registers the layouts through `register` once `written` settles, and
 // logs a write or register that throws. Disposing before then registers
 // nothing; `dispose` settles once a registration made is disposed.
@@ -235,7 +268,7 @@ export function addDriveActions(
   sessions: Pick<SessionsMainExports, 'connect'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
 ): void {
-  addAgentFormDriveActions<Harness>({
+  addAgentFormDriveActions({
     host,
     sessions,
     sessionDefaults: DRIVE_SESSION_DEFAULTS,
@@ -257,9 +290,10 @@ export function addDriveActions(
 // Serves its two tools to every agent session, shows each session's rounds on
 // the page, wakes a round's chat session when the round finishes with no call
 // waiting, registers its layouts and opens the layout preview on the page's
-// ask, and refuses a switch-off while an agent's round is open; in the
-// self-test it writes the fixture layouts and hands the driver its script, and
-// in a drive run it adds the drive actions.
+// ask, hands each dependent `confirm`, an Allow or Deny round in a session's
+// own forms session, and refuses a switch-off while an agent's round is open;
+// in the self-test it writes the fixture layouts and hands the driver its
+// script, and in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -273,12 +307,22 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       layoutNames,
     );
     api.channel.handle('openPreview', () => preview.open());
-    sessions.contributeTools(
-      FORMS_TOOLS,
-      (session) =>
-        createAgentFormToolSession(forms.startSession(session), roundType),
-      { offline: { ask_round: ASK_ROUND_OFFLINE } },
-    );
+    const formSessions = contributeRoundTools(sessions, forms);
+    const exports: FormsMainExports = {
+      confirm: (sessionId, request, signal, toolUseId) => {
+        const formSession = formSessions.get(sessionId);
+        if (formSession === undefined) {
+          return Promise.reject(new Error(`no forms session for ${sessionId}`));
+        }
+        return askConfirm(
+          formSession,
+          request,
+          api.services.randomHex(),
+          signal,
+          toolUseId,
+        );
+      },
+    };
     const { selfTest } = api.services;
     // Written before forms registers, so its first set lists every self-test
     // layout.
@@ -306,6 +350,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     }
     return {
       commands: {},
+      exports: () => exports,
       mayStop: () => presenter.mayStop(),
       dispose: (stop) => {
         if (stop === 'quit') {

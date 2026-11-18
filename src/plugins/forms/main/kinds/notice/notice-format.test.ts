@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { RoundError } from '../../round-error';
+import { roundErrorText } from '../../mcp-wording';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import { noticeFormat } from './notice-format';
+
+const NOTICE_1: RoundItemPath = { at: 'item', kind: 'notice', number: 1 };
 
 function notice(overrides: Record<string, unknown> = {}) {
   return {
@@ -10,13 +13,14 @@ function notice(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// The message of the RoundError the notice format throws for this item.
+// The tool error text of the RoundError the notice format throws for this
+// item.
 function parseError(raw: unknown): string {
   try {
-    noticeFormat.parse(raw, 'Notice 1: ');
+    noticeFormat.parse(raw, NOTICE_1);
   } catch (error) {
     if (error instanceof RoundError) {
-      return error.message;
+      return roundErrorText(error);
     }
     throw error;
   }
@@ -46,13 +50,13 @@ describe('noticeFormat.parse', () => {
 
   it('accepts an optional layout', () => {
     expect(
-      noticeFormat.parse(notice({ layout: 'compact' }), 'Notice 1: ').layout,
+      noticeFormat.parse(notice({ layout: 'compact' }), NOTICE_1).layout,
     ).toBe('compact');
-    expect(noticeFormat.parse(notice(), 'Notice 1: ').layout).toBeNull();
+    expect(noticeFormat.parse(notice(), NOTICE_1).layout).toBeNull();
   });
 
   it('gives a notice the Applied badge by default', () => {
-    expect(noticeFormat.parse(notice(), 'Notice 1: ').badge).toBe('Applied');
+    expect(noticeFormat.parse(notice(), NOTICE_1).badge).toBe('Applied');
   });
 
   it('refuses a badge outside the closed set, naming the set and the value', () => {

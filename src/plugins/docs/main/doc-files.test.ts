@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { InstalledPlugin } from '../../../contracts/agent';
 import type { Files, WatchOptions } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import {
@@ -9,6 +10,7 @@ import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { CreatePlace, IndexEntry } from '../contract';
 import { createDocFiles } from './doc-files';
+import type { HarnessFolders } from './harness-folders';
 
 const HOME = '/Users/u';
 const ROOT = '/Users/u/dev/r';
@@ -59,12 +61,34 @@ const FEATURES_ENTRIES: IndexEntry[] = [
   }),
 ];
 
+const PROFILE_DIRS = ['/Users/u/.claude', '/Users/u/.claude-personal'];
+
+// Two `claude` profiles at `PROFILE_DIRS`, each with its `plugins/cache`;
+// `installs[n]` are the installs profile n lists.
+function foldersOf(
+  installs: readonly (readonly InstalledPlugin[])[] = [],
+): HarnessFolders {
+  return {
+    roots: () =>
+      PROFILE_DIRS.map((configDir, at) => ({
+        harnessId: 'claude',
+        profile: `profile-${String(at + 1)}`,
+        roots: { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] },
+      })),
+    installedPlugins: async () =>
+      installs.flatMap((plugins) =>
+        plugins.map((plugin) => ({ harnessId: 'claude', plugin })),
+      ),
+  };
+}
+
 function setUp(
   options: {
     files?: Files;
     entries?: readonly IndexEntry[];
     homeDir?: string;
     paths?: Paths;
+    folders?: HarnessFolders;
   } = {},
 ) {
   const files = createMemoryFiles();
@@ -74,6 +98,7 @@ function setUp(
     homeDir: options.homeDir ?? HOME,
     log: (message) => logged.push(message),
     paths: options.paths ?? posixPaths,
+    folders: options.folders ?? foldersOf(),
     entries: () => options.entries ?? ENTRIES,
   });
   return { files, docFiles, logged };
@@ -257,10 +282,6 @@ describe('write', () => {
 
   it('write_SecondConfigFolderSynced_Rejects', async () => {
     const test = setUp();
-    await test.files.write(
-      '/Users/u/.agents/wigley-docs/config.json',
-      '{"claudeConfigDirs":["~/.claude","~/.claude-personal"]}',
-    );
     const path = '/Users/u/.claude-personal/skills/synced/b/s/SKILL.md';
 
     await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(path);
@@ -269,13 +290,70 @@ describe('write', () => {
   it('write_GlobalDocFolders_Written', async () => {
     const test = setUp();
 
-    await test.docFiles.write('~/.codex/prompts/p.md', 'p', null);
+    await test.docFiles.write('~/.claude-personal/rules/r.md', 'r', null);
     await test.docFiles.write('~/.agents/skills/s/SKILL.md', 's', null);
 
-    expect(await test.files.read(`${HOME}/.codex/prompts/p.md`)).toBe('p');
+    expect(await test.files.read(`${HOME}/.claude-personal/rules/r.md`)).toBe(
+      'r',
+    );
     expect(await test.files.read(`${HOME}/.agents/skills/s/SKILL.md`)).toBe(
       's',
     );
+  });
+
+  it('write_DeclaredConfigFolderWithTilde_ExpandedAndWritten', async () => {
+    const test = setUp({
+      folders: {
+        ...foldersOf(),
+        roots: () => [
+          {
+            harnessId: 'other',
+            profile: 'p',
+            roots: { configDir: '~/.other', pluginCacheDirs: [] },
+          },
+        ],
+      },
+    });
+
+    await test.docFiles.write(`${HOME}/.other/rules/r.md`, 'r', null);
+
+    expect(await test.files.read(`${HOME}/.other/rules/r.md`)).toBe('r');
+  });
+
+  it('write_DeclaredConfigFolderNotAbsolute_DroppedAndRefused', async () => {
+    const test = setUp({
+      folders: {
+        ...foldersOf(),
+        roots: () => [
+          {
+            harnessId: 'other',
+            profile: 'p',
+            roots: { configDir: 'rel/.other', pluginCacheDirs: [] },
+          },
+        ],
+      },
+    });
+
+    await expect(
+      test.docFiles.write(`${HOME}/rel/.other/r.md`, 'r', null),
+    ).rejects.toThrow('outside the indexed folders');
+  });
+
+  it('write_InsideCodexFolder_RefusedOutsideIndexedFolders', async () => {
+    const test = setUp();
+
+    await expect(
+      test.docFiles.write('/Users/u/.codex/AGENTS.md', 'a', null),
+    ).rejects.toThrow(
+      'Refused: /Users/u/.codex/AGENTS.md is outside the indexed folders',
+    );
+  });
+
+  it('write_SecondProfilesPluginCache_Rejects', async () => {
+    const test = setUp();
+    const path = '/Users/u/.claude-personal/plugins/cache/m/p/1/x.md';
+
+    await expect(test.docFiles.write(path, 'b', null)).rejects.toThrow(path);
   });
 
   it('write_LinkedWigleyAgentsFolder_WritesInClone', async () => {
@@ -937,52 +1015,39 @@ describe('wikiMainPath', () => {
 });
 
 describe('pluginConfigFile', () => {
-  it('pluginConfigFile_ClaudeSecondDir_KeyLine', async () => {
-    const test = setUp();
-    await test.files.write(
-      '/Users/u/.agents/wigley-docs/config.json',
-      '{"claudeConfigDirs":["~/.claude","~/.claude-personal"]}',
-    );
-    await test.files.write(
-      '/Users/u/.claude/plugins/installed_plugins.json',
-      '{"plugins":{}}',
-    );
-    await test.files.write(
-      '/Users/u/.claude-personal/plugins/installed_plugins.json',
-      '{\n"plugins":{\n"p@m":[]\n}}',
-    );
-
-    expect(await test.docFiles.pluginConfigFile('p@m', 'claude')).toEqual({
+  it('pluginConfigFile_SecondProfileListsKey_ItsListedAt', async () => {
+    const listedAt = {
       path: '/Users/u/.claude-personal/plugins/installed_plugins.json',
       line: 3,
+    };
+    const test = setUp({
+      folders: foldersOf([
+        [{ key: 'p@m', installDir: '/i/1', version: null, listedAt: null }],
+        [{ key: 'p@m', installDir: '/i/2', version: '1.0.0', listedAt }],
+      ]),
     });
+
+    expect(await test.docFiles.pluginConfigFile('p@m', 'claude')).toEqual(
+      listedAt,
+    );
     expect(await test.docFiles.pluginConfigFile('q@m', 'claude')).toBeNull();
   });
 
-  it('pluginConfigFile_Codex_ConfigToml', async () => {
-    const test = setUp();
-    await test.files.write(
-      '/Users/u/.codex/config.toml',
-      '[features]\n\n[plugins."p@m"]\nenabled = true\n',
-    );
-
-    expect(await test.docFiles.pluginConfigFile('p@m', 'codex')).toEqual({
-      path: '/Users/u/.codex/config.toml',
-      line: 3,
+  it('pluginConfigFile_UnregisteredHarness_Null', async () => {
+    const test = setUp({
+      folders: foldersOf([
+        [
+          {
+            key: 'p@m',
+            installDir: '/i/1',
+            version: null,
+            listedAt: { path: '/Users/u/.claude/x.json', line: 2 },
+          },
+        ],
+      ]),
     });
-  });
 
-  it('pluginConfigFile_CodexKeyPrefixOfAnother_MatchesWholeKey', async () => {
-    const test = setUp();
-    await test.files.write(
-      '/Users/u/.codex/config.toml',
-      '[plugins."p@m-extra"]\nenabled = true\n\n[plugins.\'p@m\']\n',
-    );
-
-    expect(await test.docFiles.pluginConfigFile('p@m', 'codex')).toEqual({
-      path: '/Users/u/.codex/config.toml',
-      line: 4,
-    });
+    expect(await test.docFiles.pluginConfigFile('p@m', 'codex')).toBeNull();
   });
 });
 

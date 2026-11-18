@@ -29,4 +29,63 @@ describe('FakeProcesses', () => {
     await expect(run).rejects.toThrow('Stopped python3');
     expect(processes.runs.map((held) => held.command)).toEqual(['python3']);
   });
+
+  it('resolveProgram_Unscripted_AnswersTheDefaults', async () => {
+    const processes = new FakeProcesses();
+
+    expect(await processes.resolveProgram('python')).toEqual({
+      command: 'python3',
+      args: [],
+    });
+    expect(await processes.resolveProgram('claude')).toEqual({
+      command: 'claude',
+      args: [],
+    });
+  });
+
+  it('resolveProgram_ScriptedNull_FindsNone', async () => {
+    const processes = new FakeProcesses();
+
+    processes.scriptProgram('python', null);
+
+    expect(await processes.resolveProgram('python')).toBeNull();
+  });
+
+  it('spawn_RecordsAndDrives', () => {
+    const processes = new FakeProcesses();
+    const heard: [string, unknown][] = [];
+
+    const spawned = processes.spawn('claude', ['auth'], {
+      cwd: '/h',
+      env: { A: '1' },
+      events: {
+        stdout: (chunk) => heard.push(['stdout', chunk]),
+        stderr: (chunk) => heard.push(['stderr', chunk]),
+        closed: (exit) => heard.push(['closed', exit]),
+      },
+    });
+    const [fake] = processes.spawns;
+    fake.stdout('a');
+    fake.stderr('b');
+    fake.close({ code: 0, signal: null, startError: null });
+    fake.close({ code: 1, signal: null, startError: null });
+    spawned.write('x');
+    spawned.endInput();
+    spawned.kill();
+
+    expect(fake).toMatchObject({
+      command: 'claude',
+      args: ['auth'],
+      cwd: '/h',
+      env: { A: '1' },
+      written: ['x'],
+      isInputEnded: true,
+      kills: ['SIGTERM'],
+    });
+    expect(heard).toEqual([
+      ['stdout', 'a'],
+      ['stderr', 'b'],
+      ['closed', { code: 0, signal: null, startError: null }],
+    ]);
+  });
 });

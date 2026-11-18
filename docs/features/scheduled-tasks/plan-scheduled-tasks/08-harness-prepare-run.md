@@ -5,16 +5,16 @@ Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
 
-Files:     modify `src/contracts/agent.ts` · modify `src/main/claude-code/claude-launch.ts` ·
-           modify `src/main/claude-code/claude-code-harness.ts` · modify `src/main/claude-code/claude-controls.ts` ·
+Files:     modify `src/contracts/agent.ts` · modify `src/plugins/claude-code/main/claude-launch.ts` ·
+           modify `src/plugins/claude-code/main/claude-code-harness.ts` · modify `src/plugins/claude-code/main/claude-controls.ts` ·
            modify `src/shared/fake-agent-harness.ts` · modify `src/shared/app-endpoint-dir.ts` ·
            create `src/shared/permission-cap.ts` ·
-           test `src/shared/permission-cap.test.ts` (create) · test `src/main/claude-code/claude-launch.test.ts` ·
-           test `src/main/claude-code/claude-controls.test.ts` · test `src/main/claude-code/claude-code-harness.test.ts` ·
+           test `src/shared/permission-cap.test.ts` (create) · test `src/plugins/claude-code/main/claude-launch.test.ts` ·
+           test `src/plugins/claude-code/main/claude-controls.test.ts` · test `src/plugins/claude-code/main/claude-code-harness.test.ts` ·
            test `src/shared/fake-agent-harness.test.ts`
 
 Consumes:  `HostedSpawn` with `unsetEnv` and `stdin` ← 02 (plan.md § Shared names and shapes, `src/contracts/session-host.ts`)
-           `startClaudeProcess` passing `unsetEnv` and `stdin: []` ← 02 (`src/main/claude-code/claude-code-harness.ts`)
+           `startClaudeProcess` passing `unsetEnv` and `stdin: []` ← 02 (`src/plugins/claude-code/main/claude-code-harness.ts`)
            `claudeUnsetEnv(profileDir, homeDir, paths): string[]` and `ClaudeLaunch.unsetEnv` ← 02 (`claude-launch.ts`)
            tree: `AgentStart`, `UserMessage`, `SessionControl`, `AgentHarness` (`src/contracts/agent.ts`);
            `claudeLaunch`, `claudeEnv` (`claude-launch.ts`); `CLAUDE_CONTROLS`, `launchMode`, `isChoice`, `userMessage`
@@ -30,12 +30,12 @@ Produces:
   `capControls(controls: Readonly<Record<string, string>>, cap: Readonly<Record<string, string>>): Record<string, string>;`
   `agent.ts` imports `HostedSpawn` as a type from `./session-host`.
 - In `src/shared/app-endpoint-dir.ts`: `export const APP_ENDPOINT_ENV = 'WIGLEY_AI_GUI_ENDPOINT_DIR';`
-- In `src/main/claude-code/claude-launch.ts`:
+- In `src/plugins/claude-code/main/claude-launch.ts`:
   - `export function claudeSpawn(input: ClaudeSpawnInput): HostedSpawn`
   - `export interface ClaudeSpawnInput { request: AgentStart; command: string; permissionTool: string; env: NodeJS.ProcessEnv; homeDir: string; paths: Paths; stdin: readonly string[]; inheritEnv: boolean }`
   - `export const CLAUDE_CARRIED_ENV: readonly string[] = ['PATH', APP_ENDPOINT_ENV, 'CLAUDE_CONFIG_DIR'];`
   - `CLAUDE_IDLE_RULE` and `CLAUDE_DROPPED_OUT_KEYS` move here from `claude-code-harness.ts`, unchanged and exported.
-- In `src/main/claude-code/claude-controls.ts`:
+- In `src/plugins/claude-code/main/claude-controls.ts`:
   - `export const CLAUDE_PERMISSION_ORDER: readonly string[] = ['plan', 'dontAsk', 'manual', 'acceptEdits', 'auto'];`
   - `export function claudeStartControls(): SessionControl[]`
   - `export function capClaudeControls(controls: Readonly<Record<string, string>>, cap: Readonly<Record<string, string>>): Record<string, string>`
@@ -95,7 +95,7 @@ Decisions:
   ENOENT`). This task adds no hint for it: the app hears the error long after the spawn, outside any harness call.
   Task 17 owns the failed run's reason text.
 - **The cap rule lives once** in `src/shared/permission-cap.ts`, since the fake harness in `src/shared` cannot
-  import from `src/main/claude-code`. Each adapter gives only its `PermissionRule`. `capPermission` copies
+  import from `src/plugins/claude-code/main`. Each adapter gives only its `PermissionRule`. `capPermission` copies
   `controls`. It reads the effective value as `controls[controlId]`, else `launchDefault`, and the cap value as
   `cap[controlId]`, else `launchDefault`. When the effective value ranks above the cap value in `order`, it sets
   `controlId` to the cap value; else it leaves `controls[controlId]` as it was, absent included. Unknown values fail
@@ -200,7 +200,7 @@ Tests:
     returns `{ mode: 'plan' }`.
 
 Done when: `npm run typecheck` and `npm run lint` pass (the layer check admits `src/shared/permission-cap.ts` from
-`src/main/claude-code` and `src/shared`); the test gate runs the five test files above. That a host-fired prepared run
+`src/plugins/claude-code/main` and `src/shared`); the test gate runs the five test files above. That a host-fired prepared run
 starts Claude and Claude takes the opening lines and the first message from stdin is a runtime check for task 21
 (Final verification), the host-fired run.
 Commit:    one commit for the group

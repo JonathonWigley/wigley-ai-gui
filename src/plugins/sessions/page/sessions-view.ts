@@ -1,3 +1,4 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import {
   PANE_DIRECTIONS,
@@ -52,8 +53,13 @@ import {
   type SidebarSections,
   sidebarSections,
 } from './sidebar-order';
-import { activityInput, mountSidebarView, type RowState } from './sidebar-view';
-import { harnessText, rowChanges, stepSession } from './tabs';
+import {
+  activityInput,
+  harnessInput,
+  mountSidebarView,
+  type RowState,
+} from './sidebar-view';
+import { rowChanges, stepSession } from './tabs';
 
 // `activate` runs on a row click and `runFavorite` on a star's click, neither
 // while the preview shows; `selectTab` runs on a tab's click; `isModeShown`
@@ -107,6 +113,8 @@ export interface SessionsViewDeps extends Omit<
   // Holds `sessionsClaimedSlot`: each draw of main's rows writes the rows the
   // sections claim, in drawn order, when they differ from the value it holds.
   claimed: SlotWriter<readonly string[]>;
+  // Each registered harness's info by id, which a row's harness label reads.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
 }
 
 // The Sessions list: the side bar's rows as a keyboard pane, its cursor a
@@ -269,6 +277,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     },
     parts,
     deps.timers,
+    deps.harnesses,
   );
   let state: SessionsState | null = null;
   // The list cursor while the list holds the keys; out of the list it has no
@@ -547,7 +556,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       title: shownTitle(row.titles, titleLimit(deps.titleMaxLength())),
       label: row.label,
       project: row.project,
-      harness: harnessText(row.harness),
+      harness: harnessInput(deps.harnesses(), row.harness),
       activity: activityInput(activities.top(row.sessionId)),
     }),
     tabs,

@@ -1,4 +1,5 @@
 import type { MainPart } from '../contracts/plugin';
+import { agentCommandsMainPart } from './agent-commands/main/start';
 import { agentLinesMainPart } from './agent-lines/main/start';
 import { appUpdateMainPart } from './app-update/main/start';
 import { audioPickerMainPart } from './audio-picker/main/start';
@@ -10,6 +11,8 @@ import { autoCompactMainPart } from './auto-compact/main/start';
 import { autoRetroMainPart } from './auto-retro/main/start';
 import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
+import { chatroomMainPart } from './chatroom/main/start';
+import { claudeCodeMainPart } from './claude-code/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
@@ -40,7 +43,10 @@ import { workflowSpikeMainPart } from './workflow-spike/main/start';
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
+  // Before chat and usage, so Claude's harness is registered when they start.
+  claudeCodeMainPart,
   formsMainPart,
+  agentCommandsMainPart,
   primerMainPart,
   audioPickerMainPart,
   chatMainPart,
@@ -55,6 +61,7 @@ export const mainParts: readonly MainPart[] = [
   agentSkillsMainPart,
   contextSourcesMainPart,
   liveViewMainPart,
+  chatroomMainPart,
   docsMainPart,
   settingsMainPart,
   scopedAgentsMainPart,

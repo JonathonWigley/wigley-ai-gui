@@ -3,7 +3,6 @@ import {
   isStringArray,
   type JsonObject,
 } from '../../shared/json';
-import { HARNESSES, type Harness } from '../sessions/contract';
 import type {
   NoteDraft,
   NoteFields,
@@ -35,10 +34,6 @@ function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
-function isHarnessOrNull(value: unknown): value is Harness | null {
-  return value === null || (HARNESSES as readonly unknown[]).includes(value);
-}
-
 // undefined when `value` is neither null nor a session.
 function parseSession(value: unknown): NoteSession | null | undefined {
   if (value === null) {
@@ -51,7 +46,7 @@ function parseSession(value: unknown): NoteSession | null | undefined {
   const isSession =
     typeof sessionId === 'string' &&
     typeof hostSessionId === 'string' &&
-    isHarnessOrNull(harness) &&
+    isStringOrNull(harness) &&
     isStringOrNull(projectDir);
   return isSession
     ? { sessionId, harness, hostSessionId, projectDir }

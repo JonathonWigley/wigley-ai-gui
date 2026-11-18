@@ -571,7 +571,7 @@ function statusLineKit(
       return appended(parent, modelEffortChip);
     },
     controlChip(parent, control) {
-      const command = controlCommand(control.id);
+      const command = controlCommand(control.role);
       const controlChip = chip(control.label, control.value, () =>
         run(chatCommand(command)),
       ) as HTMLButtonElement;

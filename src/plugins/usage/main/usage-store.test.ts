@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type {
   PlanRow,
   PlanRowPatch,
+  HarnessProfile,
   PlanUsage,
   UsageAgentEvent,
 } from '../../../contracts/agent';
-import type { ChatProfile } from '../../chat/contract';
 import type { ProfilePlan, SessionUsage } from '../contract';
 import {
   EMPTY_USAGE_STATE,
@@ -20,11 +20,11 @@ import {
   withSessionUsage,
 } from './usage-store';
 
-const PERSONAL: ChatProfile = {
+const PERSONAL: HarnessProfile = {
   name: 'personal',
   configDir: '~/.claude-personal',
 };
-const WORK: ChatProfile = { name: 'work', configDir: '~/.claude-work' };
+const WORK: HarnessProfile = { name: 'work', configDir: '~/.claude-work' };
 
 function row(kind: string, percent: number, label = kind): PlanRow {
   return {
@@ -58,7 +58,7 @@ function seeded(): UsageState {
   return withProfiles(EMPTY_USAGE_STATE, [PERSONAL, WORK]);
 }
 
-function planOf(state: UsageState, profile: ChatProfile): ProfilePlan {
+function planOf(state: UsageState, profile: HarnessProfile): ProfilePlan {
   const plan = state.snapshot.plans.find(
     (held) => held.profileDir === profile.configDir,
   );
@@ -89,7 +89,7 @@ describe('withPollResult', () => {
 
   it.each<{
     case: string;
-    profiles?: ChatProfile[];
+    profiles?: HarnessProfile[];
     results: PollResult[];
     onDir?: Pick<ProfilePlan, 'name' | 'isDefault'>[];
     expected: Partial<ProfilePlan>;
@@ -464,7 +464,7 @@ describe('withProfiles', () => {
 
   it.each<{
     case: string;
-    profiles: ChatProfile[];
+    profiles: HarnessProfile[];
     expectedPlans: ProfilePlan[];
     expectedHeld: HeldPatch[];
   }>([

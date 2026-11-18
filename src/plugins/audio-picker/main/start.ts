@@ -21,7 +21,6 @@ import { errorText } from '../../../shared/error-text';
 import { chatMainKey } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
-  type Harness,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
@@ -67,7 +66,7 @@ export function addDriveActions(
   onSessionEnded: (listener: (rowId: string) => void) => void,
   defaultForm: SamplePickerArgs,
 ): void {
-  addAgentFormDriveActions<Harness>({
+  addAgentFormDriveActions({
     host,
     sessions,
     sessionDefaults: DRIVE_SESSION_DEFAULTS,

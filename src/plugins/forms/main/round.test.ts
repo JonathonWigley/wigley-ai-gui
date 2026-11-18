@@ -5,19 +5,20 @@ import type {
   FindingAnswerEntry,
   FormBody,
 } from '../contract';
+import { roundErrorText } from './mcp-wording';
 import {
-  answersPayload,
-  autoAnsweredPayload,
+  answersResult,
   fingerprint,
-  handedBackPayload,
-  NEXT_ON_AUTO_ANSWERED,
-  noRoundPayload,
+  handedBackResult,
+  noRoundResult,
+  notShownResult,
   parseRound,
   readFormBody,
   recommendedBody,
   requireKnownLayouts,
 } from './round';
 import { RoundError } from './round-error';
+import { autoAnsweredPayload, roundType } from './round-type';
 
 function question(overrides: Record<string, unknown> = {}) {
   return {
@@ -90,13 +91,13 @@ function roundOf(count: number, overrides: Record<string, unknown> = {}) {
   });
 }
 
-// The message of the RoundError parseRound throws for these args.
+// The tool error text of the RoundError parseRound throws for these args.
 function roundError(args: unknown): string {
   try {
     parseRound(args);
   } catch (error) {
     if (error instanceof RoundError) {
-      return error.message;
+      return roundErrorText(error);
     }
     throw error;
   }
@@ -306,13 +307,14 @@ describe('parseRound with findings', () => {
 describe('requireKnownLayouts', () => {
   const LAYOUTS = ['default', 'compact'];
 
-  // The message of the RoundError requireKnownLayouts throws for these args.
+  // The tool error text of the RoundError requireKnownLayouts throws for
+  // these args.
   function layoutError(args: unknown): string {
     try {
       requireKnownLayouts(parseRound(args), LAYOUTS);
     } catch (error) {
       if (error instanceof RoundError) {
-        return error.message;
+        return roundErrorText(error);
       }
       throw error;
     }
@@ -511,7 +513,7 @@ describe('readFormBody', () => {
   });
 });
 
-describe('answersPayload', () => {
+describe('roundType.payload', () => {
   it('builds the whole payload for a submitted round', () => {
     const round = parseRound({
       heading: 'Interview architecture',
@@ -522,7 +524,7 @@ describe('answersPayload', () => {
       ],
     });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([
@@ -574,7 +576,7 @@ describe('answersPayload', () => {
   });
 
   it('stays index-parallel with the questions when the body holds fewer answers', () => {
-    const payload = answersPayload(
+    const payload = roundType.payload(
       roundOf(3),
       'submitted',
       body([answer({ choice: 1 })]),
@@ -590,7 +592,7 @@ describe('answersPayload', () => {
   });
 
   it('reports a not-applicable answer as not_applicable, never untouched', () => {
-    const payload = answersPayload(
+    const payload = roundType.payload(
       roundOf(1),
       'submitted',
       body([answer({ not_applicable: true })]),
@@ -602,7 +604,7 @@ describe('answersPayload', () => {
   it('reports no choice for a not-applicable answer that kept its choice number', () => {
     const round = roundOf(1, { choices: ['alpha', 'beta'], recommend: 2 });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([answer({ choice: 2, not_applicable: true })]),
@@ -619,7 +621,7 @@ describe('answersPayload', () => {
   it("fills choice_text from the round's own choices, and leaves it empty when unanswered", () => {
     const round = roundOf(2, { choices: ['alpha', 'beta'] });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([answer({ choice: 2 }), answer({ index: 2 })]),
@@ -634,7 +636,7 @@ describe('answersPayload', () => {
   it('marks took_recommendation only when the choice is the recommended one', () => {
     const round = roundOf(2, { choices: ['alpha', 'beta'], recommend: 1 });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([answer({ choice: 1 }), answer({ index: 2, choice: 2 })]),
@@ -647,7 +649,7 @@ describe('answersPayload', () => {
   });
 
   it('tells a draft caller to keep waiting', () => {
-    const payload = answersPayload(roundOf(1), 'draft', body([]));
+    const payload = roundType.payload(roundOf(1), 'draft', body([]));
 
     expect(payload.next).toContain('collect_last_round');
   });
@@ -655,7 +657,7 @@ describe('answersPayload', () => {
   it('counts an out-of-range choice as untouched in both the answer and the summary', () => {
     const round = roundOf(2, { choices: ['alpha', 'beta'] });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([answer({ choice: 99 }), answer({ index: 2, choice: 1 })]),
@@ -674,7 +676,7 @@ describe('answersPayload', () => {
   it('sends notes with no pick as untouched, carrying the notes', () => {
     const round = parseRound({ heading: 'H', findings: [finding()] });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([], {
@@ -693,7 +695,7 @@ describe('answersPayload', () => {
   });
 
   it('sends a question with notes and no choice as untouched, carrying the notes', () => {
-    const payload = answersPayload(
+    const payload = roundType.payload(
       roundOf(1),
       'submitted',
       body([answer({ notes: 'neither name' })]),
@@ -708,12 +710,12 @@ describe('answersPayload', () => {
 
   it('carries no earlier_heading on an ordinary payload', () => {
     expect(
-      answersPayload(roundOf(1), 'submitted', body([])),
+      roundType.payload(roundOf(1), 'submitted', body([])),
     ).not.toHaveProperty('earlier_heading');
   });
 });
 
-describe('answersPayload findings', () => {
+describe('roundType.payload findings', () => {
   it('returns finding answers in their own array, index-parallel with the findings', () => {
     const round = parseRound({
       heading: 'H',
@@ -733,7 +735,7 @@ describe('answersPayload findings', () => {
       ],
     });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([answer({ choice: 1 })], {
@@ -779,7 +781,7 @@ describe('answersPayload findings', () => {
   it("carries a Don't ask press on a finding answer", () => {
     const round = parseRound({ heading: 'H', findings: [finding()] });
 
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([], {
@@ -854,7 +856,7 @@ describe('answersPayload findings', () => {
   ] as const)(
     'summarises $shape',
     ({ args, outcome, answers, findingAnswers, summary }) => {
-      const payload = answersPayload(
+      const payload = roundType.payload(
         parseRound(args),
         outcome,
         body([...answers], { finding_answers: [...findingAnswers] }),
@@ -865,7 +867,7 @@ describe('answersPayload findings', () => {
   );
 });
 
-describe('answersPayload finding actions', () => {
+describe('roundType.payload finding actions', () => {
   // Choice 1 sits under fix_now, choice 2 under follow_up; leave_it has none.
   const TWO_ACTIONS = finding({
     choices: [
@@ -883,7 +885,7 @@ describe('answersPayload finding actions', () => {
     raw: Record<string, unknown> = TWO_ACTIONS,
   ) {
     const round = parseRound({ heading: 'H', findings: [raw] });
-    const payload = answersPayload(
+    const payload = roundType.payload(
       round,
       'submitted',
       body([], { finding_answers: [findingAnswer(entry)] }),
@@ -1002,7 +1004,7 @@ describe('answersPayload finding actions', () => {
   });
 });
 
-describe('answersPayload notices', () => {
+describe('roundType.payload notices', () => {
   function roundWithNotices(noticeCount: number) {
     return parseRound({
       heading: 'H',
@@ -1014,7 +1016,11 @@ describe('answersPayload notices', () => {
   }
 
   it('gives an uncommented notice no comment key', () => {
-    const payload = answersPayload(roundWithNotices(2), 'submitted', body([]));
+    const payload = roundType.payload(
+      roundWithNotices(2),
+      'submitted',
+      body([]),
+    );
 
     expect(payload.notices).toEqual([
       { index: 1, title: 'Fix 0', badge: 'Applied' },
@@ -1023,7 +1029,7 @@ describe('answersPayload notices', () => {
   });
 
   it('carries each comment on its own notice', () => {
-    const payload = answersPayload(
+    const payload = roundType.payload(
       roundWithNotices(2),
       'submitted',
       body([], {
@@ -1046,13 +1052,13 @@ describe('answersPayload notices', () => {
       notices: [notice({ title: 'Kept it in config', badge: 'Decided' })],
     });
 
-    expect(answersPayload(round, 'submitted', body([])).notices).toEqual([
+    expect(roundType.payload(round, 'submitted', body([])).notices).toEqual([
       { index: 1, title: 'Kept it in config', badge: 'Decided' },
     ]);
   });
 
   it('never counts a notice in the answers or the summary', () => {
-    const payload = answersPayload(
+    const payload = roundType.payload(
       roundWithNotices(3),
       'submitted',
       body([answer({ choice: 1 })], {
@@ -1069,7 +1075,7 @@ describe('answersPayload notices', () => {
   it('submits a notices-alone round with an empty answers list', () => {
     const round = parseRound({ heading: 'H', notices: [notice()] });
 
-    const payload = answersPayload(round, 'submitted', body([]));
+    const payload = roundType.payload(round, 'submitted', body([]));
 
     expect(payload.outcome).toBe('submitted');
     expect(payload.answers).toEqual([]);
@@ -1077,9 +1083,9 @@ describe('answersPayload notices', () => {
   });
 });
 
-describe('answersPayload free text', () => {
+describe('roundType.payload free text', () => {
   function entryFor(entry: Partial<AnswerEntry>) {
-    return answersPayload(roundOf(1), 'submitted', body([answer(entry)]))
+    return roundType.payload(roundOf(1), 'submitted', body([answer(entry)]))
       .answers[0];
   }
 
@@ -1096,11 +1102,11 @@ describe('answersPayload free text', () => {
   it('leaves out an empty note and carries a written one', () => {
     const round = roundOf(1);
 
-    expect(answersPayload(round, 'submitted', body([]))).not.toHaveProperty(
+    expect(roundType.payload(round, 'submitted', body([]))).not.toHaveProperty(
       'note',
     );
     expect(
-      answersPayload(round, 'submitted', body([], { note: 'hello' })).note,
+      roundType.payload(round, 'submitted', body([], { note: 'hello' })).note,
     ).toBe('hello');
   });
 
@@ -1344,15 +1350,23 @@ describe('autoAnsweredPayload', () => {
       const payload = autoAnsweredPayload(round, recommendedBody(round));
 
       expect(payload.outcome).toBe('auto_answered');
-      expect(payload.next).toBe(NEXT_ON_AUTO_ANSWERED);
+      expect(payload.next).toBe(
+        'This session is headless until a tool result says the session is ' +
+          'no longer headless: the app showed no form and answered every ' +
+          'item with its recommendation. Build no more rounds, and list ' +
+          'every pick as a Decided notice in your reply. An auto-answered ' +
+          'pick never approves a hard-gated action (third-party code, ' +
+          'destroying user state, a push): name what the gate needs in the ' +
+          'reply and end the turn.',
+      );
       expect(item(payload)).toEqual(expected);
     },
   );
 });
 
-describe('noRoundPayload', () => {
+describe('roundType.noFormPayload', () => {
   it('is a normal payload that says to send the round again', () => {
-    const payload = noRoundPayload();
+    const payload = roundType.noFormPayload();
 
     expect(payload.outcome).toBe('no_round');
     expect(payload.answers).toEqual([]);
@@ -1362,7 +1376,7 @@ describe('noRoundPayload', () => {
   });
 });
 
-describe('handedBackPayload', () => {
+describe('roundType.handedBackPayload', () => {
   it('names the earlier round and says to send the new one again', () => {
     const round = parseRound({
       heading: 'Earlier round',
@@ -1370,12 +1384,57 @@ describe('handedBackPayload', () => {
     });
     const saved = body([answer({ choice: 2 })]);
 
-    const payload = handedBackPayload(round, 'submitted', saved);
+    const payload = roundType.handedBackPayload(round, 'submitted', saved);
 
     expect(payload.earlier_heading).toBe('Earlier round');
     expect(payload.answers).toEqual(
-      answersPayload(round, 'submitted', saved).answers,
+      roundType.payload(round, 'submitted', saved).answers,
     );
     expect(payload.next).toContain('ask_round');
+  });
+});
+
+describe('round results', () => {
+  const round = parseRound({ heading: 'H', questions: [question()] });
+  const blank = readFormBody(round, {});
+
+  it.each([
+    {
+      name: 'draft',
+      result: () => answersResult(round, 'draft', blank),
+      reason: { kind: 'stillOpen' },
+    },
+    {
+      name: 'submitted',
+      result: () => answersResult(round, 'submitted', blank),
+      reason: { kind: 'finished' },
+    },
+    {
+      name: 'cancelled',
+      result: () => answersResult(round, 'cancelled', blank),
+      reason: { kind: 'finished' },
+    },
+    {
+      name: 'auto_answered',
+      result: () => answersResult(round, 'auto_answered', blank),
+      reason: { kind: 'autoAnswered' },
+    },
+    {
+      name: 'handed-back',
+      result: () => handedBackResult(round, 'submitted', blank),
+      reason: { kind: 'handedBack', heading: 'H' },
+    },
+    {
+      name: 'not-shown',
+      result: () => notShownResult(round, 'Other'),
+      reason: { kind: 'notShown', heading: 'H', blockingHeading: 'Other' },
+    },
+    {
+      name: 'no-round',
+      result: () => noRoundResult(),
+      reason: { kind: 'noRound' },
+    },
+  ])('gives a $name result the reason $reason.kind', ({ result, reason }) => {
+    expect(result().reason).toEqual(reason);
   });
 });

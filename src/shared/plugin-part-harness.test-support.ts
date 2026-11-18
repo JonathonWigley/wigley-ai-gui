@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
 import type { Alerts } from '../contracts/alerts';
 import type { AppInstance } from '../contracts/app-instance';
-import type { CommandId } from '../contracts/commands';
+import type { CommandHop, CommandId } from '../contracts/commands';
 import {
   coreModeSlot,
   coreRuntimeMainSlot,
@@ -10,6 +10,7 @@ import {
   type RuntimeCatalog,
 } from '../contracts/core-state';
 import type { Disposable, Registrations } from '../contracts/disposable';
+import { harnessRegistryOf } from './agent-harness-registry.test-support';
 import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
 import type { FuzzyMatcher } from '../contracts/fuzzy';
@@ -84,6 +85,7 @@ import {
 } from './plugin-manifests';
 import {
   abortableProcesses,
+  trackedAgentHarnesses,
   trackedAlerts,
   trackedEditor,
   trackedFiles,
@@ -98,6 +100,7 @@ import { scopedFiles } from './scoped-files';
 import {
   createSlotStore,
   layoutState,
+  mainPluginState,
   pluginState,
   type SlotStore,
 } from './state/slot-store';
@@ -137,9 +140,11 @@ export const noCounts: Readonly<PartCounts> = {
   frames: 0,
 };
 
+// `hop` holds the run's sessions and whether it reports.
 export interface HarnessCommandRun {
   id: CommandId;
   arg: unknown;
+  hop: CommandHop;
 }
 
 // `started` throws while the part is stopped. `ready` calls every started
@@ -158,7 +163,8 @@ export interface HarnessCommandRun {
 // held until the writer's `dispose` and `counts` does not hold it, so a test
 // publishes each key once and disposes the writer of a key the part under test
 // publishes before that part starts. `commandRuns` holds each run sent to the
-// other process, in order, under its qualified id.
+// other process, in order, under its qualified id with its hop; each resolves
+// `ran`.
 export interface PartHarness<Started> {
   started(): Started;
   ready(): void;
@@ -249,7 +255,7 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
 }
 
 // `services` replaces the named default services, and a replaced service counts
-// nothing. A replaced `files`, `processes`, `alerts` or `userConfig` still runs
+// nothing. A replaced `files`, `processes`, `alerts`, `agentHarnesses` or `userConfig` still runs
 // through its per-plugin view, as `createMainApi` does. `parts` holds real
 // providers, started before the part in listed order and stopped after it.
 // `state` replaces the harness's own slot store, to seed a slot before the start.
@@ -468,7 +474,7 @@ function lazyCatalogWriter(
 
 // What every part of the harness runs commands on: a real registry and router over
 // the commands `manifests` declare and the catalog slots. A run sent to the other
-// process joins `commandRuns`.
+// process joins `commandRuns` with its hop, and resolves `ran`.
 function createWorld(
   state: SlotStore | undefined,
   process: ProcessName,
@@ -502,9 +508,9 @@ function createWorld(
       other: store.read(otherKey, 'core'),
       served: () => declared,
       leader: () => ' ',
-      remote(id, arg) {
-        commandRuns.push({ id, arg });
-        return Promise.resolve();
+      async remote(id, arg, hop) {
+        commandRuns.push({ id, arg, hop });
+        return 'ran';
       },
     }),
   };
@@ -1000,12 +1006,14 @@ function fakeMainApi(
       register: () => fakeLayoutsRegister(manifest, record, register),
       names: () => ['default'],
     },
-    state: common.state,
+    state: mainPluginState(world.state, manifest, common.register),
     services: {
       clock: common.clock,
       randomHex: world.randomHex,
       randomUuid: world.randomUuid,
       homeDir: '/home',
+      agentEnvironment: {},
+      agentHomeDir: '/home',
       tempFolders: [],
       paths: posixPaths,
       platform: fakePlatform('macos'),
@@ -1022,7 +1030,6 @@ function fakeMainApi(
           Promise.reject(new Error('part harness: no window to capture')),
       },
       openExternal: gateExternalLinks(async () => undefined),
-      agentHarnesses: [],
       git: notFaked<Git>('git'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
@@ -1046,6 +1053,10 @@ function fakeMainApi(
       ),
       alerts: trackedAlerts(
         replaced.alerts ?? notFaked<Alerts>('alerts'),
+        context.registrations,
+      ),
+      agentHarnesses: trackedAgentHarnesses(
+        replaced.agentHarnesses ?? harnessRegistryOf([]),
         context.registrations,
       ),
       log: common.log,

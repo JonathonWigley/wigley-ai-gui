@@ -117,6 +117,12 @@ CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side b
 shell layout's attributes, and its JS parts draw only what the core puts in them. The app-wide look of the primitives
 stays in themes.
 
+Chat's entries take one source between a user layout and `default`: the renderers plugins add through chat's
+`addEntryRenderer`. An entry draws with the user's layout when it names the entry's kind, else with the latest-added
+renderer whose `kind` matches and whose `match` passes, else with `default`, which draws a harness kind
+(`<harness id>:<kind>`) with its `raw` builder. A renderer that throws draws with `default`, as a user layout's builder
+does.
+
 ## Adopters
 
 | Owner | Setting | Surfaces |
@@ -138,6 +144,7 @@ stays in themes.
 | `session-stash` | `session-stash.layout` | the stash dialog's frame (`dialogFrame`) and body (`noteDialog`): the session's name, the note box and the hint |
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
+| `chatroom` | `chatroom.layout` | Chatroom mode's side bar (`sideBar`: the rooms and their threads), the room's board with the shown thread's heading (`board`), each message of the log (`message`) and the composer (`composer`); the unread badge under each session row (`rowBadge`) |
 | `system-stats` | `system-stats.layout` | the right-bar system stats panel: its section header, the five meter rows with their sparklines, and the process list's group and process rows |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `live-view` | `live-view.layout` | the session hub's Live section: its line and button above the stream, and the place the stream's video goes |
@@ -165,6 +172,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: Large's sample session in every stage, the plan-ready countdown included |
 | `Space z l m` | audio picker: a sample picker of three moments, every play format, and a file that will not decode |
+| `Space z l r` | chatroom: a sample room in Chatroom mode, its board of two sessions and a claim, and a thread holding a message of every post and entry kind, one question to the user still open; the composer posts nothing |
 
 ## The primer's columns
 

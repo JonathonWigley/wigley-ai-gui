@@ -103,8 +103,8 @@ export interface CandidateKit extends PickerKit {
   // The row's play IconButton: Play, or Stop while the row plays. A click plays or stops the row's sound and does not
   // choose the row.
   playButton(parent: HTMLElement): HTMLElement;
-  // `span.audio-picker-waveform`: the row's waveform as an SVG of one bar per peak; empty, with `is-loading`, until
-  // the sound decodes.
+  // `span.ui-waveform.audio-picker-waveform`: the row's waveform, the shared Waveform primitive of one bar per peak;
+  // empty, with `is-loading`, until the sound decodes.
   waveform(parent: HTMLElement): HTMLElement;
 }
 

@@ -1,6 +1,9 @@
 import type { Paths } from '../../../contracts/paths';
 import type {
-  ChatProfile,
+  AgentHarnessInfo,
+  HarnessProfile,
+} from '../../../contracts/agent';
+import type {
   ChatProject,
   RecentFolder,
   ResumeSectionRow,
@@ -160,7 +163,7 @@ export function folderSection(
 // The index in `profiles` to pre-select for `projectDir`; 0 when no recent
 // folder that is the same path names a profile in `profiles`.
 export function preselectedProfile(
-  profiles: readonly ChatProfile[],
+  profiles: readonly HarnessProfile[],
   recent: readonly RecentFolder[],
   projectDir: string,
   paths: Paths,
@@ -175,6 +178,16 @@ export function preselectedProfile(
   return Math.max(0, index);
 }
 
-export function profileLabel(profile: ChatProfile): string {
+// The harness a picked recent folder starts on: the harness recorded with it
+// while `harnesses` holds it, else `defaultHarness`.
+export function recentFolderHarness(
+  folder: RecentFolder,
+  harnesses: ReadonlyMap<string, AgentHarnessInfo>,
+  defaultHarness: string,
+): string {
+  return harnesses.has(folder.harness) ? folder.harness : defaultHarness;
+}
+
+export function profileLabel(profile: HarnessProfile): string {
   return `${profile.name} · ${profile.configDir}`;
 }

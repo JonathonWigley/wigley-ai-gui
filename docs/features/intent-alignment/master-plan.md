@@ -126,16 +126,16 @@ Checkpoint, after the items above:
 Start after Wave 1 step 2: both edit the same dependency call sites. The chat pass edits chat files that Wave 2's
 conversion of chat to slots and its chat events also edited; that conversion has landed.
 
-1. [ ] AgentHarnessRegistry [ready]
-2. [ ] AgentHarness grows what a second harness needs [ready]
+1. [x] AgentHarnessRegistry [ready]
+2. [x] AgentHarness grows what a second harness needs [ready]
 3. Then ∥:
-   - [ ] Harness settings with the harness, then [ ] Docs reads harness config roots from the adapter
-   - Chat pass, in sequence (all edit chat): [ ] Chat picks a harness → [ ] Control roles → [ ] Clear aliases from
-     the adapter → [ ] Harness-neutral UI copy → [ ] Open chat entry kinds and entry renderers
-   - [ ] Permission behind the harness
-   - [ ] Sessions stops naming Claude
-   - [ ] Structured round results
-   - [ ] Owned sessions join by an adapter key [plan]
+   - [x] Harness settings with the harness, then [x] Docs reads harness config roots from the adapter
+   - Chat pass, in sequence (all edit chat): [x] Chat picks a harness → [x] Control roles → [x] Clear aliases from
+     the adapter → [x] Harness-neutral UI copy → [x] Open chat entry kinds and entry renderers
+   - [x] Permission behind the harness
+   - [x] Sessions stops naming Claude
+   - [x] Structured round results
+   - [x] Owned sessions join by an adapter key [plan]
 4. [ ] Codex harness adapter [plan]: the proof; a second harness shows what the seams missed. It is planned in its
    own session once the steps above land, outside the lane's plan.
 
@@ -144,7 +144,7 @@ conversion of chat to slots and its chat events also edited; that conversion has
 All ∥, any time, except Per-platform chord matching and Per-platform program lookup, which wait for the Platform
 record (Wave 0) because they read it:
 
-- [ ] Per-platform program lookup and spawning [ready]
+- [x] Per-platform program lookup and spawning [ready]
 - [x] Round store through Files [ready]
 - [x] Per-source alert descriptions [ready]
 - [x] Per-platform chord matching [ready]

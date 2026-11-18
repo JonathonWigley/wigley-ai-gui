@@ -1,4 +1,5 @@
 import {
+  CONTROL_ROLES,
   MAIN_AGENT_ID,
   type AccountStatus,
   type AgentEvent,
@@ -9,10 +10,13 @@ import {
   type ChatEntry,
   type ChatImage,
   type CompactionTrigger,
+  type HarnessProfile,
   type ContextBreakdownAgentEvent,
+  type InstalledPlugin,
   type LogInEvents,
   type LogInProcess,
   type PastSession,
+  type PermissionDecision,
   type PlanRowUpdate,
   type PlanUsage,
   type ProjectFolder,
@@ -50,10 +54,12 @@ import { typedSkill } from './typed-skill';
 // `usage`, `compactionStarted` and one `compactionEnded` for each
 // compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
 // turn or a compaction closes or is interrupted, and
-// `sessionEnded` just before each `ended`. A started process reports
+// `sessionEnded` just before each `ended`. A started process reports its
+// session id (`FakeAgentProcessRecord.sessionId`) before every other event, and
 // `FAKE_AGENT_PID` through `pid` right after `sessionStarted`. A process `attach`
-// resolves opens with none of `start`'s emissions, its pid included: the test's
-// replay stands for them. Once a process
+// resolves reports the request's session id, then the test's replay, and opens
+// with none of `start`'s emissions, its pid included: the replay stands for
+// them. An `attach` with a null session id rejects. Once a process
 // has detached, it emits nothing. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
 // `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
@@ -102,9 +108,10 @@ export const FAKE_COLD_TEXT = 'fake: cold';
 const FAKE_COLD_CONTEXT_TOKENS = 200_000;
 // A send of this text runs the echo turn, then reports `fakeContextBreakdownEvent` after its `usage`.
 export const FAKE_CONTEXT_TEXT = 'fake: context';
-// A send of this text starts one Bash tool, asks its permission through the
-// harness's `askPermissionsWith` ask, then finishes the tool, allowed or
-// refused, and replies. The turn stays open while the ask waits.
+// A send of this text starts one Bash tool, raises its permission request
+// through `permission`, then, once `answerPermission` answers it, finishes the
+// tool, allowed or refused, and replies. The turn stays open while the request
+// waits.
 export const FAKE_PERMISSION_TEXT = 'fake: permission';
 // A send of this text, or `/wigley:feature ` before it, runs a wigley:feature
 // turn that writes `fakeWorkflowPlan(0, 0)` at `FAKE_WORKFLOW_PLAN_PATH` under
@@ -128,20 +135,23 @@ const SIGNED_OUT: AccountStatus = { signedIn: false, account: null };
 // The `at` of a fake past session's first history entry.
 const FAKE_HISTORY_AT = 1767236645000;
 
-// The tool call a `FAKE_PERMISSION_TEXT` turn asks permission for.
+// A tool call a fake process raises a permission request for.
 export interface FakePermissionCall {
   toolName: string;
   input: unknown;
   toolUseId: string;
 }
 
-// Asks the user whether the process `request` started may run `call`, as
-// Claude Code asks through chat's permission tool; resolves to whether it was
-// allowed.
-export type FakePermissionAsk = (
-  request: AgentStart,
-  call: FakePermissionCall,
-) => Promise<boolean>;
+// The reason a request the process's end cancelled is denied with; the fake's
+// own copy of the Claude adapter's, which `src/shared` may not import.
+export const FAKE_CANCELLED_REASON =
+  'The tool call was cancelled before the user answered.';
+const CANCELLED: PermissionDecision = {
+  allowed: false,
+  reason: FAKE_CANCELLED_REASON,
+};
+
+type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
 
 export type FakeAgentCall =
   | { method: 'send'; text: string; imageCount: number; now?: true }
@@ -150,14 +160,23 @@ export type FakeAgentCall =
   | { method: 'compact' }
   | { method: 'end' }
   | { method: 'kill' }
-  | { method: 'detach' };
+  | { method: 'detach' }
+  | {
+      method: 'answerPermission';
+      requestId: string;
+      decision: PermissionDecision;
+    };
 
 // `request` and `events` are the very objects `start` or `attach` received;
+// `sessionId` is the id the process reported: the request's, or the
+// `fake-session-<n>` a start with a null one minted, `n` counting from 1 per
+// fake harness;
 // `calls` lists every call on the process in call order, refused ones included.
 // `attached` marks a process `attach` resolved; `detached` one `detach` was called
 // on.
 export interface FakeAgentProcessRecord {
   request: AgentStart;
+  sessionId: string;
   events: AgentProcessEvents;
   calls: FakeAgentCall[];
   ended: boolean;
@@ -236,7 +255,7 @@ const FAKE_IDLE_RULE: IdleRule = {
 // each record changing in place. `attachCalls` lists every `attach` request in
 // call order. `scriptAttach` sets the outcome of the next `attach` for that
 // process id, once, replacing an unused script; with none, `attach` resolves null.
-// `failNextStart` makes the next `start` or `prepareRun` throw `message`.
+// `failNextStart` makes the next `start` throw, or the next `prepareRun` reject with, `message`.
 // `preparedRuns` holds one record per `prepareRun` that returned a spec, in call
 // order; a prepared run starts no process. Every `end` on a
 // process returns the promise its first `end` returned, or, once a
@@ -263,9 +282,19 @@ const FAKE_IDLE_RULE: IdleRule = {
 // and `holdNextLastUsage` makes the next one wait until the release it returns
 // runs. `lastUsageCalls` lists every `lastUsage` call's session id in call
 // order, failed ones included. The fake's processes emit no startup `usage`.
-// `timers` runs the `fake: visual` hold. `askPermissionsWith` sets the ask a
-// `fake: permission` turn calls, replacing any earlier one; with none set, the
-// turn's tool fails.
+// `timers` runs the `fake: visual` hold. Each process numbers its permission
+// requests `fake-permission-<n>`; `answerPermission` emits the answered entry
+// and settles the request in a later microtask, and an interrupt of an open turn,
+// the process's end, kill or `FAKE_END_TEXT` exit cancel every waiting request
+// with `FAKE_CANCELLED_REASON`, emitting its cancelled entry (before
+// `sessionEnded` on an exit); a detach cancels them emitting nothing.
+// `askPermission` raises a request for `call` on the newest process record whose
+// `request.rowId` is `rowId` and that is neither ended nor detached, and
+// resolves to its decision; it rejects when there is none. `controls` declares the starting controls a process with
+// no launch values begins with; `toolUseIdOf` reads `FAKE_TOOL_USE_ID_META_KEY`;
+// `configRoots` names `configFolder`'s folder and its `plugins/cache`.
+// `installedPlugins` resolves what `setInstalledPlugins` last set for the
+// profile's `configFolder`, [] before.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly preparedRuns: readonly FakePreparedRun[];
@@ -283,8 +312,41 @@ export interface FakeAgentHarness extends AgentHarness {
   releaseEnd(): void;
   holdCompactions(): void;
   releaseCompactions(): void;
-  askPermissionsWith(ask: FakePermissionAsk): void;
+  askPermission(
+    rowId: string,
+    call: FakePermissionCall,
+  ): Promise<PermissionDecision>;
+  setInstalledPlugins(
+    configDir: string,
+    plugins: readonly InstalledPlugin[],
+  ): void;
 }
+
+// The fake's harness id.
+export const FAKE_HARNESS_ID = 'fake';
+
+// The `_meta` key the fake reads a tool call's id under.
+export const FAKE_TOOL_USE_ID_META_KEY = 'fake/toolUseId';
+
+// The fake's profiles, named and foldered as the `claude-code` plugin's
+// default, since a run on the fake leaves that plugin out.
+export const FAKE_PROFILES: readonly HarnessProfile[] = [
+  { name: 'work', configDir: '~/.claude' },
+  { name: 'personal', configDir: '~/.claude-personal' },
+];
+
+// The id, label and profiles a fake harness declares.
+export interface FakeHarnessIdentity {
+  id: string;
+  label: string;
+  profiles: readonly HarnessProfile[];
+}
+
+const FAKE_IDENTITY: FakeHarnessIdentity = {
+  id: FAKE_HARNESS_ID,
+  label: 'Fake',
+  profiles: FAKE_PROFILES,
+};
 
 // Timers for tests that never look at a fake's hold: each `set` runs its `run`
 // in a microtask, whatever its `ms`, unless `clear` took its handle first.
@@ -355,6 +417,7 @@ function startingControls(
     {
       id: 'mode',
       label: 'Mode',
+      role: CONTROL_ROLES.permissionMode,
       choices: [
         { value: 'auto', label: 'Auto' },
         { value: 'plan', label: 'Plan' },
@@ -364,6 +427,7 @@ function startingControls(
     {
       id: 'effort',
       label: 'Effort',
+      role: CONTROL_ROLES.effort,
       choices: [
         { value: 'low', label: 'Low' },
         { value: 'medium', label: 'Medium' },
@@ -374,6 +438,7 @@ function startingControls(
     {
       id: 'model',
       label: 'Model',
+      role: CONTROL_ROLES.model,
       choices: [
         { value: 'fake-small', label: 'Small' },
         { value: 'fake-large', label: 'Large' },
@@ -562,6 +627,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     }
   };
   return {
+    sessionId: (id) => whileAttached(() => events.sessionId(id)),
     entry: (entry) => whileAttached(() => events.entry(entry)),
     controls: (controls) => whileAttached(() => events.controls(controls)),
     activity: (activity) => whileAttached(() => events.activity(activity)),
@@ -571,6 +637,7 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
     messageDropped: (entryId, message) =>
       whileAttached(() => events.messageDropped(entryId, message)),
+    permission: (request) => whileAttached(() => events.permission(request)),
     ended: (end) => whileAttached(() => events.ended(end)),
   };
 }
@@ -1163,10 +1230,13 @@ function fakeHistory(sessionId: string): ChatEntry[] {
 // The config folder the fake names for a session with no profile.
 export const FAKE_DEFAULT_CONFIG_FOLDER = '~/.fake-agent';
 
+// `identity` sets the harness's id, label and profiles; with none it is the
+// fake: `FAKE_HARNESS_ID`, `Fake` and `FAKE_PROFILES`.
 export function createFakeAgentHarness(
   clock: Clock,
   files: Pick<Files, 'write' | 'trash'>,
   timers: Timers,
+  identity: FakeHarnessIdentity = FAKE_IDENTITY,
 ): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
   const preparedRuns: FakePreparedRun[] = [];
@@ -1174,6 +1244,8 @@ export function createFakeAgentHarness(
   const attachScripts = new Map<string, FakeAttachScript>();
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
+  // The session ids starts with a null `sessionId` minted.
+  let mintedSessionIds = 0;
   let nextHistoryFailure: string | null = null;
   let nextPlanUsageFailure: string | null = null;
   const lastUsages = new Map<string, UsageAgentEvent | null>();
@@ -1195,7 +1267,15 @@ export function createFakeAgentHarness(
   // Each fake plan's progress by plan folder, kept across processes so a make
   // run outlives a clear.
   const workflowPlans = new Map<string, WorkflowPlan>();
-  let permissionAsk: FakePermissionAsk | null = null;
+  // Raises a permission request on each process record's process.
+  const permissionRaisers = new Map<
+    FakeAgentProcessRecord,
+    (call: FakePermissionCall) => Promise<PermissionDecision>
+  >();
+  // By config folder.
+  const installedPlugins = new Map<string, readonly InstalledPlugin[]>();
+  const configFolder = (profileDir: string | null) =>
+    profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER;
 
   const statusOf = (profileDir: string | null): AccountStatus =>
     signedOutProfiles.has(profileDir)
@@ -1282,7 +1362,58 @@ export function createFakeAgentHarness(
         throw new Error('fake agent process has ended');
       }
     };
+    // The permission requests waiting on an answer, by entry id.
+    const waitingPermissions = new Map<
+      string,
+      { entry: PermissionEntry; resolve(decision: PermissionDecision): void }
+    >();
+    let permissionCount = 0;
+    const raisePermission = (
+      call: FakePermissionCall,
+    ): Promise<PermissionDecision> => {
+      permissionCount += 1;
+      const entry: PermissionEntry = {
+        kind: 'permission',
+        id: `fake-permission-${permissionCount}`,
+        at: clock.now(),
+        toolName: call.toolName,
+        input: call.input,
+        answer: null,
+        raw: [{ fake: 'permission', toolUseId: call.toolUseId }],
+      };
+      return new Promise<PermissionDecision>((resolve) => {
+        waitingPermissions.set(entry.id, { entry, resolve });
+        queueMicrotask(() => events.permission({ entry }));
+      });
+    };
+    permissionRaisers.set(record, raisePermission);
+    // Settles the waiting request `id`, emitting its answered entry when
+    // `isShown`; does nothing for an id not waiting.
+    const settlePermission = (
+      id: string,
+      decision: PermissionDecision,
+      isShown: boolean,
+    ) => {
+      const waiting = waitingPermissions.get(id);
+      if (waiting === undefined) {
+        return;
+      }
+      waitingPermissions.delete(id);
+      if (isShown) {
+        events.entry({
+          ...waiting.entry,
+          answer: { allowed: decision.allowed, reason: decision.reason },
+        });
+      }
+      waiting.resolve(decision);
+    };
+    const cancelWaitingPermissions = (isShown: boolean) => {
+      for (const id of waitingPermissions.keys()) {
+        settlePermission(id, CANCELLED, isShown);
+      }
+    };
     const emitSessionEnded = () => {
+      cancelWaitingPermissions(true);
       events.agentEvent({ type: 'sessionEnded', at: clock.now() });
     };
     const clearVisualHold = () => {
@@ -1459,28 +1590,20 @@ export function createFakeAgentHarness(
       }, FAKE_VISUAL_HOLD_MS);
     };
 
-    // Starts the turn's tool, asks its permission, then finishes the tool with
-    // the answer and closes the turn, unless an interrupt, a later send or the
-    // process's end came while the ask waited.
+    // Starts the turn's tool, raises its permission request, then finishes the
+    // tool with the decision and closes the turn, unless an interrupt, a later
+    // send or the process's end came while the request waited.
     const runPermissionTurn = async (askedTurn: number) => {
       const call = permissionToolCall(askedTurn);
       startFakeTool(events, emitEntry, clock, call, 'tool');
-      let result: ToolResult;
-      try {
-        if (permissionAsk === null) {
-          throw new Error('fake harness has no permission ask');
-        }
-        const allowed = await permissionAsk(record.request, {
-          toolName: call.name,
-          input: call.input,
-          toolUseId: call.toolUseId,
-        });
-        result = allowed
-          ? { text: 'fake', isError: false }
-          : { text: 'Permission denied', isError: true };
-      } catch (error) {
-        result = { text: errorText(error), isError: true };
-      }
+      const decision = await raisePermission({
+        toolName: call.name,
+        input: call.input,
+        toolUseId: call.toolUseId,
+      });
+      const result: ToolResult = decision.allowed
+        ? { text: 'fake', isError: false }
+        : { text: 'Permission denied', isError: true };
       const isStillTheTurn =
         !record.ended &&
         isTurnOpen &&
@@ -1673,6 +1796,7 @@ export function createFakeAgentHarness(
     };
     if (!record.attached) {
       queueMicrotask(() => {
+        events.sessionId(record.sessionId);
         events.agentEvent({ type: 'sessionStarted', at: clock.now() });
         events.pid(FAKE_AGENT_PID);
         events.controls(controls);
@@ -1864,6 +1988,9 @@ export function createFakeAgentHarness(
         const interruptedTurn = turn;
         const interrupted = takeOpenCompaction();
         queueMicrotask(() => {
+          // The interrupt ends the waiting tool call's ask, as Claude's ends its
+          // `permission_prompt` call.
+          cancelWaitingPermissions(true);
           finishBackgroundWork();
           if (interrupted !== null) {
             events.agentEvent(
@@ -1967,10 +2094,19 @@ export function createFakeAgentHarness(
       detach() {
         calls.push({ method: 'detach' });
         record.detached = true;
+        cancelWaitingPermissions(false);
         clearVisualHold();
         const heldEnd = heldEnds.get(record);
         heldEnds.delete(record);
         heldEnd?.();
+      },
+      answerPermission(requestId, decision) {
+        calls.push({
+          method: 'answerPermission',
+          requestId,
+          decision: { allowed: decision.allowed, reason: decision.reason },
+        });
+        queueMicrotask(() => settlePermission(requestId, decision, true));
       },
     };
   }
@@ -1985,7 +2121,34 @@ export function createFakeAgentHarness(
   };
 
   const harness: FakeAgentHarness = {
-    id: 'claude',
+    id: identity.id,
+    info: () => ({
+      label: identity.label,
+      capabilities: {
+        interrupt: true,
+        resume: true,
+        images: true,
+        midTurnSend: true,
+      },
+      clearAliases: ['reset'],
+      projectConfigFolder: '.claude',
+      profiles: identity.profiles,
+    }),
+    controls: () => startingControls({}),
+    toolUseIdOf(meta) {
+      const id = meta?.[FAKE_TOOL_USE_ID_META_KEY];
+      return typeof id === 'string' && id !== '' ? id : null;
+    },
+    configRoots(profileDir) {
+      const configDir = configFolder(profileDir);
+      return { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] };
+    },
+    async installedPlugins(profileDir) {
+      return [...(installedPlugins.get(configFolder(profileDir)) ?? [])];
+    },
+    setInstalledPlugins(configDir, plugins) {
+      installedPlugins.set(configDir, [...plugins]);
+    },
     processes,
     preparedRuns,
     attachCalls,
@@ -1994,6 +2157,7 @@ export function createFakeAgentHarness(
       throwStartFailure();
       const record: FakeAgentProcessRecord = {
         request,
+        sessionId: request.sessionId ?? `fake-session-${++mintedSessionIds}`,
         events,
         calls: [],
         ended: false,
@@ -2009,6 +2173,10 @@ export function createFakeAgentHarness(
       const script = attachScripts.get(request.processId);
       attachScripts.delete(request.processId);
       await Promise.resolve();
+      const { sessionId } = request;
+      if (sessionId === null) {
+        throw new Error('attach needs a session id');
+      }
       if (script === undefined) {
         return null;
       }
@@ -2022,6 +2190,7 @@ export function createFakeAgentHarness(
       }
       const record: FakeAgentProcessRecord = {
         request,
+        sessionId,
         events,
         calls: [],
         ended: false,
@@ -2029,6 +2198,7 @@ export function createFakeAgentHarness(
         detached: false,
       };
       processes.push(record);
+      events.sessionId(sessionId);
       script.replay(events);
       return startProcess(record, script.turns ?? 0);
     },
@@ -2038,7 +2208,7 @@ export function createFakeAgentHarness(
     failNextStart(message) {
       nextStartFailure = message;
     },
-    prepareRun(request, firstMessage, env) {
+    async prepareRun(request, firstMessage, env) {
       throwStartFailure();
       if (request.resume) {
         throw new Error('A prepared run starts a new session');
@@ -2131,7 +2301,7 @@ export function createFakeAgentHarness(
       });
       return () => release();
     },
-    configFolder: (profileDir) => profileDir ?? FAKE_DEFAULT_CONFIG_FOLDER,
+    configFolder,
     async accountStatus(profileDir) {
       return statusOf(profileDir);
     },
@@ -2173,8 +2343,18 @@ export function createFakeAgentHarness(
         }
       });
     },
-    askPermissionsWith(ask) {
-      permissionAsk = ask;
+    askPermission(rowId, call) {
+      const record = processes.findLast(
+        (each) => each.request.rowId === rowId && !each.ended && !each.detached,
+      );
+      const raise =
+        record === undefined ? undefined : permissionRaisers.get(record);
+      if (raise === undefined) {
+        return Promise.reject(
+          new Error(`fake harness has no live process for row ${rowId}`),
+        );
+      }
+      return raise(call);
     },
     releaseEnd() {
       isEndHeld = false;

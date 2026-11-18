@@ -35,11 +35,54 @@ function setUp() {
     startDetached: async (command: string) => {
       started.push(`detached ${command}`);
     },
+    spawn: () => {
+      throw new Error('unused');
+    },
+    resolveProgram: () => Promise.reject(new Error('unused')),
   };
   return { started, release, limited: limitRuns(inner, 2) };
 }
 
 describe('limitRuns', () => {
+  it('spawn_PastTheLimit_PassesStraightThrough', () => {
+    const spawned: string[] = [];
+    const inner: ProcessRunner = {
+      run: () => new Promise(() => {}),
+      startDetached: () => Promise.reject(new Error('unused')),
+      spawn: (command) => {
+        spawned.push(command);
+        return { write() {}, endInput() {}, kill() {} };
+      },
+      resolveProgram: async () => null,
+    };
+    const limited = limitRuns(inner, 1);
+    limited.run('a', []);
+
+    limited.spawn('claude', [], {
+      cwd: '/',
+      env: {},
+      events: { stdout() {}, stderr() {}, closed() {} },
+    });
+
+    expect(spawned).toEqual(['claude']);
+  });
+
+  it('resolveProgram_PastTheLimit_ForwardsAtOnce', async () => {
+    const inner: ProcessRunner = {
+      run: () => new Promise(() => {}),
+      startDetached: () => Promise.reject(new Error('unused')),
+      spawn: () => ({ write() {}, endInput() {}, kill() {} }),
+      resolveProgram: async () => ({ command: '/usr/bin/python3', args: [] }),
+    };
+    const limited = limitRuns(inner, 1);
+    limited.run('a', []);
+
+    await expect(limited.resolveProgram('python')).resolves.toEqual({
+      command: '/usr/bin/python3',
+      args: [],
+    });
+  });
+
   it('startDetached_AtTheLimit_StartsAtOnce', async () => {
     const { started, limited } = setUp();
     limited.run('a', []);
@@ -76,6 +119,10 @@ describe('limitRuns', () => {
           : Promise.resolve(DONE);
       },
       startDetached: () => Promise.reject(new Error('unused')),
+      spawn: () => {
+        throw new Error('unused');
+      },
+      resolveProgram: () => Promise.reject(new Error('unused')),
     };
     const limited = limitRuns(inner, 1);
 

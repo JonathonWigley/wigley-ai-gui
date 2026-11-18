@@ -1,4 +1,9 @@
-import type { CommandId, CommandRunContext } from '../contracts/commands';
+import type {
+  CommandId,
+  CommandOutcome,
+  CommandRunContext,
+  CommandRunOptions,
+} from '../contracts/commands';
 import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import type { CommandHandler } from '../contracts/plugin';
@@ -68,24 +73,32 @@ export class CommandRegistry<Context extends { arg: unknown }> {
     return this.handlers.has(id);
   }
 
-  // Throws for an id with no handler. Otherwise it resolves once the run settles,
-  // and never rejects: a failure of the handler or a wrap is logged under its
-  // owner. With no intercept in the way the handler starts before this returns,
-  // since the key engine reads focus right after a run.
-  run(id: CommandId, context: Context): Promise<void> {
+  // Throws for an id with no handler. Otherwise it resolves the run's outcome once
+  // the run settles: `ran` when the handler ran and nothing failed, else
+  // `skipped`. A failure of the handler or a wrap is logged under its owner; with
+  // `reportErrors` the run then rejects with the first failure in time, and
+  // without it the run never rejects. With no intercept in the way the handler
+  // starts before this returns, since the key engine reads focus right after a
+  // run.
+  run(
+    id: CommandId,
+    context: Context,
+    options?: CommandRunOptions,
+  ): Promise<CommandOutcome> {
     const handler = this.handlers.get(id);
     if (handler === undefined) {
       throw new Error(`No command is registered as "${id}"`);
     }
     const wraps = [...(this.wraps.get(id) ?? [])];
     const runContext: CommandRunContext = { id, arg: context.arg };
-    let hasFailed = false;
+    // Boxed, since a thrown value can be `undefined`.
+    let firstFailure: { error: unknown } | null = null;
     let handlerRun: Promise<void> | null = null;
     const runHandler = (): Promise<void> => {
       handlerRun = settled(
         () => handler.value(context),
         (error) => {
-          hasFailed = true;
+          firstFailure ??= { error };
           this.log(handler.owner, `command ${id} failed: ${errorText(error)}`);
         },
       );
@@ -102,7 +115,7 @@ export class CommandRegistry<Context extends { arg: unknown }> {
       return settled(
         () => wrap.value(next, runContext),
         (error) => {
-          hasFailed = true;
+          firstFailure ??= { error };
           this.log(
             wrap.owner,
             `intercept of ${id} failed: ${errorText(error)}`,
@@ -111,14 +124,21 @@ export class CommandRegistry<Context extends { arg: unknown }> {
       );
     };
     const chain = runFrom(wraps.length - 1);
-    return chain.then(async () => {
+    return chain.then(async (): Promise<CommandOutcome> => {
+      if (handlerRun !== null) {
+        await handlerRun;
+      }
+      if (firstFailure !== null) {
+        if (options?.reportErrors === true) {
+          throw new Error(errorText(firstFailure.error));
+        }
+        return 'skipped';
+      }
       if (handlerRun === null) {
-        return;
+        return 'skipped';
       }
-      await handlerRun;
-      if (!hasFailed) {
-        this.tellDidRun(id, context.arg);
-      }
+      this.tellDidRun(id, context.arg);
+      return 'ran';
     });
   }
 

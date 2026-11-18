@@ -1,6 +1,7 @@
 import type { Disposable } from '../../contracts/disposable';
 import type { Log } from '../../contracts/log';
 import type {
+  MainPluginState,
   PluginManifest,
   PluginState,
   ProcessName,
@@ -49,7 +50,10 @@ import { createListeners, type Listeners } from '../listeners';
 // slot is no change. `applyRemote` of a `cleared` change empties its slot the
 // same way without `onWrite`, and does nothing for an absent slot.
 // `isHeld` is whether a live writer holds the id. `readById` follows the rule on
-// `LayoutSlotReader`.
+// `LayoutSlotReader`. `snapshotOf` copies one slot as `snapshot` copies each,
+// an unwritten slot as its empty snapshot, and is `undefined` for an id the store
+// never created; `ids` lists the store's slot ids in code-unit order.
+// Neither creates a slot.
 export interface SlotStore {
   publish<V>(key: SlotKey<V>): SlotWriter<V>;
   publish<V>(key: KeyedSlotKey<V>): KeyedSlotWriter<V>;
@@ -68,6 +72,8 @@ export interface SlotStore {
   applyRemote(change: SlotChange): void;
   load(slots: Record<string, SlotSnapshot>): void;
   snapshot(): Record<string, SlotSnapshot>;
+  snapshotOf(id: string): SlotSnapshot | undefined;
+  ids(): readonly string[];
   onWrite(listener: (change: SlotChange) => void): Disposable;
 }
 
@@ -421,6 +427,11 @@ export function createSlotStore(log: Log): SlotStore {
       Object.fromEntries(
         Array.from(slots, ([id, slot]) => [id, snapshotOfSlot(slot)]),
       ),
+    snapshotOf(id) {
+      const slot = slots.get(id);
+      return slot === undefined ? undefined : snapshotOfSlot(slot);
+    },
+    ids: () => [...slots.keys()].sort(),
     onWrite: (listener) => writes.add(listener),
   };
 }
@@ -460,6 +471,37 @@ export function pluginState(
   return {
     publish: publish as PluginState<PluginManifest, ProcessName>['publish'],
     read: read as PluginState<PluginManifest, ProcessName>['read'],
+  };
+}
+
+// A main part's view of `store`: `pluginState`, plus `readAny` and `slotIds`, which
+// throw at the call for a manifest that does not declare `readsEverySlot`.
+export function mainPluginState<M extends PluginManifest>(
+  store: SlotStore,
+  manifest: M,
+  track: <T extends Disposable>(handle: T) => T,
+): MainPluginState<M> {
+  const requireReadsEverySlot = () => {
+    if (manifest.readsEverySlot !== true) {
+      throw new Error(
+        `Plugin "${manifest.id}" does not declare readsEverySlot`,
+      );
+    }
+  };
+  const own = pluginState(store, manifest.id, 'main', track) as PluginState<
+    M,
+    'main'
+  >;
+  return {
+    ...own,
+    readAny(id) {
+      requireReadsEverySlot();
+      return store.snapshotOf(id);
+    },
+    slotIds() {
+      requireReadsEverySlot();
+      return store.ids();
+    },
   };
 }
 

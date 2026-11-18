@@ -1,3 +1,4 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { CommandKey } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
@@ -317,6 +318,12 @@ export interface DocsViewDeps {
   // Hears each doc the view opened, once it shows; a refused or failed open is
   // not told.
   docOpened(path: string): void;
+  // Each registered harness's info by id, read at each draw of a harness's
+  // label.
+  harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
+  // Each registered harness's project config folder name, in registration
+  // order, each once; read at each create.
+  projectConfigFolders(): readonly string[];
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree shows now as this view's own pane, beside the doc; false
@@ -491,13 +498,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   const pluginFile = async (entry: IndexEntry) => {
-    const harness =
-      metaString(entry, 'harness') === 'codex' ? 'codex' : 'claude';
-    const found = await deps.channel.invoke(
-      'pluginConfigFile',
-      entry.title,
-      harness,
-    );
+    const harness = metaString(entry, 'harness');
+    const found =
+      harness === null
+        ? null
+        : await deps.channel.invoke('pluginConfigFile', entry.title, harness);
     if (found === null) {
       toast(`No config file lists ${entry.title}`, 'info');
       return null;
@@ -508,11 +513,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const detailOf = (entry: IndexEntry | null): DocDetail | null => {
     if (entry?.kind === 'hook') {
-      const fields = detailFields(entry, deps.homeDir, deps.paths);
+      const fields = detailFields(
+        entry,
+        deps.homeDir,
+        deps.paths,
+        deps.harnesses(),
+      );
       return { fields, editFile: () => hookFile(entry) };
     }
     if (entry?.kind === 'plugin') {
-      const fields = detailFields(entry, deps.homeDir, deps.paths);
+      const fields = detailFields(
+        entry,
+        deps.homeDir,
+        deps.paths,
+        deps.harnesses(),
+      );
       return { fields, editFile: () => pluginFile(entry) };
     }
     return null;
@@ -538,7 +553,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     const entry = entriesById.get(entryId);
     return entry === undefined
       ? []
-      : statusTexts(entry, files.get(entryId), context()?.loadedPlugins ?? {});
+      : statusTexts(
+          entry,
+          files.get(entryId),
+          context()?.loadedPlugins ?? {},
+          deps.harnesses(),
+        );
   };
 
   const targetFor = (
@@ -640,6 +660,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         statusRead?.clones ?? [],
         localTime,
         deps.paths,
+        deps.harnesses(),
       ),
     leafMarks: (leaf: TreeLeaf): LeafMarks => {
       const lastLoaded = entriesById.get(leaf.entryId)?.lastLoaded ?? null;
@@ -684,7 +705,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     now: deps.now,
     chipsOf: (entryId, path) => {
       const entryPath = entriesById.get(entryId)?.path ?? path;
-      return chips(context(), entryId, pending.has(entryPath));
+      return chips(
+        context(),
+        entryId,
+        pending.has(entryPath),
+        deps.harnesses(),
+      );
     },
     statusesOf: textsOf,
     loadedOf: (entryId) => {
@@ -946,6 +972,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     parts: newParts(),
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
+    projectConfigFolders: () => deps.projectConfigFolders(),
     changed: (record, selectPath) => applyDocChange(record, selectPath),
     openInEditor,
     dialogClosed: restoreFocus,

@@ -41,7 +41,10 @@ function toolWith(applies: boolean, headless = false) {
       isHeadless: (sessionId) => headless && sessionId === 's1',
       launchedHeadless: () => false,
     }),
-  })({ id: 's1', info: { sessionId: 'h1', projectDir: null, harness: null } });
+  })({
+    id: 's1',
+    info: { sessionId: 'h1', projectDir: null, harness: null, rowId: null },
+  });
   const call = (args: unknown) =>
     tool.call('set_workflow_step', args, NO_CALL_CONTEXT);
   return { call, tool, reports };

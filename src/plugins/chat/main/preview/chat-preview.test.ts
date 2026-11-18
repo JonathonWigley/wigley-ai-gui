@@ -103,6 +103,7 @@ describe('chat preview', () => {
         'notice',
         'raw',
         'compaction',
+        'preview:sample',
       ]),
     );
     const controls = store.read(chatControlsSlot, 'test').get('row-1') ?? [];

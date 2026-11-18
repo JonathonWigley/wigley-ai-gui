@@ -8,9 +8,9 @@ import type {
 import type { DependencyKey } from '../../contracts/plugin';
 import type { SlotKey } from '../../contracts/state';
 
-// One chat profile's plan usage. `profileDir` is the profile's `configDir` as
-// chat's `profiles` setting writes it; `isDefault` is true for the first
-// profile only. `usage` is the last good poll with the live rows folded in,
+// One registered harness profile's plan usage. `profileDir` is the profile's
+// `configDir` as its harness's profiles setting writes it; `isDefault` is true
+// for the first profile only. `usage` is the last good poll with the live rows folded in,
 // null before the first good poll; `lastGoodAt` is that poll's `at`. `error`
 // is the last poll's failure, null once a poll succeeds; `stale` is true
 // while it stands.
@@ -34,7 +34,8 @@ export interface SessionUsage {
   compaction: { trigger: CompactionTrigger; startedAt: number } | null;
 }
 
-// `plans` in chat's profile order; `sessions` in the order each was first
+// `plans` in harness registration order then each harness's profile order;
+// `sessions` in the order each was first
 // reported.
 export interface UsageSnapshot {
   plans: readonly ProfilePlan[];

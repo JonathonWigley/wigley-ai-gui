@@ -235,8 +235,8 @@ function countingEngineTimers(live: Set<number>): PagePart {
 // live timers and `advance` moves its clock, `setLayouts` shows Large's layouts.
 // `invoked` records Large's `runAction` calls; `logged` reads the engine's lines;
 // `largeLogged` Large's; every session named `a`, `b` or `s1` reads as `proj`.
-// `selected` sets the session the commands run on; `stageActions` reads the arg
-// of each `workflow.stageAction` run heard; `commands` is another plugin's.
+// `selected` sets the session Sessions mode shows, the one the commands run on;
+// `stageActions` reads the arg of each `workflow.stageAction` run heard; `commands` is another plugin's.
 function setUp() {
   const invoked: LargeActionRequest[] = [];
   const openedDocs: string[] = [];
@@ -248,7 +248,9 @@ function setUp() {
   const probe: { commands: PluginCommands | null } = { commands: null };
   const runs: [string, unknown][] = [];
   const untracked = () => ({ dispose: () => undefined });
+  let shown: string | null = null;
   const sessions = {
+    shownSessionId: () => shown,
     addRowPart: (part: SessionPart) => {
       rowParts.push(part);
       return untracked();
@@ -317,7 +319,11 @@ function setUp() {
     setSidePaneHidden(hidden: boolean) {
       if (hidden !== isPaneHidden) {
         isPaneHidden = hidden;
+        // The key acts only while Sessions mode shows a session.
+        const wasShown = shown;
+        shown ??= 'a';
         void commands().run('workflow.toggleSidePane');
+        shown = wasShown;
       }
     },
     // A session leaving and coming back: the engine forgets what it kept for it.
@@ -347,7 +353,10 @@ function setUp() {
     invoked,
     openedDocs,
     rowActivities,
-    selected: (sessionId: string | null) => active.set(sessionId),
+    selected: (sessionId: string | null) => {
+      shown = sessionId;
+      active.set(sessionId);
+    },
     stageActions: () =>
       runs
         .filter(([id]) => id === workflowStageActionCommand.id)
@@ -1350,29 +1359,31 @@ describe('Large over the engine page part', () => {
     large.started().commands.dismiss({ arg: undefined });
     await settle();
 
-    expect(largeLogged()).toEqual(['no selected session for dismiss']);
+    expect(largeLogged()).toEqual(['no shown session for dismiss']);
     expect(stageActions()).toEqual([]);
     expect(invoked).toEqual([]);
   });
 
+  // Breaks: a targeted run acting on the selected session instead.
   it.each([
-    'clearAndMake',
-    'cancelCountdown',
-    'makeInNewSession',
-    'resumeMake',
-    'openPlan',
-    'retro',
-    'dismiss',
+    ['clearAndMake', undefined, 's1'],
+    ['cancelCountdown', undefined, 's1'],
+    ['makeInNewSession', undefined, 's1'],
+    ['resumeMake', undefined, 's1'],
+    ['openPlan', undefined, 's1'],
+    ['retro', undefined, 's1'],
+    ['dismiss', undefined, 's1'],
+    ['clearAndMake', 'b', 'b'],
   ] as const)(
-    'commands_WithASelectedSession_RunThroughTheEngine %s',
-    async (command) => {
+    'commands_WithASelectedSession_RunThroughTheEngine %s, target %s',
+    async (command, targetSessionId, sessionId) => {
       const { large, selected, stageActions } = setUp();
       selected('s1');
 
-      large.started().commands[command]({ arg: undefined });
+      large.started().commands[command]({ arg: undefined, targetSessionId });
       await settle();
 
-      expect(stageActions()).toEqual([{ sessionId: 's1', action: command }]);
+      expect(stageActions()).toEqual([{ sessionId, action: command }]);
     },
   );
 

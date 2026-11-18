@@ -7,15 +7,15 @@ Plan: [plan.md](plan.md)
 
 Files:     modify `src/contracts/session-host.ts` · modify `src/session-host/process-table.ts` ·
            modify `src/session-host/host-server.ts` · modify `src/session-host/session-host.ts` ·
-           modify `src/session-host/session-host-test-doubles.ts` · modify `src/main/claude-code/claude-launch.ts` ·
-           modify `src/main/claude-code/claude-code-harness.ts` · modify `src/shared/fake-session-host.ts` ·
+           modify `src/session-host/session-host-test-doubles.ts` · modify `src/plugins/claude-code/main/claude-launch.ts` ·
+           modify `src/plugins/claude-code/main/claude-code-harness.ts` · modify `src/shared/fake-session-host.ts` ·
            test `src/session-host/process-table.test.ts` · test `src/session-host/host-server.test.ts` ·
            test `src/main/session-host/session-host-client.test.ts` · test `src/shared/fake-session-host.test.ts` ·
-           test `src/main/claude-code/claude-code-harness.test.ts`
+           test `src/plugins/claude-code/main/claude-code-harness.test.ts`
 
 Consumes:  nothing from another task. Tree members: `NESTED_SESSION_ENV`, `SESSION_ROW_ENV`
            (`src/shared/session-env.ts`); `claudeEnv`, `claudeLaunch`, `defaultConfigFolder`
-           (`src/main/claude-code/claude-launch.ts`); `createProcessTable`, `ProcessTableDeps`
+           (`src/plugins/claude-code/main/claude-launch.ts`); `createProcessTable`, `ProcessTableDeps`
            (`src/session-host/process-table.ts`); `startSessionHost`, `SessionHostDeps` (`src/session-host/host-server.ts`).
 
 Produces:
@@ -47,7 +47,7 @@ Produces:
 - In `src/session-host/host-server.ts`: `SessionHostDeps` gains `env: NodeJS.ProcessEnv`. `startSessionHost` hands it
   to the process table.
 - In `src/session-host/session-host.ts`: `startSessionHost` gets `env: process.env`.
-- In `src/main/claude-code/claude-launch.ts`:
+- In `src/plugins/claude-code/main/claude-launch.ts`:
   - `export function claudeUnsetEnv(profileDir: string | null, homeDir: string, paths: Paths): string[]` — the names
     `claudeEnv` removes.
   - `ClaudeLaunch` gains `unsetEnv: string[]`. `claudeLaunch` fills it from `claudeUnsetEnv`.

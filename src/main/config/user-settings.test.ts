@@ -8,7 +8,6 @@ const CORE_DEFAULTS = {
   transparency: 'system',
   fonts: {},
   keySequenceTimeoutMs: 1000,
-  claude: { command: 'claude' },
 } as Settings;
 
 const SCHEMA: SettingsSchema = {
@@ -156,11 +155,11 @@ describe('mergeUserSettings', () => {
     },
     {
       case: 'object under a core name with a letter changed',
-      text: '{"claudi":{}}',
+      text: '{"thame":{}}',
     },
     {
       case: 'object under a core name with two letters swapped',
-      text: '{"cluade":{}}',
+      text: '{"tehme":{}}',
     },
   ])('mergeUserSettings_UnknownKey_IsAProblem: $case', ({ text }) => {
     expect(() => mergeUserSettings(text, SCHEMA)).toThrow('is not a setting.');

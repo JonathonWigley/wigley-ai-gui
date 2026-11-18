@@ -274,6 +274,8 @@ export const defaultKeymap = {
         'scheduling.detail',
         'scheduling.editor',
         'scoped-agents.ask',
+        'chatroom.threads',
+        'chatroom.log',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -287,6 +289,7 @@ export const defaultKeymap = {
     { keys: '<Leader>kb', scope: 'any', command: 'backlog.showMode' },
     { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>kt', scope: 'any', command: 'scheduling.showMode' },
+    { keys: '<Leader>kc', scope: 'any', command: 'chatroom.showMode' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
     {
       keys: '<Leader>vi',
@@ -1190,6 +1193,26 @@ export const defaultKeymap = {
       command: 'unity-pool.showHolder',
     },
 
+    // ── Chatroom ───────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'chatroom.threads', command: 'chatroom.listDown' },
+    { keys: 'k', scope: 'chatroom.threads', command: 'chatroom.listUp' },
+    { keys: 'gg', scope: 'chatroom.threads', command: 'chatroom.listTop' },
+    { keys: 'G', scope: 'chatroom.threads', command: 'chatroom.listBottom' },
+    { keys: '<CR>', scope: 'chatroom.threads', command: 'chatroom.openThread' },
+    { keys: 'j', scope: 'chatroom.log', command: 'chatroom.logDown' },
+    { keys: 'k', scope: 'chatroom.log', command: 'chatroom.logUp' },
+    { keys: 'gg', scope: 'chatroom.log', command: 'chatroom.logTop' },
+    { keys: 'G', scope: 'chatroom.log', command: 'chatroom.logBottom' },
+    { keys: 'i', scope: 'chatroom.log', command: 'chatroom.compose' },
+    { keys: 'r', scope: 'chatroom.log', command: 'chatroom.reply' },
+    // The composer is a one-line box: Enter sends and Esc leaves it.
+    { keys: '<CR>', scope: 'chatroom.composer', command: 'chatroom.send' },
+    {
+      keys: '<Esc>',
+      scope: 'chatroom.composer',
+      command: 'chatroom.leaveComposer',
+    },
+
     // ── System stats ───────────────────────────────────────────────────────
     {
       keys: 'j',
@@ -1296,6 +1319,12 @@ export const defaultKeymap = {
       keys: '<Leader>zlw',
       scope: 'any',
       command: 'workflow.openPreview',
+      where: 'page',
+    },
+    {
+      keys: '<Leader>zlr',
+      scope: 'any',
+      command: 'chatroom.preview',
       where: 'page',
     },
     {

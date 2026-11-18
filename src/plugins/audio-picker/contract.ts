@@ -77,14 +77,11 @@ export const SAVED_PICKERS_FOLDER = '.agents/wigley-audio-picker/pickers';
 export const OPEN_AUDIO_PICKER_TOOL = 'open_audio_picker';
 export const COLLECT_AUDIO_PICKER_TOOL = 'collect_last_audio_picker';
 
-// Only the wigley-forms relay returns `needs_manual_open`, when it cannot
-// start the app; the app never does.
 export type AudioPickerOutcome =
   | 'submitted'
   | 'draft'
   | 'cancelled'
   | 'auto_answered'
-  | 'needs_manual_open'
   | 'no_audio_picker';
 
 // `choice` as MomentAnswer's; `candidate` is null for None of these.

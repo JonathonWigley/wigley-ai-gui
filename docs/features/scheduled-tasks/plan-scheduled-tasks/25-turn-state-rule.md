@@ -12,9 +12,9 @@ with a read of what is open. It matters to this plan: `skipWhileBusy` (task 07) 
 task's last run reads busy, so a run stuck busy today would skip every later run of its task.
 
 Files:     modify `src/contracts/session-host.ts` (`IdleRule`) · modify `src/session-host/process-table.ts` ·
-           test `src/session-host/process-table.test.ts` · modify `src/main/claude-code/claude-launch.ts`
-           (`CLAUDE_IDLE_RULE`, which task 08 moved there) · test `src/main/claude-code/claude-launch.test.ts` ·
-           test `src/main/claude-code/claude-code-harness.test.ts` · modify `src/session-host/session-host-test-doubles.ts` ·
+           test `src/session-host/process-table.test.ts` · modify `src/plugins/claude-code/main/claude-launch.ts`
+           (`CLAUDE_IDLE_RULE`, which task 08 moved there) · test `src/plugins/claude-code/main/claude-launch.test.ts` ·
+           test `src/plugins/claude-code/main/claude-code-harness.test.ts` · modify `src/session-host/session-host-test-doubles.ts` ·
            test `src/session-host/host-server.test.ts` · test `src/main/session-host/session-host-client.test.ts` ·
            test `src/shared/fake-session-host.test.ts` ·
            modify `docs/features/session-host/design.md` (§ The host: the busy and idle bullets) ·

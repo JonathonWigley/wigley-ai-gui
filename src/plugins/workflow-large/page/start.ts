@@ -1,6 +1,10 @@
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PageCommandContext,
+  PagePart,
+} from '../../../contracts/plugin';
 import { docsPageKey } from '../../docs/contract';
-import { sessionsActiveSlot } from '../../sessions/contract';
+import { sessionsPageKey } from '../../sessions/contract';
 import { keyRunner } from '../../../shared/page/layout-host/base-kit';
 import {
   workflowPageKey,
@@ -38,7 +42,8 @@ function progressText(progress: PlanProgress): string {
 
 // Large's page half on the engine: its stages, its layouts, its checklist from the
 // read plan, and what its actions, countdown, progress and preview read from its
-// state. Each command runs `workflow.stageAction` on the selected session.
+// state. Each command runs `workflow.stageAction` on the run's target when it
+// names one, else on the session Sessions mode shows.
 export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
   manifest: workflowLargeManifest,
   start(api: WorkflowLargeApi) {
@@ -46,6 +51,7 @@ export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
     const { log } = services;
     const workflow = api.dependency(workflowPageKey);
     const docs = api.dependency(docsPageKey);
+    const sessions = api.dependency(sessionsPageKey);
 
     workflow.addWorkflow({
       id: LARGE_WORKFLOW_ID,
@@ -89,14 +95,19 @@ export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
     });
 
     const runKey = keyRunner(api.commands, log);
-    const runOnSelected = (command: keyof typeof LARGE_COMMANDS) => () => {
-      const sessionId = api.state.read(sessionsActiveSlot).get() ?? null;
-      if (sessionId === null) {
-        log(`no selected session for ${command}`);
-        return;
-      }
-      runKey(workflowStageActionCommand, { sessionId, action: command });
-    };
+    // Acts on the run's target when it names one; else on the session
+    // Sessions mode shows: in any other mode the key belongs to that mode, so
+    // it does nothing.
+    const runOnSelected =
+      (command: keyof typeof LARGE_COMMANDS) =>
+      ({ targetSessionId }: PageCommandContext) => {
+        const sessionId = targetSessionId ?? sessions.shownSessionId();
+        if (sessionId === null) {
+          log(`no shown session for ${command}`);
+          return;
+        }
+        runKey(workflowStageActionCommand, { sessionId, action: command });
+      };
 
     return {
       commands: {

@@ -1,23 +1,24 @@
 import type { PlanUsage } from '../../../contracts/agent';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import { errorText } from '../../../shared/error-text';
-import type { ChatProfile } from '../../chat/contract';
+import type { RegisteredProfile } from '../../../shared/harness-profiles';
 import type { PollResult } from './usage-store';
 
 // The shortest interval between rounds, whatever `intervalSeconds` reads.
 export const MIN_POLL_SECONDS = 60;
 
 // `profiles` and `intervalSeconds` are read at each round and each arming;
+// `planUsage` reads one profile's plan through that profile's harness;
 // `roundStarted` hears each round's profiles before its polls start, and
 // `polled` each settled poll.
 export interface PlanPollerDeps {
   timers: Timers;
   clock: Clock;
-  profiles(): readonly ChatProfile[];
+  profiles(): readonly RegisteredProfile[];
   intervalSeconds(): number;
-  planUsage(profileDir: string | null): Promise<PlanUsage>;
-  roundStarted(profiles: readonly ChatProfile[]): void;
-  polled(profile: ChatProfile, result: PollResult): void;
+  planUsage(profile: RegisteredProfile): Promise<PlanUsage>;
+  roundStarted(profiles: readonly RegisteredProfile[]): void;
+  polled(profile: RegisteredProfile, result: PollResult): void;
 }
 
 // `start` runs a round and arms the timer; each timer run does the same.
@@ -77,7 +78,7 @@ export function createPlanPoller(deps: PlanPollerDeps): PlanPoller {
     );
   }
 
-  function poll(profile: ChatProfile): Promise<void> {
+  function poll(profile: RegisteredProfile): Promise<void> {
     const running = readAndReport(profile).finally(() =>
       inFlight.delete(profile.configDir),
     );
@@ -85,10 +86,10 @@ export function createPlanPoller(deps: PlanPollerDeps): PlanPoller {
     return running;
   }
 
-  async function readAndReport(profile: ChatProfile): Promise<void> {
+  async function readAndReport(profile: RegisteredProfile): Promise<void> {
     let result: PollResult;
     try {
-      result = { ok: true, usage: await deps.planUsage(profile.configDir) };
+      result = { ok: true, usage: await deps.planUsage(profile) };
     } catch (reason) {
       result = { ok: false, error: errorText(reason) };
     }

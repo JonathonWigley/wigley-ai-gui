@@ -44,6 +44,7 @@ import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
+import { waveform } from '../../../shared/page/ui/waveform';
 import type { GalleryHeadInput, Layout } from '../layouts/layout';
 import {
   createGalleryParts,
@@ -222,6 +223,7 @@ function sectionSpecs(
     section('StatusDot', statusDotCells),
     section('Meter', meterCells),
     section('Sparkline', sparklineCells),
+    section('Waveform', waveformCells),
     section('InputFrame', inputFrameCells),
     section('Row, list', listRowCells),
     section('Row, tree', treeRowCells),
@@ -444,6 +446,7 @@ function tagCells(): SampleCell[][] {
   const tags: [string, TagTone][] = [
     ['Nit', 'neutral'],
     ['Recommended', 'accent'],
+    ['On demand', 'info'],
     ['Running', 'running'],
     ['Applied', 'success'],
     ['Minor', 'warning'],
@@ -541,6 +544,21 @@ function sparklineCells(): SampleCell[][] {
     samples.map(({ caption, values, tone }) =>
       cell(sparkline(values, tone), caption, true),
     ),
+  ];
+}
+
+// Not wide: the waveform has a fixed size.
+function waveformCells(): SampleCell[][] {
+  const peaks = Array.from(
+    { length: 32 },
+    (_, index) => 0.1 + 0.9 * Math.abs(Math.sin(index / 4)),
+  );
+  return [
+    [
+      cell(waveform(peaks), 'Peaks'),
+      cell(waveform(Array.from({ length: 32 }, () => 0)), 'Silence'),
+      cell(waveform(null), 'Loading'),
+    ],
   ];
 }
 

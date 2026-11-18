@@ -20,6 +20,12 @@ export type EntryKind =
   | 'raw'
   | 'compaction';
 
+// A harness's own entry kind, `<harness id>:<kind>`; no known kind holds a `:`.
+export type HarnessEntryKind = `${string}:${string}`;
+
+// Any entry kind a builder may draw: a known one, or a harness's own.
+export type AnyEntryKind = EntryKind | HarnessEntryKind;
+
 // What started a compaction: `app`, the app itself; `manual`, the user's `/compact`; `harness`, the harness on its own.
 export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
@@ -30,10 +36,13 @@ export type UserDelivery = 'sent' | 'received' | 'notReceived';
 // `images` are the message's attached images, base64 with no `data:` prefix.
 // `delivery` is null when nothing tracks the message. `isLatestDelivery` holds on the session's last user message whose
 // `delivery` is not null, and the app sends the input again when it changes; the default layout draws `Received` only
-// on that message, and `Sent` and `Not received` on every message.
+// on that message, and `Sent` and `Not received` on every message. `from` is the sending session's name when another
+// session's agent sent the message, else null; `text` is then the message without its frame line, and the default
+// layout draws a Tag `from <name>` before it.
 export interface UserInput {
   kind: 'user';
   id: string;
+  from: string | null;
   text: string;
   images: { mediaType: string; data: string }[];
   delivery: UserDelivery | null;
@@ -91,8 +100,9 @@ export interface NoticeInput {
   tone: 'info' | 'error';
   raw: unknown[];
 }
+// `default`'s `raw` builder also draws an entry of a harness kind no layout or renderer names; `kind` is then that kind.
 export interface RawInput {
-  kind: 'raw';
+  kind: 'raw' | HarnessEntryKind;
   id: string;
   raw: unknown[];
 }
@@ -120,7 +130,17 @@ export interface EntryInputs {
   raw: RawInput;
   compaction: CompactionInput;
 }
-export type EntryInput<K extends EntryKind> = EntryInputs[K];
+// An entry of a harness's own kind: it carries only `raw`, the harness events it was built from, oldest first. `at` is
+// epoch ms.
+export interface HarnessEntryInput {
+  kind: HarnessEntryKind;
+  id: string;
+  at: number;
+  raw: unknown[];
+}
+export type EntryInput<K extends AnyEntryKind> = K extends EntryKind
+  ? EntryInputs[K]
+  : HarnessEntryInput;
 
 // The entry kinds an activity line groups.
 export type StepInput = ToolInput | ThinkingInput | RawInput;
@@ -136,12 +156,14 @@ export interface ActivityInput {
   // The user has the line open, and the app places the step rows under it. The default layout draws its summary line
   // whether open or not.
   open: boolean;
-  // When the run began: the entry before it, or its first step when the run opens the list.
-  startedAt: number;
+  // When the run began: the entry before it, or its first step when the run opens the list. Null when the transcript
+  // held no time for the run's start (an entry restored from a line with no timestamp); the default layout then draws
+  // no time.
+  startedAt: number | null;
   // When the run ended; null while live.
   endedAt: number | null;
   // The time of this draw or update; the app sends it again once a second while the run is live. A live line's time
-  // is `now - startedAt`, a finished one's `endedAt - startedAt`.
+  // is `now - startedAt`, a finished one's `endedAt - startedAt`, when `startedAt` is known.
   now: number;
 }
 
@@ -196,8 +218,10 @@ export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
 // turn, so it waits only for the agent to take it in. `holdReason` is the send gate's reason while the message waits
 // on a compaction it asked for, else null. `skipKey` is the keys that skip that compaction, formatted for the
-// platform; empty when the interrupt command is unbound.
+// platform; empty when the interrupt command is unbound. `from` is the sending session's name when another session's
+// agent sent the message, else null; `text` is then the message without its frame line.
 export interface QueuedMessageInput {
+  from: string | null;
   text: string;
   imageCount: number;
   sent: boolean;
@@ -212,8 +236,8 @@ export interface RowClockInput {
   isRunning: boolean;
 }
 
-// `name` is the session's profile: the name chat's profiles setting gives its config folder, else the folder's last
-// segment.
+// `name` is the session's profile: the name a registered harness's profiles give its config folder, else the folder's
+// last segment.
 export interface RowProfileInput {
   name: string;
 }
@@ -229,14 +253,16 @@ export interface SideSectionInput {
 }
 
 // The session hub's Session facts: `folder` shows the home folder as `~`; `worktrees` are the names of the worktrees
-// the agents wrote in, empty for none; `branch` is null outside a git repo and `modelEffort` (`Opus 5 · high`) null
-// when the harness declares no model control.
+// the agents wrote in, empty for none; `harness` is the harness's id and `harnessLabel` its label (for a harness
+// no adapter registered, the shared `harnessLabel` helper's stand-in label, else the id); `branch` is null outside
+// a git repo and `modelEffort` (`Opus 5 · high`) null when the harness declares no model control.
 export interface SessionFactsInput {
   repo: string;
   branch: string | null;
   folder: string;
   worktrees: readonly string[];
   harness: string;
+  harnessLabel: string;
   modelEffort: string | null;
 }
 
@@ -245,7 +271,7 @@ export interface CompletionDescriptionInput {
   description: string;
 }
 
-export interface EntryView<K extends EntryKind = EntryKind> {
+export interface EntryView<K extends AnyEntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
   update?(input: EntryInput<K>): void;
@@ -316,12 +342,14 @@ export interface PartView<I> {
 }
 
 // A session control as its chip shows it: `value` is the choice's label, else the raw value, else `unset`; `enabled`
-// holds while the session's process runs.
+// holds while the session's process runs; `role` is the control's role (`model`, `permissionMode`, `effort` or another
+// the harness declares), null when it declares none.
 export interface ComposerControlInput {
   id: string;
   label: string;
   value: string;
   enabled: boolean;
+  role: string | null;
 }
 // The session's model control and its effort control, which the status line shows as one chip; `effort` is null when
 // the session declares no effort control.
@@ -510,7 +538,7 @@ export interface SideSectionKit extends BaseKit {
 // the text with `kit.markdown`; an entry with no marked block has one stop, and a body drawn later is not read until
 // the next redraw. Copy reads the entry's source lines by a block's position, so copy per block needs the layout to
 // draw `input.text` itself.
-export type EntryBuilder<K extends EntryKind> = (
+export type EntryBuilder<K extends AnyEntryKind> = (
   parent: HTMLElement,
   input: EntryInput<K>,
   kit: ChatKit,
@@ -524,7 +552,11 @@ export interface ChatLayout {
   // the list and the entry cursor. A user layout that wants the activity lines sets it
   // `true`. Left out, the layout takes `default`'s.
   activityInTranscript?: boolean;
-  entries?: { [K in EntryKind]?: EntryBuilder<K> };
+  // A builder per known kind it changes; it may also name a harness's own kind (`<harness id>:<kind>`), which it then
+  // draws over any renderer a plugin adds for that kind.
+  entries?: { [K in EntryKind]?: EntryBuilder<K> } & {
+    [kind: HarnessEntryKind]: EntryBuilder<HarnessEntryKind> | undefined;
+  };
   // One run of the agent's steps (tool, thinking, raw entries between two other entries), drawn into its slot; the
   // app keeps the cursor, the click that opens it and the step rows.
   activity?(
@@ -634,7 +666,7 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<RowClockInput>;
   // The session's profile, drawn into the session row's `chat.rowProfile` wrapper; the app orders the wrapper among the
-  // row's parts. The app draws the part again when the layouts or chat's profiles change, and draws nothing for a
+  // row's parts. The app draws the part again when the layouts or a harness's profiles change, and draws nothing for a
   // session with no config folder.
   rowProfile?(
     parent: HTMLElement,

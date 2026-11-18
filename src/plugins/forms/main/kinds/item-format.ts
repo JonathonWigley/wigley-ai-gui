@@ -5,6 +5,7 @@ import type {
   Notice,
   Question,
 } from '../../contract';
+import type { RoundItemPath } from '../round-error';
 
 // The values Python's json.dumps writes for a fingerprint.
 export type PythonJsonValue =
@@ -19,17 +20,17 @@ export interface ItemOf {
   question: Question;
 }
 
-// One kind of ask_round item: its part of the tool schema, its validation and
+// One kind of round item: its part of the tool schema, its validation and
 // what a re-sent round is matched on.
 export interface ItemFormat<Item> {
-  // The ask_round field: 'notices' | 'findings' | 'questions'.
+  // The round's field: 'notices' | 'findings' | 'questions'.
   readonly argsKey: string;
   // Singular, lower case: 'notice' | 'finding' | 'question'.
   readonly noun: string;
   // The JSON Schema of the argsKey field.
-  readonly arraySchema: Record<string, unknown>;
-  // Throws a RoundError whose message starts with `where`.
-  parse(raw: unknown, where: string): Item;
+  describe(): Record<string, unknown>;
+  // Throws a RoundError whose path is `at`.
+  parse(raw: unknown, at: RoundItemPath): Item;
   fingerprintContent(item: Item): PythonJsonValue;
 }
 

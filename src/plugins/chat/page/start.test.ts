@@ -43,6 +43,7 @@ const ROW = sessionRow('s1', { label: 'row', hostSessionId: 'host-1' });
 const SESSION: ChatSessionState = {
   sessionId: 's1',
   projectDir: '/p',
+  harness: 'fake',
   profile: 'work',
   entries: [],
   controls: [],

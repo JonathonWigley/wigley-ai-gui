@@ -77,6 +77,7 @@ import {
   type WorkspaceCommand,
   type WorkspacePlace,
 } from './problem-workspace';
+import type { DraftMark } from './workspace-state';
 
 const PLUGIN_ID = 'practice';
 
@@ -133,8 +134,6 @@ export interface PracticeViewDeps {
   setFocusTarget(target: FocusTarget | null): void;
   pushScope(scope: 'box' | 'confirm' | 'import'): PushedScope;
   isShown(): boolean;
-  // Shows Practice mode.
-  showMode(): void;
   // Sets the panes around the column, the interviewer's pane's, while
   // Practice shows; null as it hides.
   setOuterPanes(panes: OuterPanes | null): void;
@@ -196,11 +195,12 @@ export interface PracticeView {
   focusMain(): void;
   // Gives the column its keys back, in the pane that held them last.
   focusColumn(): void;
-  // The one function that applies an `open` result: the shown problem is
-  // refreshed in place, keeping its tabs, pane and unsaved drafts; another
+  // The one function that applies an `open` result, with the workspace's mark
+  // taken as its read began: the shown problem is refreshed in place, keeping
+  // its tabs, pane, unsaved drafts and drafts saved during the read; another
   // shows once the shown one's drafts saved. A draft that fails to save keeps
   // the shown problem open and selected, logs `kept <slug>` and toasts.
-  applyOpened(problem: OpenedProblem): void;
+  applyOpened(problem: OpenedProblem, mark: DraftMark): void;
   // The one setter of the focus: logs `list focused` or `main focused` when
   // the focus changes to that pane, then sets the scope, resize and focus
   // targets and DOM focus from it; while `interviewer` holds it, none of them,
@@ -271,7 +271,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     addOverlay: deps.addOverlay,
     hasKeys: () => deps.isShown() && store.get().focus === 'main',
     paneChanged: () => syncTargets(store.get()),
-    applyOpened: (problem) => applyOpened(problem),
+    applyOpened: (problem, mark) => applyOpened(problem, mark),
     savedPlace: deps.savedPlace,
     placeChanged(place) {
       workspacePlace = place;
@@ -659,14 +659,14 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     interviewer.scopeOpened(slug);
   };
 
-  const applyOpened = (problem: OpenedProblem) => {
+  const applyOpened = (problem: OpenedProblem, mark: DraftMark) => {
     const slug = problem.summary.slug;
     // The shown problem refreshes in place, dropping a show of another one
-    // that waits on a save.
+    // that waits on a save; a show draws what it read and needs no mark.
     if (slug === shownSlug) {
       workspaceSlug = slug;
       noteShown(problem);
-      workspace.refresh(problem);
+      workspace.refresh(problem, mark);
       return;
     }
     // A read landing while its show waits on a save is dropped: the show
@@ -699,6 +699,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   // list keeps the keys. An open overtaken by a later one is dropped.
   const openProblem = async (slug: string, isPicked: boolean) => {
     const request = ++openRequest;
+    const mark = workspace.readMark();
     let problem: OpenedProblem;
     try {
       problem = await channel.invoke('open', slug);
@@ -712,7 +713,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     }
     dispatch({ type: 'opened', slug });
     deps.log(`opened ${slug}`);
-    applyOpened(problem);
+    applyOpened(problem, mark);
     if (isPicked) {
       setFocus('main');
       deps.picked();
@@ -720,13 +721,15 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
   };
 
   // Reads the open problem again after a `changed`, so its summary and every
-  // saved draft show what is on disk. Dropped when overtaken by an open.
+  // draft saved before the read show what is on disk. Dropped when overtaken
+  // by an open.
   const refreshOpen = async () => {
     const { openSlug } = store.get();
     if (openSlug === null || openSlug !== workspaceSlug) {
       return;
     }
     const request = openRequest;
+    const mark = workspace.readMark();
     let problem: OpenedProblem;
     try {
       problem = await channel.invoke('open', openSlug);
@@ -737,7 +740,7 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     const isOvertaken =
       request !== openRequest || store.get().openSlug !== openSlug;
     if (!isOvertaken) {
-      applyOpened(problem);
+      applyOpened(problem, mark);
     }
   };
 
@@ -841,15 +844,14 @@ export function createPracticeView(deps: PracticeViewDeps): PracticeView {
     interviewer.toggle();
   };
   const interviewerCommands: Record<InterviewerCommand, () => void> = {
+    // Bound everywhere (`Space v i`), it acts on Practice alone: in another
+    // mode the key belongs to that mode.
     toggleInterviewer() {
-      if (deps.isShown()) {
-        toggleInterviewerKeys();
+      if (!deps.isShown()) {
+        deps.log('toggleInterviewer ignored: practice hidden');
         return;
       }
-      deps.showMode();
-      if (store.get().focus !== 'interviewer') {
-        toggleInterviewerKeys();
-      }
+      toggleInterviewerKeys();
     },
     importStart: () => importBox.open(),
     importAccept: () => importBox.accept(),

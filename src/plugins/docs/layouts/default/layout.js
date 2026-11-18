@@ -7,7 +7,7 @@
 /** @type {Record<import('../layout').ChipInput['state'], import('../../../../shared/page/layout-host/kit').TagTone>} */
 const CHIP_TONES = {
   launch: 'success',
-  'on-demand': 'accent',
+  'on-demand': 'info',
   listed: 'neutral',
   shadowed: 'warning',
   pending: 'warning',

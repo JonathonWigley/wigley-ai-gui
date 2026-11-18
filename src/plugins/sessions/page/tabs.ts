@@ -1,5 +1,4 @@
 import type {
-  Harness,
   MarkOptions,
   SessionRow,
   SessionsPlace,
@@ -155,18 +154,6 @@ export function tabsAfterRestoredAdd(
     : tabs;
 }
 
-// The harness as a row shows it; nothing when the relay did not say.
-export function harnessText(harness: Harness | null): string {
-  switch (harness) {
-    case 'claude':
-      return 'Claude';
-    case 'codex':
-      return 'Codex';
-    case null:
-      return '';
-  }
-}
-
 // The toast for a mark that selected its row while Sessions mode is hidden;
 // `keys` are the keys that show the mode, null when none are bound.
 export function markToastText(mark: MarkOptions, keys: string | null): string {
@@ -224,9 +211,9 @@ export function showsNoSelectionText(state: SessionsState | null): boolean {
 
 // Asks each of the session's views whether it may close, stopping at the
 // first that says no; `atOnce` is the close key's word that a view asked for
-// the session to close at once. `viewsNow` is read again after each answer, so
-// a view added while one was asking (a form popup a round adds under chat's
-// confirm) is asked too; each view is asked once.
+// the session to close at once, or a targeted run's. `viewsNow` is read again
+// after each answer, so a view added while one was asking (a form popup a
+// round adds under chat's confirm) is asked too; each view is asked once.
 export async function mayClose(
   viewsNow: () => readonly Pick<SessionTabView, 'beforeClose'>[],
   atOnce: boolean,

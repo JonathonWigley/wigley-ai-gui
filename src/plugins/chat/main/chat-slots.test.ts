@@ -42,6 +42,7 @@ const QUEUED: QueuedMessage = {
 const STATE: ChatSessionState = {
   sessionId: 'row-1',
   projectDir: '/p',
+  harness: 'fake',
   profile: 'work',
   entries: [],
   controls: [],

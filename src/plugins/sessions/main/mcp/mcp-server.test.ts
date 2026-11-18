@@ -15,6 +15,7 @@ interface RpcResponse {
   method?: string;
   result?: {
     capabilities?: unknown;
+    serverInfo?: { name: string; version: string };
     tools?: ToolDefinition[];
     content?: { type: string; text: string }[];
     structuredContent?: unknown;
@@ -113,7 +114,9 @@ afterEach(async () => {
 });
 
 // `before` is written to a paused input ahead of the server, as the relay
-// hands over a socket holding bytes sent with the hello.
+// hands over a socket holding bytes sent with the hello. The server is named
+// `'test-forms'`, and its tool-use id reader records each `_meta` it is handed
+// and answers `'toolu_01'` for a `_meta`, null for none.
 function connect(session: ToolSession, before: object[] = []) {
   const input = new PassThrough();
   const output = new PassThrough();
@@ -136,9 +139,16 @@ function connect(session: ToolSession, before: object[] = []) {
     before.forEach(send);
   }
   const liveTools = fakeLiveTools();
-  const server = serveMcp({ input, output }, session, liveTools.live);
+  const metas: (Readonly<Record<string, unknown>> | null)[] = [];
+  const server = serveMcp({ input, output }, session, liveTools.live, {
+    serverName: 'test-forms',
+    toolUseIdOf(meta) {
+      metas.push(meta);
+      return meta === null ? null : 'toolu_01';
+    },
+  });
   servers.push(server);
-  return { send, response, notified, liveTools, server };
+  return { send, response, notified, liveTools, server, metas };
 }
 
 async function initialized(client: ReturnType<typeof connect>) {
@@ -185,6 +195,14 @@ describe('serveMcp', () => {
     });
   });
 
+  it('initialize_ServerName_RepliesWithGivenName', async () => {
+    const client = connect(fakeSession().session);
+    const reply = client.response(1);
+    client.send(INITIALIZE);
+
+    expect((await reply).result?.serverInfo?.name).toBe('test-forms');
+  });
+
   it('notifies the client when the live list changes and lists the new tools', async () => {
     const client = connect(fakeSession().session);
     await initialized(client);
@@ -221,6 +239,7 @@ describe('serveMcp', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].name).toBe('ask_round');
     expect(calls[0].args).toEqual({ heading: 'Pick a theme' });
+    expect(client.metas).toEqual([{ 'claudecode/toolUseId': 'toolu_01' }]);
     expect(calls[0].context.toolUseId).toBe('toolu_01');
     expect(reply.result).toEqual(DONE);
   });
@@ -232,6 +251,7 @@ describe('serveMcp', () => {
 
     await callTool(client, 2, { name: 'ask_round', arguments: {} });
 
+    expect(client.metas).toEqual([null]);
     expect(calls[0].context.toolUseId).toBeNull();
   });
 

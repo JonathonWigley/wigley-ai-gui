@@ -76,6 +76,7 @@ describe('sessionLogMainPart', () => {
         sessionId: 'h1',
         projectDir: '/projects/one',
         harness: 'claude',
+        rowId: null,
       },
       owned: true,
     });
@@ -94,6 +95,7 @@ describe('sessionLogMainPart', () => {
         sessionId: 'h1',
         projectDir: null,
         harness: null,
+        rowId: null,
       },
       owned: false,
     });

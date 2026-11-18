@@ -6,14 +6,19 @@ import type {
 } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
-import type { ChatChannel, ChatProfile } from '../contract';
-import { requireProfile } from './lookups';
+import type { ChatChannel } from '../contract';
+import {
+  type ChatHarnesses,
+  requireHarnessOfProfile,
+  requireProfile,
+} from './lookups';
 
 // Each profile's sign-in, by profile name. One sign-in runs at a time, named
 // by the id the page gave it: its link and its end reach the page as
 // `logInLink` and `logInEnded`, carrying that id. A cancelled sign-in stops
-// running at once, and its later events are logged and reach no page. A name
-// chat has no profile for rejects (`logIn` throws), naming it.
+// running at once, and its later events are logged and reach no page. Each runs
+// on the harness that publishes the profile; a name no registered harness
+// publishes rejects (`logIn` throws), naming it.
 export interface Accounts {
   status(profile: string): Promise<AccountStatus>;
   // Throws while a sign-in runs, starting none.
@@ -35,19 +40,27 @@ interface RunningLogIn {
   process: LogInProcess;
 }
 
-// `harness` is looked up on every call and throws when chat's harness is
-// missing.
+// The profile's harness is looked up on every call.
 export function createAccounts(deps: {
-  harness(): AgentHarness;
-  profiles(): readonly ChatProfile[];
+  harnesses: ChatHarnesses;
   send: MainChannel<ChatChannel>['send'];
   log: PluginLog;
 }): Accounts {
   const { send, log } = deps;
   let running: RunningLogIn | null = null;
 
-  const configDirOf = (name: string) =>
-    requireProfile(deps.profiles(), name).configDir;
+  // The harness that publishes the profile `name`, and the profile's folder.
+  function profileAt(name: string): {
+    harness: AgentHarness;
+    configDir: string;
+  } {
+    const harness = requireHarnessOfProfile(deps.harnesses, name);
+    const { configDir } = requireProfile(
+      deps.harnesses.profilesOf(harness.id),
+      name,
+    );
+    return { harness, configDir };
+  }
 
   // `isRunning` tells whether this sign-in is still the running one; a newer
   // page may reuse an older page's id, so it compares the run, not the id.
@@ -96,17 +109,18 @@ export function createAccounts(deps: {
 
   return {
     async status(profile) {
-      return deps.harness().accountStatus(configDirOf(profile));
+      const { harness, configDir } = profileAt(profile);
+      return harness.accountStatus(configDir);
     },
     logIn(id, profile) {
-      const configDir = configDirOf(profile);
+      const { harness, configDir } = profileAt(profile);
       if (running !== null) {
         log(`sign-in for ${profile} refused: one runs for ${running.profile}`);
         throw new Error(`A sign-in is already running for ${running.profile}`);
       }
       // Set before any event: the harness emits none inside `logIn`.
       let run: RunningLogIn | null = null;
-      const process = deps.harness().logIn(
+      const process = harness.logIn(
         configDir,
         logInEvents(id, profile, () => running !== null && running === run),
       );
@@ -129,7 +143,8 @@ export function createAccounts(deps: {
       }
     },
     async logOut(profile) {
-      await deps.harness().logOut(configDirOf(profile));
+      const { harness, configDir } = profileAt(profile);
+      await harness.logOut(configDir);
       log(`signed out ${profile}`);
     },
   };

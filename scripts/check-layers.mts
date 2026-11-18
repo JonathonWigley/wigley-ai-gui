@@ -94,8 +94,9 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
   chat: {
-    // Its contract's `readAdoptRequest` reads JSON with the shared readers.
-    contract: { layers: ['src/shared'] },
+    // Its contract's `readAdoptRequest` reads JSON with the shared readers, and
+    // it names the layouts' entry types, for `addEntryRenderer`.
+    contract: { layers: ['src/shared', 'src/plugins/chat/layouts'] },
     // Its main joins paths with `node:path`.
     main: NODE_ONLY,
     sublayers: {
@@ -113,6 +114,10 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  // Its contract's record guards read JSON through `src/shared/json`.
+  chatroom: { contract: { layers: ['src/shared'] } },
+  // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
+  'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.
   docs: { main: NODE_ONLY },
   forms: {
@@ -201,6 +206,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/practice/contract.ts',
           'src/plugins/practice/main',
           'src/main/processes',
+          'src/main/processes/node-processes.test-support.ts',
           'src/main/files',
         ],
         packages: ['node:'],
@@ -587,10 +593,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/main/drive'],
     packages: ['electron', 'node:'],
   },
-  'src/main/claude-code': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
-    packages: ['node:'],
-  },
   'src/main/themes': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/main/config': {
     layers: ['src/contracts', 'src/shared', 'src/main/themes'],
@@ -638,6 +640,34 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
+  // Finds a program on the PATH with the pure shared program lookup.
+  'src/main/processes/node-processes.ts': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:'],
+  },
+  // Builds the host's real process runner over the real file adapter.
+  'src/main/processes/node-processes.test-support.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/files',
+      'src/main/processes/node-processes.ts',
+    ],
+    packages: ['node:'],
+  },
+  // Runs real programs through the host's process runner, and the lookup on
+  // fake POSIX and Windows platforms.
+  'src/main/processes/node-processes.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/processes/node-processes.ts',
+      'src/main/processes/node-processes.test-support.ts',
+    ],
+    packages: ['node:'],
+  },
   'src/main/git': { layers: ['src/contracts'], packages: ['node:'] },
   // Over the shared fakes, and a commit in a real temporary clone through the
   // real process runner.
@@ -648,6 +678,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/main/git',
       'src/main/processes',
+      'src/main/processes/node-processes.test-support.ts',
     ],
     packages: ['node:'],
   },
@@ -711,7 +742,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/shared/paths',
       'src/config',
       'src/main',
-      'src/main/claude-code',
       'src/main/plugins',
       'src/main/themes',
       'src/main/config',
@@ -722,6 +752,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/screen-capture',
       'src/main/files',
       'src/main/processes',
+      'src/main/processes/node-processes.ts',
       'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',
@@ -769,6 +800,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   // Checks the order the built-in page parts start in.
   'src/plugins/page.test.ts': {
     layers: ['src/contracts', 'src/shared', 'src/plugins/page.ts'],
+    packages: [],
+  },
+  // Checks the order the built-in main parts start in.
+  'src/plugins/main.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/plugins/main.ts'],
     packages: [],
   },
   // Checks the built-in manifests' setting declarations, and that the default

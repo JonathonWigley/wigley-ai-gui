@@ -1,15 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentEvent,
-  AgentHarness,
-  AgentStart,
-  UserMessage,
+import {
+  type AgentEvent,
+  type AgentHarness,
+  type AgentStart,
+  MAIN_AGENT_ID,
+  type PermissionRequest,
+  type ProcessActivity,
+  type UserMessage,
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { Files } from '../../../contracts/files';
 import type { PartStop } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import type { KeyedSlotKey } from '../../../contracts/state';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -37,7 +45,6 @@ import {
   type TitleSource,
   type ToolCallGuard,
   type ToolDefinition,
-  type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
 import {
@@ -50,41 +57,40 @@ import {
   type SessionCloseReason,
   type SessionOrigin,
 } from '../contract';
+import { chatHarnessesOfRegistry } from './lookups.test-support';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
-import { addDriveActions, chatMainPart } from './start';
+import { addDriveActions, chatMainPart, createHarnessFollower } from './start';
 import { CALLER_WAIT_MS, SUBAGENT_CALL_TEXT } from './tool-callers';
 
-// A chat holding one session, `held`, whose permission calls wait until the
-// test replies to them, and `held` resting when `running` is false; `calls`
-// holds each call's tool args.
+// A chat holding one session, `held`, resting when `running` is false.
 function fakeChat(running = true) {
-  const replies: ((result: ToolResult) => void)[] = [];
-  const calls: unknown[] = [];
   return {
-    replies,
-    calls,
     closed: vi.fn<(sessionId: string, reason: SessionCloseReason) => void>(),
-    start: () => 'started',
-    hostSessionIdOf: () => 'host-started',
+    start: vi.fn<
+      (request: {
+        projectDir: string;
+        harness: string;
+        profile: string;
+      }) => string
+    >(() => 'started'),
+    hostSessionIdSettled: () => Promise.resolve('host-started'),
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
     ],
-    permissionToolSession: () => ({
-      call: (_name: string, args: unknown) => {
-        calls.push(args);
-        return new Promise<ToolResult>((resolve) => {
-          replies.push(resolve);
-        });
-      },
-      end: () => undefined,
-    }),
   };
 }
+
+// A harness `other` declaring the drive's default profile, `default`.
+const DEFAULT_PROFILE_HARNESS = {
+  id: 'other',
+  info: () =>
+    harnessInfo({ profiles: [{ name: 'default', configDir: '/default' }] }),
+} as unknown as AgentHarness;
 
 function chatDriveActions(
   chat: ReturnType<typeof fakeChat>,
   activate: (sessionId: string) => void = () => undefined,
-  harnesses: readonly AgentHarness[] = [],
+  harnesses: readonly AgentHarness[] = [DEFAULT_PROFILE_HARNESS],
 ) {
   const drive = fakeDriveHost();
   addDriveActions(drive.host, {
@@ -94,15 +100,58 @@ function chatDriveActions(
       log: () => undefined,
       files: { makeFolder: () => Promise.resolve() },
     },
-    profileNames: () => ['default'],
+    defaultProfile: () => 'default',
     chat,
     sessions: { activate },
-    harnesses,
+    harnesses: chatHarnessesOfRegistry(harnessRegistryOf(harnesses)),
   });
   return drive;
 }
 
-const ALLOWED: ToolResult = { content: [{ type: 'text', text: 'allow' }] };
+// A fake harness with one live process for the row `held`; `requests` holds
+// each permission request the process raises, which `process` answers.
+function heldFake() {
+  const fake = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+  const requests: PermissionRequest[] = [];
+  const ignore = () => undefined;
+  const process = fake.start(
+    {
+      processId: 'p-1',
+      sessionId: 's-1',
+      resume: false,
+      projectDir: '/p',
+      profileDir: null,
+      controls: {},
+      instructions: [],
+      idleCompactMinTokens: null,
+      rowId: 'held',
+    },
+    {
+      sessionId: ignore,
+      entry: ignore,
+      controls: ignore,
+      activity: ignore,
+      pid: ignore,
+      commands: ignore,
+      planUsage: ignore,
+      agentEvent: ignore,
+      messageDropped: ignore,
+      permission: (request) => requests.push(request),
+      ended: ignore,
+    },
+  );
+  return { fake, process, requests };
+}
+
+async function flushMicrotasks() {
+  for (let turn = 0; turn < 10; turn++) {
+    await Promise.resolve();
+  }
+}
 
 describe('chat drive actions', () => {
   it('start returns the session it started and its host session id', async () => {
@@ -112,6 +161,17 @@ describe('chat drive actions', () => {
       sessionId: 'started',
       hostSessionId: 'host-started',
     });
+  });
+
+  it('driveStart_NoProfileArg_StartsOnTheDefaultProfileAndItsHarness', async () => {
+    const chat = fakeChat();
+    const drive = chatDriveActions(chat);
+
+    await drive.run('start');
+
+    expect(chat.start).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ harness: 'other', profile: 'default' }),
+    );
   });
 
   it('driveStart_ActivateFails_SaysStartFailed', async () => {
@@ -124,49 +184,64 @@ describe('chat drive actions', () => {
     expect(chat.closed).toHaveBeenCalledWith('started', 'start-failed');
   });
 
-  it('permissionAnswer is pending until the user answers, then the reply', async () => {
-    const chat = fakeChat();
-    const drive = chatDriveActions(chat);
+  it('permissionAnswer is pending until the user answers, then the decision', async () => {
+    const { fake, process, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
     expect(await drive.run('askPermission', { sessionId: 'held' })).toEqual({
       toolUseId: 'use-1',
     });
+    await flushMicrotasks();
 
     expect(await drive.run('permissionAnswer', { toolUseId: 'use-1' })).toEqual(
       { pending: true },
     );
-    chat.replies[0]?.(ALLOWED);
-    await Promise.resolve();
+    process.answerPermission(requests[0].entry.id, {
+      allowed: true,
+      reason: null,
+    });
+    await flushMicrotasks();
 
     expect(await drive.run('permissionAnswer', { toolUseId: 'use-1' })).toEqual(
-      ALLOWED,
+      { allowed: true, reason: null },
     );
   });
 
   it.each([
     { given: 'an explicit null input', input: null, sent: null },
     { given: 'no input', input: undefined, sent: { command: 'ls' } },
-  ])('askPermission given $given sends $sent', async ({ input, sent }) => {
-    const chat = fakeChat();
-    const drive = chatDriveActions(chat);
+  ])('askPermission given $given raises $sent', async ({ input, sent }) => {
+    const { fake, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
     const args = input === undefined ? {} : { input };
 
     await drive.run('askPermission', { sessionId: 'held', ...args });
+    await flushMicrotasks();
 
-    expect(chat.calls[0]).toEqual({
-      tool_name: 'Bash',
-      input: sent,
-      tool_use_id: 'use-1',
-    });
+    expect(
+      requests.map(({ entry }) => ({
+        toolName: entry.toolName,
+        input: entry.input,
+      })),
+    ).toEqual([{ toolName: 'Bash', input: sent }]);
   });
 
   it('askPermission rejects a resting session and raises no card', async () => {
-    const chat = fakeChat(false);
-    const drive = chatDriveActions(chat);
+    const { fake, requests } = heldFake();
+    const drive = chatDriveActions(fakeChat(false), undefined, [fake]);
 
     await expect(
       drive.run('askPermission', { sessionId: 'held' }),
     ).rejects.toThrow('held');
-    expect(chat.calls).toEqual([]);
+    await flushMicrotasks();
+    expect(requests).toEqual([]);
+  });
+
+  it('askPermission_NoFakeHarness_Rejects', async () => {
+    const drive = chatDriveActions(fakeChat());
+
+    await expect(
+      drive.run('askPermission', { sessionId: 'held' }),
+    ).rejects.toThrow('chat runs on no fake harness');
   });
 
   it('permissionAnswer rejects a toolUseId askPermission never returned', async () => {
@@ -213,11 +288,17 @@ describe('chat drive actions', () => {
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
 // and an owned session's end emits `sessions.ended`, recorded in `ended`,
 // and its `keep` is recorded in `kept`;
-// each row holds its titles as sessions would, starting with none.
-// `options.profiles` replaces the profiles.
+// each row holds its titles as sessions would, starting with none, in
+// `titles`, and its side-bar label as `labels` holds it, else none.
+// `options.profiles` replaces the profiles the harness `claude` declares (and
+// of its `core.agentHarnesses` entry); null registers no harness.
+// `options.publishedProfiles` replaces the entry's profiles alone, as the
+// registry does for a profile another harness already names.
+// `options.infoFails` makes the harness's `info()` throw.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
-// process starts, `startInstructions` each start's instructions and
+// process starts, each reporting its request's session id, or `host-<n>` for a
+// new conversation, in a microtask; `startInstructions` each start's instructions and
 // `startIdleCompactMinTokens` each start's threshold, in start order.
 // `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
@@ -238,8 +319,9 @@ function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
-    harnessId?: string;
-    profiles?: { name: string; configDir: string }[];
+    infoFails?: boolean;
+    profiles?: { name: string; configDir: string }[] | null;
+    publishedProfiles?: { name: string; configDir: string }[];
     projects?: ProjectSetting[];
   } = {},
 ) {
@@ -249,6 +331,18 @@ function startChatPart(
   const processDetach = vi.fn<() => void>();
   const processKill = vi.fn<() => void>();
   const store = createSlotStore(() => undefined);
+  const profiles =
+    options.profiles === undefined
+      ? [{ name: 'work', configDir: '/work' }]
+      : options.profiles;
+  if (profiles !== null) {
+    store
+      .publish(coreAgentHarnessesSlot)
+      .set(
+        'claude',
+        harnessInfo({ profiles: options.publishedProfiles ?? profiles }),
+      );
+  }
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];
   const logged: string[] = [];
@@ -256,8 +350,10 @@ function startChatPart(
   const startInstructions: (readonly string[])[] = [];
   const startIdleCompactMinTokens: (number | null)[] = [];
   const processEvents: {
+    sessionId: (id: string) => void;
     ended: (exit: { code: number; error: string | null }) => void;
     agentEvent: (event: AgentEvent) => void;
+    activity: (activity: ProcessActivity) => void;
   }[] = [];
   let processEnd = Promise.resolve();
   const holdProcessEnds = () => {
@@ -275,8 +371,14 @@ function startChatPart(
     spawn: { id: string };
   }[] = [];
   const harness = {
-    id: options.harnessId ?? 'claude',
-    prepareRun: (
+    id: 'claude',
+    info: () => {
+      if (options.infoFails === true) {
+        throw new Error('info unreadable');
+      }
+      return harnessInfo({ profiles: profiles ?? [] });
+    },
+    prepareRun: async (
       request: AgentStart,
       firstMessage: UserMessage,
       env: Readonly<Record<string, string>>,
@@ -296,6 +398,8 @@ function startChatPart(
       startInstructions.push(request.instructions);
       startIdleCompactMinTokens.push(request.idleCompactMinTokens);
       processEvents.push(events);
+      const hostId = request.sessionId ?? `host-${starts.count}`;
+      queueMicrotask(() => events.sessionId(hostId));
       return {
         send: processSends,
         end: () => processEnd,
@@ -334,6 +438,7 @@ function startChatPart(
   const kept: string[] = [];
   let rows = 0;
   const titles = new Map<string, SessionTitles>();
+  const labels = new Map<string, string>();
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -393,11 +498,12 @@ function startChatPart(
       const held = titles.get(sessionId);
       return held === undefined ? null : { ...held };
     },
+    label: (sessionId: string) => labels.get(sessionId) ?? null,
   };
   const startSettings = {
-    profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
     keepIdleMinutes: 60,
     projects: options.projects ?? [],
+    defaultHarness: 'claude',
   };
   const api = {
     channel: {
@@ -423,11 +529,14 @@ function startChatPart(
     },
     services: {
       log: (line: string) => logged.push(line),
-      agentHarnesses: [harness],
+      agentHarnesses: harnessRegistryOf(
+        profiles === null ? [] : [harness as unknown as AgentHarness],
+      ),
       randomUuid: () => 'host-1',
       clock,
       timers,
       sessionHost,
+      window: { isFocused: () => true },
       files: {
         stat: () => Promise.resolve({ isFolder: true, isLink: false }),
       },
@@ -483,6 +592,12 @@ function startChatPart(
           ? [(data as { origin: SessionOrigin }).origin]
           : [],
       ),
+    clearedTo: () =>
+      emitted.flatMap(({ event, data }) =>
+        event === 'sessionCleared'
+          ? [(data as { newHostSessionId: string }).newHostSessionId]
+          : [],
+      ),
     logged,
     starts,
     startInstructions,
@@ -506,6 +621,8 @@ function startChatPart(
       settingsListener({ ...startSettings, ...settings }),
     namers,
     namerChanges,
+    titles,
+    labels,
   };
 }
 
@@ -564,7 +681,11 @@ describe('chat main part', () => {
 
   it('slots_PreviewOpen_ListsItAfterChatSessions', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     chat.invoke('openPreview');
 
     const listed = chat.sessionsInSlots();
@@ -622,7 +743,11 @@ describe('chat main part', () => {
     'exports_$method_SessionChatDoesNotHold_Rejects ($target)',
     async ({ method, target }) => {
       const chat = startChatPart();
-      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+      chat.invoke('start', {
+        projectDir: '/p',
+        harness: 'claude',
+        profile: 'work',
+      });
       chat.invoke('openPreview');
       const startsBefore = chat.starts.count;
 
@@ -639,7 +764,11 @@ describe('chat main part', () => {
 
   it('exports_ActiveTime_ReadsAHeldSessionsClock', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     expect(chat.exports.activeTime('row-1')).toEqual({
       totalMs: 0,
@@ -648,15 +777,199 @@ describe('chat main part', () => {
     expect(chat.exports.activeTime('none')).toBeNull();
   });
 
+  it.each([
+    { name: 'a subagent', agentId: 'subagent-1' },
+    { name: 'the main agent', agentId: MAIN_AGENT_ID },
+  ])('toolCaller_NamesStreamAgent ($name)', async ({ agentId }) => {
+    const chat = startChatPart();
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
+    chat.processEvents[0].agentEvent({
+      type: 'toolStarted',
+      at: 0,
+      agentId,
+      toolUseId: 't1',
+      tool: 'mcp__wigley-forms__chatroom_post',
+      summary: '',
+    });
+
+    await expect(chat.exports.toolCaller('row-1', 't1')).resolves.toBe(agentId);
+  });
+
+  it('toolCaller_NamesStreamAgent (a row chat does not hold)', async () => {
+    const chat = startChatPart();
+    const timersBefore = new Set(chat.timerDelays.keys());
+
+    await expect(
+      chat.exports.toolCaller('terminal-1', 't1'),
+    ).resolves.toBeNull();
+    expect(
+      [...chat.timerDelays.keys()].filter(
+        (handle) => !timersBefore.has(handle),
+      ),
+    ).toEqual([]);
+  });
+
+  // Breaks if chat main reads a harness's own `info()` profiles again rather
+  // than the ones the registry publishes, which leave out a clashing name.
+  it('start_ProfileTheRegistryLeftOut_ThrowsNamingIt', () => {
+    const chat = startChatPart({ publishedProfiles: [] });
+
+    expect(() =>
+      chat.invoke('start', {
+        projectDir: '/p',
+        harness: 'claude',
+        profile: 'work',
+      }),
+    ).toThrow('chat has no profile "work"');
+    expect(chat.starts.count).toBe(0);
+  });
+
+  it('exports_HaveNoProfiles', () => {
+    const chat = startChatPart();
+
+    expect('profiles' in chat.exports).toBe(false);
+  });
+
   it('exports_Send_WritesToTheProcess', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     const message = { text: '/wigley:make /p', images: [] };
 
     await chat.exports.send('row-1', message);
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
   });
+
+  // Rows `row-1` (the caller) and `row-2` (the target) are open; `relay-row`
+  // stands for a terminal row, which chat does not hold.
+  it.each<{
+    given: string;
+    callerSessionId?: string;
+    callerTitle?: string;
+    callerLabel?: string;
+    target: string;
+    text: string;
+    isTargetRunning?: true;
+    sent?: string;
+    error?: string;
+  }>([
+    {
+      given: 'a titled caller',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'an untitled caller',
+      callerSessionId: 'row-1',
+      callerLabel: 'alpha 2',
+      target: 'row-2',
+      text: 'go',
+      sent: '[Message from the agent in session "alpha 2" — not typed by the user]\ngo',
+    },
+    { given: 'no caller', target: 'row-2', text: ' go ', sent: ' go ' },
+    {
+      given: 'no caller and a slash text',
+      target: 'row-2',
+      text: '/clear',
+      sent: '/clear',
+    },
+    {
+      given: 'a running target',
+      callerSessionId: 'row-1',
+      callerTitle: 'Planner',
+      target: 'row-2',
+      text: 'go',
+      isTargetRunning: true,
+      sent: '[Message from the agent in session "Planner" — not typed by the user]\ngo',
+    },
+    {
+      given: 'a self-send',
+      callerSessionId: 'row-2',
+      target: 'row-2',
+      text: 'go',
+      error: 'chat.sendTo: a session cannot send to itself',
+    },
+    {
+      given: 'blank text',
+      callerSessionId: 'row-1',
+      target: 'row-2',
+      text: ' \n ',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: 'blank text to an unknown target',
+      callerSessionId: 'row-1',
+      target: 'row-9',
+      text: '',
+      error: 'chat.sendTo: no text',
+    },
+    {
+      given: "a terminal row's id",
+      callerSessionId: 'row-1',
+      target: 'relay-row',
+      text: 'go',
+      error: 'chat.sendTo: no chat session relay-row',
+    },
+  ])(
+    'sendTo sends the framed text to the target or refuses: $given',
+    async (row) => {
+      const chat = startChatPart();
+      for (let opened = 0; opened < 2; opened++) {
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
+      }
+      await flushMicrotasks();
+      const callerTitles = chat.titles.get('row-1');
+      if (callerTitles !== undefined && row.callerTitle !== undefined) {
+        callerTitles.agent = row.callerTitle;
+      }
+      if (row.callerLabel !== undefined) {
+        chat.labels.set('row-1', row.callerLabel);
+      }
+      if (row.isTargetRunning === true) {
+        chat.processEvents[1].activity('working');
+      }
+
+      const run = Promise.resolve(
+        chat.part.commands.sendTo({
+          arg: { sessionId: row.target, text: row.text },
+          callerSessionId: row.callerSessionId,
+        }),
+      );
+
+      if (row.error !== undefined) {
+        await expect(run).rejects.toThrow(row.error);
+        expect(chat.processSends).not.toHaveBeenCalled();
+        return;
+      }
+      await run;
+      if (row.isTargetRunning === true) {
+        expect(chat.processSends).not.toHaveBeenCalled();
+        chat.processEvents[1].activity('idle');
+      }
+      expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
+        text: row.sent,
+        images: [],
+      });
+      expect(chat.starts.count).toBe(2);
+    },
+  );
 
   it.each([
     {
@@ -683,14 +996,25 @@ describe('chat main part', () => {
       sessionId: null,
       expected: null,
     },
+    {
+      given: 'no harness registered',
+      profiles: null,
+      sessionId: null,
+      expected: null,
+    },
   ])(
     'exports_DefaultProfile_given $given',
     ({ profiles, sessionId, expected }) => {
       const chat = startChatPart({
-        profiles: profiles.map((name) => ({ name, configDir: `/${name}` })),
+        profiles:
+          profiles?.map((name) => ({ name, configDir: `/${name}` })) ?? null,
       });
-      if (profiles.length > 0) {
-        chat.invoke('start', { projectDir: '/p', profile: 'second' });
+      if (profiles !== null && profiles.length > 0) {
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'second',
+        });
       }
 
       expect(chat.exports.defaultProfile(sessionId)).toBe(expected);
@@ -724,7 +1048,11 @@ describe('chat main part', () => {
         })),
       });
       if (callerProfile !== null) {
-        chat.invoke('start', { projectDir: '/p', profile: callerProfile });
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: callerProfile,
+        });
       }
       const contribution = chat.contributions.find(({ tools }) =>
         tools.some((tool) => tool.name === 'start_session'),
@@ -737,6 +1065,7 @@ describe('chat main part', () => {
             sessionId: 'host-relay',
             projectDir: '/p',
             harness: 'claude',
+            rowId: null,
           },
         })
         .call(
@@ -755,9 +1084,21 @@ describe('chat main part', () => {
     },
   );
 
+  it('contributions_LeaveOutPermissionPrompt', () => {
+    const chat = startChatPart();
+
+    expect(
+      chat.contributions.flatMap(({ tools }) => tools.map((tool) => tool.name)),
+    ).not.toContain('permission_prompt');
+  });
+
   it('setHeadlessTool_CallOnAStartedRow_FlipsItsFlag_AsAMainAgentOnlyContribution', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     const contribution = chat.contributions.find(({ tools }) =>
       tools.some((tool) => tool.name === 'set_headless'),
     );
@@ -765,7 +1106,12 @@ describe('chat main part', () => {
     const result = await contribution
       ?.start({
         id: 'row-1',
-        info: { sessionId: 'host-1', projectDir: '/p', harness: 'claude' },
+        info: {
+          sessionId: 'host-1',
+          projectDir: '/p',
+          harness: 'claude',
+          rowId: null,
+        },
       })
       .call(
         'set_headless',
@@ -786,20 +1132,7 @@ describe('chat main part', () => {
     expect(chat.exports.isHeadless('row-1')).toBe(true);
   });
 
-  it.each([
-    {
-      tool: 'permission_prompt',
-      offline: {
-        permission_prompt: {
-          result: textResult(
-            '{"behavior":"deny","message":"The app is closed: this run\'s permission mode does not allow this tool, so it was denied."}',
-          ),
-          replay: false,
-        },
-      },
-    },
-    { tool: 'start_session', offline: undefined },
-  ])(
+  it.each([{ tool: 'start_session', offline: undefined }])(
     'offlineAnswers_EachChatContribution_AnswersAsPinned: $tool',
     ({ tool, offline }) => {
       const chat = startChatPart();
@@ -814,7 +1147,13 @@ describe('chat main part', () => {
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    // The gates skip a row until its harness reports a host id.
+    await flushMicrotasks();
     const message = { text: 'hi', images: [] };
     const gate = chat.exports.addSendGate(() => ({
       action: 'compact',
@@ -835,7 +1174,11 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.exports.addIdleCompactThreshold(() => 150_000);
 
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     expect(chat.startIdleCompactMinTokens).toEqual([150_000]);
   });
@@ -844,26 +1187,42 @@ describe('chat main part', () => {
     const chat = startChatPart();
     chat.exports.addInstructions('visual note');
 
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     expect(chat.startInstructions).toEqual([
       [expect.stringContaining('set_session_title'), 'visual note'],
     ]);
   });
 
-  it('exports_Clear_ResolvesAfterTheFreshStart', async () => {
+  // Breaks if the export resolves before the fresh process reports its host
+  // session id, when a caller would still read the old one.
+  it('clear_Export_ResolvesAfterHostSessionChanged', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await chat.exports.send('row-1', { text: 'hi', images: [] });
+    await settle();
 
     await chat.exports.clear('row-1');
 
     expect(chat.starts.count).toBe(2);
+    expect(chat.clearedTo()).toEqual(['host-2']);
   });
 
   it('toolCallGuard_SubagentCall_SkipsUntilTheRowEnds', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settle();
     chat.processEvents[0].agentEvent({
       type: 'toolStarted',
@@ -901,9 +1260,21 @@ describe('chat main part', () => {
 
   it("exports_CloseSessionsIn_EndsTheFolder'sSessions_ResolvesOnceTheyEnded", async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    chat.invoke('start', {
+      projectDir: '/q',
+      harness: 'claude',
+      profile: 'work',
+    });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     chat.processEvents[2]?.ended({ code: 0, error: null });
     const releaseEnds = chat.holdProcessEnds();
     let resolved = false;
@@ -924,8 +1295,17 @@ describe('chat main part', () => {
 
   it('exports_CloseSessionsIn_ClosesWithProjectClosed', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    chat.invoke('start', {
+      projectDir: '/q',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
 
     await chat.exports.closeSessionsIn('/p');
 
@@ -934,8 +1314,17 @@ describe('chat main part', () => {
 
   it('exports_Close_EndsTheRow_ResolvesOnceItEnded', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
-    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    chat.invoke('start', {
+      projectDir: '/q',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
     const releaseEnds = chat.holdProcessEnds();
     let resolved = false;
 
@@ -964,9 +1353,14 @@ describe('chat main part', () => {
     expect(chat.closeReasons()).toEqual([]);
   });
 
-  it('sessionsClosed_UserClose_SaysUser', () => {
+  it('sessionsClosed_UserClose_SaysUser', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
 
     chat.listeners.get('sessions.closed')?.({ sessionId: 'row-1' });
 
@@ -976,7 +1370,12 @@ describe('chat main part', () => {
   it('stop_HeldRows_FiresNoSessionClosed', async () => {
     const chat = startChatPart({ data: await dataWithSavedRow() });
     await chat.heldConnects[0];
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
+    await settle();
 
     await chat.part.dispose?.('end');
 
@@ -992,7 +1391,11 @@ describe('chat main part', () => {
     async ({ stop, kept }) => {
       const chat = startChatPart({ data: await dataWithSavedRow() });
       await chat.heldConnects[0];
-      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+      chat.invoke('start', {
+        projectDir: '/p',
+        harness: 'claude',
+        profile: 'work',
+      });
 
       await chat.part.dispose?.(stop);
 
@@ -1002,7 +1405,11 @@ describe('chat main part', () => {
 
   it('exports_CloseSessionsIn_EndsNeverCome_ResolvesAtStop', async () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     chat.holdProcessEnds();
     const closing = chat.exports.closeSessionsIn('/p');
 
@@ -1015,7 +1422,11 @@ describe('chat main part', () => {
   it('sessionsTitleChanged_HeldRow_Saves', async () => {
     const chat = startChatPart();
     await settle();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settle();
     // The harness's data folder refuses every write, so each save logs this.
     const saveAttempts = () =>
@@ -1063,7 +1474,11 @@ describe('chat main part', () => {
   it('dispose_SignInRunning_CancelsIt', async () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     await chat.part.dispose?.('end');
 
@@ -1074,7 +1489,11 @@ describe('chat main part', () => {
 
   it('stopAll_Channel_StopsEveryProcess', () => {
     const chat = startChatPart();
-    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     chat.invoke('stopAll');
 
@@ -1135,7 +1554,7 @@ describe('chat main part', () => {
 
   it('restore_Throws_LogsAndSettlesTheHold', async () => {
     const chat = startChatPart({
-      harnessId: 'not-chats',
+      infoFails: true,
       list: () =>
         Promise.resolve([
           { id: 'p1', startedAt: 1, running: true, current: true },
@@ -1151,13 +1570,13 @@ describe('chat main part', () => {
   });
 
   it.each([
-    { given: 'a restore that reopens the saved row', harnessId: undefined },
-    { given: 'a restore that throws', harnessId: 'not-chats' },
+    { given: 'a restore that reopens the saved row', infoFails: false },
+    { given: 'a restore that throws', infoFails: true },
   ])(
     'exports_Restored_SettlesWithTheRestore given $given',
-    async ({ harnessId }) => {
+    async ({ infoFails }) => {
       const chat = startChatPart({
-        harnessId,
+        infoFails,
         list: () =>
           Promise.resolve([
             { id: 'p1', startedAt: 1, running: true, current: true },
@@ -1193,6 +1612,7 @@ describe('chat main part', () => {
       processId: 'host-a-1-4000',
       rowId: 'row-adopted',
       projectDir: '/p',
+      harness: 'claude',
       profile: 'work',
       headless: true,
       unattended: true,
@@ -1212,12 +1632,12 @@ describe('chat main part', () => {
     ]);
   });
 
-  it('exports_PrepareLaunch_PassesTheEnvToTheHarness', () => {
+  it('exports_PrepareLaunch_PassesTheEnvToTheHarness', async () => {
     const chat = startChatPart();
     const env = { WIGLEY_FORMS_OFFLINE: '/calls' };
     const message = { text: 'run the task', images: [] };
 
-    const prepared = chat.exports.prepareLaunch(
+    const prepared = await chat.exports.prepareLaunch(
       { projectDir: '/p', profile: 'work', message },
       env,
     );
@@ -1258,7 +1678,11 @@ describe('chat main part', () => {
       contribution: 'instructions',
       contribute: (view: ChatMainExports) => view.addInstructions('note'),
       observe: (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
         return chat.startInstructions.at(-1);
       },
       expected: [expect.stringContaining('set_session_title')],
@@ -1268,7 +1692,11 @@ describe('chat main part', () => {
       contribute: (view: ChatMainExports) =>
         view.addSendGate(() => ({ action: 'compact', reason: 'r' })),
       observe: async (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
         await chat.exports.send('row-1', { text: 'hi', images: [] });
         return chat.processSends.mock.calls;
       },
@@ -1279,7 +1707,11 @@ describe('chat main part', () => {
       contribute: (view: ChatMainExports) =>
         view.addIdleCompactThreshold(() => 150_000),
       observe: (chat: ReturnType<typeof startChatPart>) => {
-        chat.invoke('start', { projectDir: '/p', profile: 'work' });
+        chat.invoke('start', {
+          projectDir: '/p',
+          harness: 'claude',
+          profile: 'work',
+        });
         return chat.startIdleCompactMinTokens.at(-1);
       },
       expected: null,
@@ -1303,6 +1735,7 @@ describe('chat main part', () => {
         try {
           return chat.invoke('start', {
             project: 'New Games',
+            harness: 'claude',
             profile: 'work',
           });
         } catch (error) {
@@ -1399,7 +1832,11 @@ describe('chat main part', () => {
     const before = chat.namerChanges.count;
 
     chat.exports.addPoolProvider(fakePoolProvider());
-    chat.invoke('start', { project: 'New Games', profile: 'work' });
+    chat.invoke('start', {
+      project: 'New Games',
+      harness: 'claude',
+      profile: 'work',
+    });
 
     expect(chat.namerChanges.count).toBe(before + 1);
     expect(chat.starts.count).toBe(1);
@@ -1447,33 +1884,51 @@ describe('chat main part', () => {
 
 // Chat's main part on the part harness, over a sessions fake that files each
 // contribution and owned row with `consumer.track`, as sessions' view does. A
-// row's end is recorded in `ended` and emits `sessions.ended`. A process's detach
-// and kill are recorded in `stops`; a kill reports its exit, as a real one does.
+// row's end is recorded in `ended` and emits `sessions.ended`. A process reports
+// its request's session id, or `host-new` for a new conversation, in a
+// microtask. A process's detach and kill are recorded in `stops`; a kill
+// reports its exit, as a real one does.
 function startChatOnHarness() {
   const ended: string[] = [];
   const stops = { detaches: 0, kills: 0 };
   let rows = 0;
   const agentHarness = {
     id: 'claude',
+    info: () =>
+      harnessInfo({ profiles: [{ name: 'work', configDir: '/work' }] }),
     start: (
-      _request: AgentStart,
-      events: { ended(exit: { code: number; error: string | null }): void },
-    ) => ({
-      send: () => undefined,
-      end: () => Promise.resolve(),
-      interrupt: () => undefined,
-      detach() {
-        stops.detaches += 1;
+      request: AgentStart,
+      events: {
+        sessionId(id: string): void;
+        ended(exit: { code: number; error: string | null }): void;
       },
-      kill() {
-        stops.kills += 1;
-        events.ended({ code: 0, error: null });
-      },
-    }),
+    ) => {
+      queueMicrotask(() => events.sessionId(request.sessionId ?? 'host-new'));
+      return startedProcess(events);
+    },
   } as unknown as AgentHarness;
+  const startedProcess = (events: {
+    ended(exit: { code: number; error: string | null }): void;
+  }) => ({
+    send: () => undefined,
+    end: () => Promise.resolve(),
+    interrupt: () => undefined,
+    detach() {
+      stops.detaches += 1;
+    },
+    kill() {
+      stops.kills += 1;
+      events.ended({ code: 0, error: null });
+    },
+  });
+  const state = createSlotStore(() => undefined);
+  state
+    .publish(coreAgentHarnessesSlot)
+    .set(agentHarness.id, agentHarness.info());
   const harness = startMainPart(chatMainPart, {
+    state,
     services: {
-      agentHarnesses: [agentHarness],
+      agentHarnesses: harnessRegistryOf([agentHarness]),
       sessionHost: createFakeSessionHost({ now: () => 0 }),
       git: {
         topLevel: () => Promise.resolve(null),
@@ -1539,7 +1994,11 @@ describe('chat main part on the harness', () => {
   it('selectionWrite_SavesTheSelectedSession', async () => {
     const { harness } = startChatOnHarness();
     await settleFiles();
-    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    harness.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settleFiles();
 
     harness.state.publish(sessionsSelectionSlot).set('row-1');
@@ -1566,7 +2025,11 @@ describe('chat main part on the harness', () => {
     );
     const openSessionsWrites = () =>
       writes.filter((changed) => changed === OPEN_SESSIONS_FILE).length;
-    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    harness.invoke('start', {
+      projectDir: '/p',
+      harness: 'claude',
+      profile: 'work',
+    });
     await settleFiles();
     const writesBeforeStop = openSessionsWrites();
     expect(writesBeforeStop).toBeGreaterThan(0);
@@ -1578,5 +2041,87 @@ describe('chat main part on the harness', () => {
     expect(stops).toEqual({ detaches: 1, kills: 0 });
     expect(ended).toEqual(['row-1']);
     expect(openSessionsWrites()).toBe(writesBeforeStop + 1);
+  });
+});
+
+// A follower over a `core.agentHarnesses` slot that holds `claude` labelled
+// `Claude Code`, following a chat double that records each leave and return.
+function followedHarnesses() {
+  const store = createSlotStore(() => undefined);
+  const writer = store.publish(coreAgentHarnessesSlot);
+  writer.set('claude', harnessInfo({ label: 'Claude Code' }));
+  const logged: string[] = [];
+  const follower = createHarnessFollower(
+    store.read(coreAgentHarnessesSlot, 'test'),
+    (line) => logged.push(line),
+  );
+  const heard: string[] = [];
+  follower.follow({
+    harnessLeft: (harnessId) => {
+      heard.push(`left ${harnessId}`);
+    },
+    harnessReturned: (harnessId) => {
+      heard.push(`returned ${harnessId}`);
+      return Promise.resolve();
+    },
+  });
+  return { writer, follower, heard, logged };
+}
+
+describe('createHarnessFollower', () => {
+  it('start_HarnessKeyDeleted_ChatHearsTheLeave', () => {
+    const test = followedHarnesses();
+
+    test.writer.delete('claude');
+    test.writer.delete('claude');
+
+    expect(test.heard).toEqual(['left claude']);
+    expect(test.follower.labelOf('claude')).toBe('Claude Code');
+  });
+
+  it.each([
+    { given: 'a harness that left', leftFirst: true, id: 'claude' },
+    { given: 'a first registration', leftFirst: false, id: 'codex' },
+  ])(
+    'start_HarnessKeySetAfterItLeft_ChatHearsTheReturn given $given',
+    ({ leftFirst, id }) => {
+      const test = followedHarnesses();
+      if (leftFirst) {
+        test.writer.delete(id);
+      }
+
+      test.writer.set(id, harnessInfo({ label: 'Renamed' }));
+
+      expect(test.heard.at(-1)).toBe(`returned ${id}`);
+      expect(test.follower.labelOf(id)).toBe('Renamed');
+    },
+  );
+
+  it('start_PresentHarnessSetAgain_ChatHearsNeither', () => {
+    const test = followedHarnesses();
+
+    test.writer.set('claude', harnessInfo({ label: 'Claude Code 2' }));
+
+    expect(test.heard).toEqual([]);
+    expect(test.follower.labelOf('claude')).toBe('Claude Code 2');
+    expect(test.follower.labelOf('unknown')).toBe('unknown');
+  });
+
+  it('follow_ReturnRejects_LogsIt', async () => {
+    const store = createSlotStore(() => undefined);
+    const writer = store.publish(coreAgentHarnessesSlot);
+    const logged: string[] = [];
+    createHarnessFollower(store.read(coreAgentHarnessesSlot, 'test'), (line) =>
+      logged.push(line),
+    ).follow({
+      harnessLeft: () => undefined,
+      harnessReturned: () => Promise.reject(new Error('boom')),
+    });
+
+    writer.set('claude', harnessInfo());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(logged).toEqual(['harness claude not re-attached: boom']);
   });
 });

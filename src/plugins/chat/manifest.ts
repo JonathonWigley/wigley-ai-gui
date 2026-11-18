@@ -1,13 +1,6 @@
 import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
-import type { ChatProfile, ProjectSetting } from './contract';
-
-// Each profile names a Claude config folder; a leading `~/` means the home
-// folder.
-export const DEFAULT_PROFILES: ChatProfile[] = [
-  { name: 'work', configDir: '~/.claude' },
-  { name: 'personal', configDir: '~/.claude-personal' },
-];
+import type { ProjectSetting } from './contract';
 
 export const chatManifest = definePlugin({
   id: 'chat',
@@ -27,6 +20,7 @@ export const chatManifest = definePlugin({
       label: "stop every session's process",
       group: 'sessions',
       runsIn: 'page',
+      risky: true,
     },
     focusBox: { label: 'type a message', group: 'box', runsIn: 'page' },
     appendBox: {
@@ -35,17 +29,30 @@ export const chatManifest = definePlugin({
       runsIn: 'page',
     },
     leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
-    send: { label: 'send the message', group: 'box', runsIn: 'page' },
+    send: {
+      label: 'send the message',
+      group: 'box',
+      runsIn: 'page',
+      targets: true,
+    },
     sendNow: {
       label:
         'send now: the focused pending row, or the box with every pending message',
       group: 'box',
       runsIn: 'page',
+      targets: true,
+    },
+    sendTo: {
+      label: "send a message to another session, framed as its agent's",
+      group: 'chat',
+      runsIn: 'main',
+      arg: { sessionId: 'string', text: 'string' },
     },
     removeImage: {
       label: 'remove the last attached image',
       group: 'box',
       runsIn: 'page',
+      risky: true,
     },
     pullBackQueued: {
       label: 'pull back the newest unsent pending message',
@@ -62,6 +69,7 @@ export const chatManifest = definePlugin({
       group: 'box',
       runsIn: 'page',
       arg: { sessionId: 'string', index: 'number' },
+      risky: true,
     },
     pullBackMessage: {
       label: 'pull back this pending message',
@@ -82,8 +90,14 @@ export const chatManifest = definePlugin({
       label: 'remove the shown image',
       group: 'image',
       runsIn: 'page',
+      risky: true,
     },
-    interrupt: { label: 'interrupt the turn', group: 'chat', runsIn: 'page' },
+    interrupt: {
+      label: 'interrupt the turn',
+      group: 'chat',
+      runsIn: 'page',
+      targets: true,
+    },
     nextEntry: { label: 'next block', group: 'entries', runsIn: 'page' },
     prevEntry: { label: 'previous block', group: 'entries', runsIn: 'page' },
     nextMessage: { label: 'next message', group: 'entries', runsIn: 'page' },
@@ -151,6 +165,8 @@ export const chatManifest = definePlugin({
       label: 'allow the tool once, or copy',
       group: 'permissions',
       runsIn: 'page',
+      risky: true,
+      targets: true,
     },
     denyPermission: {
       label: 'deny the tool, with a reason',
@@ -162,6 +178,7 @@ export const chatManifest = definePlugin({
       group: 'permissions',
       runsIn: 'page',
       arg: { sessionId: 'string', entryId: 'string' },
+      risky: true,
     },
     denyEntry: {
       label: 'deny this tool, with a reason',
@@ -202,6 +219,7 @@ export const chatManifest = definePlugin({
       label: 'yes, end the session',
       group: 'confirm',
       runsIn: 'page',
+      risky: true,
     },
     keepSession: {
       label: 'keep the session',
@@ -277,18 +295,13 @@ export const chatManifest = definePlugin({
     hub: 'In the session hub',
   },
   settings: {
-    profiles: DEFAULT_PROFILES,
     projects: [] as ProjectSetting[],
     layout: 'default',
     keepIdleMinutes: 60,
     completionDescriptions: true,
+    defaultHarness: 'claude',
   },
   settingInfo: {
-    profiles: {
-      label: 'Profiles',
-      description:
-        'The Claude profiles a new session can start in: a name and its config folder each.',
-    },
     projects: {
       label: 'Projects',
       description:
@@ -302,12 +315,17 @@ export const chatManifest = definePlugin({
     keepIdleMinutes: {
       label: 'Keep idle sessions (minutes)',
       description:
-        "How long a session whose turn has ended keeps its Claude process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
+        "How long a session whose turn has ended keeps its agent process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
     },
     completionDescriptions: {
       label: 'Completion descriptions',
       description:
         "Show each command's description beside its name in the / completion list.",
+    },
+    defaultHarness: {
+      label: 'Default harness',
+      description:
+        "The id of the agent harness a new session runs on: claude for Claude Code. A project that names a profile runs on that profile's harness, and a resumed session on the harness it was saved with.",
     },
   },
   themeTokens: {

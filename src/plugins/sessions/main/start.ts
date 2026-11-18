@@ -1,15 +1,19 @@
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type {
   DriveHost,
   MainApi,
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import {
+  harnessLabel,
+  registeredInfos,
+} from '../../../shared/agent-harness-label';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import {
   argsObject,
   nullableStringOr,
-  optionalOneOf,
   optionalString,
   requiredString,
 } from '../../../shared/drive-args';
@@ -40,6 +44,7 @@ import {
 } from './offline-calls';
 import { createEndpointWriter, endedDriveRunLaunch } from './relay/endpoint';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
+import { createHookRoutes, type HookRoutes } from './relay/hook-routes';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
@@ -63,10 +68,11 @@ async function hostSessionName(
   info: SessionInfo,
 ): Promise<string | null> {
   const { sessionId, projectDir } = info;
-  const harness = api.services.agentHarnesses.find(
-    (candidate) => candidate.id === info.harness,
-  );
-  if (harness === undefined || sessionId === null || projectDir === null) {
+  const harness =
+    info.harness === null
+      ? null
+      : api.services.agentHarnesses.get(info.harness);
+  if (harness === null || sessionId === null || projectDir === null) {
     return null;
   }
   return harness.sessionName(sessionId, projectDir, info.profileDir ?? null);
@@ -75,10 +81,23 @@ async function hostSessionName(
 // The session's config folder as its harness resolves it; null when the app
 // runs no such harness.
 function configFolder(api: SessionsApi, info: SessionInfo): string | null {
-  const harness = api.services.agentHarnesses.find(
-    (candidate) => candidate.id === info.harness,
-  );
+  const harness =
+    info.harness === null
+      ? null
+      : api.services.agentHarnesses.get(info.harness);
   return harness?.configFolder(info.profileDir ?? null) ?? null;
+}
+
+// The tool-use id the session's harness reads from a call's raw `_meta`, looked
+// up at each call; null when the session names no harness or the app runs no
+// such harness.
+export function harnessToolUseId(
+  harnesses: Pick<AgentHarnessRegistry, 'get'>,
+  info: SessionInfo,
+  meta: Readonly<Record<string, unknown>> | null,
+): string | null {
+  const harness = info.harness === null ? null : harnesses.get(info.harness);
+  return harness?.toolUseIdOf(meta) ?? null;
 }
 
 function createList(api: SessionsApi): SessionList {
@@ -96,6 +115,8 @@ function createList(api: SessionsApi): SessionList {
     hostSessionName: (info) => hostSessionName(api, info),
     configFolder: (info) => configFolder(api, info),
     claimed: () => claimed.get() ?? [],
+    harnessLabel: (harness) =>
+      harnessLabel(registeredInfos(api.services.agentHarnesses), harness),
   });
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId, atOnce) =>
@@ -112,9 +133,16 @@ function createList(api: SessionsApi): SessionList {
 }
 
 // Opens the channel relay.py connects to, each relay connecting one session
-// served the live tool list. A relay that finds the app gone starts
-// it again, except a drive run's, which stays ended and names the run's home.
-function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
+// served the live tool list under the platform's relay server name, its calls'
+// tool-use ids read by its harness, and each hook call answered by `routes`. A
+// relay that finds the app gone starts it again, except a drive run's, which
+// stays ended and names the run's home.
+function openRelay(
+  api: SessionsApi,
+  list: SessionList,
+  hold: ConnectHold,
+  routes: HookRoutes,
+) {
   const channel = channelPath(
     api.services.platform.os,
     api.services.homeDir,
@@ -126,7 +154,17 @@ function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
     channel,
     ready: () => hold.ready(),
     connect: (info) => list.connect(info),
-    serve: (streams, session) => serveMcp(streams, session, list),
+    serve: (streams, session) =>
+      serveMcp(streams, session, list, {
+        serverName: api.services.platform.relay.serverName,
+        toolUseIdOf: (meta) =>
+          harnessToolUseId(
+            api.services.agentHarnesses,
+            session.session.info,
+            meta,
+          ),
+      }),
+    hook: (name, info, request) => routes.answer(name, info, request),
     log: api.services.log,
   });
   const endpoint: RelayEndpoint = {
@@ -152,9 +190,8 @@ function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
       'projectDir',
       DRIVE_SESSION_DEFAULTS.projectDir,
     ),
-    harness:
-      optionalOneOf(args, 'harness', DRIVE_SESSION_DEFAULTS.harnesses) ??
-      DRIVE_SESSION_DEFAULTS.harness,
+    harness: optionalString(args, 'harness') ?? DRIVE_SESSION_DEFAULTS.harness,
+    rowId: optionalString(args, 'rowId') ?? null,
   };
   const { host } = args;
   if (host === undefined) {
@@ -171,7 +208,8 @@ type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
 
 // Starts a drive run's sessions, each with no form, and ends or selects them:
 // `connect` connects one as a relay would, with no row until a form shows or
-// `activate` adds it; `open` opens an owned one, selected, which forms' and
+// `activate` adds it, or joins the owned row its `rowId` names as a relay's
+// hello would; `open` opens an owned one, selected, which forms' and
 // the primer's open actions join when they name its id, so a round and a
 // primer share its row. A session's id is
 // `drive-session-<n>` unless the caller names one; `rowId` is the app's own
@@ -192,7 +230,7 @@ export function addDriveActions(
     }
   });
   const sessionArgs =
-    '{ sessionId?: string, projectDir?: string | null, harness?: "claude" | "codex", host?: object }';
+    '{ sessionId?: string, projectDir?: string | null, harness?: string, rowId?: string, host?: object }';
   // Reads the args, then starts the session `start` makes from them.
   const startSession = (
     rawArgs: unknown,
@@ -250,7 +288,8 @@ export function addDriveActions(
   });
 }
 
-// Owns agent sessions: the relay they connect through, the tools other
+// Owns agent sessions: the relay they connect through, the hook calls it
+// answers with the handlers other plugins register, the tools other
 // plugins contribute for them and its own `set_session_title`, their sidebar
 // rows and the project each row groups under, from the namers other plugins
 // register, and the sessions layouts.
@@ -271,8 +310,14 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const list = createList(api);
     const hold = createConnectHold(api.services.timers, api.services.log);
+    const routes = createHookRoutes(
+      (info) => list.sessionOf(info),
+      api.services.log,
+    );
     const opened =
-      api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
+      api.services.runMode === 'selfTest'
+        ? null
+        : openRelay(api, list, hold, routes);
     const { files, paths, log } = api.services;
     const endpointDir = appEndpointDir(
       paths,
@@ -299,9 +344,11 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       activate: (sessionId) => list.activate(sessionId),
       release: (sessionId) => list.release(sessionId),
       label: (sessionId) => list.label(sessionId),
+      project: (sessionId) => list.project(sessionId),
       addCloseGuard: (mayClose, cancelHold) =>
         list.addCloseGuard(mayClose, cancelHold),
       addToolCallGuard: (guard) => list.addToolCallGuard(guard),
+      addHookHandler: (name, handler) => routes.add(name, handler),
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),

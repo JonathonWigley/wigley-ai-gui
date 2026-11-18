@@ -178,7 +178,7 @@ schedule is read, since it would never fire.
   At `at`, the host skips the run while that process runs and its idle rule reads it busy, and records a run with
   `skipped: true`, which history shows as skipped. An idle run whose process stays alive does not block the next run.
 - **A failed start.** A run that fails to start is a failed history entry with its reason. That covers a run the
-  app could not prepare (`chat.prepareLaunch` throws: a missing folder, an unknown profile, project or control id)
+  app could not prepare (`chat.prepareLaunch` rejects: a missing folder, an unknown profile, project or control id)
   once its time has come, and a spawn the host could not make (`exit.error`). A prepare that fails before the run's
   time queues nothing for the task and tries again at that time, since a folder missing now may exist then.
 - **A one-time task** stays listed after its run, with no next run, until the user edits or removes it.
@@ -367,7 +367,8 @@ until the user views a finished run's row.
   A cap with no value for the control caps at the harness's launch default, `auto` for Claude. Control values are
   adapter knowledge, so the order lives in the adapter.
 - **Start controls from the harness.** `startControls()` gives the editor and the tools the control ids and choices
-  with no process, since control ids and choices are adapter knowledge.
+  with no process, since control ids and choices are adapter knowledge. Scheduling reads them, and `capControls`,
+  from the first registered harness; the task profile's own harness is a follow-up (`followups.md`).
 - **Carried env names in the adapter.** No plugin reads the app's environment, and the adapter already sets the app's
   `WIGLEY_SESSION_ROW`.
 - **The unviewed mark in history.** Kept in `history.json` beside the entry, so a run the user has not read is still

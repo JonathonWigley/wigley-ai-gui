@@ -123,7 +123,7 @@ means something.
 | Lines                  | `border-subtle`, `border-default`, `border-strong`                      | Hairlines on L1 edges; gutters elsewhere                                                                            |
 | Text                   | `fg`, `fg-secondary`, `fg-tertiary`, `fg-disabled`                      | Primary, labels and metadata, hints, disabled and placeholder                                                       |
 | **Accent (the one)**   | `accent`, `accent-tint`, `accent-tint-strong`, `focus-border`           | Focus ring, selection, the primary button, the active tab and activity mark, the active row, the recommended choice |
-| Links and info         | `fg-link`, `status-info`                                                |                                                                                                                     |
+| Links and info         | `fg-link`, `status-info`, `status-info-tint`                            | Links; an informational Tag (the `info` tone: docs' `on-demand` load state)                                         |
 | Running                | `status-running` (sapphire)                                             | An agent working, a tool running                                                                                    |
 | Success / added        | `status-success`                                                        |                                                                                                                     |
 | Warning                | `status-warning`                                                        |                                                                                                                     |
@@ -288,8 +288,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Button** (`textButton`): a labelled button, variants primary, secondary, ghost, danger.
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
-- **Tag** (`tag`): a small static label in a tone. The workflow strip's Headless chip is the one Tag drawn as a
-  toggle button (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
+- **Tag** (`tag`): a small static label in a tone (`neutral`, `accent`, `info`, `running`, `success`, `warning`,
+  `attention`, `error`). The workflow strip's Headless chip is the one Tag drawn as a toggle button
+  (`button.ui-tag`, its `data-state` and `aria-pressed` carrying on or off).
 - **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding
   on the sides only so the box keeps its line height, `font-mono`, a file Codicon in `fg-secondary`, then the file's
   name. The CodeMirror adapter draws it; it is not a builder
@@ -303,6 +304,10 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Sparkline** (`sparkline`): an SVG line of recent values from 0 to 100, in the tone of the Meter beside it; a fixed
   height and no axes. A layout draws one with `kit.sparkline(parent, values, tone)` and redraws it by calling that again
   in a fresh parent part.
+- **Waveform** (`waveform`): an SVG bar per peak (each 0 to 1), centred on its box's middle, in `fg-tertiary`; a fixed
+  size, `space-4` high and twice `space-8` wide, and a line for silence. It is empty, with `is-loading`, until its
+  peaks arrive. The audio picker's candidate row draws one through its kit's `waveform`, which turns it `accent` on the
+  cursor row.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab. The `ui-tabs--scroll` strip scrolls
@@ -424,6 +429,28 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
+- **Chatroom:** in Chatroom mode the side bar holds one group per room under its section header, by name, padded
+  `space-2` with `space-0_5` between rows; under each, its open threads as `row-list` rows, newest first, then its
+  resolved threads in `fg-tertiary`. A row ends with its unread count in `text-12` `fg-secondary` and an `attention`
+  Tag `@` while a post is addressed to the user; the open thread takes `list-active-background`, and the keyboard
+  cursor the focus ring. A session's own thread reads `<session title> (session)`. The sheet stacks three bands. On
+  top, under a hairline in `border-subtle`, the board: a section header `Board · <room>`, then one `text-12` line per
+  session, a StatusDot (`running` working, `attention` waiting, `success` done, `idle` otherwise), its name in
+  `weight-medium` `fg`, then its state and harness in `fg-tertiary`, its branch in `font-mono`, a neutral Tag
+  `Unity 3` for a pool clone, a `warning` Tag `<n> uncommitted` and a neutral Tag per claim; under it the thread's
+  name in `weight-medium` with the `i compose` and `r reply` hints at its end. In the middle the log scrolls, one
+  block per message, `space-2` by `space-4` padding and `radius-sm`: a head line of the sender in `weight-medium`, the
+  kind as a Tag (`attention` for a question or blocker, `success` a result, `warning` a heads-up, else neutral), the
+  time `HH:MM`, `to <names>` and `↪ #<id>` in `text-12` `fg-tertiary`, then the body as prose and the refs as neutral
+  Tags. An entry (`dispatch`, `hand-back`, `joined`, `left`) and a `progress` post draw in `fg-tertiary`. The log
+  cursor's message takes `list-active-background` and the `focus-border` ring, and on a question or blocker its
+  head ends with the `r reply` prompt. At the bottom, over a `border-subtle` hairline, the composer: a `text-12`
+  `fg-tertiary` line naming what it sends (`Note to the thread`, `Answer to #<id>`), then the box, in `input-border`
+  and `input-background` with `radius-md`, and a primary Send button carrying its `↩` hint; a refused post's reason
+  shows under them in `status-error`, the draft kept. A session row with unread posts in its room carries a Tag in
+  its row parts' line: `@<n>` in `attention` while any is addressed to the user, else `<n> new` in `accent`; a click
+  opens the thread of its newest. A row whose agents asked the user a question or blocker no answer replies to shows
+  the `asks you` activity, raised.
 - **System stats:** the right bar holds the system stats panel while it is shown (`Space v y`): a section header
   with the sort key's hint at its end, then five meter rows (CPU, GPU, RAM, Network, Disk), each its label, a Meter,
   its value in tabular numerals and a Sparkline of the last 60 seconds in the meter's tone (`warning` from 70 %,
@@ -458,10 +485,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Tag for the play format. The chosen row takes `accent-tint`, and the recommended row carries the accent mark, since
   Cmd+Enter accepts it. A playing row shows a `status-running` mark. Each section ends in a None of these row and a
   notes box in an InputFrame.
-- **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
-  (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
-  a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
+- **Chat:** user turns are a `card-background` block, not a bubble. A user turn another session's agent sent opens
+  with a neutral Tag, `from <session>`, over its text, and its pending row shows the Tag between the order label and
+  the text. Assistant prose is markdown on the sheet. The transcript shows the messages, permission prompts, notices,
+  turn dividers and pending rows only: the agent's steps (tool calls, thinking, raw events) show in the **session
+  hub**'s **activity dock**. The hub is a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space b h`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
   `border-subtle` line parts the sections. The hub opens on the Session header, which has no title or chevron: the

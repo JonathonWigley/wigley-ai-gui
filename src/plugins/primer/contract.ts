@@ -66,14 +66,9 @@ export interface PrimerBody {
   entries: PrimerEntry[];
 }
 
-export type PrimerOutcome =
-  | 'submitted'
-  | 'draft'
-  | 'cancelled'
-  | 'needs_manual_open'
-  | 'no_primer';
+export type PrimerOutcome = 'submitted' | 'draft' | 'cancelled' | 'no_primer';
 
-// `no_primer` and `needs_manual_open` carry no `feature` and no `entries`.
+// `no_primer` carries no `feature` and no `entries`.
 export interface PrimerPayload {
   outcome: PrimerOutcome;
   summary: string;

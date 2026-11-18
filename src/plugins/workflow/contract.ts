@@ -301,6 +301,9 @@ export interface WorkflowMainExports {
   ): void;
   flowOf(sessionId: string): SessionFlow | null;
   flows(): readonly SessionFlow[];
+  // True when the flow's stage is one with `finishes` in the registered
+  // workflow holding the flow; false for a flow with no such workflow.
+  stageFinishes(flow: SessionFlow): boolean;
   // Replaces the current workflow's state with no fold, keeping the save time.
   setState(sessionId: string, state: unknown): void;
   observe(observer: WorkflowObserver): Disposable;

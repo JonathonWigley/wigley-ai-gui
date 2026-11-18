@@ -1,5 +1,5 @@
 import { MAX_ENTRIES, type Question } from '../../../contract';
-import { RoundError } from '../../round-error';
+import { RoundError, type RoundItemPath } from '../../round-error';
 import {
   fieldsMissing,
   fieldsOutside,
@@ -49,80 +49,96 @@ const QUESTION_CONTEXT_DESCRIPTION =
   'Close each block with a line holding only `:::`. Markdown. Wording: ' +
   '~/wigley-agents/forms.md § Questions.';
 
-function parseChoices(raw: unknown, where: string): string[] {
+function parseChoices(raw: unknown, at: RoundItemPath): string[] {
   if (!Array.isArray(raw)) {
-    throw new RoundError(`${where}choices must be a list of strings.`);
+    throw new RoundError({
+      path: at,
+      problem: 'choices must be a list of strings.',
+    });
   }
   if (raw.length < MIN_CHOICES) {
-    throw new RoundError(
-      `${where}has ${raw.length} choice(s). A question with fewer than ` +
-        `${MIN_CHOICES} is not a question — give at least ${MIN_CHOICES}.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `has ${raw.length} choice(s).`,
+      detail:
+        `A question with fewer than ${MIN_CHOICES} is not a question — ` +
+        `give at least ${MIN_CHOICES}.`,
+    });
   }
   if (raw.length > MAX_ENTRIES) {
-    throw new RoundError(
-      `${where}has ${raw.length} choices; the maximum is ${MAX_ENTRIES}, ` +
-        `one per number key. Split it into two questions.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem:
+        `has ${raw.length} choices; the maximum is ${MAX_ENTRIES}, one per ` +
+        `number key.`,
+      detail: 'Split it into two questions.',
+    });
   }
-  return raw.map((choice, i) =>
-    requireText(choice, `choices[${i + 1}]`, where),
-  );
+  return raw.map((choice, i) => requireText(choice, `choices[${i + 1}]`, at));
 }
 
-function parseQuestion(item: unknown, where: string): Question {
+function parseQuestion(item: unknown, at: RoundItemPath): Question {
   if (!isJsonObject(item)) {
-    throw new RoundError(`${where}each question must be an object.`);
+    throw new RoundError({
+      path: at,
+      problem: 'each question must be an object.',
+    });
   }
   const hasSummary = Object.hasOwn(item, 'summary');
   const hasLegacySummary = Object.hasOwn(item, LEGACY_SUMMARY_FIELD);
   if (hasSummary && hasLegacySummary) {
-    throw new RoundError(
-      `${where}has both summary and question. Send summary alone: ` +
-        `question is its old name.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: 'has both summary and question.',
+      detail: 'Send summary alone: question is its old name.',
+    });
   }
   const missing = fieldsMissing(item, QUESTION_FIELDS).filter(
     (field) => !(field === 'summary' && hasLegacySummary),
   );
   if (missing.length > 0) {
-    throw new RoundError(
-      `${where}missing ${missing.join(', ')}. All six fields are ` +
-        `required: title, summary, context, choices, recommend, rationale.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `missing ${missing.join(', ')}.`,
+      detail:
+        'All six fields are required: title, summary, context, choices, ' +
+        'recommend, rationale.',
+    });
   }
   const extra = fieldsOutside(item, QUESTION_KNOWN_FIELDS);
   if (extra.length > 0) {
-    throw new RoundError(
-      `${where}unknown field(s) ${extra.join(', ')}. The form draws ` +
-        `the not-applicable control and the Notes box itself; do not ` +
-        `describe them.`,
-    );
+    throw new RoundError({
+      path: at,
+      problem: `unknown field(s) ${extra.join(', ')}.`,
+      detail:
+        'The form draws the not-applicable control and the Notes box ' +
+        'itself; do not describe them.',
+    });
   }
-  const title = requireText(item.title, 'title', where);
+  const title = requireText(item.title, 'title', at);
   const summary = requireText(
     hasSummary ? item.summary : item[LEGACY_SUMMARY_FIELD],
     'summary',
-    where,
+    at,
   );
-  const context = requireText(item.context, 'context', where);
-  const rationale = requireText(item.rationale, 'rationale', where);
-  const choices = parseChoices(item.choices, where);
+  const context = requireText(item.context, 'context', at);
+  const rationale = requireText(item.rationale, 'rationale', at);
+  const choices = parseChoices(item.choices, at);
   const recommend = parseRecommend(
     item.recommend,
     title,
     choices.length,
     'choice',
-    where,
+    at,
   );
-  const layout = parseLayoutField(item, where);
+  const layout = parseLayoutField(item, at);
   return { title, summary, context, choices, recommend, rationale, layout };
 }
 
 export const questionFormat: AnswerableFormat<Question> = {
   argsKey: 'questions',
   noun: 'question',
-  arraySchema: {
+  describe: () => ({
     type: 'array',
     items: {
       type: 'object',
@@ -169,7 +185,7 @@ export const questionFormat: AnswerableFormat<Question> = {
       },
     },
     description: QUESTIONS_DESCRIPTION,
-  },
+  }),
   parse: parseQuestion,
   fingerprintContent: (question) => ({
     title: question.title,

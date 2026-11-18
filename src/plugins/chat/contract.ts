@@ -22,10 +22,7 @@ import type { HostedSpawn } from '../../contracts/session-host';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
 import { isJsonObject, isStringArray } from '../../shared/json';
 import type { SessionTitles } from '../sessions/contract';
-
-// The `id` of the agent harness chat runs its sessions on: chat's profiles are
-// that harness's config folders.
-export const CHAT_HARNESS_ID = 'claude';
+import type { AnyEntryKind, EntryBuilder, EntryInput } from './layouts/layout';
 
 // The layout preview's row host session id; no harness holds a session by it.
 export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
@@ -42,13 +39,10 @@ export const HEADLESS_NOTE =
 export const HEADLESS_OFF_NOTE =
   'This session is no longer headless: send each round to the form again.';
 
-export interface ChatProfile {
-  name: string;
-  configDir: string;
-}
-
+// `harness` is the id of the harness the folder's session ran on.
 export interface RecentFolder {
   projectDir: string;
+  harness: string;
   profile: string;
   lastUsed: number;
 }
@@ -84,7 +78,9 @@ export interface PoolProviderHandle extends Disposable {
 // setting.
 export type StartTarget = { projectDir: string } | { project: string };
 
-export type StartRequest = StartTarget & { profile: string };
+// `harness` is the id of the harness the session runs on, and `profile` one of
+// that harness's profiles.
+export type StartRequest = StartTarget & { harness: string; profile: string };
 
 // `unattended`: true for a session nobody answers: chat denies each permission
 // prompt at once. Kept with the row across a relaunch.
@@ -115,6 +111,7 @@ export interface AdoptRequest {
   processId: string; // `<hostSessionId>-1-<epoch ms>`, chat's process id form
   rowId: string;
   projectDir: string;
+  harness: string; // the id of the harness that prepared the run
   profile: string;
   headless: boolean;
   unattended: boolean;
@@ -135,6 +132,7 @@ export function readAdoptRequest(value: unknown): AdoptRequest | null {
     'processId',
     'rowId',
     'projectDir',
+    'harness',
     'profile',
   ].every((key) => typeof value[key] === 'string');
   const hasFlags =
@@ -180,9 +178,11 @@ export interface ProjectPastSessionRow extends PastSessionRow {
 // `title` is the saved session's title, which the new row takes as its
 // first-message title. `instructions` and `owner` are as `LaunchRequest` has
 // them; a resume with `owner` opens its row unselected. True `headless` opens
-// the row headless, as a stashed session that was headless resumes.
+// the row headless, as a stashed session that was headless resumes. With no
+// `harness` the session resumes on the harness that declares `profile`.
 export interface ResumeRequest {
   projectDir: string;
+  harness?: string;
   profile: string;
   hostSessionId: string;
   title: string;
@@ -237,9 +237,11 @@ export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
 // A saved session a resume section lists. `note` is the section's word about
 // the session, drawn after its title. True `headless` resumes it headless.
+// `harness` is as `ResumeRequest` has it.
 export interface ResumeSectionRow {
   hostSessionId: string;
   projectDir: string;
+  harness?: string;
   profile: string;
   title: string;
   note?: string;
@@ -276,10 +278,12 @@ export interface ReturnedMessage extends UserMessage {
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
 // until the user closes it, across a relaunch, where it comes back resting
 // with its earlier conversation read again; a closed session's keys are
-// deleted at once.
+// deleted at once. `harness` is the id of the harness the row runs on, fixed
+// when the row opens.
 export interface ChatSessionInfo {
   sessionId: string;
   projectDir: string;
+  harness: string;
   profile: string;
   activity: ProcessActivity;
   // The subagents and background tasks still running in the session's
@@ -415,7 +419,8 @@ export interface ChatChannel extends ChannelShape {
     // folders and those in the OS's temp folders left out.
     recentFolders(): Promise<RecentFolder[]>;
     // The new row's sessionId; a pool project's row starts in the pool's
-    // lowest-numbered clone. Throws, opening nothing, on an unknown project, a
+    // lowest-numbered clone. Throws, opening nothing, on a harness not
+    // registered, a profile its harness does not declare, an unknown project, a
     // profile other than the project's, no pool provider, or a pool with no
     // clones.
     start(request: StartRequest): string;
@@ -479,8 +484,9 @@ export interface ChatChannel extends ChannelShape {
     // is up it skips the compaction and returns nothing: the held row is written
     // when the compaction ends, then the rows behind it.
     interrupt(sessionId: string): void;
-    // Ends the session's process and starts a fresh one under a new host
-    // session id; the entries become one `Conversation cleared` notice in
+    // Ends the session's process and starts a fresh one as a new conversation,
+    // whose host session id the harness reports; the entries become one
+    // `Conversation cleared` notice in
     // `chat.entries`, the active time returns to 0 in `chat.session`, and
     // every message written but not taken in, then every queued message,
     // goes into `chat.returned`. Rejects when the fresh process cannot start,
@@ -587,19 +593,21 @@ export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 // process a clear or a failed attach let go.
 // `planUsage`: the plan rows one of those sessions saw. Both carry the
 // `profileDir` of the profile the row opened under: its `configDir` as the
-// `profiles` setting writes it, unexpanded; null is the harness default, which
-// chat never sends.
+// harness's profiles setting writes it, unexpanded; null is the harness
+// default, which chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under,
 // its host id and folder, and how it came to open; a row whose profile is not
-// in chat's profiles setting fires none. It fires before the session's slots
-// exist and before chat's exports know the row. A pool project's row fires it
-// when its claim lands instead, with the clone as `projectDir` and after its
-// slots exist; it fires none, nor `sessionClosed`, when its claim fails or the
-// row closes first.
+// among the profiles of its harness fires none. A restored, resumed or
+// attached row fires it before the session's slots exist and before chat's
+// exports know the row. A new session's row fires it once its harness reports
+// the host id, after its slots exist and the sessions row holds that id; it
+// fires none, nor `sessionClosed`, when the row closes first.
 // `sessionClosed`: chat closing a row it holds, before its state goes, with the
 // titles, `sent` and `headless` it had. A quit or relaunch fires none.
-// `sessionCleared`: a clear moving a row to a new host id, with the titles it
-// holds and whether the old conversation was sent a message.
+// `sessionCleared`: a clear moving a row to a new host id, once the fresh
+// process reports that id, with the titles it holds and whether the old
+// conversation was sent a message. A clear of a row with no host id yet fires
+// none.
 // `processEnded`: a row's live process exiting, outside a replay;
 // `hostSessionId` is the id it started under.
 // `sessionArchived`: a saved session's archived flag, once written.
@@ -666,20 +674,22 @@ export interface ChatMainExports {
   // row's process starts; `owner` names the plugin the row belongs to, and
   // such a row raises no `Turn finished` mark. Resolves to the new row's
   // sessionId; rejects, opening nothing, on an image chat refuses (with the
-  // refusal text), an unknown profile, no chat harness, an unknown project, a
-  // profile other than the project's, no pool provider, a pool with no
-  // clones, or an unknown control id. A pool project's session starts in the
-  // pool's lowest-numbered clone.
+  // refusal text), a profile no registered harness declares, an unknown
+  // project, a profile other than the project's, no pool provider, a pool
+  // with no clones, or an unknown control id. A pool project's session starts
+  // in the pool's lowest-numbered clone. It runs on the harness that declares
+  // its profile.
   launch(request: LaunchRequest): Promise<string>;
   // A launch the session host starts later: chat's instructions as they stand
   // now, the headless note when `request.headless`, `request.controls` as the
   // first process's, `env` added to the run's environment, and fresh ids (host
-  // session id, process id, row id, message uuid). Opens nothing. Throws where
-  // `launch` rejects, an unknown control id included.
+  // session id, process id, row id, message uuid), on the harness that
+  // declares its profile. Opens nothing. Rejects where `launch` rejects, an
+  // unknown control id included.
   prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
-  ): PreparedLaunch;
+  ): Promise<PreparedLaunch>;
   // Chat's checked projects, in settings order, as the channel's `projects`
   // gives the page.
   projects(): readonly ChatProject[];
@@ -701,16 +711,24 @@ export interface ChatMainExports {
   // `instructions` and `owner` are as `launch` has them, and a resume with
   // `owner` opens its row unselected.
   resume(request: ResumeRequest): Promise<string>;
-  // Chat's profiles, in settings order, read at each call. The first profile
-  // is the one a drive `chat.start` takes when it names none, and the only
-  // choice the start prompt skips to.
-  profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
   // The clock of a session chat owns; null for any other session id.
   activeTime(sessionId: string): ActiveTime | null;
+  // The agent that made a tool call, by its host tool-use id: MAIN_AGENT_ID or
+  // a subagent's id, as the session's stream names it. For a call the stream
+  // has not named yet it waits a short while, then resolves null; for a
+  // session chat does not hold it resolves null at once.
+  toolCaller(sessionId: string, toolUseId: string): Promise<string | null>;
   // Whether a session chat owns is headless; false for any other session id.
   isHeadless(sessionId: string): boolean;
+  // Whether a session chat owns is unattended (launched with `unattended`
+  // true); false for any other session id.
+  isUnattended(sessionId: string): boolean;
+  // The name a frame line from this session's agent gives it, by
+  // `frameSenderName`: its title as a rename starts from, else its side-bar
+  // label, else its id.
+  senderName(sessionId: string): string;
   // Whether the harness process of a session chat owns started with the
   // headless note, which is the flag at its last process start (a `/clear`
   // included), or its saved flag when it has not started one in this app run;
@@ -718,7 +736,8 @@ export interface ChatMainExports {
   // changes, since a running process keeps the instructions it started with.
   launchedHeadless(sessionId: string): boolean;
   // The profile a launch takes when its caller names none: the profile of a
-  // session chat owns, else chat's first; null when chat has no profiles.
+  // session chat owns, else the first profile of chat's `defaultHarness`; null
+  // when that harness is not registered or has no profiles.
   // `sessionId` is null when the launch comes from no session.
   defaultProfile(sessionId: string | null): string | null;
   // Settles once main's restore of the saved rows ends, a failed one
@@ -729,8 +748,9 @@ export interface ChatMainExports {
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
   send(sessionId: string, message: UserMessage): Promise<void>;
-  // The `/clear` command's clear: resolves once the fresh process started;
-  // rejects when it cannot start, or for a session chat does not hold.
+  // The `/clear` command's clear: resolves once the fresh process started and
+  // reported its host session id; rejects when it cannot start, or for a
+  // session chat does not hold.
   // `sessions.hostSessionChanged` is emitted before it resolves.
   clear(sessionId: string): Promise<void>;
   // Drops every session chat holds in `projectDir` (compared as samePath
@@ -933,6 +953,11 @@ export type CompletionRowDraw = (
 // channel's `setHeadless`; the flag shows in `chat.session`.
 // `mountChat` draws the Chat tab's view of a session whose row has an owner
 // into `element`, in place of a Sessions tab (`ChatMount`).
+// `addEntryRenderer` adds a renderer for entries of `kind` until its
+// `dispose`; an entry draws with the user's layout when it names the kind,
+// else with the latest-added renderer whose `kind` matches and whose `match`
+// passes, else with `default`; adding or disposing one redraws every Chat
+// tab's entries.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
@@ -943,6 +968,21 @@ export interface ChatPageExports {
   activeTime(sessionId: string): ActiveTime | null;
   setHeadless(sessionId: string, headless: boolean): Promise<void>;
   mountChat(element: HTMLElement, sessionId: string): ChatMount;
+  addEntryRenderer<K extends AnyEntryKind>(
+    renderer: ChatEntryRenderer<K>,
+  ): Disposable;
+}
+
+// Draws entries of `kind`, a known kind or a harness's own
+// (`<harness id>:<kind>`), whose `match`, when given, returns true; `build`
+// takes a chat layout's entry builder's arguments. `match` is asked again at
+// each update of the entry, and an answer that changes what draws it draws
+// the entry anew. A `build` or view `update` that throws leaves the entry to
+// `default`; a `match` that throws counts as false.
+export interface ChatEntryRenderer<K extends AnyEntryKind = AnyEntryKind> {
+  kind: K;
+  match?(input: EntryInput<K>): boolean;
+  build: EntryBuilder<K>;
 }
 
 // A session's chat view drawn into another plugin's element by `mountChat`:
@@ -1047,3 +1087,11 @@ export const chatMoveFocusCommand: CommandKey<
   { sessionId: string; stopId: string },
   'chat.moveFocus'
 > = { id: 'chat.moveFocus' };
+
+// Sends `text` to the chat session `sessionId`, framed as the calling agent's
+// message when an agent runs it; the one command that names its target
+// session in its argument.
+export const chatSendToCommand: CommandKey<
+  { sessionId: string; text: string },
+  'chat.sendTo'
+> = { id: 'chat.sendTo' };

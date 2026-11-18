@@ -1,8 +1,10 @@
+import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
+import { harnessLabel } from '../../../shared/agent-harness-label';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
-import { CHAT_HARNESS_ID, type ChatSidePart } from '../contract';
+import type { ChatSidePart } from '../contract';
 import type {
   ComposerInput,
   PartView,
@@ -30,19 +32,25 @@ interface DrawnFacts {
 
 // The Session facts, from chat's own state: the repo, the branch when there is
 // one, the folder with the home folder as `~`, the worktrees the agents wrote
-// in, the harness, and the model and effort when the session declares a model
+// in, the harness's id and its label in `harnesses` (when it is not
+// registered, `harnessLabel`'s stand-in label, else the id), and the model and effort when the session declares a model
 // control.
 export function sessionFactsOf(
   input: ComposerInput,
-  place: { projectDir: string; worktrees: readonly string[] },
-  deps: { homeDir: string; paths: Paths },
+  place: { projectDir: string; worktrees: readonly string[]; harness: string },
+  deps: {
+    homeDir: string;
+    paths: Paths;
+    harnesses: ReadonlyMap<string, AgentHarnessInfo>;
+  },
 ): SessionFactsInput {
   return {
     repo: input.repo,
     branch: input.branch,
     folder: displayPath(place.projectDir, deps.homeDir, deps.paths),
     worktrees: place.worktrees,
-    harness: CHAT_HARNESS_ID,
+    harness: place.harness,
+    harnessLabel: harnessLabel(deps.harnesses, place.harness),
     modelEffort:
       input.modelEffort === null ? null : modelEffortText(input.modelEffort),
   };

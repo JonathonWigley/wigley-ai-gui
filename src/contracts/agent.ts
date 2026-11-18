@@ -1,23 +1,27 @@
+import type { Disposable } from './disposable';
 import type { HostedSpawn } from './session-host';
-
-// The MCP tool that answers a harness's permission prompts, served to every
-// session by the app's MCP server. Claude Code names a plugin's MCP tool
-// `mcp__plugin_<plugin>_<server>__<tool>`: the server is `wigley-forms` in the
-// marketplace's `wigley` plugin.
-export const PERMISSION_TOOL_NAME = 'permission_prompt';
-export const CLAUDE_PERMISSION_TOOL = `mcp__plugin_wigley_wigley-forms__${PERMISSION_TOOL_NAME}`;
 
 export interface ControlChoice {
   value: string;
   label: string;
 }
 // A setting of a running session the harness declares; `value` is null until the harness reports it, and while the harness reports none.
+// `role` names what the control is, so chat can bind a key to it whatever its id: one of `CONTROL_ROLES`, or any
+// other string a harness picks; absent for a control no key binds.
 export interface SessionControl {
   id: string;
   label: string;
   choices: ControlChoice[];
   value: string | null;
+  role?: string;
 }
+
+// The control roles chat binds keys to.
+export const CONTROL_ROLES = {
+  model: 'model',
+  permissionMode: 'permissionMode',
+  effort: 'effort',
+} as const;
 
 export type ProcessActivity = 'idle' | 'working' | 'waiting';
 
@@ -115,7 +119,7 @@ export type ChatEntry =
       at: number;
       toolName: string;
       input: unknown;
-      answer: { allowed: boolean; reason: string | null } | null;
+      answer: PermissionDecision | null;
       raw: unknown[];
     }
   | {
@@ -123,6 +127,8 @@ export type ChatEntry =
       id: string;
       at: number;
       stopReason: string;
+      // This turn's cost in USD, null when the harness reports none; an adapter whose harness reports a running total
+      // subtracts the previous turn's.
       costUsd: number | null;
       durationMs: number | null;
       raw: unknown[];
@@ -148,13 +154,35 @@ export type ChatEntry =
       durationMs: number | null;
       raw: unknown[];
     }
-  | { kind: 'raw'; id: string; at: number; raw: unknown[] };
+  | { kind: 'raw'; id: string; at: number; raw: unknown[] }
+  // A kind a harness adds, named `<harness id>:<kind>`. It carries only `raw`, which a renderer the harness's plugin
+  // adds decodes; `default` draws it with its `raw` builder.
+  | { kind: HarnessEntryKind; id: string; at: number; raw: unknown[] };
+
+// A harness's own entry kind, `<harness id>:<kind>`; no known kind holds a `:`, so the two never meet.
+export type HarnessEntryKind = `${string}:${string}`;
 
 export type ChatEntryKind = ChatEntry['kind'];
 
-// `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
-// `profileDir` is the harness's config folder (Claude's `CLAUDE_CONFIG_DIR`) as the profile writes it, which the
-// adapter resolves (`~` against the home the adapter was built with); null for the harness default.
+// The user's answer to a tool call's permission request; `reason` is what a deny tells the agent, null for the
+// harness's own default.
+export interface PermissionDecision {
+  allowed: boolean;
+  reason: string | null;
+}
+
+// A tool call waiting on the user. `entry` is the permission entry the adapter minted for it, `answer`
+// null; `entry.id` is the id `answerPermission` takes, unique among the process's entries.
+export interface PermissionRequest {
+  entry: Extract<ChatEntry, { kind: 'permission' }>;
+}
+
+// `sessionId` null asks the harness for a new conversation, whose id the adapter mints or learns and reports through
+// `AgentProcessEvents.sessionId`; a string with `resume` false starts a conversation under that id (a row whose earlier
+// start never got a message); a string with `resume` true resumes it. `attach` always gets a string.
+// `profileDir` is the config folder of the profile the session runs under, as that harness's profiles setting writes
+// it (`HarnessProfile.configDir`), which the adapter resolves (`~` against the home the adapter was built with); null
+// for the harness default.
 // `controls` maps a control id to the value the row holds, for the row's mode and for each model or effort the user
 // picked in the row once the process confirmed the pick, leaving out a null `value`; the adapter starts with each value
 // it knows and ignores an id it does not declare.
@@ -167,7 +195,7 @@ export type ChatEntryKind = ChatEntry['kind'];
 // to its harness's environment for tools that track the row, such as `unity-pool`.
 export interface AgentStart {
   processId: string;
-  sessionId: string;
+  sessionId: string | null;
   resume: boolean;
   projectDir: string;
   profileDir: string | null;
@@ -226,6 +254,7 @@ export interface AutocompactLimits {
 
 // One agent's context and spend. `agentId` is `main` for the session's own agent; `contextWindow` is null until the
 // harness reports it and `spendUsd` until the first turn ends; `cacheExpiresAt` is epoch ms, null when unknown.
+// `spendUsd` is the process's spend so far in USD, cumulative across its turns.
 export interface UsageAgentEvent {
   type: 'usage';
   agentId: string;
@@ -389,6 +418,9 @@ export type AgentEvent =
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.
 export interface AgentProcessEvents {
+  // The id the process's conversation runs under. Each `start` calls it once, before every other event of that
+  // process, in a later microtask like every event; each `attach` calls it once, first, before its promise resolves.
+  sessionId(id: string): void;
   entry(entry: ChatEntry): void;
   controls(controls: SessionControl[]): void;
   activity(activity: ProcessActivity): void;
@@ -408,9 +440,15 @@ export interface AgentProcessEvents {
   // every such message in the process's log, including one the caller heard
   // before the attach.
   messageDropped(entryId: string, message: UserMessage): void;
+  // A tool call waits on the user's answer. A request still waiting when the process closes is cancelled, and its
+  // answered entry comes before `ended`. After `detach` nothing comes. No `entry` comes for a waiting request: its
+  // answered entry (same id, `answer` set) comes through `entry` once it is answered or cancelled.
+  permission(request: PermissionRequest): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
+// Chat passes `now` only to a harness whose `capabilities.midTurnSend` is true; to any other it writes the message
+// plainly.
 export interface SendOptions {
   now?: boolean;
 }
@@ -433,7 +471,8 @@ export interface AgentProcess {
   // never passed to this process's `send`, gets `messageDropped` before `ended`.
   // `now` asks the agent to take the message in at once, ending its running
   // turn's tool or reply rather than waiting for the turn's next step; messages
-  // sent now back to back run as one turn.
+  // sent now back to back run as one turn. Chat passes `now` only to a harness whose `capabilities.midTurnSend` is
+  // true; to any other it writes the message plainly.
   send(message: UserMessage, options?: SendOptions): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
@@ -450,6 +489,9 @@ export interface AgentProcess {
   // running; a pending `end` settles, with no `ended`. Chat calls it on quit and on
   // a chat plugin stop, in place of `kill`.
   detach(): void;
+  // Answers the request `requestId` that `permission` raised. Does nothing for an id that is not waiting (answered,
+  // cancelled or unknown), logging it; it does not throw after `end`, since an answer may race the process's end.
+  answerPermission(requestId: string, decision: PermissionDecision): void;
 }
 
 // A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to
@@ -493,8 +535,68 @@ export interface ProjectFolder {
   modified: number;
 }
 
+// What a harness can do, each flag required so every adapter declares each one. `interrupt`: `AgentProcess.interrupt`
+// ends a running turn; `resume`: a saved session starts again; `images`: a user message carries images;
+// `midTurnSend`: `SendOptions.now` reaches the agent mid-turn.
+export interface HarnessCapabilities {
+  interrupt: boolean;
+  resume: boolean;
+  images: boolean;
+  midTurnSend: boolean;
+}
+
+// The declarations a harness publishes in `core.agentHarnesses`; JSON-safe. `label` names the harness to the user;
+// `clearAliases` are the names typed after `/` that clear the session beside the app's own `clear`;
+// `projectConfigFolder` is the folder name the harness reads in a project (`.claude` for Claude); `profiles` are the
+// profiles a session can run under, in the harness's settings order; the registry's slot entry leaves out each name
+// an earlier registered harness holds, and the later of a name the harness lists twice.
+export interface AgentHarnessInfo {
+  label: string;
+  capabilities: HarnessCapabilities;
+  clearAliases: readonly string[];
+  projectConfigFolder: string;
+  profiles: readonly HarnessProfile[];
+}
+
+// A profile a session can run under: `name` is unique across harnesses, `configDir` the harness's config folder as
+// its profiles setting writes it, `~/` unexpanded.
+export interface HarnessProfile {
+  name: string;
+  configDir: string;
+}
+
+// A profile's config folder (as `AgentHarness.configFolder` resolves it) and the folders the harness caches its
+// installed plugins in.
+export interface HarnessConfigRoots {
+  configDir: string;
+  pluginCacheDirs: readonly string[];
+}
+
+// One install of a plugin in a profile, as the harness lists it: `key` the harness's name for the plugin,
+// `installDir` the install's folder, `version` null when the harness names none; `listedAt` the config file and
+// 1-based line that list the key, null when no line does.
+export interface InstalledPlugin {
+  key: string;
+  installDir: string;
+  version: string | null;
+  listedAt: { path: string; line: number } | null;
+}
+
 export interface AgentHarness {
-  id: string;
+  readonly id: string;
+  // The harness's declarations as they stand now; the registry publishes them at `register` and at each `refresh`.
+  info(): AgentHarnessInfo;
+  // The controls a session started now under `profileDir` with empty `AgentStart.controls` begins with, each `value`
+  // that start's, null when the harness cannot know it before start. A running process reports its own through
+  // `AgentProcessEvents.controls`.
+  controls(profileDir: string | null): SessionControl[];
+  // The tool-use id the harness put in an MCP call's `_meta`; null when `meta` is null or holds none.
+  toolUseIdOf(meta: Readonly<Record<string, unknown>> | null): string | null;
+  // `profileDir`'s (as `AgentStart` holds it) config and plugin-cache folders; `configDir` is `configFolder`'s.
+  configRoots(profileDir: string | null): HarnessConfigRoots;
+  // Every plugin install `profileDir` (as `AgentStart` holds it) lists, in the harness's file order; [] when none or
+  // when the harness's list cannot be read, which the adapter logs. Never rejects.
+  installedPlugins(profileDir: string | null): Promise<InstalledPlugin[]>;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
   // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed,
   // except what a process that exited during the attach fires for that exit, its `sessionEnded` and `ended` included.
@@ -548,14 +650,15 @@ export interface AgentHarness {
   planUsage(profileDir: string | null): Promise<PlanUsage>;
   // A start of `request` that the session host runs later. Its `stdin` holds the lines `start` writes when a process
   // opens, then `firstMessage`. Its `env` holds `env`, the harness's own values and the names the adapter carries from
-  // the app's environment; its `unsetEnv` the names the child must not inherit. Pure: spawns and writes nothing.
-  // Throws where `start` would throw before spawning, and on a control value the harness does not offer for a control
-  // whose values it checks. `request.resume` is false.
+  // the app's environment; its `unsetEnv` the names the child must not inherit. Spawns and writes nothing; it may
+  // look up the harness's program. Rejects where `start` would fail before spawning, and on a control value the
+  // harness does not offer for a control whose values it checks. `request.resume` is false and `request.sessionId`
+  // is set.
   prepareRun(
     request: AgentStart,
     firstMessage: UserMessage,
     env: Readonly<Record<string, string>>,
-  ): HostedSpawn;
+  ): Promise<HostedSpawn>;
   // The controls a new session starts from: each declared control with its choices and `value` null.
   startControls(): SessionControl[];
   // `controls` with each permission control lowered to `cap`'s value where `controls` grants more. A permission
@@ -564,4 +667,20 @@ export interface AgentHarness {
     controls: Readonly<Record<string, string>>,
     cap: Readonly<Record<string, string>>,
   ): Record<string, string>;
+}
+
+// One harness's place in the registry. `refresh` publishes the adapter's `info()` again after its declarations
+// change, and does nothing after `dispose`; a second `dispose` does nothing.
+export interface AgentHarnessRegistration extends Disposable {
+  refresh(): void;
+}
+
+// Every harness the app runs, behind `services.agentHarnesses`. `register` throws when a live registration holds the
+// harness's id, and changes nothing then. `list` is in registration order; `get` is null for an id no live
+// registration holds. A harness is in `list` and `get` before the registry sets its `core.agentHarnesses` key, and
+// out of them before it deletes that key.
+export interface AgentHarnessRegistry {
+  register(harness: AgentHarness): AgentHarnessRegistration;
+  list(): readonly AgentHarness[];
+  get(id: string): AgentHarness | null;
 }

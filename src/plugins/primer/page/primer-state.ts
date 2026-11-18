@@ -313,7 +313,9 @@ export function primerPlace(
 }
 
 // A saved task row the primer no longer holds falls back to the Feature row,
-// and a saved item outside the task's items to the nearest it holds.
+// and a saved item outside the task's items to the nearest it holds. The
+// review cursor, which the place does not carry, stays and is pulled into the
+// review's rows, which removed tasks may have shrunk.
 function restorePlace(
   state: PrimerState,
   formId: string,
@@ -325,14 +327,17 @@ function restorePlace(
     const isRowHeld = row.kind === 'feature' || entry !== null;
     const count = entry?.items.length ?? 0;
     const item = Math.min(Math.max(place.selectedItem ?? 1, 1), count);
-    const restored = withFocus(
-      {
-        ...primer,
-        selectedTask: isRowHeld ? row : FEATURE_ROW,
-        selectedItem: count === 0 ? null : item,
-        cardColumn: place.cardColumn,
-      },
-      place.pane,
+    const restored = moveReviewRow(
+      withFocus(
+        {
+          ...primer,
+          selectedTask: isRowHeld ? row : FEATURE_ROW,
+          selectedItem: count === 0 ? null : item,
+          cardColumn: place.cardColumn,
+        },
+        place.pane,
+      ),
+      (reviewRow) => reviewRow,
     );
     return isSamePlace(restored, primer) ? primer : restored;
   });
@@ -354,7 +359,8 @@ function isSamePlace(a: OpenPrimer, b: OpenPrimer): boolean {
     isSameTask(a.selectedTask, b.selectedTask) &&
     a.selectedItem === b.selectedItem &&
     a.pane === b.pane &&
-    a.cardColumn === b.cardColumn
+    a.cardColumn === b.cardColumn &&
+    a.reviewRow === b.reviewRow
   );
 }
 

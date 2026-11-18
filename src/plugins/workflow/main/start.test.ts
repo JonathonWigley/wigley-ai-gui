@@ -106,6 +106,7 @@ function session(id: string, hostSessionId: string): AgentSession {
       sessionId: hostSessionId,
       projectDir: '/r',
       harness: null,
+      rowId: null,
     },
   };
 }
@@ -139,16 +140,11 @@ function startWorkflowPart(
   let launchedHeadless = false;
   const chat: Pick<
     ChatMainExports,
-    | 'activeTime'
-    | 'addInstructions'
-    | 'isHeadless'
-    | 'launchedHeadless'
-    | 'profiles'
+    'activeTime' | 'addInstructions' | 'isHeadless' | 'launchedHeadless'
   > = {
     activeTime: () => activeTime,
     isHeadless: () => headless,
     launchedHeadless: () => launchedHeadless,
-    profiles: () => [],
     addInstructions: (text) => {
       instructions.push(text);
       return { dispose: () => undefined };
@@ -305,6 +301,7 @@ function chatHeld(sessionId: string, profile: string): ChatSessionInfo {
   return {
     sessionId,
     projectDir: '/p',
+    harness: 'fake',
     profile,
     activity: 'idle',
     background: 0,
@@ -1515,5 +1512,28 @@ describe('workflowMainPart', () => {
     expect(await runLogLines(workflow)).toMatchObject([
       { activeMs: 0, costUsd: null },
     ]);
+  });
+
+  it.each([
+    {
+      name: 'a stage with finishes',
+      workflow: 'stub',
+      stage: 'done',
+      expected: true,
+    },
+    {
+      name: 'another stage',
+      workflow: 'stub',
+      stage: 'scope',
+      expected: false,
+    },
+    { name: 'no workflow', workflow: null, stage: 'done', expected: false },
+  ])('stageFinishes ($name)', ({ workflow: workflowId, stage, expected }) => {
+    const workflow = startWorkflowPart();
+    workflow.exported().addWorkflow(finishingWorkflow());
+
+    const flow = { ...newFlow('s1', '/r'), workflow: workflowId, stage };
+
+    expect(workflow.exported().stageFinishes(flow)).toBe(expected);
   });
 });

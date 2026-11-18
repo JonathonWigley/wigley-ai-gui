@@ -1,4 +1,4 @@
-import type { AgentHarness } from '../../../contracts/agent';
+import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Clock } from '../../../contracts/ambient';
 import type { DriveHost } from '../../../contracts/plugin';
 import {
@@ -19,7 +19,7 @@ export interface UsageDriveDeps {
   snapshot(): UsageSnapshot;
   seed(snapshot: UsageSnapshot): void;
   pollNow(): Promise<void>;
-  harnesses: readonly AgentHarness[];
+  harnesses: AgentHarnessRegistry;
 }
 
 const DEFAULT_POLL_FAILURE = 'fake poll failed';
@@ -66,7 +66,7 @@ export function addDriveActions(drive: DriveHost, deps: UsageDriveDeps): void {
     async run(rawArgs) {
       const args = argsObject(rawArgs);
       const message = optionalString(args, 'message') ?? DEFAULT_POLL_FAILURE;
-      const fake = deps.harnesses.find(isFakeAgentHarness);
+      const fake = deps.harnesses.list().find(isFakeAgentHarness);
       if (fake === undefined) {
         throw new Error('usage.failNextPoll needs the fake harness');
       }

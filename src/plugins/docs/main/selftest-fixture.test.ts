@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { FAKE_HARNESS_ID } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { IndexDocument } from '../contract';
 import { parseIndexDocument } from '../index-document';
 import { buildWikiTree, type TreeNode } from '../tree';
 import { parseWikiMain } from '../wiki-main';
-import { WIKI_MAIN_TEXT, writeDocsFixture } from './selftest-fixture';
+import {
+  docsFixtureInstalls,
+  WIKI_MAIN_TEXT,
+  writeDocsFixture,
+} from './selftest-fixture';
 
 const HOME = '/home';
 const LOAD_STATES = `${HOME}/.claude/load-states`;
@@ -88,7 +93,7 @@ describe('writeDocsFixture', () => {
     },
   );
 
-  it('GIVEN loadStates on WHEN the index fixture is read back THEN it holds each load-state doc and the home context its Claude state', async () => {
+  it('GIVEN loadStates on WHEN the index fixture is read back THEN it holds each load-state doc and the home context its fake-harness state', async () => {
     const files = await homeFiles();
 
     await writeDocsFixture(files, HOME, posixPaths, { loadStates: true });
@@ -104,7 +109,9 @@ describe('writeDocsFixture', () => {
           source: 'global',
         }),
       );
-      expect(home?.states[doc.path]).toEqual({ claude: doc.claude });
+      expect(home?.states[doc.path]).toEqual({
+        [FAKE_HARNESS_ID]: doc.claude,
+      });
       expect(await files.read(doc.path)).toBe(`# ${doc.title}\n`);
     }
   });
@@ -155,6 +162,39 @@ describe('writeDocsFixture', () => {
     );
     for (const doc of LOAD_STATE_DOCS) {
       expect(indexedPaths).not.toContain(doc.path);
+    }
+  });
+
+  it('writeDocsFixture_IndexFixture_KeysStatesAndPluginEntryByTheFakeId', async () => {
+    const files = await homeFiles();
+
+    await writeDocsFixture(files, HOME, posixPaths, { loadStates: false });
+
+    const index = await readIndex(files);
+    const records = index.contexts.flatMap((context) =>
+      Object.values(context.states),
+    );
+    expect(records.length).toBeGreaterThan(0);
+    for (const record of records) {
+      expect(Object.keys(record ?? {})).toContain(FAKE_HARNESS_ID);
+      expect(Object.keys(record ?? {})).not.toContain('claude');
+    }
+    const plugin = index.entries.find(
+      (entry) => entry.title === 'selftest-plugin@selftest-market',
+    );
+    expect(plugin?.meta.harness).toBe(FAKE_HARNESS_ID);
+  });
+
+  it('docsFixtureInstalls_ListedAt_TheWrittenLineHoldsTheKey', async () => {
+    const files = await homeFiles();
+    await writeDocsFixture(files, HOME, posixPaths);
+
+    for (const { key, listedAt } of docsFixtureInstalls(HOME, posixPaths)) {
+      if (listedAt === null) {
+        throw new Error(`${key} lists no line`);
+      }
+      const lines = (await files.read(listedAt.path)).split('\n');
+      expect(lines[listedAt.line - 1]).toContain(`"${key}"`);
     }
   });
 });

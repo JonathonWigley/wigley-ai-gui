@@ -45,7 +45,7 @@ extra-usage credits.
 
 ## Sources
 
-Only `src/main/claude-code/` knows any of these shapes.
+Only `src/plugins/claude-code/main/` knows any of these shapes.
 
 | Number | Source | When |
 | --- | --- | --- |
@@ -134,8 +134,10 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 
 `src/plugins/usage/` depends on `chat`, `sessions` and `keys` (the page kit's key anchors).
 
-- **Main** keeps one plan per chat profile (re-read at the start of each poll round, so a profile added or removed in
-  settings joins or leaves), polls every one at start and then every `usage.pollIntervalSeconds` (default 300, never
+- **Main** keeps one plan per registered harness profile, in `core.agentHarnesses` order then each harness's profile
+  order, the first the default (re-read at the start of each poll round, and a round runs at once when a harness's
+  profiles change, so a profile added or removed joins or leaves), polls each through its own harness's `planUsage`
+  at start and then every `usage.pollIntervalSeconds` (default 300, never
   under `MIN_POLL_SECONDS` = 60; read at each reschedule and rescheduled on a settings change) through the injected
   main `timers`. It folds each `chat.planUsage` update into that profile's plan usage, records each session's profile
   from `chat.sessionOpened` (so the line shows the right profile before the session's first turn ends), keeps each

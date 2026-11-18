@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../contracts/ambient';
+import type { ProcessRunner } from '../../contracts/processes';
 import type {
   HostedExit,
   HostedProcessEvents,
@@ -35,10 +36,10 @@ import {
   type ChannelServer,
   listenOnChannel,
 } from '../../shared/local-channel/local-channel';
+import { FakeProcesses } from '../../shared/fake-processes';
 import { osPlatform } from '../../shared/os-platform';
 import {
   createSessionHostClient,
-  type SessionHostSpawn,
   sessionHostLaunch,
 } from './session-host-client';
 
@@ -215,34 +216,24 @@ async function startScriptedHost(
   return host;
 }
 
-interface SpawnCall {
-  command: string;
-  args: readonly string[];
-  options: Parameters<SessionHostSpawn>[2];
-}
-
+// `spawned` runs at each host start, after the fake records it.
 function clientRig(
   folderRoot: string,
   channel: string,
-  spawned: (listeners: ((error: Error) => void)[]) => void = () => {},
+  spawned: () => void = () => {},
 ) {
   const folder = path.join(folderRoot, 'session-host');
   mkdirSync(folder, { recursive: true });
   const timers = manualTimers();
   const logged: string[] = [];
-  const spawnCalls: SpawnCall[] = [];
-  let unrefs = 0;
+  const fake = new FakeProcesses();
   let now = 5000;
-  const spawn: SessionHostSpawn = (command, args, options) => {
-    spawnCalls.push({ command, args, options });
-    const listeners: ((error: Error) => void)[] = [];
-    spawned(listeners);
-    return {
-      unref: () => {
-        unrefs += 1;
-      },
-      on: (_event, listener) => listeners.push(listener),
-    };
+  const processes: Pick<ProcessRunner, 'startDetached'> = {
+    startDetached: (command, args, options) => {
+      const started = fake.startDetached(command, args, options);
+      spawned();
+      return started;
+    },
   };
   const create = () =>
     createSessionHostClient({
@@ -250,8 +241,7 @@ function clientRig(
       channel,
       hostScript: '/build/session-host.js',
       execPath: '/app/binary',
-      env: { KEPT: 'yes' },
-      spawn,
+      processes,
       clock: { now: () => now },
       timers,
       log: (_source, message) => logged.push(message),
@@ -260,9 +250,8 @@ function clientRig(
     folder,
     timers,
     logged,
-    spawnCalls,
+    fake,
     create,
-    unrefs: () => unrefs,
     moveClock: (ms: number) => {
       now += ms;
     },
@@ -499,7 +488,7 @@ describe('createSessionHostClient', () => {
 
     await client.list();
 
-    expect(rig.spawnCalls).toEqual([]);
+    expect(rig.fake.detachedStarts).toEqual([]);
     expect(host.got.slice(0, 2)).toEqual([
       { type: 'hello', requestId: 1 },
       { type: 'setKeepIdle', minutes: 60 },
@@ -508,12 +497,9 @@ describe('createSessionHostClient', () => {
 
   it('create_SpawnEmitsError_FailsAtOnce', async () => {
     const dir = tempFolder();
-    const rig = clientRig(dir, testChannel(dir, ''), (listeners) =>
-      queueMicrotask(() => {
-        for (const listener of listeners) {
-          listener(new Error('spawn x ENOENT'));
-        }
-      }),
+    const rig = clientRig(dir, testChannel(dir, ''));
+    rig.fake.failDetachedStarts(
+      new Error('Could not run /app/binary: spawn x ENOENT'),
     );
     const client = rig.create();
     const queued = recordedEvents();
@@ -522,10 +508,10 @@ describe('createSessionHostClient', () => {
 
     await vi.waitFor(() =>
       expect(queued.errors()).toEqual([
-        'the session host did not start: spawn x ENOENT',
+        'the session host did not start: Could not run /app/binary: spawn x ENOENT',
       ]),
     );
-    expect(rig.spawnCalls).toHaveLength(1);
+    expect(rig.fake.detachedStarts).toHaveLength(1);
     expect(rig.timers.pending(POLL_MS)).toBe(0);
   });
 
@@ -541,14 +527,14 @@ describe('createSessionHostClient', () => {
         expect(rig.timers.pending(REPLY_LIMIT_MS)).toBe(1),
       );
       if (round === 0) {
-        expect(rig.spawnCalls).toEqual([]);
+        expect(rig.fake.detachedStarts).toEqual([]);
       }
       rig.timers.fire(REPLY_LIMIT_MS);
       await vi.waitFor(() => expect(rig.timers.pending(POLL_MS)).toBe(1));
       rig.timers.fire(POLL_MS);
     }
 
-    expect(rig.spawnCalls).toHaveLength(1);
+    expect(rig.fake.detachedStarts).toHaveLength(1);
   });
 
   it('connect_WrongProtocol_CountsAsNoAnswer', async () => {
@@ -558,7 +544,7 @@ describe('createSessionHostClient', () => {
     const rig = clientRig(dir, channel);
     rig.create();
 
-    await vi.waitFor(() => expect(rig.spawnCalls).toHaveLength(1));
+    await vi.waitFor(() => expect(rig.fake.detachedStarts).toHaveLength(1));
   });
 
   it('create_NoHost_SpawnsTheHostDetachedThenConnects', async () => {
@@ -577,19 +563,18 @@ describe('createSessionHostClient', () => {
       folder: rig.folder,
       channel,
     });
-    expect(rig.spawnCalls).toEqual([
+    expect(launch).toEqual({
+      command: '/app/binary',
+      args: ['/build/session-host.js', rig.folder, channel],
+      env: { ELECTRON_RUN_AS_NODE: '1' },
+    });
+    expect(rig.fake.detachedStarts).toEqual([
       {
         command: launch.command,
         args: launch.args,
-        options: {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-          env: { KEPT: 'yes', ELECTRON_RUN_AS_NODE: '1' },
-        },
+        options: { setEnv: launch.env },
       },
     ]);
-    expect(rig.unrefs()).toBe(1);
 
     const host = await starting[0];
     rig.timers.fire(POLL_MS);
@@ -597,7 +582,7 @@ describe('createSessionHostClient', () => {
     await vi.waitFor(() =>
       expect(host.got).toContainEqual({ type: 'setKeepIdle', minutes: 60 }),
     );
-    expect(rig.spawnCalls).toHaveLength(1);
+    expect(rig.fake.detachedStarts).toHaveLength(1);
   });
 
   it('create_HostNeverAnswers_ClosesQueuedSpawnsWithTheReason', async () => {
@@ -624,7 +609,7 @@ describe('createSessionHostClient', () => {
     expect(queued.errors()[0]).toMatch(/^the session host did not start:/);
     await listing;
     await attaching;
-    expect(rig.spawnCalls).toHaveLength(1);
+    expect(rig.fake.detachedStarts).toHaveLength(1);
   });
 
   it('process_Messages_ReachTheHostInCallOrderUntilClosed', async () => {
@@ -1262,7 +1247,7 @@ describe('createSessionHostClient', () => {
       { type: 'hello', requestId: 1 },
       { type: 'setKeepIdle', minutes: 30 },
     ]);
-    expect(rig.spawnCalls).toEqual([]);
+    expect(rig.fake.detachedStarts).toEqual([]);
   });
 
   it.each(SET_PENDING_ROWS)(

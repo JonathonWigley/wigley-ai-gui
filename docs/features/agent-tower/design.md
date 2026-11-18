@@ -19,7 +19,7 @@ running subagents and tasks in the Sessions side bar.
 Built:
 
 - the agent event record in `src/contracts/agent.ts` (`AgentEvent`), emitted by the Claude adapter
-  (`src/main/claude-code/stream-decoder.ts`, `claude-code-harness.ts`) and by the fake harness
+  (`src/plugins/claude-code/main/stream-decoder.ts`, `claude-code-harness.ts`) and by the fake harness
 - chat main forwarding each owned session's events as `chat.agentEvent`, carrying
   `{ sessionId, profileDir, hostSessionId, event }`
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, and the `Space z l a` layout

@@ -145,6 +145,7 @@ function fakeKit() {
         },
       };
     },
+    tag: (parent, text, tone) => part(parent, 'span', `tag:${text}:${tone}`),
     card: (parent) => part(parent, 'div', 'card:none'),
     edgeCard: (parent, edge) => part(parent, 'div', `card:${edge ?? 'none'}`),
     statusDot: (parent, status) => part(parent, 'span', `dot:${status}`),
@@ -173,7 +174,9 @@ function draw<K extends EntryKind>(
   kit: ChatKit,
 ): EntryView<K> {
   const parent = new FakeElement('li');
-  const builder = layout.entries[input.kind] as AnyBuilder;
+  // `EntryInput<K>` is conditional over the harness kinds, so its `kind` reads
+  // wider than `K`.
+  const builder = layout.entries[input.kind as EntryKind] as AnyBuilder;
   const view = builder(asHtml(parent), input, kit);
   expect(parent.children).toEqual([asFake(view.element)]);
   return view as EntryView<K>;
@@ -207,6 +210,7 @@ describe('default chat layout', () => {
     const entry = {
       kind: 'user' as const,
       id: 'u1',
+      from: null,
       text: 'hello',
       images: [] as { mediaType: string; data: string }[],
       delivery: null,
@@ -227,9 +231,69 @@ describe('default chat layout', () => {
     ]);
   });
 
+  it.each([
+    {
+      from: 'Planner',
+      children: ['tag:from Planner:neutral', 'markdown:go (fences off)'],
+    },
+    { from: null, children: ['markdown:go (fences off)'] },
+  ])(
+    'a user turn draws the from Tag only for a framed message ($from)',
+    ({ from, children }) => {
+      const { kit } = fakeKit();
+      const view = draw(
+        {
+          kind: 'user' as const,
+          id: 'u3',
+          from,
+          text: 'go',
+          images: [],
+          delivery: null,
+          isLatestDelivery: false,
+          raw: [],
+        },
+        kit,
+      );
+
+      const turn = asFake(view.element).children[0];
+      expect(describeChildren(turn)).toEqual(children);
+      if (from !== null) {
+        const tag = turn.children[0];
+        expect(tag.classList.contains('chat-user-from')).toBe(true);
+        expect(tag.title).toBe(
+          'Sent by the agent in session "Planner", not typed by the user',
+        );
+      }
+    },
+  );
+
+  it('a changed from redraws the turn', () => {
+    const { kit } = fakeKit();
+    const entry = {
+      kind: 'user' as const,
+      id: 'u4',
+      from: null,
+      text: 'go',
+      images: [] as { mediaType: string; data: string }[],
+      delivery: null,
+      isLatestDelivery: false,
+      raw: [] as unknown[],
+    };
+    const view = draw(entry, kit);
+    const turn = asFake(view.element).children[0];
+
+    view.update?.({ ...entry, from: 'Planner' });
+
+    expect(describeChildren(turn)).toEqual([
+      'tag:from Planner:neutral',
+      'markdown:go (fences off)',
+    ]);
+  });
+
   const userWithImage = {
     kind: 'user' as const,
     id: 'u2',
+    from: null,
     text: 'look',
     images: [{ mediaType: 'image/png', data: 'cG5n' }],
     delivery: null,
@@ -743,6 +807,25 @@ describe('default chat layout activity', () => {
         'span.chat-activity-steps:7 steps · Read 2 · Grep · Edit · Bash span.chat-activity-failed:· 1 failed span.chat-activity-time:· 20s',
       ],
     },
+    {
+      state: 'UnknownStart',
+      input: {
+        ...finishedRun([toolStep('Read', 'a.ts')], 8000),
+        startedAt: null,
+      },
+      lines: ['chat-activity', 'span.chat-activity-steps:1 step · Read'],
+    },
+    {
+      state: 'UnknownStartLive',
+      input: {
+        ...liveRun([toolStep('Read', 'a.ts', null)], false, 3000),
+        startedAt: null,
+      },
+      lines: [
+        'chat-activity is-live',
+        'span.chat-activity-steps:1 step · Read',
+      ],
+    },
   ] as {
     state: string;
     input: ActivityInput;
@@ -1215,6 +1298,7 @@ describe('default chat layout queuedMessage', () => {
     'queuedMessage_Default_Label ($imageCount, sent $sent, hold $holdReason, key $skipKey → $label)',
     ({ imageCount, sent, holdReason, skipKey, label }) => {
       const view = drawQueued({
+        from: null,
         text: 'fix the tests',
         imageCount,
         sent,
@@ -1229,8 +1313,38 @@ describe('default chat layout queuedMessage', () => {
     },
   );
 
+  it.each([
+    {
+      from: 'Planner',
+      children: [
+        'div.chat-queued-label:pending',
+        'tag:from Planner:neutral',
+        'div.chat-queued-text:go',
+      ],
+    },
+    {
+      from: null,
+      children: ['div.chat-queued-label:pending', 'div.chat-queued-text:go'],
+    },
+  ])(
+    'a queued message draws the from Tag only for a framed message ($from)',
+    ({ from, children }) => {
+      const view = drawQueued({
+        from,
+        text: 'go',
+        imageCount: 0,
+        sent: false,
+        holdReason: null,
+        skipKey: '⌃C',
+      });
+
+      expect(describeChildren(asFake(view.element))).toEqual(children);
+    },
+  );
+
   it('queuedMessage_Default_UpdateRedrawsInPlace', () => {
     const view = drawQueued({
+      from: null,
       text: 'fix the tests',
       imageCount: 0,
       sent: false,
@@ -1240,6 +1354,7 @@ describe('default chat layout queuedMessage', () => {
     const row = view.element;
 
     view.update?.({
+      from: null,
       text: 'and the lint',
       imageCount: 2,
       sent: false,
@@ -1252,6 +1367,32 @@ describe('default chat layout queuedMessage', () => {
       'div.chat-queued-label:pending · 2 images',
       'div.chat-queued-text:and the lint',
     ]);
+
+    for (const from of ['Planner', null, 'Planner']) {
+      view.update?.({
+        from,
+        text: 'go',
+        imageCount: 0,
+        sent: false,
+        holdReason: null,
+        skipKey: '⌃C',
+      });
+
+      const children = describeChildren(asFake(row));
+      expect(view.element).toBe(row);
+      expect(children).toEqual(
+        from === null
+          ? ['div.chat-queued-label:pending', 'div.chat-queued-text:go']
+          : [
+              'div.chat-queued-label:pending',
+              'tag:from Planner:neutral',
+              'div.chat-queued-text:go',
+            ],
+      );
+      expect(children.filter((child) => child.startsWith('tag:'))).toHaveLength(
+        from === null ? 0 : 1,
+      );
+    }
   });
 });
 
@@ -1285,6 +1426,7 @@ function fakeSurfaceKit() {
     copyButton: (parent: HTMLElement) => part(parent, 'button', 'copy'),
     codeBox: (parent: HTMLElement) => part(parent, 'div', 'codeBox'),
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
+    reasonBox: (parent: HTMLElement) => part(parent, 'textarea', 'reasonBox'),
     keyHint: (parent: HTMLElement, command: string) =>
       part(parent, 'span', `hint:${command}`),
     tag(parent: HTMLElement, text: string, tone = 'neutral') {
@@ -1366,12 +1508,19 @@ describe('default chat layout surfaces', () => {
     vi.unstubAllGlobals();
   });
 
-  const model = { id: 'model', label: 'Model', value: 'Small', enabled: true };
+  const model = {
+    id: 'model',
+    label: 'Model',
+    value: 'Small',
+    enabled: true,
+    role: 'model',
+  };
   const effort = {
     id: 'effort',
     label: 'Effort',
     value: 'High',
     enabled: true,
+    role: 'effort',
   };
   const composerInput: ComposerInput = {
     session: 'repo',
@@ -1381,7 +1530,15 @@ describe('default chat layout surfaces', () => {
     running: true,
     working: false,
     modelEffort: { model, effort },
-    controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
+    controls: [
+      {
+        id: 'mode',
+        label: 'Mode',
+        value: 'Auto',
+        enabled: true,
+        role: 'permissionMode',
+      },
+    ],
   };
 
   it('rowClock_Default_UpdateChangesTextAndRunningInPlace', () => {
@@ -1419,6 +1576,27 @@ describe('default chat layout surfaces', () => {
       'box',
       'statusLine',
     ]);
+  });
+
+  it.each<{ name: SurfacePart; text: string }>([
+    {
+      name: 'reasonBox',
+      text: 'Optional: tell the agent why. It reads your reason.',
+    },
+    {
+      name: 'closeConfirm',
+      text: 'The agent is still working. Ending the session stops it.',
+    },
+  ])('dialogText_Default_NamesTheAgent ($name)', ({ name, text }) => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(name, {}, kit);
+
+    const dialogText = asFake(view.element).children.find(
+      (child) =>
+        child.tagName === 'P' && child.classList.contains('chat-dialog-text'),
+    );
+    expect(dialogText?.textContent).toBe(text);
   });
 
   it.each([
@@ -1601,6 +1779,7 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         worktrees: ['app-fix'],
         harness: 'claude',
+        harnessLabel: 'Claude Code',
         modelEffort: 'Opus 5 · high',
       },
       shown: {
@@ -1608,7 +1787,7 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         tags: [
           'tag:accent:app-fix',
-          'tag:neutral:claude',
+          'tag:neutral:Claude Code',
           'tag:neutral:Opus 5 · high',
         ],
       },
@@ -1621,12 +1800,13 @@ describe('default chat layout surfaces', () => {
         folder: '~/dev/app',
         worktrees: [],
         harness: 'claude',
+        harnessLabel: 'Claude Code',
         modelEffort: null,
       },
       shown: {
         title: ['span.chat-session-repo:app'],
         folder: '~/dev/app',
-        tags: ['tag:neutral:claude'],
+        tags: ['tag:neutral:Claude Code'],
       },
     },
   ])('sessionFacts_Default_$case', ({ input, shown }) => {
@@ -1652,6 +1832,7 @@ describe('default chat layout surfaces', () => {
       folder: '~/dev/app',
       worktrees: [],
       harness: 'claude',
+      harnessLabel: 'Claude Code',
       modelEffort: null,
     };
     const view = drawSurface('sessionFacts', facts, kit);
@@ -1673,6 +1854,7 @@ describe('default chat layout surfaces', () => {
       folder: '~/dev/app',
       worktrees: ['app-fix'],
       harness: 'claude',
+      harnessLabel: 'Claude Code',
       modelEffort: null,
     };
     const view = drawSurface('sessionFacts', facts, kit);
@@ -1683,6 +1865,27 @@ describe('default chat layout surfaces', () => {
     expect(
       asFake(view.element).children.map((child, i) => child === before[i]),
     ).toEqual([true, true, true]);
+  });
+
+  it('sessionFacts_Default_LabelOnlyUpdate_RedrawsTheHarnessTag', () => {
+    const { kit } = fakeSurfaceKit();
+    const facts: SessionFactsInput = {
+      repo: 'app',
+      branch: 'main',
+      folder: '~/dev/app',
+      worktrees: [],
+      harness: 'claude',
+      harnessLabel: 'claude',
+      modelEffort: null,
+    };
+    const view = drawSurface('sessionFacts', facts, kit);
+
+    view.update?.({ ...facts, harnessLabel: 'Claude Code' });
+
+    const [, , tags] = asFake(view.element).children;
+    expect(
+      tags.children.map((tag) => `${tag.dataset.part}:${tag.textContent}`),
+    ).toEqual(['tag:neutral:Claude Code']);
   });
 
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOneAndTheRemoveHintWhenNotRemovable', () => {

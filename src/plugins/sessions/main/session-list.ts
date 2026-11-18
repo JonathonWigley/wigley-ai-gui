@@ -50,6 +50,9 @@ export interface SessionListDeps {
   // The sessionIds of the rows a side bar section claims; a closed selected
   // row never passes the selection to one of them.
   claimed(): readonly string[];
+  // The label the harness `harness` shows as; when no adapter registered it,
+  // `harnessLabel`'s stand-in label, else its id.
+  harnessLabel(harness: string): string;
 }
 
 // The session list and its rows. `tools` lists every contributed tool in
@@ -57,10 +60,15 @@ export interface SessionListDeps {
 // one disposed, once each.
 export interface SessionList extends Omit<
   SessionsMainExports,
-  'holdConnects' | 'activate' | 'offlineEnv' | 'replayCalls'
+  'holdConnects' | 'activate' | 'offlineEnv' | 'replayCalls' | 'addHookHandler'
 > {
   // `SessionsMainExports.activate`; true when it wrote the rows or the selection.
   activate(sessionId: string): boolean;
+  // The live session `info` names, looked up in `connect`'s order: the owned
+  // session `info.rowId` names under `connect`'s join rule, else the owned
+  // session holding `info.sessionId`, else the first connected one holding it;
+  // null when none does. Connects and changes nothing.
+  sessionOf(info: SessionInfo): AgentSession | null;
   tools(): ToolDefinition[];
   // The live contributions' offline answers merged by tool name, in
   // contribution order.
@@ -103,8 +111,8 @@ interface Contribution {
 interface SessionEntry {
   session: AgentSession;
   // Set at connect: the `label` override, else the
-  // project folder's last segment, else `Codex session` for a Codex session or
-  // `session`.
+  // project folder's last segment, else `<harness label> session` for a
+  // session that names its harness, or `session`.
   group: string;
   // Set at connect; 1 for the first of its group,
   // which reads without a number.
@@ -145,14 +153,20 @@ export const RESELECT_WINDOW_MS = 30_000;
 export const KEPT_SESSION_MS = 30_000;
 
 const NO_FOLDER_LABEL = 'session';
-const CODEX_NO_FOLDER_LABEL = 'Codex session';
 
-function groupOf(info: SessionInfo): string {
+// A session with no folder groups as `<harness label> session`, or `session`
+// when it names no harness.
+function groupOf(
+  info: SessionInfo,
+  harnessLabel: (harness: string) => string,
+): string {
   if (info.label !== undefined) {
     return info.label;
   }
   const noFolderLabel =
-    info.harness === 'codex' ? CODEX_NO_FOLDER_LABEL : NO_FOLDER_LABEL;
+    info.harness === null
+      ? NO_FOLDER_LABEL
+      : `${harnessLabel(info.harness)} ${NO_FOLDER_LABEL}`;
   return info.projectDir === null
     ? noFolderLabel
     : path.basename(info.projectDir) || noFolderLabel;
@@ -268,10 +282,11 @@ function unknownToolError(entry: SessionEntry, name: string): Error {
 // connected session has no row until `mark` or `activate` adds it at the end,
 // and `release` closes that row again; an owned session gets its row at open,
 // under the `rowId` it was opened with, else a new id, selected unless opened
-// with `select` false or with an `owner`, is joined by each relay carrying
-// its host id without a row of its own, a newer relay taking the join from an
-// older one, moves to a new host id by its `setHostSessionId()`, which retires
-// the old id and its relay, and ends only by its `end()`, or once
+// with `select` false or with an `owner`, is joined by each relay naming its
+// row id (under the join rule `connect` states) or carrying its host id,
+// without a row of its own, a newer relay taking the join from an older one,
+// takes its first host id or moves to a new one by its `setHostSessionId()`,
+// a move retiring the old id and its relay, and ends only by its `end()`, or once
 // KEPT_SESSION_MS passed after its `keep()` with no `open` naming its row id
 // to adopt it. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
@@ -531,7 +546,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     id: string = deps.randomHex(),
   ): SessionEntry => {
     const session: AgentSession = { id, info };
-    const group = groupOf(info);
+    const group = groupOf(info, deps.harnessLabel);
     const namedProject = namedProjectOf(info.projectDir);
     const entry: SessionEntry = {
       session,
@@ -560,6 +575,20 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     [...entries.values()].filter(
       (entry) => entry.session.info.sessionId === hostId,
     );
+
+  // The owned entry `info.rowId` names, while it has no host id, `info` has
+  // none, or the two are equal; a row id naming a connected entry, or none,
+  // finds nothing.
+  const rowJoinEntry = (info: SessionInfo): SessionEntry | undefined => {
+    const hostId = info.sessionId;
+    const rowEntry = info.rowId === null ? undefined : entries.get(info.rowId);
+    const rowHostId = rowEntry?.session.info.sessionId ?? null;
+    const isRowJoin =
+      rowEntry !== undefined &&
+      rowEntry.owned &&
+      (rowHostId === null || hostId === null || hostId === rowHostId);
+    return isRowJoin ? rowEntry : undefined;
+  };
 
   // Ends the contribution's tool session in every live entry, each whatever
   // another's `end` throws, and frees its tool names.
@@ -634,7 +663,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   // Changes `sessionId` inside the session's one info object, so every holder
-  // of it sees the new id. The relay joined under the old id loses its join.
+  // of it sees the new id. The relay joined under an old id loses its join; a
+  // first host id, set on a session opened with none, retires nothing and keeps
+  // the join.
   const setHostSessionId = (entry: SessionEntry, newHostId: string) => {
     const appId = entry.session.id;
     if (!entries.has(appId)) {
@@ -736,10 +767,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
 
   // The kept session's new owner takes it as it is: its row, written again
   // when the user closed it meanwhile, and selected unless `select` is false
-  // or the row has an owner.
+  // or the row has an owner. A null `hostId` keeps the session's own host id.
   const adopt = (
     entry: SessionEntry,
-    hostId: string,
+    hostId: string | null,
     select: boolean,
   ): OwnedSession => {
     const appId = entry.session.id;
@@ -747,7 +778,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       deps.timers.clear(entry.keptTimer);
       entry.keptTimer = null;
     }
-    if (entry.session.info.sessionId !== hostId) {
+    if (hostId !== null && entry.session.info.sessionId !== hostId) {
       setHostSessionId(entry, hostId);
     }
     if (rows.get(appId) === undefined) {
@@ -766,15 +797,17 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // hello on the new socket before the old one closes. The handle's `end`
   // only clears the join, and only while this handle still holds it; its
   // calls are refused once the session moves off the host id it joined under,
-  // a move during a call's guard wait included. Host fields the hello carries
-  // replace the session's in its one info object, as `setHostSessionId`
-  // changes its id; a hello with none leaves them.
+  // a move during a call's guard wait included. A relay joining a session with
+  // no host id yet joins under the hello's `info.sessionId`, else under the
+  // session's first host id; its calls run while the session has none. Host
+  // fields the hello carries replace the session's in its one info object, as
+  // `setHostSessionId` changes its id; a hello with none leaves them.
   const join = (entry: SessionEntry, info: SessionInfo): ConnectedSession => {
     const appId = entry.session.id;
     if (info.host !== undefined) {
       entry.session.info.host = info.host;
     }
-    const joinedHostId = entry.session.info.sessionId;
+    let joinedHostId = entry.session.info.sessionId ?? info.sessionId;
     const handle = Symbol(appId);
     const isTakingOver = entry.joinedBy !== null;
     entry.joinedBy = handle;
@@ -788,6 +821,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       call: (name, args, context) =>
         routeCall(entry, name, args, context, false, () => {
           const hostId = entry.session.info.sessionId;
+          if (hostId === null) {
+            return null;
+          }
+          joinedHostId ??= hostId;
           if (hostId === joinedHostId) {
             return null;
           }
@@ -866,6 +903,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     connect(info): ConnectedSession {
       const hostId = info.sessionId;
+      const rowEntry = rowJoinEntry(info);
+      if (rowEntry !== undefined) {
+        return join(rowEntry, info);
+      }
       const ownedEntry =
         hostId === null
           ? undefined
@@ -899,15 +940,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     open(info, options): OwnedSession {
       const hostId = info.sessionId;
-      if (hostId === null) {
-        throw new Error('open needs a host session id');
-      }
       const rowId = options?.rowId;
       const held = rowId === undefined ? undefined : entries.get(rowId);
       const kept = held?.keptTimer === null ? undefined : held;
-      const isHostHeld = entriesHolding(hostId).some(
-        (holder) => holder !== kept,
-      );
+      const isHostHeld =
+        hostId !== null &&
+        entriesHolding(hostId).some((holder) => holder !== kept);
       if (isHostHeld) {
         throw new Error(`Host session ${hostId} is already open`);
       }
@@ -1040,6 +1078,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     label(sessionId) {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : labelOf(entry);
+    },
+    project(sessionId) {
+      return entries.get(sessionId)?.project ?? null;
+    },
+    sessionOf(info) {
+      const holders =
+        info.sessionId === null ? [] : entriesHolding(info.sessionId);
+      const entry =
+        rowJoinEntry(info) ??
+        holders.find((holder) => holder.owned) ??
+        holders[0];
+      return entry?.session ?? null;
     },
     setTitle,
     titles(sessionId) {

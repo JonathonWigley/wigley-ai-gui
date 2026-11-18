@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
-import { isActivityInTranscript } from './chat-layouts';
+import { isActivityInTranscript, pickEntry } from './chat-layouts';
+
+const builder = () => ({ element: {} as HTMLElement });
 
 describe('chat layouts', () => {
   it.each([
@@ -33,6 +35,27 @@ describe('chat layouts', () => {
       ]);
 
       expect(isActivityInTranscript({ layouts, user })).toBe(expected);
+    },
+  );
+
+  it.each([
+    {
+      case: 'names it',
+      mine: { entries: { 'fake:card': builder } },
+      expected: 'mine',
+    },
+    { case: 'leaves it out', mine: { entries: {} }, expected: 'default' },
+  ] as { case: string; mine: ChatLayout; expected: string }[])(
+    'pickEntry_HarnessKindTheUserNames_PicksTheUserLayout ($case)',
+    ({ mine, expected }) => {
+      const layouts = new Map<string, ChatLayout>([
+        ['default', defaultLayout],
+        ['mine', mine],
+      ]);
+
+      expect(pickEntry({ layouts, user: 'mine' }, 'fake:card').name).toBe(
+        expected,
+      );
     },
   );
 });

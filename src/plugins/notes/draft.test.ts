@@ -104,9 +104,18 @@ describe('parseDraft', () => {
     expect(parseDraft(textWith({ nextImageId: 5 }))).toBeNull();
   });
 
-  it('parseDraft_UnknownHarness_Null', () => {
-    const session = { ...FULL.session, harness: 'gemini' };
-    expect(parseDraft(textWith({ session }))).toBeNull();
+  it('parseDraft_AnyHarnessId_Parses', () => {
+    const draft: NoteDraft = {
+      ...FULL,
+      session: {
+        sessionId: 'row-1',
+        harness: 'gemini',
+        hostSessionId: 'host-1',
+        projectDir: '/r',
+      },
+    };
+
+    expect(parseDraft(JSON.stringify(draft))).toEqual(draft);
   });
 });
 

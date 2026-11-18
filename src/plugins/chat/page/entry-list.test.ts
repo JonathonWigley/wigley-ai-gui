@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
-import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
+import {
+  type ChatEntry,
+  type HarnessEntryKind,
+  MAIN_AGENT_ID,
+} from '../../../contracts/agent';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { CommandId } from '../../../contracts/commands';
 import { element } from '../../../shared/page/dom';
@@ -13,11 +17,13 @@ import {
   installFakeDom,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { QueuedMessage } from '../contract';
+import type { ChatEntryRenderer, QueuedMessage } from '../contract';
+import { frameAgentMessage } from '../agent-frame';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ActivityInput,
+  AnyEntryKind,
   ChatKit,
   ChatLayout,
   EntryInput,
@@ -27,6 +33,7 @@ import type {
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { blockIndexOfStop, entryIdOfStop } from './entry-focus';
+import { createEntryRenderers } from './entry-renderers';
 import {
   createEntryList,
   type EntryList,
@@ -39,9 +46,9 @@ import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-stat
 
 type AnyBuilder = (
   parent: HTMLElement,
-  input: EntryInput<EntryKind>,
+  input: EntryInput<AnyEntryKind>,
   kit: ChatKit,
-) => EntryView;
+) => EntryView<AnyEntryKind>;
 
 const KINDS: EntryKind[] = [
   'user',
@@ -55,22 +62,38 @@ const KINDS: EntryKind[] = [
   'compaction',
 ];
 
-// Draws `div.fancy` for every kind, with the builders in `overrides` in
-// place of it; a kind `overrides` sets to undefined is left out.
+// Draws `div.fancy` for every known kind, with the builders in `overrides` in
+// place of it; a kind `overrides` sets to undefined is left out. A harness
+// kind in `overrides` is copied over.
 function fancyLayout(
-  overrides: Partial<Record<EntryKind, AnyBuilder | undefined>>,
+  overrides: Partial<Record<AnyEntryKind, AnyBuilder | undefined>>,
 ): ChatLayout {
   const drawsFancy: AnyBuilder = (parent, _input, kit) => ({
     element: kit.el(parent, 'div', 'fancy'),
   });
-  const entries = Object.fromEntries(
-    KINDS.filter(
-      (kind) =>
-        !Object.hasOwn(overrides, kind) || overrides[kind] !== undefined,
-    ).map((kind) => [kind, overrides[kind] ?? drawsFancy]),
-  );
+  const harnessKinds = Object.keys(overrides).filter((kind) =>
+    kind.includes(':'),
+  ) as HarnessEntryKind[];
+  const known = KINDS.filter(
+    (kind) => !Object.hasOwn(overrides, kind) || overrides[kind] !== undefined,
+  ).map((kind): [string, AnyBuilder | undefined] => [
+    kind,
+    overrides[kind] ?? drawsFancy,
+  ]);
+  const entries = Object.fromEntries([
+    ...known,
+    ...harnessKinds.map((kind): [string, AnyBuilder | undefined] => [
+      kind,
+      overrides[kind],
+    ]),
+  ]);
   return { entries };
 }
+
+// Draws `div.plugin`.
+const drawsPlugin: AnyBuilder = (parent, _input, kit) => ({
+  element: kit.el(parent, 'div', 'plugin'),
+});
 
 // Names a key hint and draws a card through the kit, then throws.
 const anchorsThenThrows: AnyBuilder = (parent, _input, kit) => {
@@ -99,12 +122,18 @@ const tool = (id: string): Extract<ChatEntry, { kind: 'tool' }> => ({
   result: null,
   raw: [],
 });
-const notice = (id: string): ChatEntry => ({
+const notice = (id: string, tone: 'info' | 'error' = 'info'): ChatEntry => ({
   kind: 'notice',
   id,
   at: 1000,
   text: 'hi',
-  tone: 'info',
+  tone,
+  raw: [],
+});
+const harness = (kind: HarnessEntryKind, id: string): ChatEntry => ({
+  kind,
+  id,
+  at: 1000,
   raw: [],
 });
 const assistant = (text: string, agentId = MAIN_AGENT_ID): ChatEntry => ({
@@ -122,7 +151,9 @@ interface Row {
   // `live default`: the fancy builders over the bundled default, shown as
   // `default`.
   shown: 'fancy' | 'default' | 'live default';
-  fancy?: Partial<Record<EntryKind, AnyBuilder | undefined>>;
+  fancy?: Partial<Record<AnyEntryKind, AnyBuilder | undefined>>;
+  // Added to the list's entry renderers, in order, before the puts.
+  renderers?: ChatEntryRenderer[];
   // The kind whose default builder throws.
   breakDefault?: EntryKind;
   // Put in order; an entry whose id was put before redraws its slot.
@@ -234,6 +265,140 @@ const rows: Row[] = [
     toasts: [],
     disposedAnchors: [],
   },
+  {
+    name: 'harness kind under default draws with raw',
+    shown: 'default',
+    puts: [harness('fake:card', 'h1')],
+    slots: [['chat-entry chat-raw@default']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer draws a harness kind',
+    shown: 'default',
+    renderers: [{ kind: 'fake:card', build: drawsPlugin }],
+    puts: [harness('fake:card', 'h1')],
+    slots: [['plugin@entry renderer']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'user layout names the kind over a renderer',
+    shown: 'fancy',
+    fancy: {
+      'fake:card': (parent, _input, kit) => ({
+        element: kit.el(parent, 'div', 'fancy'),
+      }),
+    },
+    renderers: [{ kind: 'fake:card', build: drawsPlugin }],
+    puts: [harness('fake:card', 'h1')],
+    slots: [['fancy@fancy']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer matches one notice',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'notice',
+        match: (input) => input.kind === 'notice' && input.tone === 'error',
+        build: drawsPlugin,
+      },
+    ],
+    puts: [notice('n1'), notice('n2', 'error')],
+    slots: [
+      ['chat-entry chat-notice chat-notice-info@default'],
+      ['plugin@entry renderer'],
+    ],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer match turns true on an update',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'notice',
+        match: (input) => input.kind === 'notice' && input.tone === 'error',
+        build: drawsPlugin,
+      },
+    ],
+    puts: [notice('n1'), notice('n1', 'error')],
+    slots: [['plugin@entry renderer']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer match turns false on an update',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'notice',
+        match: (input) => input.kind === 'notice' && input.tone === 'error',
+        build: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'plugin'),
+          update: () => undefined,
+        }),
+      },
+    ],
+    puts: [notice('n1', 'error'), notice('n1')],
+    slots: [['chat-entry chat-notice chat-notice-info@default']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    // The third put finds the slot drawing with default after the second's
+    // update threw; a `match` run then would log its throw.
+    name: 'slot drawing with default runs no renderer match',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'fake:card',
+        match: (input) => {
+          if (input.raw.length === 2) {
+            throw new Error('match ran');
+          }
+          return true;
+        },
+        build: updateThrows,
+      },
+    ],
+    puts: [
+      harness('fake:card', 'h1'),
+      { ...harness('fake:card', 'h1'), raw: ['second'] },
+      { ...harness('fake:card', 'h1'), raw: ['second', 'third'] },
+    ],
+    slots: [['chat-entry chat-raw@default']],
+    logs: [
+      'layout entry renderer fake:card entry update failed: broken update',
+    ],
+    toasts: ['Chat entry renderer: fake:card entries drawn with default'],
+    disposedAnchors: [],
+  },
+  {
+    name: 'renderer throws',
+    shown: 'default',
+    renderers: [
+      {
+        kind: 'fake:card',
+        build: () => {
+          throw new Error('boom');
+        },
+      },
+    ],
+    puts: [harness('fake:card', 'h1'), harness('fake:card', 'h2')],
+    slots: [['chat-entry chat-raw@default'], ['chat-entry chat-raw@default']],
+    logs: ['layout entry renderer fake:card entry failed: boom'],
+    toasts: ['Chat entry renderer: fake:card entries drawn with default'],
+    disposedAnchors: [],
+  },
 ];
 
 const timed = (entry: ChatEntry, time: number): ChatEntry => ({
@@ -338,9 +503,10 @@ function fakeTimers() {
   return { timers, armed, fireAll };
 }
 
-// A list over `shown`, its layouts, logs, toasts, disposed anchors, timers, a
-// clock whose `time` the test sets, the ids each pending row click pulled back,
-// and the counts of `placeChanged` and `focusChanged` calls.
+// A list over `shown`, its layouts, entry renderers, logs, toasts, disposed
+// anchors, timers, a clock whose `time` the test sets, the ids each pending
+// row click pulled back, and the counts of `placeChanged` and `focusChanged`
+// calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
@@ -353,12 +519,14 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   const log = (message: string) => logs.push(message);
   const layouts = createChatLayouts(log);
   layouts.set(shown);
+  const renderers = createEntryRenderers(log);
   const { timers, armed, fireAll } = fakeTimers();
   const clock = { time: 1000, now: () => clock.time };
   const placeChanges = { count: 0 };
   const focusChanges = { count: 0 };
   const list = createEntryList({
     layouts,
+    renderers,
     toastedKinds: new Set(),
     kit: {
       markdown: {
@@ -418,6 +586,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     fireAll,
     clock,
     layouts,
+    renderers,
     placeChanges,
     focusChanges,
     put,
@@ -537,7 +706,10 @@ describe('entry list', () => {
         user: 'default',
       },
     }[row.shown];
-    const { list, logs, toasts, disposed, put } = setUpList(shown);
+    const { list, logs, toasts, disposed, put, renderers } = setUpList(shown);
+    for (const renderer of row.renderers ?? []) {
+      renderers.add(renderer);
+    }
 
     for (const entry of row.puts) {
       put(entry);
@@ -1774,6 +1946,63 @@ describe('slots and focus', () => {
   });
 
   it.each([
+    {
+      case: 'a framed entry',
+      entry: userText('u1', frameAgentMessage('Planner', 'go')),
+      from: 'Planner',
+      text: 'go',
+    },
+    {
+      case: 'a plain entry',
+      entry: userText('u1', 'go'),
+      from: null,
+      text: 'go',
+    },
+    {
+      case: 'a framed queued message',
+      queued: { ...queued('q1'), text: frameAgentMessage('Planner', 'go') },
+      from: 'Planner',
+      text: 'go',
+    },
+    {
+      case: 'a plain queued message',
+      queued: { ...queued('q1'), text: 'go' },
+      from: null,
+      text: 'go',
+    },
+  ])(
+    "a framed message's input carries the sender and the body ($case)",
+    (row) => {
+      const seen: [string | null, string][] = [];
+      const shown = withUser<ChatLayout>(
+        defaultLayout,
+        {
+          entries: {
+            user(parent, input, kit) {
+              seen.push([input.from, input.text]);
+              return { element: kit.el(parent, 'div', 'recorded') };
+            },
+          },
+          queuedMessage(parent, input, kit) {
+            seen.push([input.from, input.text]);
+            return { element: kit.el(parent, 'div', 'recorded') };
+          },
+        },
+        'recording',
+      );
+      const { list, put } = setUpList(shown);
+
+      if (row.entry !== undefined) {
+        put(row.entry);
+      } else {
+        list.setQueued([row.queued]);
+      }
+
+      expect(seen).toEqual([[row.from, row.text]]);
+    },
+  );
+
+  it.each([
     { case: 'following', scrollsUp: false, scrollTop: 500 },
     { case: 'scrolled up', scrollsUp: true, scrollTop: 250 },
   ])(
@@ -2418,11 +2647,27 @@ describe('block stops', () => {
       source: null,
     },
     {
+      case: 'a framed message gives the second block without its frame line',
+      puts: [userText('u', frameAgentMessage('Planner', 'one\n\ntwo'))],
+      act: (list) => {
+        list.first();
+        list.move(1);
+      },
+      source: { text: 'two', blockCount: 1 },
+    },
+    {
       case: 'a pending row gives its message',
       puts: [userText('u', 'ask')],
       queued: [queued('q1')],
       act: () => undefined,
       source: { text: 'text of q1', blockCount: 1 },
+    },
+    {
+      case: 'a pending framed row gives its message without its frame line',
+      puts: [userText('u', 'ask')],
+      queued: [{ ...queued('q1'), text: frameAgentMessage('Planner', 'ask') }],
+      act: () => undefined,
+      source: { text: 'ask', blockCount: 1 },
     },
     {
       case: 'a permission card gives nothing, and leaves a range its parts',
