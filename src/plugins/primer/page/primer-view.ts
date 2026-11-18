@@ -28,6 +28,14 @@ import {
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import {
+  type ChromeStrip,
+  chromeStrip,
+  disposeStrip,
+  type DrawnStrip,
+  markNoTargets,
+  showStrip,
+} from '../../../shared/page/layout-host/chrome-strip';
+import {
   type DrawnPart,
   drawPart,
   type PartPick,
@@ -240,21 +248,15 @@ interface ColumnParts {
   body: HTMLElement;
 }
 
-// What a chrome strip's draw returns: its root, and the row pairs a column
-// head drew (empty for the other strips).
-interface DrawnStrip {
-  element: HTMLElement;
-  rowSteps: HTMLElement[];
-}
-
-// One chrome strip of a primer view: the slot it draws into, built once; the
-// part it draws; its last draw and the input that draw was for.
-interface ShownStrip<Input extends object> {
-  slot: HTMLElement;
+// One chrome strip of a primer view: the part it draws, and `draw`, which
+// draws it into its slot with a pick. A column head's draw keeps its row pairs
+// as its `noTargets`.
+interface ShownStrip<Input extends object> extends ChromeStrip<
+  Input,
+  DrawnPrimerPart<DrawnStrip>
+> {
   part: PartOf;
   draw(input: Input, pick: PartPick<PrimerLayout>): DrawnPrimerPart<DrawnStrip>;
-  drawn: DrawnPrimerPart<DrawnStrip> | null;
-  input: Input | null;
 }
 
 // A primer view's chrome strips, one per strip part.
@@ -796,7 +798,7 @@ function createPrimerFormView(
       items.drawn?.dispose();
       reviewPart?.dispose();
       for (const strip of Object.values(strips)) {
-        strip.drawn?.dispose();
+        disposeStrip(strip);
       }
       inner.dispose();
       outer.dispose();
@@ -839,14 +841,14 @@ function shownStrip<B, Input extends object>(
     rollback: RollbackDeps,
   ) => DrawnStrip,
 ): ShownStrip<Input> {
-  const slot = element('div', slotClass);
+  const strip = chromeStrip<Input, DrawnPrimerPart<DrawnStrip>>(slotClass);
   return {
-    slot,
+    ...strip,
     part,
     draw(input, pick) {
       const drawn = drawPart({
         owner: 'primer',
-        parent: slot,
+        parent: strip.slot,
         pick,
         defaultLayout,
         part,
@@ -857,8 +859,6 @@ function shownStrip<B, Input extends object>(
       });
       return { built: drawn.built, pick, dispose: drawn.dispose };
     },
-    drawn: null,
-    input: null,
   };
 }
 
@@ -872,7 +872,7 @@ function createStrips(deps: PartDeps, statusLine: HTMLElement): PrimerStrips {
     partName: string,
   ): DrawnStrip => ({
     element: paneElement(parent, built, partName),
-    rowSteps: [],
+    noTargets: [],
   });
   return {
     tasksHead: shownStrip(
@@ -888,7 +888,7 @@ function createStrips(deps: PartDeps, statusLine: HTMLElement): PrimerStrips {
           'tasksHead',
         );
         head.placeLeftOut(element);
-        return { element, rowSteps: head.rowSteps };
+        return { element, noTargets: head.rowSteps };
       },
     ),
     itemsHead: shownStrip(
@@ -904,7 +904,7 @@ function createStrips(deps: PartDeps, statusLine: HTMLElement): PrimerStrips {
           'itemsHead',
         );
         head.placeLeftOut(element);
-        return { element, rowSteps: head.rowSteps };
+        return { element, noTargets: head.rowSteps };
       },
     ),
     tasksFoot: shownStrip(
@@ -967,49 +967,24 @@ function updateStrips(
   updateStrip(strips.tasksFoot, { problems }, layouts);
   updateStrip(strips.cardEdge, { row: cardRow(primer).kind }, layouts);
   updateStrip(strips.reviewFooter, { problems }, layouts);
-  markRowSteps(strips.tasksHead, tasksRows < 2);
-  markRowSteps(strips.itemsHead, itemsRows < 2);
+  markNoTargets(strips.tasksHead, tasksRows < 2);
+  markNoTargets(strips.itemsHead, itemsRows < 2);
 }
 
 // Draws the strip again when it has no draw, its pick changed or a field of
-// its input changed: the last draw disposed, its slot emptied, then drawn.
+// its input changed.
 function updateStrip<Input extends object>(
   strip: ShownStrip<Input>,
   input: Input,
   layouts: ShownLayouts<PrimerLayout>,
 ): void {
   const pick = pickPart(layouts, strip.part);
-  const isCurrent =
-    isSamePick(strip.drawn?.pick, pick) && isSameInput(strip.input, input);
-  if (isCurrent) {
-    return;
-  }
-  strip.drawn?.dispose();
-  strip.slot.replaceChildren();
-  strip.drawn = strip.draw(input, pick);
-  strip.input = input;
-}
-
-// Whether every field of `next` equals that field of `drawn`.
-function isSameInput<Input extends object>(
-  drawn: Input | null,
-  next: Input,
-): boolean {
-  if (drawn === null) {
-    return false;
-  }
-  return (Object.keys(next) as (keyof Input)[]).every(
-    (field) => drawn[field] === next[field],
+  showStrip(
+    strip,
+    input,
+    (next) => strip.draw(next, pick),
+    !isSamePick(strip.drawn?.pick, pick),
   );
-}
-
-function markRowSteps(
-  strip: Pick<ShownStrip<object>, 'drawn'>,
-  isNoTarget: boolean,
-): void {
-  for (const rowStep of strip.drawn?.built.rowSteps ?? []) {
-    rowStep.classList.toggle('is-no-target', isNoTarget);
-  }
 }
 
 // The save state the tasks column header shows: `Sending…` while the primer

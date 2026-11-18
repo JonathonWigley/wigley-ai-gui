@@ -12,6 +12,7 @@ import {
   type MarkdownMount,
 } from '../../../../shared/page/markdown-mount';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
+import type { DrawnStrip } from '../../../../shared/page/layout-host/chrome-strip';
 import {
   drawPart,
   type DrawnPart,
@@ -131,13 +132,6 @@ export interface ReviewPane {
   update(round: RoundState, isNewlyShown: boolean): void;
 }
 
-// A drawn chrome strip and the edges its kit drew, for the app's
-// `is-no-target`.
-export interface DrawnChrome {
-  element: HTMLElement;
-  edges: HTMLElement[];
-}
-
 type Updater = (round: RoundState) => void;
 
 // The round's rail, drawn into `parent` by drawPart with the picked layout's
@@ -234,7 +228,7 @@ export function drawRailHead(
   input: RailHeadInput,
   saveStatus: HTMLElement,
   deps: PaneDeps,
-): DrawnPart<DrawnChrome> {
+): DrawnPart<DrawnStrip> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -257,7 +251,7 @@ export function drawRailHead(
         'railHead',
       );
       slot.placeIfLeftOut(element, 'end');
-      return { element, edges };
+      return { element, noTargets: edges };
     },
     log: deps.log,
     partName: 'railHead',
@@ -265,13 +259,13 @@ export function drawRailHead(
 }
 
 // The rail's foot strip, drawn into `parent` as drawRailHead draws the head,
-// with the layout's `railFoot`; its `edges` is always empty.
+// with the layout's `railFoot`; its `noTargets` is always empty.
 export function drawRailFoot(
   pick: LayoutPick,
   parent: HTMLElement,
   input: RailFootInput,
   deps: PaneDeps,
-): DrawnPart<DrawnChrome> {
+): DrawnPart<DrawnStrip> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -285,7 +279,7 @@ export function drawRailFoot(
         (railFoot(stripParent, input, kit) as LayoutPane | undefined)?.element,
         'railFoot',
       );
-      return { element, edges: [] };
+      return { element, noTargets: [] };
     },
     log: deps.log,
     partName: 'railFoot',
@@ -299,7 +293,7 @@ export function drawPager(
   parent: HTMLElement,
   input: PagerInput,
   deps: PaneDeps,
-): DrawnPart<DrawnChrome> {
+): DrawnPart<DrawnStrip> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -319,7 +313,7 @@ export function drawPager(
         (pager(stripParent, input, kit) as LayoutPane | undefined)?.element,
         'pager',
       );
-      return { element, edges };
+      return { element, noTargets: edges };
     },
     log: deps.log,
     partName: 'pager',

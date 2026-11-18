@@ -19,7 +19,7 @@ import { createFormsContributions } from './contributions';
 import type { RoundState } from './round-model';
 import {
   asFake,
-  type FakeElement,
+  FakeElement,
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
@@ -30,7 +30,7 @@ import { pageKindTable } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import type { FormsAction, FormsState } from './form-state';
 import { createRoundView } from './round-view';
-import { railHeadInput } from './view-model';
+import { railHeadInput, roundSaveLabel } from './view-model';
 import {
   apply,
   finding,
@@ -194,15 +194,16 @@ function drawnParts(view: { element: HTMLElement }): FakeElement[] {
 }
 
 // Whether `after` holds the very elements of `before`, in order, once
-// `before`'s `redrawn` and `after`'s `drawn` are left out.
+// `before`'s `redrawn` and `after`'s `drawn`, with the parts inside each, are
+// left out.
 function keepsEveryOtherPart(
   before: FakeElement[],
   redrawn: FakeElement,
   after: FakeElement[],
   drawn: FakeElement,
 ): boolean {
-  const kept = before.filter((part) => part !== redrawn);
-  const now = after.filter((part) => part !== drawn);
+  const kept = before.filter((part) => !redrawn.contains(part));
+  const now = after.filter((part) => !drawn.contains(part));
   return kept.length === now.length && kept.every((part, i) => part === now[i]);
 }
 
@@ -376,6 +377,7 @@ describe('round view setLayouts', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   // A finding card of its own, `f-card`, leaving every box to the app.
@@ -515,6 +517,179 @@ describe('round view setLayouts', () => {
     expect(boxes.editorOf(roundNote)).toBe(editor);
     expect(created).toHaveLength(builtBefore);
     expect(main.scrollTop).toBe(80);
+  });
+
+  it.each<{ case: string; first: Layout; next: Layout; drawsHead: boolean }>([
+    {
+      case: 'none to some',
+      first: {},
+      next: { head: (parent, _round, kit) => kit.el(parent, 'div', 'r-head') },
+      drawsHead: true,
+    },
+    {
+      case: 'some to none',
+      first: { head: (parent, _round, kit) => kit.el(parent, 'div', 'r-head') },
+      next: {},
+      drawsHead: false,
+    },
+  ])(
+    'setLayouts_HeadPickChanged_PlacesTheHeadBeforeThePager on $case',
+    ({ first, next, drawsHead }) => {
+      const { view, round, main, layouts } = roundViewSetup(
+        bareLayout,
+        undefined,
+        roundNamingR(),
+        undefined,
+        [['r', first]],
+      );
+
+      view.setLayouts(reloaded(layouts, 'r', next), round);
+
+      const heads = findAll(asFake(view.element), 'layout-head');
+      expect(heads).toHaveLength(drawsHead ? 1 : 0);
+      if (drawsHead) {
+        const [head] = heads;
+        const [pagerSlot] = findAll(main, 'item-pager-slot');
+        expect(head.dataset.layout).toBe('r');
+        expect(findAll(head, 'r-head')).toHaveLength(1);
+        expect(main.children.indexOf(head) + 1).toBe(
+          main.children.indexOf(pagerSlot),
+        );
+      }
+    },
+  );
+
+  it('setLayouts_NoticeCardChanged_RedrawsOnlyTheNoticesPane', () => {
+    const noticeLayout = (): Layout => ({
+      cards: {
+        notice: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'n-card'),
+        }),
+      },
+    });
+    const { view, round, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      presentedRound('r1', {
+        questions: [question('Alpha')],
+        notices: [{ ...notice('Heads up'), layout: 'n' }],
+      }),
+      undefined,
+      [['n', noticeLayout()]],
+    );
+    const [noticesBefore] = findAll(asFake(view.element), 'notices');
+    const before = drawnParts(view);
+
+    view.setLayouts(reloaded(layouts, 'n', noticeLayout()), round);
+
+    const [noticesAfter] = findAll(asFake(view.element), 'notices');
+    expect(noticesAfter).not.toBe(noticesBefore);
+    expect(
+      keepsEveryOtherPart(
+        before,
+        noticesBefore,
+        drawnParts(view),
+        noticesAfter,
+      ),
+    ).toBe(true);
+  });
+
+  it('setLayouts_RailHeadChanged_PlacesTheSaveStatusAndDisposesTheOldAnchors', () => {
+    const railHeadLayout = (): Layout => ({ railHead: defaultLayout.railHead });
+    const { view, round, anchors, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      roundNamingR(),
+      undefined,
+      [['r', railHeadLayout()]],
+    );
+
+    view.setLayouts(reloaded(layouts, 'r', railHeadLayout()), round);
+
+    const [slot] = findAll(asFake(view.element), 'rail-head-slot');
+    expect(slot.children).toHaveLength(1);
+    const statusLines = findAll(asFake(view.element), 'ui-status-line');
+    expect(statusLines).toHaveLength(1);
+    expect(slot.children[0].contains(statusLines[0])).toBe(true);
+    expect(findAll(statusLines[0], 'ui-status-line-save')[0].textContent).toBe(
+      roundSaveLabel(round),
+    );
+    const disposedByCommand = (command: string) =>
+      anchors
+        .filter((anchor) => anchor.command === command)
+        .map((anchor) => anchor.isDisposed);
+    expect(disposedByCommand('forms.prevUnanswered')).toEqual([true, false]);
+    expect(disposedByCommand('forms.nextUnanswered')).toEqual([true, false]);
+  });
+
+  it.each<{ case: string; layout: () => Layout; box: BoxRef }>([
+    {
+      case: 'a card',
+      layout: () => ({
+        cards: {
+          question: (parent, _input, kit) => ({
+            element: kit.card(parent, 'r-card'),
+          }),
+        },
+      }),
+      box: {
+        roundId: 'r1',
+        target: { field: 'notes', item: { kind: 'question', index: 1 } },
+      },
+    },
+    {
+      case: 'the review pane',
+      layout: () => ({
+        review: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'r-review'),
+        }),
+      }),
+      box: { roundId: 'r1', target: { field: 'note' } },
+    },
+  ])(
+    'setLayouts_RedrawsThePartHoldingTheFocusedBox_FocusesItAgainInsertingWithItsEditor in $case',
+    ({ layout, box }) => {
+      const { boxes, created, view, round, layouts } = roundViewSetup(
+        bareLayout,
+        undefined,
+        roundNamingR(),
+        undefined,
+        [['r', layout()]],
+      );
+      boxes.focus(box);
+      const [focused] = created.filter((made) => made.focusOptions.length > 0);
+      focused.events.modeChanged({ mode: 'insert', subMode: '' });
+      const editor = boxes.editorOf(box);
+      const focusesBefore = focused.focusOptions.length;
+
+      view.setLayouts(reloaded(layouts, 'r', layout()), round);
+
+      expect(boxes.active()).toEqual(box);
+      expect(boxes.editorOf(box)).toBe(editor);
+      expect(focused.focusOptions.slice(focusesBefore)).toEqual([
+        { insert: true },
+      ]);
+    },
+  );
+
+  it('setLayouts_RailChanged_SelectsAndShowsTheFocusedItemsEntry', () => {
+    const railLayout = (): Layout => ({ rail: defaultLayout.rail });
+    const { view, round, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      roundNamingR(),
+      (shown) => ({ ...shown, focus: 1 }),
+      [['r', railLayout()]],
+    );
+    const shownEntries = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+    view.setLayouts(reloaded(layouts, 'r', railLayout()), round);
+
+    const entries = findAll(asFake(view.element), 'rail-entry');
+    expect(
+      entries.map((entry) => entry.classList.contains('is-selected')),
+    ).toEqual([false, true]);
+    expect(shownEntries.mock.contexts).toEqual([entries[1]]);
   });
 });
 

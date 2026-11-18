@@ -28,6 +28,14 @@ import type {
   BaseKitDeps,
   KitCommands,
 } from '../../../shared/page/layout-host/base-kit';
+import {
+  type ChromeStrip,
+  chromeStrip,
+  disposeStrip,
+  type DrawnStrip,
+  markNoTargets,
+  showStrip,
+} from '../../../shared/page/layout-host/chrome-strip';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import {
   createStatusLine,
@@ -58,7 +66,6 @@ import {
   drawPager,
   drawRailFoot,
   drawRailHead,
-  type DrawnChrome,
   type PaneDeps,
   type RailPane,
   type ReviewPane,
@@ -151,10 +158,10 @@ interface RoundParts {
   redrawLayoutHead(): void;
   // The round's save status, which the rail head's kit places.
   statusLine: StatusLine;
-  railHead: ChromeStrip<RailHeadInput>;
+  railHead: RoundStrip<RailHeadInput>;
   rail: RoundPart<RailPane>;
-  railFoot: ChromeStrip<RailFootInput>;
-  pager: ChromeStrip<PagerInput>;
+  railFoot: RoundStrip<RailFootInput>;
+  pager: RoundStrip<PagerInput>;
   itemsPane: HTMLElement;
   // By rail position: each stop's card, and the notices stop's pane.
   itemCards: RoundPart<ItemCard>[];
@@ -165,8 +172,8 @@ interface RoundParts {
   // again into its slot; the head draws again in its slot. The notices pane
   // draws again when a notice card's pick changed too.
   redraw(round: RoundState, picks: RoundPicks, changes: RoundPickChanges): void;
-  // Disposes each part's last draw, then every anchor and markdown mount the
-  // build recorded, the head's included.
+  // Disposes each card's, pane's and strip's last draw, which disposes the
+  // anchors and markdown mounts it made, then the head's.
   dispose(): void;
 }
 
@@ -177,13 +184,13 @@ interface RoundPart<T extends { element: HTMLElement }> {
   draw(round: RoundState): Pick<DrawnPart<T>, 'built' | 'dispose'>;
 }
 
-// One chrome strip of a build: the slot it draws into, its last draw and the
-// input that draw took; `draw` draws it into the slot.
-interface ChromeStrip<Input extends object> {
-  slot: HTMLElement;
-  draw(input: Input): DrawnPart<DrawnChrome>;
-  drawn: DrawnPart<DrawnChrome> | null;
-  input: Input | null;
+// One chrome strip of a build; `draw` draws it into its slot with the
+// build's current pick.
+interface RoundStrip<Input extends object> extends ChromeStrip<
+  Input,
+  DrawnPart<DrawnStrip>
+> {
+  draw(input: Input): DrawnPart<DrawnStrip>;
 }
 
 // One open round's DOM, built with its editors: a split with the rail head,
@@ -337,33 +344,21 @@ export function createRoundView(
   return view;
 }
 
-// The anchor keys a build hands its parts.
-type AnchorKeys = Pick<KeyHints, 'keysFor' | 'anchor'>;
-
-// `keys`, keeping each anchor it names in `anchors`.
-function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
-  return { ...keys, anchor: recordingAnchor(keys.anchor, anchors) };
-}
-
 // Builds the split's start pane, the rail head's slot, the rail pane and the
 // rail foot's slot, and the round's main column in its end pane: the layout's
 // head, the item pager's slot, the items pane of cards and the notices pane at
 // the notices stop's rail position, and the review pane, each card, pane and
 // strip drawn by its pick in `picks`, and by its pick in the picks `redraw`
-// takes when drawn again. Every card and pane anchors its keys through one
-// recording `keys` and records its markdown mounts beside those anchors, and
-// its draw keeps them too, so a part drawn again alone disposes its own; the
-// head records into its own, and each strip's draw keeps its own, so
-// `dispose` reaches them all.
+// takes when drawn again. Each card's, pane's and strip's draw owns the
+// anchors and markdown mounts it makes, so a part drawn again disposes only
+// its own; the head records into its own list, so `dispose` reaches them all.
 function buildRoundParts(
   split: Split,
   round: RoundState,
   picks: RoundPicks,
   deps: RoundViewDeps,
 ): RoundParts {
-  const anchors: Disposable[] = [];
   const headAnchors: Disposable[] = [];
-  const keys = recordingKeys(deps.keys, anchors);
   const items = railItems(round);
   // The picks each part draws with; `redraw` sets the next.
   let shown = picks;
@@ -371,36 +366,29 @@ function buildRoundParts(
     deps.boxes.place(parent, { roundId: round.formId, target }, text);
   const releaseBox = (target: TextTarget) =>
     deps.boxes.release({ roundId: round.formId, target });
+  // Each part's draw records what it makes, so the build records nothing.
   const paneDeps: PaneDeps = {
     markdown: deps.markdown,
     platform: deps.platform,
     log: deps.log,
-    keys,
+    keys: deps.keys,
     run: deps.run,
     placeBox,
     releaseBox,
     commands: deps.commands,
     contributions: deps.contributions,
     state: deps.state,
-    recordAnchor: (anchor) => anchors.push(anchor),
-    recordMount: (mount) => anchors.push(mount),
-  };
-  // Each strip's draw owns the anchors and mounts it makes, so a redraw
-  // releases the last draw's.
-  const chromeDeps: PaneDeps = {
-    ...paneDeps,
-    keys: deps.keys,
     recordAnchor: () => {},
     recordMount: () => {},
   };
   const statusLine = createStatusLine();
-  const railHead = chromeStrip('rail-head-slot', (slot, input: RailHeadInput) =>
+  const railHead = roundStrip('rail-head-slot', (slot, input: RailHeadInput) =>
     drawRailHead(
       shown.panes.railHead,
       slot,
       input,
       statusLine.element,
-      chromeDeps,
+      paneDeps,
     ),
   );
   split.start.append(railHead.slot);
@@ -408,8 +396,8 @@ function buildRoundParts(
   const rail = roundPart(round, (current) =>
     buildRailPane(shown.panes.rail, split.start, current, paneDeps),
   );
-  const railFoot = chromeStrip('rail-foot-slot', (slot, input: RailFootInput) =>
-    drawRailFoot(shown.panes.railFoot, slot, input, chromeDeps),
+  const railFoot = roundStrip('rail-foot-slot', (slot, input: RailFootInput) =>
+    drawRailFoot(shown.panes.railFoot, slot, input, paneDeps),
   );
   split.start.append(railFoot.slot);
   updateStrip(railFoot, railFootInput(round));
@@ -419,7 +407,10 @@ function buildRoundParts(
     ...baseKitDepsFor(
       {
         ...deps,
-        keys: recordingKeys(deps.keys, headAnchors),
+        keys: {
+          ...deps.keys,
+          anchor: recordingAnchor(deps.keys.anchor, headAnchors),
+        },
         recordAnchor: (anchor) => headAnchors.push(anchor),
         recordMount: (mount) => headAnchors.push(mount),
       },
@@ -434,8 +425,8 @@ function buildRoundParts(
     headDeps,
     headAnchors,
   );
-  const pager = chromeStrip('item-pager-slot', (slot, input: PagerInput) =>
-    drawPager(shown.panes.pager, slot, input, chromeDeps),
+  const pager = roundStrip('item-pager-slot', (slot, input: PagerInput) =>
+    drawPager(shown.panes.pager, slot, input, paneDeps),
   );
   main.append(pager.slot);
   updateStrip(pager, pagerInput(round));
@@ -461,14 +452,14 @@ function buildRoundParts(
     markdown: deps.markdown,
     placeBox,
     releaseBox,
-    keys,
+    keys: deps.keys,
     platform: deps.platform,
     log: deps.log,
     commands: deps.commands,
     contributions: deps.contributions,
     state: deps.state,
-    recordAnchor: (anchor) => anchors.push(anchor),
-    recordMount: (mount) => anchors.push(mount),
+    recordAnchor: () => {},
+    recordMount: () => {},
   };
   const itemCards = items.map((item, position) =>
     roundPart(
@@ -503,9 +494,9 @@ function buildRoundParts(
   const paneRedraws: Record<LayoutPane, (current: RoundState) => void> = {
     head: redrawHead,
     rail: (current) => redrawPart(rail, current),
-    railHead: (current) => drawStrip(railHead, railHeadInput(current)),
-    railFoot: (current) => drawStrip(railFoot, railFootInput(current)),
-    pager: (current) => drawStrip(pager, pagerInput(current)),
+    railHead: (current) => updateStrip(railHead, railHeadInput(current), true),
+    railFoot: (current) => updateStrip(railFoot, railFootInput(current), true),
+    pager: (current) => updateStrip(pager, pagerInput(current), true),
     review: (current) => redrawPart(review, current),
     notices: (current) => {
       if (noticesPane !== undefined) {
@@ -558,11 +549,10 @@ function buildRoundParts(
         card.drawn.dispose();
       }
       review.drawn.dispose();
-      disposeAnchors(anchors);
       disposeAnchors(headAnchors);
-      railHead.drawn?.dispose();
-      railFoot.drawn?.dispose();
-      pager.drawn?.dispose();
+      disposeStrip(railHead);
+      disposeStrip(railFoot);
+      disposeStrip(pager);
     },
   };
 }
@@ -589,17 +579,12 @@ function redrawPart<T extends { element: HTMLElement }>(
 }
 
 // A strip whose slot is `div.<slotClass>`, drawn by `draw`, with no draw yet.
-function chromeStrip<Input extends object>(
+function roundStrip<Input extends object>(
   slotClass: string,
-  draw: (slot: HTMLElement, input: Input) => DrawnPart<DrawnChrome>,
-): ChromeStrip<Input> {
-  const slot = element('div', slotClass);
-  return {
-    slot,
-    draw: (input) => draw(slot, input),
-    drawn: null,
-    input: null,
-  };
+  draw: (slot: HTMLElement, input: Input) => DrawnPart<DrawnStrip>,
+): RoundStrip<Input> {
+  const strip = chromeStrip<Input, DrawnPart<DrawnStrip>>(slotClass);
+  return { ...strip, draw: (input) => draw(strip.slot, input) };
 }
 
 // Draws each chrome strip again whose input changed, then keeps the save
@@ -614,30 +599,18 @@ function updateChrome(parts: RoundParts, round: RoundState) {
     save: roundSaveLabel(round),
     saveState: roundSaveState(round) ?? '',
   });
-  markEdges(parts.railHead, !hasOtherUnanswered(round));
-  markEdges(parts.pager, railItems(round).length < 2);
+  markNoTargets(parts.railHead, !hasOtherUnanswered(round));
+  markNoTargets(parts.pager, railItems(round).length < 2);
 }
 
-// Draws the strip again when it has no draw or a field of its input changed.
+// Draws the strip again when it has no draw, a field of its input changed or
+// `force` is set (its pick changed).
 function updateStrip<Input extends object>(
-  strip: ChromeStrip<Input>,
+  strip: RoundStrip<Input>,
   input: Input,
+  force = false,
 ) {
-  if (!isSameInput(strip.input, input)) {
-    drawStrip(strip, input);
-  }
-}
-
-// Draws the strip again from `input`: its last draw disposed, its slot
-// emptied, then drawn.
-function drawStrip<Input extends object>(
-  strip: ChromeStrip<Input>,
-  input: Input,
-) {
-  strip.drawn?.dispose();
-  strip.slot.replaceChildren();
-  strip.drawn = strip.draw(input);
-  strip.input = input;
+  showStrip(strip, input, strip.draw, force);
 }
 
 // Whether `changes` names any part.
@@ -645,26 +618,6 @@ function hasChanges(changes: RoundPickChanges): boolean {
   return (
     changes.cards.length > 0 || changes.noticeCards || changes.panes.length > 0
   );
-}
-
-// Whether every field of `next` equals that field of `drawn`.
-function isSameInput<Input extends object>(
-  drawn: Input | null,
-  next: Input,
-): boolean {
-  if (drawn === null) {
-    return false;
-  }
-  return (Object.keys(next) as (keyof Input)[]).every(
-    (field) => drawn[field] === next[field],
-  );
-}
-
-// Toggles `is-no-target` on each edge the strip's last draw drew.
-function markEdges(strip: ChromeStrip<object>, isNoTarget: boolean) {
-  for (const edge of strip.drawn?.built.edges ?? []) {
-    edge.classList.toggle('is-no-target', isNoTarget);
-  }
 }
 
 // The head kit's deps over the forms view's keys, and the log.
