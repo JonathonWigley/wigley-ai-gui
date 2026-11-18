@@ -349,7 +349,7 @@ export interface SessionsMainExports {
   // through the guards, results dropped; then deletes the calls file. Resolves to the count routed; 0 with no file.
   // A main-agent-only call replays only once the row's tool callers are noted, which chat's `adopt` resolving
   // guarantees; before that it is skipped as a subagent's. Rejects when the claim or the read of the calls file fails
-  // for any reason but a missing file, the file then left on disk for a later replay.
+  // for any reason but a missing file; the file is then left on disk, and nothing replays it again.
   replayCalls(hostSessionId: string): Promise<number>;
 }
 

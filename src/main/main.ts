@@ -678,12 +678,17 @@ function pluginCodeFolder(homeDir: string): string {
     : path.join(homeDir, 'plugin-code');
 }
 
+// The session host's folder inside `parent`.
+function sessionHostFolderIn(parent: string): string {
+  return path.join(parent, 'session-host');
+}
+
 // The session host's folder: the app instance's, or a drive run's, own user data;
 // in the self-test, whose user data every self-test shares, its temp home.
 function sessionHostFolder(homeDir: string): string {
-  return runMode === 'selfTest'
-    ? path.join(homeDir, 'session-host')
-    : path.join(app.getPath('userData'), 'session-host');
+  return sessionHostFolderIn(
+    runMode === 'selfTest' ? homeDir : app.getPath('userData'),
+  );
 }
 
 // The live app instance's user data folder, which the stable session host's folder sits in.
@@ -1618,7 +1623,7 @@ function startSessionHostAtLogin() {
   // The live run's `sessionHostFolder`, whose user data is `liveUserDataFolder()`.
   const launch = sessionHostLaunch(
     sessionHostLocation(
-      path.join(liveUserDataFolder(), 'session-host'),
+      sessionHostFolderIn(liveUserDataFolder()),
       os.homedir(),
     ),
   );

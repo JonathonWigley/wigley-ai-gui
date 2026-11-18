@@ -165,7 +165,8 @@ schedule is read, since it would never fire.
   that task, task-file change or plugin reload.
 - **A re-plan reads the host's runs first.** A re-plan for an instruction change or a task-file change reads the
   host's runs, once the first read has finished, so an occurrence the host fired is in history and is never prepared
-  again under a new spawn id. A prepared launch is reused only while the task's content is unchanged: its reuse key
+  again under a new spawn id. Re-plans coalesce: one asked for while a read is queued joins it, and any number asked
+  for while a read is under way cost one more plan after it, with no second read. A prepared launch is reused only while the task's content is unchanged: its reuse key
   holds the task's whole JSON, so any edit, a hand edit that keeps `updatedAt` included, prepares it again.
 - **Catch-up.** The planner looks back from now to the latest of the task's `updatedAt`, its latest history
   occurrence and, in a start whose `history.json` could not be read, that start's time. When that window holds a missed occurrence, it queues one run, at once, for the latest; older missed
@@ -254,12 +255,15 @@ inside `sessions.holdConnects`, so a run's relay hello waits for its row. For ea
    the harness still declares and logs the rest. A rejection (the app stopping, or a row chat
    cannot open) is a failed entry, `not opened: <reason>`, except while the app stops, when the run waits for the
    next start. A run's history entry names the row id `adopt` resolved to. A run read through
-   `listRuns` is finished at adoption when its process is gone or its row reads idle after the attach replayed the
-   pipe log; a run heard through `runStarted` is finished at adoption only when its process is gone, since its first
-   turn has just begun.
+   `listRuns` is finished at adoption when its process is gone or its attached row reads idle after the attach
+   replayed the pipe log; a run heard through `runStarted` is finished at adoption only when its process is gone,
+   since its first turn has just begun. A run on an unheld row (chat's resting row, whose process may still run in
+   another host) stays running until its row is re-attached and its turn ends, the row is removed, or the app
+   restarts.
 3. `sessions.replayCalls(hostSessionId)` replays the calls the relay logged while the app was closed, routing a
-   leftover `.replaying` file from an earlier replay first. A replay that rejects is logged and the run is still
-   forgotten, with the calls file left on disk.
+   leftover `.replaying` file from an earlier replay first. A replay that rejects is logged with the run's host
+   session id and the run is still forgotten: its calls file stays on disk under `offline-calls/` and is never
+   replayed again.
 4. `sessionHost.forgetRuns([id])` drops the run from the host's runs record, the history entry is written, and the
    plugin re-plans and sends `setPending`.
 

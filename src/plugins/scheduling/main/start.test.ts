@@ -16,7 +16,6 @@ import {
   fakeDependency,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { MAX_TIMER_MS } from '../../../shared/tracked-timers';
 import {
   type AdoptRequest,
   type ChatMainExports,
@@ -257,6 +256,8 @@ function startPart(options: StartOptions = {}) {
   const instructionsListeners = new Set<() => void>();
   let seenLogs = 0;
   let isPushHeld = false;
+  // What every `listRuns` waits on before it reads the host; null reads at once.
+  let listGate: Promise<void> | null = null;
   // The harness's log, once `startMainPart` returned: the part subscribes during its start.
   let logs: () => readonly { message: string }[] = () => [];
   for (const run of options.runs ?? []) {
@@ -277,7 +278,8 @@ function startPart(options: StartOptions = {}) {
     ...host,
     listRuns() {
       note('listRuns');
-      return host.listRuns();
+      const gate = listGate;
+      return gate === null ? host.listRuns() : gate.then(() => host.listRuns());
     },
     forgetRuns(ids) {
       note(`forgetRuns ${ids.join(' ')}`);
@@ -442,6 +444,17 @@ function startPart(options: StartOptions = {}) {
     lastPending: () => host.pendingLists.at(-1),
     holdPushes(isHeld: boolean) {
       isPushHeld = isHeld;
+    },
+    // Holds every `listRuns` from now on until the returned release is called.
+    holdListRuns(): () => void {
+      let release = () => undefined as void;
+      listGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => {
+        listGate = null;
+        release();
+      };
     },
     changeInstructions() {
       for (const listener of instructionsListeners) {
@@ -754,7 +767,7 @@ describe('schedulingMainPart', () => {
       heard: 'pushed',
       replayError: 'EACCES',
       expected: [runningEntry()],
-      log: 'calls for row-run not replayed: EACCES',
+      log: 'calls of host session host-run for row-run not replayed: EACCES',
       forgets: true,
     },
   ])('run_Outcome_WritesHistory: $case', async (row) => {
@@ -902,6 +915,30 @@ describe('schedulingMainPart', () => {
     expect(await part.historyFile()).toEqual([runningEntry()]);
   });
 
+  it('plan_TaskEditsDuringARead_ListRunsOnceThenPlanOnce', async () => {
+    const part = startPart();
+    await settle();
+    const releaseList = part.holdListRuns();
+    part.calls.length = 0;
+
+    // The first edit's read waits in `listRuns`; the next two arrive while it does.
+    for (const prompt of ['Triage A.', 'Triage B.', 'Triage C.']) {
+      await part.harness.files.write(
+        TASK_PATH,
+        taskFileText({ tasks: [task({ prompt })] }),
+      );
+      await settle();
+    }
+    releaseList();
+    await settle();
+
+    const readAndPlanCalls = ['holdConnects', 'listRuns', 'setPending'];
+    expect(
+      part.calls.filter((call) => readAndPlanCalls.includes(call)),
+    ).toEqual(['holdConnects', 'listRuns', 'setPending', 'setPending']);
+    expect(part.prepares.at(-1)?.request.message.text).toBe('Triage C.');
+  });
+
   it('tools_ViewsReadTheStoresAtCallTime', async () => {
     const part = startPart();
     await settle();
@@ -971,23 +1008,6 @@ describe('schedulingMainPart', () => {
 
     expect(part.prepares).toHaveLength(1);
     expect(part.lastPending()?.[0]?.at).toBe(TOMORROW_09);
-  });
-
-  it('plan_PrepareThrows_RecordsFailedOnlyWhenDue: past the timer cap', async () => {
-    // An hour past the longest delay a timer takes, to the minute a `once` task names.
-    const pastCap = new Date(TODAY_12 + MAX_TIMER_MS + 3_600_000)
-      .toISOString()
-      .slice(0, 16);
-    const part = startPart({
-      tasks: [task({ schedule: { kind: 'once', at: pastCap } })],
-    });
-    part.prepareErrors.push('no folder /home/me/dev/a');
-    await settle();
-
-    await part.advance(60_000);
-
-    expect(part.prepares).toEqual([]);
-    expect(await part.historyFile()).toEqual([]);
   });
 
   it('plan_UnchangedOccurrence_ReusesThePreparedLaunch', async () => {

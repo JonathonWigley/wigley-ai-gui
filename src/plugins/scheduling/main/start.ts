@@ -151,6 +151,11 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     let nextRuns = new Map<string, number>();
     let prepareTimers: number[] = [];
     let runsRetry: number | null = null;
+    // A `readRunsThenPlan` step is in the chain and has not begun; one has begun and not ended; a re-plan asked for
+    // after the read began, which one plan after it serves.
+    let isReadQueued = false;
+    let isReadGoing = false;
+    let isPlanAfterRead = false;
     let lastWant: boolean | null = null;
     let loginStatus: LoginStartStatus | null = null;
     const handledRuns = new Set<string>();
@@ -510,14 +515,17 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
           finish(entry);
         }
       }
-      // A replay that rejects leaves the calls file on disk.
+      // A replay that rejects leaves the calls file on disk, and nothing replays it again.
+      const { hostSessionId } = record.adopt;
       try {
-        const replayed = await sessions.replayCalls(record.adopt.hostSessionId);
+        const replayed = await sessions.replayCalls(hostSessionId);
         if (replayed > 0) {
           log(`replayed ${replayed} calls for ${rowId}`);
         }
       } catch (error) {
-        log(`calls for ${rowId} not replayed: ${errorText(error)}`);
+        log(
+          `calls of host session ${hostSessionId} for ${rowId} not replayed: ${errorText(error)}`,
+        );
       }
       forget(run);
     };
@@ -531,6 +539,29 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
 
     // Reads the host's runs inside a connect hold and handles each before the plan; retries a read that rejects.
     const readRunsThenPlan = async () => {
+      isReadQueued = false;
+      isReadGoing = true;
+      try {
+        await readRunsInHoldThenPlan();
+      } finally {
+        isReadGoing = false;
+        if (isPlanAfterRead) {
+          isPlanAfterRead = false;
+          serial(plan);
+        }
+      }
+    };
+
+    // Queues a `readRunsThenPlan` unless one is already queued, which then serves this caller too.
+    const queueReadRuns = () => {
+      if (isReadQueued) {
+        return;
+      }
+      isReadQueued = true;
+      serial(readRunsThenPlan);
+    };
+
+    const readRunsInHoldThenPlan = async () => {
       if (runsRetry !== null) {
         timers.clear(runsRetry);
         runsRetry = null;
@@ -550,7 +581,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
           log(`runs not read: ${errorText(error)}`);
           runsRetry = timers.set(() => {
             runsRetry = null;
-            serial(readRunsThenPlan);
+            queueReadRuns();
           }, RUNS_RETRY_MS);
           return;
         }
@@ -582,7 +613,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
 
     serial(loadStores);
     if (fires) {
-      serial(readRunsThenPlan);
+      queueReadRuns();
     }
 
     const saveTask = async (draft: TaskDraft): Promise<string> => {
@@ -662,9 +693,18 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
 
     // A re-plan that prepares a launch again reads the host's runs first, so an occurrence the host fired but the
     // part has not heard is in history and is not queued again under a new spawn id. Before the first read, the read
-    // already queued plans after it.
-    const replanAfterRuns = () => (hasReadRuns ? readRunsThenPlan : plan);
-    taskStore.onChanged(() => serial(replanAfterRuns()));
+    // already queued plans after it. A re-plan joins a read still queued, and a read already going plans once more
+    // after it, however many re-plans arrived meanwhile.
+    const replanAfterRuns = () => {
+      if (!hasReadRuns) {
+        serial(plan);
+      } else if (isReadGoing && !isReadQueued) {
+        isPlanAfterRead = true;
+      } else {
+        queueReadRuns();
+      }
+    };
+    taskStore.onChanged(replanAfterRuns);
     followRows(rowsSlot, {
       added: () => serial(() => undefined),
       removed: (rowId) => serial(() => finishRowRun(rowId)),
@@ -675,21 +715,18 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     );
     chat.restored().then(() => serial(finishRestoredRuns));
     if (fires) {
-      chat.onInstructionsChanged(() => {
-        const replan = replanAfterRuns();
-        serial(() => {
-          kept = new Map();
-          return replan();
-        });
-      });
       subscriptions.push(
+        chat.onInstructionsChanged(() => {
+          kept = new Map();
+          replanAfterRuns();
+        }),
         sessionHost.onRunStarted((run) =>
           serial(async () => {
             await handleRun(run, 'pushed');
             await plan();
           }),
         ),
-        sessionHost.onConnected(() => serial(readRunsThenPlan)),
+        sessionHost.onConnected(queueReadRuns),
       );
     }
 

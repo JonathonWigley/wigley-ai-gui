@@ -229,30 +229,44 @@ describe('scheduling page part', () => {
     ).toHaveLength(1);
   });
 
-  it('nextField with no box focused steps from the cursor row to the next box row', async () => {
-    const page = startSchedulesPage(undefined);
-    page.run('showMode');
-    page.run('newTask');
-    await settle();
-    // The cursor starts on Name; Profile, the third row, is a choice.
-    page.run('fieldDown');
-    page.run('fieldDown');
+  it.each<{ command: 'nextField' | 'previousField'; row: string }>([
+    { command: 'nextField', row: 'Time' },
+    { command: 'previousField', row: 'Project' },
+  ])(
+    '$command with no box focused steps from the cursor row to the nearest box row that way',
+    async ({ command, row }) => {
+      const page = startSchedulesPage(undefined);
+      page.run('showMode');
+      page.run('newTask');
+      await settle();
+      // The cursor starts on Name; Profile, the third row, is a choice.
+      page.run('fieldDown');
+      page.run('fieldDown');
 
-    page.run('nextField');
+      page.run(command);
 
-    expect(sheetOf(page).querySelector('.is-cursor')?.textContent).toContain(
-      'Time',
-    );
-  });
+      expect(sheetOf(page).querySelector('.is-cursor')?.textContent).toContain(
+        row,
+      );
+    },
+  );
 
   it('a part restarted while Schedules mode shows starts with the mode shown', async () => {
-    const page = startSchedulesPage(undefined, undefined, false);
+    const page = startSchedulesPage(
+      schedulingState({ tasks: [taskView('aaaa1111', 'Nightly')] }),
+      undefined,
+      false,
+    );
 
     await page.harness.restart();
 
     expect(page.harness.state.read(coreModeSlot, 'test').get()).toBe(
       'scheduling.main',
     );
+    expect(page.harness.modeContext('scheduling.main')).toEqual({
+      title: 'Schedules',
+      detail: 'Nightly',
+    });
   });
 
   it('a rejected save keeps the editor open with the reason', async () => {

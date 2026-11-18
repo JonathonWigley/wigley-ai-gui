@@ -35,6 +35,7 @@ import type {
   MainServices,
   MainStart,
   Mode,
+  ModeContext,
   ModeHandle,
   PageApi,
   LayoutShow,
@@ -237,6 +238,8 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   isCapturing(): boolean;
   // The live mode added under qualified id `id`; throws when none is live.
   mode(id: string): Mode;
+  // The title bar context the live mode `id`'s handle set last; null before any.
+  modeContext(id: string): ModeContext | null;
   // Sets what every mode handle's `sideBarShown` reads; false until set.
   setSideBarShown(isShown: boolean): void;
   // The base scope `keys.setScope` set last, qualified; `idle` at the start.
@@ -1138,12 +1141,14 @@ function newPageRecord(
   };
 }
 
-// A mode the fake registry holds: its qualified id, the calls it hears, and
-// the mode a part added, null for the harness's own first mode.
+// A mode the fake registry holds: its qualified id, the calls it hears, the
+// mode a part added, null for the harness's own first mode, and the context its
+// handle set last.
 interface FakeLiveMode {
   id: string;
   mode: Pick<Mode, 'shown' | 'hidden'>;
   added: Mode | null;
+  context: ModeContext | null;
 }
 
 // What every page part of one harness shares: the page core's single slots.
@@ -1205,6 +1210,7 @@ function createPageWorld(
         id: 'part-harness.first-mode',
         mode: { shown() {}, hidden() {} },
         added: null,
+        context: null,
       }
     : null;
   const world: PageWorld = {
@@ -1304,7 +1310,7 @@ function fakeModes(
       if (liveModes.some((live) => live.id === id)) {
         throw new Error(`Mode "${id}" is added twice`);
       }
-      const entry: FakeLiveMode = { id, mode, added: mode };
+      const entry: FakeLiveMode = { id, mode, added: mode, context: null };
       liveModes.push(entry);
       const isDisposed = () => !liveModes.includes(entry);
       const handle: ModeHandle = common.register({
@@ -1316,7 +1322,9 @@ function fakeModes(
           revealFakeMode(world, entry);
         },
         isShown: () => world.shownMode === entry,
-        setContext() {},
+        setContext(context) {
+          entry.context = context;
+        },
         toggleSideBar() {
           if (mode.sideBar === undefined && !isDisposed()) {
             throw new Error(`Mode "${id}" has no side bar`);
@@ -1857,6 +1865,13 @@ export function startPagePart<M extends PluginManifest>(
         throw new Error(`part harness: no live mode ${id}`);
       }
       return live;
+    },
+    modeContext(id) {
+      const live = world.liveModes.find((entry) => entry.id === id);
+      if (live === undefined) {
+        throw new Error(`part harness: no live mode ${id}`);
+      }
+      return live.context;
     },
     setSideBarShown(isShown) {
       world.isSideBarShown = isShown;

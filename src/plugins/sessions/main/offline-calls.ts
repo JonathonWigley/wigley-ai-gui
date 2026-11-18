@@ -69,7 +69,8 @@ function parseCallLine(line: string): OfflineCall | string {
 // Routes each replayable call the relay logged in `<folder>/<hostSessionId>.jsonl`,
 // in file order, each awaited before the next, then deletes the file. It first
 // claims the file by renaming it to `<id>.jsonl.replaying`, so a line the relay
-// appends meanwhile starts a new `<id>.jsonl` that a later replay reads. A
+// appends meanwhile starts a new `<id>.jsonl`, read only by a later replay of
+// that id. A
 // claimed file an earlier replay left is routed first and deleted before the
 // claim. A bad line and a route that rejects are logged and skipped; a failed
 // delete of the claimed file is logged. Resolves to the number of calls routed,
