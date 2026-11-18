@@ -1,7 +1,6 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
 import type { KeyedSlotReader } from '../../../contracts/state';
-import type { ChatMainExports } from '../../chat/contract';
 import { editableTitle, type SessionRow } from '../../sessions/contract';
 import { type Participant, type RoomView, sessionThread } from '../contract';
 import type { RoomService } from './room-service';
@@ -17,15 +16,17 @@ export const FIXTURE_THREAD = 'plan-demo';
 const WAIT_TIMEOUT_MS = 5_000;
 const WAIT_POLL_MS = 20;
 
-// `rooms` reads the `chatroom.rooms` value of a room.
+// `launch` starts a session in the project folder with `title` as its first message and resolves to its row id.
+// `rooms` reads the `chatroom.rooms` value of a room. `roomFor` is the room service the posts and the claim go
+// through, asked once the room is known.
 export interface ChatroomFixtureDeps {
   files: Pick<Files, 'makeFolder'>;
   clock: Clock;
   timers: Timers;
-  chat: Pick<ChatMainExports, 'launch'>;
+  launch(title: string): Promise<string>;
   rows: Pick<KeyedSlotReader<SessionRow>, 'get'>;
   rooms: (room: string) => RoomView | undefined;
-  room: Pick<RoomService, 'post' | 'claim'>;
+  roomFor(roomName: string): Pick<RoomService, 'post' | 'claim'>;
 }
 
 // The lead's row first, then the peer's. `questionId` is the peer's question
@@ -38,19 +39,19 @@ export interface ChatroomFixture {
   questionId: number;
 }
 
-// Launches the lead and then the peer in `projectDir`, waits until both rows,
-// their titles and the room's board rows are in, then posts as the two agents
-// through the room service: the lead's heads-up, the peer's question to `you`
+// Launches the lead and then the peer through `launch`, which starts them in
+// `projectDir`, waits until both rows, their titles and the room's board rows
+// are in, then posts as the two agents through the room `roomFor` names: the lead's heads-up, the peer's question to `you`
 // and the lead's result in `plan-demo`, the lead's progress in its session
 // thread, and the lead's claim on `src/**`. Throws on any refused post or claim.
 export async function seedChatroomFixture(
   deps: ChatroomFixtureDeps,
   projectDir: string,
 ): Promise<ChatroomFixture> {
-  const { files, chat, rows, rooms, room } = deps;
+  const { files, rows, rooms } = deps;
   await files.makeFolder(projectDir);
-  const leadId = await launch(chat, projectDir, LEAD_TITLE);
-  const peerId = await launch(chat, projectDir, PEER_TITLE);
+  const leadId = await deps.launch(LEAD_TITLE);
+  const peerId = await deps.launch(PEER_TITLE);
   const rowIds = [leadId, peerId] as const;
 
   const deadline = deps.clock.now() + WAIT_TIMEOUT_MS;
@@ -92,6 +93,7 @@ export async function seedChatroomFixture(
   if (project === null) {
     throw new Error("the chatroom fixture's rows are in two rooms");
   }
+  const room = deps.roomFor(project);
   const titles = [titleOf(leadId), titleOf(peerId)] as const;
   const lead = agent(leadId, titles[0]);
   const peer = agent(peerId, titles[1]);
@@ -159,18 +161,6 @@ export async function seedChatroomFixture(
   }
 
   return { room: project, rowIds, titles, thread: FIXTURE_THREAD, questionId };
-}
-
-function launch(
-  chat: Pick<ChatMainExports, 'launch'>,
-  projectDir: string,
-  title: string,
-): Promise<string> {
-  return chat.launch({
-    projectDir,
-    profile: 'work',
-    message: { text: title, images: [] },
-  });
 }
 
 function agent(rowId: string, name: string): Participant {

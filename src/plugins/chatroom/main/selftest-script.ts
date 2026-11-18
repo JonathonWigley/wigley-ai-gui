@@ -18,11 +18,13 @@ const SELFTEST_ROOM = SELFTEST_PROJECT_NAME;
 // folder's name with a counter. The badge and activity lines name it.
 const PEER_LABEL = `${SELFTEST_PROJECT_NAME} 2`;
 
-export interface ChatroomSelfTestDeps extends ChatroomFixtureDeps {
+// `fixtureDeps` is the fixture's deps for a project folder.
+export interface ChatroomSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath'>;
   paths: Paths;
   sessions: Pick<SessionsMainExports, 'activate'>;
+  fixtureDeps(projectDir: string): ChatroomFixtureDeps;
 }
 
 const line = (text: string) => `[chatroom] ${text}`;
@@ -135,7 +137,10 @@ export function chatroomSelfTestScript(
       const result = (async () => {
         const home = await files.realPath(homeDir);
         const projectDir = paths.join(home, SELFTEST_PROJECT_NAME);
-        const fixture = await seedChatroomFixture(deps, projectDir);
+        const fixture = await seedChatroomFixture(
+          deps.fixtureDeps(projectDir),
+          projectDir,
+        );
         sessions.activate(fixture.rowIds[1]);
         return fixture;
       })();

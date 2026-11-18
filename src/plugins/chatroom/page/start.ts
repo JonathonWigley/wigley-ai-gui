@@ -34,6 +34,7 @@ import type { ChatroomPart, CompleteLayout, Layout } from '../layouts/layout';
 import { chatroomManifest } from '../manifest';
 import { badgeText, rowActivities, rowUnreadOf } from './chatroom-state';
 import { createChatroomView } from './chatroom-view';
+import { registerDemoSteps } from './demo-steps';
 import { readChatroomLayout } from './layout/read-chatroom-layout';
 
 type ChatroomApi = PageApi<typeof chatroomManifest, ChatroomChannel>;
@@ -58,6 +59,7 @@ interface HeldWrapper {
 // `asks you` activity. Reads the rooms from `chatroom.rooms` and the rows from
 // `sessions.rows`; the open thread goes to `chatroom.place`, and a page load
 // opens it again. Logs each badge's and activity's text when it changes.
+// Registers the Chatroom demo step's page half.
 export const chatroomPagePart: PagePart<typeof chatroomManifest> = {
   manifest: chatroomManifest,
   start(api: ChatroomApi) {
@@ -288,6 +290,8 @@ export const chatroomPagePart: PagePart<typeof chatroomManifest> = {
       }
       view.openRoomThread(row.project, thread);
     };
+
+    registerDemoSteps(services, { commands: api.commands });
 
     return {
       commands: {

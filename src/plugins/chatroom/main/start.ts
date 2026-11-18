@@ -40,9 +40,11 @@ import { createTouchTracker } from './board';
 import { createBoardFeed } from './board-feed';
 import { createChatroomTools } from './chatroom-tools';
 import { startDelivery } from './delivery';
+import { createDemoRooms } from './demo-rooms';
+import { registerDemoSteps } from './demo-steps';
 import { createHookHandlers, WARN_AT_POST } from './hook-handlers';
 import { createJsonlRoomStore } from './jsonl-room-store';
-import { createRoomService } from './room-service';
+import { createRoomService, type RoomService } from './room-service';
 import { buildRoomView } from './room-views';
 import { createRoster } from './roster';
 import {
@@ -72,7 +74,9 @@ export const STANDING_NOTE =
 // entries and its subagents' `dispatch` and `hand-back` entries; and writes
 // each room's view and board to `chatroom.rooms`, rebuilt one at a time per
 // room. Hands the self-test its script and offers a drive run the `seed`
-// fixture.
+// fixture. A demo step's room is a memory room service while it is held: the
+// room's view and the page's channel calls go to it, while the tools, hooks,
+// delivery and agent entries keep the room in plugin data.
 export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
   manifest: chatroomManifest,
   start(api: ChatroomApi) {
@@ -127,39 +131,77 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
     // Row id → its room when last checked.
     const lastRooms = new Map<string, string | null>();
 
-    const rewriteRoom = (roomName: string): void => {
+    // A room's view and its channel calls read the demo step's memory room
+    // while one is held under its name.
+    const demoRooms = createDemoRooms({
+      clock: services.clock,
+      randomHex: services.randomHex,
+      limits: () => {
+        const { bodyCap, postsPerMinute, claimMinutes } = api.settings();
+        return { bodyCap, postsPerMinute, claimMinutes };
+      },
+      participants: (roomName) => roster.participants(roomName),
+      log,
+      rewriteRoom: (roomName) => rewriteRoom(roomName),
+      released: (roomName) => restoreRoom(roomName),
+    });
+    const serviceFor = (roomName: string): RoomService =>
+      demoRooms.serviceFor(roomName) ?? room;
+
+    // Runs `rebuild` on the room's chain, after every earlier rebuild of it.
+    const queueRebuild = (
+      roomName: string,
+      rebuild: () => Promise<void>,
+    ): void => {
       if (isStopped) {
         return;
       }
       const queue = rebuilds.get(roomName) ?? createSerialQueue();
       rebuilds.set(roomName, queue);
-      queue
-        .run(async () => {
-          const [threads, claims, userUnread, messages] = await Promise.all([
-            room.threads(roomName),
-            room.claims(roomName),
-            room.userUnread(roomName),
-            room.messages(roomName, 0),
-          ]);
-          if (isStopped) {
-            return;
-          }
-          roomsSlot.set(
-            roomName,
-            buildRoomView({
-              room: roomName,
-              threads,
-              board: boardFeed.rows(roomName),
-              claims,
-              userUnread,
-              messages,
-            }),
-          );
-        })
-        .catch((error: unknown) => {
-          log(`room view of ${roomName} not written: ${errorText(error)}`);
-        });
+      queue.run(rebuild).catch((error: unknown) => {
+        log(`room view of ${roomName} not written: ${errorText(error)}`);
+      });
     };
+
+    const writeRoomView = async (roomName: string): Promise<void> => {
+      const source = serviceFor(roomName);
+      const [threads, claims, userUnread, messages] = await Promise.all([
+        source.threads(roomName),
+        source.claims(roomName),
+        source.userUnread(roomName),
+        source.messages(roomName, 0),
+      ]);
+      if (isStopped) {
+        return;
+      }
+      roomsSlot.set(
+        roomName,
+        buildRoomView({
+          room: roomName,
+          threads,
+          board: boardFeed.rows(roomName),
+          claims,
+          userUnread,
+          messages,
+        }),
+      );
+    };
+
+    const rewriteRoom = (roomName: string): void =>
+      queueRebuild(roomName, () => writeRoomView(roomName));
+
+    // After a demo hold: the view of the room in plugin data, or no view when
+    // plugin data holds no room of that name.
+    const restoreRoom = (roomName: string): void =>
+      queueRebuild(roomName, async () => {
+        const isHeldAgain = demoRooms.serviceFor(roomName) !== null;
+        const isSaved = (await room.rooms()).includes(roomName);
+        if (isHeldAgain || isSaved) {
+          await writeRoomView(roomName);
+        } else if (!isStopped) {
+          roomsSlot.delete(roomName);
+        }
+      });
 
     const refreshRoom = (roomName: string | null): void => {
       if (roomName !== null && !isStopped) {
@@ -365,12 +407,12 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
       });
 
     api.channel.handle('readThread', async (roomName, thread, afterId) =>
-      (await room.messages(roomName, afterId)).filter(
+      (await serviceFor(roomName).messages(roomName, afterId)).filter(
         (message) => message.thread === thread,
       ),
     );
     api.channel.handle('postAsUser', async (roomName, thread, post) => {
-      const result = await room.postHuman({
+      const result = await serviceFor(roomName).postHuman({
         room: roomName,
         thread,
         kind: post.kind,
@@ -387,28 +429,43 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
         : { ok: false, reason: result.reason };
     });
     api.channel.handle('markUserRead', async (roomName, thread, upToId) => {
-      await room.markUserRead(roomName, thread, upToId);
+      await serviceFor(roomName).markUserRead(roomName, thread, upToId);
       rewriteRoom(roomName);
     });
 
-    const fixtureDeps: ChatroomFixtureDeps = {
+    // The fixture's deps but its launch and its room.
+    const fixtureBase: Omit<ChatroomFixtureDeps, 'launch' | 'roomFor'> = {
       files: services.files,
       clock: services.clock,
       timers: services.timers,
-      chat,
       rows: rowsSlot,
       rooms: (roomName) => roomsSlot.get(roomName),
-      room,
     };
+    // The self-test's and the drive run's fixture: sessions on profile work in
+    // `projectDir`, posting into the room in plugin data.
+    const fixtureDeps = (projectDir: string): ChatroomFixtureDeps => ({
+      ...fixtureBase,
+      launch: (title) =>
+        chat.launch({
+          projectDir,
+          profile: 'work',
+          message: { text: title, images: [] },
+        }),
+      roomFor: () => room,
+    });
     services.selfTest?.run(
       chatroomSelfTestScript({
-        ...fixtureDeps,
         homeDir: services.homeDir,
         files: services.files,
         paths: services.paths,
         sessions,
+        fixtureDeps,
       }),
     );
+    registerDemoSteps(services, {
+      fixtureDeps: fixtureBase,
+      holdRoom: (roomName) => demoRooms.hold(roomName),
+    });
     api.drive?.add('seed', {
       description:
         "Seeds a chatroom in the project folder (default <home>/dev/chatroom-drive): launches two sessions on profile work, titled chatroom lead and chatroom peer, waits for their rows and board rows, then posts as them through the room service: in thread plan-demo the lead's heads-up, the peer's question to you and the lead's result with a commit ref, the lead's progress in its session thread, and the lead's claim on src/**. Throws on a refused post or claim. Returns { room, rowIds, titles, thread, questionId }, the lead first in rowIds and titles.",
@@ -417,7 +474,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
         const projectDir =
           optionalString(argsObject(rawArgs), 'projectDir') ??
           services.paths.join(services.homeDir, ...DRIVE_PROJECT_FOLDER);
-        return seedChatroomFixture(fixtureDeps, projectDir);
+        return seedChatroomFixture(fixtureDeps(projectDir), projectDir);
       },
     });
 

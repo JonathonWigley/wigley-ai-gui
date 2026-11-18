@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { UserMessage } from '../../../contracts/agent';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { Git } from '../../../contracts/git';
 import type { SlotChange } from '../../../contracts/state';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   fakeDependency,
   startMainPart,
@@ -48,6 +50,8 @@ import {
 } from '../contract';
 import { GIT_READ_WINDOW_MS } from './board-feed';
 import { chatInfo, cloneClaim, flow, poolClone } from './board.test-support';
+import { createDemoRooms } from './demo-rooms';
+import { FIXTURE_THREAD } from './selftest-fixture';
 import { chatroomMainPart, STANDING_NOTE } from './start';
 
 const FINISHING_STAGE = 'land';
@@ -123,6 +127,7 @@ function startChatroom(
     hasUpstream: async () => false,
     unpushedPaths: async () => [] as string[],
   };
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const harness = startMainPart(chatroomMainPart, {
     dependencies: [
       fakeDependency(
@@ -175,7 +180,7 @@ function startChatroom(
           }) as unknown as WorkflowMainExports,
       ),
     ],
-    services: { git: git as unknown as Git },
+    services: { git: git as unknown as Git, demoSteps },
     state: options.state,
   });
   const callTool = (
@@ -205,6 +210,7 @@ function startChatroom(
     flows,
     changedByRoot,
     git,
+    demoSteps,
     callTool,
     roomView,
     thread,
@@ -671,5 +677,134 @@ describe('chatroomMainPart', () => {
     await settle();
 
     expect(published).toEqual(['one']);
+  });
+});
+
+describe('chatroom demo step', () => {
+  const DEMO_ROOM = 'demo';
+  const DATA_FOLDER = '/data/chatroom';
+
+  // Each launch opens a titled row in DEMO_ROOM and connects its session.
+  async function enterRoomStep(chatroom: Chatroom) {
+    const { harness, projects, demoSteps } = chatroom;
+    const rows = harness.state.publish(sessionsRowsSlot);
+    const launchSession = async (title: string) => {
+      const rowId = title === 'chatroom lead' ? 'rL' : 'rP';
+      projects[rowId] = DEMO_ROOM;
+      rows.set(
+        rowId,
+        sessionRow(rowId, {
+          project: DEMO_ROOM,
+          projectDir: '/scratch',
+          hostSessionId: `host-${rowId}`,
+          titles: { user: null, agent: null, firstMessage: title },
+        }),
+      );
+      harness.emit('sessions.connected', {
+        id: rowId,
+        info: {
+          sessionId: `host-${rowId}`,
+          projectDir: '/scratch',
+          harness: 'demo',
+          rowId: null,
+        },
+        owned: true,
+      });
+      return rowId;
+    };
+    const step = demoSteps.list().find(({ id }) => id === 'chatroom.room');
+    if (step === undefined) {
+      throw new Error('chatroom registered no chatroom.room step');
+    }
+    const entering = step.enter({
+      scratchDir: '/scratch',
+      launchSession,
+      processEvents: () => {
+        throw new Error('no process events in this test');
+      },
+    });
+    // The fixture polls its waits on the harness's timers.
+    for (let poll = 0; poll < 20; poll += 1) {
+      await settle();
+      harness.advance(20);
+    }
+    return entering;
+  }
+
+  it('keeps the demo room in memory', async () => {
+    const chatroom = startChatroom();
+    const { harness, roomView } = chatroom;
+
+    const stage = await enterRoomStep(chatroom);
+    const answer = (await harness.invoke(
+      'postAsUser',
+      DEMO_ROOM,
+      FIXTURE_THREAD,
+      { kind: 'note', body: 'from the user', to: [], replyTo: null },
+    )) as UserPostResult;
+    if (!answer.ok) {
+      throw new Error(answer.reason);
+    }
+    await harness.invoke('markUserRead', DEMO_ROOM, FIXTURE_THREAD, answer.id);
+    await settle();
+
+    const dataFiles =
+      (await harness.files.stat(DATA_FOLDER)) === null
+        ? []
+        : await harness.files.list(DATA_FOLDER, { recursive: true });
+    expect(dataFiles).toEqual([]);
+    expect(stage.sessions).toEqual({ lead: 'rL', peer: 'rP' });
+    expect(
+      roomView(DEMO_ROOM)?.threads.map(({ thread }) => thread),
+    ).toContain(FIXTURE_THREAD);
+
+    stage.dispose();
+    await settle();
+    expect(roomView(DEMO_ROOM)).toBeUndefined();
+  });
+
+  it('holds one demo room per name', async () => {
+    const released: string[] = [];
+    const lead = {
+      kind: 'agent' as const,
+      rowId: 'rA',
+      agentId: null,
+      mirrorId: null,
+      name: 'Lead',
+    };
+    const demoRooms = createDemoRooms({
+      clock: { now: () => 1_000 },
+      randomHex: () => 'abcd',
+      limits: () => ({ bodyCap: 2_000, postsPerMinute: 60, claimMinutes: 30 }),
+      participants: () => [lead],
+      log: () => undefined,
+      rewriteRoom: () => undefined,
+      released: (roomName) => released.push(roomName),
+    });
+
+    const first = demoRooms.hold('p');
+    const second = demoRooms.hold('p');
+    const posted = await first.post({
+      room: 'p',
+      from: lead,
+      kind: 'note',
+      body: 'held once',
+      to: [],
+      thread: null,
+      refs: [],
+      replyTo: null,
+      answerBy: null,
+      onNoAnswer: null,
+      key: null,
+    });
+
+    expect(second).toBe(first);
+    expect(posted.ok).toBe(true);
+    expect((await second.messages('p', 0)).map(({ body }) => body)).toEqual([
+      'held once',
+    ]);
+    first.dispose();
+    expect(demoRooms.serviceFor('p')).toBeNull();
+    expect(released).toEqual(['p']);
   });
 });

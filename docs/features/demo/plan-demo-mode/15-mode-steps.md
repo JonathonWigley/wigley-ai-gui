@@ -1,6 +1,6 @@
 # 15 — Mode steps: docs, backlog, practice, scheduling, chatroom
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: deep · each plugin holds a sample beside the user's real state and routes its channel, store or room between the two for a step's lifetime (lifecycle, async, saved data)
 Wave: 2 · Depends on: 01 (the demo contract, `services.demoSteps` and `demoSkip`), 02 (02 also lists `src/plugins/scheduling/main/start.ts`)
