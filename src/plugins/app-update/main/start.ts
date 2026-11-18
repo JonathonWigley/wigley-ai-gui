@@ -1,14 +1,16 @@
 import type { AppBuild } from '../../../contracts/app-instance';
 import { coreWindowFocusedSlot } from '../../../contracts/core-state';
 import type { Git } from '../../../contracts/git';
-import type {
-  ChannelShape,
-  MainApi,
-  MainPart,
-} from '../../../contracts/plugin';
-import { type AppUpdateStatus, appUpdateStatusSlot } from '../contract';
+import type { MainApi, MainPart } from '../../../contracts/plugin';
+import type { SlotWriter } from '../../../contracts/state';
+import {
+  type AppUpdateChannel,
+  type AppUpdateStatus,
+  appUpdateStatusSlot,
+} from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { appUpdateManifest } from '../manifest';
+import { demoStatus, registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { installCommandFor } from './install-command';
 import {
@@ -20,7 +22,7 @@ import { appUpdateSelfTestScript } from './selftest-script';
 import { FIXTURE_INSTALLED_COMMIT, fixtureGit } from './update-fixture';
 import { createUpdater, statusText, type Updater } from './updater';
 
-type AppUpdateApi = MainApi<typeof appUpdateManifest, ChannelShape>;
+type AppUpdateApi = MainApi<typeof appUpdateManifest, AppUpdateChannel>;
 
 // Registers the layouts and writes `app-update.status`. With a build baked in
 // (`services.appBuild`) and an install command for the OS, it checks origin's
@@ -31,6 +33,9 @@ type AppUpdateApi = MainApi<typeof appUpdateManifest, ChannelShape>;
 // nothing and the status stays `none`. A seed, from a drive run or the
 // self-test's script, swaps in a fixture build and clone and an install that
 // starts no program. Its stop leaves a running install alone and holds no quit.
+// While the demo step is entered, the slot shows its sample status and every
+// updater writes the real status beside it, shown again at leave and at stop;
+// `install` then starts nothing and shows `installing` on the sample.
 export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
   manifest: appUpdateManifest,
   start(api: AppUpdateApi) {
@@ -41,6 +46,24 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     if (status.get() === undefined) {
       status.set({ kind: 'none' });
     }
+    // The updater's status, which the slot shows unless the demo step's
+    // sample `demo` is set.
+    let real: AppUpdateStatus = status.get() ?? { kind: 'none' };
+    let demo: AppUpdateStatus | null = null;
+    const updaterStatus: SlotWriter<AppUpdateStatus> = {
+      get: () => real,
+      set(next) {
+        real = next;
+        if (demo === null) {
+          status.set(next);
+        }
+      },
+      dispose() {},
+    };
+    const setDemo = (next: AppUpdateStatus | null) => {
+      demo = next;
+      status.set(next ?? real);
+    };
     let updater: Updater | null = null;
 
     const startUpdater = (
@@ -58,7 +81,7 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
           fromCommit: build.commit,
           startProgram,
         }),
-        status,
+        status: updaterStatus,
         timers: services.timers,
         clock: services.clock,
         log,
@@ -111,7 +134,7 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     const currentStatus = (): AppUpdateStatus =>
       status.get() ?? { kind: 'none' };
     const seed = async (): Promise<AppUpdateStatus> => {
-      status.set({ kind: 'none' });
+      updaterStatus.set({ kind: 'none' });
       startUpdater(
         { commit: FIXTURE_INSTALLED_COMMIT, cloneDir: services.homeDir },
         fixtureGit(),
@@ -126,9 +149,22 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     }
     services.selfTest?.run(appUpdateSelfTestScript({ seed }));
 
+    registerDemoSteps(services, { setDemo });
+    api.channel.handle('showDemoStatus', (kind) => {
+      if (demo === null) {
+        throw new Error('no demo step entered');
+      }
+      setDemo(demoStatus(kind));
+    });
+
     return {
       commands: {
         install: async () => {
+          if (demo !== null) {
+            log('install skipped: demo');
+            setDemo({ kind: 'installing' });
+            return;
+          }
           if (updater === null) {
             log('install skipped: no build baked in');
             return;
@@ -143,7 +179,13 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
           await updater.check();
         },
       },
-      dispose: () => updater?.dispose(),
+      dispose: () => {
+        // The next start reads the slot to resume an install.
+        if (demo !== null) {
+          status.set(real);
+        }
+        updater?.dispose();
+      },
     };
   },
 };

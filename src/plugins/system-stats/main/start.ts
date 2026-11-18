@@ -5,11 +5,13 @@ import { chatSessionSlot } from '../../chat/contract';
 import { sessionsRowsSlot } from '../../sessions/contract';
 import {
   type StatsFixtureVariant,
+  type StatsSnapshot,
   type SystemStatsChannel,
   systemStatsSnapshotSlot,
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { systemStatsManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { sessionProcesses } from './grouping';
 import { createStatsPoller, type StatsPoller } from './poller';
@@ -30,6 +32,8 @@ type SystemStatsApi = MainApi<typeof systemStatsManifest, SystemStatsChannel>;
 // reading. Each show starts an empty history, so a sparkline never joins readings across a hide. A rejected sample
 // keeps the last snapshot with its error set, logged once per distinct text. A seed, from a drive run or the
 // self-test's script, writes a fixed snapshot and stops sampling for the run. Hands the self-test the panel script.
+// While the demo step is entered, its busy fixture holds the slot and no reading reaches it; leaving draws real
+// readings again from the next two samples, or puts a seed's snapshot back.
 export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
   manifest: systemStatsManifest,
   start(api: SystemStatsApi) {
@@ -47,8 +51,14 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
     // The last rejection's text, until a good sample.
     let lastFailure: string | null = null;
     let seedStopLogged = false;
+    // The demo step's snapshot while it is entered, and the slot's value when it entered.
+    let demo: StatsSnapshot | null = null;
+    let beforeDemo: StatsSnapshot | null = null;
 
     const sampled = (sample: SystemSample, at: number) => {
+      if (demo !== null) {
+        return;
+      }
       lastFailure = null;
       if (prev === null) {
         prev = { sample, at };
@@ -75,6 +85,9 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       snapshot.set(built.snapshot);
     };
     const failed = (error: unknown) => {
+      if (demo !== null) {
+        return;
+      }
       const text = errorText(error);
       if (text !== lastFailure) {
         services.log(`sample failed: ${text}`);
@@ -108,7 +121,9 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       shown = next;
       if (next) {
         history = emptyHistory(historyCapacity(refreshSeconds()));
-        snapshot.set(null);
+        if (demo === null) {
+          snapshot.set(null);
+        }
         services.log('sampling started');
       } else {
         prev = null;
@@ -117,6 +132,31 @@ export const systemStatsMainPart: MainPart<typeof systemStatsManifest> = {
       poller.setShown(next);
     });
     api.onSettingsChanged(() => poller?.reschedule());
+
+    registerDemoSteps(services, {
+      setDemo(next) {
+        if (next !== null) {
+          if (demo === null) {
+            beforeDemo = snapshot.get() ?? null;
+          }
+          demo = next;
+          snapshot.set(next);
+          return;
+        }
+        if (demo === null) {
+          return;
+        }
+        demo = null;
+        if (poller === null) {
+          snapshot.set(beforeDemo);
+        } else {
+          prev = null;
+          history = emptyHistory(historyCapacity(refreshSeconds()));
+          snapshot.set(null);
+        }
+        beforeDemo = null;
+      },
+    });
 
     const seed = (variant: StatsFixtureVariant) => {
       poller?.dispose();

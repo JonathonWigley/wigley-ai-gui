@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { OsName } from '../../../contracts/platform';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { fakePlatform } from '../../../shared/platform.test-support';
 import {
   fakeDependency,
@@ -17,6 +19,7 @@ import {
 } from '../../sessions/contract';
 import { unityPoolSnapshotSlot } from '../contract';
 import { unityPoolManifest } from '../manifest';
+import { DEMO_POOL } from './demo-steps';
 import {
   poolStateText,
   SELFTEST_POOL,
@@ -25,8 +28,10 @@ import {
 import { unityPoolMainPart } from './start';
 
 // The fake chat records each provider `addPoolProvider` registers, counts each registration's dispose, and records
-// the self-test pool's folders as the provider gave them at each `changed()`.
+// the self-test pool's folders as the provider gave them at each `changed()`. `enterDemoStep` enters the registered
+// `unity-pool.pool` step, its demo session `row-demo` in `/scratch`.
 function startOnHarness(os: OsName = 'macos') {
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const providers: PoolProvider[] = [];
   const foldersAtChanges: (readonly string[])[] = [];
   let disposed = 0;
@@ -45,7 +50,7 @@ function startOnHarness(os: OsName = 'macos') {
   };
   const harness = startMainPart(unityPoolMainPart, {
     settings: { ...unityPoolManifest.settings, scriptPath: '' },
-    services: { platform: fakePlatform(os) },
+    services: { platform: fakePlatform(os), demoSteps },
     dependencies: [
       fakeDependency(chatMainKey, () => chat as unknown as ChatMainExports),
       fakeDependency(
@@ -54,12 +59,44 @@ function startOnHarness(os: OsName = 'macos') {
       ),
     ],
   });
+  const enterDemoStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'unity-pool.pool');
+    if (step === undefined) {
+      throw new Error('unity-pool registered no unity-pool.pool step');
+    }
+    return step.enter({
+      scratchDir: '/scratch',
+      launchSession: async () => 'row-demo',
+      processEvents: () => {
+        throw new Error('no process events');
+      },
+    });
+  };
   return Object.assign(harness, {
     providers,
     foldersAtChanges,
     disposedRegistrations: () => disposed,
+    enterDemoStep,
   });
 }
+
+function writeSelfTestPool(harness: ReturnType<typeof startOnHarness>) {
+  return harness.files.write(
+    `/home/${SELFTEST_STATE_PATH}`,
+    poolStateText(
+      { rowId: 'row-1', clonePaths: ['/x/1', '/x/2'], startedAt: 1_000 },
+      'opening',
+    ),
+  );
+}
+
+const DEMO_REFUSAL = {
+  ok: false,
+  error: 'demo',
+  message: 'A demo clone: nothing runs.',
+};
+// The harness's home is `/home`.
+const MACOS_CLI = '/home/.local/bin/unity-pool';
 
 describe('unityPoolMainPart', () => {
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -86,13 +123,7 @@ describe('unityPoolMainPart', () => {
     const slot = harness.state.read(unityPoolSnapshotSlot, 'test');
     expect(slot.get()).toEqual({ pools: [] });
 
-    await harness.files.write(
-      `/home/${SELFTEST_STATE_PATH}`,
-      poolStateText(
-        { rowId: 'row-1', clonePaths: ['/x/1', '/x/2'], startedAt: 1_000 },
-        'opening',
-      ),
-    );
+    await writeSelfTestPool(harness);
     // A run reads every pool again.
     await harness.invoke('run', 'hold', SELFTEST_POOL, 1);
     await vi.waitFor(() =>
@@ -129,13 +160,7 @@ describe('unityPoolMainPart', () => {
 
   it('poolProvider_Folders_ReadTheWatchSnapshot_AndChatHearsTheChange', async () => {
     const harness = startOnHarness();
-    await harness.files.write(
-      `/home/${SELFTEST_STATE_PATH}`,
-      poolStateText(
-        { rowId: 'row-1', clonePaths: ['/x/1', '/x/2'], startedAt: 1_000 },
-        'opening',
-      ),
-    );
+    await writeSelfTestPool(harness);
 
     await harness.invoke('run', 'hold', SELFTEST_POOL, 1);
 
@@ -146,5 +171,52 @@ describe('unityPoolMainPart', () => {
       ]),
     );
     expect(harness.foldersAtChanges).toContainEqual(['/x/1', '/x/2']);
+  });
+
+  it('demoStep_RunOnTheDemoPool_RunsNoCli', async () => {
+    const harness = startOnHarness();
+    const slot = harness.state.read(unityPoolSnapshotSlot, 'test');
+    const stage = await harness.enterDemoStep();
+    const pools = slot.get()?.pools ?? [];
+    expect({
+      names: pools.map(({ pool }) => pool),
+      clone1Row: pools[0]?.clones[0]?.claim?.row,
+    }).toEqual({ names: [DEMO_POOL], clone1Row: 'row-demo' });
+    const stat = vi.spyOn(harness.files, 'stat');
+
+    const result = await harness.invoke('run', 'hold', DEMO_POOL, 1);
+
+    expect(result).toEqual(DEMO_REFUSAL);
+    expect(stat).not.toHaveBeenCalledWith(MACOS_CLI);
+    stage.dispose();
+    expect(slot.get()?.pools).toEqual([]);
+  });
+
+  it('demoStep_RealPoolHeld_PublishesBothSortedByName', async () => {
+    const harness = startOnHarness();
+    const slot = harness.state.read(unityPoolSnapshotSlot, 'test');
+    const names = () => slot.get()?.pools.map(({ pool }) => pool);
+    await writeSelfTestPool(harness);
+    await harness.invoke('run', 'hold', SELFTEST_POOL, 1);
+    await vi.waitFor(() => expect(names()).toEqual([SELFTEST_POOL]));
+
+    const stage = await harness.enterDemoStep();
+    expect(names()).toEqual([DEMO_POOL, SELFTEST_POOL]);
+
+    stage.dispose();
+    expect(names()).toEqual([SELFTEST_POOL]);
+  });
+
+  it('demoStep_NoStageEntered_ShowStageThrowsAndRunStillRefuses', async () => {
+    const harness = startOnHarness();
+    const stat = vi.spyOn(harness.files, 'stat');
+
+    expect(() => harness.invoke('showDemoStage', 'tiles')).toThrow(
+      'no demo step entered',
+    );
+    const result = await harness.invoke('run', 'hold', DEMO_POOL, 1);
+
+    expect(result).toEqual(DEMO_REFUSAL);
+    expect(stat).not.toHaveBeenCalledWith(MACOS_CLI);
   });
 });

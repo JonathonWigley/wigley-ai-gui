@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessActivity } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { DemoMainStep } from '../../../contracts/demo';
 import { readIfPresent } from '../../../contracts/files';
 import type { RunMode } from '../../../contracts/plugin';
 import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   fakeDependency,
@@ -27,6 +29,7 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import { autoRetroStateSlot } from '../contract';
+import { DEMO_QUEUED } from './demo-steps';
 import { QUEUE_FILE } from './queue-file';
 import { DEFAULT_SETTLE_SECONDS, RESTORE_WAIT_MS } from './retro-done';
 import type { RetroQueue } from './retro-queue';
@@ -62,6 +65,22 @@ function closedEvent(
   };
 }
 
+function clearedEvent(
+  oldHost: string,
+  newHost: string,
+  sent: boolean,
+): ChatMainEvents['sessionCleared'] {
+  return {
+    sessionId: `row-${newHost}`,
+    oldHostSessionId: oldHost,
+    newHostSessionId: newHost,
+    projectDir: '/home/me/project',
+    profile: 'work',
+    titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
+    sent,
+  };
+}
+
 function sessionInfo(
   sessionId: string,
   activity: ProcessActivity,
@@ -87,7 +106,8 @@ function sessionInfo(
 // The part on the harness, over a chat whose `launch` answers through
 // `answerLaunch` (by default: row `retro-<n>` with host `retro-host-<n>` set in
 // `sessions.rows`, then that row id) and records each launch and close, and a
-// sessions that records each title set. Every fake lives across a restart.
+// sessions that records each title set. Every fake lives across a restart. `enterDemoStep` enters the registered
+// `auto-retro.section` step, its demo session `row-demo`.
 function startPart(
   options: {
     runMode?: RunMode;
@@ -102,6 +122,7 @@ function startPart(
     layout: 'default',
     settleSeconds: DEFAULT_SETTLE_SECONDS,
   };
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const state = createSlotStore(() => undefined);
   state.publish(coreAgentHarnessesSlot).set(
     'claude',
@@ -112,7 +133,11 @@ function startPart(
   const harness = startMainPart(autoRetroMainPart, {
     settings,
     state,
-    services: { runMode: options.runMode ?? 'live', homeDir: '/home/me' },
+    services: {
+      runMode: options.runMode ?? 'live',
+      homeDir: '/home/me',
+      demoSteps,
+    },
     dependencies: [
       fakeDependency(
         chatMainKey,
@@ -169,16 +194,23 @@ function startPart(
       await settled();
     },
     async clear(oldHost: string, newHost: string, sent: boolean) {
-      harness.emit('chat.sessionCleared', {
-        sessionId: `row-${newHost}`,
-        oldHostSessionId: oldHost,
-        newHostSessionId: newHost,
-        projectDir: '/home/me/project',
-        profile: 'work',
-        titles: { user: 'Fix login', agent: null, firstMessage: 'hi' },
-        sent,
-      });
+      harness.emit('chat.sessionCleared', clearedEvent(oldHost, newHost, sent));
       await settled();
+    },
+    enterDemoStep() {
+      const step = demoSteps
+        .list()
+        .find(({ id }) => id === 'auto-retro.section');
+      if (step === undefined) {
+        throw new Error('auto-retro registered no auto-retro.section step');
+      }
+      return step.enter({
+        scratchDir: '/scratch',
+        launchSession: async () => 'row-demo',
+        processEvents: () => {
+          throw new Error('no process events');
+        },
+      });
     },
     // Starts the launched row's first turn and reads it done.
     async startedThenIdle(sessionId: string) {
@@ -514,5 +546,49 @@ describe('autoRetroMainPart', () => {
         .messages()
         .some((message) => message.startsWith('queue.json not read:')),
     ).toBe(true);
+  });
+
+  // No row is set for `row-h1`: a user close removes the row before chat fires the event.
+  it.each([
+    {
+      event: 'close',
+      qualified: 'chat.sessionClosed',
+      payload: { ...closedEvent('h1'), ephemeral: true },
+    },
+    {
+      event: 'clear',
+      qualified: 'chat.sessionCleared',
+      payload: { ...clearedEvent('h0', 'h1', true), ephemeral: true },
+    },
+  ])('demoSession_$event_QueuesNoRetro', async ({ qualified, payload }) => {
+    const part = startPart();
+    await settled();
+
+    part.harness.emit(qualified, payload);
+    await settled();
+
+    expect({
+      launches: part.launches,
+      queued: part.state()?.queued,
+      ignored: part.messages().includes('ignored demo session row-h1'),
+    }).toEqual({ launches: [], queued: 0, ignored: true });
+  });
+
+  it('demoStep_OverlaysTheRowAndCount_AndLeavingShowsTheRealState', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    const real = part.state();
+    expect(real).toEqual({ rows: ['retro-1'], queued: 0 });
+
+    const stage = await part.enterDemoStep();
+    expect(part.state()).toEqual({
+      rows: ['retro-1', 'row-demo'],
+      queued: DEMO_QUEUED,
+    });
+    expect(JSON.stringify(await part.queueFile())).not.toContain('row-demo');
+
+    stage.dispose();
+    expect(part.state()).toEqual(real);
   });
 });

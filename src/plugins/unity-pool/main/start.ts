@@ -2,9 +2,15 @@ import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { createOriginRepoNames } from '../../../shared/origin-repo-names';
 import { chatMainKey } from '../../chat/contract';
 import { sessionsMainKey } from '../../sessions/contract';
-import { type UnityPoolChannel, unityPoolSnapshotSlot } from '../contract';
+import {
+  type PoolSnapshot,
+  type PoolState,
+  type UnityPoolChannel,
+  unityPoolSnapshotSlot,
+} from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { unityPoolManifest } from '../manifest';
+import { DEMO_POOL, registerDemoSteps } from './demo-steps';
 import { resolveScriptPath, runPoolCommand } from './pool-cli';
 import { createPoolProvider } from './pool-provider';
 import { createPoolWatch } from './pool-watch';
@@ -16,7 +22,8 @@ type UnityPoolApi = MainApi<typeof unityPoolManifest, UnityPoolChannel>;
 // the panel's Hold, Release and Open, logging each run's outcome and reading every pool again after it in case the OS
 // watcher misses the write. Registers as chat's pool provider, which gives each pool's clone folders, and tells chat at
 // each change that those folders may have changed.
-// Registers the layouts and hands the self-test the badge and panel script.
+// Registers the layouts and hands the self-test the badge and panel script. The demo step's pool joins the slot, never
+// the pool provider, and a run on it runs nothing.
 export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -44,6 +51,18 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
         ),
       };
     };
+    // The demo step's pool, published beside the watch's while the step is entered.
+    let demoPool: PoolState | null = null;
+    const publish = (snapshot: PoolSnapshot) =>
+      poolSnapshot.set(
+        demoPool === null
+          ? snapshot
+          : {
+              pools: [...snapshot.pools, demoPool].sort((a, b) =>
+                a.pool.localeCompare(b.pool),
+              ),
+            },
+      );
     const watch = createPoolWatch({
       files: services.files,
       paths: services.paths,
@@ -52,18 +71,32 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       stateRoot,
       // Never called before `createPoolWatch` returns: its first scan is async.
       changed: (snapshot) => {
-        poolSnapshot.set(snapshot);
+        publish(snapshot);
         registration.changed();
       },
     });
-    poolSnapshot.set(watch.snapshot());
+    publish(watch.snapshot());
     const registration = chat.addPoolProvider(
       createPoolProvider(() => watch.snapshot()),
     );
     const originName = createOriginRepoNames(services.git);
+    const demo = registerDemoSteps(services, {
+      setDemoPool(pool) {
+        demoPool = pool;
+        publish(watch.snapshot());
+      },
+    });
 
     api.channel.handle('originName', (folder) => originName(folder));
     api.channel.handle('run', async (action, pool, clone) => {
+      if (pool === DEMO_POOL) {
+        services.log(`${action} ${pool} ${clone}: demo clone, nothing run`);
+        return {
+          ok: false,
+          error: 'demo',
+          message: 'A demo clone: nothing runs.',
+        };
+      }
       const result = await runPoolCommand(cliDeps(), action, pool, clone);
       services.log(
         `${action} ${pool} ${clone}: ${result.ok ? 'ok' : `${result.error}: ${result.message}`}`,
@@ -71,6 +104,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       watch.rescan();
       return result;
     });
+    api.channel.handle('showDemoStage', (stage) => demo.showStage(stage));
 
     services.selfTest?.run(
       unityPoolSelfTestScript({

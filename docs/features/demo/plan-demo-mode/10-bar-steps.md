@@ -1,6 +1,6 @@
 # 10 — Bar steps
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · overlays four main slots that async writers also write (the pool watch, the stats poller, the updater, the retro chain), and the auto-retro guard must hold on a close whose row is already gone
 Wave: 2 · Depends on: 01, 03 (auto-retro's guard reads the `ephemeral` key 03 adds to chat's `sessionClosed` and `sessionCleared`), 04 (auto-retro's page half holds `SessionsPageExports.showOnly`, and relies on 04's stack rule: the latest hold wins, and only the shown section claims rows)

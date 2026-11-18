@@ -29,6 +29,7 @@ import type {
   SystemStatsPart,
 } from '../layouts/layout';
 import { systemStatsManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readSystemStatsLayout } from './layout/read-system-stats-layout';
 import {
   type CursorMove,
@@ -62,7 +63,8 @@ type Reveal = 'none' | 'cursor' | 'openedGroup';
 // other plugins' scripts see the right bar as before. The panel is a right-bar stop: given the keys, it walks a
 // cursor over the rows, cycles the sort and opens and closes groups, its view state kept for the page's life. Redraws
 // on each snapshot, settings change, layouts set, key, focus and leave, and logs the panel's showing and hiding, its
-// keys' results and each change of the snapshot's error.
+// keys' results and each change of the snapshot's error. The demo step shows the panel for its length without writing
+// `uiState`, and hides it again only when it showed it and the user has not toggled it since.
 export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
   manifest: systemStatsManifest,
   start(api: SystemStatsApi) {
@@ -110,6 +112,8 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
     let loggedCursorName: string | null = null;
     let lastError: string | null = null;
     let isDisposed = false;
+    // Counts the `togglePanel` runs, so a `showForNow` handle knows whether the user toggled since.
+    let toggleCount = 0;
 
     const reportShown = () => {
       api.channel
@@ -305,6 +309,7 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
     };
 
     const togglePanel = () => {
+      toggleCount += 1;
       isShown = !isShown;
       let stored: boolean | undefined;
       if (!isShown) {
@@ -319,6 +324,30 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       } else {
         hidePanel();
       }
+    };
+
+    // Shows the panel, keeping `uiState` as it is; the handle hides it again unless it showed already or the user
+    // toggled it since.
+    const showForNow = (): Disposable => {
+      if (isShown) {
+        return { dispose() {} };
+      }
+      isShown = true;
+      reportShown();
+      draw();
+      const toggleCountAtShow = toggleCount;
+      return {
+        dispose() {
+          const isStillOurs =
+            isShown && !isDisposed && toggleCount === toggleCountAtShow;
+          if (!isStillOurs) {
+            return;
+          }
+          isShown = false;
+          reportShown();
+          hidePanel();
+        },
+      };
     };
 
     const moveCursor = (move: CursorMove) => {
@@ -395,6 +424,7 @@ export const systemStatsPagePart: PagePart<typeof systemStatsManifest> = {
       },
     });
     reportShown();
+    registerDemoSteps(services, { showForNow });
 
     return {
       commands: {

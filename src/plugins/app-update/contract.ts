@@ -1,3 +1,4 @@
+import type { ChannelShape } from '../../contracts/plugin';
 import type { SlotKey } from '../../contracts/state';
 
 // Where the installed app's update stands:
@@ -17,3 +18,12 @@ export const appUpdateStatusSlot: SlotKey<
   'main',
   'app-update'
 > = { id: 'app-update.status', process: 'main', kind: 'value' };
+
+// The sample statuses the demo step shows.
+export type DemoUpdateKind = 'available' | 'installing' | 'failed';
+
+// `showDemoStatus` shows the demo step's sample status of `kind`; it throws while no demo step is entered.
+export interface AppUpdateChannel extends ChannelShape {
+  invoke: { showDemoStatus(kind: DemoUpdateKind): void };
+  messages: Record<never, never>;
+}

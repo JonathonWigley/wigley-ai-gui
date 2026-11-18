@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DemoStep } from '../../../contracts/demo';
 import type { RunMode } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   FakeElement,
   installFakeDom,
@@ -65,6 +67,7 @@ function snapshot(
 
 // The part on the harness in `runMode`, its `uiState` a map the test reads, `invoke` recording each channel call.
 // `focuses` takes the right-bar `focus` of each contribution, and `disposals` counts each contribution disposed.
+// `enterDemoStep` enters the registered `system-stats.panel` step.
 function startOnHarness({
   runMode = 'live',
   stored = new Map<string, unknown>(),
@@ -99,8 +102,9 @@ function startOnHarness({
       return systemStatsPagePart.start(api);
     },
   };
+  const demoSteps = createDemoStepRegistry<DemoStep>();
   const harness = startPagePart(part, {
-    services: { runMode, uiState },
+    services: { runMode, uiState, demoSteps },
     invoke: async (method, ...args) => {
       invoked.push([method, ...args]);
     },
@@ -109,7 +113,22 @@ function startOnHarness({
     harness.logs
       .filter(({ source }) => source === 'system-stats')
       .map(({ message }) => message);
-  return { harness, invoked, focuses, disposals, stored, messages };
+  const enterDemoStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'system-stats.panel');
+    if (step === undefined) {
+      throw new Error('system-stats registered no system-stats.panel step');
+    }
+    return step.enter({ scratchDir: '/scratch', sessions: {} });
+  };
+  return {
+    harness,
+    invoked,
+    focuses,
+    disposals,
+    stored,
+    messages,
+    enterDemoStep,
+  };
 }
 
 // A layout that records each panel drawn and draws a row per row, titled with its name and marked `is-cursor` as the
@@ -366,4 +385,75 @@ describe('systemStatsPagePart', () => {
       disposals: ['panel'],
     });
   });
+
+  // Breaks: a stage that writes `uiState`, a dispose that hides a panel the user had shown or toggled.
+  it.each<{
+    name: string;
+    hiddenBefore: boolean;
+    // `togglePanel` runs during the step.
+    toggles: number;
+    invoked: unknown[][];
+    hidden: (boolean | undefined)[];
+  }>([
+    {
+      name: 'panel hidden',
+      hiddenBefore: true,
+      toggles: 0,
+      invoked: [
+        ['setShown', true],
+        ['setShown', false],
+      ],
+      hidden: [true, true, true],
+    },
+    {
+      name: 'panel shown',
+      hiddenBefore: false,
+      toggles: 0,
+      invoked: [],
+      hidden: [undefined, undefined, undefined],
+    },
+    {
+      name: 'user toggled during the step',
+      hiddenBefore: true,
+      toggles: 1,
+      invoked: [
+        ['setShown', true],
+        ['setShown', false],
+      ],
+      hidden: [true, true, true],
+    },
+    {
+      name: 'user hid and showed it during the step',
+      hiddenBefore: true,
+      toggles: 2,
+      invoked: [
+        ['setShown', true],
+        ['setShown', false],
+        ['setShown', true],
+      ],
+      hidden: [true, true, undefined],
+    },
+  ])(
+    'demo stage shows the panel for now: $name',
+    async ({ hiddenBefore, toggles, invoked: expected, hidden }) => {
+      const { harness, invoked, stored, enterDemoStep } = startOnHarness();
+      harness.ready();
+      const { commands } = harness.started();
+      if (hiddenBefore) {
+        commands.togglePanel({ arg: undefined });
+      }
+      invoked.length = 0;
+      const kept = [stored.get('hidden')];
+
+      const stage = await enterDemoStep();
+      kept.push(stored.get('hidden'));
+      for (let toggle = 0; toggle < toggles; toggle++) {
+        commands.togglePanel({ arg: undefined });
+      }
+      stage.dispose();
+      kept.push(stored.get('hidden'));
+
+      expect({ invoked, kept }).toEqual({ invoked: expected, kept: hidden });
+    },
+  );
 });

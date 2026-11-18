@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { Git } from '../../../contracts/git';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { appUpdateStatusSlot } from '../contract';
 import { appUpdateMainPart } from './start';
@@ -24,14 +26,16 @@ function aheadGit(): Git {
 }
 
 // `files` are written to the data folder, as an earlier run left them, and
-// the part restarted to read them.
+// the part restarted to read them. `enterDemoStep` enters the registered
+// `app-update.button` step.
 async function startWithBuild(
   build: { commit: string; cloneDir: string } | null,
   files: Record<string, string> = {},
 ) {
   const git = aheadGit();
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const harness = startMainPart(appUpdateMainPart, {
-    services: { appBuild: build, git },
+    services: { appBuild: build, git, demoSteps },
   });
   await settle();
   if (Object.keys(files).length > 0) {
@@ -48,7 +52,20 @@ async function startWithBuild(
     await harness.started().commands.install({ arg: undefined });
     await settle();
   };
-  return { harness, git, status, install };
+  const enterDemoStep = () => {
+    const step = demoSteps.list().find(({ id }) => id === 'app-update.button');
+    if (step === undefined) {
+      throw new Error('app-update registered no app-update.button step');
+    }
+    return step.enter({
+      scratchDir: '/scratch',
+      launchSession: () => Promise.reject(new Error('no demo session')),
+      processEvents: () => {
+        throw new Error('no process events');
+      },
+    });
+  };
+  return { harness, git, status, install, enterDemoStep };
 }
 
 describe('appUpdateMainPart', () => {
@@ -303,5 +320,39 @@ describe('appUpdateMainPart', () => {
       kind: 'failed',
       error: 'install-app exited 1',
     });
+  });
+
+  it('demoStep_InstallStartsNothing_AndLeavingShowsTheRealStatus', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    const stage = await test.enterDemoStep();
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
+
+    await test.install();
+    expect(test.harness.processes.detachedStarts).toEqual([]);
+    expect(test.status()).toEqual({ kind: 'installing' });
+
+    stage.dispose();
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
+  });
+
+  it('demoStep_StopMidStep_NextStartReadsTheRealStatus', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+    await test.enterDemoStep();
+    await test.install();
+
+    await test.harness.restart();
+    await settle();
+
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
+    expect(test.harness.processes.detachedStarts).toEqual([]);
+  });
+
+  it('showDemoStatus_NoStageEntered_Throws', async () => {
+    const test = await startWithBuild({ commit: INSTALLED, cloneDir: CLONE });
+
+    expect(() => test.harness.invoke('showDemoStatus', 'failed')).toThrow(
+      'no demo step entered',
+    );
+    expect(test.status()).toEqual({ kind: 'available', sha: '2222222' });
   });
 });

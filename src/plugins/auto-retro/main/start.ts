@@ -18,9 +18,10 @@ import {
   sessionsMainKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import { autoRetroStateSlot } from '../contract';
+import { type AutoRetroState, autoRetroStateSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { autoRetroManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { createQueueFile } from './queue-file';
 import {
   DEFAULT_SETTLE_SECONDS,
@@ -61,6 +62,8 @@ function hostIdsText(item: RetroItem): string {
 // `folder` setting, and closes it `settleSeconds` after it reads done. Every event and launch result applies in one
 // serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to
 // `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it registers its layouts and queues nothing.
+// A demo session (`ephemeral` on chat's event) queues no retro. While the demo step is entered, the slot shows its
+// row after the real rows and its queued count in place of the real one; the queue and `queue.json` never hold it.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
   manifest: autoRetroManifest,
   start(api: AutoRetroApi) {
@@ -68,8 +71,25 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const { log } = services;
     api.layouts.register({ layoutTypes });
     const state = api.state.publish(autoRetroStateSlot);
+    // The state the queue gives, last written, and the demo step's row and count shown over it.
+    let real: AutoRetroState = { rows: [], queued: 0 };
+    let demo: { rowId: string; queued: number } | null = null;
+    const write = (next: AutoRetroState) => {
+      real = next;
+      state.set(
+        demo === null
+          ? next
+          : { rows: [...next.rows, demo.rowId], queued: demo.queued },
+      );
+    };
+    registerDemoSteps(services, {
+      setDemo(next) {
+        demo = next;
+        write(real);
+      },
+    });
     if (services.runMode === 'selfTest') {
-      state.set({ rows: [], queued: 0 });
+      write({ rows: [], queued: 0 });
       return { commands: {} };
     }
     const chat = api.dependency(chatMainKey);
@@ -89,7 +109,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     let settle: { rowId: string; timer: number } | null = null;
 
     const publish = () =>
-      state.set({ rows: [...rows], queued: queue.queued.length });
+      write({ rows: [...rows], queued: queue.queued.length });
 
     const runningRowId = (): string | null => {
       const host = queue.running?.hostSessionId ?? null;
@@ -333,13 +353,32 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
     };
 
+    // True, logged, for a demo session's event. Its row is gone before chat fires its close, so the event's
+    // `ephemeral` tells it apart.
+    const skipsDemoSession = (event: {
+      sessionId: string;
+      ephemeral?: true;
+    }) => {
+      if (event.ephemeral !== true) {
+        return false;
+      }
+      log(`ignored demo session ${event.sessionId}`);
+      return true;
+    };
+
     // Chat deletes the row's `chat.session` entry right after the emit, which clears the settle wait before the
     // step runs.
     api.events.on('chat.sessionClosed', (event) => {
+      if (skipsDemoSession(event)) {
+        return;
+      }
       const isSettling = settle?.rowId === event.sessionId;
       serial(() => closed(event, isSettling));
     });
-    api.events.on('chat.sessionCleared', (event) =>
+    api.events.on('chat.sessionCleared', (event) => {
+      if (skipsDemoSession(event)) {
+        return;
+      }
       serial(() =>
         applyLoggingQueued({
           kind: 'cleared',
@@ -349,8 +388,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           titles: event.titles,
           sent: event.sent,
         }),
-      ),
-    );
+      );
+    });
     api.events.on('chat.turnStarted', ({ sessionId }) =>
       serial(() => markStarted(sessionId)),
     );

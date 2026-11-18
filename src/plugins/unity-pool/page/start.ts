@@ -37,6 +37,7 @@ import type {
   UnityPoolPart,
 } from '../layouts/layout';
 import { unityPoolManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readUnityPoolLayout } from './layout/read-unity-pool-layout';
 import {
   type CursorMove,
@@ -101,6 +102,7 @@ interface HeldWrapper {
 // the cursor's session, until the core ends its turn. Logs each row's badges
 // and the panel's showing, hiding, counts and keys when they change, and a Hold
 // or Release whose call to main fails; main logs every run it answers.
+// Registers the demo step, whose beats ask main for each stage of its pool.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -472,6 +474,11 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
         layoutParts.setLayouts(shown);
         redraw();
       },
+    });
+
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      showStage: (stage) => api.channel.invoke('showDemoStage', stage),
     });
 
     return {

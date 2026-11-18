@@ -21,6 +21,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { AutoRetroPart, CompleteLayout, Layout } from '../layouts/layout';
 import { autoRetroManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readAutoRetroLayout } from './layout/read-auto-retro-layout';
 
 type AutoRetroApi = PageApi<typeof autoRetroManifest, ChannelShape>;
@@ -37,7 +38,8 @@ function isSameRows(a: readonly string[], b: readonly string[]): boolean {
 // Registers the Retro section through sessions' `addSection`, claiming the rows `auto-retro.state` lists, with the
 // queued count at its header's end drawn through the `auto-retro.layout` layout while retros wait. Sessions knows no
 // change of `claims`, so each change of the rows adds the section again, which redraws the side bar; a change of the
-// count alone, and each layouts set, redraws every header the side bar holds.
+// count alone, and each layouts set, redraws every header the side bar holds. Registers the demo step, which shows the
+// Retro section alone for its length.
 export const autoRetroPagePart: PagePart<typeof autoRetroManifest> = {
   manifest: autoRetroManifest,
   start(api: AutoRetroApi) {
@@ -135,6 +137,10 @@ export const autoRetroPagePart: PagePart<typeof autoRetroManifest> = {
         layoutParts.setLayouts(layouts);
         redrawHeaders();
       },
+    });
+    registerDemoSteps(services, {
+      showOnly: (sectionId) => sessions.showOnly(sectionId),
+      activate: (sessionId) => sessions.activate(sessionId),
     });
 
     return {
