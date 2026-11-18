@@ -8,10 +8,12 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
-import { tmpdir } from 'node:os';
+import { tmpdir, uptime } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { osPlatform } from '../os-platform';
@@ -20,6 +22,7 @@ import {
   type ChannelHandlers,
   connectToChannel,
   listenOnChannel,
+  settleMovedLock,
 } from './local-channel';
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -31,9 +34,14 @@ afterEach(async () => {
 });
 
 // macOS caps a socket path near 104 bytes, so the folder name stays short.
-function tempChannel(): string {
+function tempDir(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'lc-'));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+function tempChannel(): string {
+  const dir = tempDir();
   return channelPath(
     osPlatform(process.platform),
     dir,
@@ -67,6 +75,11 @@ function lockText(channel: string): string | null {
 function writeLock(channel: string, text: string) {
   mkdirSync(path.dirname(channel), { recursive: true });
   writeFileSync(`${channel}.lock`, text);
+}
+
+function dateLockBeforeBoot(channel: string) {
+  const beforeBootSeconds = (Date.now() - uptime() * 1000 - 60_000) / 1000;
+  utimesSync(`${channel}.lock`, beforeBootSeconds, beforeBootSeconds);
 }
 
 // A child that has exited and been reaped, so its pid no longer runs.
@@ -186,19 +199,40 @@ describe('listenOnChannel', () => {
   );
 
   it.skipIf(channelIsPipe).each([
-    { label: 'a pid that does not run', holder: deadPid, listens: true },
-    { label: 'no pid', holder: () => '', listens: true },
     {
-      label: 'another pid that runs',
+      label: 'a pid that does not run',
+      holder: deadPid,
+      beforeBoot: false,
+      listens: true,
+    },
+    { label: 'no pid', holder: () => '', beforeBoot: false, listens: true },
+    {
+      label: 'another pid that runs, written this boot',
       holder: () => process.ppid,
+      beforeBoot: false,
       listens: false,
     },
+    {
+      label: 'another pid that runs, written before boot',
+      holder: () => process.ppid,
+      beforeBoot: true,
+      listens: true,
+    },
+    {
+      label: 'this process, held by none of its servers',
+      holder: () => process.pid,
+      beforeBoot: false,
+      listens: true,
+    },
   ])(
-    'listenOnChannel_LockFile_ListensOnlyWhenItsPidDoesNotRun: $label',
-    async ({ holder, listens }) => {
+    'listenOnChannel_LockFile_ListensOnlyWhenTheLockIsStale: $label',
+    async ({ holder, beforeBoot, listens }) => {
       const channel = tempChannel();
       const held = `${holder()}`;
       writeLock(channel, held);
+      if (beforeBoot) {
+        dateLockBeforeBoot(channel);
+      }
 
       const server = listen(channel);
 
@@ -270,6 +304,60 @@ describe('listenOnChannel', () => {
 
     expect(lockText(channel)).toBe(left);
   });
+});
+
+// A lock file whose inode and text a take-over judged.
+function judgeLockAt(file: string, text: string) {
+  writeFileSync(file, text);
+  const { ino, mtimeMs } = statSync(file);
+  return { ino, mtimeMs, text };
+}
+
+describe('settleMovedLock', () => {
+  it.each([
+    {
+      label: 'the judged lock was moved: the path stays free',
+      movedTheJudged: true,
+      arrived: null,
+      settled: true,
+      left: null,
+    },
+    {
+      label: 'a newer lock was moved: it is put back',
+      movedTheJudged: false,
+      arrived: null,
+      settled: false,
+      left: 'newer',
+    },
+    {
+      label: 'a newer lock was moved and another arrived: the arrived one stays',
+      movedTheJudged: false,
+      arrived: 'arrived',
+      settled: false,
+      left: 'arrived',
+    },
+  ])(
+    'settleMovedLock_MovedLock_SettlesOnlyTheJudgedOneAndKeepsALockAtThePath: $label',
+    ({ movedTheJudged, arrived, settled, left }) => {
+      const channel = path.join(tempDir(), 'channel');
+      const lock = `${channel}.lock`;
+      const moved = `${lock}.moved`;
+      const judged = movedTheJudged
+        ? judgeLockAt(moved, 'stale')
+        : judgeLockAt(`${lock}.judged`, 'stale');
+      if (!movedTheJudged) {
+        writeFileSync(moved, 'newer');
+      }
+      if (arrived !== null) {
+        writeFileSync(lock, arrived);
+      }
+
+      expect(settleMovedLock(lock, moved, judged)).toBe(settled);
+
+      expect(lockText(channel)).toBe(left);
+      expect(existsSync(moved)).toBe(false);
+    },
+  );
 });
 
 describe('connectToChannel', () => {
