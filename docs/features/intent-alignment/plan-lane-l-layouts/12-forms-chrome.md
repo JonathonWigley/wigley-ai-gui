@@ -1,6 +1,6 @@
 # 12 — Forms column chrome
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -198,3 +198,5 @@ Commit: one commit for the group, pathspecs `src/plugins/forms`, `AGENTS.md`, `d
 `docs/features/intent-alignment/master-plan.md`.
 
 ## Proof
+
+Commit 7b834bb98 · proof: diff read (railHead/railFoot/pager in layout.d.ts, default, resolver PANES/PART_READS, read-layout; drawRailHead/drawRailFoot/drawPager; view-model inputs; CSS moved) + wave 6 compile (typecheck, lint clean after oxfmt) · concerns: createStatusLine import kept (one status line per build, per Decisions); isSameInput copies primer-view's private helper; task 11's followups bullet was renamed, removed in this commit; layout-dialog.ts missed by 1dc26df2e, committed in 6ecb55d0b
