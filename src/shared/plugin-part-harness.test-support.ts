@@ -61,6 +61,7 @@ import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
 import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
+import type { UiState } from '../contracts/ui-state';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
@@ -1129,12 +1130,14 @@ export function startMainPart<M extends PluginManifest>(
   };
 }
 
-// What the page's fake API writes to for one part; see `MainRecord`.
+// What the page's fake API writes to for one part; see `MainRecord`. One
+// `uiState` per record, as the page store keeps one per page, so a restarted
+// part still hears a key listener its stopped run leaked.
 interface PageRecord {
   counts: PartCounts;
   channelListeners: Map<string, Listeners<unknown>>;
   shows: Listeners<ShownLayouts<unknown>>;
-  uiState: Map<string, unknown>;
+  uiState: UiState;
   settings: object;
   settingsListeners: Listeners<object>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
@@ -1149,7 +1152,7 @@ function newPageRecord(
     counts,
     channelListeners: new Map(),
     shows: createListeners(),
-    uiState: new Map(),
+    uiState: uiStateOver(new Map()),
     settings,
     settingsListeners: createListeners(),
     invoke,
@@ -1640,7 +1643,7 @@ function fakePageApi(
       paths: posixPaths,
       homeDir: '/home',
       runMode: 'selfTest',
-      uiState: uiStateOver(record.uiState),
+      uiState: record.uiState,
       ...replaced,
       picker:
         replaced.picker === undefined

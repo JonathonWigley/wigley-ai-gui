@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
+  type DrawnPart,
   type DrawPartOptions,
+  disposeDraws,
   drawPart,
   type RollbackDeps,
   requireDialogFrame,
@@ -144,7 +146,7 @@ describe('drawPart', () => {
       logLines: [],
     },
   ])(
-    'drawPart_DrewBundled_TrueOnlyWhenTheBundledDefaultDrew: $row',
+    'drewBundled is true only when the bundled default drew ($row)',
     ({ pick, drewBundled, layoutName, text, dataset, logLines }) => {
       const rail = drawRail(pick);
 
@@ -378,6 +380,41 @@ describe('drawPart', () => {
       'default',
     ]);
   });
+});
+
+describe('disposeDraws', () => {
+  // Breaks if a throwing dispose skips the draws after it, or swallows the
+  // error.
+  it.each<{ row: string; throwing: string[]; error: string | null }>([
+    { row: 'none throws', throwing: [], error: null },
+    { row: 'the first throws', throwing: ['a'], error: 'a failed' },
+    { row: 'two throw', throwing: ['a', 'c'], error: 'a failed' },
+  ])(
+    'disposes every draw and throws the first error after ($row)',
+    ({ throwing, error }) => {
+      const disposed: string[] = [];
+      const draws = ['a', 'b', 'c'].map((name): DrawnPart<null> => ({
+        built: null,
+        layoutName: 'default',
+        drewBundled: true,
+        dispose() {
+          disposed.push(name);
+          if (throwing.includes(name)) {
+            throw new Error(`${name} failed`);
+          }
+        },
+      }));
+
+      const run = () => disposeDraws(draws);
+
+      if (error === null) {
+        expect(run()).toEqual([]);
+      } else {
+        expect(run).toThrow(error);
+      }
+      expect(disposed).toEqual(['a', 'b', 'c']);
+    },
+  );
 });
 
 describe('requireElementIn', () => {

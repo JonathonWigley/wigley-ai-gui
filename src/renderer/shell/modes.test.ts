@@ -5,8 +5,8 @@ import { createModes } from './modes';
 // plain objects holding `hidden`; `calls` records the deps the registry drives,
 // each mode's `shown` and `hidden`, and each change heard; `told` records each
 // mode's `sideBarHidden`, `sideBarNarrowed`, `sideBarOpenedOver`,
-// `focusSideBar` and `focusMain`, and the `sideBarOpened` dep. A mode added with `focusesSideBar` gives
-// `focusSideBar`.
+// `focusSideBar` and `focusMain`, and the `sideBarOpened` dep. A mode added
+// with `focusesSideBar` gives `focusSideBar`.
 function setup(isNarrow = false) {
   const logs: string[] = [];
   const calls: string[] = [];

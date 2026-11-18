@@ -629,16 +629,50 @@ describe('createSplit setEndHidden', () => {
   });
 });
 
+// A store over `saved` whose `on` subscriptions dispose, then throw `error`.
+function throwingSubscriptions(
+  saved: Map<string, unknown>,
+  error: Error,
+): UiState {
+  const inner = uiStateOver(saved);
+  return {
+    ...inner,
+    on(key, listener) {
+      const subscription = inner.on(key, listener);
+      return {
+        dispose() {
+          subscription.dispose();
+          throw error;
+        },
+      };
+    },
+  };
+}
+
 describe('createSplit dispose', () => {
-  it('dispose stops the split', () => {
+  // Breaks if a throwing key subscription skips the handle's teardown.
+  it.each([
+    { row: 'every step disposes', error: null },
+    { row: 'the key subscription dispose throws', error: 'on failed' },
+  ])('dispose stops the split ($row)', ({ error }) => {
     const saved = new Map<string, unknown>();
-    const { split, handle, timers, anchor } = splitWithHandle(saved);
+    const uiState =
+      error === null
+        ? undefined
+        : throwingSubscriptions(saved, new Error(error));
+    const { split, handle, timers, anchor } = splitWithHandle(saved, {
+      uiState,
+    });
     split.nudge('right');
     const [lingering] = [...timers.armed.keys()];
     press(handle, 1, 264);
     move(handle, 1, 300);
 
-    split.dispose();
+    if (error === null) {
+      split.dispose();
+    } else {
+      expect(() => split.dispose()).toThrow(error);
+    }
 
     expect(fakeWin.listeners.get('pointerup') ?? []).toEqual([]);
     expect(fakeWin.listeners.get('pointercancel') ?? []).toEqual([]);

@@ -5,6 +5,7 @@ import {
   PANE_RESIZE_COMMANDS,
   type PaneDirection,
 } from '../../../contracts/panes';
+import { callEach } from '../../call-each';
 import { element, moveConnected } from '../dom';
 import type { AnchorNamer } from '../ui/key-anchors';
 import { createDividerHandle, type DividerHandle } from '../ui/split';
@@ -24,7 +25,6 @@ import {
   swapToward,
   withSplitRatio,
 } from './pane-tree';
-import { callEach } from '../../call-each';
 
 // The least width of a pane beside another, in pixels.
 const LEAST_PANE_WIDTH = 280;

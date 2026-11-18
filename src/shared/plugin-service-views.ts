@@ -10,8 +10,8 @@ import type {
   SpawnOptions,
 } from '../contracts/processes';
 import type { UserConfig } from '../contracts/user-config';
-import { createRegistrations } from './registrations';
 import { callEach } from './call-each';
+import { createRegistrations } from './registrations';
 
 // One plugin's view of `files`: `registrations` disposing it disposes the
 // plugin's live watches, and a watch made after that is disposed at once. A

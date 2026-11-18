@@ -94,10 +94,10 @@ interface PendingSave {
 
 // Saves a draft once its edits pause for `delayMs`. A save is in flight until
 // `save` settles; a failed one leaves the draft unsaved with its message, and
-// the next edit schedules a save again. On page hide every unsaved draft saves at
-// once, `save` called inside the listener. Its `Disposable` clears every scheduled
-// save, the subscription and the page hide listener; a save still in flight then
-// only logs a failure.
+// the next edit schedules a save again. On page hide every unsaved draft saves
+// at once, `save` called inside the listener. Its `Disposable` clears every
+// scheduled save, the subscription and the page hide listener; a save still in
+// flight then logs and reports nothing when it settles.
 export function startAutosave<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
 ): Disposable {

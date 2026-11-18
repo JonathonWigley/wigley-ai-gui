@@ -81,7 +81,7 @@ describe('createToasts', () => {
   // Breaks if a draw that throws reaches `show`'s caller or goes unlogged.
   it('createToasts_DrawThrows_LogsAndShowsNothing', () => {
     const layer = new FakeElement('div');
-    const { timers, armed } = fakeTimers();
+    const { timers, armed, cleared } = fakeTimers();
     const log = vi.fn<(message: string) => void>();
     const draw: DrawToast = () => {
       throw new Error('bad toast');
@@ -92,6 +92,7 @@ describe('createToasts', () => {
 
     expect(layer.children).toEqual([]);
     expect(armed.size).toBe(0);
+    expect(cleared).toEqual([]);
     expect(log).toHaveBeenCalledTimes(1);
     expect(log.mock.calls[0][0]).toMatch(/bad toast/);
   });

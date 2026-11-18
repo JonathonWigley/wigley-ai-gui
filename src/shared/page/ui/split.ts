@@ -8,6 +8,7 @@ import {
   type ResizeTarget,
 } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
+import { callEach } from '../../call-each';
 import { element } from '../dom';
 import {
   type AnchorNamer,
@@ -21,7 +22,6 @@ import {
   type SplitLimits,
   storedSplitWidth,
 } from './split-width';
-import { callEach } from '../../call-each';
 
 // How long the handle's resize prompt shows after a keyboard nudge.
 const NUDGE_PROMPT_MS = 1000;
@@ -68,18 +68,17 @@ export interface Split extends ResizeTarget {
 // pixels and the span both panes share, whichever pane is sized: an `end`
 // pane's width runs leftward from the span's right edge, so a nudge left
 // widens it. `show` draws a width. The divider owns the drag on `handle`, the
-// stored width under `stateKey` and `nudge`; a drag writes
-// uiState once at its end, a nudge on each press, each only when the width
-// changed. It follows every `set` of `stateKey`, its own included, as
-// `reloadWidth` does. A nudge steps from the drawn width, the stored one clamped to the
-// span, so a press at a limit writes nothing and keeps a wider stored width;
-// nudge does nothing while a drag is running. `nudge` returns false, moving
-// nothing, for the directions off the divider's axis (up and down on a row,
-// left and right on a column), and while
-// `handle` has no layout box (its split stacked, the pane it sizes hidden or
-// lying over, or the window too narrow for it), so the press goes on to the
-// next divider; it
-// returns true for its axis's directions otherwise, moved or not.
+// stored width under `stateKey` and `nudge`; a drag writes uiState once at its
+// end, a nudge on each press, each only when the width changed. It follows
+// every `set` of `stateKey`, its own included, as `reloadWidth` does. A nudge
+// steps from the drawn width, the stored one clamped to the span, so a press
+// at a limit writes nothing and keeps a wider stored width; nudge does nothing
+// while a drag is running. `nudge` returns false, moving nothing, for the
+// directions off the divider's axis (up and down on a row, left and right on a
+// column), and while `handle` has no layout box (its split stacked, the pane
+// it sizes hidden or lying over, or the window too narrow for it), so the
+// press goes on to the next divider; it returns true for its axis's directions
+// otherwise, moved or not.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
@@ -369,9 +368,9 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 // pane's width, or a column's height, opens from `uiState` under `stateKey`
 // and is written back at the end of a drag and on each nudge, when either
 // changed it; a nudge steps from the drawn width and is ignored mid-drag.
-// Every split over one `stateKey` follows a width any of them stores. With `sizedPane` `end` the root carries
-// `is-end-sized` and the end pane holds the size. Its owner calls `dispose`
-// when it drops the split.
+// Every split over one `stateKey` follows a width any of them stores. With
+// `sizedPane` `end` the root carries `is-end-sized` and the end pane holds the
+// size. Its owner calls `dispose` when it drops the split.
 export function createSplit(options: SplitOptions): Split {
   const isColumn = options.axis === 'column';
   const sizesEnd = options.sizedPane === 'end';

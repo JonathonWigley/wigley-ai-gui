@@ -79,8 +79,9 @@ function holdsPart<T>(consumer: Registrations, parts: Set<T>, part: T) {
 
 // Workflow's page part over fakes that file each part they take under it, as
 // sessions' and chat's views do. `commands` is another plugin's, and `runs` holds
-// each run its process heard.
-function startWorkflow() {
+// each run its process heard. With `sidePartDisposeError`, a side part's
+// dispose unfiles it and then throws that error.
+function startWorkflow(sidePartDisposeError: Error | null = null) {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   const rowParts = new Set<SessionPart>();
   const composerParts = new Set<ChatComposerPart>();
@@ -108,8 +109,18 @@ function startWorkflow() {
           ({
             addComposerPart: (part: ChatComposerPart) =>
               holdsPart(consumer, composerParts, part),
-            addSidePart: (part: ChatSidePart) =>
-              holdsPart(consumer, sideParts, part),
+            addSidePart(part: ChatSidePart) {
+              const held = holdsPart(consumer, sideParts, part);
+              if (sidePartDisposeError === null) {
+                return held;
+              }
+              return {
+                dispose() {
+                  held.dispose();
+                  throw sidePartDisposeError;
+                },
+              };
+            },
           }) as unknown as ChatPageExports,
       ),
     ],
@@ -201,26 +212,40 @@ describe('workflow page part', () => {
     expect(harness.counts()).toEqual(NONE_LIVE);
   });
 
-  it('exports_AddWorkflow_DrawsAndConsumerDisposeRemovesBoth', () => {
-    const { harness, exportsFor, rowParts, ids } = startWorkflow();
-    const consumer = createRegistrations();
-    const { workflow } = stubSmall();
-    const wrapper = new FakeElement('div');
+  // Breaks if a side part whose dispose throws skips the redraw that removes
+  // the workflow's chip.
+  it.each([
+    { row: 'its side part disposes', error: null },
+    { row: 'its side part dispose throws', error: 'side part failed' },
+  ])(
+    'an added workflow draws, and its consumer dispose removes its chip and side part ($row)',
+    ({ error }) => {
+      const { harness, exportsFor, rowParts, ids } = startWorkflow(
+        error === null ? null : new Error(error),
+      );
+      const consumer = createRegistrations();
+      const { workflow } = stubSmall();
+      const wrapper = new FakeElement('div');
 
-    exportsFor(consumer).addWorkflow(workflow);
-    harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
-    [...rowParts][0].build(asHtml(wrapper), 's1');
-    const whileAdded = { chip: wrapper.children.length, ids: ids() };
-    consumer.dispose();
+      exportsFor(consumer).addWorkflow(workflow);
+      harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
+      [...rowParts][0].build(asHtml(wrapper), 's1');
+      const whileAdded = { chip: wrapper.children.length, ids: ids() };
+      if (error === null) {
+        consumer.dispose();
+      } else {
+        expect(() => consumer.dispose()).toThrow(error);
+      }
 
-    expect(whileAdded.chip).toBe(1);
-    expect(whileAdded.ids).toContain('small.sidePane');
-    expect(wrapper.children).toHaveLength(0);
-    expect(ids()).not.toContain('small.sidePane');
-    expect(() =>
-      exportsFor(createRegistrations()).addWorkflow(workflow),
-    ).not.toThrow();
-  });
+      expect(whileAdded.chip).toBe(1);
+      expect(whileAdded.ids).toContain('small.sidePane');
+      expect(wrapper.children).toHaveLength(0);
+      expect(ids()).not.toContain('small.sidePane');
+      expect(() =>
+        exportsFor(createRegistrations()).addWorkflow(workflow),
+      ).not.toThrow();
+    },
+  );
 
   function row(sessionId: string): SessionRow {
     return sessionRow(sessionId, {
