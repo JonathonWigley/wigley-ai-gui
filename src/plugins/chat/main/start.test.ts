@@ -36,6 +36,7 @@ import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
   type ContributeToolsOptions,
+  errorResult,
   type ProjectNamer,
   type SessionsMainExports,
   sessionsMainKey,
@@ -315,6 +316,8 @@ describe('chat drive actions', () => {
 // `addProjectNamer` got, and `namerChanges.count` each `changed()` call.
 // `preparedRuns` holds each `prepareRun` call's arguments and the spec it
 // returned; the harness declares no start controls.
+// `options.unlistedProfiles` publishes a second, unlisted harness `demo` with
+// those profiles.
 function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
@@ -322,6 +325,7 @@ function startChatPart(
     infoFails?: boolean;
     profiles?: { name: string; configDir: string }[] | null;
     publishedProfiles?: { name: string; configDir: string }[];
+    unlistedProfiles?: { name: string; configDir: string }[];
     projects?: ProjectSetting[];
   } = {},
 ) {
@@ -335,13 +339,20 @@ function startChatPart(
     options.profiles === undefined
       ? [{ name: 'work', configDir: '/work' }]
       : options.profiles;
-  if (profiles !== null) {
-    store
-      .publish(coreAgentHarnessesSlot)
-      .set(
+  if (profiles !== null || options.unlistedProfiles !== undefined) {
+    const published = store.publish(coreAgentHarnessesSlot);
+    if (profiles !== null) {
+      published.set(
         'claude',
         harnessInfo({ profiles: options.publishedProfiles ?? profiles }),
       );
+    }
+    if (options.unlistedProfiles !== undefined) {
+      published.set(
+        'demo',
+        harnessInfo({ profiles: options.unlistedProfiles, unlisted: true }),
+      );
+    }
   }
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];
@@ -1083,6 +1094,36 @@ describe('chat main part', () => {
       });
     },
   );
+
+  it('startSessionTool_UnlistedHarnessProfile_AnswersUnknownProfile', async () => {
+    const chat = startChatPart({
+      unlistedProfiles: [{ name: 'demo', configDir: '/demo' }],
+    });
+    const contribution = chat.contributions.find(({ tools }) =>
+      tools.some((tool) => tool.name === 'start_session'),
+    );
+
+    const result = await contribution
+      ?.start({
+        id: 'relay-row',
+        info: {
+          sessionId: 'host-relay',
+          projectDir: '/p',
+          harness: 'claude',
+          rowId: null,
+        },
+      })
+      .call(
+        'start_session',
+        { prompt: 'hi', profile: 'demo' },
+        { toolUseId: null, signal: new AbortController().signal },
+      );
+
+    expect(result).toEqual(
+      errorResult('Unknown profile "demo". Profiles: work.'),
+    );
+    expect(chat.starts.count).toBe(0);
+  });
 
   it('contributions_LeaveOutPermissionPrompt', () => {
     const chat = startChatPart();

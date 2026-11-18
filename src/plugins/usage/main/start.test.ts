@@ -345,6 +345,27 @@ describe('usageMainPart', () => {
     ]);
   });
 
+  it('usageMainPart_UnlistedHarness_NeitherPolledNorListed', async () => {
+    const state = createSlotStore(() => undefined);
+    const harnesses = state.publish(coreAgentHarnessesSlot);
+    harnesses.set('claude', harnessInfo({ profiles: [PERSONAL] }));
+    harnesses.set('lab', harnessInfo({ profiles: [LAB], unlisted: true }));
+    const heard: Record<string, (string | null)[]> = { claude: [], lab: [] };
+    const recording = (id: string): Partial<AgentHarness> => ({
+      id,
+      planUsage: (profileDir) => {
+        heard[id].push(profileDir);
+        return Promise.resolve(POLLED);
+      },
+    });
+
+    const usage = startOverSlot(state, [recording('claude'), recording('lab')]);
+    await settled();
+
+    expect(heard).toEqual({ claude: ['~/.claude-personal'], lab: [] });
+    expect(planNames(usage)).toEqual([{ name: 'personal', isDefault: true }]);
+  });
+
   it('usageMainPart_HarnessRegistersAfterStart_PollsItsProfiles', async () => {
     const state = createSlotStore(() => undefined);
     const harnesses = state.publish(coreAgentHarnessesSlot);

@@ -10,7 +10,10 @@ import type {
 import type { HostedRun, PendingSpawn } from '../../../contracts/session-host';
 import { registeredInfos } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
-import { registeredProfiles } from '../../../shared/harness-profiles';
+import {
+  listedHarnesses,
+  registeredProfiles,
+} from '../../../shared/harness-profiles';
 import {
   type ChatMainEvents,
   chatControlsSlot,
@@ -167,20 +170,22 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     const taskName = (taskId: string): string =>
       taskStore.tasks().find((task) => task.id === taskId)?.name ?? taskId;
 
-    // The harness whose controls the editor and the task tools offer: the first registered one.
+    // The harness whose controls the editor and the task tools offer: the first registered listed one.
     const controlsHarness = (): AgentHarness => {
-      const [harness] = services.agentHarnesses.list();
+      const harness = services.agentHarnesses
+        .list()
+        .find((candidate) => candidate.info().unlisted !== true);
       if (harness === undefined) {
         throw new Error('no agent harness is registered');
       }
       return harness;
     };
 
-    // Every registered harness's profile names, in registration order.
+    // Every listed harness's profile names, in registration order.
     const profileNames = (): string[] =>
-      registeredProfiles(registeredInfos(services.agentHarnesses)).map(
-        (profile) => profile.name,
-      );
+      registeredProfiles(
+        listedHarnesses(registeredInfos(services.agentHarnesses)),
+      ).map((profile) => profile.name);
 
     const views = (): ScheduledTaskView[] => {
       const entries = history.entries();

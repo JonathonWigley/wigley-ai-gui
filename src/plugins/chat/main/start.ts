@@ -25,7 +25,10 @@ import {
   createFakeAgentHarness,
   isFakeAgentHarness,
 } from '../../../shared/fake-agent-harness';
-import { registeredProfiles } from '../../../shared/harness-profiles';
+import {
+  listedHarnesses,
+  registeredProfiles,
+} from '../../../shared/harness-profiles';
 import { isSameJson } from '../../../shared/json';
 import {
   editableTitle,
@@ -349,9 +352,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     });
     const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const harnesses = chatHarnessesOf(services.agentHarnesses, harnessSlot);
-    // Every profile name the registry publishes, in registration order.
+    // Every listed harness's profile name the registry publishes, in registration order.
     const profileNames = () =>
-      registeredProfiles(harnessSlot.all()).map((profile) => profile.name);
+      registeredProfiles(listedHarnesses(harnessSlot.all())).map(
+        (profile) => profile.name,
+      );
     // The first profile published for chat's `defaultHarness`; null when it is
     // not registered or has no profiles.
     const defaultHarnessProfile = () =>

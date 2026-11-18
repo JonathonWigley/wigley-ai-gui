@@ -13,6 +13,7 @@ import type {
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { listedHarnesses } from '../../../shared/harness-profiles';
 import {
   createBaseKit,
   keyRunner,
@@ -220,7 +221,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         matcher: services.fuzzy,
         picker: docsPicker.forView(viewId),
         paths: services.paths,
-        harnesses: () => harnesses.all(),
+        harnesses: () => listedHarnesses(harnesses.all()),
         projectConfigFolders: () => [
           ...new Set(
             [...harnesses.all().values()].map(

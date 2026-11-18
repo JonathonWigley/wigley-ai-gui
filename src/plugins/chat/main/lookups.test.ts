@@ -8,7 +8,12 @@ import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
-import { chatHarnessesOf, harnessOfProfile, requireHarness } from './lookups';
+import {
+  chatHarnessesOf,
+  harnessOfProfile,
+  requireHarness,
+  requireHarnessOfProfile,
+} from './lookups';
 import { chatHarnessesOfRegistry } from './lookups.test-support';
 
 function profilesNamed(profileNames: string[]): HarnessProfile[] {
@@ -46,6 +51,19 @@ describe('lookups', () => {
     );
 
     expect(harnessOfProfile(harnesses, 'spare')).toBe(fake);
+  });
+
+  it('requireHarnessOfProfile_UnlistedHarness_StillResolves', () => {
+    const demo = {
+      id: 'demo',
+      info: () =>
+        harnessInfo({ profiles: profilesNamed(['demo']), unlisted: true }),
+    } as unknown as AgentHarness;
+    const harnesses = chatHarnessesOfRegistry(
+      harnessRegistryOf([harnessWith('claude', ['work']), demo]),
+    );
+
+    expect(requireHarnessOfProfile(harnesses, 'demo')).toBe(demo);
   });
 
   it('harnessOfProfile_NoHarnessDeclaresIt_Null', () => {

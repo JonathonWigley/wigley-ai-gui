@@ -14,3 +14,11 @@ export function registeredProfiles(
     info.profiles.map((profile) => ({ ...profile, harnessId })),
   );
 }
+
+// `infos` without each unlisted harness, in the same key order: the harnesses
+// a reader that offers or polls profiles lists.
+export function listedHarnesses(
+  infos: ReadonlyMap<string, AgentHarnessInfo>,
+): ReadonlyMap<string, AgentHarnessInfo> {
+  return new Map([...infos].filter(([, info]) => info.unlisted !== true));
+}

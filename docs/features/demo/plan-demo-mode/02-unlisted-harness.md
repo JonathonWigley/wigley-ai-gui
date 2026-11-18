@@ -1,6 +1,6 @@
 # 02 — Unlisted harness
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `unlisted` flag that 06 consumes, and changes eight readers of `core.agentHarnesses` in five plugins
 Wave: 1 · Depends on: none

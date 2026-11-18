@@ -338,11 +338,12 @@ export const FAKE_PROFILES: readonly HarnessProfile[] = [
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
 
-// The id, label and profiles a fake harness declares.
+// The id, label and profiles a fake harness declares; `unlisted` carries into its info.
 export interface FakeHarnessIdentity {
   id: string;
   label: string;
   profiles: readonly HarnessProfile[];
+  unlisted?: true;
 }
 
 const FAKE_IDENTITY: FakeHarnessIdentity = {
@@ -2151,6 +2152,7 @@ export function createFakeAgentHarness(
       clearAliases: ['reset'],
       projectConfigFolder: '.claude',
       profiles: identity.profiles,
+      ...(identity.unlisted === true ? { unlisted: true } : {}),
     }),
     controls: () => startingControls({}),
     toolUseIdOf(meta) {

@@ -1834,7 +1834,12 @@ describe('createFakeAgentHarness', () => {
     {
       given: 'no identity',
       identity: undefined,
-      expected: { id: 'fake', label: 'Fake', profiles: FAKE_PROFILES },
+      expected: {
+        id: 'fake',
+        label: 'Fake',
+        profiles: FAKE_PROFILES,
+        hasUnlisted: false,
+      },
     },
     {
       given: 'an identity',
@@ -1847,10 +1852,27 @@ describe('createFakeAgentHarness', () => {
         id: 'fake-return',
         label: 'Fake return',
         profiles: [{ name: 'fake-return', configDir: '~/.fake-return' }],
+        hasUnlisted: false,
+      },
+    },
+    {
+      given: 'an unlisted identity',
+      identity: {
+        id: 'demo',
+        label: 'Demo',
+        profiles: [{ name: 'demo', configDir: '/demo' }],
+        unlisted: true as const,
+      },
+      expected: {
+        id: 'demo',
+        label: 'Demo',
+        profiles: [{ name: 'demo', configDir: '/demo' }],
+        hasUnlisted: true,
+        unlisted: true,
       },
     },
   ])(
-    'createFakeAgentHarness_Identity_IdLabelAndProfilesAsGiven given $given',
+    'createFakeAgentHarness_Identity_IdLabelProfilesAndUnlistedAsGiven given $given',
     ({ identity, expected }) => {
       const harness = createFakeAgentHarness(
         clock,
@@ -1858,11 +1880,14 @@ describe('createFakeAgentHarness', () => {
         FAKE_MICROTASK_TIMERS,
         identity,
       );
+      const info = harness.info();
 
       expect({
         id: harness.id,
-        label: harness.info().label,
-        profiles: harness.info().profiles,
+        label: info.label,
+        profiles: info.profiles,
+        hasUnlisted: 'unlisted' in info,
+        unlisted: info.unlisted,
       }).toEqual(expected);
     },
   );

@@ -6,7 +6,10 @@ import type {
 } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
-import { registeredProfiles } from '../../../shared/harness-profiles';
+import {
+  listedHarnesses,
+  registeredProfiles,
+} from '../../../shared/harness-profiles';
 
 // One registered profile's folders, as its harness declares them; `~` is left
 // for the reader to expand.
@@ -32,7 +35,7 @@ export interface HarnessFoldersDeps {
 // Each registered profile's harness folders and plugin installs, asked of the
 // adapter registered under the profile's harness id at each call, in
 // registration then profile order. A profile whose harness the registry does
-// not hold is left out.
+// not hold, or whose harness is unlisted, is left out.
 export interface HarnessFolders {
   roots(): ProfileRoots[];
   // A profile whose installs reject is logged and lists none.
@@ -43,7 +46,7 @@ export function createHarnessFolders(deps: HarnessFoldersDeps): HarnessFolders {
   const { harnesses, infos, log } = deps;
 
   const profilesWithHarness = () =>
-    registeredProfiles(infos()).flatMap((profile) => {
+    registeredProfiles(listedHarnesses(infos())).flatMap((profile) => {
       const harness = harnesses.get(profile.harnessId);
       return harness === null ? [] : [{ profile, harness }];
     });

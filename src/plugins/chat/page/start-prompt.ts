@@ -5,6 +5,7 @@ import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { harnessLabel } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
 import {
+  listedHarnesses,
   type RegisteredProfile,
   registeredProfiles,
 } from '../../../shared/harness-profiles';
@@ -213,7 +214,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           projects,
           harnesses,
           defaultHarness,
-          profiles: registeredProfiles(harnesses),
+          profiles: registeredProfiles(listedHarnesses(harnesses)),
         };
         if (projects.length === 0) {
           openFolderStep(context);
@@ -381,7 +382,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     });
   };
 
-  // The profile `project` fixes, from every registered harness's profiles the
+  // The profile `project` fixes, from every listed harness's profiles the
   // prompt opened with; null when it fixes none. One missing from them is
   // logged and toasted, and answers false.
   const fixedProfileOrReport = (

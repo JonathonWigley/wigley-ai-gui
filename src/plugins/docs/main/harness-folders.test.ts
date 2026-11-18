@@ -9,6 +9,7 @@ import {
 } from '../../../shared/agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
+  FAKE_HARNESS_ID,
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -59,10 +60,22 @@ describe('createHarnessFolders', () => {
     ]);
   });
 
-  it('roots_HarnessNotRegistered_LeftOut', () => {
-    const { folders } = setUp(
-      new Map([['other', harnessInfo({ profiles: PROFILES })]]),
-    );
+  it.each([
+    {
+      given: 'harness not registered',
+      infos: new Map([['other', harnessInfo({ profiles: PROFILES })]]),
+    },
+    {
+      given: 'harness unlisted',
+      infos: new Map([
+        [
+          FAKE_HARNESS_ID,
+          harnessInfo({ profiles: PROFILES, unlisted: true }),
+        ],
+      ]),
+    },
+  ])('roots_ProfilesHarnessNotListable_LeftOut given $given', ({ infos }) => {
+    const { folders } = setUp(infos);
 
     expect(folders.roots()).toEqual([]);
   });

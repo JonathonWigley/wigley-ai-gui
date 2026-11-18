@@ -8,6 +8,7 @@ import type {
 } from '../../../contracts/plugin';
 import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import {
+  listedHarnesses,
   type RegisteredProfile,
   registeredProfiles,
 } from '../../../shared/harness-profiles';
@@ -97,7 +98,8 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       writer.set(EMPTY_USAGE_STATE.snapshot);
     }
     const harnessSlot = api.state.read(coreAgentHarnessesSlot);
-    const profiles = () => registeredProfiles(harnessSlot.all());
+    const profiles = () =>
+      registeredProfiles(listedHarnesses(harnessSlot.all()));
     apply(withProfiles(currentState(), profiles()));
     events.on('chat.planUsage', ({ profileDir, update }) =>
       apply(withLiveRows(currentState(), profileDir, update)),

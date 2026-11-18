@@ -228,6 +228,8 @@ interface StartOptions {
   // In the host before the part starts, so only `listRuns` brings them.
   runs?: HostedRun[];
   loginAnswer?: LoginStartStatus;
+  // Registered before the chat's harness.
+  harnessesFirst?: AgentHarness[];
 }
 
 // The part on the harness at today's 12:00, over fakes that live across a restart: a chat whose `prepareLaunch`
@@ -384,7 +386,10 @@ function startPart(options: StartOptions = {}) {
       clock,
       sessionHost,
       loginStart,
-      agentHarnesses: harnessRegistryOf([chatHarness]),
+      agentHarnesses: harnessRegistryOf([
+        ...(options.harnessesFirst ?? []),
+        chatHarness,
+      ]),
       alerts: {
         setOpenCount: (_source, count, noun) => alerts.push({ count, noun }),
       },
@@ -1214,6 +1219,25 @@ describe('schedulingMainPart', () => {
 
   it('editorChoices_ReadsChatAndTheHarness', async () => {
     const part = startPart();
+    await settle();
+
+    expect(part.harness.invoke('editorChoices')).toEqual({
+      profiles: ['work', 'personal'],
+      projects: ['games'],
+      controls: START_CONTROLS,
+    });
+  });
+
+  it('editorChoices_UnlistedHarnessRegisteredFirst_LeftOut', async () => {
+    const demo = {
+      id: 'demo',
+      info: () => ({
+        profiles: [{ name: 'demo', configDir: '/demo' }],
+        unlisted: true,
+      }),
+      startControls: () => [{ ...START_CONTROLS[0], id: 'demo-mode' }],
+    } as unknown as AgentHarness;
+    const part = startPart({ harnessesFirst: [demo] });
     await settle();
 
     expect(part.harness.invoke('editorChoices')).toEqual({

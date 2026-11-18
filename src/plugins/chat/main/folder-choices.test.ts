@@ -24,13 +24,14 @@ const PROFILES: HarnessProfile[] = [
   { name: 'personal', configDir: '~/.claude-personal' },
 ];
 
-// A fake harness `id` declaring `profiles`, whose `listProjects` answers from
-// `listed` by config folder, rejecting for a folder `listed` holds an Error
-// for.
+// A fake harness `id` declaring `profiles`, unlisted when `unlisted` is true,
+// whose `listProjects` answers from `listed` by config folder, rejecting for a
+// folder `listed` holds an Error for.
 function harnessListing(
   id: string,
   profiles: HarnessProfile[],
   listed: Record<string, ProjectFolder[] | Error>,
+  unlisted?: true,
 ): AgentHarness {
   const fake = createFakeAgentHarness(
     { now: () => 1000 },
@@ -40,7 +41,11 @@ function harnessListing(
   return {
     ...fake,
     id,
-    info: () => ({ ...fake.info(), profiles }),
+    info: () => ({
+      ...fake.info(),
+      profiles,
+      ...(unlisted === true ? { unlisted } : {}),
+    }),
     async listProjects(profileDir) {
       const answer = listed[profileDir ?? ''] ?? [];
       if (answer instanceof Error) {
@@ -330,6 +335,35 @@ describe('createFolderChoices', () => {
         profile: 'spare',
         lastUsed: 3,
       },
+      {
+        projectDir: '/claude-app',
+        harness: 'claude',
+        profile: 'work',
+        lastUsed: 2,
+      },
+    ]);
+  });
+
+  it('list_SecondHarnessUnlisted_ListsOnlyTheFirstHarnessesFolders', async () => {
+    const test = setUp({
+      recent: [],
+      listed: {},
+      folders: ['/claude-app', '/demo-app'],
+      harnesses: [
+        harnessListing('claude', [PROFILES[0]], {
+          '~/.claude': [{ projectDir: '/claude-app', modified: 2 }],
+        }),
+        harnessListing(
+          'demo',
+          [{ name: 'demo', configDir: '~/.demo' }],
+          { '~/.demo': [{ projectDir: '/demo-app', modified: 3 }] },
+          true,
+        ),
+      ],
+    });
+    await test.madeFolders;
+
+    expect(await test.choices.list()).toEqual([
       {
         projectDir: '/claude-app',
         harness: 'claude',

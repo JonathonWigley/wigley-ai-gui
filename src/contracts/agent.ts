@@ -550,12 +550,15 @@ export interface HarnessCapabilities {
 // `projectConfigFolder` is the folder name the harness reads in a project (`.claude` for Claude); `profiles` are the
 // profiles a session can run under, in the harness's settings order; the registry's slot entry leaves out each name
 // an earlier registered harness holds, and the later of a name the harness lists twice.
+// `unlisted`: true for a harness the app runs sessions on but never offers or polls: no reader that offers a profile
+// to the user or an agent, or polls a profile, lists it; chat still launches on its profiles.
 export interface AgentHarnessInfo {
   label: string;
   capabilities: HarnessCapabilities;
   clearAliases: readonly string[];
   projectConfigFolder: string;
   profiles: readonly HarnessProfile[];
+  unlisted?: true;
 }
 
 // A profile a session can run under: `name` is unique across harnesses, `configDir` the harness's config folder as

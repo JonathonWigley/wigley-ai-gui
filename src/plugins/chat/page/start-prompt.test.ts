@@ -792,6 +792,43 @@ describe('start prompt', () => {
     ]);
   });
 
+  it('projectStep_ProjectPinsAnUnlistedHarnessesProfile_ToastsAndStartsNothing', async () => {
+    const demoProject: ChatProject = {
+      kind: 'pool',
+      name: 'Demo',
+      pool: 'demo-pool',
+      profile: 'demo',
+    };
+    const run = setUp({
+      harnesses: new Map([
+        ['claude', harnessInfo({ profiles: [work] })],
+        [
+          'demo',
+          harnessInfo({
+            profiles: [{ name: 'demo', configDir: '/demo' }],
+            unlisted: true,
+          }),
+        ],
+      ]),
+      answers: {
+        projects: () => Promise.resolve([demoProject]),
+        projectPastSessions: () =>
+          Promise.resolve([{ ...alpha, projectDir: '/c/1' }]),
+      },
+    });
+    await flush();
+
+    await pickInTurn(run, 'Demo · demo-pool');
+
+    expect(run.started).toEqual([]);
+    expect(run.toasts).toEqual([
+      {
+        text: 'Profile demo of Demo is not a profile of any registered harness',
+        tone: 'error',
+      },
+    ]);
+  });
+
   it('noProfiles_toastsTheHarnessLabelAndOpensNothing', async () => {
     const run = setUp({
       harnesses: new Map([
