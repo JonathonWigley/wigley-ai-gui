@@ -1,6 +1,6 @@
 # 02 — EditorHost.defineEx
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 07 Part A
 Plan: [plan.md](plan.md)
@@ -193,3 +193,4 @@ Commit: one commit for the group. Message:
 
 ## Proof
 
+Commit 39a7d4933 · proof: diff read: EditorHost.defineEx/ExHandler/ExCall in contracts/editor.ts, DOCUMENT_COMMANDS, ex-definitions.ts with the pinned vim list and the two new rules, dispose stub, trackedEditor/countingEditors exCommands; wave 3 compile: typecheck, lint pass; full npm test 14794 pass, 3 known failures (plan-copies, user-keymap, markdown-it addBlock) · concerns: prefix rule rejects only an equal prefix between definitions, so ('quiet','qu') catches :qu that ran quit; dispose stubs stay in vim's tables for good; vim's prompt shows 'Error: Not an editor command'; check-layers.mts gained a whole-file entry outside the Files list; followups.md:427 names DOCUMENT_EX_COMMANDS (task 11)

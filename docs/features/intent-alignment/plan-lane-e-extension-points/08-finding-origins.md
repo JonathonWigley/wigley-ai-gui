@@ -1,6 +1,6 @@
 # 08 — Finding origin specs, open layout unions, proof off a Nit
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
