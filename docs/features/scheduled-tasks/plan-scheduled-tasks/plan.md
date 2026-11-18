@@ -990,4 +990,6 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 ### Review rounds
 - R1 · 8e6865c20 · NEEDS FIXES: 2 critical, 19 important, 22 minor; 9 lead-applied (e984c3171); fixes e984c3171..c3e5e2535 · tier High (host protocol handoff, channel lock, busy state, adoption) → correctness re-review
 - R2 · c3e5e2535 · NEEDS FIXES: 2 important (forgotten runs resurrect via F7, drain grace too short), 14 minor incl. 4 repeats; fixes 94d049420..a80279fad · tier High (host import and drain timing) → correctness re-review
+- R3 6 Minor: #5 #6 lead-applied f802db9a4; #2 #3 tests and follow-ups ecc436717 (max cycles reached). R4 (test-gate fix d319fdc68, Medium, correctness read): PASS, 1 Minor (no case for the sweep finishing a non-adopted row) left open.
 ### Test gate
+- Tier High. vitest over the 52 changed test files: 2409/2409 after d319fdc68 (first run 19 failed: 18 tests that never passed or were broken by 1ca2a9758, plus one node-files watch flake under load, 3/3 alone); relay unittest discover: 110 OK, 2 skipped.
