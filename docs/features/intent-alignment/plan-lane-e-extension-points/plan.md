@@ -309,4 +309,6 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - 09: version 2.16.3, one patch above main's 2.16.2; _action_label gains a private saved_word parameter · group 09 · group 09
 - 10: findingActionOf and findingActionWord stay in round-answers.ts (they call kindAnswer/kindItem); isAnswerable, NoticeAnswer, HeldEntries and NOTICE_KIND go to round-model.ts; shared test helpers in page/form-state.test-support.ts · group 10 · group 10
 ### Review rounds
+- Round 1 (review at 34f3dacb3, NEEDS FIXES: 0 critical, 9 important, 30 minor): fix range 4ea805983, tier Medium (registry undo, ex shadow rule, tool refresh and RoundError detection change behaviour), re-review correctness on the fix commit
+- Re-review of 4ea805983: forms-main PASS; page-editor NEEDS FIXES (1 important + 2 minor repeats, open, headless pick Follow-up; 4 minor determined). Last fix round 0f89e80e7: tier Low (tests, doc and comment text, one helper move, agent-facing notices wording), closed by commit and compile
 ### Test gate
