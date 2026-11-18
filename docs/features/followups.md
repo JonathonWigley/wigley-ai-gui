@@ -429,6 +429,11 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **`ask_round` still names three item kinds** — *agent-ready*: its description says "question, finding or notice, and
   may carry any mix of the three" (`src/plugins/forms/main/tool-definitions.ts:53`), also when plugin kinds are
   registered. Build that sentence from the registered kinds.
+- **A round submitted while a kind's plugin is off drops that kind's answers silently** — *agent-ready*: Lane E's live
+  session (task 12, check 16) answered a plugin `poll` item, switched its plugin off, and sent the round. The poll
+  answer was missing from the result, and nothing told the user. The round view hides a departed kind's items and
+  keeps its draft entries only in the body (`rederiveRound`, `src/plugins/forms/page/round-draft.ts`). Options: name
+  the held items in the send confirmation, or refuse to send while a round holds an answered item whose kind is gone.
 
 ## Features
 

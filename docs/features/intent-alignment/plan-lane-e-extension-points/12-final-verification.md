@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -110,3 +110,4 @@ Done when: the test gate and filtered self-tests pass, and every live check abov
 
 ## Proof
 
+Commit da1e2df3c, cc74329a1 · proof: live session (drive run, lane-e-fixture user plugin in the run's own home; report scratchpad/reports/12-live.md): self-tests forms, settings, chat and practice pass; docs failed 4 steps on the branch's pre-rebase base and passes on main, fixed there by 1221f806e (re-run after the landing rebase); checks 1-3, 5-8, 10, 11, 13 and 15-21 pass; check 4 failed (the disposed ex stub threw and the Enter reached the page) and was fixed by da1e2df3c, re-run passing; check 9 failed (an open picker did not take a new layout) and was fixed by cc74329a1, re-run passing for the docs and shell pickers; checks 12 and 14 need the user (an installed-app draft, Claude Code's tools/list refetch) · concerns: jk remap to <C-[> deleted two characters under synthetic keys (user check); a plugin kind's empty answers key joins the saved body while its plugin is on, by design; an answer of a kind switched off at send is dropped silently (follow-up)

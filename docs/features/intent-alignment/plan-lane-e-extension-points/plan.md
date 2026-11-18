@@ -263,7 +263,7 @@ Names and types more than one task uses. A task's own internals are its document
 - [x] [Agent docs and the design re-read](11-docs.md) — after 01–10
 
 ### Wave 7
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -282,6 +282,7 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - 09 · hard · 2c5350abe, bf8ea4199 · diff read: ORIGIN_ACTION_LABELS gone, _action_pick reads action_label/recommend_action_label with the pre-08 fallback, _card_entries offers every action; README, triage.md, make SKILL.md, forms.md proof text; both manifests 2.16.3 (main holds 2.16.2); retro unittest OK · concerns: check_pointers.py fails on a main-clone learning/candidates file this task did not touch; the doc's 2.12.4 version was stale
 - 10 · hard · 8b8fd33ba · diff read: round-model.ts, round-answers.ts, round-draft.ts, kinds/finding/finding-answer.ts, form-state.ts keeps state/createFormsState/reducer/roundPlace, FormsScreen; wave 5 compile: typecheck, lint pass; full npm test 14832 pass, 3 known failures · concerns: test-rounds.ts imports changed (types moved since 07); AGENTS.md 'An item kind' and the FormsView name in followups.md, plugin-framework design, master-plan and the Lane L docs are left for task 11
 - 11 · standard · de205e616 · diff read: AGENTS.md sections and design docs match the landed code (names grepped); followups removed, the partly landed tool-table entry reworded to its open part; master-plan boxes ticked; lint passes · concerns: FormsView is still named in Lane L's plan docs (plan-lane-l-layouts 11, 12, 13 and plan.md:47, :50), left for Lane L; run-log concerns were not added as follow-ups
+- 12 · hard · da1e2df3c, cc74329a1 · live session (drive run, lane-e-fixture user plugin in the run's own home; report scratchpad/reports/12-live.md): self-tests forms, settings, chat and practice pass; docs failed 4 steps on the branch's pre-rebase base and passes on main, fixed there by 1221f806e (re-run after the landing rebase); checks 1-3, 5-8, 10, 11, 13 and 15-21 pass; check 4 failed (the disposed ex stub threw and the Enter reached the page) and was fixed by da1e2df3c, re-run passing; check 9 failed (an open picker did not take a new layout) and was fixed by cc74329a1, re-run passing for the docs and shell pickers; checks 12 and 14 need the user (an installed-app draft, Claude Code's tools/list refetch) · concerns: jk remap to <C-[> deleted two characters under synthetic keys (user check); a plugin kind's empty answers key joins the saved body while its plugin is on, by design; an answer of a kind switched off at send is dropped silently (follow-up)
 ### Contract changes
 - appliedRemaps(defaults): Keymap → DefaultKeymap · why: the defaults served() has (checks().deps.defaultKeymap) are a DefaultKeymap; the merged Keymap already holds plugin remaps · consumers: 03, 11, 12 · group 03
 - contributeFormsTools deps gain log: PluginLog; createLayoutPreview deps gain kinds() · why: a failed tool refresh is logged; the preview parses saved rounds with the registered kinds · consumers: 07, 08, 10 · group 06
@@ -312,3 +313,4 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - Round 1 (review at 34f3dacb3, NEEDS FIXES: 0 critical, 9 important, 30 minor): fix range 4ea805983, tier Medium (registry undo, ex shadow rule, tool refresh and RoundError detection change behaviour), re-review correctness on the fix commit
 - Re-review of 4ea805983: forms-main PASS; page-editor NEEDS FIXES (1 important + 2 minor repeats, open, headless pick Follow-up; 4 minor determined). Last fix round 0f89e80e7: tier Low (tests, doc and comment text, one helper move, agent-facing notices wording), closed by commit and compile
 ### Test gate
+- Full npm test over 8d829c42c..d24dac027 (14879 tests) plus retro (230): 2 failures, neither Lane E's: plan-copies readPlanCopy_PlanAndLinkedTaskDocuments is fixed on main by bc5ab1c58 (verification field), which the landing rebase brings in; user-keymap parseUserKeymap_UnknownToken fails on main too (F-keys now valid). addBlock_SecondOfAName fixed by review finding 1.
