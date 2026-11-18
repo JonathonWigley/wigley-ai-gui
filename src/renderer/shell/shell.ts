@@ -123,6 +123,11 @@ function isBarName(name: AreaName): name is BarName {
 // `data-side-bar`. `setChromeLayout` names the user's shell layout on the
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
+// `isSideBarCrowded` is whether the shown left bar would lie over a side bar
+// beside it at its least width, whatever the side bar's layout; the core then
+// keeps the side bar off beside, as in a narrow window.
+// `onSideBarCrowdedChanged` tells each listener when that changes, after the
+// bars are drawn.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
 // the side bar is beside the content; the left and right bars resize by their
 // handles' drag alone. `reloadBarOpenWidths` reads the `sidebar-width`,
@@ -144,6 +149,8 @@ export interface Shell {
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
+  isSideBarCrowded(): boolean;
+  onSideBarCrowdedChanged(listener: (isCrowded: boolean) => void): Disposable;
   sideBarDivider: ResizeTarget;
   reloadBarOpenWidths(): void;
   dispose(): void;
@@ -403,7 +410,9 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // first, then the left bar: the right bar is measured against the side bar
 // and the left bar at their least widths, the left bar against the side bar
 // at its least width and the width the right bar takes (each none unless
-// shown), and the side bar gets what is left. Shown in a span with room for
+// shown), and the side bar gets what is left; once even the side bar's least
+// width would put the left bar over, the side bar is crowded
+// (`isSideBarCrowded`). Shown in a span with room for
 // its least width and main's, a left or right bar sits beside main
 // (`data-left-bar` or `data-right-bar` `beside`), drawn no wider than leaves
 // main its least width; in a narrower span it lies over (`over`) at its least
@@ -610,35 +619,48 @@ export function mountShell(
     return { left: Math.min(...starts), right };
   };
   const sideBarLeast = () => (sideBarLayout === 'beside' ? SIDE_BAR_MIN : 0);
-  // The span main and the right bar share with the side bar and the left bar
-  // at their least widths, ending at the right bar's end.
-  const measureRightBar = () => {
+  // The span main and the right bar share with the side bar, taking
+  // `sideLeast`, and the left bar at its least width, ending at the right
+  // bar's end.
+  const measureRightBar = (sideLeast = sideBarLeast()) => {
     const { left, right } = measureBarSpan();
     const leftBarLeast = isBarShown('leftBar') ? BAR_SPECS.leftBar.min : 0;
-    const span = right - left - sideBarLeast() - leftBarLeast;
+    const span = right - left - sideLeast - leftBarLeast;
     return { left: right - span, span };
   };
-  const drawRightBar = () =>
+  const drawRightBar = (sideLeast = sideBarLeast()) =>
     drawBar(
       bars.rightBar.width,
       barLimits(bars.rightBar),
-      measureRightBar().span,
+      measureRightBar(sideLeast).span,
       !isBarShown('rightBar'),
     );
-  // The span the left bar shares with main, the side bar at its least width
+  // The span the left bar shares with main, the side bar, taking `sideLeast`,
   // and the width the right bar takes, starting at the left bar's start.
-  const measureLeftBar = () => {
+  const measureLeftBar = (sideLeast = sideBarLeast()) => {
     const { left, right } = measureBarSpan();
-    const span = right - left - sideBarLeast() - drawRightBar().taken;
+    const span = right - left - sideLeast - drawRightBar(sideLeast).taken;
     return { left, span };
   };
-  const drawLeftBar = () =>
+  const drawLeftBar = (sideLeast = sideBarLeast()) =>
     drawBar(
       bars.leftBar.width,
       barLimits(bars.leftBar),
-      measureLeftBar().span,
+      measureLeftBar(sideLeast).span,
       !isBarShown('leftBar'),
     );
+  // Whether a side bar beside at its least width would put the left bar over
+  // it; measured whatever the side bar's layout, so laying the side bar out by
+  // it cannot flip it back.
+  let isSideBarCrowded = false;
+  const crowdedChanged = createListeners<boolean>();
+  const updateSideBarCrowded = () => {
+    const next = drawLeftBar(SIDE_BAR_MIN).isOver;
+    if (next !== isSideBarCrowded) {
+      isSideBarCrowded = next;
+      crowdedChanged.tell(next);
+    }
+  };
   // The span the side bar and main share, less the widths the left and right
   // bars take from it.
   const measureSideBar = () => {
@@ -670,11 +692,13 @@ export function mountShell(
   };
 
   // No bar's measure reads another's drawn width or layout, so one pass ends
-  // settled.
+  // settled; a crowding listener that lays the side bar out again redraws in
+  // a pass of its own.
   const drawBarWidths = () => {
     showBarDraw('rightBar', drawRightBar());
     showBarDraw('leftBar', drawLeftBar());
     drawSideBarWidth();
+    updateSideBarCrowded();
   };
 
   const sideBarDivider = createSplitDivider({
@@ -768,6 +792,8 @@ export function mountShell(
       chromeLayout = name;
       applyChromeLayout();
     },
+    isSideBarCrowded: () => isSideBarCrowded,
+    onSideBarCrowdedChanged: (listener) => crowdedChanged.add(listener),
     sideBarDivider,
     reloadBarOpenWidths() {
       sideBarOpen = sideBarOpenWidth();

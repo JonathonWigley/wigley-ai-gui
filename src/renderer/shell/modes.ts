@@ -68,7 +68,8 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 // and side bar in the window, and its item in the activity bar, once at its
 // `add`, and the `Disposable` it returns takes them out; `marked` marks the shown mode in the activity bar; `layOutSideBar`
 // lays out the side bar area; `showContext` shows the title bar's context;
-// `isNarrow` is whether the window starts narrow (`SIDE_BAR_OVER_QUERY`);
+// `isNarrow` is whether the side bar starts with no room beside the content
+// (`SIDE_BAR_OVER_QUERY`, or crowded by the left bar);
 // `sideBarOpened` runs after a mode with `focusSideBar` has heard its side bar
 // open over the content (`sideBarOpenedOver`), so the core holds that side
 // bar as the area with the keys.
@@ -82,8 +83,10 @@ export interface ModesDeps {
   log: Log;
 }
 
-// The core's own view of the registry: `narrowChanged` hears the window cross
-// the 680 px breakpoint, closing every mode's overlay on widening and laying
+// The core's own view of the registry: `narrowChanged` hears the side bar lose
+// or regain its room beside the content (the window crossing the 680 px
+// breakpoint, or the shell's left bar crowding it), closing every mode's
+// overlay on widening and laying
 // out the shown mode's side bar again. It tells the mode `sideBarHidden` only
 // when widening closes its open overlay onto a side bar the user hid, and
 // `sideBarNarrowed` only when narrowing hides its side bar from beside the

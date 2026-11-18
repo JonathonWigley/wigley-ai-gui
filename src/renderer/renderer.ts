@@ -267,6 +267,17 @@ async function start() {
     log,
   });
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
+  // A side bar crowded by the left bar lays out as in a narrow window, so it
+  // never lies beside under the left bar.
+  const hasNoSideBarRoom = () => narrow.matches || shell.isSideBarCrowded();
+  let wasNoSideBarRoom = hasNoSideBarRoom();
+  const sideBarRoomChanged = () => {
+    const isNoRoom = hasNoSideBarRoom();
+    if (isNoRoom !== wasNoSideBarRoom) {
+      wasNoSideBarRoom = isNoRoom;
+      modes.narrowChanged(isNoRoom);
+    }
+  };
   const modes = createModes({
     place(mode, handle) {
       const placement = createRegistrations();
@@ -282,12 +293,11 @@ async function start() {
     showContext: (context) => chrome.showContext(context),
     // `paneTargets` is made below; no mode is added before it.
     sideBarOpened: () => paneTargets.sideBarOpened(),
-    isNarrow: narrow.matches,
+    isNarrow: wasNoSideBarRoom,
     log,
   });
-  narrow.addEventListener('change', (event) =>
-    modes.narrowChanged(event.matches),
-  );
+  narrow.addEventListener('change', sideBarRoomChanged);
+  shell.onSideBarCrowdedChanged(sideBarRoomChanged);
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
   areas.overlay.contribute(toastLayer);

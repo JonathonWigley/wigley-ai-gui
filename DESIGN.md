@@ -385,10 +385,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Left bar:** L1 dense glass between the activity bar and the side bar in every mode, belonging to no mode,
   opening at `leftbar-width` and then the user's width (by drag on its end edge; it carries no resize keys); hidden
   while no plugin contributes to it. Its hairline is on its end edge. With too little room for its least width and the
-  sheet's, once the side bar is at its least width and the right bar has taken its own, it lies over at its least
-  width, still against the activity bar: over a beside side bar's start, or over the sheet's start, with a side bar
-  opened over the sheet laid past it. It stays between the activity bar and the side bar in every width. Rows and hover
-  follow the side bar.
+  sheet's beside a side bar at its least width, the side bar gives way as in a narrow window (hidden, or opened over
+  the sheet), so the left bar never covers a side bar beside it. With too little room even then, it lies over the
+  sheet's start at its least width, still against the activity bar, with a side bar opened over the sheet laid past
+  it. It stays between the activity bar and the side bar in every width. Rows and hover follow the side bar.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
   user's width (by drag; it carries no resize keys); hidden while no plugin contributes to it. In a window too narrow
   for every bar, the side bar narrows to its least width first, then the left bar, then the right bar to its own; with

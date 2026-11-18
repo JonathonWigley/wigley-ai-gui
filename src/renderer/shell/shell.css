@@ -222,8 +222,8 @@
 }
 
 /* Over the content, the left bar lies against the activity bar, from the
-   side bar's column across main's, while its own column collapses: over a
-   beside side bar's start, or over main's start. */
+   side bar's column across main's, while its own column collapses; the side
+   bar is then hidden or over, so it lies over main's start. */
 .shell-left-bar[data-left-bar='over'] {
   grid-column: 3 / 5;
   grid-row: 2 / 4;

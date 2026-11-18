@@ -1300,15 +1300,14 @@ describe('mountShell', () => {
       drawn: '220',
     },
     {
-      row: 'shown, the side bar beside, main ending at 600, over at its least width',
+      row: 'shown, the side bar beside, main ending at 600, then the side bar hidden as crowded, beside main',
       steps: (shell: NarrowingShell) => {
         shell.shell.layOutSideBar('beside');
         shell.showLeftBar();
         resizeTo(shell, 600);
+        shell.shell.layOutSideBar('hidden');
       },
-      drawn: '200',
-      layout: 'over',
-      handleHidden: true,
+      drawn: '280',
     },
     {
       row: 'shown, the right bar shown, right edge 900, the right bar keeping its width',
@@ -1347,6 +1346,109 @@ describe('mountShell', () => {
         shell.leftHandle()?.hidden,
       ]).toEqual([drawn, layout, handleHidden]);
       expect(shell.values.get('left-bar-width')).toBe(400);
+    },
+  );
+
+  // Steps over a shell whose left bar and side bar start at the client's left
+  // edge, with each bar's stored width 400 and the right bar's open 300: the
+  // side bar is crowded once the span past its least width 160 leaves the
+  // left bar less than its least 200 and main's 320.
+  it.each([
+    {
+      row: 'the left bar shown, main ending at 1200',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.showLeftBar();
+      },
+      heard: [],
+      isCrowded: false,
+    },
+    {
+      row: 'the left bar shown, main ending at 600',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.showLeftBar();
+        resizeTo(shell, 600);
+      },
+      heard: [true],
+      isCrowded: true,
+    },
+    {
+      // Breaks when crowding is measured against the side bar's own layout,
+      // which the crowding hides.
+      row: 'crowded at main ending at 600, then the side bar hidden',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.showLeftBar();
+        resizeTo(shell, 600);
+        shell.shell.layOutSideBar('hidden');
+        shell.resizeRoot();
+      },
+      heard: [true],
+      isCrowded: true,
+    },
+    {
+      row: 'crowded at main ending at 600, then main ending at 1200',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('hidden');
+        shell.showLeftBar();
+        resizeTo(shell, 600);
+        resizeTo(shell, 1200);
+      },
+      heard: [true, false],
+      isCrowded: false,
+    },
+    {
+      row: 'the left bar hidden, main ending at 400',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        resizeTo(shell, 400);
+      },
+      heard: [],
+      isCrowded: false,
+    },
+    {
+      row: 'the right bar shown, right edge 880, the left bar just beside',
+      steps: (shell: NarrowingShell) => {
+        shell.showLeftBar();
+        shell.showRightBar();
+        resizeRightTo(shell, 880);
+      },
+      heard: [],
+      isCrowded: false,
+    },
+    {
+      row: 'the right bar shown, right edge 860, crowded',
+      steps: (shell: NarrowingShell) => {
+        shell.showLeftBar();
+        shell.showRightBar();
+        resizeRightTo(shell, 860);
+      },
+      heard: [true],
+      isCrowded: true,
+    },
+  ] satisfies {
+    row: string;
+    steps: (shell: NarrowingShell) => void;
+    heard: boolean[];
+    isCrowded: boolean;
+  }[])(
+    'tells when the left bar crowds the side bar: $row',
+    ({ steps, heard, isCrowded }) => {
+      const shell = mountMeasuredShell({
+        stored: 400,
+        leftStored: 400,
+        rightToken: '300px',
+      });
+      const told: boolean[] = [];
+      shell.shell.onSideBarCrowdedChanged((next) => told.push(next));
+
+      steps(shell);
+
+      expect([told, shell.shell.isSideBarCrowded()]).toEqual([
+        heard,
+        isCrowded,
+      ]);
     },
   );
 

@@ -708,10 +708,12 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   hidden while empty, and takes contributions through `api.areas.leftBar` or `api.areas.rightBar` (a `BarArea`); a
   contribution with rows to act on passes `focus` with it, which sets its own key scope and cursor, and `left`, which
   the core calls when its turn ends, and becomes a stop for the core's focus keys (`BarOptions`). In a window too
-  narrow for every bar beside `main`, the side bar narrows to its least width first, then the left bar, then the right
-  bar; the left or right bar lies over when the room left for it is less than its least width and `main`'s, the right
-  bar over `main`'s end and the left bar against the activity bar, over the side bar's start (a side bar over `main`
-  is laid past it). Only the side bar resizes by keys; the left and right bars by drag alone.
+  narrow for every bar beside `main`, the side bar narrows to its least width first; once even that would put the left
+  bar over, the side bar is crowded (`isSideBarCrowded`) and lays out as in a narrow window, hidden or opened over
+  the content, so it never lies beside under the left bar. Then the left bar narrows, then the right bar; the left or
+  right bar lies over when the room left for it is less than its least width and `main`'s, the right bar over
+  `main`'s end and the left bar against the activity bar over `main`'s start (a side bar over `main` is laid past
+  it). Only the side bar resizes by keys; the left and right bars by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
