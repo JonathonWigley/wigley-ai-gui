@@ -161,16 +161,10 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
     },
   });
 
-  // Closes the sessions of `run` launched since `before` was taken, each
+  // Closes `sessionIds` and drops them from `run`'s launched set, each
   // failure logged.
-  const closeLaunchedSince = async (
-    run: LiveRun,
-    before: ReadonlySet<string>,
-  ) => {
-    for (const sessionId of run.launched) {
-      if (before.has(sessionId)) {
-        continue;
-      }
+  const closeSessions = async (run: LiveRun, sessionIds: Iterable<string>) => {
+    for (const sessionId of sessionIds) {
       run.launched.delete(sessionId);
       try {
         await chat.close(sessionId, 'finished');
@@ -182,19 +176,33 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
 
   // `step.enter`, rejecting once it has not settled in
   // `STEP_ENTER_TIMEOUT_MS` after closing the sessions it launched, so a hung
-  // enter never holds the queue and `stop` behind it. A stage it returns after
-  // that is disposed and its sessions closed.
+  // enter never holds the queue and `stop` behind it. The enter gets its own
+  // `launchSession`, so only its sessions are closed: one it launches after
+  // the timeout is closed as it launches, whether the enter then resolves or
+  // rejects, and a stage it returns then is disposed, all without touching the
+  // step entered after it.
   const enterInTime = (
     run: LiveRun,
     step: DemoMainStep,
   ): Promise<DemoMainStage> => {
-    const before = new Set(run.launched);
+    const own = new Set<string>();
+    let isTimedOut = false;
+    const context: DemoMainContext = {
+      ...run.context,
+      async launchSession(text) {
+        const sessionId = await run.context.launchSession(text);
+        own.add(sessionId);
+        if (isTimedOut) {
+          await closeSessions(run, [sessionId]);
+        }
+        return sessionId;
+      },
+    };
     return new Promise<DemoMainStage>((resolve, reject) => {
-      let isTimedOut = false;
       const timer = deps.timers.set(() => {
         isTimedOut = true;
         log(`${step.id} did not enter in time`);
-        void closeLaunchedSince(run, before).then(() =>
+        void closeSessions(run, [...own]).then(() =>
           reject(
             new Error(
               `Step ${step.id} did not enter within ${STEP_ENTER_TIMEOUT_MS} ms.`,
@@ -202,7 +210,7 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
           ),
         );
       }, STEP_ENTER_TIMEOUT_MS);
-      step.enter(run.context).then(
+      step.enter(context).then(
         (stage) => {
           if (!isTimedOut) {
             deps.timers.clear(timer);
@@ -214,13 +222,14 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
           } catch (error) {
             log(`leave ${step.id} failed: ${errorText(error)}`);
           }
-          void closeLaunchedSince(run, before);
         },
         (error: unknown) => {
           if (!isTimedOut) {
             deps.timers.clear(timer);
             reject(error);
+            return;
           }
+          log(`${step.id} failed after its timeout: ${errorText(error)}`);
         },
       );
     });

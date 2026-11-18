@@ -355,6 +355,7 @@ Review base: 7811ca8a2
 - 13: shared/agent-forms/demo-form.ts (openSampleForm, sampleFormOwner) and shared/page/demo-form-wait.ts; FormsMainExports.confirmSample; agent-commands exports confirmRequest and gains agentCommandsPagePart (07 lists it); audio-picker exports SAMPLE_SOUNDS and writeSampleSoundsIn; NotePopup.showSample; notes main registerDemoSteps takes no deps
 - 14: workflow/contract.ts gains sampleFlow, sampleChecklist, createSampleSequence, sampleSessionStep and WorkflowPageExports.showSample; workflow-large previewFlow takes the plan (default PREVIEW_PLAN)
 - 15: createDemoRooms takes DemoRoomsDeps (adds rewriteRoom, released); seedChatroomFixture deps take launch(title) and roomFor(name); ChatroomSelfTestDeps takes fixtureDeps(projectDir); docs exports addSampleDocs, SAMPLE_HOME_FOLDER, SAMPLE_SOURCE_ID, NO_INDEX_MESSAGE; scheduling contract DEMO_TASK_IDS
+- Review fixes: createDemoTasks(clock: Clock); stepAgentInstructions takes StepAgentFolder {path, isAppClone}; DemoRunDeps gains timers; chat demo deps swap openStartPrompt for startPrompt
 ### Rulings
 - 01: runDisabledForNow counts a hold from its call's start and releases it if the apply rejects, so a hold disposed while a second call applies does not switch off what that call starts — literal reading had the race; cost if wrong: none for the cases the plan names · group 01
 - 03: prepareLaunch rejects ephemeral before its other checks; toggleHidden still logs the user's uiState choice during a hold · group 03
@@ -367,4 +368,5 @@ Review base: 7811ca8a2
 - 15: chatroom release rebuilds through the room's chain, deleting the view key only when no saved room has the name · group 15 · group 15
 - 16 runs alongside 08 rather than after it, to meet the user's 3:00 deadline: 16 documents 08's self-test from its task document, and the review checks the prose against 08's landed code
 ### Review rounds
+- Round 1: 8 lanes (4 correctness, 3 plan-and-design, 1 for 08+16) at 1a8110c8c/ec1c6cdf9, NEEDS FIXES, no critical. Determined fixes 68074eb05, e6d373d02, a229c4698, 0966221f2; demo self-test now passes. Fix range 033cfd5b4..0966221f2 risk Medium: one correctness re-review lane. Open items triaged with the user.
 ### Test gate

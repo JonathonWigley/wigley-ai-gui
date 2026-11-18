@@ -68,14 +68,15 @@ export function registerDemoSteps(
     order: 40,
     title: 'Message box',
     caption:
-      'The message box queues messages while the agent works, interrupts it, and completes slash commands.',
+      'The message box queues messages while the agent works, interrupts it, and takes slash commands typed after a /.',
     files: [
       'src/plugins/chat/page/composer-kit.ts',
       'src/plugins/chat/page/chat-commands.ts',
     ],
     async enter({ sessions }: DemoPageContext) {
       let hasTyped = false;
-      // A typed `/` opens the completion; filling the box alone does not.
+      // Types a `/` into the box. The completion it opens closes as the demo takes the keys back from the box, so
+      // the beat shows the typed `/` alone.
       const typeSlash = () => {
         deps.fillComposer(sessions.slash, '');
         const focused = document.activeElement;

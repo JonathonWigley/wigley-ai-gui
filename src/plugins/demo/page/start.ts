@@ -45,6 +45,8 @@ type DemoApi = PageApi<typeof demoManifest, DemoChannel>;
 // Ahead of usage's details (0), the unity-pool panel (10) and system stats (20): the Demo panel tops the right bar.
 const PANEL_ORDER = -10;
 const SECTION_ID = 'demo';
+// The longest the panel keeps its turn through a step its Enter enters, so a hung enter cannot hold the turn.
+const PANEL_ENTER_TURN_MS = 10_000;
 const PANE_HINT =
   "Ask for a change to the feature on screen; the agent works in the app's own clone.";
 const NOT_RUNNING: DemoRunState = {
@@ -118,11 +120,37 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     let cursorId: string | null = null;
     // True while the panel itself holds the keys, its agent pane not.
     let hasKeys = false;
-    // True while the panel's Enter enters the cursor's step.
+    // True from the panel's Enter on the cursor's step until the driver has entered it (or failed to), and for
+    // `PANEL_ENTER_TURN_MS` at most; `enteringTimer` ends it then.
     let isEnteringFromPanel = false;
+    let enteringTimer: number | null = null;
     // The live run's failed step ids, once each in first-failure order.
     const failedSteps: string[] = [];
 
+    // Runs `work`, then gives up the DOM focus when `work` moved it into a text box outside the panel (the message
+    // box, a form's answer, a note), which would take the demo keys as text. A box focused before `work`, such as one
+    // the user is typing in, keeps the focus, and so does the step agent's pane in the panel.
+    const keepingKeys = async <T>(work: () => T | Promise<T>): Promise<T> => {
+      const before = document.activeElement;
+      try {
+        return await work();
+      } finally {
+        const focused = document.activeElement;
+        if (
+          focused !== before &&
+          focused instanceof HTMLElement &&
+          !panelSlot.contains(focused) &&
+          (services.editor.contains(focused) ||
+            focused.isContentEditable ||
+            focused.matches('input, textarea'))
+        ) {
+          focused.blur();
+          log('took the keys back from a text box');
+        }
+      }
+    };
+
+    // Main's half first, then the page's, whose enter and each beat's show run under `keepingKeys`.
     const enter = async (step: DemoStep): Promise<DemoStage> => {
       if (run === null) {
         throw new Error('The demo is not running.');
@@ -131,7 +159,9 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       const stepSessions = await channel.invoke('enterStep', step.id);
       let stage: DemoStage;
       try {
-        stage = await step.enter({ scratchDir, sessions: stepSessions });
+        stage = await keepingKeys(() =>
+          step.enter({ scratchDir, sessions: stepSessions }),
+        );
       } catch (error) {
         await channel
           .invoke('leaveStep', step.id)
@@ -152,33 +182,31 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
         .catch((error: unknown) =>
           log(`describeStep failed: ${errorText(error)}`),
         );
-      return stage;
+      return {
+        beats: stage.beats.map((beat) => ({
+          ...beat,
+          show: () => keepingKeys(() => beat.show()),
+        })),
+        dispose: () => stage.dispose(),
+      };
     };
 
-    // A beat or a leave that focused a text box (the message box, a form's answer, a note) would take the demo keys
-    // as text, so the box gives the DOM focus up; the step agent's pane in the panel keeps its own.
-    const takeKeysFromTextBox = () => {
-      const focused = document.activeElement;
-      if (!(focused instanceof HTMLElement) || panelSlot.contains(focused)) {
-        return;
-      }
-      const isTextBox =
-        services.editor.contains(focused) ||
-        focused.isContentEditable ||
-        focused.matches('input, textarea');
-      if (isTextBox) {
-        focused.blur();
-        log('took the keys back from a text box');
-      }
-    };
-
-    // The page's stage first, then main's.
+    // The page's stage first, under `keepingKeys`, then main's.
     const leave = async (step: DemoStep, stage: DemoStage) => {
       try {
-        stage.dispose();
+        await keepingKeys(() => {
+          stage.dispose();
+        });
       } finally {
-        takeKeysFromTextBox();
         await channel.invoke('leaveStep', step.id);
+      }
+    };
+
+    const endEnteringFromPanel = () => {
+      isEnteringFromPanel = false;
+      if (enteringTimer !== null) {
+        services.timers.clear(enteringTimer);
+        enteringTimer = null;
       }
     };
 
@@ -189,7 +217,6 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       timers: services.timers,
       autoplaySeconds: () => api.settings().autoplaySeconds,
       changed(state) {
-        takeKeysFromTextBox();
         publish();
         pane.scopeOpened(state.stepId);
         draw();
@@ -518,9 +545,15 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       if (cursorId === null) {
         return;
       }
-      // The step's beat may show another mode, whose base scope change would end the panel's turn: the panel keeps
-      // its turn through it and takes its scope back after.
+      // The step's first beat may show another mode, whose base scope change would end the panel's turn: the panel
+      // keeps its turn until the driver has entered the step, `PANEL_ENTER_TURN_MS` at most, so a hung enter cannot
+      // hold it, and takes its scope back after.
+      endEnteringFromPanel();
       isEnteringFromPanel = true;
+      enteringTimer = services.timers.set(
+        endEnteringFromPanel,
+        PANEL_ENTER_TURN_MS,
+      );
       try {
         await driver.goTo(cursorId);
         if (hasKeys && !pane.holdsKeys()) {
@@ -528,7 +561,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
           panelSlot.focus();
         }
       } finally {
-        isEnteringFromPanel = false;
+        endEnteringFromPanel();
       }
     };
 

@@ -286,6 +286,55 @@ describe('createDemoRun', () => {
     expect(run.isRunning()).toBe(false);
   });
 
+  // Breaks on a late enter that closes every session launched since it began,
+  // the held step's after it included, or leaves one it launched late open.
+  it('enterStep_EnterSettlesAfterTimeout_LeavesTheNextStepsSessionsOpen', async () => {
+    let finishLate = (): void => undefined;
+    const { run, calls, fireTimers } = fixture({
+      launchIds: ['s1', 's2', 's3'],
+      steps: (stepCalls) => [
+        {
+          id: 'p.one',
+          async enter(context) {
+            await context.launchSession('hold');
+            await new Promise<void>((resolve) => {
+              finishLate = resolve;
+            });
+            await context.launchSession('late');
+            return {
+              sessions: {},
+              dispose: () => void stepCalls.push('late disposed'),
+            };
+          },
+        },
+        {
+          id: 'p.two',
+          async enter(context) {
+            const held = await context.launchSession('held');
+            return stepWith('p.two', { a: held }, stepCalls).enter(context);
+          },
+        },
+      ],
+    });
+    await run.start();
+    const timedOut = run.enterStep('p.one');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireTimers();
+    await expect(timedOut).rejects.toThrow('Step p.one did not enter within');
+    await run.enterStep('p.two');
+
+    finishLate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toEqual([
+      'harness registered',
+      'hold taken',
+      'close s1 finished',
+      'close s3 finished',
+      'late disposed',
+    ]);
+  });
+
   it('leaveStep_CloseRejects_ClosesTheRest', async () => {
     const { run, calls, logged } = fixture({
       closeFails: ['s1'],

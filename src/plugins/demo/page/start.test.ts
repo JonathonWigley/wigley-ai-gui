@@ -496,6 +496,30 @@ describe('demoPagePart', () => {
     expect(demo.messages().slice(mark)).toEqual(expectedLogs);
   });
 
+  // Breaks on a demo that takes the focus from a box the user was typing in, though no beat or leave moved it.
+  it.each<{ name: string; act(demo: Demo): void | Promise<void> }>([
+    {
+      name: 'the next beat',
+      act: (demo) => demo.commands().next({ arg: undefined }),
+    },
+    {
+      name: 'leaving one step and entering another',
+      act: (demo) => demo.commands().goTo({ arg: 'p.two' }),
+    },
+  ])('beatOrLeave_BoxFocusedBefore_KeepsTheFocus: $name', async ({ act }) => {
+    const demo = startDemo();
+    await startRun(demo);
+    const box = document.createElement('textarea');
+    box.focus();
+
+    await act(demo);
+
+    expect({
+      isFocused: document.activeElement === box,
+      tookKeys: demo.messages().includes('took the keys back from a text box'),
+    }).toEqual({ isFocused: true, tookKeys: false });
+  });
+
   it('stop_FailedStep_ReportsCoverageAndFailures', async () => {
     const demo = startDemo();
     demo.harness.state
