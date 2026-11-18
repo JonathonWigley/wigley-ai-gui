@@ -5147,31 +5147,34 @@ describe('createChatSessions usage forwarding', () => {
       close: true,
       event: { type: 'sessionEnded', at: 1000 } satisfies AgentEvent,
     },
-  ])('agentEvent_ReachesTheBusWithBothIds ($case)', async ({ close, event }) => {
-    const test = await started();
-    if (close) {
-      test.chat.closed(ROW_ID, 'user');
-    }
-    test.emitted.length = 0;
+  ])(
+    'agentEvent_ReachesTheBusWithBothIds ($case)',
+    async ({ close, event }) => {
+      const test = await started();
+      if (close) {
+        test.chat.closed(ROW_ID, 'user');
+      }
+      test.emitted.length = 0;
 
-    test.process.events.agentEvent(event);
+      test.process.events.agentEvent(event);
 
-    expect(test.emitted).toEqual([
-      {
-        event: 'agentEvent',
-        data: {
-          sessionId: ROW_ID,
-          profileDir: '~/.claude-personal',
-          hostSessionId: 'fake-session-1',
-          event,
-          replayed: false,
+      expect(test.emitted).toEqual([
+        {
+          event: 'agentEvent',
+          data: {
+            sessionId: ROW_ID,
+            profileDir: '~/.claude-personal',
+            hostSessionId: 'fake-session-1',
+            event,
+            replayed: false,
+          },
         },
-      },
-    ]);
-    expect((test.emitted[0].data as ChatMainEvents['agentEvent']).event).toBe(
-      event,
-    );
-  });
+      ]);
+      expect((test.emitted[0].data as ChatMainEvents['agentEvent']).event).toBe(
+        event,
+      );
+    },
+  );
 
   it.each([
     {

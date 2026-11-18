@@ -256,7 +256,7 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     'wait-log': {
       args: '{ line: string, timeoutMs?: number, since?: number }',
       description:
-        'waits for a page log line equal to the whole line, its source prefix included (`[page] …`): one logged after the call, or with `since` (the `next` a `log` call returned) one at that index or later, already logged or not; a `since` past the log\'s end (the page reloaded) counts every line, as `log` does',
+        "waits for a page log line equal to the whole line, its source prefix included (`[page] …`): one logged after the call, or with `since` (the `next` a `log` call returned) one at that index or later, already logged or not; a `since` past the log's end (the page reloaded) counts every line, as `log` does",
       run: async (args) => {
         const line = requiredString(args, 'line');
         const timeoutMs = optionalNumber(args, 'timeoutMs') ?? STEP_TIMEOUT_MS;

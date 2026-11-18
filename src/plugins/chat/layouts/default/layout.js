@@ -99,8 +99,7 @@ function toolStatus(input) {
  * @param {import('../layout').BaseKit} kit
  */
 function fillStepTime(time, durationMs, kit) {
-  time.textContent =
-    durationMs === null ? '' : `· ${kit.duration(durationMs)}`;
+  time.textContent = durationMs === null ? '' : `· ${kit.duration(durationMs)}`;
   time.hidden = durationMs === null;
 }
 

@@ -185,15 +185,18 @@ describe('keys page part', () => {
     },
     { command: 'scrollTop', line: 'scrolled the key help to the top' },
     { command: 'scrollEnd', line: 'scrolled the key help to the end' },
-  ] as const)('helpScroll_LogsItsLine ($command)', async ({ command, line }) => {
-    helpScroller.scrollTop = 100;
-    const harness = startKeys();
+  ] as const)(
+    'helpScroll_LogsItsLine ($command)',
+    async ({ command, line }) => {
+      helpScroller.scrollTop = 100;
+      const harness = startKeys();
 
-    harness.started().commands[command]({ arg: undefined });
+      harness.started().commands[command]({ arg: undefined });
 
-    expect(harness.logs.map(({ message }) => message)).toContain(line);
-    await harness.stop();
-  });
+      expect(harness.logs.map(({ message }) => message)).toContain(line);
+      await harness.stop();
+    },
+  );
 
   it('searchLeader_Chosen_RunsTheCommandWithItsArg', async () => {
     const ran: unknown[] = [];

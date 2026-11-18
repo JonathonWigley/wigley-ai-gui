@@ -131,22 +131,19 @@ describe('createDriveCommands', () => {
         keys: { whichKeyTimeoutMs: 50 },
       },
     },
-  ])(
-    'setting_$case',
-    async ({ name, value, written }) => {
-      const { files, commands, changeConfigOnWrite } = setUp(() => []);
-      await files.write(
-        SETTINGS,
-        '{ "transparency": "full", "workflow-large": { "autoClearAndMake": true } }',
-      );
-      changeConfigOnWrite();
+  ])('setting_$case', async ({ name, value, written }) => {
+    const { files, commands, changeConfigOnWrite } = setUp(() => []);
+    await files.write(
+      SETTINGS,
+      '{ "transparency": "full", "workflow-large": { "autoClearAndMake": true } }',
+    );
+    changeConfigOnWrite();
 
-      const result = await commands.run('setting', { name, value });
+    const result = await commands.run('setting', { name, value });
 
-      expect(JSON.parse(await files.read(SETTINGS))).toEqual(written);
-      expect(result).toEqual({ lines: [], applied: true });
-    },
-  );
+    expect(JSON.parse(await files.read(SETTINGS))).toEqual(written);
+    expect(result).toEqual({ lines: [], applied: true });
+  });
 
   it.each([
     {
@@ -164,19 +161,16 @@ describe('createDriveCommands', () => {
       name: 'transparency.level',
       error: 'transparency is not a JSON object',
     },
-  ])(
-    'setting_$case',
-    async ({ name, error }) => {
-      const { files, commands } = setUp(() => []);
-      const before = '{ "transparency": "full" }';
-      await files.write(SETTINGS, before);
+  ])('setting_$case', async ({ name, error }) => {
+    const { files, commands } = setUp(() => []);
+    const before = '{ "transparency": "full" }';
+    await files.write(SETTINGS, before);
 
-      await expect(commands.run('setting', { name, value: 1 })).rejects.toThrow(
-        error,
-      );
-      expect(await files.read(SETTINGS)).toBe(before);
-    },
-  );
+    await expect(commands.run('setting', { name, value: 1 })).rejects.toThrow(
+      error,
+    );
+    expect(await files.read(SETTINGS)).toBe(before);
+  });
 
   it('setting_ConfigNeverChanges_ResolvesNotAppliedAfterTheStepTimeout', async () => {
     vi.useFakeTimers();

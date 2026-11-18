@@ -667,16 +667,19 @@ describe('Large over the engine page part', () => {
     { stage: 'closed', fields: BUSY.subagent, word: null, tag: true },
     { stage: 'make', fields: {}, word: null, tag: true },
     { stage: 'make', fields: BUSY.turn, word: null, tag: true },
-  ])('setFlow_RowLabelReadsItsWord ($stage, word $word)', ({ stage, fields, word, tag }) => {
-    const { view, put, rowActivities } = setUp();
-    const wrapper = new FakeElement('div');
+  ])(
+    'setFlow_RowLabelReadsItsWord ($stage, word $word)',
+    ({ stage, fields, word, tag }) => {
+      const { view, put, rowActivities } = setUp();
+      const wrapper = new FakeElement('div');
 
-    put(flowIn(stage, fields));
-    view.chipPart.build(asHtml(wrapper), 'a');
+      put(flowIn(stage, fields));
+      view.chipPart.build(asHtml(wrapper), 'a');
 
-    expect(rowActivities.get('a')?.word ?? null).toBe(word);
-    expect(findAll(wrapper, 'ui-tag').length > 0).toBe(tag);
-  });
+      expect(rowActivities.get('a')?.word ?? null).toBe(word);
+      expect(findAll(wrapper, 'ui-tag').length > 0).toBe(tag);
+    },
+  );
 
   it('setFlow_LeavesWaitingStage_ClearsTheRowLabel', () => {
     const { put, rowActivities } = setUp();
