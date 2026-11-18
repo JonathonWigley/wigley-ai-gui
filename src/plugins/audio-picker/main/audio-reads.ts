@@ -21,21 +21,17 @@ export interface AudioReads {
   watch(
     inner: AgentFormPresenter<AudioPickerForm, AudioPickerBody>,
   ): AgentFormPresenter<AudioPickerForm, AudioPickerBody>;
-  // `sessionId` is the app's. Rejects, reading nothing, when the session has
-  // no open picker or the picker lists no file at `at`; rejects when the file
-  // is longer than `maxBytes`.
-  readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array>;
+  // `sessionId` is the app's. Null, reading nothing, when the session has no
+  // open picker; rejects, reading nothing, when the picker lists no file at
+  // `at`, and when the file is longer than `maxBytes`.
+  readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array | null>;
 }
 
 function listedPath(
-  open: Iterable<PresentedAudioPicker>,
+  picker: PresentedAudioPicker,
   sessionId: string,
   at: AudioPosition,
 ): string {
-  const picker = [...open].find((each) => each.sessionId === sessionId);
-  if (picker === undefined) {
-    throw new Error(`Session ${sessionId} has no open audio picker.`);
-  }
   const path =
     picker.form.moments[at.moment]?.candidates[at.candidate]?.files[at.file];
   if (path === undefined) {
@@ -65,7 +61,13 @@ export function createAudioReads(deps: {
       },
     }),
     async readAudio(sessionId, at) {
-      const path = listedPath(open.values(), sessionId, at);
+      const picker = [...open.values()].find(
+        (each) => each.sessionId === sessionId,
+      );
+      if (picker === undefined) {
+        return null;
+      }
+      const path = listedPath(picker, sessionId, at);
       const bytes = await deps.files.readBytes(path);
       if (bytes.length > deps.maxBytes) {
         throw new Error(

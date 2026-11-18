@@ -24,8 +24,9 @@ export const VISIBILITY_POLL_MS = 250;
 
 export interface PickerAudioDeps {
   output: AudioOutput;
-  // The bytes of one file of an open picker's candidate.
-  readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array>;
+  // The bytes of one file of an open picker's candidate; null once main has
+  // closed the picker.
+  readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array | null>;
   store: PickerStore;
   // A value in [0, 1), as Math.random returns.
   random(): number;
@@ -141,15 +142,15 @@ export function createPickerAudio(deps: PickerAudioDeps): PickerAudio {
     log(`ended ${play.name}`);
   };
 
-  // Reads and decodes one file into the picker's cache; null when `isWanted`
-  // turned false while it read or decoded.
+  // Reads and decodes one file into the picker's cache; null when main has
+  // closed the picker or `isWanted` turned false while it read or decoded.
   const decodeFile = async (
     load: PickerLoad,
     at: AudioPosition,
     isWanted: () => boolean,
   ): Promise<DecodedAudio | null> => {
     const bytes = await deps.readAudio(load.sessionId, at);
-    if (!isWanted()) {
+    if (bytes === null || !isWanted()) {
       return null;
     }
     // Read before the decode, which may detach the bytes.

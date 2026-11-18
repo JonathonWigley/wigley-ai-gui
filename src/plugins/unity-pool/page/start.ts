@@ -102,7 +102,7 @@ interface HeldWrapper {
 // the cursor's session, until the core ends its turn. Logs each row's badges
 // and the panel's showing, hiding, counts and keys when they change, and a Hold
 // or Release whose call to main fails; main logs every run it answers.
-// Registers the demo step, whose beats ask main for each stage of its pool.
+// Registers the demo step, whose pool main shows.
 export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
   manifest: unityPoolManifest,
   start(api: UnityPoolApi) {
@@ -482,7 +482,6 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
 
     registerDemoSteps(services, {
       activate: (sessionId) => sessions.activate(sessionId),
-      showStage: (stage) => api.channel.invoke('showDemoStage', stage),
     });
 
     return {

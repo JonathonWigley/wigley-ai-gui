@@ -115,12 +115,8 @@ export type PoolActionResult =
   | { ok: true; pool: string; clone: number; editorOpening: boolean | null }
   | { ok: false; error: string; message: string };
 
-// The self-test fixture's stages the demo step shows.
-export type DemoPoolStage = 'panel' | 'tiles' | 'longWait';
-
 // `originName` is a folder's origin repo name, null outside a clone with an origin. `run` runs
 // `unity-pool <action> <pool> <clone>`, except on the demo pool, where it runs nothing and answers `demo`.
-// `showDemoStage` shows the demo pool at `stage`; it throws while no demo step is entered.
 export interface UnityPoolChannel extends ChannelShape {
   invoke: {
     originName(folder: string): Promise<string | null>;
@@ -129,7 +125,6 @@ export interface UnityPoolChannel extends ChannelShape {
       pool: string,
       clone: number,
     ): Promise<PoolActionResult>;
-    showDemoStage(stage: DemoPoolStage): void;
   };
   messages: Record<never, never>;
 }

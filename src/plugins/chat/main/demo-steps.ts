@@ -2,6 +2,7 @@ import type { DemoMainContext } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MainServices } from '../../../contracts/plugin';
 import {
+  FAKE_BLOCKS_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_STEPS_TEXT,
 } from '../../../shared/fake-agent-harness';
@@ -15,7 +16,8 @@ export interface ChatDemoMainDeps {
 const PLAN_TEXT = 'Plan the next change.';
 
 // The main halves of chat's steps: each launches the demo sessions its page
-// half shows. The composer step's queued send runs here, at enter.
+// half shows. The transcript step's second turn and the composer step's queued
+// send run here, at enter.
 export function registerDemoSteps(
   services: MainServices,
   deps: ChatDemoMainDeps,
@@ -37,9 +39,11 @@ export function registerDemoSteps(
         }),
       }),
     );
-  register('chat.transcript', async (context) => ({
-    steps: await context.launchSession(FAKE_STEPS_TEXT),
-  }));
+  register('chat.transcript', async (context) => {
+    const transcript = await context.launchSession(FAKE_BLOCKS_TEXT);
+    await chat.send(transcript, { text: FAKE_STEPS_TEXT, images: [] });
+    return { transcript };
+  });
   register('chat.composer', async (context) => {
     const queued = await context.launchSession(FAKE_HOLD_TEXT);
     await chat.send(queued, { text: 'Then run the tests.', images: [] });

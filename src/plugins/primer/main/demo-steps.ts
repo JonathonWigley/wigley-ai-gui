@@ -17,7 +17,7 @@ export interface PrimerMainDemoDeps {
 }
 
 // The primer step's primer: the preview's entries, unchanged so the page's
-// task and item positions hold, under the demo's own feature.
+// task position holds, under the demo's own feature.
 export const DEMO_PRIMER_ARGS: typeof PREVIEW_PRIMER_ARGS = {
   ...PREVIEW_PRIMER_ARGS,
   feature: {

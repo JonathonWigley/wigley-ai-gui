@@ -109,11 +109,6 @@ export interface PrimerPageEvents extends EventShape {
 export const primerSelectTaskCommand: CommandKey<number, 'primer.selectTask'> =
   { id: 'primer.selectTask' };
 
-// Selects the selected task's item of the 1-based number, as a click on its
-// row does.
-export const primerSelectItemCommand: CommandKey<number, 'primer.selectItem'> =
-  { id: 'primer.selectItem' };
-
 // Selects the selected task's item of the 1-based number and flips its
 // include, as a click on its row's mark does.
 export const primerToggleIncludeAtCommand: CommandKey<

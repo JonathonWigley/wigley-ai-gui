@@ -33,8 +33,8 @@ const BEATS: readonly {
   { name: 'Done', stage: 'done', done: 3, fixCycles: 1, turnRunning: false },
 ];
 
-// The Medium step: the demo session's sample flow through each Medium stage,
-// one review fix cycle from Fix on.
+// The Medium step: the demo session's sample flow at Build, then at Done
+// after one review fix cycle.
 export function registerDemoSteps(
   services: PageServices,
   deps: WorkflowMediumPageDemoDeps,

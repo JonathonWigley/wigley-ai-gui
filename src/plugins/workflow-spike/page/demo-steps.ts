@@ -31,7 +31,7 @@ const BEATS: readonly {
   { name: 'Done', stage: 'done', done: 3, turnRunning: false },
 ];
 
-// The Spike step: the demo session's sample flow through each Spike stage.
+// The Spike step: the demo session's sample flow at Build, then at Done.
 export function registerDemoSteps(
   services: PageServices,
   deps: WorkflowSpikePageDemoDeps,

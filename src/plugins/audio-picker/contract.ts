@@ -109,8 +109,9 @@ export type PresentedAudioPicker = PresentedAgentForm<
 // preview key.
 export interface AudioPickerChannel extends ChannelShape {
   invoke: AgentFormInvoke<AudioPickerForm, AudioPickerBody> & {
-    // `sessionId` is the app's, PresentedAgentForm.sessionId.
-    readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array>;
+    // `sessionId` is the app's, PresentedAgentForm.sessionId. Null when the
+    // session has no open picker, as once main closed it.
+    readAudio(sessionId: string, at: AudioPosition): Promise<Uint8Array | null>;
     openPreview(): void;
   };
   messages: AgentFormMessages<AudioPickerForm, AudioPickerBody>;

@@ -23,7 +23,7 @@ type FileKey = string;
 
 interface PendingRead {
   key: FileKey;
-  resolve(bytes: Uint8Array): void;
+  resolve(bytes: Uint8Array | null): void;
   reject(error: Error): void;
 }
 
@@ -130,7 +130,7 @@ function setup(options: Options = {}) {
       dispose: () => {},
     },
     readAudio: (_sessionId, at) =>
-      new Promise<Uint8Array>((resolve, reject) => {
+      new Promise<Uint8Array | null>((resolve, reject) => {
         const key = keyOf(at);
         started.push(key);
         inFlight += 1;
@@ -142,7 +142,9 @@ function setup(options: Options = {}) {
           key,
           resolve: (bytes) => {
             settled();
-            fileOfBytes.set(bytes, key);
+            if (bytes !== null) {
+              fileOfBytes.set(bytes, key);
+            }
             resolve(bytes);
           },
           reject: (error) => {
@@ -608,6 +610,21 @@ describe('createPickerAudio', () => {
     await h.settleAll();
 
     expect(h.started).toEqual(['0.0.0', '0.1.0']);
+    expect(h.dispatched).toEqual([]);
+    expect(h.logs).toEqual([]);
+  });
+
+  // Breaks: a null read decoded or failed as a broken file.
+  it('createPickerAudio_ReadAnsweredNull_FailsNothingAndLogsNothing', async () => {
+    const h = setup();
+    h.show();
+    h.dispatched.length = 0;
+
+    for (const read of h.pending.splice(0)) {
+      read.resolve(null);
+    }
+    await flush();
+
     expect(h.dispatched).toEqual([]);
     expect(h.logs).toEqual([]);
   });

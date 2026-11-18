@@ -1,23 +1,9 @@
-import type { DemoBeat } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices } from '../../../contracts/plugin';
-import type { DemoUpdateKind } from '../contract';
 
-export interface AppUpdatePageDemoDeps {
-  // Asks main to show the sample status of `kind`.
-  showDemoStatus(kind: DemoUpdateKind): Promise<void>;
-}
-
-const BEATS: readonly { name: string; kind: DemoUpdateKind }[] = [
-  { name: 'Update available', kind: 'available' },
-];
-
-// Step `app-update.button`: each beat asks main for its sample status, which
-// the title bar button draws. Main shows the real status again at leave.
-export function registerDemoSteps(
-  services: PageServices,
-  deps: AppUpdatePageDemoDeps,
-): Disposable {
+// Step `app-update.button`: main shows the sample update at enter, which the
+// title bar button draws, and the real status again at leave.
+export function registerDemoSteps(services: PageServices): Disposable {
   return services.demoSteps.register({
     id: 'app-update.button',
     section: 'bars',
@@ -32,11 +18,10 @@ export function registerDemoSteps(
       'src/plugins/app-update/layouts/default/layout.js',
     ],
     async enter() {
-      const beats = BEATS.map(({ name, kind }): DemoBeat => ({
-        name,
-        show: () => deps.showDemoStatus(kind),
-      }));
-      return { beats, dispose() {} };
+      return {
+        beats: [{ name: 'Update available', show() {} }],
+        dispose() {},
+      };
     },
   });
 }

@@ -20,7 +20,6 @@ function registerStep(shown: SessionFlow[] = []) {
         shown.push(flow);
         return { dispose: () => undefined };
       },
-      autoStartSeconds: () => 7,
     },
   );
   const [step] = demoSteps.list();

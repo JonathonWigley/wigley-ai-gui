@@ -31,7 +31,7 @@ const BEATS: readonly {
   { name: 'Done', stage: 'done', done: 3, turnRunning: false },
 ];
 
-// The Small step: the demo session's sample flow through each Small stage.
+// The Small step: the demo session's sample flow at Build, then at Done.
 export function registerDemoSteps(
   services: PageServices,
   deps: WorkflowSmallPageDemoDeps,

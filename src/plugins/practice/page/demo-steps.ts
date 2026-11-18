@@ -14,7 +14,7 @@ export interface PracticeDemoPageDeps {
 }
 
 // The Practice step: Practice mode over the sample folder main serves while
-// the step holds it, a problem, then a run of its solution. It never starts
+// the step holds it, open on a problem. It never starts
 // the interviewer or an import. It holds the place so the user's saved one
 // outlasts the sample, and its dispose saves the sample's drafts before main
 // serves the real folder again.

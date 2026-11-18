@@ -346,9 +346,6 @@ export interface SettingsView {
   // then tells `sectionPicked`; an index no section holds logs
   // `no section <index>`.
   openSectionAt(index: number): void;
-  // `openSectionAt` for the section `id` names; an id no section holds logs
-  // `no section <id>` and opens nothing.
-  openSectionById(id: string): void;
   // Puts back a reloaded page's place, before `load`: the first show opens the
   // saved section with its filter applied, its box closed. A saved section the
   // schema no longer holds opens the first, and a saved cursor key no row
@@ -1604,14 +1601,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       focusRows();
     },
     openSectionAt,
-    openSectionById(id) {
-      const index = sectionList().findIndex((section) => section.id === id);
-      if (index === -1) {
-        log(`no section ${id}`);
-        return;
-      }
-      openSectionAt(index);
-    },
     returnToPlace(place) {
       const list = sectionList();
       const index =

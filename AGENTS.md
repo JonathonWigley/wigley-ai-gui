@@ -456,7 +456,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  contract and the built-in `default` layout)
   settings/      manifest.ts, contract.ts, main/ (the userConfig reads and writes, `Cmd+,`), page/ (Settings mode:
                  a form over every setting, every command's binds with its key recorder (`key-recorder.ts`) and the leader tree
-                 (`leader-tree.ts`, `leader-menu-view.ts`; the view's `openSectionById` and `returnToPlace` serve the demo's Settings step), `docs/features/settings/design.md`), layouts/
+                 (`leader-tree.ts`, `leader-menu-view.ts`; the view's `openSectionAt` and `returnToPlace` serve the demo's Settings step), `docs/features/settings/design.md`), layouts/
                  (the settings Layout contract and the built-in `default` layout)
   notes/         manifest.ts, contract.ts, main/ (the kept draft in plugin data, window captures through `services.window.capture`, sending a note
                  to a follow-up through backlog's exports or to a new session through chat's), page/ (the note
@@ -502,7 +502,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  land, done), main/ (its self-test script), page/, layouts/ (the built-in `default` layout); claims
                  `wigley:medium`
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json` into the `unity-pool.snapshot` slot, runs
-                 `unity-pool hold|release|open` for the panel, gives chat its pools' clone folders, hands its self-test script, `showDemoStage` on its channel: the sample pool `DEMO_POOL` at a stage of the demo step), page/ (the clone badge under
+                 `unity-pool hold|release|open` for the panel, gives chat its pools' clone folders, hands its self-test script, shows the sample pool `DEMO_POOL` while the demo step is entered), page/ (the clone badge under
                  each session row through sessions' `addRowPart`, the right-bar panel), layouts/ (the unity-pool
                  Layout contract and the built-in `default` layout); `docs/features/unity-pool/design.md`
   chatroom/      manifest.ts, contract.ts (the records, the `chatroom.rooms` slot holding each room's view and board, and the
@@ -522,7 +522,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  failed with the error), main/ (fetches `services.appBuild`'s clone every 15 minutes and on window focus,
                  decides in update-decision.ts, starts `install-app --ref origin/main` through
                  `processes.startDetached` with the per-OS line in install-command.ts, polls the exit-code file the line
-                 writes, hands its self-test script over a fixture seed, `showDemoStatus` on its channel: a sample status in the button for the demo step), page/ (the Update available button at the
+                 writes, hands its self-test script over a fixture seed, shows a sample update in the button while the demo step is entered), page/ (the Update available button at the
                  title bar's end through `api.areas.titleBar.contribute`, shown only while the status is not none),
                  layouts/ (its Layout contract and `default` layout); the dev app bakes no commit and checks nothing;
                  `docs/features/app-update/design.md`

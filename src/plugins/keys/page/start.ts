@@ -179,8 +179,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       );
       void api.commands.run({ id: action.command }, action.arg);
     };
-    // The picker over the leader actions, its filter not focused.
-    const openLeaderSearch = () => {
+    const searchLeader = () => {
       const title = 'Leader actions';
       picker.open({
         title,
@@ -194,9 +193,6 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
         chosen: runLeaderAction,
         cancelled: () => services.log(`picker closed: ${title}`),
       });
-    };
-    const searchLeader = () => {
-      openLeaderSearch();
       picker.focusFilter();
     };
 

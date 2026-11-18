@@ -1,6 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { MainServices } from '../../../contracts/plugin';
-import type { DemoPoolStage, PoolState } from '../contract';
+import type { PoolState } from '../contract';
 import { type PoolFixture, poolStateText } from './selftest-fixture';
 import { readStateFile } from './state-file';
 
@@ -11,29 +11,24 @@ export interface UnityPoolDemoDeps {
   setDemoPool(pool: PoolState | null): void;
 }
 
-// `showStage` throws while no stage is entered.
-export interface UnityPoolDemo extends Disposable {
-  showStage(stage: DemoPoolStage): void;
-}
-
-// The self-test fixture's pool at `stage`, named `DEMO_POOL`.
-function demoPoolOf(fixture: PoolFixture, stage: DemoPoolStage): PoolState {
-  const read = readStateFile(poolStateText(fixture, stage));
+// The self-test fixture's pool at its `tiles` stage, named `DEMO_POOL`.
+function demoPoolOf(fixture: PoolFixture): PoolState {
+  const read = readStateFile(poolStateText(fixture, 'tiles'));
   if (read.kind !== 'pool') {
-    throw new Error(`demo pool ${stage} read as ${read.kind}`);
+    throw new Error(`demo pool read as ${read.kind}`);
   }
   return { ...read.pool, pool: DEMO_POOL };
 }
 
 // The main half of step `unity-pool.pool`: launches the demo session clone 1
-// is held by, in the scratch folder, and shows the self-test fixture's pool as
-// `DEMO_POOL` through `setDemoPool` until the stage is disposed.
+// is held by, in the scratch folder, and shows the self-test fixture's pool
+// with a failed warm-up, a stranded clone and a warming clone as `DEMO_POOL`
+// through `setDemoPool` until the stage is disposed.
 export function registerDemoSteps(
   services: MainServices,
   deps: UnityPoolDemoDeps,
-): UnityPoolDemo {
-  let entered: PoolFixture | null = null;
-  const registration = services.demoSteps.register({
+): Disposable {
+  return services.demoSteps.register({
     id: 'unity-pool.pool',
     async enter(context) {
       const rowId = await context.launchSession('Fix the level loader');
@@ -45,26 +40,11 @@ export function registerDemoSteps(
         ],
         startedAt: Math.floor(services.clock.now() / 1000),
       };
-      deps.setDemoPool(demoPoolOf(fixture, 'panel'));
-      entered = fixture;
+      deps.setDemoPool(demoPoolOf(fixture));
       return {
         sessions: { pool: rowId },
-        dispose() {
-          if (entered === fixture) {
-            entered = null;
-          }
-          deps.setDemoPool(null);
-        },
+        dispose: () => deps.setDemoPool(null),
       };
     },
   });
-  return {
-    showStage(stage) {
-      if (entered === null) {
-        throw new Error('no demo step entered');
-      }
-      deps.setDemoPool(demoPoolOf(entered, stage));
-    },
-    dispose: () => registration.dispose(),
-  };
 }

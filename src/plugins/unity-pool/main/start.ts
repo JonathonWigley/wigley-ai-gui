@@ -83,7 +83,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       createPoolProvider(() => watch.snapshot()),
     );
     const originName = createOriginRepoNames(services.git);
-    const demo = registerDemoSteps(services, {
+    registerDemoSteps(services, {
       setDemoPool(pool) {
         if (isStopped) {
           return;
@@ -110,7 +110,6 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
       watch.rescan();
       return result;
     });
-    api.channel.handle('showDemoStage', (stage) => demo.showStage(stage));
 
     services.selfTest?.run(
       unityPoolSelfTestScript({

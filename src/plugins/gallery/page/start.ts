@@ -36,7 +36,7 @@ type GalleryApi = PageApi<
 // to its top and end, and `j`/`k` and the line and half-page scrolls step it, logging
 // whether they reached the end or the top. `Space z s` swaps the whole shell to
 // the test layout and, pressed again, back; leaving the gallery keeps the swap.
-// Registers the `gallery.mode` demo step, which shares that swap.
+// Registers the `gallery.mode` demo step.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
@@ -102,15 +102,6 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
 
     // The swap in force, null while the default layout is mounted.
     let swappedLayout: Disposable | null = null;
-    const swap = () => {
-      swappedLayout = api.shell.setLayout(testShellLayout);
-      log('shell layout swapped');
-    };
-    const restore = () => {
-      swappedLayout?.dispose();
-      swappedLayout = null;
-      log('shell layout restored');
-    };
     const setTransparency = (value: 'full' | 'reduced' | null) => {
       api.transparency.override(value);
       view.showTransparency(value);
@@ -141,10 +132,13 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
         },
         swapShellLayout() {
           if (swappedLayout === null) {
-            swap();
+            swappedLayout = api.shell.setLayout(testShellLayout);
+            log('shell layout swapped');
             return;
           }
-          restore();
+          swappedLayout.dispose();
+          swappedLayout = null;
+          log('shell layout restored');
         },
         scrollTop: () => scrollSheetTo('top'),
         scrollEnd: () => scrollSheetTo('end'),

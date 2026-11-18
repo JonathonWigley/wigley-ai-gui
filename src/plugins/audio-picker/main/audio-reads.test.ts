@@ -114,19 +114,36 @@ describe('createAudioReads', () => {
       file: 0,
     });
 
-    expect([...bytes]).toEqual([4, 5, 6, 7]);
+    expect(bytes).toEqual(new Uint8Array([4, 5, 6, 7]));
   });
 
   const AT: AudioPosition = { moment: 0, candidate: 0, file: 0 };
 
+  // Breaks: a closed picker's read rejecting, which main's IPC logs, or
+  // reading the file anyway.
   it.each([
     {
       name: 'a session with no picker',
       opened: false,
       sessionId: SESSION_ID,
-      at: AT,
     },
-    { name: "another session's id", sessionId: 'app-2', at: AT },
+    { name: "another session's id", sessionId: 'app-2' },
+    {
+      name: 'the form after close',
+      closed: true,
+      sessionId: SESSION_ID,
+    },
+  ])(
+    'answers null to a session with no open picker ($name)',
+    async ({ opened, closed, sessionId }) => {
+      const { reads, readBytes } = await readsWith({ opened, closed });
+
+      await expect(reads.readAudio(sessionId, AT)).resolves.toBeNull();
+      expect(readBytes).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
     {
       name: 'moment out of range',
       sessionId: SESSION_ID,
@@ -142,16 +159,10 @@ describe('createAudioReads', () => {
       sessionId: SESSION_ID,
       at: { ...AT, file: 1 },
     },
-    {
-      name: 'the form after close',
-      closed: true,
-      sessionId: SESSION_ID,
-      at: AT,
-    },
   ])(
     'refuses a read the open picker does not list ($name)',
-    async ({ opened, closed, sessionId, at }) => {
-      const { reads, readBytes } = await readsWith({ opened, closed });
+    async ({ sessionId, at }) => {
+      const { reads, readBytes } = await readsWith({});
 
       await expect(reads.readAudio(sessionId, at)).rejects.toThrow(Error);
       expect(readBytes).not.toHaveBeenCalled();

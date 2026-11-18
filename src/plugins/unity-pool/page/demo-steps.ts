@@ -1,22 +1,14 @@
-import type { DemoBeat } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices } from '../../../contracts/plugin';
-import type { DemoPoolStage } from '../contract';
 
 export interface UnityPoolPageDemoDeps {
   // sessions.activate
   activate(sessionId: string): void;
-  // Asks main to show the demo pool at `stage`.
-  showStage(stage: DemoPoolStage): Promise<void>;
 }
 
-const BEATS: readonly { name: string; stage: DemoPoolStage }[] = [
-  { name: 'Clone held', stage: 'panel' },
-];
-
-// Step `unity-pool.pool`: each beat asks main for its stage of the demo pool
-// and shows the demo session, so the panel shows that pool. Main removes the
-// pool at leave.
+// Step `unity-pool.pool`: main shows the demo pool at enter, and the beat
+// shows the demo session, so the panel shows that pool. Main removes the pool
+// at leave.
 export function registerDemoSteps(
   services: PageServices,
   deps: UnityPoolPageDemoDeps,
@@ -40,14 +32,10 @@ export function registerDemoSteps(
       if (sessionId === undefined) {
         throw new Error('unity-pool.pool: no demo session');
       }
-      const beats = BEATS.map(({ name, stage }): DemoBeat => ({
-        name,
-        async show() {
-          await deps.showStage(stage);
-          deps.activate(sessionId);
-        },
-      }));
-      return { beats, dispose() {} };
+      return {
+        beats: [{ name: 'Clone held', show: () => deps.activate(sessionId) }],
+        dispose() {},
+      };
     },
   });
 }

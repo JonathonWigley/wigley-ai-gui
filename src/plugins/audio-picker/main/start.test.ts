@@ -249,7 +249,7 @@ describe('audio-picker main part', () => {
     await harness.stop();
   });
 
-  it("readAudio serves an open picker's file and refuses after finish", async () => {
+  it("readAudio serves an open picker's file and answers null after finish", async () => {
     const harness = startWithSessions({ homeDir });
     const shown = await openedPicker(harness);
     const readFirst = () =>
@@ -257,12 +257,12 @@ describe('audio-picker main part', () => {
         moment: 0,
         candidate: 0,
         file: 0,
-      }) as Promise<Uint8Array>;
+      }) as Promise<Uint8Array | null>;
 
     await expect(readFirst()).resolves.toEqual(sineWav(880, 0.15));
 
     harness.invoke('finish', shown.formId, { kind: 'cancelled', body: {} });
-    await vi.waitFor(() => expect(readFirst()).rejects.toThrow());
+    await vi.waitFor(() => expect(readFirst()).resolves.toBeNull());
     await harness.stop();
   });
 

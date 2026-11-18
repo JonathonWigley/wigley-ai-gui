@@ -14,8 +14,6 @@ import { nextOccurrence } from '../schedule';
 import type { DemoTasks } from './demo-tasks';
 
 const HOUR = 3_600_000;
-const SWEEP_PROMPT =
-  'Run the test suite and report each failure with its file.';
 
 export interface SchedulingDemoMainDeps {
   clock: Clock;
@@ -25,16 +23,13 @@ export interface SchedulingDemoMainDeps {
 export interface DemoTaskViewsInput {
   now: number;
   projectDir: string;
-  // The demo session the sweep task's finished run opens.
-  runRowId: string;
 }
 
 // The three demo tasks: an active weekday one with no runs, an active nightly one whose history holds a finished
-// run on `runRowId`, a skipped run and a failed one, newest first, and a paused weekly one.
+// run, a skipped run and a failed one, newest first, none with a row, and a paused weekly one.
 export function demoTaskViews({
   now,
   projectDir,
-  runRowId,
 }: DemoTaskViewsInput): ScheduledTaskView[] {
   const taskOf = (
     id: string,
@@ -89,14 +84,14 @@ export function demoTaskViews({
         DEMO_TASK_IDS.sweep,
         'Nightly test sweep',
         { kind: 'daily', time: '22:30' },
-        SWEEP_PROMPT,
+        'Run the test suite and report each failure with its file.',
         false,
       ),
       [
         sweepEntry(1, {
           outcome: 'finished',
           reason: null,
-          rowId: runRowId,
+          rowId: null,
           processId: null,
           viewed: false,
         }),
@@ -129,8 +124,7 @@ export function demoTaskViews({
   ];
 }
 
-// The Scheduled tasks step's main half: one demo session as the sweep task's finished run row, and the demo tasks
-// shown beside the real ones for the stage's length.
+// The Scheduled tasks step's main half: the demo tasks shown beside the real ones for the stage's length.
 export function registerDemoSteps(
   services: MainServices,
   deps: SchedulingDemoMainDeps,
@@ -140,15 +134,13 @@ export function registerDemoSteps(
     services.demoSteps.register({
       id: 'scheduling.schedules',
       async enter(context) {
-        const runRow = await context.launchSession(SWEEP_PROMPT);
         const shown = deps.demoTasks.show(
           demoTaskViews({
             now: deps.clock.now(),
             projectDir: context.scratchDir,
-            runRowId: runRow,
           }),
         );
-        return { sessions: { runRow }, dispose: () => shown.dispose() };
+        return { sessions: {}, dispose: () => shown.dispose() };
       },
     }),
   );

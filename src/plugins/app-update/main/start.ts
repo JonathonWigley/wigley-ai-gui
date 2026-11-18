@@ -1,16 +1,16 @@
 import type { AppBuild } from '../../../contracts/app-instance';
 import { coreWindowFocusedSlot } from '../../../contracts/core-state';
 import type { Git } from '../../../contracts/git';
-import type { MainApi, MainPart } from '../../../contracts/plugin';
+import type {
+  ChannelShape,
+  MainApi,
+  MainPart,
+} from '../../../contracts/plugin';
 import type { SlotWriter } from '../../../contracts/state';
-import {
-  type AppUpdateChannel,
-  type AppUpdateStatus,
-  appUpdateStatusSlot,
-} from '../contract';
+import { type AppUpdateStatus, appUpdateStatusSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { appUpdateManifest } from '../manifest';
-import { demoStatus, registerDemoSteps } from './demo-steps';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { installCommandFor } from './install-command';
 import {
@@ -22,7 +22,7 @@ import { appUpdateSelfTestScript } from './selftest-script';
 import { FIXTURE_INSTALLED_COMMIT, fixtureGit } from './update-fixture';
 import { createUpdater, statusText, type Updater } from './updater';
 
-type AppUpdateApi = MainApi<typeof appUpdateManifest, AppUpdateChannel>;
+type AppUpdateApi = MainApi<typeof appUpdateManifest, ChannelShape>;
 
 // Registers the layouts and writes `app-update.status`. With a build baked in
 // (`services.appBuild`) and an install command for the OS, it checks origin's
@@ -155,12 +155,6 @@ export const appUpdateMainPart: MainPart<typeof appUpdateManifest> = {
     services.selfTest?.run(appUpdateSelfTestScript({ seed }));
 
     registerDemoSteps(services, { setDemo });
-    api.channel.handle('showDemoStatus', (kind) => {
-      if (demo === null) {
-        throw new Error('no demo step entered');
-      }
-      setDemo(demoStatus(kind));
-    });
 
     return {
       commands: {

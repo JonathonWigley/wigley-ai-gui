@@ -238,13 +238,10 @@ describe('unityPoolMainPart', () => {
     expect(names()).toEqual([SELFTEST_POOL]);
   });
 
-  it('demoStep_NoStageEntered_ShowStageThrowsAndRunStillRefuses', async () => {
+  it('demoStep_NoStageEntered_RunStillRefuses', async () => {
     const harness = startOnHarness();
     const stat = vi.spyOn(harness.files, 'stat');
 
-    expect(() => harness.invoke('showDemoStage', 'tiles')).toThrow(
-      'no demo step entered',
-    );
     const result = await harness.invoke('run', 'hold', DEMO_POOL, 1);
 
     expect(result).toEqual(DEMO_REFUSAL);

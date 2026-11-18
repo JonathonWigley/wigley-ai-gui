@@ -68,6 +68,9 @@ The picker plays what the agent describes, so the user approves the sound as it 
 - The page asks for a file by its position in the open picker (moment, candidate, file), never by path. Main serves
   a read only for a position in the session's open picker. The reason: the page is a renderer, and a path argument
   would turn the channel into a read of any file on disk.
+- A read for a session with no open picker answers null rather than an error, and the page drops it. The page reads
+  every candidate as the picker arrives, so reads are still in flight when main closes the picker, and a rejection
+  there would log an IPC error for each.
 
 ## How bytes reach the page
 

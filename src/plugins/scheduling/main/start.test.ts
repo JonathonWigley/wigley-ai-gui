@@ -239,7 +239,7 @@ interface StartOptions {
 // counts its prepares in the ids and whose `adopt` opens the row `part.session` describes (null: a relay row, with no
 // chat session), a sessions that records its holds, replays and contributions, the fake host and login start. `calls`
 // is one log across the fakes; `history add` stands where the part logged `adopted run of …`, which it writes right
-// after its history add. `enterStep` enters the Scheduled tasks demo step's main half, its demo session `row-demo`.
+// after its history add. `enterStep` enters the Scheduled tasks demo step's main half.
 function startPart(options: StartOptions = {}) {
   let now = TODAY_12;
   const clock = { now: () => now };
@@ -1373,18 +1373,15 @@ describe('demo tasks', () => {
     expect(await part.historyFile()).toEqual([]);
   });
 
-  it('counts no demo run in the Dock badge and leaves at dispose', async () => {
+  it('leaves the demo tasks at dispose', async () => {
     const part = startPart();
     await settle();
 
     const stage = await part.enterStep();
     await settle();
-    expect(part.state()?.unviewedRows).toEqual(['row-demo']);
-    expect(part.alerts.at(-1)?.count).toBe(0);
 
     stage.dispose();
     await settle();
-    expect(part.state()?.runRows).not.toContain('row-demo');
     expect(part.state()?.tasks.map((view) => view.task.id)).toEqual([TASK_ID]);
   });
 

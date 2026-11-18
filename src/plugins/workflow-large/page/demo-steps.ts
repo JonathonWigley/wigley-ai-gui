@@ -11,12 +11,13 @@ import {
 } from '../../workflow/contract';
 import { PREVIEW_SAMPLES, previewFlow, type SamplePlan } from './preview';
 
-// `showSample` is the workflow engine's page export; `autoStartSeconds` reads
-// Large's setting of that name.
+// `showSample` is the workflow engine's page export.
 export interface WorkflowLargePageDemoDeps {
   showSample(flow: SessionFlow): Disposable;
-  autoStartSeconds(): number;
 }
+
+// Neither beat's sample runs a countdown, so no auto-start time shows.
+const AUTO_START_SECONDS = 0;
 
 // The beats: a run early on, then the closed run, each the PREVIEW_SAMPLES row
 // of its stage.
@@ -58,7 +59,6 @@ function largeStage(
   context: DemoPageContext,
 ): DemoStage {
   const sessionId = context.sessions.session;
-  const autoStartSeconds = deps.autoStartSeconds();
   const plan: SamplePlan = {
     projectDir: context.scratchDir,
     planDir: services.paths.join(
@@ -84,7 +84,7 @@ function largeStage(
               index,
               sessionId,
               services.clock.now(),
-              autoStartSeconds,
+              AUTO_START_SECONDS,
               plan,
             ),
           ),

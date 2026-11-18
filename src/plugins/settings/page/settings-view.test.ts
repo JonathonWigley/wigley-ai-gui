@@ -884,31 +884,6 @@ describe('createSettingsView', () => {
     },
   );
 
-  it.each([
-    { name: 'a held id', id: 'keymap', opened: 'section keymap', picks: 1 },
-    {
-      name: 'an id with no section',
-      id: 'nope',
-      opened: 'no section nope',
-      picks: 0,
-    },
-  ])(
-    'openSectionById_Id_OpensAndCallsSectionPicked: $name',
-    async ({ id, opened, picks }) => {
-      const { view, logs, picked } = await shownView();
-      const logsBefore = logs.length;
-
-      view.openSectionById(id);
-
-      const added = logs.slice(logsBefore);
-      expect(added).toContain(opened);
-      expect(added.filter((line) => line.startsWith('section '))).toEqual(
-        picks === 0 ? [] : [opened],
-      );
-      expect(picked.count).toBe(picks);
-    },
-  );
-
   const NO_LEADER_CURSORS = { groups: null, items: null };
 
   // Section `q` sits after `p`, holding one row.
@@ -1337,6 +1312,7 @@ describe('createSettingsView', () => {
   });
 
   // SCHEMA's sections: p, Plugins, then Keybindings.
+  const SCHEMA_PLUGINS_INDEX = 1;
   const KEYS_INDEX = 2;
 
   // A view open on the Keybindings section with the rows focused.
@@ -1485,7 +1461,7 @@ describe('createSettingsView', () => {
       const { view, logs, picked, places, sheet, move } = await shownView({
         schema: SAVE_COMMANDS_SCHEMA,
       });
-      view.openSectionById('plugins');
+      view.openSectionAt(SCHEMA_PLUGINS_INDEX);
       move('right');
       picked.count = 0;
       const leaderCursors = places.at(-1)?.leaderCursors ?? {

@@ -97,7 +97,6 @@ export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
     });
     registerDemoSteps(services, {
       showSample: (flow) => workflow.showSample(flow),
-      autoStartSeconds: () => api.settings().autoStartSeconds,
     });
 
     const runKey = keyRunner(api.commands, log);

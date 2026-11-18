@@ -47,7 +47,9 @@ export function registerDemoSteps(
       'src/plugins/chat/layouts/default/layout.js',
     ],
     enter: async ({ sessions }: DemoPageContext) =>
-      stageOf([{ name: 'transcript', show: () => activate(sessions.steps) }]),
+      stageOf([
+        { name: 'transcript', show: () => activate(sessions.transcript) },
+      ]),
   });
 
   register({
