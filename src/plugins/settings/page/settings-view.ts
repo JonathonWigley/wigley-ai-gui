@@ -871,16 +871,27 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     (focus === 'rows' ? rowsSheet : sections.element).focus();
   };
 
+  // Takes the open box down: its scope disposed rather than popped, since the
+  // view's dispose closes it too, while the plugin stops. Cleared first, so a
+  // later `closeBox` of the same box finds it gone.
+  const dropOpenBox = () => {
+    const held = openBox;
+    if (held === null) {
+      return;
+    }
+    openBox = null;
+    callEach<() => void>(
+      [() => held.scope.dispose(), () => held.box.destroy()],
+      (step) => step(),
+    );
+    log(`box closed ${held.box.key}`);
+  };
+
   const closeBox = (box: RowBox) => {
     if (openBox?.box !== box) {
       return;
     }
-    const held = openBox;
-    openBox = null;
-    // A write landing after the plugin stopped closes here too, so no `pop`.
-    held.scope.dispose();
-    box.destroy();
-    log(`box closed ${box.key}`);
+    dropOpenBox();
     markCursor();
     restoreFocus();
   };
@@ -1534,7 +1545,12 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     dispose() {
       isDisposed = true;
       callEach<() => void>(
-        [disposeEntries, () => rowsPane.dispose(), () => sections.dispose()],
+        [
+          dropOpenBox,
+          disposeEntries,
+          () => rowsPane.dispose(),
+          () => sections.dispose(),
+        ],
         (step) => step(),
       );
     },
