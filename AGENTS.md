@@ -1122,9 +1122,10 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
     refusal once.
   - **An agent wanting a look no layout has** writes a new layout folder, names it in the round, and lists each
     layout it wrote or changed in a notice on that round, so the user sees the file while its look is on screen.
-  - **Reloads:** saving a layout's code (`.js`, `.mjs`), style (`.css`), data (`.json`), image or font files redraws
-    the open rounds and keeps every answer; editor swap and lock files do not. A card or pane that throws falls back
-    to `default`, and a reload that fails keeps the last good version of that layout.
+  - **Reloads:** saving a layout's code (`.js`, `.mjs`), data (`.json`), image or font files redraws only the cards
+    and panes whose layout changed, and keeps every box with its text, cursor, vim mode and undo; saving only its
+    style (`.css`) restyles in place with no redraw; editor swap and lock files do neither. A card or pane that throws
+    falls back to `default`, and a reload that fails keeps the last good version of that layout.
   - `Space z l o` opens the preview round in the user's layout and selects its row; the round sends nothing and
     raises no notification or badge.
   - **Other plugins** reach the forms view through the page exports (`FormsPageExports` in

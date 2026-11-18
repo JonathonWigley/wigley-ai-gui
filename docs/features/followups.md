@@ -413,17 +413,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **View and interaction behaviours as switchable plugins** — *needs a feature plan*: behaviours such as
   `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
   settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
-- **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
-  reload changes a layout it draws with, by a card part or review column added or disposed, and by a page kind
-  registered or disposed) destroys and
-  remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
-  was inserting, and keeps the main column's scroll, but loses the cursor, a visual mode and undo. Move its boxes to
-  `EditorBoxes.place` and `release` (`src/shared/page/editor-boxes.ts`), as the primer, practice and the audio picker
-  do, so a redraw keeps each box's editor. Redraw only the parts whose layout pick changed: compare each card's,
-  notice card's and pane's pick (name and layout object) with the last draw's, in place of `setLayouts`' one
-  `picksEqual` over the whole round, and redraw each changed part alone in its place (task 13 of the Lane L plan,
-  `changedPicks`). Forms is the owner this covers: chat's composer keeps its box and draft across a redraw, and docs'
-  doc pane redraws its frame only after the editor closes.
 - **A finding origin registered only in main draws with the `caused` actions** — *needs a feature plan*: the page draws
   an origin it has no registration for with the `caused` card's fields and actions (`drawnOriginSpec`,
   `src/plugins/forms/page/kinds/finding/verdict.ts:36-55`). Main checks the user's pick against its own spec for that

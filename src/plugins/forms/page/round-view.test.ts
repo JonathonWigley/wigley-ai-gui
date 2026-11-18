@@ -13,10 +13,16 @@ import {
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import type { RoundState } from './round-model';
-import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  type FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../shared/page/test-dom';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../manifest';
 import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
@@ -27,6 +33,7 @@ import { createRoundView } from './round-view';
 import { railHeadInput } from './view-model';
 import {
   apply,
+  finding,
   initialState,
   notice,
   presentedRound,
@@ -113,8 +120,10 @@ const bareLayout: Layout = {
 // Round r1, open and active, shown in the forms view by a round view over
 // editor boxes; `main` is the scrolled main column, and `anchors` holds every
 // anchor the keys named, in call order. It draws with `layout` over `default`
-// and renders through `markdown`. The round is `presented` (two questions by
-// default) as `shape` changes it; `shown` is the state it was shown in.
+// and renders through `markdown`, `extraLayouts` loaded beside them (the
+// layouts it shows with are `layouts`). The round is `presented` (two
+// questions by default) as `shape` changes it; `shown` is the state it was
+// shown in.
 function roundViewSetup(
   layout: Layout = bareLayout,
   markdown: MarkdownRenderer = {
@@ -125,6 +134,7 @@ function roundViewSetup(
   },
   presented = presentedRound('r1'),
   shape: (round: RoundState) => RoundState = (round) => round,
+  extraLayouts: [string, Layout][] = [],
 ) {
   const { boxes, created } = setup();
   const { anchors, keys } = recordingAnchors();
@@ -133,27 +143,74 @@ function roundViewSetup(
     form: presented,
   });
   const round = shape(shown.forms[0]);
-  const view = createRoundView(
-    () => undefined,
-    round,
-    withUser(defaultLayout, layout),
-    {
-      markdown,
-      boxes,
-      keys: { ...keys, onKeymapChanged: () => ({ dispose: () => undefined }) },
-      run: vi.fn(),
-      commands: fakeKitCommandsOf(formsManifest),
-      contributions: createFormsContributions(),
-      platform: 'macos',
-      state: noLayoutState,
-      uiState: { get: () => undefined, set: () => undefined },
-      timers: { set: () => 0, clear: () => undefined },
-      log: vi.fn(),
-    },
-  );
+  const userLayouts = withUser(defaultLayout, layout);
+  const layouts: ShownLayouts<Layout> = {
+    layouts: new Map([...userLayouts.layouts, ...extraLayouts]),
+    user: userLayouts.user,
+  };
+  const view = createRoundView(() => undefined, round, layouts, {
+    markdown,
+    boxes,
+    keys: { ...keys, onKeymapChanged: () => ({ dispose: () => undefined }) },
+    run: vi.fn(),
+    commands: fakeKitCommandsOf(formsManifest),
+    contributions: createFormsContributions(),
+    platform: 'macos',
+    state: noLayoutState,
+    uiState: { get: () => undefined, set: () => undefined },
+    timers: { set: () => 0, clear: () => undefined },
+    log: vi.fn(),
+  });
   view.update(round, 'forms');
   const [main] = findAll(asFake(view.element), 'ui-split-end');
-  return { boxes, created, round, view, main, anchors, shown };
+  return { boxes, created, round, view, main, anchors, shown, layouts };
+}
+
+// `layouts` with `name` loaded as `layout`, a new object.
+function reloaded(
+  layouts: ShownLayouts<Layout>,
+  name: string,
+  layout: Layout,
+): ShownLayouts<Layout> {
+  return {
+    layouts: new Map([...layouts.layouts, [name, layout]]),
+    user: layouts.user,
+  };
+}
+
+// Every element of the view a layout drew (`data-layout-owner="forms"`): each
+// card, pane, strip and the head, in tree order.
+function drawnParts(view: { element: HTMLElement }): FakeElement[] {
+  const found: FakeElement[] = [];
+  const pending = [asFake(view.element)];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node.dataset.layoutOwner === 'forms') {
+      found.push(node);
+    }
+    pending.push(...[...node.children].reverse());
+  }
+  return found;
+}
+
+// Whether `after` holds the very elements of `before`, in order, once
+// `before`'s `redrawn` and `after`'s `drawn` are left out.
+function keepsEveryOtherPart(
+  before: FakeElement[],
+  redrawn: FakeElement,
+  after: FakeElement[],
+  drawn: FakeElement,
+): boolean {
+  const kept = before.filter((part) => part !== redrawn);
+  const now = after.filter((part) => part !== drawn);
+  return kept.length === now.length && kept.every((part, i) => part === now[i]);
+}
+
+// Round r1, its two questions, with the round's own layout `r`.
+function roundNamingR() {
+  const presented = presentedRound('r1');
+  presented.round = { ...presented.round, layout: 'r' };
+  return presented;
 }
 
 describe('round view rebuild', () => {
@@ -235,16 +292,17 @@ describe('round view rebuild', () => {
       roundId: 'r1',
       target: { field: 'notes', item: { kind: 'question', index: 1 } },
     };
+    const editor = boxes.editorOf(questionNotes);
     boxes.focus(questionNotes);
+    const [focused] = created.filter((made) => made.focusOptions.length > 0);
     const builtBefore = created.length;
 
     view.rebuild(round);
 
     expect(boxes.active()).toEqual(questionNotes);
-    const focusedAfter = created
-      .slice(builtBefore)
-      .filter((editor) => editor.focusOptions.length > 0);
-    expect(focusedAfter).toHaveLength(1);
+    expect(created).toHaveLength(builtBefore);
+    expect(boxes.editorOf(questionNotes)).toBe(editor);
+    expect(focused.focusOptions).toHaveLength(2);
   });
 
   it('rebuild_OpenNoticeLine_KeepsItOpenItsCursorAndItsFocusedBox', () => {
@@ -311,6 +369,152 @@ describe('round view rebuild', () => {
       true,
     );
     expect(anchors.every((anchor) => anchor.isDisposed)).toBe(true);
+  });
+});
+
+describe('round view setLayouts', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // A finding card of its own, `f-card`, leaving every box to the app.
+  const findingLayout = (): Layout => ({
+    cards: {
+      finding: (cardParent, _input, kit) => ({
+        element: kit.card(cardParent, 'f-card'),
+      }),
+    },
+  });
+
+  it('setLayouts_OneCardsLayoutChanged_RedrawsOnlyThatCard', () => {
+    const { boxes, created, view, round, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      presentedRound('r1', {
+        questions: [question('Alpha')],
+        findings: [finding('Delta', { layout: 'f' })],
+      }),
+      undefined,
+      [['f', findingLayout()]],
+    );
+    const questionNotes: BoxRef = {
+      roundId: 'r1',
+      target: { field: 'notes', item: { kind: 'question', index: 1 } },
+    };
+    boxes.focus(questionNotes);
+    const [focused] = created.filter((made) => made.focusOptions.length > 0);
+    focused.events.modeChanged({ mode: 'visual', subMode: '' });
+    const editor = boxes.editorOf(questionNotes);
+    const [findingBefore, questionBefore] = findAll(
+      asFake(view.element),
+      'items',
+    )[0].children;
+    const framesBefore = findAll(questionBefore, 'ui-input');
+    const focusesBefore = focused.focusOptions.length;
+    const before = drawnParts(view);
+
+    view.setLayouts(reloaded(layouts, 'f', findingLayout()), round);
+
+    const [findingAfter, questionAfter] = findAll(
+      asFake(view.element),
+      'items',
+    )[0].children;
+    expect(findingAfter).not.toBe(findingBefore);
+    expect(findingAfter.classList.contains('f-card')).toBe(true);
+    expect(questionAfter).toBe(questionBefore);
+    expect(
+      keepsEveryOtherPart(
+        before,
+        findingBefore,
+        drawnParts(view),
+        findingAfter,
+      ),
+    ).toBe(true);
+    expect(boxes.editorOf(questionNotes)).toBe(editor);
+    const framesAfter = findAll(questionAfter, 'ui-input');
+    expect(framesBefore.length).toBeGreaterThan(0);
+    expect(framesAfter.every((frame, i) => frame === framesBefore[i])).toBe(
+      true,
+    );
+    expect(focused.focusOptions.slice(focusesBefore)).toEqual([undefined]);
+  });
+
+  it('setLayouts_RailFootChanged_RedrawsOnlyIt', () => {
+    const railFootLayout = (): Layout => ({
+      railFoot: (parent, _input, kit) => ({
+        element: kit.el(parent, 'footer', 'r-foot'),
+      }),
+    });
+    const { view, round, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      roundNamingR(),
+      undefined,
+      [['r', railFootLayout()]],
+    );
+    const [slot] = findAll(asFake(view.element), 'rail-foot-slot');
+    const [footBefore] = slot.children;
+    const before = drawnParts(view);
+
+    view.setLayouts(reloaded(layouts, 'r', railFootLayout()), round);
+
+    expect(slot.children).toHaveLength(1);
+    const [footAfter] = slot.children;
+    expect(footAfter).not.toBe(footBefore);
+    expect(footAfter.classList.contains('r-foot')).toBe(true);
+    expect(
+      keepsEveryOtherPart(before, footBefore, drawnParts(view), footAfter),
+    ).toBe(true);
+    expect(findAll(asFake(view.element), 'rail-foot-slot')[0]).toBe(slot);
+  });
+
+  it('setLayouts_SamePicks_RedrawsNothing', () => {
+    const { view, round, layouts } = roundViewSetup();
+    const before = drawnParts(view);
+
+    view.setLayouts(
+      { layouts: new Map(layouts.layouts), user: layouts.user },
+      round,
+    );
+
+    const after = drawnParts(view);
+    expect(before.length).toBeGreaterThan(0);
+    expect(after).toHaveLength(before.length);
+    expect(after.every((part, i) => part === before[i])).toBe(true);
+  });
+
+  it('setLayouts_ReviewPaneChanged_RedrawsOnlyItAndKeepsTheScroll', () => {
+    const reviewLayout = (): Layout => ({
+      review: (parent, _input, kit) => ({
+        element: kit.el(parent, 'div', 'r-review'),
+      }),
+    });
+    const { boxes, created, view, round, main, layouts } = roundViewSetup(
+      bareLayout,
+      undefined,
+      roundNamingR(),
+      undefined,
+      [['r', reviewLayout()]],
+    );
+    const roundNote: BoxRef = { roundId: 'r1', target: { field: 'note' } };
+    const editor = boxes.editorOf(roundNote);
+    const builtBefore = created.length;
+    const [reviewBefore] = findAll(asFake(view.element), 'r-review');
+    const before = drawnParts(view);
+    main.scrollTop = 80;
+
+    view.setLayouts(reloaded(layouts, 'r', reviewLayout()), round);
+
+    const [reviewAfter] = findAll(asFake(view.element), 'r-review');
+    expect(reviewAfter).not.toBe(reviewBefore);
+    expect(
+      keepsEveryOtherPart(before, reviewBefore, drawnParts(view), reviewAfter),
+    ).toBe(true);
+    expect(editor).toBeDefined();
+    expect(boxes.editorOf(roundNote)).toBe(editor);
+    expect(created).toHaveLength(builtBefore);
+    expect(main.scrollTop).toBe(80);
   });
 });
 

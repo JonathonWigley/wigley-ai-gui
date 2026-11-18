@@ -64,9 +64,11 @@ import {
   type ReviewPane,
 } from './layout/layout-panes';
 import {
+  changedPicks,
+  type LayoutPane,
   type LayoutPick,
   pickRoundLayouts,
-  picksEqual,
+  type RoundPickChanges,
   type RoundPicks,
 } from './layout/layout-resolver';
 import {
@@ -88,9 +90,8 @@ export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<
     EditorBoxes<BoxRef>,
-    | 'mount'
-    | 'destroyBox'
-    | 'destroyForm'
+    | 'place'
+    | 'release'
     | 'destroyReleased'
     | 'isMounted'
     | 'editorOf'
@@ -114,12 +115,14 @@ export interface RoundViewDeps {
 // prompt, the view keeping the round returns to. A round whose page kinds
 // differ from those the view was built with picks its layouts again and
 // rebuilds before it updates, so a card of a kind that left is dropped and
-// one that arrived is drawn. `rebuild` rebuilds the
-// view's children from `round` with the layouts it picked, remounting every
-// box from the round's answers; the round's focused box takes focus again,
-// and the main column keeps its scroll while the round shows the same item.
-// `setLayouts` picks the round's layouts again from `shown` and rebuilds when
-// a pick changed.
+// one that arrived is drawn. `rebuild` draws every card and pane of the view
+// again from `round` with the layouts it picked, placing each box again with
+// its editor kept; the round's focused box takes focus again, the main column
+// keeps its scroll while the round shows the same item, and the rail shows
+// the focused item's entry. `setLayouts` picks the round's layouts again from
+// `shown` and draws again only the cards and panes whose pick changed, in
+// place, keeping every other part's element, boxes and anchors, the focused
+// box and the main column's scroll; nothing when no pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `resizeTarget` is the view's rail | main split, which the resize keys move
 // while the round shows.
@@ -139,6 +142,7 @@ export interface RoundView {
 // The children of a round view one build makes.
 interface RoundParts {
   main: HTMLElement;
+  // The layout head's slot; null while the head's pick has no head.
   layoutHead: HTMLElement | null;
   // Disposes the head's anchors and mounts and draws the layout's head again
   // in its slot; nothing for a layout with no head.
@@ -146,15 +150,29 @@ interface RoundParts {
   // The round's save status, which the rail head's kit places.
   statusLine: StatusLine;
   railHead: ChromeStrip<RailHeadInput>;
-  rail: RailPane;
+  rail: RoundPart<RailPane>;
   railFoot: ChromeStrip<RailFootInput>;
   pager: ChromeStrip<PagerInput>;
   itemsPane: HTMLElement;
-  itemCards: ItemCard[];
-  review: ReviewPane;
-  // Disposes every anchor and markdown mount the build made, the head's and
-  // each chrome strip's last draw's included.
+  // By rail position: each stop's card, and the notices stop's pane.
+  itemCards: RoundPart<ItemCard>[];
+  review: RoundPart<ReviewPane>;
+  // Draws each part `changes` names again from `round` with its pick in
+  // `picks`, in its place: a card or pane disposes its last draw, releasing
+  // its boxes, and its new element takes the old one's place; a strip draws
+  // again into its slot; the head draws again in its slot. The notices pane
+  // draws again when a notice card's pick changed too.
+  redraw(round: RoundState, picks: RoundPicks, changes: RoundPickChanges): void;
+  // Disposes each part's last draw, then every anchor and markdown mount the
+  // build recorded, the head's included.
   dispose(): void;
+}
+
+// A drawn card or pane of a build, and the draw that draws it again from a
+// round into the same parent, with the build's current picks.
+interface RoundPart<T extends { element: HTMLElement }> {
+  drawn: Pick<DrawnPart<T>, 'built' | 'dispose'>;
+  draw(round: RoundState): Pick<DrawnPart<T>, 'built' | 'dispose'>;
 }
 
 // One chrome strip of a build: the slot it draws into, its last draw and the
@@ -173,9 +191,10 @@ interface ChromeStrip<Input extends object> {
 // card, pane and strip drawn by the layout `pickRoundLayouts` picks for it
 // from `shown`. A render only updates it, each strip (the rail head and foot,
 // the item pager) drawing again when its input changed, the
-// rail taking the latest dragged width of any round; new layouts that change a
-// pick rebuild both panes, as `rebuild` does, keeping the rail's dragged
-// width, the focused box and the main column's scroll. Every key hint is an
+// rail taking the latest dragged width of any round; new layouts draw again
+// only the cards, panes and strips whose pick changed, keeping the rail's
+// dragged width, every box's editor, the focused box and the main column's
+// scroll. Every key hint is an
 // anchor, which redraws itself on a keymap change; the change draws the
 // layout's head again, shown or hidden, for the text it drew from the keys.
 // `attach` places the root in the page once, before any editor mounts.
@@ -231,39 +250,40 @@ export function createRoundView(
         parts.layoutHead.hidden = !isForms;
       }
       updateChrome(parts, current);
-      parts.rail.update(current, viewName);
+      const rail = parts.rail.drawn.built;
+      rail.update(current, viewName);
       parts.pager.slot.hidden = !isForms;
       parts.itemsPane.hidden = !isForms;
-      parts.itemCards.forEach((card, position) => {
+      parts.itemCards.forEach(({ drawn: { built: card } }, position) => {
         const isShown = isForms && position === current.focus;
         card.element.hidden = !isShown;
         if (isShown) {
           card.update(current);
         }
       });
-      const wasReviewHidden = parts.review.element.hidden === true;
-      parts.review.element.hidden = !isReview;
+      const review = parts.review.drawn.built;
+      const wasReviewHidden = review.element.hidden === true;
+      review.element.hidden = !isReview;
       if (isReview) {
-        parts.review.update(current, wasReviewHidden);
+        review.update(current, wasReviewHidden);
       }
       if (current.focus !== shownFocus) {
         shownFocus = current.focus;
         parts.main.scrollTop = 0;
-        parts.rail.showEntry(current.focus);
+        rail.showEntry(current.focus);
       }
     },
     rebuild(current) {
       const showsSameItem = current.focus === shownFocus;
       const scrollTop = parts.main.scrollTop;
       keepFocusedBox(deps.boxes, current.formId, () => {
-        deps.boxes.destroyForm(current.formId);
         parts.dispose();
         split.start.replaceChildren();
         split.end.replaceChildren();
         builtKinds = current.kinds;
         parts = build(current, picks);
-        shownFocus = -1;
         view.update(current, shownView);
+        parts.rail.drawn.built.showEntry(current.focus);
         if (showsSameItem) {
           parts.main.scrollTop = scrollTop;
         }
@@ -276,11 +296,24 @@ export function createRoundView(
         nextShown.user,
         nextShown.layouts,
       );
-      if (picksEqual(nextPicks, picks)) {
+      const changes = changedPicks(picks, nextPicks);
+      picks = nextPicks;
+      if (!hasChanges(changes)) {
         return;
       }
-      picks = nextPicks;
-      view.rebuild(current);
+      if (current.kinds !== builtKinds) {
+        view.rebuild(current);
+        return;
+      }
+      keepFocusedBox(deps.boxes, current.formId, () => {
+        const scrollTop = parts.main.scrollTop;
+        parts.redraw(current, picks, changes);
+        view.update(current, shownView);
+        if (changes.panes.includes('rail')) {
+          parts.rail.drawn.built.showEntry(current.focus);
+        }
+        parts.main.scrollTop = scrollTop;
+      });
     },
     scrollBy(step, direction) {
       return scrollContent(
@@ -313,9 +346,11 @@ function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
 // rail foot's slot, and the round's main column in its end pane: the layout's
 // head, the item pager's slot, the items pane of cards and the notices pane at
 // the notices stop's rail position, and the review pane, each card, pane and
-// strip drawn by its pick in `picks`. Every card and pane anchors its keys
-// through one recording `keys` and records its markdown mounts beside those
-// anchors, the head into its own, and each strip's draw keeps its own, so
+// strip drawn by its pick in `picks`, and by its pick in the picks `redraw`
+// takes when drawn again. Every card and pane anchors its keys through one
+// recording `keys` and records its markdown mounts beside those anchors, and
+// its draw keeps them too, so a part drawn again alone disposes its own; the
+// head records into its own, and each strip's draw keeps its own, so
 // `dispose` reaches them all.
 function buildRoundParts(
   split: Split,
@@ -327,18 +362,20 @@ function buildRoundParts(
   const headAnchors: Disposable[] = [];
   const keys = recordingKeys(deps.keys, anchors);
   const items = railItems(round);
-  const mountBox = (parent: HTMLElement, target: TextTarget, text: string) =>
-    deps.boxes.mount(parent, { roundId: round.formId, target }, text);
-  const destroyBox = (target: TextTarget) =>
-    deps.boxes.destroyBox({ roundId: round.formId, target });
+  // The picks each part draws with; `redraw` sets the next.
+  let shown = picks;
+  const placeBox = (parent: HTMLElement, target: TextTarget, text: string) =>
+    deps.boxes.place(parent, { roundId: round.formId, target }, text);
+  const releaseBox = (target: TextTarget) =>
+    deps.boxes.release({ roundId: round.formId, target });
   const paneDeps: PaneDeps = {
     markdown: deps.markdown,
     platform: deps.platform,
     log: deps.log,
     keys,
     run: deps.run,
-    mountBox,
-    destroyBox,
+    placeBox,
+    releaseBox,
     commands: deps.commands,
     contributions: deps.contributions,
     state: deps.state,
@@ -356,7 +393,7 @@ function buildRoundParts(
   const statusLine = createStatusLine();
   const railHead = chromeStrip('rail-head-slot', (slot, input: RailHeadInput) =>
     drawRailHead(
-      picks.panes.railHead,
+      shown.panes.railHead,
       slot,
       input,
       statusLine.element,
@@ -365,9 +402,11 @@ function buildRoundParts(
   );
   split.start.append(railHead.slot);
   updateStrip(railHead, railHeadInput(round));
-  const rail = buildRailPane(picks.panes.rail, split.start, round, paneDeps);
+  const rail = roundPart(round, (current) =>
+    buildRailPane(shown.panes.rail, split.start, current, paneDeps),
+  );
   const railFoot = chromeStrip('rail-foot-slot', (slot, input: RailFootInput) =>
-    drawRailFoot(picks.panes.railFoot, slot, input, chromeDeps),
+    drawRailFoot(shown.panes.railFoot, slot, input, chromeDeps),
   );
   split.start.append(railFoot.slot);
   updateStrip(railFoot, railFootInput(round));
@@ -385,25 +424,40 @@ function buildRoundParts(
     ),
     log: deps.log,
   };
-  const headPick = picks.panes.head;
-  const layoutHead = buildLayoutHead(
+  let layoutHead = buildLayoutHead(
     main,
     round,
-    headPick,
+    shown.panes.head,
     headDeps,
     headAnchors,
   );
   const pager = chromeStrip('item-pager-slot', (slot, input: PagerInput) =>
-    drawPager(picks.panes.pager, slot, input, chromeDeps),
+    drawPager(shown.panes.pager, slot, input, chromeDeps),
   );
   main.append(pager.slot);
   updateStrip(pager, pagerInput(round));
+  // Draws the head of the current head pick in a new slot in the old one's
+  // place, before the pager's slot; no slot while the pick has no head.
+  const redrawHead = (current: RoundState) => {
+    disposeAnchors(headAnchors);
+    layoutHead?.remove();
+    layoutHead = buildLayoutHead(
+      main,
+      current,
+      shown.panes.head,
+      headDeps,
+      headAnchors,
+    );
+    if (layoutHead !== null) {
+      main.insertBefore(layoutHead, pager.slot);
+    }
+  };
   const itemsPane = element('div', 'items');
   main.append(itemsPane);
   const cardDeps: CardDeps = {
     markdown: deps.markdown,
-    mountBox,
-    destroyBox,
+    placeBox,
+    releaseBox,
     keys,
     platform: deps.platform,
     log: deps.log,
@@ -414,33 +468,63 @@ function buildRoundParts(
     recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>
-    isNoticesStop(item)
-      ? buildNoticesPane(
-          picks.panes.notices,
-          picks.noticeCards,
-          itemsPane,
-          round,
-          position,
-          paneDeps,
-          cardDeps,
-        )
-      : buildLayoutCard(
-          picks.cards[position],
-          itemsPane,
-          round,
-          item,
-          position,
-          cardDeps,
-        ),
+    roundPart(
+      round,
+      (current): Pick<DrawnPart<ItemCard>, 'built' | 'dispose'> =>
+        isNoticesStop(item)
+          ? buildNoticesPane(
+              shown.panes.notices,
+              shown.noticeCards,
+              itemsPane,
+              current,
+              position,
+              paneDeps,
+              cardDeps,
+            )
+          : buildLayoutCard(
+              shown.cards[position],
+              itemsPane,
+              current,
+              item,
+              position,
+              cardDeps,
+            ),
+    ),
   );
-  const review = buildReviewPane(picks.panes.review, main, round, paneDeps);
+  const noticesPane = itemCards.find((_, position) =>
+    isNoticesStop(items[position]),
+  );
+  const review = roundPart(round, (current) =>
+    buildReviewPane(shown.panes.review, main, current, paneDeps),
+  );
+  const paneRedraws: Record<LayoutPane, (current: RoundState) => void> = {
+    head: redrawHead,
+    rail: (current) => redrawPart(rail, current),
+    railHead: (current) => drawStrip(railHead, railHeadInput(current)),
+    railFoot: (current) => drawStrip(railFoot, railFootInput(current)),
+    pager: (current) => drawStrip(pager, pagerInput(current)),
+    review: (current) => redrawPart(review, current),
+    notices: (current) => {
+      if (noticesPane !== undefined) {
+        redrawPart(noticesPane, current);
+      }
+    },
+  };
   return {
     main,
-    layoutHead,
+    get layoutHead() {
+      return layoutHead;
+    },
     redrawLayoutHead() {
       if (layoutHead !== null) {
         disposeAnchors(headAnchors);
-        drawLayoutHead(layoutHead, round, headPick, headDeps, headAnchors);
+        drawLayoutHead(
+          layoutHead,
+          round,
+          shown.panes.head,
+          headDeps,
+          headAnchors,
+        );
       }
     },
     statusLine,
@@ -451,7 +535,26 @@ function buildRoundParts(
     itemsPane,
     itemCards,
     review,
+    redraw(current, nextPicks, changes) {
+      shown = nextPicks;
+      for (const position of changes.cards) {
+        redrawPart(itemCards[position], current);
+      }
+      const isNoticesPaneDueForItsCards =
+        changes.noticeCards && !changes.panes.includes('notices');
+      const panes: LayoutPane[] = isNoticesPaneDueForItsCards
+        ? [...changes.panes, 'notices']
+        : changes.panes;
+      for (const pane of panes) {
+        paneRedraws[pane](current);
+      }
+    },
     dispose() {
+      rail.drawn.dispose();
+      for (const card of itemCards) {
+        card.drawn.dispose();
+      }
+      review.drawn.dispose();
       disposeAnchors(anchors);
       disposeAnchors(headAnchors);
       railHead.drawn?.dispose();
@@ -459,6 +562,27 @@ function buildRoundParts(
       pager.drawn?.dispose();
     },
   };
+}
+
+// The part `draw` draws from `round` now, with `draw` kept to draw it again.
+function roundPart<T extends { element: HTMLElement }>(
+  round: RoundState,
+  draw: RoundPart<T>['draw'],
+): RoundPart<T> {
+  return { drawn: draw(round), draw };
+}
+
+// Disposes the part's last draw, releasing its boxes and disposing its
+// anchors and mounts, and draws it again from `round`, its new element taking
+// the old one's place in the parent.
+function redrawPart<T extends { element: HTMLElement }>(
+  part: RoundPart<T>,
+  round: RoundState,
+) {
+  const old = part.drawn.built.element;
+  part.drawn.dispose();
+  part.drawn = part.draw(round);
+  old.replaceWith(part.drawn.built.element);
 }
 
 // A strip whose slot is `div.<slotClass>`, drawn by `draw`, with no draw yet.
@@ -491,19 +615,33 @@ function updateChrome(parts: RoundParts, round: RoundState) {
   markEdges(parts.pager, railItems(round).length < 2);
 }
 
-// Draws the strip again when it has no draw or a field of its input changed:
-// the last draw disposed, its slot emptied, then drawn.
+// Draws the strip again when it has no draw or a field of its input changed.
 function updateStrip<Input extends object>(
   strip: ChromeStrip<Input>,
   input: Input,
 ) {
-  if (isSameInput(strip.input, input)) {
-    return;
+  if (!isSameInput(strip.input, input)) {
+    drawStrip(strip, input);
   }
+}
+
+// Draws the strip again from `input`: its last draw disposed, its slot
+// emptied, then drawn.
+function drawStrip<Input extends object>(
+  strip: ChromeStrip<Input>,
+  input: Input,
+) {
   strip.drawn?.dispose();
   strip.slot.replaceChildren();
   strip.drawn = strip.draw(input);
   strip.input = input;
+}
+
+// Whether `changes` names any part.
+function hasChanges(changes: RoundPickChanges): boolean {
+  return (
+    changes.cards.length > 0 || changes.noticeCards || changes.panes.length > 0
+  );
 }
 
 // Whether every field of `next` equals that field of `drawn`.

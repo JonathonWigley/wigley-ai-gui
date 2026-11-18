@@ -2,6 +2,7 @@ import type { Disposable } from '../../../../contracts/disposable';
 import { errorText } from '../../../../shared/error-text';
 import {
   drawPart,
+  type DrawnPart,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
@@ -62,10 +63,12 @@ export function cardAnswer(
 // the picked layout, or with `default` when the pick lacks the item's card or
 // its card throws: a plugin kind's card draws with the layout's
 // `cards.kinds[kind]` when it is a function, else with its `cards.other`, and
-// falls back to `default`'s `other`. The boxes the card mounts, the anchors it
+// falls back to `default`'s `other`. The boxes the card places, the anchors it
 // names, its slot subscriptions and its markdown mounts are recorded for
-// drawPart's rollback. With `rollback`, the drawn card's dispose is recorded in
-// it, so the part the card sits in undoes the card when it rolls back.
+// drawPart's rollback; `dispose` releases those boxes and disposes the rest,
+// and leaves the card's element in place. With `rollback`, the drawn card's
+// dispose is recorded in it, so the part the card sits in undoes the card
+// when it rolls back.
 export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
@@ -74,7 +77,7 @@ export function buildLayoutCard(
   position: number,
   deps: CardDeps,
   rollback?: RollbackDeps,
-): ItemCard {
+): Pick<DrawnPart<ItemCard>, 'built' | 'dispose'> {
   const { built, layoutName, dispose } = drawPart({
     owner: 'forms',
     parent,
@@ -94,32 +97,37 @@ export function buildLayoutCard(
     partName: `${item.kind} card`,
   });
   rollback?.recordBox(dispose);
-  return hostCard(built, layoutName, item, isAnswerable(round, item), deps);
+  return {
+    built: hostCard(built, layoutName, item, isAnswerable(round, item), deps),
+    dispose,
+  };
 }
 
-// What a layout's card or pane mounts its text boxes and anchors its keys
+// What a layout's card or pane places its text boxes and anchors its keys
 // through, and where it records each anchor the kit names and each slot
 // subscription and markdown mount it makes.
 interface MountingDeps {
-  mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
-  destroyBox(target: TextTarget): void;
+  placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;
+  releaseBox(target: TextTarget): void;
   keys: Pick<KeyHints, 'anchor'>;
   recordAnchor(anchor: Disposable): void;
   recordMount(mount: MarkdownMount): void;
 }
 
-// `deps` with each box it mounts, each anchor it names, and each anchor the
-// kit names and each slot subscription and markdown mount it records also
-// recorded in `rollback`.
+// `deps` with each box it places recorded in `rollback` as released, so a
+// rolled-back or disposed draw detaches the box's frame and the editor lives
+// on, and each anchor it names, and each anchor the kit names and each slot
+// subscription and markdown mount it records, also recorded in `rollback`.
 export function recordingDeps<D extends MountingDeps>(
   deps: D,
   rollback: RollbackDeps,
 ): D {
   return {
     ...deps,
-    mountBox(parent: HTMLElement, target: TextTarget, text: string) {
-      deps.mountBox(parent, target, text);
-      rollback.recordBox(() => deps.destroyBox(target));
+    placeBox(parent: HTMLElement, target: TextTarget, text: string) {
+      const frame = deps.placeBox(parent, target, text);
+      rollback.recordBox(() => deps.releaseBox(target));
+      return frame;
     },
     recordAnchor(anchor: Disposable) {
       deps.recordAnchor(anchor);
@@ -140,8 +148,8 @@ export function recordingDeps<D extends MountingDeps>(
   };
 }
 
-// Builds the item's card through `builder`, checks its element, then mounts
-// the boxes the card left unmounted and places the contributed parts it left
+// Builds the item's card through `builder`, checks its element, then places
+// the boxes the card left unplaced and places the contributed parts it left
 // unplaced, in that order, at the end of its element. A built-in or `kinds`
 // card's input comes from the item's kind's `cardInput.input`; the `other`
 // card's is the item's OtherCard.

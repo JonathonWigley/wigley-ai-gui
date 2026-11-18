@@ -203,8 +203,12 @@ function fakeCardDeps(contributions: FormsContributions) {
       document: async (text) => text,
       ...NO_FENCES,
     },
-    mountBox: vi.fn(),
-    destroyBox: vi.fn(),
+    placeBox: vi.fn((parent: HTMLElement) => {
+      const frame = asHtml(new FakeElement('div'));
+      parent.append(frame);
+      return frame;
+    }),
+    releaseBox: vi.fn(),
     keys: { keysFor, anchor },
     platform: 'macos',
     state: noLayoutState,
@@ -713,7 +717,7 @@ describe('plugin kind kit', () => {
       expect(field.textContent).toContain('Why this poll');
       expect(field.textContent).toContain('Say why.');
       expect(field.hidden).toBe(hidden);
-      expect(deps.mountBox).toHaveBeenCalledWith(
+      expect(deps.placeBox).toHaveBeenCalledWith(
         expect.anything(),
         { field: 'why', item: { kind: 'poll', index: 1 } },
         '',
@@ -730,7 +734,7 @@ describe('plugin kind kit', () => {
 
     expect(findAll(parent, 'toggles')).toHaveLength(1);
     expect(findAll(parent, 'field')).toHaveLength(0);
-    expect(deps.mountBox).not.toHaveBeenCalled();
+    expect(deps.placeBox).not.toHaveBeenCalled();
   });
 });
 

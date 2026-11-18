@@ -43,6 +43,13 @@ function findingRound(): RoundState {
   }).forms[0];
 }
 
+// Appends a new frame to `parent` and returns it, as placing a new box does.
+function placeFakeFrame(parent: HTMLElement): HTMLElement {
+  const frame = asHtml(new FakeElement('div'));
+  parent.append(frame);
+  return frame;
+}
+
 function fakeCardDeps(contributions: FormsContributions): CardDeps {
   return {
     markdown: {
@@ -51,8 +58,8 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
       document: async (text) => text,
       ...NO_FENCES,
     },
-    mountBox: vi.fn(),
-    destroyBox: vi.fn(),
+    placeBox: vi.fn(placeFakeFrame),
+    releaseBox: vi.fn(),
     keys: {
       keysFor: () => null,
       anchor: () => ({ dispose: () => undefined }),
@@ -99,7 +106,7 @@ function buildFindingCard(layout: Layout, contributions: FormsContributions) {
     { kind: 'finding', index: 1 },
     0,
     fakeCardDeps(contributions),
-  );
+  ).built;
   return { card, round };
 }
 
@@ -177,9 +184,9 @@ describe('buildLayoutCard', () => {
       form: presented,
     }).forms[0];
     const deps = fakeCardDeps(createFormsContributions());
-    const destroys: (() => void)[] = [];
+    const undos: (() => void)[] = [];
 
-    buildLayoutCard(
+    const drawn = buildLayoutCard(
       { name: 'default', layout: defaultLayout },
       asHtml(new FakeElement('div')),
       round,
@@ -187,40 +194,31 @@ describe('buildLayoutCard', () => {
       0,
       deps,
       {
-        recordBox: (destroy) => destroys.push(destroy),
+        recordBox: (undo) => undos.push(undo),
         recordAnchor: () => {},
       },
     );
-    for (const destroy of [...destroys, ...destroys]) {
-      destroy();
+    for (const undo of [...undos, ...undos]) {
+      undo();
     }
 
-    expect(destroys).toHaveLength(1);
-    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
-    expect(deps.destroyBox).toHaveBeenCalledWith({
+    expect(undos).toEqual([drawn.dispose]);
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith({
       field: 'comment',
       item: { kind: 'notice', index: 1 },
     });
   });
 
-  it('buildLayoutCard_CardThrowsAfterMountingABox_DestroysItAndDrawsDefault', () => {
-    // Boxes mounted and not yet destroyed; a second mount of one throws, as
-    // the editor boxes do.
-    const mounted = new Set<string>();
-    const mounts: string[] = [];
+  it('buildLayoutCard_CardThrowsAfterPlacingABox_ReleasesItAndDrawsDefault', () => {
+    const notes: TextTarget = {
+      field: 'notes',
+      item: { kind: 'finding', index: 1 },
+    };
     const { anchors, keys } = recordingAnchors();
     let anchorsAtThrow = 0;
     const deps: CardDeps = {
       ...fakeCardDeps(createFormsContributions()),
-      mountBox(_parent, target: TextTarget) {
-        const key = JSON.stringify(target);
-        if (mounted.has(key)) {
-          throw new Error(`${key} mounted twice`);
-        }
-        mounted.add(key);
-        mounts.push(key);
-      },
-      destroyBox: (target) => mounted.delete(JSON.stringify(target)),
       keys,
     };
     const fancy: Layout = {
@@ -241,11 +239,14 @@ describe('buildLayoutCard', () => {
       { kind: 'finding', index: 1 },
       0,
       deps,
-    );
+    ).built;
 
-    const notesMounts = mounts.filter((key) => key.includes('"notes"'));
-    expect(notesMounts).toHaveLength(2);
-    expect(mounted.has(notesMounts[0])).toBe(true);
+    const notesPlaces = vi
+      .mocked(deps.placeBox)
+      .mock.calls.filter(([, target]) => target.field === 'notes');
+    expect(notesPlaces).toHaveLength(2);
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith(notes);
     expect(anchorsAtThrow).toBeGreaterThan(0);
     expect(
       anchors.slice(0, anchorsAtThrow).every((anchor) => anchor.isDisposed),
@@ -284,7 +285,7 @@ function buildPollCard(answerable: boolean, layout: Layout, pick = 'mine') {
     { kind: 'poll', index: 1 },
     1,
     deps,
-  );
+  ).built;
   return { card: asFake(card.element), deps };
 }
 

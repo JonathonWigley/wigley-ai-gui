@@ -161,7 +161,7 @@ item draws a button through `kit.button`, which runs a command, and no closure b
   `docs/features/layouts/design.md`.
 - [x] Fixed texts in layout slots
 - [x] Sessions split picker rows through the sessions layout
-- [ ] Layout hot reload keeps the user's place
+- [x] Layout hot reload keeps the user's place
 
 ## Lane E: extension points
 

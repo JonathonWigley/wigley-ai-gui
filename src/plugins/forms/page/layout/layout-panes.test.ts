@@ -57,6 +57,13 @@ function openRound(): FormsState {
 
 // Pane deps over `contributions` whose commands register every forms
 // command, each run recorded.
+// Appends a new frame to `parent` and returns it, as placing a new box does.
+function placeFakeFrame(parent: HTMLElement): HTMLElement {
+  const frame = asHtml(new FakeElement('div'));
+  parent.append(frame);
+  return frame;
+}
+
 function fakePaneDeps(contributions: FormsContributions) {
   const keysFor = vi.fn(() => null);
   const anchor = vi.fn(
@@ -78,8 +85,8 @@ function fakePaneDeps(contributions: FormsContributions) {
     log,
     keys: { keysFor, anchor },
     run: vi.fn(),
-    mountBox: vi.fn(),
-    destroyBox: vi.fn(),
+    placeBox: vi.fn(placeFakeFrame),
+    releaseBox: vi.fn(),
     commands: fakeKitCommandsOf(formsManifest, run),
     contributions,
     recordAnchor: () => {},
@@ -92,8 +99,8 @@ function fakePaneDeps(contributions: FormsContributions) {
 function fakeCardDeps(deps: PaneDeps): CardDeps {
   return {
     markdown: deps.markdown,
-    mountBox: deps.mountBox,
-    destroyBox: deps.destroyBox,
+    placeBox: deps.placeBox,
+    releaseBox: deps.releaseBox,
     keys: deps.keys,
     platform: deps.platform,
     log: deps.log,
@@ -133,7 +140,7 @@ function drawRow(contributions: FormsContributions) {
     asHtml(new FakeElement('div')),
     round,
     deps,
-  );
+  ).built;
   pane.update(round, true);
   const [row] = findAll(asFake(pane.element), 'review-row');
   return { row, log, run };
@@ -266,7 +273,7 @@ describe('review pane', () => {
       asHtml(new FakeElement('div')),
       round,
       deps,
-    );
+    ).built;
 
     pane.update(round, true);
 
@@ -301,7 +308,7 @@ function drawPane(
     asHtml(parent),
     state.forms[0],
     deps,
-  );
+  ).built;
   return { pane, parent, deps, log, run };
 }
 
@@ -341,7 +348,7 @@ function drawNoticesPane(
     1,
     deps,
     fakeCardDeps(deps),
-  );
+  ).built;
   return { pane, parent, deps, log, run, round };
 }
 
@@ -350,7 +357,7 @@ function noticeLines(pane: { element: HTMLElement }) {
   return findAll(asFake(pane.element), 'notice-line');
 }
 
-// A review that appends a stray node and mounts the round note, then throws.
+// A review that appends a stray node and places the round note, then throws.
 function throwingReview(): Layout {
   return {
     review(parent, _input, kit) {
@@ -367,11 +374,11 @@ describe('panes', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reviewPane_Throws_DestroysTheBoxesItMounted', () => {
+  it('reviewPane_Throws_ReleasesTheBoxesItPlaced', () => {
     const { deps } = drawPane(buildReviewPane, throwingReview());
 
-    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
-    expect(deps.destroyBox).toHaveBeenCalledWith({ field: 'note' });
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith({ field: 'note' });
   });
 
   it.each([
@@ -434,7 +441,7 @@ describe('panes', () => {
   it('reviewPane_NoteLeftOut_AppendsItToThePane', () => {
     const { deps } = drawPane(buildReviewPane, oneRowReview());
 
-    expect(deps.mountBox).toHaveBeenCalledWith(
+    expect(deps.placeBox).toHaveBeenCalledWith(
       expect.anything(),
       { field: 'note' },
       expect.any(String),
@@ -463,7 +470,10 @@ describe('panes', () => {
       },
       state,
     );
-    (pane as ReturnType<typeof buildRailPane>).update(state.forms[0], 'review');
+    (pane as ReturnType<typeof buildRailPane>['built']).update(
+      state.forms[0],
+      'review',
+    );
 
     expect(inputs[0].items[0]).toEqual({
       position: 0,
@@ -608,7 +618,7 @@ describe('notices pane', () => {
     expect(pane.element.dataset.layout).toBe('default');
   });
 
-  it('noticesPane_Throws_DestroysEachBodysBoxOnce', () => {
+  it('noticesPane_Throws_ReleasesEachBodysBoxOnce', () => {
     const { pane, deps, log } = drawNoticesPane({
       name: 'test',
       layout: {
@@ -619,8 +629,8 @@ describe('notices pane', () => {
       },
     });
 
-    expect(deps.destroyBox).toHaveBeenCalledTimes(1);
-    expect(deps.destroyBox).toHaveBeenCalledWith({
+    expect(deps.releaseBox).toHaveBeenCalledTimes(1);
+    expect(deps.releaseBox).toHaveBeenCalledWith({
       field: 'comment',
       item: { kind: 'notice', index: 1 },
     });
@@ -628,7 +638,7 @@ describe('notices pane', () => {
     expect(pane.element.dataset.layout).toBe('default');
     expect(noticeLines(pane)).toHaveLength(2);
     for (const target of [1, 2]) {
-      expect(deps.mountBox).toHaveBeenCalledWith(
+      expect(deps.placeBox).toHaveBeenCalledWith(
         expect.anything(),
         { field: 'comment', item: { kind: 'notice', index: target } },
         expect.any(String),
@@ -653,7 +663,7 @@ describe('notices pane', () => {
     expect(asFake(pane.element).children.at(-1)).toBe(lines[1]);
     const title = findAll(lines[1], 'notice-line-title')[0];
     expect([title?.textContent, title?.title]).toEqual(['Also', 'Also']);
-    expect(deps.mountBox).toHaveBeenCalledWith(
+    expect(deps.placeBox).toHaveBeenCalledWith(
       expect.anything(),
       { field: 'comment', item: { kind: 'notice', index: 2 } },
       expect.any(String),

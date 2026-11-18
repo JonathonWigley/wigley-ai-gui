@@ -132,7 +132,7 @@ export interface CardKit<T extends Kit = Kit> {
   update(round: RoundState): void;
   // Runs the update each contributed part returned.
   updateContributedParts(): void;
-  // Mounts each of the item's boxes no part mounted, in its default field at
+  // Places each of the item's boxes no part placed, in its default field at
   // the end of `card`.
   appendUnmountedBoxes(card: HTMLElement): void;
   // Places the contributed parts at the end of `card` when the card never
@@ -426,7 +426,7 @@ function itemTextBoxes(
   );
 }
 
-// Mounts the item's box for `field` in its default field; the field hides
+// Places the item's box for `field` in its default field; the field hides
 // while it is not in the kind's `boxes.shown` for the item's answer.
 function mountTextBox(
   card: CardContext,
@@ -448,8 +448,8 @@ function mountTextBox(
     caption.label,
     caption.hint,
     caption.keys === null ? null : { command: caption.keys, anchor },
+    (fieldElement) => card.deps.placeBox(fieldElement, box.target, box.text),
   );
-  card.deps.mountBox(built.box, box.target, box.text);
   appendBoxKeys(built, anchor);
   card.mounted.add(field);
   const { item, kind } = card;

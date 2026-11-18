@@ -11,11 +11,12 @@ import {
   type RoundParts,
 } from '../test-rounds';
 import {
+  changedPicks,
   itemLayout,
   layoutChain,
   pickLayout,
   pickRoundLayouts,
-  picksEqual,
+  type RoundPickChanges,
   roundLayoutNames,
 } from './layout-resolver';
 
@@ -242,57 +243,56 @@ describe('pickRoundLayouts', () => {
   });
 });
 
-describe('picksEqual', () => {
-  it('picksEqual_SameNamesSameObjects_True_NewObject_False', () => {
-    const named = round({
-      findings: [finding('F1', { layout: 'f' })],
-      questions: [question('Q1')],
-      notices: [{ ...notice('N1'), layout: 'n' }],
-    });
-    const fallback = allCards();
-    const f = allCards();
-    const n = allCards();
-    const loaded = new Map([
-      ['f', f],
-      ['n', n],
-      ['default', fallback],
-    ]);
-    const reloadedCard = new Map([
-      ['f', allCards()],
-      ['n', n],
-      ['default', fallback],
-    ]);
-    const reloadedNoticeCard = new Map([
-      ['f', f],
-      ['n', allCards()],
-      ['default', fallback],
-    ]);
-    const withNotices: Layout = { notices: pane };
-    const withNoticesAgain: Layout = { notices: pane };
-
-    const first = pickRoundLayouts(named, 'default', loaded);
-
-    expect(picksEqual(first, pickRoundLayouts(named, 'default', loaded))).toBe(
-      true,
-    );
-    expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloadedCard)),
-    ).toBe(false);
-    expect(
-      picksEqual(first, pickRoundLayouts(named, 'default', reloadedNoticeCard)),
-    ).toBe(false);
-    // Only the notices pane's layout object is new.
-    const panesFirst = pickRoundLayouts(
-      named,
-      'u',
-      new Map([...loaded, ['u', withNotices]]),
-    );
-    const panesReloaded = pickRoundLayouts(
-      named,
-      'u',
-      new Map([...loaded, ['u', withNoticesAgain]]),
-    );
-    expect(panesReloaded.panes.notices.layout).toBe(withNoticesAgain);
-    expect(picksEqual(panesFirst, panesReloaded)).toBe(false);
+describe('changedPicks', () => {
+  // Finding F2 (rail position 1) names `f`, the notice names `n`, and the
+  // user's `u` draws only the rail.
+  const named = round({
+    findings: [finding('F1'), finding('F2', { layout: 'f' })],
+    questions: [question('Q1')],
+    notices: [{ ...notice('N1'), layout: 'n' }],
   });
+  const f = allCards();
+  const n = allCards();
+  const u: Layout = { rail: pane };
+  const loaded = new Map<string, Layout>([
+    ['f', f],
+    ['n', n],
+    ['u', u],
+    ['default', allCards()],
+  ]);
+
+  it.each<{
+    case: string;
+    reloaded: [string, Layout];
+    expected: RoundPickChanges;
+  }>([
+    {
+      case: 'the same maps',
+      reloaded: ['f', f],
+      expected: { cards: [], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a new card layout object',
+      reloaded: ['f', allCards()],
+      expected: { cards: [1], noticeCards: false, panes: [] },
+    },
+    {
+      case: 'a new notice card layout object',
+      reloaded: ['n', allCards()],
+      expected: { cards: [], noticeCards: true, panes: [] },
+    },
+    {
+      case: 'a new pane layout object',
+      reloaded: ['u', { rail: pane }],
+      expected: { cards: [], noticeCards: false, panes: ['rail'] },
+    },
+  ])(
+    'changedPicks_NamesAndObjects_ReportsEachChangedPart on $case',
+    ({ reloaded, expected }) => {
+      const first = pickRoundLayouts(named, 'u', loaded);
+      const next = pickRoundLayouts(named, 'u', new Map([...loaded, reloaded]));
+
+      expect(changedPicks(first, next)).toEqual(expected);
+    },
+  );
 });

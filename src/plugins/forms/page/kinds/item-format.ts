@@ -17,7 +17,9 @@ export interface ItemCard {
   update(round: RoundState): void;
 }
 
-// What a card reaches outside itself: the round's boxes, the keys bound in a
+// What a card reaches outside itself: the round's boxes, which `placeBox`
+// places (returning the box's frame) and `releaseBox` releases, keeping each
+// editor, the keys bound in a
 // scope and the anchors that show them (a card reads and anchors in the forms
 // view's), the platform key hints are drawn for, the log, the registered
 // commands `kit.command` checks and runs, which every control of the card
@@ -27,8 +29,8 @@ export interface ItemCard {
 // disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
-  mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
-  destroyBox(target: TextTarget): void;
+  placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;
+  releaseBox(target: TextTarget): void;
   keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   platform: OsName;
   log: PluginLog;

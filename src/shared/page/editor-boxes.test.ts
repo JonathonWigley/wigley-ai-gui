@@ -101,12 +101,11 @@ const identity: BoxIdentity<TestBox> = {
   describe: (box) => box.key,
 };
 
-const parent = {} as HTMLElement;
 const notes: TestBox = { formId: 'f1', key: 'f1/notes' };
 const reason: TestBox = { formId: 'f1', key: 'f1/reason' };
 const other: TestBox = { formId: 'f2', key: 'f2/note' };
 
-// Editor boxes with no box mounted, logging into `logs`.
+// Editor boxes with no box placed, logging into `logs`.
 function emptySetup() {
   const { host, created } = fakeHost();
   const changes: { box: TestBox; text: string }[] = [];
@@ -130,9 +129,9 @@ function div(): HTMLElement {
 
 function setup() {
   const made = emptySetup();
-  made.boxes.mount(parent, notes, '');
-  made.boxes.mount(parent, reason, '');
-  made.boxes.mount(parent, other, '');
+  made.boxes.place(div(), notes, '');
+  made.boxes.place(div(), reason, '');
+  made.boxes.place(div(), other, '');
   return made;
 }
 
@@ -224,7 +223,7 @@ describe('createEditorBoxes', () => {
     boxes.focus(notes);
 
     boxes.destroyBox(notes);
-    boxes.mount(parent, notes, 'again');
+    boxes.place(div(), notes, 'again');
 
     expect(created[0].editor.isDestroyed).toBe(true);
     expect(created[1].editor.isDestroyed).toBe(false);
@@ -234,14 +233,9 @@ describe('createEditorBoxes', () => {
 
   it('refuses a box mounted twice, and focusing a box never mounted', () => {
     const { boxes } = setup();
-    expect(() => boxes.mount(parent, notes, '')).toThrow(/f1\/notes/);
     expect(() => boxes.focus({ formId: 'f9', key: 'f9/note' })).toThrow(
       /f9\/note/,
     );
-    expect(() => boxes.place(div(), reason, '')).toThrow(
-      /mounted without a frame/,
-    );
-    expect(() => boxes.release(reason)).toThrow(/mounted without a frame/);
     boxes.destroyBox(notes);
     boxes.place(div(), notes, '');
     boxes.release(notes);
@@ -512,7 +506,7 @@ describe('createEditorBoxes', () => {
     {
       steps: 'already destroyed',
       before: (boxes) => {
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), notes, '');
         boxes.destroyBox(notes);
       },
     },
@@ -533,11 +527,11 @@ describe('keepFocusedBox', () => {
 
   function keepSetup() {
     const { boxes, created } = emptySetup();
-    // Destroys form f1's boxes and mounts `remounted` again, as a rebuild does.
-    const rebuildWith = (remounted: TestBox[]) => () => {
+    // Destroys form f1's boxes and places `replaced` anew.
+    const rebuildWith = (replaced: TestBox[]) => () => {
       boxes.destroyForm('f1');
-      for (const box of remounted) {
-        boxes.mount(parent, box, '');
+      for (const box of replaced) {
+        boxes.place(div(), box, '');
       }
     };
     return { boxes, created, rebuildWith };
@@ -545,8 +539,8 @@ describe('keepFocusedBox', () => {
 
   it('focuses the form box that had focus again after the rebuild', () => {
     const { boxes, created, rebuildWith } = keepSetup();
-    boxes.mount(parent, notes, '');
-    boxes.mount(parent, note, '');
+    boxes.place(div(), notes, '');
+    boxes.place(div(), note, '');
     boxes.focus(notes);
 
     keepFocusedBox(boxes, 'f1', rebuildWith([notes, note]));
@@ -558,24 +552,21 @@ describe('keepFocusedBox', () => {
   // `focused` is the index in `created` of the editor the refocus lands on.
   it.each<{
     steps: string;
-    first: 'mount' | 'place';
     rebuild: (boxes: ReturnType<typeof emptySetup>['boxes']) => void;
     focused: number;
     options: FocusOptions;
   }>([
     {
-      steps: 'mounted anew',
-      first: 'mount',
+      steps: 'placed anew after its form is destroyed',
       rebuild: (boxes) => {
         boxes.destroyForm('f1');
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), notes, '');
       },
       focused: 1,
       options: { insertAtEnd: true },
     },
     {
       steps: 'placed anew',
-      first: 'place',
       rebuild: (boxes) => {
         boxes.destroyBox(notes);
         boxes.place(div(), notes, '');
@@ -585,7 +576,6 @@ describe('keepFocusedBox', () => {
     },
     {
       steps: 'kept through release and place',
-      first: 'place',
       rebuild: (boxes) => {
         boxes.release(notes);
         boxes.place(div(), notes, '');
@@ -595,13 +585,9 @@ describe('keepFocusedBox', () => {
     },
   ])(
     'keepFocusedBox_InsertingBox_FocusesItInInsertMode: $steps',
-    ({ first, rebuild, focused, options }) => {
+    ({ rebuild, focused, options }) => {
       const { boxes, created } = keepSetup();
-      if (first === 'mount') {
-        boxes.mount(parent, notes, '');
-      } else {
-        boxes.place(div(), notes, '');
-      }
+      boxes.place(div(), notes, '');
       // A click, so the editor's focus options hold only the refocus.
       created[0].events.focused();
       created[0].events.modeChanged({ mode: 'insert', subMode: '' });
@@ -654,7 +640,7 @@ describe('keepFocusedBox', () => {
 
   it('focuses nothing when the rebuilt form no longer mounts the box', () => {
     const { boxes, rebuildWith } = keepSetup();
-    boxes.mount(parent, notes, '');
+    boxes.place(div(), notes, '');
     boxes.focus(notes);
 
     keepFocusedBox(boxes, 'f1', rebuildWith([note]));
@@ -664,8 +650,8 @@ describe('keepFocusedBox', () => {
 
   it("leaves another form's focused box alone", () => {
     const { boxes, created, rebuildWith } = keepSetup();
-    boxes.mount(parent, notes, '');
-    boxes.mount(parent, other, '');
+    boxes.place(div(), notes, '');
+    boxes.place(div(), other, '');
     boxes.focus(other);
 
     keepFocusedBox(boxes, 'f1', rebuildWith([notes]));
@@ -700,42 +686,42 @@ describe('fileEditor', () => {
       expected: notes,
     },
     {
-      steps: "focus reason, destroyForm('f1'), mount reason then notes again",
+      steps: "focus reason, destroyForm('f1'), place reason then notes again",
       act: ({ boxes }) => {
         boxes.focus(reason);
         boxes.destroyForm('f1');
-        boxes.mount(parent, reason, '');
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), reason, '');
+        boxes.place(div(), notes, '');
       },
       expected: reason,
     },
     {
-      steps: 'destroyBox(notes), mount notes again (first-mount order kept)',
+      steps: 'destroyBox(notes), place notes again (first-mount order kept)',
       act: ({ boxes }) => {
         boxes.destroyBox(notes);
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), notes, '');
       },
       expected: notes,
     },
     {
       steps:
-        "nothing focused, destroyForm('f1'), mount reason then notes again (order survives destroyForm)",
+        "nothing focused, destroyForm('f1'), place reason then notes again (order survives destroyForm)",
       act: ({ boxes }) => {
         boxes.destroyForm('f1');
-        boxes.mount(parent, reason, '');
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), reason, '');
+        boxes.place(div(), notes, '');
       },
       expected: notes,
     },
     {
       steps:
-        "focus reason, destroyForm('f1'), forgetForm('f1'), mount reason then notes again (order and last-used reset)",
+        "focus reason, destroyForm('f1'), forgetForm('f1'), place reason then notes again (order and last-used reset)",
       act: ({ boxes }) => {
         boxes.focus(reason);
         boxes.destroyForm('f1');
         boxes.forgetForm('f1');
-        boxes.mount(parent, reason, '');
-        boxes.mount(parent, notes, '');
+        boxes.place(div(), reason, '');
+        boxes.place(div(), notes, '');
       },
       expected: reason,
     },

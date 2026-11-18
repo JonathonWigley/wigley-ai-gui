@@ -127,8 +127,8 @@ interface ConfirmDraws {
 // views once sessions dropped the popup, so the next render rebuilds a round
 // still open for the session in a new form popup. `setLayouts` draws the
 // cancel prompt again when `shown` picks another layout for its frame or body,
-// then hands `shown` to every open round view, which rebuilds when a layout it
-// draws with changed, and rounds that open later are built with it. A round
+// then hands `shown` to every open round view, which draws again each part
+// whose layout changed, and rounds that open later are built with it. A round
 // view's throw does not skip the rest; the first is rethrown once all have
 // run. `rebuild` rebuilds every open round view with the layouts it holds,
 // keeping its answers, as after a card part or review column is added or

@@ -251,20 +251,30 @@ export function pickRoundLayouts(
   };
 }
 
-// True when every card, notice card and pane has the same name and the same
-// layout object in both.
-export function picksEqual(a: RoundPicks, b: RoundPicks): boolean {
-  return (
-    isSamePickList(a.cards, b.cards) &&
-    isSamePickList(a.noticeCards, b.noticeCards) &&
-    PANES.every((pane) => isSamePick(a.panes[pane], b.panes[pane]))
-  );
+// The parts of a round whose pick differs between two RoundPicks: the
+// positions in `cards`, whether any notice card's, and the panes.
+export interface RoundPickChanges {
+  cards: number[];
+  noticeCards: boolean;
+  panes: LayoutPane[];
 }
 
-function isSamePickList(a: LayoutPick[], b: LayoutPick[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((pick, position) => isSamePick(pick, b[position]))
+// The parts whose pick in `b` differs from `a` by name or layout object; when
+// `a` and `b` hold card or notice card lists of different lengths, every
+// position of the longer counts as changed.
+export function changedPicks(a: RoundPicks, b: RoundPicks): RoundPickChanges {
+  return {
+    cards: changedPositions(a.cards, b.cards),
+    noticeCards: changedPositions(a.noticeCards, b.noticeCards).length > 0,
+    panes: PANES.filter((pane) => !isSamePick(a.panes[pane], b.panes[pane])),
+  };
+}
+
+function changedPositions(a: LayoutPick[], b: LayoutPick[]): number[] {
+  const longer = a.length >= b.length ? a : b;
+  const isSameLength = a.length === b.length;
+  return longer.flatMap((_, position) =>
+    isSameLength && isSamePick(a[position], b[position]) ? [] : [position],
   );
 }
 

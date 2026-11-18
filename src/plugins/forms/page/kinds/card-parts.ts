@@ -2,7 +2,6 @@ import type { CommandArg, CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import { button, element } from '../../../../shared/page/dom';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
-import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag } from '../../../../shared/page/ui/tag';
@@ -75,14 +74,17 @@ export function buildChoiceReason(
   return reason;
 }
 
-// A text box's field: its label, the anchor `labelKeys` names when given,
-// and its hint over the input frame `box`, which the editor mounts into.
+// A text box's field, appended to `parent`: its label, the anchor `labelKeys`
+// names when given, and its hint, then the box's input frame, which
+// `placeFrame` appends to the field once the field is attached and returns.
+// The field is new on each draw; the frame is the box's own, moved in.
 export function buildField(
   parent: HTMLElement,
   className: string,
   label: string,
   hint: string,
-  labelKeys: { command: CommandId; anchor: PartAnchor } | null = null,
+  labelKeys: { command: CommandId; anchor: PartAnchor } | null,
+  placeFrame: (field: HTMLElement) => HTMLElement,
 ): Field {
   const field = element('div', `field ${className}`);
   const caption = sectionHeader(label);
@@ -92,10 +94,10 @@ export function buildField(
     labelKeys.anchor(keys, labelKeys.command);
   }
   caption.append(element('span', 'field-hint', hint));
-  const box = inputFrame();
-  box.classList.add('box');
-  field.append(caption, box);
+  field.append(caption);
   parent.append(field);
+  const box = placeFrame(field);
+  box.classList.add('box');
   return { element: field, box };
 }
 

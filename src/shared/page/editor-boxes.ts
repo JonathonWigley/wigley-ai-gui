@@ -35,42 +35,38 @@ export interface EditorBoxEvents<Box> {
 // One editor per text box, created the first time its form places it and kept
 // across redraws until its form or the box is destroyed.
 export interface EditorBoxes<Box> {
-  // Creates the box's editor in `parent` itself, with no frame editor boxes
-  // own; such a box can be neither placed nor released.
-  mount(parent: HTMLElement, box: Box, text: string): void;
   // Appends the box's frame, a `div.ui-input` holding its editor, to `parent`
   // and returns it. The first call makes the frame and the editor; a later
   // call, placed or released, moves the same frame, keeping the editor's
   // cursor, vim mode, undo and scroll, and sets its text when `text` differs
-  // from it (no `changed`). Throws for a box `mount` made.
+  // from it (no `changed`).
   place(parent: HTMLElement, box: Box, text: string): HTMLElement;
   // Sets the placed box's editor text when `text` differs from it (no
   // `changed`), leaving its frame, scroll and focus where they are. Does
   // nothing for a box that is not placed.
   setText(box: Box, text: string): void;
   // Detaches the box's frame and keeps its editor, and blurs it when focused.
-  // Does nothing for a box already released or held by no editor; throws for
-  // a box `mount` made.
+  // Does nothing for a box already released or held by no editor.
   release(box: Box): void;
   // Destroys every released box of form `formId`: the boxes a redraw
   // released and did not place again.
   destroyReleased(formId: string): void;
-  // Whether the box is placed or mounted; false once released or destroyed.
+  // Whether the box is placed; false once released or destroyed.
   isMounted(box: Box): boolean;
   // Undefined for a released box's editor.
   boxOf(editor: TextEditor): Box | undefined;
-  // The box's editor while it is placed or mounted, else undefined.
+  // The box's editor while it is placed, else undefined.
   editorOf(box: Box): TextEditor | undefined;
   // Focuses the box's editor; the box counts as focused at once. Throws for a
-  // box released or never mounted.
+  // box released or never placed.
   focus(box: Box, options?: FocusOptions): void;
   // Blurs the focused box, if any.
   leave(): void;
   active(): Box | null;
   // The focused box's vim mode, or null outside every box.
   activeMode(): VimMode | null;
-  // Destroys one box's editor and removes its frame, so the box can mount
-  // again; does nothing for a box no editor holds.
+  // Destroys one box's editor and removes its frame, so the box can be
+  // placed anew; does nothing for a box no editor holds.
   destroyBox(box: Box): void;
   destroyForm(formId: string): void;
   // The editor files dropped on form `formId` go into: its box activated last
@@ -86,13 +82,14 @@ export interface EditorBoxes<Box> {
 }
 
 // A box whose editor lives. `order` is the box's first-mount order; `frame`
-// is null for a box `mount` made; `scrollTop` is the editor scroller's scroll
-// when the box was last released or moved, null when it had no scroller.
+// is the `div.ui-input` holding its editor; `scrollTop` is the editor
+// scroller's scroll when the box was last released or moved, null when it had
+// no scroller.
 interface HeldBox<Box> {
   box: Box;
   editor: TextEditor;
   order: number;
-  frame: HTMLElement | null;
+  frame: HTMLElement;
   isPlaced: boolean;
   scrollTop: number | null;
 }
@@ -148,7 +145,7 @@ export function createEditorBoxes<Box>(
       activeKey = null;
     }
     entry.editor.destroy();
-    entry.frame?.remove();
+    entry.frame.remove();
     held.delete(key);
     modes.delete(key);
   };
@@ -156,14 +153,8 @@ export function createEditorBoxes<Box>(
     const entry = held.get(key);
     return entry?.isPlaced === true ? entry : undefined;
   };
-  // Creates the box's editor in `parent` and records its first mount.
-  const create = (
-    parent: HTMLElement,
-    key: string,
-    box: Box,
-    text: string,
-    frame: HTMLElement | null,
-  ) => {
+  // Creates the box's editor in `frame` and records its first mount.
+  const create = (frame: HTMLElement, key: string, box: Box, text: string) => {
     const editorEvents: EditorEvents = {
       changed: (value) => events.changed(box, value),
       focused: () => activate(key, box),
@@ -175,7 +166,7 @@ export function createEditorBoxes<Box>(
         }
       },
     };
-    const editor = host.create(parent, text, editorEvents);
+    const editor = host.create(frame, text, editorEvents);
     const firstMount = firstMounts.get(key) ?? {
       formId: identity.formIdOf(box),
       order: mountCount++,
@@ -190,31 +181,17 @@ export function createEditorBoxes<Box>(
       scrollTop: null,
     });
   };
-  const requireFrame = (key: string, entry: HeldBox<Box>): HTMLElement => {
-    if (entry.frame === null) {
-      throw new Error(`Box ${key} is mounted without a frame`);
-    }
-    return entry.frame;
-  };
-
   return {
-    mount(parent, box, text) {
-      const key = identity.keyOf(box);
-      if (held.has(key)) {
-        throw new Error(`Box ${key} is already mounted`);
-      }
-      create(parent, key, box, text, null);
-    },
     place(parent, box, text) {
       const key = identity.keyOf(box);
       const entry = held.get(key);
       if (entry === undefined) {
         const frame = inputFrame();
         parent.append(frame);
-        create(frame, key, box, text, frame);
+        create(frame, key, box, text);
         return frame;
       }
-      const frame = requireFrame(key, entry);
+      const { frame } = entry;
       const scroller = frame.querySelector<HTMLElement>('.cm-scroller');
       if (entry.isPlaced) {
         entry.scrollTop = scroller?.scrollTop ?? null;
@@ -236,13 +213,10 @@ export function createEditorBoxes<Box>(
     release(box) {
       const key = identity.keyOf(box);
       const entry = held.get(key);
-      if (entry === undefined) {
+      if (entry === undefined || !entry.isPlaced) {
         return;
       }
-      const frame = requireFrame(key, entry);
-      if (!entry.isPlaced) {
-        return;
-      }
+      const { frame } = entry;
       entry.scrollTop =
         frame.querySelector<HTMLElement>('.cm-scroller')?.scrollTop ?? null;
       entry.isPlaced = false;

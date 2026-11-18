@@ -92,7 +92,8 @@ import type { LayoutPick } from './layout-resolver';
 
 // What a pane reaches outside itself: the markdown renderer, the platform key
 // hints are drawn for, the log, the keys bound in a forms scope and the
-// anchors that show them, a forms command, the round's text boxes, the
+// anchors that show them, a forms command, the round's text boxes (`placeBox`
+// places one and returns its frame, `releaseBox` releases it), the
 // registered commands `kit.command` checks and runs, which the rail entries
 // and review rows run through, the review columns other plugins added, the
 // slots `kit.state` reads, where each anchor the kit names and each slot
@@ -104,8 +105,8 @@ export interface PaneDeps {
   log: PluginLog;
   keys: Pick<KeyHints, 'keysFor' | 'anchor'>;
   run(command: CommandId): void;
-  mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
-  destroyBox(target: TextTarget): void;
+  placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;
+  releaseBox(target: TextTarget): void;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
   state: LayoutState;
@@ -141,14 +142,15 @@ type Updater = (round: RoundState) => void;
 
 // The round's rail, drawn into `parent` by drawPart with the picked layout's
 // `rail`, or with `default`'s when the pick lacks it or its rail throws. The
-// boxes the rail mounts and the anchors it names are recorded for drawPart's
-// rollback.
+// boxes the rail places and the anchors it names are recorded for drawPart's
+// rollback; `dispose` releases those boxes and disposes those anchors, and
+// leaves the pane's element in place.
 export function buildRailPane(
   pick: LayoutPick,
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
-): RailPane {
+): Pick<DrawnPart<RailPane>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -159,7 +161,7 @@ export function buildRailPane(
       drawRail(rail, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
     partName: 'rail',
-  }).built;
+  });
 }
 
 // The round's review, drawn into `parent` as buildRailPane draws the rail,
@@ -169,7 +171,7 @@ export function buildReviewPane(
   parent: HTMLElement,
   round: RoundState,
   deps: PaneDeps,
-): ReviewPane {
+): Pick<DrawnPart<ReviewPane>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -180,14 +182,15 @@ export function buildReviewPane(
       drawReview(review, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
     partName: 'review',
-  }).built;
+  });
 }
 
 // The round's notices page at rail `position`, drawn into `parent` as
 // buildRailPane draws the rail, with the layout's `notices`. Each line's body is
 // its notice's card, drawn by buildLayoutCard with `bodyPicks[index - 1]` and
-// `cardDeps`; a pane that throws destroys each body it drew through the body's
-// own dispose, and `default` draws the pane and its bodies again. `update`
+// `cardDeps`; a pane that throws undoes each body it drew through the body's
+// own dispose, releasing its boxes, and `default` draws the pane and its
+// bodies again. `dispose` undoes the pane and each body the same way. `update`
 // opens the open lines, marks the cursor line, moves the toggle prompt to it
 // and updates each body; it scrolls the cursor line into view when it moved
 // since the last update.
@@ -199,7 +202,7 @@ export function buildNoticesPane(
   position: number,
   deps: PaneDeps,
   cardDeps: CardDeps,
-): ItemCard {
+): Pick<DrawnPart<ItemCard>, 'built' | 'dispose'> {
   return drawPart({
     owner: 'forms',
     parent,
@@ -217,7 +220,7 @@ export function buildNoticesPane(
       }),
     log: deps.log,
     partName: 'notices',
-  }).built;
+  });
 }
 
 // The rail's head strip, drawn into `parent` by drawPart with the picked
@@ -497,7 +500,7 @@ function drawNoticeLine(
     draw.position,
     draw.cardDeps,
     draw.rollback,
-  );
+  ).built;
   lines.set(index, { line, head, body });
   return head;
 }
@@ -704,8 +707,8 @@ function drawReview(
         'Round note',
         'Optional. Anything about the round as a whole.',
         { command: formsCommand('editNote'), anchor },
+        (field) => deps.placeBox(field, { field: 'note' }, round.note),
       );
-      deps.mountBox(note.box, { field: 'note' }, round.note);
       appendBoxKeys(note, anchor);
       return note.element;
     },
