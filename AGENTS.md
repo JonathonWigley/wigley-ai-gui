@@ -1236,7 +1236,9 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown names
   (`CFBundleName`, which the menu bar shows, and `CFBundleDisplayName`) to Auri in `Info.plist`, renames the
   `wigley-ai-gui Helper*.app` bundles to `Auri Helper*.app` (Electron finds its helpers by `CFBundleName`), and
-  re-signs it (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. It signs with the
+  re-signs it (`forge.config.mts`'s `postPackage`), which refuses an `osxSign` config. Packaging also writes
+  `NSAppleEventsUsageDescription` into `Info.plist` through `extendInfo`, so tools in sessions can ask for
+  Automation. It signs with the
   self-signed certificate `npm run create-signing-identity` makes once per Mac, in a keychain of its own, and
   ad hoc on a Mac without one. macOS ties an ad hoc app's privacy grants to its code hash, so each ad hoc install
   loses them and asks again; a denied Documents grant makes every session in `~/Documents` exit with `EPERM`. The
