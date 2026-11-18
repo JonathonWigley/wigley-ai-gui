@@ -986,5 +986,7 @@ Review base: a777cb41d0f13bab9e2b467551280556fcdb205a
 - No plan is sent until a listRuns read has succeeded; a failed read turns sending off until the 10 s retry succeeds — runs the host fired unseen must be adopted before re-planning — a host that cannot list keeps its old queue · group 17 · group 17
 - After chat.restored(), a running entry is finished when its row is not open, as well as when its session reads not running — a closed row cannot finish later — none · group 17 · group 17
 - design.md drain wording now 'once it reads idle' · group 25
+- Protocol stays 4: no build carrying protocol 4 was installed between tasks 07 and 25, so the IdleRule fields need no bump — lead
 ### Review rounds
+- R1 · 8e6865c20 · NEEDS FIXES: 2 critical, 19 important, 22 minor; 9 lead-applied (e984c3171); fixes e984c3171..c3e5e2535 · tier High (host protocol handoff, channel lock, busy state, adoption) → correctness re-review
 ### Test gate
