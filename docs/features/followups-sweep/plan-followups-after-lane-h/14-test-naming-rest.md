@@ -1,6 +1,6 @@
 # 14 — Test naming, the rest
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · renames test titles to the sentence form `typescript-vitest.md` § Naming gives, following the sentence titles already in `src/main/plugins/main-api.test.ts` (`"disposes the plugin's file watches, …"`); no test body changes
 Wave: 2 · Depends on: 01 (both list `src/plugins/docs/page/tree-view.test.ts`), 02 (02's Tests and Done when name `docs-state.test.ts` rows by their old titles)

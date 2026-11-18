@@ -539,7 +539,7 @@ describe('createTreeView', () => {
         isPrompted: false,
       },
     },
-  ])('rowInput_$name_SelectedRowHoldsItsFields', ({ node, expected }) => {
+  ])('the selected row holds its fields: $name', ({ node, expected }) => {
     const { tree, inputs, selected } = wikiSetUp();
     tree.setWikiTree([shelf('One', [node])], [], true);
     tree.down();
@@ -786,7 +786,7 @@ describe('createTreeView', () => {
     { key: 'open', focusDoc: false },
     { key: 'toggle', focusDoc: true },
   ] as const)(
-    '$key_WikiLinkRow_CallsOpenWikiLinkWithFocusDoc_$focusDoc',
+    '$key on a wiki link row calls openWikiLink with focusDoc $focusDoc',
     ({ key, focusDoc }) => {
       const { tree, openWikiLink } = wikiSetUp();
       const link = wikiLink({});

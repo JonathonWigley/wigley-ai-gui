@@ -415,7 +415,7 @@ describe('createMainApi', () => {
     expect(heard).toEqual([3]);
   });
 
-  it('createMainApi_Data_IsScopedToThePluginFolder', async () => {
+  it("scopes the plugin's data to its own folder", async () => {
     const files = createMemoryFiles();
     const api = createMainApi(
       { ...manifest, id: 'forms' },
@@ -443,7 +443,7 @@ describe('createMainApi', () => {
     );
   });
 
-  it('createMainApi_SelfTest_IsTheHostForThePlugin', () => {
+  it('hands the plugin the self-test host', () => {
     const host: SelfTestHost = { run: () => undefined };
     const clock = { now: () => 0 };
     const api = createMainApi(
@@ -513,7 +513,7 @@ describe('createMainApi', () => {
     expect(elsewhere.drive).toBeNull();
   });
 
-  it('createMainApi_Layouts_RunUnderThePluginId', () => {
+  it("registers the plugin's layouts under its id", () => {
     const calls: unknown[][] = [];
     const layouts = {
       register: (owner: string, layoutTypes: string, defaultFolder: string) => {
@@ -809,7 +809,7 @@ describe('createMainApi commands', () => {
     return { api, commands, registrations, catalog, writePage, remoteRuns };
   }
 
-  it('register_DisposedWithThePart_LeavesRegistryAndSlot', () => {
+  it("a registered command and its bind leave the registry and the catalog when the part's registrations are disposed", () => {
     const { api, commands, registrations, catalog } = commandsSetup();
     api.commands.register('go', DECL, () => {});
     api.keys.bind({
@@ -824,7 +824,7 @@ describe('createMainApi commands', () => {
     expect(catalog()?.binds.app).toEqual([]);
   });
 
-  it('register_OtherProcessDecl_Throws', () => {
+  it('register throws for a command that runs in the other process', () => {
     const { api } = commandsSetup();
 
     expect(() =>
@@ -832,7 +832,7 @@ describe('createMainApi commands', () => {
     ).toThrow('p.go runs in page');
   });
 
-  it('bind_ClashesWithRuntimeBindOfEitherProcess_ThrowsAtTheCall', () => {
+  it('bind throws at the call when its key clashes with a runtime bind of either process', () => {
     const { api, writePage } = commandsSetup();
     writePage();
     api.commands.register('go', DECL, () => {});
@@ -846,7 +846,7 @@ describe('createMainApi commands', () => {
     expect(() => api.keys.bind(bindOn('Alt+Z'))).toThrow();
   });
 
-  it('bind_OnDefaultOrUserKey_Accepted', () => {
+  it('bind accepts a key a default or user bind holds', () => {
     const { api, catalog } = commandsSetup();
     api.commands.register('go', DECL, () => {});
 
@@ -858,7 +858,7 @@ describe('createMainApi commands', () => {
     expect(catalog()?.binds.intercept).toHaveLength(1);
   });
 
-  it('infoOf_OtherProcessRuntimeCommand_ReadsItsSlotBeforeTheServedConfig', async () => {
+  it("runs another process's runtime command from its slot before the served config has it", async () => {
     const { api, writePage, remoteRuns } = commandsSetup();
     writePage();
 
@@ -867,7 +867,7 @@ describe('createMainApi commands', () => {
     expect(remoteRuns).toEqual([['q.go', undefined]]);
   });
 
-  it('intercept_PartStops_WrapGone', async () => {
+  it("an intercept's wrap is gone once the part stops", async () => {
     const { api, commands, registrations } = commandsSetup();
     const ran: string[] = [];
     commands.registry.register('p.go', () => void ran.push('handler'), 'p');
@@ -879,7 +879,7 @@ describe('createMainApi commands', () => {
     expect(ran).toEqual(['handler']);
   });
 
-  it('onDidRun_PartStops_ListenerGone', async () => {
+  it('an onDidRun listener is gone once the part stops', async () => {
     const { api, commands, registrations } = commandsSetup();
     const heard: string[] = [];
     commands.registry.register('p.go', () => {}, 'p');
@@ -891,7 +891,7 @@ describe('createMainApi commands', () => {
     expect(heard).toEqual([]);
   });
 
-  it('bind_PartStops_LeavesTheCatalog', () => {
+  it('a bind leaves the catalog once the part stops', () => {
     const { api, registrations, catalog } = commandsSetup();
     api.commands.register('go', DECL, () => {});
     api.keys.bind({
