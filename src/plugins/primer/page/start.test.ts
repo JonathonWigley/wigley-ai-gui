@@ -282,7 +282,7 @@ describe('primer page part', () => {
     expect(harness.logs).toHaveLength(logged);
   });
 
-  it('a finish that rejects after stop draws nothing', async () => {
+  it('a finish that rejects after stop draws and logs nothing', async () => {
     const finishing = deferred<void>();
     const editors = countingEditors();
     const harness = startPagePart(primerPagePart, {
@@ -310,12 +310,11 @@ describe('primer page part', () => {
 
     await harness.stop();
     const made = editors.made();
+    const logged = harness.logs.length;
     finishing.reject(new Error('main is gone'));
     await settle();
 
-    expect(harness.logs.map((line) => line.message)).toContainEqual(
-      expect.stringContaining('not finished'),
-    );
+    expect(harness.logs).toHaveLength(logged);
     expect(editors.made()).toBe(made);
   });
 

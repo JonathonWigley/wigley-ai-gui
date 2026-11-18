@@ -509,7 +509,9 @@ describe('createPluginSwitch', () => {
       flow: 'remove',
       options: { entries: [entry('a'), user('u')] },
       run: (switched) => {
-        switched.catalog.change([entry('a')]);
+        switched.catalog.change(
+          switched.catalog.entries.filter((each) => each.manifest.id !== 'u'),
+        );
         return switched.pluginSwitch.settled();
       },
       calls: ['page remove u', 'dropParked u', 'main remove u', 'dropParked u'],

@@ -1576,9 +1576,9 @@ describe('docs view state', () => {
     await harness.stop();
   });
 
-  // Breaks: a held draft going over the user's typing when its doc opens by
-  // a path that skips `applyDraft` (a followed link), with no toast.
-  it('a held draft is toasted and dropped when the user types in its doc, opened by a link', async () => {
+  // Breaks: a held draft left out of its doc's editor when the doc opens by
+  // a followed link, so it counts as unsaved until another open reaches it.
+  it('a held draft goes back in its doc editor when the doc opens by a link', async () => {
     const rebuilt = Promise.withResolvers<unknown>();
     let isRebuildAsked = false;
     const edits = { path: TARGET, text: 'Edited.\n', baseText: TEXTS[TARGET] };
@@ -1592,30 +1592,29 @@ describe('docs view state', () => {
     const { commands } = harness.started();
     commands.showMode({ arg: undefined });
     await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    openByMessage(page, PLAIN);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listingOf([PLAIN, GUIDE, TARGET]));
     openByMessage(page, GUIDE);
     await vi.waitFor(() => expect(openedPaths(page)).toContain(GUIDE));
-    rebuilt.resolve(listingOf([PLAIN, GUIDE, TARGET]));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(openedPaths(page)).not.toContain(TARGET);
+
     commands.followLink({
       arg: { viewId: 'machine', href: 'target.md', title: '' },
     });
-    await vi.waitFor(() => expect(openedPaths(page)).toContain(TARGET));
-    commands.edit({ arg: undefined });
-
-    editors.type('Typed.\n');
 
     await vi.waitFor(() =>
-      expect(
-        harness.logs.filter(({ message }) =>
-          message.includes('edits not restored'),
-        ),
-      ).toEqual([
-        expect.objectContaining({
-          message: `toast error: Unsaved edits not restored: ${TARGET}`,
-        }),
-      ]),
+      expect(harness.logs.map(({ message }) => message)).toContain(
+        'restored edits on target.md',
+      ),
     );
+    expect({
+      opened: openedPaths(page).at(-1),
+      editor: editors.text(),
+      toasted: harness.logs.filter(({ message }) =>
+        message.includes('edits not restored'),
+      ),
+    }).toEqual({ opened: TARGET, editor: 'Edited.\n', toasted: [] });
     await harness.stop();
   });
 
