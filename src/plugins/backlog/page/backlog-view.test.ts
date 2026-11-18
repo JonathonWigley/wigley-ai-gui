@@ -1359,6 +1359,7 @@ describe('backlog strip', () => {
         answers: { [method]: () => reply.promise },
       });
       act(setup);
+      await vi.waitFor(() => expect(invokesOf(setup, method)).not.toEqual([]));
       await settle();
       setup.view.dispose();
       const logsBefore = [...setup.logs];

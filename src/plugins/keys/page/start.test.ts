@@ -97,6 +97,40 @@ describe('keys page part', () => {
     await harness.stop();
   });
 
+  it("stop disposes every anchor of the title bar button in the part's own dispose", async () => {
+    // The host disposes the registrations after the part's dispose, so an anchor
+    // disposed only there would pass a count; this records the ones disposed
+    // while the part's own `dispose` runs.
+    let isInOwnDispose = false;
+    let disposedInOwn = 0;
+    const harness = startKeys({
+      anchorDispose() {
+        if (isInOwnDispose) {
+          disposedInOwn += 1;
+        }
+      },
+    });
+    const started = harness.started();
+    const ownDispose = started.dispose?.bind(started);
+    if (ownDispose === undefined) {
+      throw new Error('the part has no dispose');
+    }
+    started.dispose = () => {
+      isInOwnDispose = true;
+      try {
+        ownDispose();
+      } finally {
+        isInOwnDispose = false;
+      }
+    };
+    const anchors = harness.anchors.length;
+    expect(anchors).toBeGreaterThan(0);
+
+    await harness.stop();
+
+    expect(disposedInOwn).toBe(anchors);
+  });
+
   it('toggleHelp_OpenAndClose_FiresOnOpenOnly', async () => {
     const harness = startKeys();
     const { toggleHelp } = harness.started().commands;

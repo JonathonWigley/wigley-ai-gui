@@ -1134,8 +1134,15 @@ describe('practicePagePart', () => {
         isArmed && held.includes(method) ? reply.promise : undefined,
       );
       isArmed = true;
+      const callsAtAct = page.calls.length;
       act(page);
-      await settle();
+      await vi.waitFor(() =>
+        expect(
+          page.calls
+            .slice(callsAtAct)
+            .some((call) => held.includes(call.method)),
+        ).toBe(true),
+      );
       await settle();
       await page.harness.stop();
       const messagesBefore = messagesOf(page.harness);
@@ -1155,13 +1162,31 @@ describe('practicePagePart', () => {
     },
   );
 
-  it('stops with nothing live when a dispose throws', async () => {
+  it('stop with the interviewer pane dispose throwing still disposes the workspace after it', async () => {
     const page = await startWithProblemOpen();
     page.pane.disposeError = new Error('pane dispose failed');
+    // The workspace disposes after the pane and destroys its box editors. The host
+    // destroys what a part leaves, so the state is read inside the part's own dispose.
+    expect(page.boxEditors.length).toBeGreaterThan(0);
+    const started = page.harness.started();
+    const ownDispose = started.dispose?.bind(started);
+    if (ownDispose === undefined) {
+      throw new Error('the part has no dispose');
+    }
+    let isEveryBoxDestroyed: boolean | null = null;
+    started.dispose = () => {
+      try {
+        ownDispose();
+      } finally {
+        isEveryBoxDestroyed = page.boxEditors.every(
+          (editor) => editor.isDestroyed,
+        );
+      }
+    };
 
-    await page.harness.stop().catch(() => undefined);
+    await expect(page.harness.stop()).rejects.toThrow('pane dispose failed');
 
-    expect(page.harness.counts()).toEqual(noCounts);
+    expect(isEveryBoxDestroyed).toBe(true);
   });
 
   it('stops with nothing live', async () => {
