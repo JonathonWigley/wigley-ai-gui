@@ -163,6 +163,10 @@ schedule is read, since it would never fire.
   every pending run again. The `claude.command` path and chat's profiles and projects, which a prepared run also
   holds, have no change signal: a change reaches a pending run at its next re-prepare, the next app start, edit of
   that task, task-file change or plugin reload.
+- **A re-plan reads the host's runs first.** A re-plan for an instruction change or a task-file change reads the
+  host's runs, once the first read has finished, so an occurrence the host fired is in history and is never prepared
+  again under a new spawn id. A prepared launch is reused only while the task's content is unchanged: its reuse key
+  holds the task's whole JSON, so any edit, a hand edit that keeps `updatedAt` included, prepares it again.
 - **Catch-up.** The planner looks back from now to the latest of the task's `updatedAt`, its latest history
   occurrence and, in a start whose `history.json` could not be read, that start's time. When that window holds a missed occurrence, it queues one run, at once, for the latest; older missed
   times are dropped. So a task resumed or edited after a gap does not catch up times from before the change. A task
@@ -190,7 +194,7 @@ into the run (`CLAUDE_CARRIED_ENV`, `prepareRun`), so no plugin reads that envir
 along because a profile with no folder of its own keeps the inherited value, and the run must write its transcript
 where adoption reads it. A profile whose folder is the default `~/.claude` runs with `CLAUDE_CONFIG_DIR` unset, and
 any other profile folder sets it. The host lays these over its own environment, less
-`ELECTRON_RUN_AS_NODE` and the harness's unset names; a host launchd started at login has launchd's bare one. A
+`ELECTRON_RUN_AS_NODE` and the harness's unset names, which include each carried name the run's spawn env lacks; a host launchd started at login has launchd's bare one. A
 variable a run needs beyond these goes in the Claude profile's settings `env`, and Schedules mode says so.
 
 ## With the app closed
@@ -245,13 +249,17 @@ inside `sessions.holdConnects`, so a run's relay hello waits for its row. For ea
    with its history pending, through chat's restore path. When a row already holds the host session id (an earlier
    start adopted the run and quit before forgetting it, the same run heard twice, or the run's own relay row),
    `adopt` opens nothing and resolves to that row, and an existing history entry stands. A relay row has no chat
-   session to report a turn's end, so its run is finished at adoption. A rejection (the app stopping, or a row chat
+   session to report a turn's end, so its run is finished at adoption, as is a run whose host run has an exit. A host
+   that died records an exit with no error, so its run is adopted as a resting row. `adopt` keeps only the controls
+   the harness still declares and logs the rest. A rejection (the app stopping, or a row chat
    cannot open) is a failed entry, `not opened: <reason>`, except while the app stops, when the run waits for the
    next start. A run's history entry names the row id `adopt` resolved to. A run read through
    `listRuns` is finished at adoption when its process is gone or its row reads idle after the attach replayed the
    pipe log; a run heard through `runStarted` is finished at adoption only when its process is gone, since its first
    turn has just begun.
-3. `sessions.replayCalls(hostSessionId)` replays the calls the relay logged while the app was closed.
+3. `sessions.replayCalls(hostSessionId)` replays the calls the relay logged while the app was closed, routing a
+   leftover `.replaying` file from an earlier replay first. A replay that rejects is logged and the run is still
+   forgotten, with the calls file left on disk.
 4. `sessionHost.forgetRuns([id])` drops the run from the host's runs record, the history entry is written, and the
    plugin re-plans and sends `setPending`.
 

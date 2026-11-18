@@ -28,7 +28,8 @@ export interface IdleRule {
   // Ends an open message: a stdout line whose `key` equals `value`, whose `idKey` names the message and whose
   // `stateKey` holds one of `endStates` (Claude: `command_lifecycle`, `command_uuid`, `state`, `completed`,
   // `cancelled`, `discarded`, `refused`). A turn-end line also ends each message its `turnEndIdsKey` list names
-  // (Claude: `user_message_uuids`).
+  // (Claude: `user_message_uuids`), and every open message until the process has printed a line whose `key` equals
+  // `messageEnd.value`, in any state.
   messageEnd: {
     value: string;
     idKey: string;

@@ -148,12 +148,14 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
 - One host listens per channel. On a Unix socket a host takes `<channel>.lock`, which holds its pid, before it checks
   the channel, and holds it until its server has closed; a named pipe in use already refuses a second listener. A host
   that finds the lock held by a pid that runs exits as a host that finds the channel owned does, the socket file gone
-  or not, so a login start and an app start at one moment leave one host. A lock whose pid does not run, or that holds
-  no pid, is stale, and one taker alone takes it over. So only the host that listens sets the last log aside and
+  or not, so a login start and an app start at one moment leave one host. A lock is stale when it holds no pid, was
+  written before this boot (its mtime is before `Date.now() - os.uptime() * 1000`), names a pid that does not run, or
+  names the taker's own pid while none of the taker's servers holds it; one taker alone takes a stale lock over. A
+  process releases the locks it holds when it exits, and the host turns SIGTERM, SIGHUP and SIGINT into an exit. So only the host that listens sets the last log aside and
   sweeps the pipe logs, and a host's `shutDown` removes the record only while it still holds that host's pid. The relay
   channel takes the same lock, so two app instances of one id never share it.
-  - A known limit: a lock left by a host killed outright, whose pid another process has taken since, counts as held,
-    and no host starts on that channel until that process ends.
+  - A known limit: a lock left this boot by a host ended by `kill -9` or a crash, whose pid another process has taken
+    since, counts as held, and no host starts on that channel until that process ends or the machine restarts.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
   home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain
@@ -168,7 +170,7 @@ harness.
 - **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
   `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
   The client keeps the last list, less each entry a `runStarted` or `forgetRuns` named, and sends it again on each
-  connect, after it sent `drain` to any older host, so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
+  connect, once every older host has served its `drain` (§ Older hosts), so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
   scheduling plugin reads `listRuns` again.
 - **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. The timer waits at
   most 30 s before it reads the wall clock again, since Node's timers do not advance while a Mac sleeps; an entry
@@ -180,12 +182,12 @@ harness.
   process that stays alive does not block the entry.
 - **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
   spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
-  holds `error`. A run with `exit` null that a starting host loads, or imports from an older file, belongs to a host
-  that is gone and took its process with it: the host sets its `exit.error` to `the session host that started it
-  exited`.
+  holds `error`. A run with `exit` null that a starting host loads, or imports from the file of an older host that is
+  gone, belonged to a host that took its process with it: the host sets its `exit` to
+  `{ code: null, signal: null, error: null }`, since the run did start.
 - **`runStarted`** is pushed to every connected client when the host starts or skips an entry.
 - **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
-  as `list` does.
+  as `list` does. The client asks it only once every older host has served its `drain`.
 - **`forgetRuns`** drops the runs with the given ids from the runs record, once the app has adopted them.
 - **The runs file is frozen.** `runs-v<protocol>.json`'s name form and the `HostedRun` shape keep their form in every
   protocol version, as the children record does, so a newer host can import an older host's runs (§ Older hosts).
@@ -200,7 +202,8 @@ any older one fired.
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
   pipe log path.
-- `drain` — end each process once it reads idle, refuse new ones, exit once empty.
+- `drain` — end each process once it reads idle, refuse new ones, exit once empty. It gets no reply; a `list` sent
+  after it on the same connection is answered only once the drain is served.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
 - `setPending`, `listRuns`, `forgetRuns`, and the pushed `runStarted` — the pending queue (§ Pending runs), since
@@ -252,11 +255,16 @@ another app version and refuses a send until that process has ended; it then res
 the next message.
 
 A protocol bump drops the old host's pending queue: at `drain` the old host deletes its pending file and takes no
-`setPending` after it. The new app sends its queue to the new host once the drain is sent, so every pending run
-moves to the new host. The old host's run records stay in its frozen runs file, which it writes no more after the
-drain. The new host imports every older protocol's runs file at its start and again before each `listRuns` reply: it
-adds each run its own record lacks by id, saves, and deletes the older file. So no run the old host fired is lost,
-and the app adopts it like any other.
+`setPending` after it. `drain` gets no reply, so the new app follows it with a `list` on the same connection. A host
+reads one connection's lines in order, so the `list` reply, or the connection closing as the old host exits, shows the
+drain was served. Only then does the app send its queue to the new host and read `listRuns`, so no occurrence fires in
+both hosts and every pending run moves to the new host. The old host's run records stay in its frozen runs file, where
+it still records each exit after the drain. The new host imports every older protocol's runs file at its start and
+again before each `setPending` and `listRuns`. It adds by id each run its own record lacks and never held, and fills
+the null exit of each run it holds from the file. While the old host's record names a pid that runs, a run still
+running there stays running and the file stays. Once that host is gone, each of its runs still running gets the
+host-death exit (§ Pending runs) and the file is deleted. So no run the old host fired is lost, nor its outcome, and
+the app adopts it like any other.
 
 ## Platforms
 
