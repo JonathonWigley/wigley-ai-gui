@@ -969,3 +969,25 @@ because the earlier items rewrite many of these tests anyway.
   `seedChatroomFixture` (`src/plugins/chatroom/main/selftest-fixture.ts:46`) creates its two rows without looking for
   rows a failed earlier seed left, so a retry adds a second pair. Reuse the rows by title, or remove them before
   seeding. Source session: Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Demo: the real-session step's row lands in recency and saved panes** — *needs a feature plan*: page readers spot
+  a demo row by its harness, but the real-session step runs on the claude harness as an ephemeral session, so
+  `sessions/page/session-recency.ts` stamps it and `pane-sessions.ts` saves its `hostSessionId` to uiState. Carry
+  `ephemeral` on the page `SessionRow` (from `HeldSession.ephemeral` in `chat-sessions.ts`) and filter there; one
+  `isDemoRow(info)` helper in `contracts/demo.ts` would serve every reader. Source: demo-mode review, plan lane 1 M2.
+- **Demo: Practice edits made just before the step can save into the sample folder** — *agent-ready*: the page's
+  autosave of a draft typed just before `practice.mode` enters can land in the sample folder and be lost when the
+  sample goes. The leave also calls the async `saveDrafts()` dispose without awaiting it (`demo/page/start.ts`
+  `leave`), so main's `leaveStep` can release the sample first. Flush drafts before main swaps the folder, and decide
+  whether a leave awaits an async dispose.
+- **Demo: smaller edge cases** — *agent-ready*: a dispose during an in-flight notes draft op can save sample fields
+  to the real draft (`notes/page/popup.ts` ~970); the Docs sample split uses the real uiState key, so a drag writes
+  the user's tree width (`docs/page/start.ts` `createAddedView`); `live-view/window-pick.ts` `UNITY_EDITOR_TITLE` is
+  loose; `next`/`previous`/`reset` with no held step enter the first step (`run-driver.ts`), with no test row;
+  `goToCursor` (`demo/page/start.ts`) runs outside the page queue; chatroom `addSessionEntry` writes the real room's
+  agent entries for demo sessions. Source: demo-mode review lanes C, D and 2.
+- **Demo self-test: the walk's end depends on the last beat** — *agent-ready*: the walk's `until` waits on the last
+  beat succeeding, and the report is taken before the final leave (`demo/main/selftest-script.ts`). Wait on the
+  driver's step state instead, and report after the leave. Source: demo-mode review, lane 08 M2/M3.
+- **Demo: cleanup** — *agent-ready*: `createStepAgentStore` copies backlog's `createAssistantStore`; share one. Two
+  `unicorn(no-useless-spread)` warnings remain in `src/shared/page/demo-start-prompt.test.ts`. The correctness-A
+  lane's missing test rows for the per-plugin demo steps are worth one row each where a step holds state.
