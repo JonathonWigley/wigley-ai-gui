@@ -37,28 +37,22 @@ part lists gain nothing from it.
 - Paths in `files` are repo-relative.
 
 Files:
-
-- docs:
-  - modify `wigley-ai-gui/src/plugins/docs/contract.ts` · modify `wigley-ai-gui/src/plugins/docs/main/start.ts` · modify `wigley-ai-gui/src/plugins/docs/page/start.ts`
-  - create `wigley-ai-gui/src/plugins/docs/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/docs/page/demo-steps.ts`
-  - test `wigley-ai-gui/src/plugins/docs/main/start.test.ts`
-- docs-session-tab: modify `wigley-ai-gui/src/plugins/docs-session-tab/manifest.ts`
-- backlog:
-  - modify `wigley-ai-gui/src/plugins/backlog/main/start.ts` · modify `wigley-ai-gui/src/plugins/backlog/page/start.ts`
-  - create `wigley-ai-gui/src/plugins/backlog/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/backlog/page/demo-steps.ts`
-  - test `wigley-ai-gui/src/plugins/backlog/main/start.test.ts`
-- practice:
-  - modify `wigley-ai-gui/src/plugins/practice/main/start.ts` · modify `wigley-ai-gui/src/plugins/practice/page/start.ts`
-  - create `wigley-ai-gui/src/plugins/practice/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/practice/page/demo-steps.ts`
-  - test `wigley-ai-gui/src/plugins/practice/main/start.test.ts`
-- scheduling:
-  - modify `wigley-ai-gui/src/plugins/scheduling/contract.ts` · modify `wigley-ai-gui/src/plugins/scheduling/main/start.ts` · modify `wigley-ai-gui/src/plugins/scheduling/page/start.ts`
-  - create `wigley-ai-gui/src/plugins/scheduling/main/demo-tasks.ts` · create `wigley-ai-gui/src/plugins/scheduling/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/scheduling/page/demo-steps.ts`
-  - test `wigley-ai-gui/src/plugins/scheduling/main/start.test.ts` · test `wigley-ai-gui/src/plugins/scheduling/main/demo-tasks.test.ts`
-- chatroom:
-  - modify `wigley-ai-gui/src/plugins/chatroom/main/start.ts` · modify `wigley-ai-gui/src/plugins/chatroom/main/selftest-fixture.ts` · modify `wigley-ai-gui/src/plugins/chatroom/page/start.ts`
-  - create `wigley-ai-gui/src/plugins/chatroom/main/demo-rooms.ts` · create `wigley-ai-gui/src/plugins/chatroom/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/chatroom/page/demo-steps.ts`
-  - test `wigley-ai-gui/src/plugins/chatroom/main/start.test.ts`
+- modify `wigley-ai-gui/src/plugins/docs/contract.ts` · modify `wigley-ai-gui/src/plugins/docs/main/start.ts` · modify `wigley-ai-gui/src/plugins/docs/page/start.ts`
+- create `wigley-ai-gui/src/plugins/docs/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/docs/page/demo-steps.ts`
+- test `wigley-ai-gui/src/plugins/docs/main/start.test.ts`
+- modify `wigley-ai-gui/src/plugins/docs-session-tab/manifest.ts`
+- modify `wigley-ai-gui/src/plugins/backlog/main/start.ts` · modify `wigley-ai-gui/src/plugins/backlog/page/start.ts`
+- create `wigley-ai-gui/src/plugins/backlog/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/backlog/page/demo-steps.ts`
+- test `wigley-ai-gui/src/plugins/backlog/main/start.test.ts`
+- modify `wigley-ai-gui/src/plugins/practice/main/start.ts` · modify `wigley-ai-gui/src/plugins/practice/page/start.ts`
+- create `wigley-ai-gui/src/plugins/practice/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/practice/page/demo-steps.ts`
+- test `wigley-ai-gui/src/plugins/practice/main/start.test.ts`
+- modify `wigley-ai-gui/src/plugins/scheduling/contract.ts` · modify `wigley-ai-gui/src/plugins/scheduling/main/start.ts` · modify `wigley-ai-gui/src/plugins/scheduling/page/start.ts`
+- create `wigley-ai-gui/src/plugins/scheduling/main/demo-tasks.ts` · create `wigley-ai-gui/src/plugins/scheduling/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/scheduling/page/demo-steps.ts`
+- test `wigley-ai-gui/src/plugins/scheduling/main/start.test.ts` · test `wigley-ai-gui/src/plugins/scheduling/main/demo-tasks.test.ts`
+- modify `wigley-ai-gui/src/plugins/chatroom/main/start.ts` · modify `wigley-ai-gui/src/plugins/chatroom/main/selftest-fixture.ts` · modify `wigley-ai-gui/src/plugins/chatroom/page/start.ts`
+- create `wigley-ai-gui/src/plugins/chatroom/main/demo-rooms.ts` · create `wigley-ai-gui/src/plugins/chatroom/main/demo-steps.ts` · create `wigley-ai-gui/src/plugins/chatroom/page/demo-steps.ts`
+- test `wigley-ai-gui/src/plugins/chatroom/main/start.test.ts`
 
 Consumes:
 
