@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UsageAgentEvent } from '../../../contracts/agent';
+import type { DemoStep } from '../../../contracts/demo';
+import type { PageServices } from '../../../contracts/plugin';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   asHtml,
   FakeElement,
@@ -60,9 +63,13 @@ const PLAN_SNAPSHOT: UsageSnapshot = {
 };
 
 // The part on the harness, over fakes that file each handle with
-// `consumer.track`, as the real views do.
-function startOnHarness() {
+// `consumer.track`, as the real views do; `services` replaces the named
+// services.
+function startOnHarness(
+  services: Partial<Pick<PageServices, 'demoSteps' | 'uiState'>> = {},
+) {
   const harness = startPagePart(usagePagePart, {
+    services,
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -77,6 +84,7 @@ function startOnHarness() {
         (consumer) =>
           ({
             addRowPart: () => consumer.track({ dispose() {} }),
+            activate: () => undefined,
           }) as unknown as SessionsPageExports,
       ),
     ],
@@ -155,6 +163,39 @@ describe('usagePagePart', () => {
 
     expect(loggedByA).toEqual([]);
     expect(loggedByB).toHaveLength(1);
+  });
+
+  // Breaks if a demo changes the user's saved choice of open details.
+  it('setDetailsShown opens and closes the details and writes no uiState', async () => {
+    const demoSteps = createDemoStepRegistry<DemoStep>();
+    const written: string[] = [];
+    const harness = startOnHarness({
+      demoSteps,
+      uiState: { get: () => undefined, set: (key) => written.push(key) },
+    });
+    harness.ready();
+    harness.state.publish(usageSnapshotSlot).set(SNAPSHOT);
+    const [step] = demoSteps.list();
+    const stage = await step.enter({
+      scratchDir: '/scratch',
+      sessions: { session: 's1' },
+    });
+    const detailsLines = () =>
+      harness.logs
+        .map(({ message }) => message)
+        .filter((message) => message.startsWith('details'));
+
+    await stage.beats[1].show();
+    expect(detailsLines()).toEqual([
+      expect.stringMatching(/^details shown: /),
+    ]);
+
+    stage.dispose();
+    expect(detailsLines()).toEqual([
+      expect.stringMatching(/^details shown: /),
+      'details hidden',
+    ]);
+    expect(written).toEqual([]);
   });
 
   // `drawn` counts the status lines drawn by the load, a live restart drawing

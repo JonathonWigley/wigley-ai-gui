@@ -2,8 +2,8 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // The session hub's Context section: main keeps each session's last `contextBreakdown` agent event from chat's
 // `chat.agentEvent` in the `context-sources.breakdowns` slot, and the page draws it in chat's side part through the
-// `layout` setting's context-sources layout. It names `sessions` for the rows it forgets, the names in its page log
-// and its self-test's launch.
+// `layout` setting's context-sources layout. It names `sessions` for the rows it forgets, the names in its page log,
+// its self-test's launch and its demo step's activation.
 export const contextSourcesManifest = definePlugin({
   id: 'context-sources',
   label: 'Context sources',
@@ -11,9 +11,9 @@ export const contextSourcesManifest = definePlugin({
     "Shows what fills each session's context, in the Context section of the session hub.",
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['chat'],
+    page: ['chat', 'sessions'],
   },
-  reads: { main: [], page: ['sessions'] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: { layout: 'default' },

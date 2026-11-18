@@ -118,17 +118,58 @@ export function pickOf(
           error: `The Game View rect ${rectText(gameRect)} is not inside any window of ${folder}'s editor. Call show_live_view again with the game_view of a fresh capture.py start, or with no gameRect to stream the whole editor.`,
         };
   }
+  return {
+    pick: streamPick(
+      window,
+      gameRect === null ? `Editor · ${folder}` : `Game View · ${folder}`,
+      gameRect === null ? null : cropOf(gameRect, window.bounds),
+    ),
+  };
+}
+
+// The pick that streams `window`, sized as the window is now.
+function streamPick(
+  window: CaptureWindow,
+  summary: string,
+  crop: CaptureCrop | null,
+): LivePick {
   const { width, height } = window.bounds;
   return {
-    pick: {
-      kind: 'stream',
-      sourceId: window.sourceId,
-      summary:
-        gameRect === null ? `Editor · ${folder}` : `Game View · ${folder}`,
-      windowSize: { width, height },
-      crop: gameRect === null ? null : cropOf(gameRect, window.bounds),
-    },
+    kind: 'stream',
+    sourceId: window.sourceId,
+    summary,
+    windowSize: { width, height },
+    crop,
   };
+}
+
+// A Unity editor window's title: `<project> - <scene> - <platform> - Unity
+// <version> …`.
+const UNITY_EDITOR_TITLE = / - Unity \d/;
+
+// The demo's live view, whole: the Unity editor's largest window, the editor
+// being the process of the frontmost window titled as one; else the largest
+// window of the app's own process `ownProcessId`. Blocked access is a pick;
+// null when neither has a window.
+export function demoStreamPick(
+  list: WindowList,
+  ownProcessId: number,
+): LivePick | null {
+  if (list.access === 'blocked') {
+    return { kind: 'blocked' };
+  }
+  const unityWindow = list.windows.find((window) =>
+    UNITY_EDITOR_TITLE.test(window.title),
+  );
+  if (unityWindow !== undefined) {
+    return streamPick(
+      pickEditorWindow(list.windows, unityWindow.processId, null),
+      'Unity editor',
+      null,
+    );
+  }
+  const ownWindow = pickEditorWindow(list.windows, ownProcessId, null);
+  return ownWindow === null ? null : streamPick(ownWindow, 'This app', null);
 }
 
 // `[x, y, width, height]` as a rect.

@@ -6,7 +6,11 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 import { chatPageKey } from '../../chat/contract';
-import { followRows, sessionsRowsSlot } from '../../sessions/contract';
+import {
+  followRows,
+  sessionsPageKey,
+  sessionsRowsSlot,
+} from '../../sessions/contract';
 import { contextBreakdownsSlot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -14,6 +18,7 @@ import type { Layout } from '../layouts/layout';
 import { contextSourcesManifest } from '../manifest';
 import { readContextSourcesLayout } from './layout/read-context-sources-layout';
 import { createContextSection } from './context-section';
+import { registerDemoSteps } from './demo-steps';
 
 type ContextSourcesApi = PageApi<
   typeof contextSourcesManifest,
@@ -23,7 +28,7 @@ type ContextSourcesApi = PageApi<
 
 // Draws the session hub's Context section through chat's side parts and the `context-sources.layout` layout. Reads
 // `context-sources.breakdowns`, redrawing a session's section each time its breakdown changes, and names each session
-// by its side-bar label for the page log.
+// by its side-bar label for the page log. Registers the Context demo step.
 export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
   manifest: contextSourcesManifest,
   start(api: ContextSourcesApi) {
@@ -45,6 +50,11 @@ export const contextSourcesPagePart: PagePart<typeof contextSourcesManifest> = {
       showPath: (path) => services.paths.tilde(path, services.homeDir),
     });
     chat.addSidePart(section.part);
+    const sessions = api.dependency(sessionsPageKey);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      showHubForNow: (sectionId) => chat.showHubForNow(sectionId),
+    });
 
     followRows(rows, { removed: (sessionId) => section.forget(sessionId) });
 

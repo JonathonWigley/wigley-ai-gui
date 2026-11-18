@@ -1,3 +1,4 @@
+import { coreScopeSlot } from '../../../contracts/core-state';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
@@ -11,6 +12,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { sessionStashManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readSessionStashLayout } from './layout/read-session-stash-layout';
 import { createSessionStashParts } from './layout/session-stash-parts';
 import { createNoteDialog } from './note-dialog';
@@ -26,8 +28,8 @@ type SessionStashApi = PageApi<
 // `stashSession`: main keeps the note, then sessions' `closeSession` asks what
 // any close asks (chat's end-session confirm mid-turn), main writes the stash
 // once the close lands, and a kept close drops the note. Starting, it has main
-// forget the notes an earlier page kept there. A switch-off is refused while
-// the dialog is open.
+// forget the notes an earlier page kept there, and registers the Stash demo
+// step. A switch-off is refused while the dialog is open.
 export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
   manifest: sessionStashManifest,
   start(api: SessionStashApi) {
@@ -86,6 +88,18 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
         parts.setLayouts(shown);
         noteDialog.redraw();
       },
+    });
+
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      shownSessionId: () => sessions.shownSessionId(),
+      hasRow: (sessionId) => rows.get(sessionId) !== undefined,
+      nameOf,
+      noteDialog,
+      runCommand: (id) => void api.commands.run(id),
+      scope: api.state.read(coreScopeSlot),
+      timers: services.timers,
+      log,
     });
 
     const stash = () => {

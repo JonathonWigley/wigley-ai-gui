@@ -11,6 +11,7 @@ import {
 } from '../../shared/fake-screen-capture';
 import {
   cropOf,
+  demoStreamPick,
   pickEditorWindow,
   pickOf,
   rectOfTuple,
@@ -225,6 +226,73 @@ describe('pickOf', () => {
       expect(pickOf(list, processId, rect, 'Game')).toEqual(result);
     },
   );
+});
+
+describe('demoStreamPick', () => {
+  const APP = 4000;
+  const UNITY = 6000;
+  const windowOf = (
+    processId: number,
+    title: string,
+    width: number,
+    height: number,
+  ): CaptureWindow => ({
+    sourceId: `sample:${width}x${height}`,
+    processId,
+    title,
+    bounds: { x: 20, y: 30, width, height },
+  });
+  // The Unity editor's titled window is the smaller of its two.
+  const UNITY_TITLED = windowOf(
+    UNITY,
+    'Game - Main - macOS - Unity 6000.0.1f1',
+    800,
+    600,
+  );
+  const UNITY_LARGE = windowOf(UNITY, 'Inspector', 1600, 1000);
+  const APP_SMALL = windowOf(APP, 'Settings', 400, 300);
+  const APP_LARGE = windowOf(APP, 'wigley-ai-gui', 1200, 800);
+  const OTHER_WINDOW = windowOf(7, 'Notes', 2000, 1200);
+  const streamOf = (window: CaptureWindow, summary: string) => ({
+    kind: 'stream',
+    sourceId: window.sourceId,
+    summary,
+    windowSize: { width: window.bounds.width, height: window.bounds.height },
+    crop: null,
+  });
+
+  // Breaks on a pick of the titled window over its process's largest, or of
+  // the app over a running editor.
+  it.each<{ given: string; list: WindowList; pick: unknown }>([
+    {
+      given: 'access blocked',
+      list: { access: 'blocked' },
+      pick: { kind: 'blocked' },
+    },
+    {
+      given: 'a Unity editor window and app windows',
+      list: {
+        access: 'granted',
+        windows: [APP_LARGE, UNITY_TITLED, APP_SMALL, UNITY_LARGE],
+      },
+      pick: streamOf(UNITY_LARGE, 'Unity editor'),
+    },
+    {
+      given: 'app windows only',
+      list: {
+        access: 'granted',
+        windows: [OTHER_WINDOW, APP_SMALL, APP_LARGE],
+      },
+      pick: streamOf(APP_LARGE, 'This app'),
+    },
+    {
+      given: 'neither',
+      list: { access: 'granted', windows: [OTHER_WINDOW] },
+      pick: null,
+    },
+  ])('demoStreamPick_PicksUnityElseTheApp_given $given', ({ list, pick }) => {
+    expect(demoStreamPick(list, APP)).toEqual(pick);
+  });
 });
 
 describe('cropOf', () => {

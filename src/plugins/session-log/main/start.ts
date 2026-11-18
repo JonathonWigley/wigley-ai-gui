@@ -1,3 +1,4 @@
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type {
   ChannelShape,
   MainApi,
@@ -10,7 +11,7 @@ import {
   sessionsMainKey,
 } from '../../sessions/contract';
 import { sessionLogManifest } from '../manifest';
-import { recentlyClosed } from './recently-closed';
+import { recentlyClosed, sampleRecentlyClosed } from './recently-closed';
 import { createSessionEventLog } from './session-event-log';
 import { sessionLogSelfTestScript } from './selftest-script';
 
@@ -24,9 +25,11 @@ type SessionLogApi = MainApi<
 
 // Writes one log line for each lifecycle event, gives chat the Recently closed
 // section over the log, which reads the file and `recentlyClosedCount` at each
-// ask, and hands the self-test its script. A quit writes no close: this part
-// stops before chat, and chat's stop closes nothing. An ephemeral row's events
-// write nothing, so a later run's Recently closed never lists it.
+// ask, and hands the self-test its script. While the demo runs (the demo
+// harness is registered) the section answers sample rows and reads no log. A
+// quit writes no close: this part stops before chat, and chat's stop closes
+// nothing. An ephemeral row's events write nothing, so a later run's Recently
+// closed never lists it.
 export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
   manifest: sessionLogManifest,
   start(api: SessionLogApi) {
@@ -106,17 +109,28 @@ export const sessionLogMainPart: MainPart<typeof sessionLogManifest> = {
       });
     });
 
+    const { services } = api;
+    const sampleProjectDir = services.paths.join(
+      services.homeDir,
+      'dev',
+      'sample-app',
+    );
     chat.addResumeSection({
       title: 'Recently closed',
-      rows: async (isResumable) =>
-        recentlyClosed(
-          await eventLog.entries(),
-          api.settings().recentlyClosedCount,
-          isResumable,
-        ),
+      rows: async (isResumable) => {
+        const count = api.settings().recentlyClosedCount;
+        if (services.agentHarnesses.get(DEMO_HARNESS_ID) !== null) {
+          return sampleRecentlyClosed(
+            now(),
+            count,
+            sampleProjectDir,
+            isResumable,
+          );
+        }
+        return recentlyClosed(await eventLog.entries(), count, isResumable);
+      },
     });
 
-    const { services } = api;
     services.selfTest?.run(
       sessionLogSelfTestScript({
         homeDir: services.homeDir,

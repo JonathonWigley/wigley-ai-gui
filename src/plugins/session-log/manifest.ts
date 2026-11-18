@@ -2,7 +2,7 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // Records each session lifecycle change chat and sessions announce, and offers
 // the closed sessions back in the start prompt through chat's resume sections.
-// Main only: it has no surface and no layout.
+// It has no surface and no layout; its page part only registers the demo step.
 export const sessionLogManifest = definePlugin({
   id: 'session-log',
   label: 'Session log',

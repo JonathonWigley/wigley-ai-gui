@@ -1,5 +1,6 @@
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
   MainApi,
@@ -22,6 +23,7 @@ import {
 import { type UsageSnapshot, usageSnapshotSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { usageManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { createPlanPoller, type PlanPoller } from './plan-poller';
 import { usageSelfTestScript } from './selftest-script';
@@ -55,7 +57,10 @@ type UsageApi = MainApi<
 // snapshot and stops the poller for the run, while live rows, usage events and
 // compaction events still fold. The script's `sessionUsage` waits for a
 // session's first `usage` event in the store, and its `compactions` hold and
-// release every fake harness's compactions.
+// release every fake harness's compactions. The Usage demo step shows a sample
+// in the slot over the real snapshot until its dispose or the part's, while
+// the poller and the folds keep building the real one, which the script, the
+// drive actions and `sessionUsage` read.
 export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -64,7 +69,27 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
     const writer = api.state.publish(usageSnapshotSlot);
-    const snapshot = () => writer.get() ?? EMPTY_USAGE_STATE.snapshot;
+    if (writer.get() === undefined) {
+      writer.set(EMPTY_USAGE_STATE.snapshot);
+    }
+    // The snapshot the folds build; the slot shows `sample` over it while one
+    // shows.
+    let real = writer.get() ?? EMPTY_USAGE_STATE.snapshot;
+    let sample: { snapshot: UsageSnapshot } | null = null;
+    const snapshot = () => real;
+    const showSample = (shown: UsageSnapshot): Disposable => {
+      const handle = { snapshot: shown };
+      sample = handle;
+      writer.set(shown);
+      return {
+        dispose() {
+          if (sample === handle) {
+            sample = null;
+            writer.set(real);
+          }
+        },
+      };
+    };
     let held = EMPTY_USAGE_STATE.held;
     const currentState = (): UsageState => ({ snapshot: snapshot(), held });
     // `sessionUsage` callers still waiting, each for its session's usage.
@@ -81,10 +106,13 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       }
     };
     const apply = (next: UsageState) => {
-      const changed = next.snapshot !== snapshot();
+      const changed = next.snapshot !== real;
       held = next.held;
       if (changed) {
-        writer.set(next.snapshot);
+        real = next.snapshot;
+        if (sample === null) {
+          writer.set(real);
+        }
         resolveUsageWaits();
       }
     };
@@ -94,9 +122,6 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
         : new Promise<void>((resolve) => {
             usageWaits.push({ sessionId, resolve });
           });
-    if (writer.get() === undefined) {
-      writer.set(EMPTY_USAGE_STATE.snapshot);
-    }
     const harnessSlot = api.state.read(coreAgentHarnessesSlot);
     const profiles = () =>
       registeredProfiles(listedHarnesses(harnessSlot.all()));
@@ -168,6 +193,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       }
     });
     poller.start();
+    registerDemoSteps(services, { clock: services.clock, showSample });
     const fakeHarnesses = services.agentHarnesses
       .list()
       .filter(isFakeAgentHarness);
@@ -207,6 +233,15 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
         harnesses: services.agentHarnesses,
       });
     }
-    return { commands: {}, dispose: () => poller?.dispose() };
+    return {
+      commands: {},
+      dispose() {
+        poller?.dispose();
+        if (sample !== null) {
+          sample = null;
+          writer.set(real);
+        }
+      },
+    };
   },
 };

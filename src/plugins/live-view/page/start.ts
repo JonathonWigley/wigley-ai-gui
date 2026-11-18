@@ -8,12 +8,17 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 import { chatPageKey } from '../../chat/contract';
-import { followRows, sessionsRowsSlot } from '../../sessions/contract';
+import {
+  followRows,
+  sessionsPageKey,
+  sessionsRowsSlot,
+} from '../../sessions/contract';
 import { livePicksSlot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { liveViewManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readLiveViewLayout } from './layout/read-live-view-layout';
 import { createLiveSection } from './live-section';
 import { createStreamSource } from './stream-source';
@@ -44,7 +49,7 @@ function observeIntersection(
 // Draws the session hub's Live section through chat's side parts and the `live-view.layout` layout. Reads
 // `live-view.picks`, redrawing a session's section each time its pick changes, and streams each section's pick while
 // the section is on screen and the page visible, at the `frameRate` setting read at each open. Names each
-// session by its side-bar label for the page log.
+// session by its side-bar label for the page log. Registers the Live view demo step, which holds the hub shown.
 export const liveViewPagePart: PagePart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
@@ -70,6 +75,11 @@ export const liveViewPagePart: PagePart<typeof liveViewManifest> = {
       isPageVisible: () => document.visibilityState === 'visible',
     });
     chat.addSidePart(section.part);
+    const sessions = api.dependency(sessionsPageKey);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      showHubForNow: (sectionId) => chat.showHubForNow(sectionId),
+    });
 
     followRows(rows, { removed: (sessionId) => section.forget(sessionId) });
 

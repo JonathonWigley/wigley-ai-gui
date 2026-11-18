@@ -1,3 +1,4 @@
+import { DEMO_HARNESS_ID, DEMO_PROFILE } from '../../../contracts/demo';
 import { isUserClose, type ResumeSectionRow } from '../../chat/contract';
 import { editableTitle, type SessionTitles } from '../../sessions/contract';
 import type { SessionLogEntry } from './session-event-log';
@@ -55,4 +56,47 @@ export function recentlyClosed(
     }
   }
   return rows.reverse();
+}
+
+// The demo's closed sessions, oldest first; `ago` is how long before now each
+// closed.
+const SAMPLE_CLOSES = [
+  {
+    hostSessionId: 'demo-closed-1',
+    title: 'Write the release notes',
+    ago: 86_400_000,
+  },
+  {
+    hostSessionId: 'demo-closed-2',
+    title: 'Profile the sidebar redraw',
+    ago: 7_200_000,
+  },
+  {
+    hostSessionId: 'demo-closed-3',
+    title: 'Fix the flaky upload test',
+    ago: 900_000,
+  },
+];
+
+// The rows the section answers while the demo runs, on the demo profile in the
+// sample folder `projectDir`: the newest `count` that `isResumable` lets
+// through, oldest first, capped after the filter as `recentlyClosed` caps.
+export function sampleRecentlyClosed(
+  now: number,
+  count: number,
+  projectDir: string,
+  isResumable: (hostSessionId: string) => boolean,
+): ResumeSectionRow[] {
+  const limit = Math.max(0, Math.floor(count));
+  const rows = SAMPLE_CLOSES.filter((sample) =>
+    isResumable(sample.hostSessionId),
+  ).map((sample) => ({
+    hostSessionId: sample.hostSessionId,
+    projectDir,
+    harness: DEMO_HARNESS_ID,
+    profile: DEMO_PROFILE,
+    title: sample.title,
+    at: now - sample.ago,
+  }));
+  return rows.slice(rows.length - Math.min(limit, rows.length));
 }

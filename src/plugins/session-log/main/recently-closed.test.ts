@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { recentlyClosed } from './recently-closed';
+import { recentlyClosed, sampleRecentlyClosed } from './recently-closed';
 import type { SessionLogEntry } from './session-event-log';
 
 const titled = (user: string) => ({ user, agent: null, firstMessage: null });
@@ -132,6 +132,42 @@ describe('recentlyClosed', () => {
       expect(recentlyClosed(fourCandidates, count, isResumable)).toEqual(
         expected,
       );
+    },
+  );
+});
+
+describe('sampleRecentlyClosed', () => {
+  // Breaks on a cap counted before the filter, or a fraction that keeps an
+  // extra row.
+  it.each([
+    {
+      count: 2,
+      isResumable: anyResumable,
+      expected: ['demo-closed-2', 'demo-closed-3'],
+    },
+    { count: 0, isResumable: anyResumable, expected: [] },
+    { count: -1, isResumable: anyResumable, expected: [] },
+    {
+      count: 2.7,
+      isResumable: anyResumable,
+      expected: ['demo-closed-2', 'demo-closed-3'],
+    },
+    {
+      count: 2,
+      isResumable: (host: string) => host !== 'demo-closed-3',
+      expected: ['demo-closed-1', 'demo-closed-2'],
+    },
+  ])(
+    'caps after the resumable filter: count $count keeps $expected',
+    ({ count, isResumable, expected }) => {
+      const rows = sampleRecentlyClosed(
+        1_000_000_000,
+        count,
+        '/home/dev/sample-app',
+        isResumable,
+      );
+
+      expect(rows.map((row) => row.hostSessionId)).toEqual(expected);
     },
   );
 });

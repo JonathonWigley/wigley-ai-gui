@@ -1,6 +1,6 @@
 # 12 — Session extras steps
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: deep · changes what session-log and session-stash save, and what usage publishes to its slot across the poller's life
 Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/usage/main/start.ts`: 02 makes the poller skip unlisted profiles, this task adds the sample snapshot), 03 (both modify `src/plugins/session-log/main/start.ts` and `src/plugins/session-stash/main/session-stash.ts`: 03's `ephemeral` skip keeps demo sessions out of both, this task adds the sample sections)

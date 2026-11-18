@@ -1,14 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type {
   ChatMainEvents,
   ResumeSectionRow,
   SessionOrigin,
 } from '../../chat/contract';
-import { createSessionStash } from './session-stash';
+import { createSessionStash, sampleStashRows } from './session-stash';
 import { createStashStore, STASHED_FILE } from './stash-store';
 
 const AT = 1000;
+const SAMPLE_DIR = '/home/dev/sample-app';
 
 type Closed = ChatMainEvents['sessionClosed'];
 
@@ -54,20 +55,26 @@ function row(
   };
 }
 
+// `demo.isRunning` is what `isDemoRunning` answers; false until set.
 function setUp() {
   const data = createMemoryFiles();
   const store = createStashStore(data);
   const logged: string[] = [];
+  const demo = { isRunning: false };
   const stash = createSessionStash({
     store,
     log: (line) => logged.push(line),
     now: () => AT,
     ownsSession: (sessionId) => sessionId !== 'terminal',
+    isDemoRunning: () => demo.isRunning,
+    sampleProjectDir: SAMPLE_DIR,
   });
   return {
     data,
+    store,
     stash,
     logged,
+    demo,
     // Every write and its log line have landed.
     settled: async () => {
       await store.settled();
@@ -241,6 +248,34 @@ describe('createSessionStash', () => {
     expect(
       await test.stash.rows((hostSessionId) => hostSessionId !== 'host-s2'),
     ).toEqual([row('s1'), row('s3')]);
+  });
+
+  // Breaks if a team demo's start prompt lists the user's stashes.
+  it('rows answers samples while the demo runs', async () => {
+    const test = setUp();
+    test.stash.request({ sessionId: 's1', note: null });
+    test.stash.closed(closed('s1'));
+    await test.settled();
+    const records = vi.spyOn(test.store, 'records');
+    const hosts = async () =>
+      (await test.stash.rows(anyResumable)).map((item) => item.hostSessionId);
+
+    test.demo.isRunning = true;
+    expect(await hosts()).toEqual(['demo-stash-1', 'demo-stash-2']);
+    expect(records).not.toHaveBeenCalled();
+
+    test.demo.isRunning = false;
+    expect(await hosts()).toEqual(['host-s1']);
+  });
+
+  it('sampleStashRows leaves out the samples isResumable refuses', () => {
+    const rows = sampleStashRows(
+      AT,
+      SAMPLE_DIR,
+      (hostSessionId) => hostSessionId !== 'demo-stash-1',
+    );
+
+    expect(rows.map((item) => item.hostSessionId)).toEqual(['demo-stash-2']);
   });
 
   it('closed_UnreadableFile_LogsAndKeepsIt', async () => {

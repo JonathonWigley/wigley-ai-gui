@@ -1,3 +1,4 @@
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type {
   MainApi,
   MainPart,
@@ -8,6 +9,7 @@ import { sessionsMainKey } from '../../sessions/contract';
 import type { SessionStashChannel } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionStashManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { sessionStashSelfTestScript } from './selftest-script';
 import { createSessionStash } from './session-stash';
 import { createStashStore } from './stash-store';
@@ -22,8 +24,9 @@ type SessionStashApi = MainApi<
 // Keeps each stash the page asks for, of a session chat owns, until its
 // session's close, the page's drop or the page starting again, writes it to
 // `stashed.json` in the plugin data, and gives chat the Stashed section over
-// that file. It starts before session-log, so Stashed sits above Recently
-// closed. Registers the layouts and hands the self-test its script.
+// that file, or sample rows while the demo runs. It starts before session-log,
+// so Stashed sits above Recently closed. Registers the layouts and the demo
+// step's main half, and hands the self-test its script.
 export const sessionStashMainPart: MainPart<typeof sessionStashManifest> = {
   manifest: sessionStashManifest,
   start(api: SessionStashApi) {
@@ -36,7 +39,15 @@ export const sessionStashMainPart: MainPart<typeof sessionStashManifest> = {
       log: services.log,
       now: () => services.clock.now(),
       ownsSession: (sessionId) => chat.profileOf(sessionId) !== null,
+      isDemoRunning: () =>
+        services.agentHarnesses.get(DEMO_HARNESS_ID) !== null,
+      sampleProjectDir: services.paths.join(
+        services.homeDir,
+        'dev',
+        'sample-app',
+      ),
     });
+    registerDemoSteps(services);
 
     api.channel.handle('stash', (request) => stash.request(request));
     api.channel.handle('drop', (sessionId) => stash.drop(sessionId));

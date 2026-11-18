@@ -13,6 +13,7 @@ import {
 import { contextBreakdownsSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { contextSourcesManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { contextSourcesSelfTestScript } from './selftest-script';
 
 type ContextSourcesApi = MainApi<
@@ -24,7 +25,8 @@ type ContextSourcesApi = MainApi<
 >;
 
 // Registers context-sources' layouts, writes each session's last main-agent `contextBreakdown` from `chat.agentEvent`
-// to `context-sources.breakdowns`, deletes it on `sessions.ended`, and hands the self-test its script.
+// to `context-sources.breakdowns`, deletes it on `sessions.ended`, registers the Context demo step's main half, and
+// hands the self-test its script.
 export const contextSourcesMainPart: MainPart<typeof contextSourcesManifest> = {
   manifest: contextSourcesManifest,
   start(api: ContextSourcesApi) {
@@ -41,6 +43,7 @@ export const contextSourcesMainPart: MainPart<typeof contextSourcesManifest> = {
       breakdowns.delete(sessionId),
     );
     const { services } = api;
+    registerDemoSteps(services);
     services.selfTest?.run(
       contextSourcesSelfTestScript({
         homeDir: services.homeDir,

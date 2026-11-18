@@ -6,11 +6,13 @@ import type {
   UsageAgentEvent,
 } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { DemoMainStage, DemoMainStep } from '../../../contracts/demo';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import {
   createSlotStore,
@@ -100,7 +102,8 @@ function usageEvent(agentId: string): UsageAgentEvent {
 // `emit` calls the listeners of a qualified event, `sent` records every write
 // of the slot after the start, `snapshot` reads the slot, `armed` records
 // every timer set and `pendingTimers` the ids set and not yet cleared. The clock reads `NOW` and sessions' selected session is
-// `SELECTED`.
+// `SELECTED`. `started` is what the start returned and `demoSteps` the
+// registry the part registers its demo step in.
 function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: UsageSnapshot[] = [];
@@ -116,6 +119,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const armed: number[] = [];
   const pendingTimers = new Set<number>();
   const drive = fakeDriveHost();
+  const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const chat = {};
   const api = {
     events: {
@@ -146,12 +150,13 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
       },
       agentHarnesses: harnessRegistryOf(harnesses as AgentHarness[]),
       selfTest: { run: () => undefined },
+      demoSteps,
     },
     drive: drive.host,
     dependency: (key: { id: string }) => ({ chat })[key.id as 'chat'] ?? {},
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
-  usageMainPart.start(api);
+  const started = usageMainPart.start(api);
   reader.on((snapshot) => {
     if (snapshot !== undefined) {
       sent.push(snapshot);
@@ -166,7 +171,33 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     }
   };
   const snapshot = () => reader.get();
-  return { sent, logs, armed, pendingTimers, drive, emit, snapshot };
+  return {
+    sent,
+    logs,
+    armed,
+    pendingTimers,
+    drive,
+    emit,
+    snapshot,
+    started,
+    demoSteps,
+  };
+}
+
+// Enters the Usage demo step's main half, whose launched session is
+// `sessionId`.
+function enterMeters(
+  usage: ReturnType<typeof startUsagePart>,
+  sessionId: string,
+): Promise<DemoMainStage> {
+  const [step] = usage.demoSteps.list();
+  return step.enter({
+    scratchDir: '/scratch',
+    launchSession: () => Promise.resolve(sessionId),
+    processEvents: () => {
+      throw new Error('no process events in this test');
+    },
+  });
 }
 
 const settled = () => new Promise((settle) => setImmediate(settle));
@@ -447,6 +478,57 @@ describe('usageMainPart', () => {
 
     expect(scriptDeps().snapshot()).toBe(usage.snapshot());
     expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, SELECTED));
+  });
+
+  // Breaks if a sample stays in the slot after the demo, or a fold under it
+  // is lost.
+  it('a sample shows over the real snapshot until its dispose', async () => {
+    const usage = startUsagePart([]);
+    const stage = await enterMeters(usage, 'demo-1');
+    expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, 'demo-1'));
+
+    usage.emit('chat.agentEvent', {
+      sessionId: 's1',
+      profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
+      event: usageEvent('main'),
+      replayed: false,
+    });
+    expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, 'demo-1'));
+    expect(scriptDeps().snapshot().sessions).toHaveLength(1);
+
+    stage.dispose();
+    expect(usage.snapshot()?.sessions).toEqual([
+      {
+        sessionId: 's1',
+        profileDir: '~/.claude-personal',
+        usage: usageEvent('main'),
+        compaction: null,
+      },
+    ]);
+  });
+
+  it('a second sample replaces the first', async () => {
+    const usage = startUsagePart([]);
+    const first = await enterMeters(usage, 'demo-1');
+
+    const second = await enterMeters(usage, 'demo-2');
+    expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, 'demo-2'));
+
+    first.dispose();
+    expect(usage.snapshot()).toEqual(usageFixture('fresh', NOW, 'demo-2'));
+
+    second.dispose();
+    expect(usage.snapshot()).toEqual({ plans: [], sessions: [] });
+  });
+
+  it("the part's dispose publishes the real snapshot over a sample", async () => {
+    const usage = startUsagePart([]);
+    await enterMeters(usage, 'demo-1');
+
+    await usage.started.dispose?.('restart');
+
+    expect(usage.snapshot()).toEqual({ plans: [], sessions: [] });
   });
 
   it('start_WritesTheEmptySnapshot', () => {

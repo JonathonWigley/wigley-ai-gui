@@ -5,8 +5,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // `layout` setting's live-view layout. Main also opens a session's Live view when a live `unity command editor_play` or
 // `capture.py start` Bash call succeeds, on the editor its `--project-path` names, and closes the view it opened on a
 // successful `unity command editor_stop` for the same project; it reads chat's entries and agent events for them. It
-// names `sessions` for the tools it contributes and the picks it forgets, and reads it on the page for the names in its
-// page log.
+// names `sessions` for the tools it contributes and the picks it forgets, and on the page for the names in its page log
+// and the session its demo step activates.
 export const liveViewManifest = definePlugin({
   id: 'live-view',
   label: 'Live view',
@@ -14,9 +14,9 @@ export const liveViewManifest = definePlugin({
     "Streams a Unity editor's Game View into the session hub while an agent plays it.",
   dependsOn: {
     main: ['chat', 'sessions'],
-    page: ['chat'],
+    page: ['chat', 'sessions'],
   },
-  reads: { main: [], page: ['sessions'] },
+  reads: { main: [], page: [] },
   commands: {
     openScreenSettings: {
       label: 'open the Screen Recording settings',

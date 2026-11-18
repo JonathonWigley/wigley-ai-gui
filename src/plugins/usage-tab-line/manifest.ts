@@ -1,8 +1,8 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-// Each session's usage line in its tab bar: a page-only plugin that places
-// usage's session line, drawn through usage's layout, as a sessions bar part.
-// It owns no layout and no setting.
+// Each session's usage line in its tab bar: the page places usage's session
+// line, drawn through usage's layout, as a sessions bar part, and the main part
+// only registers the demo step's main half. It owns no layout and no setting.
 export const usageTabLineManifest = definePlugin({
   id: 'usage-tab-line',
   label: 'Usage tab line',

@@ -1,3 +1,4 @@
+import { DEMO_HARNESS_ID, DEMO_PROFILE } from '../../../contracts/demo';
 import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -10,12 +11,15 @@ import type { StashRequest } from '../contract';
 import type { StashRecord, StashStore } from './stash-store';
 
 // `ownsSession` is whether chat owns the row, so its close fires
-// `chat.sessionClosed`.
+// `chat.sessionClosed`. `isDemoRunning` is whether the demo harness is
+// registered; `sampleProjectDir` is the folder the demo's sample rows name.
 export interface SessionStashDeps {
   store: StashStore;
   log: PluginLog;
   now: () => number;
   ownsSession: (sessionId: string) => boolean;
+  isDemoRunning(): boolean;
+  sampleProjectDir: string;
 }
 
 // The stash flow over chat's events. `request` keeps a note for a session chat
@@ -27,7 +31,8 @@ export interface SessionStashDeps {
 // an ephemeral session's kept note is dropped with a log line, never written.
 // A headless session's stash keeps the flag, and its row resumes it headless.
 // `opened` removes the stash of a session resumed from the start prompt.
-// `rows` is the Stashed section's rows: the resumable stashes, newest last. A
+// `rows` is the Stashed section's rows: the resumable stashes, newest last;
+// while the demo runs, the sample rows instead, with no read of the store. A
 // failed write is logged.
 export interface SessionStash {
   request(request: StashRequest): boolean;
@@ -139,9 +144,50 @@ export function createSessionStash(deps: SessionStashDeps): SessionStash {
           log(`stash not removed on resume: ${errorText(error)}`),
       );
     },
-    rows: async (isResumable) =>
-      (await store.records())
+    rows: async (isResumable) => {
+      if (deps.isDemoRunning()) {
+        return sampleStashRows(deps.now(), deps.sampleProjectDir, isResumable);
+      }
+      return (await store.records())
         .filter((record) => isResumable(record.hostSessionId))
-        .map(rowOf),
+        .map(rowOf);
+    },
   };
+}
+
+// The demo's stashed sessions, oldest first; `ago` is how long before now each
+// was stashed.
+const SAMPLE_STASHES = [
+  {
+    hostSessionId: 'demo-stash-1',
+    title: 'Spike the offline cache',
+    note: 'Paused until the sync API settles.',
+    ago: 172_800_000,
+  },
+  {
+    hostSessionId: 'demo-stash-2',
+    title: 'Tidy the settings form',
+    note: 'Halfway through the field layout.',
+    ago: 10_800_000,
+  },
+];
+
+// The Stashed rows while the demo runs, on the demo profile in the sample
+// folder `projectDir`, oldest first, the ones `isResumable` refuses left out.
+export function sampleStashRows(
+  now: number,
+  projectDir: string,
+  isResumable: (hostSessionId: string) => boolean,
+): ResumeSectionRow[] {
+  return SAMPLE_STASHES.filter((sample) =>
+    isResumable(sample.hostSessionId),
+  ).map((sample) => ({
+    hostSessionId: sample.hostSessionId,
+    projectDir,
+    harness: DEMO_HARNESS_ID,
+    profile: DEMO_PROFILE,
+    title: sample.title,
+    note: sample.note,
+    at: now - sample.ago,
+  }));
 }

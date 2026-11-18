@@ -6,11 +6,12 @@ import type {
 import { sessionsPageKey } from '../../sessions/contract';
 import { usagePageKey } from '../../usage/contract';
 import { usageTabLineManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 
 type UsageTabLineApi = PageApi<typeof usageTabLineManifest, ChannelShape>;
 
 // Adds usage's session line to every session's tab bar as a sessions bar part,
-// logging its lines under `usage-tab-line`.
+// logging its lines under `usage-tab-line`, and registers its demo step.
 export const usageTabLinePagePart: PagePart<typeof usageTabLineManifest> = {
   manifest: usageTabLineManifest,
   start(api: UsageTabLineApi) {
@@ -20,6 +21,9 @@ export const usageTabLinePagePart: PagePart<typeof usageTabLineManifest> = {
     sessions.addBarPart(
       usage.sessionLinePart('usage-tab-line.sessionLine', services.log),
     );
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+    });
     return { commands: {} };
   },
 };

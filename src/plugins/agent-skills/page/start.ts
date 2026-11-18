@@ -6,12 +6,17 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { agentsRostersSlot, EMPTY_ROSTER } from '../../agents/contract';
 import { chatPageKey } from '../../chat/contract';
-import { followRows, sessionsRowsSlot } from '../../sessions/contract';
+import {
+  followRows,
+  sessionsPageKey,
+  sessionsRowsSlot,
+} from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { agentSkillsManifest } from '../manifest';
 import { readAgentSkillsLayout } from './layout/read-agent-skills-layout';
+import { registerDemoSteps } from './demo-steps';
 import { createSkillList } from './skill-list';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
@@ -19,8 +24,8 @@ type AgentSkillsApi = PageApi<typeof agentSkillsManifest, ChannelShape>;
 
 // Draws the session hub's Skills section through chat's side parts and the
 // `agent-skills.layout` layout. Reads `agents.rosters`, redrawing a session's
-// list each time its roster changes, and names each session by its side-bar
-// label for the page log.
+// list each time its roster changes, names each session by its side-bar
+// label for the page log, and registers the Skills demo step.
 export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
   manifest: agentSkillsManifest,
   start(api: AgentSkillsApi) {
@@ -41,6 +46,11 @@ export const agentSkillsPagePart: PagePart<typeof agentSkillsManifest> = {
       roster: (sessionId) => rosters.get(sessionId) ?? EMPTY_ROSTER,
     });
     chat.addSidePart(list.part);
+    const sessions = api.dependency(sessionsPageKey);
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      showHubForNow: (sectionId) => chat.showHubForNow(sectionId),
+    });
 
     followRows(rows, { removed: (sessionId) => list.forget(sessionId) });
 

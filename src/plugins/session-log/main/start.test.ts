@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentHarness } from '../../../contracts/agent';
+import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import { readIfPresent } from '../../../contracts/files';
+import { harnessRegistryOf } from '../../../shared/agent-harness-registry.test-support';
 import {
   fakeDependency,
   noCounts,
@@ -28,12 +31,13 @@ const closedEvent = (hostSessionId: string) => ({
 
 // The part on the harness, over a chat that records each section and files its
 // handle with `consumer.track`, as chat's view does. `setting` is the object the
-// part reads its settings from.
-function startPart() {
+// part reads its settings from; `agentHarnesses` is the registry it reads.
+function startPart(agentHarnesses = harnessRegistryOf([])) {
   const setting = { recentlyClosedCount: 10 };
   const sections = new Set<ResumeSection>();
   const harness = startMainPart(sessionLogMainPart, {
     settings: setting,
+    services: { agentHarnesses },
     dependencies: [
       fakeDependency(
         chatMainKey,
@@ -265,6 +269,28 @@ describe('sessionLogMainPart', () => {
 
     part.setting.recentlyClosedCount = 1;
     expect(await hosts()).toEqual(['h3']);
+  });
+
+  // Breaks if a team demo's start prompt lists the user's closed sessions.
+  it('the section answers samples while the demo runs', async () => {
+    const harnesses = harnessRegistryOf([]);
+    const part = startPart(harnesses);
+    part.harness.emit('chat.sessionClosed', closedEvent('h1'));
+    const [section] = part.sections;
+    const hosts = async () =>
+      (await section.rows(() => true)).map((row) => row.hostSessionId);
+    const demo = harnesses.register({
+      id: DEMO_HARNESS_ID,
+    } as unknown as AgentHarness);
+
+    expect(await hosts()).toEqual([
+      'demo-closed-1',
+      'demo-closed-2',
+      'demo-closed-3',
+    ]);
+
+    demo.dispose();
+    expect(await hosts()).toEqual(['h1']);
   });
 
   it('dispose_WaitsForLastAppend', async () => {

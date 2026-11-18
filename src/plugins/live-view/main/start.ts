@@ -24,6 +24,7 @@ import { livePicksSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
 import { pickOf, rectOfTuple } from '../window-pick';
+import { registerDemoSteps } from './demo-steps';
 import { createLiveTools, LIVE_VIEW_OFFLINE } from './live-tools';
 import { createPlaytestWatch } from './playtest-watch';
 import { liveViewSelfTestScript } from './selftest-script';
@@ -42,7 +43,9 @@ type LiveViewApi = MainApi<
 // closes a session's pick on its live playtest Bash calls, read from chat's
 // entries and agent events; deletes the pick on `sessions.ended`; writes
 // chat's layout preview row a sample pick, the real pick and crop over the
-// fake ScreenCapture's windows; and hands the self-test its script.
+// fake ScreenCapture's windows; registers the Live view demo step's main
+// half, which picks the Unity editor or the app's own window; and hands the
+// self-test its script.
 export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
@@ -70,6 +73,12 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     api.events.on('sessions.ended', ({ sessionId }) => {
       liveTools.sessionEnded(sessionId);
       watch.sessionEnded(sessionId);
+    });
+    registerDemoSteps(services, {
+      screenCapture: services.screenCapture,
+      picks,
+      ownProcessId: process.pid,
+      log: services.log,
     });
 
     // The preview emits several events in a row, so the key is checked again

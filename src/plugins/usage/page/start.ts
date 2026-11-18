@@ -23,6 +23,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { usageManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { readUsageLayout } from './layout/read-usage-layout';
 import { createUsageParts, type Drawn } from './layout/usage-parts';
 import { createSessionLineParts } from './session-line-parts';
@@ -63,7 +64,8 @@ const REDRAW_MS = 60_000;
 // log and to forget a removed session's lines. Draws nothing while the slot holds
 // no snapshot. Logs the status line's
 // and each session's lines' text when it changes, and the details' states when
-// they show, hide or change.
+// they show, hide or change. Registers the Usage demo step, which opens and
+// closes the details without writing `uiState`.
 export const usagePagePart: PagePart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -222,6 +224,21 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       );
       services.log('details hidden');
     };
+    // Opens or closes the details as `toggleDetails` does, writing no
+    // `uiState`.
+    const setDetailsShown = (shown: boolean) => {
+      detailsOpen = shown;
+      if (shown) {
+        redraw();
+      } else {
+        closeDetails();
+      }
+    };
+    registerDemoSteps(services, {
+      activate: (sessionId) => sessions.activate(sessionId),
+      setDetailsShown,
+      detailsShown: () => detailsOpen,
+    });
 
     active.on(() => redraw());
     followRows(rows, { removed: (sessionId) => lineParts.forget(sessionId) });
