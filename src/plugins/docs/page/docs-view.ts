@@ -884,10 +884,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // Waits for the first index read and, when it does not list `path`, for a
   // rebuild coming or running, then opens `path` unless the open asked as
   // `number` is no longer the newest; resolves to whether it opened.
+  // `selectsRow` as `openListed` takes it.
   const openOnceRead = async (
     path: string,
     line: number | null,
     number: number,
+    selectsRow: boolean,
   ): Promise<boolean> => {
     await firstRead.promise;
     const awaitedRebuild = firstShowRuns ?? runningRebuild;
@@ -897,19 +899,23 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     if (isDisposed || number !== askedOpens) {
       return false;
     }
-    return openListed(path, line, null);
+    return openListed(path, line, null, { selectsRow });
   };
 
   const isListed = (path: string): boolean =>
     document !== null && isIndexedPath(path, document.entries, deps.paths);
 
-  // Opens `path` when the index lists it, selecting its entry's row; else
-  // toasts that it does not. Resolves to whether it opened.
+  // Opens `path` when the index lists it, selecting its entry's row unless
+  // `selectsRow` is false, as for a restore, whose tree place the reload put
+  // back; else toasts that it does not. Resolves to whether it opened.
   const openListed = async (
     path: string,
     line: number | null,
     fragment: string | null,
-    options?: { isHistoryMove?: boolean },
+    {
+      isHistoryMove,
+      selectsRow = true,
+    }: { isHistoryMove?: boolean; selectsRow?: boolean } = {},
   ): Promise<boolean> => {
     if (!isListed(path)) {
       toast(`Not an indexed doc: ${path}`, 'error');
@@ -919,11 +925,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    const opened = await openAndTell(
-      targetFor(path, entry, line, fragment),
-      options,
-    );
-    if (opened && entry !== null) {
+    const opened = await openAndTell(targetFor(path, entry, line, fragment), {
+      isHistoryMove,
+    });
+    if (opened && entry !== null && selectsRow) {
       tree.selectEntry(entry.id);
     }
     return opened;
@@ -1898,7 +1903,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     openDoc(path, line) {
       const number = ++askedOpens;
       isDocAsked = true;
-      void openOnceRead(path, line, number);
+      void openOnceRead(path, line, number, true);
     },
     restorePlace(place) {
       tree.restorePlace(place.trees);
@@ -1914,7 +1919,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           toastEditsNotRestored(edits);
         }
       };
-      restoringOpen = openOnceRead(openPath, null, number)
+      restoringOpen = openOnceRead(openPath, null, number, false)
         .then((opened) => {
           if (isDisposed) {
             return;

@@ -686,6 +686,32 @@ describe('docs page part lifecycle', () => {
     await harness.stop();
   });
 
+  // The open doc's row is not where the place left the tree: the restored open
+  // must not reveal it over the place.
+  it('a restored open keeps the tree place the reload put back', async () => {
+    const page = startDocsPage(servingIndexOf(['/p/kept.md'], []));
+    const { harness } = page;
+    const trackedBefore = harness.restores.length;
+    const saved = {
+      ...placeAt('/p/kept.md'),
+      trees: {
+        wiki: null,
+        all: { expanded: [], selectedId: 'owner:mine', filter: '' },
+      },
+    };
+
+    await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
+    const view = sessionView(page, 's1');
+    view.shown();
+    await Promise.all(harness.restores.slice(trackedBefore));
+
+    expect(selectedTreeRow(view.element)).toEqual({
+      label: 'Mine',
+      isUsualRow: true,
+    });
+    await harness.stop();
+  });
+
   it.each([
     { case: 'view shown', isShown: true, tracked: 1 },
     { case: 'view never shown', isShown: false, tracked: 0 },
