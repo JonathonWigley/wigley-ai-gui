@@ -5,6 +5,7 @@ import { chatMainKey } from '../../chat/contract';
 import { scopedAgentsMainKey } from '../../scoped-agents/contract';
 import {
   type DemoChannel,
+  type DemoRunReport,
   type DemoStepBrief,
   demoRunSlot,
   STEP_AGENT_ID,
@@ -13,6 +14,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { demoManifest } from '../manifest';
 import { createDemoRun, PROFILE_FOLDER, SCRATCH_FOLDER } from './demo-run';
 import { realSessionMainStep } from './real-session-step';
+import { demoSelfTestScript } from './selftest-script';
 import {
   createStepAgentStore,
   stepAgentInstructions,
@@ -28,7 +30,8 @@ type DemoApi = MainApi<typeof demoManifest, DemoChannel>;
 // with scoped-agents, one per step id, in the app's own clone (the home
 // folder when none resolves), its instructions built from the brief the page
 // last described for the step and the `demo.run` slot. Registers the
-// real-session step's main half. Stopping the part stops a live run.
+// real-session step's main half. Hands the self-test its script, whose result
+// is the page's next `report`. Stopping the part stops a live run.
 export const demoMainPart: MainPart<typeof demoManifest> = {
   manifest: demoManifest,
   start(api: DemoApi) {
@@ -72,6 +75,22 @@ export const demoMainPart: MainPart<typeof demoManifest> = {
       briefs.set(brief.id, brief);
     });
     channel.handle('stop', () => run.stop());
+    // A report with no waiting result is dropped, so a stale run's never settles a later run's result.
+    let waitingReport: ((report: DemoRunReport) => void) | null = null;
+    channel.handle('report', (report) => {
+      const settle = waitingReport;
+      waitingReport = null;
+      settle?.(report);
+    });
+    services.selfTest?.run(
+      demoSelfTestScript({
+        open: (selfTestRun) => channel.send('selfTestOpened', selfTestRun),
+        nextReport: () =>
+          new Promise<DemoRunReport>((resolve) => {
+            waitingReport = resolve;
+          }),
+      }),
+    );
     return {
       commands: {},
       dispose: async () => {

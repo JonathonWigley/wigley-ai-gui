@@ -56,6 +56,20 @@ export interface DemoChannel extends ChannelShape {
     // Leaves the held step, closes every demo session, and gives back the
     // plugin switch and the demo harness; does nothing with no live run.
     stop(): Promise<void>;
+    // The page's report at each stop; settles a waiting self-test result and
+    // is dropped when none waits.
+    report(report: DemoRunReport): void;
   };
-  messages: Record<never, never>;
+  messages: {
+    // A self-test opened run `selfTestOpened`.
+    selfTestOpened: number;
+  };
+}
+
+// What a run left uncovered: `missing` the built-in plugins with no page step
+// and no `demoSkip`, in catalog order; `failed` the step ids whose enter, beat
+// or leave failed, once each in first-failure order.
+export interface DemoRunReport {
+  missing: string[];
+  failed: string[];
 }

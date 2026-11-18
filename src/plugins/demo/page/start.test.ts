@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  corePluginsSlot,
+  type PluginStatus,
+} from '../../../contracts/core-state';
 import type { DemoStep } from '../../../contracts/demo';
 import type { RightBarOptions } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
@@ -47,6 +51,19 @@ function fakeStep(
   };
 }
 
+function pluginStatus(id: string): PluginStatus {
+  return {
+    id,
+    label: id,
+    description: '',
+    on: true,
+    neededBy: [],
+    origin: 'built-in',
+    problem: null,
+    demoSkip: null,
+  };
+}
+
 interface Contribution {
   area: 'panel' | 'caption';
   options: RightBarOptions | undefined;
@@ -62,7 +79,8 @@ function settled(): Promise<void> {
 // (beats one-a, one-b) and `p.two` (beat two-a) registered beside its own real-session step. `events` holds, in
 // order: each channel call but `describeStep` as `invoke <method>[ <step id>]`, `addSection <id>`,
 // `showOnly <id>` and the dispose of each, each step's enter and dispose, and each right-bar (`panel`) and status-bar
-// (`caption`) contribution and its dispose. `start` and `stop` answer main's methods of those names.
+// (`caption`) contribution and its dispose. `reports` holds each `report` invoke's argument. `start` and `stop` answer
+// main's methods of those names.
 function startDemo({
   start = async () => ({ scratchDir: SCRATCH }),
   stop = async () => undefined,
@@ -71,6 +89,7 @@ function startDemo({
   stop?: () => Promise<void>;
 } = {}) {
   const events: string[] = [];
+  const reports: unknown[] = [];
   const sections: SidebarSection[] = [];
   const contributions: Contribution[] = [];
   const scopes: (string | null)[] = [];
@@ -167,6 +186,9 @@ function startDemo({
       if (method === 'enterStep') {
         return {};
       }
+      if (method === 'report') {
+        reports.push(args[0]);
+      }
       return undefined;
     },
   });
@@ -184,6 +206,8 @@ function startDemo({
     commands,
     messages,
     events,
+    reports,
+    demoSteps,
     sections,
     scopes,
     panel,
@@ -245,6 +269,7 @@ describe('demoPagePart', () => {
       lastLog: demo.messages().at(-1),
     }).toEqual({
       events: [
+        'invoke report',
         'dispose p.one',
         'invoke leaveStep p.one',
         'invoke stop',
@@ -469,6 +494,36 @@ describe('demoPagePart', () => {
     await act(demo);
 
     expect(demo.messages().slice(mark)).toEqual(expectedLogs);
+  });
+
+  it('stop_FailedStep_ReportsCoverageAndFailures', async () => {
+    const demo = startDemo();
+    demo.harness.state
+      .publish(corePluginsSlot)
+      .set([pluginStatus('p'), pluginStatus('x')]);
+    demo.demoSteps.register({
+      ...fakeStep(demo.events, 'p.bad', 0, ['bad']),
+      enter: async () => {
+        throw new Error('no sample data');
+      },
+    });
+    await startRun(demo);
+    await demo.commands().next({ arg: undefined });
+    demo.events.length = 0;
+
+    await demo.commands().stop({ arg: undefined });
+
+    expect({
+      reports: demo.reports,
+      firstEvents: demo.events.slice(0, 3),
+      logs: demo
+        .messages()
+        .filter((line) => /^(coverage|failed steps):/.test(line)),
+    }).toEqual({
+      reports: [{ missing: ['x'], failed: ['p.bad'] }],
+      firstEvents: ['invoke report', 'dispose p.one', 'invoke leaveStep p.one'],
+      logs: ['coverage: no step or skip for x', 'failed steps: p.bad'],
+    });
   });
 
   it('stop_Run_ClosesThePaneScope', async () => {

@@ -1,4 +1,4 @@
-import { coreModeSlot } from '../../../contracts/core-state';
+import { coreModeSlot, corePluginsSlot } from '../../../contracts/core-state';
 import {
   DEMO_HARNESS_ID,
   type DemoStage,
@@ -34,6 +34,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { CompleteLayout, DemoPart, Layout } from '../layouts/layout';
 import { demoManifest } from '../manifest';
+import { missingCoverage } from './coverage';
 import { readDemoLayout } from './layout/read-demo-layout';
 import { captionInput, movedCursor, stepListInput } from './panel-view-model';
 import { realSessionPageStep } from './real-session-step';
@@ -70,8 +71,9 @@ interface LiveRun {
 // reads or changes whether a run lives runs in one queue, so two arriving during a start act on the run it started.
 // The panel holds the step list, drawn by the `demo.layout` layout's `steps` part, over the step agent's pane, whose
 // scope is the held step; as a right-bar stop it walks a cursor over the steps, and `i` moves the keys into the pane
-// and back. `demo.run` is published at each change. At `ready` it stops a run a reload left in main. Registers the
-// real-session step's page half.
+// and back. `demo.run` is published at each change. At each stop it first logs and reports to main the built-in
+// plugins with no step or skip and the run's failed steps. At `ready` it stops a run a reload left in main. Registers
+// the real-session step's page half.
 export const demoPagePart: PagePart<typeof demoManifest> = {
   manifest: demoManifest,
   start(api: DemoApi) {
@@ -81,6 +83,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     const scopedAgents = api.dependency(scopedAgentsPageKey);
     const runSlot = api.state.publish(demoRunSlot);
     const modeSlot = api.state.read(coreModeSlot);
+    const plugins = api.state.read(corePluginsSlot);
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
       keys: api.keys,
@@ -115,6 +118,8 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     let cursorId: string | null = null;
     // True while the panel itself holds the keys, its agent pane not.
     let hasKeys = false;
+    // The live run's failed step ids, once each in first-failure order.
+    const failedSteps: string[] = [];
 
     const enter = async (step: DemoStep): Promise<DemoStage> => {
       if (run === null) {
@@ -168,8 +173,12 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
         pane.scopeOpened(state.stepId);
         draw();
       },
-      failed: (stepId, error) =>
-        log(`step ${stepId} failed: ${errorText(error)}`),
+      failed(stepId, error) {
+        log(`step ${stepId} failed: ${errorText(error)}`);
+        if (!failedSteps.includes(stepId)) {
+          failedSteps.push(stepId);
+        }
+      },
       log,
     });
 
@@ -362,14 +371,38 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
         align: 'center',
       });
       run = { scratchDir, section, showOnly, caption: captionContribution };
+      failedSteps.length = 0;
       publish();
       draw();
       log('run started');
       await enterFirst();
     };
 
+    // Before the driver leaves the held step, while the plugin switch still runs the off-by-default plugins and their
+    // steps are registered. A rejection of `report` is logged.
+    const reportRun = async () => {
+      const missing = missingCoverage(
+        plugins.get() ?? [],
+        services.demoSteps.list().map(({ id }) => id),
+      );
+      log(
+        missing.length === 0
+          ? 'coverage: every built-in plugin has a step or a skip'
+          : `coverage: no step or skip for ${missing.join(', ')}`,
+      );
+      if (failedSteps.length > 0) {
+        log(`failed steps: ${failedSteps.join(', ')}`);
+      }
+      try {
+        await channel.invoke('report', { missing, failed: [...failedSteps] });
+      } catch (error) {
+        log(`report failed: ${errorText(error)}`);
+      }
+    };
+
     // Inside the queue, with a run live. Each part's failure is logged and never stops the next.
     const stopRun = async (live: LiveRun) => {
+      await reportRun();
       const undos: { name: string; undo(): void | Promise<void> }[] = [
         { name: 'leaving the step', undo: () => driver.stop() },
         { name: 'stopping main', undo: () => channel.invoke('stop') },
@@ -490,6 +523,9 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       },
     });
     services.demoSteps.register(realSessionPageStep(sessions));
+    channel.on('selfTestOpened', (selfTestRun) =>
+      log(`self-test run ${selfTestRun}`),
+    );
     publish();
 
     return {
