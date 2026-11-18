@@ -74,6 +74,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     // The state the queue gives, last written, and the demo step's row and count shown over it.
     let real: AutoRetroState = { rows: [], queued: 0 };
     let demo: { rowId: string; queued: number } | null = null;
+    // Set once the part is disposed, after which the demo step writes nothing.
+    let isDisposed = false;
     const write = (next: AutoRetroState) => {
       real = next;
       state.set(
@@ -84,6 +86,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     };
     registerDemoSteps(services, {
       setDemo(next) {
+        if (isDisposed) {
+          return;
+        }
         demo = next;
         write(real);
       },
@@ -101,7 +106,6 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
 
     let queue: RetroQueue = EMPTY_QUEUE;
     let isFileWritable = true;
-    let isDisposed = false;
     // The slot's rows, in join order.
     const rows: string[] = [];
     // Row ids whose first turn began, kept until the row leaves the side bar.
@@ -419,6 +423,10 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       async dispose() {
         await chain;
         isDisposed = true;
+        if (demo !== null) {
+          demo = null;
+          state.set(real);
+        }
         await file.settled();
       },
     };

@@ -26,13 +26,15 @@ interface FixtureOptions {
 
 // A run over in-memory fakes of every dep: `calls` holds every fake's call in
 // order, `identities` each harness identity made, `launches` each launch
-// request, `logged` each log line.
+// request, `logged` each log line; `fireTimers` runs the timers set so far.
 function fixture(options: FixtureOptions = {}) {
   const calls: string[] = [];
   const logged: string[] = [];
   const identities: FakeHarnessIdentity[] = [];
   const launches: LaunchRequest[] = [];
   const launchIds = [...(options.launchIds ?? [])];
+  const due = new Map<number, () => void>();
+  let timerCount = 0;
   const steps = options.steps?.(calls) ?? [];
   const data = createMemoryFiles();
   const run = createDemoRun({
@@ -83,11 +85,26 @@ function fixture(options: FixtureOptions = {}) {
       },
     },
     data,
+    timers: {
+      set(timerRun) {
+        timerCount += 1;
+        due.set(timerCount, timerRun);
+        return timerCount;
+      },
+      clear: (handle) => due.delete(handle),
+    },
     scratchDir: SCRATCH,
     profileDir: PROFILE,
     log: (line) => logged.push(line),
   });
-  return { run, calls, logged, identities, launches, data };
+  const fireTimers = () => {
+    const runs = [...due.values()];
+    due.clear();
+    for (const timerRun of runs) {
+      timerRun();
+    }
+  };
+  return { run, calls, logged, identities, launches, data, fireTimers };
 }
 
 // A main step whose stage holds `sessions`; its dispose records
@@ -241,6 +258,33 @@ describe('createDemoRun', () => {
       expect(calls).toEqual(atStop);
     },
   );
+
+  // Breaks on a hung main enter that holds the queue, so `stop` never runs,
+  // or one that leaves the sessions it launched open.
+  it('enterStep_EnterHangs_RejectsClosesItsSessionsAndStopRuns', async () => {
+    const { run, calls, fireTimers } = fixture({
+      launchIds: ['s1'],
+      steps: () => [
+        {
+          id: 'p.one',
+          async enter(context) {
+            await context.launchSession('hold');
+            return new Promise<never>(() => undefined);
+          },
+        },
+      ],
+    });
+    await run.start();
+    const entered = run.enterStep('p.one');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireTimers();
+
+    await expect(entered).rejects.toThrow('Step p.one did not enter within');
+    expect(calls).toContain('close s1 finished');
+    await run.stop();
+    expect(run.isRunning()).toBe(false);
+  });
 
   it('leaveStep_CloseRejects_ClosesTheRest', async () => {
     const { run, calls, logged } = fixture({

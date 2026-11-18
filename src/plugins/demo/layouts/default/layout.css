@@ -32,22 +32,28 @@
 }
 
 /* One line in the status bar's centre: the number, the title, then the caption
-   cut with an ellipsis where the bar runs out. */
+   cut with an ellipsis. The bar's centre track never shrinks, so the caption
+   takes at most part of the window's width and leaves the rest to the end
+   track's usage line. */
 [data-layout-owner='demo'][data-layout='default'].demo-caption {
   display: inline-flex;
   align-items: baseline;
   gap: var(--wg-space-2);
+  max-width: 40vw;
   min-width: 0;
   overflow: hidden;
+  padding-inline: var(--wg-space-2);
   white-space: nowrap;
 }
 
 [data-layout-owner='demo'][data-layout='default'] .demo-caption-number {
+  flex: none;
   color: var(--wg-fg-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 [data-layout-owner='demo'][data-layout='default'] .demo-caption-title {
+  flex: none;
   color: var(--wg-fg);
 }
 

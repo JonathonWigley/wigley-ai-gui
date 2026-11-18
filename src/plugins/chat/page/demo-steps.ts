@@ -6,6 +6,10 @@ import type {
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { PageServices } from '../../../contracts/plugin';
+import {
+  type DemoStartPromptDeps,
+  demoStartPrompt,
+} from '../../../shared/page/demo-start-prompt';
 import { createRegistrations } from '../../../shared/registrations';
 import type { SessionsPageExports } from '../../sessions/contract';
 import type { ChatPageExports } from '../contract';
@@ -15,7 +19,7 @@ export interface ChatDemoPageDeps {
   fillComposer: ChatPageExports['fillComposer'];
   setHeadless: ChatPageExports['setHeadless'];
   typeInto: EditorHost['typeInto'];
-  openStartPrompt(): void;
+  startPrompt: DemoStartPromptDeps;
   // Runs `chat.pickModel` on the shown tab's session.
   pickModel(): Promise<void>;
   cancelPicker(): void;
@@ -24,7 +28,8 @@ export interface ChatDemoPageDeps {
 
 // The page halves of chat's steps. Each beat shows a session the main half
 // launched; the composer, controls and start-prompt steps close only what
-// their own beats opened: a typed box, the model picker, the start prompt.
+// their own beats opened: a typed box, the model picker, the start prompt,
+// a picker that opens after its beat was left included.
 export function registerDemoSteps(
   services: PageServices,
   deps: ChatDemoPageDeps,
@@ -109,7 +114,11 @@ export function registerDemoSteps(
     async enter({ sessions }: DemoPageContext) {
       const { session } = sessions;
       let hasOpenedPicker = false;
+      // Bumped by each beat and the dispose, so a picker that opens after its
+      // beat was left is closed.
+      let beatRun = 0;
       const closeOwnPicker = () => {
+        beatRun += 1;
         if (hasOpenedPicker && deps.isPickerOpen()) {
           deps.cancelPicker();
         }
@@ -127,11 +136,19 @@ export function registerDemoSteps(
           {
             name: 'model picker',
             async show() {
+              beatRun += 1;
+              const run = beatRun;
               activate(session);
               if (deps.isPickerOpen()) {
                 return;
               }
               await deps.pickModel();
+              if (run !== beatRun) {
+                if (deps.isPickerOpen()) {
+                  deps.cancelPicker();
+                }
+                return;
+              }
               hasOpenedPicker = deps.isPickerOpen();
               if (!hasOpenedPicker) {
                 log('demo controls: no model picker');
@@ -154,23 +171,20 @@ export function registerDemoSteps(
       'src/plugins/chat/page/start-prompt.ts',
       'src/plugins/chat/page/start-prompt-items.ts',
     ],
-    enter: async () => ({
-      beats: [
-        {
-          name: 'start prompt',
-          show() {
-            if (!deps.isPickerOpen()) {
-              deps.openStartPrompt();
-            }
+    async enter(): Promise<DemoStage> {
+      const prompt = demoStartPrompt(deps.startPrompt);
+      return {
+        beats: [
+          {
+            name: 'start prompt',
+            show: async () => {
+              await prompt.open();
+            },
           },
-        },
-      ],
-      dispose() {
-        if (deps.isPickerOpen()) {
-          deps.cancelPicker();
-        }
-      },
-    }),
+        ],
+        dispose: () => prompt.dispose(),
+      };
+    },
   });
 
   register({

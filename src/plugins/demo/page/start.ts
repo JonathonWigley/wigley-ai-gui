@@ -118,6 +118,8 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     let cursorId: string | null = null;
     // True while the panel itself holds the keys, its agent pane not.
     let hasKeys = false;
+    // True while the panel's Enter enters the cursor's step.
+    let isEnteringFromPanel = false;
     // The live run's failed step ids, once each in first-failure order.
     const failedSteps: string[] = [];
 
@@ -153,11 +155,29 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       return stage;
     };
 
+    // A beat or a leave that focused a text box (the message box, a form's answer, a note) would take the demo keys
+    // as text, so the box gives the DOM focus up; the step agent's pane in the panel keeps its own.
+    const takeKeysFromTextBox = () => {
+      const focused = document.activeElement;
+      if (!(focused instanceof HTMLElement) || panelSlot.contains(focused)) {
+        return;
+      }
+      const isTextBox =
+        services.editor.contains(focused) ||
+        focused.isContentEditable ||
+        focused.matches('input, textarea');
+      if (isTextBox) {
+        focused.blur();
+        log('took the keys back from a text box');
+      }
+    };
+
     // The page's stage first, then main's.
     const leave = async (step: DemoStep, stage: DemoStage) => {
       try {
         stage.dispose();
       } finally {
+        takeKeysFromTextBox();
         await channel.invoke('leaveStep', step.id);
       }
     };
@@ -169,6 +189,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
       timers: services.timers,
       autoplaySeconds: () => api.settings().autoplaySeconds,
       changed(state) {
+        takeKeysFromTextBox();
         publish();
         pane.scopeOpened(state.stepId);
         draw();
@@ -309,7 +330,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
         order: PANEL_ORDER,
         focus: focusPanel,
         left: leavePanel,
-        keepsTurn: () => pane.holdsKeys(),
+        keepsTurn: () => pane.holdsKeys() || isEnteringFromPanel,
       });
     };
 
@@ -494,8 +515,20 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
         logNotRunning();
         return;
       }
-      if (cursorId !== null) {
+      if (cursorId === null) {
+        return;
+      }
+      // The step's beat may show another mode, whose base scope change would end the panel's turn: the panel keeps
+      // its turn through it and takes its scope back after.
+      isEnteringFromPanel = true;
+      try {
         await driver.goTo(cursorId);
+        if (hasKeys && !pane.holdsKeys()) {
+          api.keys.setScope('panel');
+          panelSlot.focus();
+        }
+      } finally {
+        isEnteringFromPanel = false;
       }
     };
 

@@ -1,4 +1,5 @@
 import type { AgentHarnessRegistry } from '../../../contracts/agent';
+import type { Timers } from '../../../contracts/ambient';
 import {
   DEMO_HARNESS_ID,
   DEMO_PROFILE,
@@ -22,6 +23,8 @@ import type { ChatMainExports } from '../../chat/contract';
 // The run's folders in the plugin data folder.
 export const SCRATCH_FOLDER = 'scratch';
 export const PROFILE_FOLDER = 'profile';
+// How long a step's main enter may take before `enterStep` gives up on it.
+export const STEP_ENTER_TIMEOUT_MS = 30_000;
 
 // `data` is the plugin's data folder, which holds `SCRATCH_FOLDER` and
 // `PROFILE_FOLDER`; `scratchDir` and `profileDir` are their full paths.
@@ -32,6 +35,7 @@ export interface DemoRunDeps {
   steps: Pick<DemoStepRegistry<DemoMainStep>, 'list'>;
   pluginSwitch: Pick<PluginSwitchService, 'runDisabledForNow'>;
   data: Pick<Files, 'list' | 'deleteFile' | 'makeFolder'>;
+  timers: Timers;
   scratchDir: string;
   profileDir: string;
   log: PluginLog;
@@ -39,8 +43,10 @@ export interface DemoRunDeps {
 
 // The demo's main side, every call run after the one before it settles.
 // `start` stops a live run first. `enterStep` leaves a held main stage first
-// and rejects `The demo is not running.` with no live run. `leaveStep` acts
-// only on the held stage's id. `stop` does nothing with no live run.
+// and rejects `The demo is not running.` with no live run; a step's enter not
+// settled after `STEP_ENTER_TIMEOUT_MS` rejects, closing the sessions it
+// launched, and a stage it returns later is disposed. `leaveStep` acts only on
+// the held stage's id. `stop` does nothing with no live run.
 export interface DemoRun {
   start(): Promise<{ scratchDir: string }>;
   enterStep(stepId: string): Promise<Readonly<Record<string, string>>>;
@@ -155,6 +161,71 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
     },
   });
 
+  // Closes the sessions of `run` launched since `before` was taken, each
+  // failure logged.
+  const closeLaunchedSince = async (
+    run: LiveRun,
+    before: ReadonlySet<string>,
+  ) => {
+    for (const sessionId of run.launched) {
+      if (before.has(sessionId)) {
+        continue;
+      }
+      run.launched.delete(sessionId);
+      try {
+        await chat.close(sessionId, 'finished');
+      } catch (error) {
+        log(`session ${sessionId} not closed: ${errorText(error)}`);
+      }
+    }
+  };
+
+  // `step.enter`, rejecting once it has not settled in
+  // `STEP_ENTER_TIMEOUT_MS` after closing the sessions it launched, so a hung
+  // enter never holds the queue and `stop` behind it. A stage it returns after
+  // that is disposed and its sessions closed.
+  const enterInTime = (
+    run: LiveRun,
+    step: DemoMainStep,
+  ): Promise<DemoMainStage> => {
+    const before = new Set(run.launched);
+    return new Promise<DemoMainStage>((resolve, reject) => {
+      let isTimedOut = false;
+      const timer = deps.timers.set(() => {
+        isTimedOut = true;
+        log(`${step.id} did not enter in time`);
+        void closeLaunchedSince(run, before).then(() =>
+          reject(
+            new Error(
+              `Step ${step.id} did not enter within ${STEP_ENTER_TIMEOUT_MS} ms.`,
+            ),
+          ),
+        );
+      }, STEP_ENTER_TIMEOUT_MS);
+      step.enter(run.context).then(
+        (stage) => {
+          if (!isTimedOut) {
+            deps.timers.clear(timer);
+            resolve(stage);
+            return;
+          }
+          try {
+            stage.dispose();
+          } catch (error) {
+            log(`leave ${step.id} failed: ${errorText(error)}`);
+          }
+          void closeLaunchedSince(run, before);
+        },
+        (error: unknown) => {
+          if (!isTimedOut) {
+            deps.timers.clear(timer);
+            reject(error);
+          }
+        },
+      );
+    });
+  };
+
   const requireLive = (): LiveRun => {
     if (live === null) {
       throw new Error('The demo is not running.');
@@ -207,7 +278,7 @@ export function createDemoRun(deps: DemoRunDeps): DemoRun {
         if (step === undefined) {
           return {};
         }
-        const stage = await step.enter(run.context);
+        const stage = await enterInTime(run, step);
         run.held = { id: stepId, stage };
         const keys = Object.keys(stage.sessions);
         log(

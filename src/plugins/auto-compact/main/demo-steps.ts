@@ -1,4 +1,5 @@
 import type { AgentHarnessRegistry } from '../../../contracts/agent';
+import type { Timers } from '../../../contracts/ambient';
 import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MainServices } from '../../../contracts/plugin';
@@ -19,18 +20,19 @@ export interface AutoCompactDemoMainDeps {
 }
 
 const CARRY_ON = { text: 'Carry on with the plan.', images: [] };
+// How long the step waits on one session's turn to finish.
+export const TURN_WAIT_MS = 15_000;
 
-// Counts the turns each session finished idle, from the moment it is made.
-// `idle(id, n)` resolves once session `id` finished `n` or more idle turns.
+// Counts the turns each session finished, idle or rested, from the moment it
+// is made. `idle(id, n)` resolves once session `id` finished `n` or more
+// turns, and rejects once it has not after `TURN_WAIT_MS`.
 function idleTurnCounter(
   deps: Pick<AutoCompactDemoMainDeps, 'onTurnFinished'>,
+  timers: Timers,
 ) {
   const counts = new Map<string, number>();
   const waits: { sessionId: string; count: number; resolve(): void }[] = [];
-  const subscription = deps.onTurnFinished(({ sessionId, how }) => {
-    if (how !== 'idle') {
-      return;
-    }
+  const subscription = deps.onTurnFinished(({ sessionId }) => {
     const count = (counts.get(sessionId) ?? 0) + 1;
     counts.set(sessionId, count);
     for (const wait of waits.filter(
@@ -43,12 +45,26 @@ function idleTurnCounter(
   });
   return {
     idle: (sessionId: string, count: number) =>
-      new Promise<void>((resolve) => {
+      new Promise<void>((resolve, reject) => {
         if ((counts.get(sessionId) ?? 0) >= count) {
           resolve();
           return;
         }
-        waits.push({ sessionId, count, resolve });
+        const wait = {
+          sessionId,
+          count,
+          resolve() {
+            timers.clear(timer);
+            resolve();
+          },
+        };
+        const timer = timers.set(() => {
+          waits.splice(waits.indexOf(wait), 1);
+          reject(
+            new Error(`Session ${sessionId} did not finish turn ${count}.`),
+          );
+        }, TURN_WAIT_MS);
+        waits.push(wait);
       }),
     dispose: () => subscription.dispose(),
   };
@@ -67,7 +83,7 @@ export function registerDemoSteps(
     services.demoSteps.register({
       id: 'auto-compact.compact',
       async enter(context) {
-        const turns = idleTurnCounter(deps);
+        const turns = idleTurnCounter(deps, services.timers);
         let heldHarness: FakeAgentHarness | null = null;
         const dispose = () => {
           heldHarness?.releaseCompactions();

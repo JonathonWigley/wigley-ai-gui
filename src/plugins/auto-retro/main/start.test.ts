@@ -591,4 +591,31 @@ describe('autoRetroMainPart', () => {
     stage.dispose();
     expect(part.state()).toEqual(real);
   });
+
+  // Breaks: the slot keeping the demo overlay after the part stopped mid-step.
+  it('demoStep_StopMidStep_ShowsTheRealState', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    const real = part.state();
+    await part.enterDemoStep();
+
+    await part.harness.stop();
+
+    expect(part.state()).toEqual(real);
+  });
+
+  // Breaks: a stage left after a restart dropping the new part's overlay.
+  it('demoStep_LeftAfterARestart_LeavesTheNewStagesOverlay', async () => {
+    const part = startPart();
+    await settled();
+    const stale = await part.enterDemoStep();
+    await part.harness.restart();
+    await settled();
+    await part.enterDemoStep();
+
+    stale.dispose();
+
+    expect(part.state()).toEqual({ rows: ['row-demo'], queued: DEMO_QUEUED });
+  });
 });

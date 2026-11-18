@@ -14,8 +14,9 @@ const DEMO_KEYS = (key: string) => [' ', 'd', key];
 const FIRST = 'keys.hints';
 const SECOND = 'gallery.mode';
 // The last beat before the `live` section: the highest-order `bars` step's last beat.
+const LAST_STEP = 'auto-retro.section';
 const LAST_LINE = line(
-  'showing auto-retro.section beat 1 of 1: Retro running, 2 queued',
+  `showing ${LAST_STEP} beat 1 of 1: Retro running, 2 queued`,
 );
 
 const firstBeatShown = (stepId: string) =>
@@ -107,6 +108,10 @@ export function demoSelfTestScript(deps: DemoSelfTestDeps): SelfTestScript {
           expect: line('moved next'),
           repeat: { until: LAST_LINE, max: 400 },
           timeoutMs: 15000,
+        },
+        {
+          keys: DEMO_KEYS('r'),
+          expect: line(`reset ${LAST_STEP}`),
           screenshot: 'before-live',
         },
       ],
@@ -127,7 +132,8 @@ export function demoSelfTestScript(deps: DemoSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: { demo: { autoplaySeconds: 1 } },
-    scrollsItself: [],
+    // The status bar caption cuts its text with an ellipsis.
+    scrollsItself: ['.demo-caption-text'],
     open(run) {
       deps.open(run);
       return {

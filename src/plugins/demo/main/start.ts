@@ -17,6 +17,7 @@ import { realSessionMainStep } from './real-session-step';
 import { demoSelfTestScript } from './selftest-script';
 import {
   createStepAgentStore,
+  type StepAgentFolder,
   stepAgentInstructions,
   stepAgentTitle,
 } from './step-agent';
@@ -51,17 +52,21 @@ export const demoMainPart: MainPart<typeof demoManifest> = {
       steps: services.demoSteps,
       pluginSwitch: services.pluginSwitch,
       data: api.data,
+      timers: services.timers,
       scratchDir: services.paths.join(api.dataFolder, SCRATCH_FOLDER),
       profileDir: services.paths.join(api.dataFolder, PROFILE_FOLDER),
       log: services.log,
     });
     const briefs = new Map<string, DemoStepBrief>();
     const runSlot = api.state.read(demoRunSlot);
-    const folder = services.cloneDir ?? services.homeDir;
+    const folder: StepAgentFolder =
+      services.cloneDir === null
+        ? { path: services.homeDir, isAppClone: false }
+        : { path: services.cloneDir, isAppClone: true };
     api.dependency(scopedAgentsMainKey).addScopedAgent({
       owner: demoManifest.id,
       agentId: STEP_AGENT_ID,
-      folder: () => folder,
+      folder: () => folder.path,
       instructions: async (scope) =>
         stepAgentInstructions(scope, briefs.get(scope), runSlot.get(), folder),
       title: async (scope) => stepAgentTitle(scope, briefs.get(scope)),
