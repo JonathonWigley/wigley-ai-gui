@@ -260,7 +260,7 @@ Names and types more than one task uses. A task's own internals are its document
 - [x] [Split form-state.ts and rename the screen union](10-split-form-state.md) — after 08
 
 ### Wave 6
-- [ ] [Agent docs and the design re-read](11-docs.md) — after 01–10
+- [x] [Agent docs and the design re-read](11-docs.md) — after 01–10
 
 ### Wave 7
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -281,6 +281,7 @@ Review base: 6df66e9240a22bd1da246c98f3c1070378bc37e8
 - 08 · hard · 80df93896 · diff read: FindingOriginSpec, string FindingOrigin/FindingCard, registerFindingOrigin on main and page exports, action_label/recommend_action_label on FindingAnswerEntry, FindingCard.originToken; golden diff is the three proof lines only (ask_round proof sentence, proof out of required, proof description); wave 4 compile: typecheck, lint, forms tests 922 pass · concerns: a page start that throws partway leaves its registered built-in origins undisposed (main guards, page does not); an origin with no spec on the page draws the caused card's action headers with no entries behind them; saved finding entries now carry the two label keys, old bodies still read since main recomputes them
 - 09 · hard · 2c5350abe, bf8ea4199 · diff read: ORIGIN_ACTION_LABELS gone, _action_pick reads action_label/recommend_action_label with the pre-08 fallback, _card_entries offers every action; README, triage.md, make SKILL.md, forms.md proof text; both manifests 2.16.3 (main holds 2.16.2); retro unittest OK · concerns: check_pointers.py fails on a main-clone learning/candidates file this task did not touch; the doc's 2.12.4 version was stale
 - 10 · hard · 8b8fd33ba · diff read: round-model.ts, round-answers.ts, round-draft.ts, kinds/finding/finding-answer.ts, form-state.ts keeps state/createFormsState/reducer/roundPlace, FormsScreen; wave 5 compile: typecheck, lint pass; full npm test 14832 pass, 3 known failures · concerns: test-rounds.ts imports changed (types moved since 07); AGENTS.md 'An item kind' and the FormsView name in followups.md, plugin-framework design, master-plan and the Lane L docs are left for task 11
+- 11 · standard · de205e616 · diff read: AGENTS.md sections and design docs match the landed code (names grepped); followups removed, the partly landed tool-table entry reworded to its open part; master-plan boxes ticked; lint passes · concerns: FormsView is still named in Lane L's plan docs (plan-lane-l-layouts 11, 12, 13 and plan.md:47, :50), left for Lane L; run-log concerns were not added as follow-ups
 ### Contract changes
 - appliedRemaps(defaults): Keymap → DefaultKeymap · why: the defaults served() has (checks().deps.defaultKeymap) are a DefaultKeymap; the merged Keymap already holds plugin remaps · consumers: 03, 11, 12 · group 03
 - contributeFormsTools deps gain log: PluginLog; createLayoutPreview deps gain kinds() · why: a failed tool refresh is logged; the preview parses saved rounds with the registered kinds · consumers: 07, 08, 10 · group 06

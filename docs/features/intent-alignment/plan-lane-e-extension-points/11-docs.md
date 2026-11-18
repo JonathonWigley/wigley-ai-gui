@@ -1,6 +1,6 @@
 # 11 — Agent docs and the design re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01–10
 Plan: [plan.md](plan.md)
@@ -103,3 +103,4 @@ follow-ups closed and ticked".
 
 ## Proof
 
+Commit de205e616 · proof: diff read: AGENTS.md sections and design docs match the landed code (names grepped); followups removed, the partly landed tool-table entry reworded to its open part; master-plan boxes ticked; lint passes · concerns: FormsView is still named in Lane L's plan docs (plan-lane-l-layouts 11, 12, 13 and plan.md:47, :50), left for Lane L; run-log concerns were not added as follow-ups
