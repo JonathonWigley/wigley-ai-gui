@@ -331,8 +331,9 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 - **Side pane** — one section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub) for each workflow, drawn only while a session's flow is of that
   workflow. The section's title is `Plan` for Large and `Checklist` for Small, Medium and Spike.
-  - Large's pane shows from the first read of a plan until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. The
-    checklist folds finished waves into one row, shows the current wave in full, and shows each later wave as one line.
+  - Large's pane shows once the agent has set a checklist or a plan is read, until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. Until a plan is read the
+    checklist is the agent's own, as Small's is. A read plan's checklist shows every wave in full: the finished waves
+    under a fold row that starts open, then the current wave, then each later wave.
     A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
   - Small's, Medium's and Spike's pane shows once the agent has set a checklist: the status line, a `<checked>/<total>` line, a
     progress bar and the list as one flat list.
@@ -370,7 +371,7 @@ when the workflow plugins split; `ww`, `ws` and `wf` stay engine commands (`work
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
 | `<Leader>ws` | Show or hide the side pane, in every session |
-| `<Leader>wf` | Open or fold the selected session's finished waves; with no finished group, log `nothing to run`; on a Small, Medium or Spike flat list the key flips the fold and nothing shows |
+| `<Leader>wf` | Fold or open the selected session's finished waves, which start open; with no finished group, log `nothing to run`; on a Small, Medium or Spike flat list the key flips the fold and nothing shows |
 
 The layout preview opens on `<Leader>zlw`.
 

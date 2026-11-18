@@ -94,7 +94,8 @@ export interface WorkflowViewDeps {
 // each changes; `forget` drops what it logged for a session that left and its
 // finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
-// `toggleFinishedWaves` opens or folds one session's finished groups, logging
+// `toggleFinishedWaves` opens or folds one session's finished groups, which
+// show open until it folds them, logging
 // `nothing to run` and changing nothing while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
 // runs a stage action for a session, which `workflow.stageAction` runs, through the
@@ -160,7 +161,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const noWorkflowLogged = new Set<string>();
   const missingWorkflowsLogged = new Set<string>();
   const missingStagesLogged = new Set<string>();
-  const finishedOpen = new Set<string>();
+  const finishedFolded = new Set<string>();
   const drawnHeadless = new Map<string, boolean>();
   const busyDrawn = new Map<string, boolean>();
   const unseen = new Set<string>();
@@ -342,7 +343,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       checklistTitle: checklist.title,
       checked: checklist.checked,
       total: checklist.total,
-      finishedOpen: finishedOpen.has(flow.sessionId),
+      finishedOpen: !finishedFolded.has(flow.sessionId),
       ...partitionedGroups(checklist.groups, openItemState),
     };
   };
@@ -598,6 +599,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       id: `${workflow.id}.sidePane`,
       title: workflow.draw.sideTitle,
       order: SIDE_PART_ORDER,
+      keepsHeight: true,
       build: (wrapper, sessionId, section) =>
         hold('sidePane', wrapper, sessionId, {
           workflow: workflow.id,
@@ -642,7 +644,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedStages.delete(sessionId);
       loggedProgress.delete(sessionId);
       countdownShown.delete(sessionId);
-      finishedOpen.delete(sessionId);
+      finishedFolded.delete(sessionId);
       busyDrawn.delete(sessionId);
       unseen.delete(sessionId);
     },
@@ -669,9 +671,9 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         log(`nothing to run for ${TOGGLE_FINISHED_WAVES} in ${name}`);
         return;
       }
-      const isOpen = !finishedOpen.delete(sessionId);
-      if (isOpen) {
-        finishedOpen.add(sessionId);
+      const isOpen = finishedFolded.delete(sessionId);
+      if (!isOpen) {
+        finishedFolded.add(sessionId);
       }
       log(`finished waves ${isOpen ? 'open' : 'folded'} in ${name}`);
       drawSession(sessionId);

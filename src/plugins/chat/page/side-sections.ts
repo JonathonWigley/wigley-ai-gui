@@ -116,7 +116,8 @@ export interface SideTab {
 // width, which a drag on its start edge or a nudge of a tab's `divider` sets,
 // apply to every tab and session and are kept in `uiState`; a frame change
 // updates the frame in place and never rebuilds the part. A `shrinksLast`
-// part's wrapper carries `data-shrinks-last`, which the hub's height rules read.
+// part's wrapper carries `data-shrinks-last` and a `keepsHeight` part's
+// `data-keeps-height`, which the hub's height rules read.
 export interface SideSections {
   // Appends the hub's holder to `root`, which takes `is-side-hidden` while the
   // hub is hidden. Builds no part: the caller runs `sync`.
@@ -344,6 +345,9 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         );
         if (wrapper !== null && part.shrinksLast === true) {
           wrapper.dataset.shrinksLast = '';
+        }
+        if (wrapper !== null && part.keepsHeight === true) {
+          wrapper.dataset.keepsHeight = '';
         }
         return {
           wrapper,

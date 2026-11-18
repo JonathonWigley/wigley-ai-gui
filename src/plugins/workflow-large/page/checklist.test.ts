@@ -47,8 +47,26 @@ const flowWith = (progress: PlanProgress | null) =>
   withLargeState(BASE_FLOW, { progress });
 
 describe('largeChecklist', () => {
-  it('largeChecklist_MapsThePlan: progress null gives null', () => {
+  it('largeChecklist_NoPlan: no plan and no agent list gives null', () => {
     expect(largeChecklist(flowWith(null))).toBeNull();
+  });
+
+  it('largeChecklist_NoPlan: the agent list shows until a plan is read', () => {
+    const items = [
+      { text: 'Interview', done: true },
+      { text: 'Plan', done: false },
+    ];
+    const flow = { ...flowWith(null), checklist: items };
+
+    expect(largeChecklist(flow)).toEqual({
+      title: '',
+      checked: 1,
+      total: 2,
+      groups: [{ title: 'Tasks', items }],
+    });
+    expect(
+      largeChecklist({ ...flow, ...flowWith(planOf([[null, false, null]])) }),
+    ).toMatchObject({ title: 'Plan A', total: 1 });
   });
 
   it.each<{

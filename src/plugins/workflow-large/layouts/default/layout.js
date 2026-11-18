@@ -61,24 +61,8 @@ function drawGroup(parent, group, kit) {
 }
 
 /**
- * A later group's one line: its title, then its one item's text or its count.
- * @param {HTMLElement} parent
- * @param {SideGroupInput} group
- * @param {WorkflowKit} kit
- */
-function drawLaterGroup(parent, group, kit) {
-  kit.row(parent, {
-    density: 'list',
-    label: group.title,
-    detail:
-      group.items.length === 1
-        ? group.items[0].text
-        : `${group.items.length} tasks`,
-  });
-}
-
-/**
- * The scrolling checklist: the fold, the current group and the later groups.
+ * The scrolling checklist: the fold, the current group and the later groups,
+ * every group with its items in full.
  * @param {HTMLElement} parent
  * @param {SidePaneInput} input
  * @param {WorkflowKit} kit
@@ -96,11 +80,8 @@ function drawChecklist(parent, input, kit) {
   if (input.currentGroup !== null) {
     drawGroup(list, input.currentGroup, kit);
   }
-  if (input.laterGroups.length > 0) {
-    kit.sectionHeader(list, 'Up next');
-    for (const group of input.laterGroups) {
-      drawLaterGroup(list, group, kit);
-    }
+  for (const group of input.laterGroups) {
+    drawGroup(list, group, kit);
   }
 }
 

@@ -740,7 +740,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
   the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
-  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up. A side part takes no key scope and no stop: the hub is a pane of chat's
+  the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up, and one marked `keepsHeight` (the workflow's side pane) keeps its height ahead of every other, a `shrinksLast` one included. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
