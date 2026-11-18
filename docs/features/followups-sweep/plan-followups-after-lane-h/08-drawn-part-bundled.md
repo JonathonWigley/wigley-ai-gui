@@ -1,6 +1,6 @@
 # 08 — DrawnPart reports drewBundled
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · replaces one field of `DrawnPart` with its inverse-kind twin, following the existing `drewPick` field and its table test; no other group consumes it
 Wave: 4 · Depends on: 07 (`entry-list.ts`), 09 (`draw-part.ts`), 10 (`primer-view.ts`)

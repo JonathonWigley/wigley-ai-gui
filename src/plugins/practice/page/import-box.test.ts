@@ -69,7 +69,7 @@ function boxSetup() {
       return {
         built: { element: textBox },
         layoutName: 'default',
-        drewPick: false,
+        drewBundled: true,
         dispose: () => undefined,
       };
     },

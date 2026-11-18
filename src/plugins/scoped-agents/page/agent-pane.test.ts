@@ -162,7 +162,7 @@ function paneSetup(
         return {
           built: { element: frame },
           layoutName: 'default',
-          drewPick: false,
+          drewBundled: true,
           dispose: () => undefined,
         };
       },

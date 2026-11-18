@@ -156,6 +156,8 @@ interface Row {
   renderers?: ChatEntryRenderer[];
   // The kind whose default builder throws.
   breakDefault?: EntryKind;
+  // The kind whose default builder draws a view whose update throws.
+  defaultUpdateThrows?: EntryKind;
   // Put in order; an entry whose id was put before redraws its slot.
   puts: ChatEntry[];
   // Each slot's children, as `<classes>@<data-layout>`.
@@ -262,6 +264,20 @@ const rows: Row[] = [
     puts: [assistant('one'), assistant('two'), assistant('three')],
     slots: [['chat-entry chat-assistant@default']],
     logs: ['layout default assistant entry update failed: broken update'],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'update throws in the bundled default drawn for a kind the shown layout leaves out',
+    shown: 'fancy',
+    fancy: { assistant: undefined },
+    defaultUpdateThrows: 'assistant',
+    puts: [assistant('one'), assistant('two'), assistant('three')],
+    slots: [['chat-entry chat-assistant@default']],
+    logs: [
+      'default layout assistant entry update failed: broken update',
+      'default layout assistant entry update failed: broken update',
+    ],
     toasts: [],
     disposedAnchors: [],
   },
@@ -724,6 +740,12 @@ describe('entry list', () => {
           throw new Error('broken default');
         },
       );
+    }
+    if (row.defaultUpdateThrows !== undefined) {
+      vi.spyOn(
+        defaultLayout.entries,
+        row.defaultUpdateThrows,
+      ).mockImplementation(updateThrows);
     }
     const shown = {
       default: defaultShown(),

@@ -42,12 +42,12 @@ export interface DrawPartOptions<
 }
 
 // A drawn part: the owner's built object, the name of the layout that drew it,
-// whether the picked layout drew it (false when `defaultLayout` drew in its
-// place), and the dispose of every anchor and box its build recorded.
+// whether `defaultLayout` itself drew it: picked, or in the picked layout's
+// place, and the dispose of every anchor and box its build recorded.
 export interface DrawnPart<R> {
   built: R;
   layoutName: string;
-  drewPick: boolean;
+  drewBundled: boolean;
   dispose(): void;
 }
 
@@ -92,7 +92,7 @@ export function drawPart<
   const isBundledPick = pick.layout === options.defaultLayout;
   if (picked !== undefined && !isBundledPick) {
     try {
-      return attempt(options, picked, pick.name, true);
+      return attempt(options, picked, pick.name, false);
     } catch (error) {
       logFailureOnce(options, error);
     }
@@ -101,7 +101,7 @@ export function drawPart<
   if (builder === undefined) {
     throw new Error(`layout ${DEFAULT_LAYOUT_NAME} has no ${options.partName}`);
   }
-  return attempt(options, builder, DEFAULT_LAYOUT_NAME, isBundledPick);
+  return attempt(options, builder, DEFAULT_LAYOUT_NAME, true);
 }
 
 // A layout's part must return an element it appended to `parent`: the host
@@ -177,7 +177,7 @@ function attempt<L extends object, B, R extends { element: HTMLElement }>(
   options: DrawPartOptions<L, B, R>,
   builder: B,
   layoutName: string,
-  drewPick: boolean,
+  drewBundled: boolean,
 ): DrawnPart<R> {
   const { parent, partName } = options;
   const recorder = createRecorder();
@@ -192,7 +192,7 @@ function attempt<L extends object, B, R extends { element: HTMLElement }>(
     requireOnlyRootAdded(parent, existing, element, partName);
     element.dataset.layout = layoutName;
     element.dataset.layoutOwner = options.owner;
-    return { built, layoutName, drewPick, dispose: recorder.dispose };
+    return { built, layoutName, drewBundled, dispose: recorder.dispose };
   } catch (error) {
     let undoError: unknown = null;
     try {

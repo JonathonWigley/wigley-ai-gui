@@ -1343,7 +1343,7 @@ function drawCardPart<Kit, Input>(
     log: deps.log,
     partName,
   });
-  const layout = drawn.drewPick ? pick.layout : defaultLayout;
+  const layout = drawn.drewBundled ? defaultLayout : pick.layout;
   const { card, kit } = drawn.built;
   return {
     pick,

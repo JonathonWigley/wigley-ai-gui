@@ -1682,7 +1682,7 @@ function buildEntry(
       view: drawn.built.view,
       kit: drawn.built.kit,
       isDefaultView: drawn.layoutName === DEFAULT_ENTRY_PICK.name,
-      isBundledView: !drawn.drewPick || pick.layout === defaultLayout,
+      isBundledView: drawn.drewBundled,
       isBareLine: false,
       dispose: drawn.dispose,
     };

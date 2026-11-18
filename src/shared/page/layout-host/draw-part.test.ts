@@ -83,7 +83,7 @@ describe('drawPart', () => {
     {
       row: 'user layout draws',
       pick: { name: 'fancy', layout: { rail: drawsArticle('fancy') } },
-      drewPick: true,
+      drewBundled: false,
       layoutName: 'fancy',
       text: 'fancy',
       dataset: { layout: 'fancy', layoutOwner: 'forms' },
@@ -92,7 +92,7 @@ describe('drawPart', () => {
     {
       row: 'user layout lacks the part',
       pick: { name: 'bare', layout: {} },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -101,7 +101,7 @@ describe('drawPart', () => {
     {
       row: 'user layout throws',
       pick: { name: 'fancy', layout: { rail: throwsBoom } },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -110,7 +110,7 @@ describe('drawPart', () => {
     {
       row: 'the bundled default picked as default',
       pick: { name: 'default', layout: DEFAULT_LAYOUT },
-      drewPick: true,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -119,7 +119,7 @@ describe('drawPart', () => {
     {
       row: 'a live default draws',
       pick: { name: 'default', layout: { rail: drawsArticle('live') } },
-      drewPick: true,
+      drewBundled: false,
       layoutName: 'default',
       text: 'live',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -128,7 +128,7 @@ describe('drawPart', () => {
     {
       row: 'a live default throws',
       pick: { name: 'default', layout: { rail: throwsBoom } },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
@@ -137,25 +137,25 @@ describe('drawPart', () => {
     {
       row: 'a live default lacks the part',
       pick: { name: 'default', layout: {} },
-      drewPick: false,
+      drewBundled: true,
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
   ])(
-    'drawPart_DrewPick_TrueOnlyWhenThePickedLayoutDrew: $row',
-    ({ pick, drewPick, layoutName, text, dataset, logLines }) => {
+    'drawPart_DrewBundled_TrueOnlyWhenTheBundledDefaultDrew: $row',
+    ({ pick, drewBundled, layoutName, text, dataset, logLines }) => {
       const rail = drawRail(pick);
 
       const drawn = rail.call();
 
       expect({
-        drewPick: drawn.drewPick,
+        drewBundled: drawn.drewBundled,
         layoutName: drawn.layoutName,
         text: asFake(drawn.built.element).textContent,
         dataset: asFake(drawn.built.element).dataset,
-      }).toEqual({ drewPick, layoutName, text, dataset });
+      }).toEqual({ drewBundled, layoutName, text, dataset });
       expect(rail.logLines).toEqual(logLines);
     },
   );
