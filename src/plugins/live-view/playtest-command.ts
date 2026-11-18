@@ -126,7 +126,9 @@ function isBackgroundAmpersand(text: string, index: number): boolean {
 }
 
 // The heredoc whose `<<` ends just before `start`: its terminator word with
-// quotes removed, and whether `<<-` strips leading tabs from its lines.
+// quotes and escapes removed, a quoted run read through its closing quote
+// (`<<'END X'` reads `END X`), and whether `<<-` strips leading tabs from its
+// lines.
 function heredocAt(text: string, start: number): Heredoc {
   const stripsTabs = text[start] === '-';
   let i = stripsTabs ? start + 1 : start;
@@ -136,16 +138,26 @@ function heredocAt(text: string, start: number): Heredoc {
   let terminator = '';
   while (i < text.length && !/[\s;&|<>()]/.test(text[i] ?? '')) {
     const char = text[i] ?? '';
-    if (char !== "'" && char !== '"' && char !== '\\') {
+    if (char === "'" || char === '"') {
+      const close = text.indexOf(char, i + 1);
+      const end = close === -1 ? text.length : close;
+      terminator += text.slice(i + 1, end);
+      i = end + 1;
+    } else if (char === '\\') {
+      terminator += text[i + 1] ?? '';
+      i += 2;
+    } else {
       terminator += char;
+      i += 1;
     }
-    i += 1;
   }
   return { terminator, stripsTabs };
 }
 
 // Skips the bodies of `heredocs`, in order, from the line at `start`, and
-// returns the index of the line after the last terminator.
+// returns the index of the line after the last terminator. When a terminator
+// never appears alone on a later line, it returns `start` and skips nothing:
+// a `<<` that opened no heredoc (`$((x<<2))`, a comment) hides no command.
 function skipHeredocBodies(
   text: string,
   start: number,
@@ -153,14 +165,17 @@ function skipHeredocBodies(
 ): number {
   let i = start;
   for (const { terminator, stripsTabs } of heredocs) {
-    while (i < text.length) {
+    let terminatorFound = false;
+    while (!terminatorFound && i < text.length) {
       const newline = text.indexOf('\n', i);
       const end = newline === -1 ? text.length : newline;
       const line = text.slice(i, end);
       i = end + 1;
-      if ((stripsTabs ? line.replace(/^\t+/, '') : line) === terminator) {
-        break;
-      }
+      terminatorFound =
+        (stripsTabs ? line.replace(/^\t+/, '') : line) === terminator;
+    }
+    if (!terminatorFound) {
+      return start;
     }
   }
   return Math.min(i, text.length);

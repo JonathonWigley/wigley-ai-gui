@@ -270,6 +270,16 @@ describe('parsePlaytestCommand', () => {
       result: stop(P),
     },
     {
+      given: 'quoted heredoc terminator holding a space',
+      command: `cat <<'END X'\nunity command editor_play --project-path ${P}\nEND X`,
+      result: null,
+    },
+    {
+      given: 'arithmetic shift, not a heredoc',
+      command: `n=$((1<<2))\nunity command editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
       given: 'here-string',
       command: `cat <<< x\nunity command editor_play --project-path ${P}`,
       result: start(P),
