@@ -5,9 +5,11 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowMediumManifest } from '../manifest';
 import { MEDIUM_PAGE_STAGES } from '../stages';
+import { registerDemoSteps } from './demo-steps';
 
 // Medium's page half on the engine: its stages, its layouts and its letter. The
-// engine's `defaultChecklist` draws the agent's list.
+// engine's `defaultChecklist` draws the agent's list. Registers the
+// `workflow-medium.run` demo step.
 export const workflowMediumPagePart: PagePart<typeof workflowMediumManifest> = {
   manifest: workflowMediumManifest,
   start(api) {
@@ -27,6 +29,9 @@ export const workflowMediumPagePart: PagePart<typeof workflowMediumManifest> = {
       }),
       runAction: () => Promise.reject(new Error('Medium has no actions')),
       progressText: checklistCount,
+    });
+    registerDemoSteps(api.services, {
+      showSample: (flow) => workflow.showSample(flow),
     });
 
     return { commands: {} };

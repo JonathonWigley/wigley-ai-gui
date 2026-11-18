@@ -29,6 +29,7 @@ import {
 } from '../contract';
 import { newFlow } from '../flow';
 import { workflowManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import {
   createWorkflowDraw,
   type WorkflowDrawDeps,
@@ -60,7 +61,9 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // session's headless flag draws its parts again. `toggleSidePane` shows or
 // hides the pane in every session, kept in `uiState`, and does nothing while
 // Sessions mode shows no session. `openPreview` steps chat's preview session
-// through every workflow's samples (`createPreview`).
+// through every workflow's samples (`createPreview`). `showSample` draws a demo
+// step's sample flow on its session in place of the stored flow, and like the
+// preview runs no action; registers the `workflow.engine` demo step.
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -74,12 +77,16 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const chatSessions = api.state.read(chatSessionSlot);
     const active = api.state.read(sessionsActiveSlot);
     const workflows = new Map<WorkflowId, PageWorkflow>();
+    // The demo sample each session shows (`showSample`), over its stored flow.
+    const samples = new Map<string, SessionFlow>();
 
     const nameOf = (sessionId: string) =>
       rows.get(sessionId)?.label ?? sessionId;
-    const isPreview = (sessionId: string) => preview.flowOf(sessionId) !== null;
+    const isPreview = (sessionId: string) =>
+      preview.flowOf(sessionId) !== null || samples.has(sessionId);
     const flowOf = (sessionId: string): SessionFlow =>
       preview.flowOf(sessionId) ??
+      samples.get(sessionId) ??
       flows.get(sessionId) ??
       newFlow(sessionId, rows.get(sessionId)?.projectDir ?? '');
 
@@ -181,6 +188,46 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
     };
 
+    // Draws the sample now when its row is there, else once the row arrives.
+    const showSample = (flow: SessionFlow): Disposable => {
+      const { sessionId } = flow;
+      samples.set(sessionId, flow);
+      let rowWait: Disposable | null = null;
+      if (rows.get(sessionId) === undefined) {
+        rowWait = rows.on((changedId, row) => {
+          if (changedId !== sessionId || row === undefined) {
+            return;
+          }
+          rowWait?.dispose();
+          rowWait = null;
+          if (samples.get(sessionId) === flow) {
+            view.setFlow(flow);
+          }
+        });
+      } else {
+        view.setFlow(flow);
+      }
+      sessions.activate(sessionId);
+      return {
+        dispose() {
+          rowWait?.dispose();
+          rowWait = null;
+          if (samples.get(sessionId) !== flow) {
+            return;
+          }
+          samples.delete(sessionId);
+          if (rows.get(sessionId) !== undefined) {
+            view.setFlow(flowOf(sessionId));
+          }
+        },
+      };
+    };
+    registerDemoSteps(services, {
+      showSample,
+      setHeadless: (sessionId, headless) =>
+        chat.setHeadless(sessionId, headless),
+    });
+
     const runKey = keyRunner(api.commands, log);
     // Acts on the run's target when it names one; else on the session
     // Sessions mode shows: in any other mode the key belongs to that mode, so
@@ -219,6 +266,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         createWorkflowDraw: (pluginApi, options) =>
           createWorkflowDraw(drawDeps, pluginApi, options),
+        showSample: (flow) => consumer.track(showSample(flow)),
       }),
       ready() {
         followRows(rows, {

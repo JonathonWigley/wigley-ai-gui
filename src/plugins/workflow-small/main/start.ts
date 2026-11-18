@@ -4,9 +4,11 @@ import { sessionsMainKey } from '../../sessions/contract';
 import { workflowMainKey } from '../../workflow/contract';
 import { workflowSmallManifest } from '../manifest';
 import { smallMainWorkflow } from '../stages';
+import { registerDemoSteps } from './demo-steps';
 import { workflowSmallSelfTestScript } from './selftest-script';
 
-// Small's main half on the engine: its stages, its layouts' types and its self-test.
+// Small's main half on the engine: its stages, its layouts' types, its self-test
+// and its demo step's session.
 export const workflowSmallMainPart: MainPart<typeof workflowSmallManifest> = {
   manifest: workflowSmallManifest,
   start(api) {
@@ -14,6 +16,7 @@ export const workflowSmallMainPart: MainPart<typeof workflowSmallManifest> = {
     const workflow = api.dependency(workflowMainKey);
     api.layouts.register({ layoutTypes: workflow.layoutTypes });
     workflow.addWorkflow(smallMainWorkflow);
+    registerDemoSteps(services);
 
     if (services.selfTest !== null && workflow.selfTestHooks !== null) {
       services.selfTest.run(

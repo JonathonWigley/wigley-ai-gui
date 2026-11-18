@@ -4,9 +4,11 @@ import { sessionsMainKey } from '../../sessions/contract';
 import { workflowMainKey } from '../../workflow/contract';
 import { workflowMediumManifest } from '../manifest';
 import { mediumMainWorkflow } from '../stages';
+import { registerDemoSteps } from './demo-steps';
 import { workflowMediumSelfTestScript } from './selftest-script';
 
-// Medium's main half on the engine: its stages, its layouts' types and its self-test.
+// Medium's main half on the engine: its stages, its layouts' types, its self-test
+// and its demo step's session.
 export const workflowMediumMainPart: MainPart<typeof workflowMediumManifest> = {
   manifest: workflowMediumManifest,
   start(api) {
@@ -14,6 +16,7 @@ export const workflowMediumMainPart: MainPart<typeof workflowMediumManifest> = {
     const workflow = api.dependency(workflowMainKey);
     api.layouts.register({ layoutTypes: workflow.layoutTypes });
     workflow.addWorkflow(mediumMainWorkflow);
+    registerDemoSteps(services);
 
     if (services.selfTest !== null && workflow.selfTestHooks !== null) {
       services.selfTest.run(

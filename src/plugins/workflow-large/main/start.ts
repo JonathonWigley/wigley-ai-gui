@@ -23,6 +23,7 @@ import { workflowLargeManifest } from '../manifest';
 import { LARGE_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { createCountdown } from './countdown';
+import { registerDemoSteps } from './demo-steps';
 import { createPlanReports, PLAN_RUNS_FOLDER } from './plan-reports';
 import { largePlanReporter } from './plan-report';
 import {
@@ -53,7 +54,8 @@ const autoCommandOf = (stageId: string): string | undefined =>
 // auto-start countdown; `set_workflow_plan` and `plan.py`'s report files move a
 // flow's watch to the copy its run writes; the page runs its main-side commands over `runAction`. Every
 // write goes through `setState`, which keeps the flow's save time, on a fresh flow,
-// since a plan read can signal while an observer call runs.
+// since a plan read can signal while an observer call runs. Registers its demo
+// step's session.
 export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
   manifest: workflowLargeManifest,
   start(api: WorkflowLargeApi) {
@@ -64,6 +66,7 @@ export const workflowLargeMainPart: MainPart<typeof workflowLargeManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     api.layouts.register({ layoutTypes: workflow.layoutTypes });
     workflow.addWorkflow(largeMainWorkflow);
+    registerDemoSteps(services);
 
     // Sessions whose last turn end was replayed, until a live turn starts or
     // ends: the plan read such a turn causes settles after its replay, as a plain

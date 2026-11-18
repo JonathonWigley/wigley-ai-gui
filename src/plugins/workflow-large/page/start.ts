@@ -22,6 +22,7 @@ import type { PlanProgress } from '../../../shared/plan-progress';
 import { LARGE_COMMANDS, LARGE_PAGE_STAGES } from '../stages';
 import { largeChecklist } from './checklist';
 import { countdownText } from './countdown';
+import { registerDemoSteps } from './demo-steps';
 import { PREVIEW_SAMPLES, previewFlow } from './preview';
 
 type WorkflowLargeApi = PageApi<
@@ -43,7 +44,8 @@ function progressText(progress: PlanProgress): string {
 // Large's page half on the engine: its stages, its layouts, its checklist from the
 // read plan, and what its actions, countdown, progress and preview read from its
 // state. Each command runs `workflow.stageAction` on the run's target when it
-// names one, else on the session Sessions mode shows.
+// names one, else on the session Sessions mode shows. Registers the
+// `workflow-large.run` demo step, which shows the preview's samples.
 export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
   manifest: workflowLargeManifest,
   start(api: WorkflowLargeApi) {
@@ -92,6 +94,10 @@ export const workflowLargePagePart: PagePart<typeof workflowLargeManifest> = {
         PREVIEW_SAMPLES.map((_, index) =>
           previewFlow(index, sessionId, now, api.settings().autoStartSeconds),
         ),
+    });
+    registerDemoSteps(services, {
+      showSample: (flow) => workflow.showSample(flow),
+      autoStartSeconds: () => api.settings().autoStartSeconds,
     });
 
     const runKey = keyRunner(api.commands, log);

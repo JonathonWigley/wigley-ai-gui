@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import {
+  DEMO_HARNESS_ID,
+  DEMO_PROFILE,
+  type DemoMainStep,
+} from '../../../contracts/demo';
 import { readIfPresent } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import type { KeyedSlotKey } from '../../../contracts/state';
@@ -9,9 +15,12 @@ import {
   type MemoryFiles,
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { harnessInfo } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   noCounts,
   type MainPartHarness,
+  startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { createSlotStore } from '../../../shared/state/slot-store';
@@ -50,7 +59,11 @@ import {
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
-import { startEngineMainPart } from './engine-fakes.test-support';
+import {
+  FAKE_CHAT,
+  FAKE_SESSIONS,
+  startEngineMainPart,
+} from './engine-fakes.test-support';
 import { FLOWS_FILE } from './flow-store';
 import { RUNS_FILE, type RunLogLine } from './run-log';
 import { SESSION_NOTE } from './session-note';
@@ -187,6 +200,7 @@ function startWorkflowPart(
       timers: time.timers,
       paths: posixPaths,
       selfTest: options.selfTest === true ? { run: () => undefined } : null,
+      demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     dependency: (key: { id: string }) => dependencies[key.id] ?? {},
     data,
@@ -1300,6 +1314,85 @@ describe('workflowMainPart', () => {
       flows: { hostSessionId: string }[];
     };
     expect(saved.flows.map((entry) => entry.hostSessionId)).toEqual(['h-kept']);
+  });
+
+  // The engine over a store whose harnesses declare `personal` and the demo
+  // harness's profile, so only the demo guard keeps a demo row's flow shut.
+  function startWithDemoHarness() {
+    const state = createSlotStore(() => undefined);
+    const harnesses = state.publish(coreAgentHarnessesSlot);
+    harnesses.set(
+      'claude',
+      harnessInfo({ profiles: [{ name: 'personal', configDir: '~/.c' }] }),
+    );
+    harnesses.set(
+      DEMO_HARNESS_ID,
+      harnessInfo({ profiles: [{ name: DEMO_PROFILE, configDir: '/demo' }] }),
+    );
+    return startMainPart(workflowMainPart, {
+      state,
+      dependencies: [FAKE_SESSIONS, FAKE_CHAT],
+    });
+  }
+
+  // Breaks: a demo session writing the user's flows.json.
+  it.each<{
+    name: string;
+    entry: 'sessionOpened' | 'openRowsAlreadyOpen';
+    profile: string;
+    opens: boolean;
+  }>([
+    {
+      name: 'sessionOpened_DemoProfile_OpensNoFlow',
+      entry: 'sessionOpened',
+      profile: DEMO_PROFILE,
+      opens: false,
+    },
+    {
+      name: 'openRowsAlreadyOpen_DemoProfile_OpensNoFlow',
+      entry: 'openRowsAlreadyOpen',
+      profile: DEMO_PROFILE,
+      opens: false,
+    },
+    {
+      name: 'sessionOpened_OtherProfile_OpensFlow',
+      entry: 'sessionOpened',
+      profile: 'personal',
+      opens: true,
+    },
+  ])('$name', async ({ entry, profile, opens }) => {
+    const harness = startWithDemoHarness();
+    const isDemo = profile === DEMO_PROFILE;
+    if (entry === 'sessionOpened') {
+      harness.emit('chat.sessionOpened', {
+        sessionId: 's1',
+        profileDir: '~/.c',
+        hostSessionId: 'h1',
+        projectDir: '/p',
+        profile,
+        origin: 'new',
+        ...(isDemo ? { ephemeral: true as const } : {}),
+      });
+    } else {
+      harness.state
+        .publish(sessionsRowsSlot)
+        .set('s1', sessionRow('s1', { hostSessionId: 'h1', projectDir: '/p' }));
+      harness.state.publish(chatSessionSlot).set('s1', {
+        ...chatHeld('s1', profile),
+        harness: isDemo ? DEMO_HARNESS_ID : 'claude',
+      });
+      harness.ready();
+    }
+    await settled();
+
+    const exported = harness
+      .started()
+      .exports?.(createRegistrations()) as WorkflowMainExports;
+    const saved = await readIfPresent(harness.files, FLOWS_PATH);
+    expect({
+      holdsFlow: exported.flowOf('s1') !== null,
+      wroteFlows: saved !== null,
+    }).toEqual({ holdsFlow: opens, wroteFlows: opens });
   });
 
   it('Observer_Disposed_HearsNothing', async () => {

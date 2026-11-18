@@ -1,6 +1,7 @@
 // Large's layout preview samples: one flow per press, through every Large
 // stage, make both busy and not, the plan-ready countdown on the second plan
-// ready. The stage ids are sample data, not stage rules.
+// ready; the demo step shows the same samples on its own plan. The stage ids
+// are sample data, not stage rules.
 import type { StageId, SessionFlow } from '../../workflow/contract';
 import type {
   PlanProgress,
@@ -30,9 +31,19 @@ export const PREVIEW_SAMPLES: readonly {
   { stage: 'closed', busy: false, countdown: false },
 ];
 
-const PREVIEW_PROJECT = 'Workflow preview';
-const PREVIEW_PLAN_DIR = '~/docs/features/preview/plan-preview';
-const PREVIEW_TITLE = 'Preview plan';
+// The folder, plan folder and plan title a sample flow names.
+export interface SamplePlan {
+  projectDir: string;
+  planDir: string;
+  title: string;
+}
+
+// The layout preview's plan.
+export const PREVIEW_PLAN: SamplePlan = {
+  projectDir: 'Workflow preview',
+  planDir: '~/docs/features/preview/plan-preview',
+  title: 'Preview plan',
+};
 
 // The sample plan's seven tasks, by the wave each sits under.
 const PREVIEW_TASKS: readonly Omit<PlanTaskLine, 'done' | 'status'>[] = [
@@ -66,17 +77,19 @@ const PREVIEW_PROGRESS: Readonly<
   closed: { checked: 7, reviewRounds: 1 },
 };
 
-// The sample flow `index` of PREVIEW_SAMPLES shows, over the preview session.
+// The sample flow `index` of PREVIEW_SAMPLES shows, over session `sessionId`,
+// on `plan`.
 export function previewFlow(
   index: number,
   sessionId: string,
   now: number,
   autoStartSeconds: number,
+  plan: SamplePlan = PREVIEW_PLAN,
 ): SessionFlow {
   const { stage, busy, countdown } = PREVIEW_SAMPLES[index];
-  const progress = previewProgress(stage);
+  const progress = previewProgress(stage, plan.title);
   const state: LargeState = {
-    planDir: progress === null ? null : PREVIEW_PLAN_DIR,
+    planDir: progress === null ? null : plan.planDir,
     planReported: false,
     unreportedPlanDir: null,
     progress,
@@ -86,7 +99,7 @@ export function previewFlow(
   };
   return {
     sessionId,
-    projectDir: PREVIEW_PROJECT,
+    projectDir: plan.projectDir,
     workflow: LARGE_WORKFLOW_ID,
     movedUpFrom: null,
     stage,
@@ -98,7 +111,7 @@ export function previewFlow(
   };
 }
 
-function previewProgress(stage: StageId): PlanProgress | null {
+function previewProgress(stage: StageId, title: string): PlanProgress | null {
   const reached = PREVIEW_PROGRESS[stage];
   if (reached === undefined) {
     return null;
@@ -114,7 +127,7 @@ function previewProgress(stage: StageId): PlanProgress | null {
     total: tasks.length,
     wave: tasks.find((task) => !task.done)?.wave ?? null,
     reviewRounds: reached.reviewRounds,
-    title: PREVIEW_TITLE,
+    title,
     tasks,
   };
 }

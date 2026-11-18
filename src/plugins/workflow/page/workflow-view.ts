@@ -45,9 +45,9 @@ import {
 } from './layout/workflow-kit';
 
 // `workflows` holds each workflow's page half, its stages in stage order. `flowOf`
-// is the flow a session draws (the preview's sample while it shows, else the
-// slot's flow or a new one); `nameOf` names the session in the log; `isPreview` is
-// whether the session shows the preview, which runs nothing. `setRowActivity` sets
+// is the flow a session draws (the preview's sample or a demo sample while one
+// shows, else the slot's flow or a new one); `nameOf` names the session in the
+// log; `isPreview` is whether the session shows either sample, which runs nothing. `setRowActivity` sets
 // what the session's row says for its stage, null for nothing. `isWorking` is
 // whether the session's row holds a running activity, which the row's title line
 // leaves to the chip's `Working` tag. `isHeadless` is whether the session is

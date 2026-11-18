@@ -46,8 +46,11 @@ import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
 import type { createWorkflowView } from './workflow-view';
 
-// Each session id the view's `setFlow` ran for, in order.
-const drawn = vi.hoisted(() => ({ setFlow: [] as string[] }));
+// Each session id the view's `setFlow` ran for, in order, and each flow it drew.
+const drawn = vi.hoisted(() => ({
+  setFlow: [] as string[],
+  flows: [] as SessionFlow[],
+}));
 
 vi.mock('./workflow-view', async (importOriginal) => {
   const original = await importOriginal<typeof import('./workflow-view')>();
@@ -59,6 +62,7 @@ vi.mock('./workflow-view', async (importOriginal) => {
         ...view,
         setFlow(flow: SessionFlow) {
           drawn.setFlow.push(flow.sessionId);
+          drawn.flows.push(flow);
           view.setFlow(flow);
         },
       };
@@ -78,8 +82,8 @@ function holdsPart<T>(consumer: Registrations, parts: Set<T>, part: T) {
 }
 
 // Workflow's page part over fakes that file each part they take under it, as
-// sessions' and chat's views do. `commands` is another plugin's, and `runs` holds
-// each run its process heard.
+// sessions' and chat's views do. `commands` is another plugin's, `runs` holds
+// each run its process heard, and `activated` each session sessions activated.
 function startWorkflow() {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   const rowParts = new Set<SessionPart>();
@@ -87,6 +91,7 @@ function startWorkflow() {
   const sideParts = new Set<ChatSidePart>();
   const probe: { commands: PluginCommands | null } = { commands: null };
   const runs: [string, unknown][] = [];
+  const activated: string[] = [];
   const harness = startPagePart(workflowPagePart, {
     parts: [probePart(runs, probe)],
     dependencies: [
@@ -100,6 +105,7 @@ function startWorkflow() {
             setActivity: () => undefined,
             shownSessionId: () =>
               harness.state.read(sessionsActiveSlot, 'test').get() ?? null,
+            activate: (sessionId: string) => activated.push(sessionId),
           }) as unknown as SessionsPageExports,
       ),
       fakeDependency(
@@ -127,6 +133,7 @@ function startWorkflow() {
     ids,
     commands,
     runs,
+    activated,
   };
 }
 
@@ -178,6 +185,7 @@ function flowOfSmall(stage: string): SessionFlow {
 describe('workflow page part', () => {
   beforeEach(() => {
     drawn.setFlow = [];
+    drawn.flows = [];
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -502,4 +510,121 @@ describe('workflow page part', () => {
       expect(strips.at(-1)?.headless).toBe(headless);
     },
   );
+
+  // The engine past `ready` holding `small`, s1's stored flow in `build`, and s1's
+  // row when `hasRow`. `show` shows a sample of s1 in `stage`; `drawnStages` are
+  // the stages drawn for s1 since the start was set up.
+  function startWithStoredFlow(hasRow: boolean) {
+    const started = startWorkflow();
+    const { harness, exportsFor } = started;
+    const { workflow } = stubSmall(
+      ['build', 'check', 'review', 'land'].map((id, index) =>
+        stageOf(id, index * 10),
+      ),
+    );
+    exportsFor(createRegistrations()).addWorkflow(workflow);
+    const rows = harness.state.publish(sessionsRowsSlot);
+    if (hasRow) {
+      rows.set('s1', row('s1'));
+    }
+    const flows = harness.state.publish(workflowFlowsSlot);
+    flows.set('s1', flowOfSmall('build'));
+    harness.ready();
+    drawn.flows = [];
+    const exported = exportsFor(createRegistrations());
+    return {
+      ...started,
+      rows,
+      flows,
+      show: (stage: string) => exported.showSample(flowOfSmall(stage)),
+      drawnStages: () =>
+        drawn.flows
+          .filter((flow) => flow.sessionId === 's1')
+          .map((flow) => flow.stage),
+    };
+  }
+
+  // Breaks: a sample a live signal overwrites, a dispose that strands the
+  // sample, or one that clears another step's sample.
+  it.each<{
+    name: string;
+    hasRow: boolean;
+    act(started: ReturnType<typeof startWithStoredFlow>): void;
+    stages: string[];
+    activated: string[];
+  }>([
+    {
+      name: 'draws over a stored flow',
+      hasRow: true,
+      act: ({ show }) => show('review'),
+      stages: ['review'],
+      activated: ['s1'],
+    },
+    {
+      name: 'keeps the sample over a stored-flow change',
+      hasRow: true,
+      act({ show, flows }) {
+        show('review');
+        flows.set('s1', flowOfSmall('check'));
+      },
+      stages: ['review'],
+      activated: ['s1'],
+    },
+    {
+      name: 'redraws the stored flow at dispose',
+      hasRow: true,
+      act: ({ show }) => show('review').dispose(),
+      stages: ['review', 'build'],
+      activated: ['s1'],
+    },
+    {
+      name: 'leaves a newer sample at an older dispose',
+      hasRow: true,
+      act({ show }) {
+        const older = show('review');
+        show('land');
+        older.dispose();
+      },
+      stages: ['review', 'land'],
+      activated: ['s1', 's1'],
+    },
+    {
+      name: 'draws once its row is added',
+      hasRow: false,
+      act({ show, rows }) {
+        show('review');
+        rows.set('s1', row('s1'));
+        rows.set('s1', { ...row('s1'), label: 'renamed' });
+      },
+      stages: ['review'],
+      activated: ['s1'],
+    },
+  ])('showSample $name', ({ hasRow, act, stages, activated }) => {
+    const started = startWithStoredFlow(hasRow);
+
+    act(started);
+
+    expect({
+      stages: started.drawnStages(),
+      activated: started.activated,
+    }).toEqual({ stages, activated });
+  });
+
+  // Breaks: a click on a demo row that runs a real stage action.
+  it('showSample makes the chip buttons inert', async () => {
+    const { harness, commands, ran, flowOfB, exportsFor } =
+      startWithSmallAction();
+    exportsFor(createRegistrations()).showSample({ ...flowOfB });
+
+    await commands().run(workflowStageActionCommand, {
+      sessionId: 'b',
+      action: 'go',
+    });
+
+    expect(ran).toEqual([]);
+    expect(harness.logs.at(-1)).toEqual({
+      source: 'workflow',
+      message: 'preview runs nothing for go',
+    });
+  });
 });

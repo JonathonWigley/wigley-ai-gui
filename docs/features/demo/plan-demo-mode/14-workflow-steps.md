@@ -1,6 +1,6 @@
 # 14 — Workflow steps
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: deep · `showSample` holds per-session state across a rows-slot listener, a handle's dispose order and chat's headless flag (async, through chat main), and task 17 marks checks 36 and 38 on these steps `low-confidence`
 Wave: 2 · Depends on: 01

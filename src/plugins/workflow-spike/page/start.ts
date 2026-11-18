@@ -5,9 +5,11 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowSpikeManifest } from '../manifest';
 import { SPIKE_PAGE_STAGES } from '../stages';
+import { registerDemoSteps } from './demo-steps';
 
 // Spike's page half on the engine: its stages, its layouts and its letter. The
-// engine's `defaultChecklist` draws the agent's list.
+// engine's `defaultChecklist` draws the agent's list. Registers the
+// `workflow-spike.run` demo step.
 export const workflowSpikePagePart: PagePart<typeof workflowSpikeManifest> = {
   manifest: workflowSpikeManifest,
   start(api) {
@@ -27,6 +29,9 @@ export const workflowSpikePagePart: PagePart<typeof workflowSpikeManifest> = {
       }),
       runAction: () => Promise.reject(new Error('Spike has no actions')),
       progressText: checklistCount,
+    });
+    registerDemoSteps(api.services, {
+      showSample: (flow) => workflow.showSample(flow),
     });
 
     return { commands: {} };

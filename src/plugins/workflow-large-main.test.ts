@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../contracts/active-time';
 import type { AgentEvent, UsageAgentEvent } from '../contracts/agent';
+import type { DemoMainStep } from '../contracts/demo';
 import { type Files, readIfPresent } from '../contracts/files';
 import type { QualifiedEvents } from '../contracts/plugin';
 import type { KeyedSlotKey } from '../contracts/state';
+import { createDemoStepRegistry } from '../shared/demo-step-registry';
 import { createMemoryFiles, type MemoryFiles } from '../shared/memory-files';
 import { posixPaths } from '../shared/paths/posix-paths';
 import {
@@ -248,6 +250,7 @@ function startWorkflowPart(
       timers: time.timers,
       paths: posixPaths,
       selfTest: null,
+      demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     dependency: (key: { id: string }) =>
       ({ chat, sessions } as Record<string, unknown>)[key.id],
@@ -278,6 +281,7 @@ function startWorkflowPart(
         selfTest: null,
         homeDir: '/home',
         appInstance: { id: 'app', isDev: false },
+        demoSteps: createDemoStepRegistry<DemoMainStep>(),
       },
       dependency: (key: { id: string }) =>
         ({ workflow: exported(), chat, sessions } as Record<string, unknown>)[

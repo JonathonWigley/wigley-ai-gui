@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { largeStateOf } from '../contract';
-import { previewFlow } from './preview';
+import { LARGE_BEAT_NAMES } from './demo-steps';
+import {
+  PREVIEW_PLAN,
+  PREVIEW_SAMPLES,
+  previewFlow,
+  type SamplePlan,
+} from './preview';
 
 const NOW = 1_000_000;
+
+// The index of the first `make` sample, which carries a plan.
+const MAKE_INDEX = 8;
+
+const DAILY_QUESTS: SamplePlan = {
+  projectDir: '/scratch',
+  planDir: '/scratch/docs/features/daily-quests/plan-daily-quests',
+  title: 'Daily quests',
+};
 
 describe('previewFlow', () => {
   it.each([
@@ -39,4 +54,25 @@ describe('previewFlow', () => {
       }).toEqual({ stage, busy, endsAt, checked });
     },
   );
+
+  // Breaks: a demo plan leaking into the layout preview, or the reverse.
+  it.each<{ name: string; plan: SamplePlan | undefined }>([
+    { name: 'default', plan: undefined },
+    { name: 'demo plan', plan: DAILY_QUESTS },
+  ])('previewFlow plan: $name', ({ plan }) => {
+    const flow = previewFlow(MAKE_INDEX, 's1', NOW, 7, plan);
+
+    const large = largeStateOf(flow);
+    const expected = plan ?? PREVIEW_PLAN;
+    expect({
+      projectDir: flow.projectDir,
+      planDir: large.planDir,
+      title: large.progress?.title,
+    }).toEqual(expected);
+  });
+
+  // Breaks: a sample added without a beat.
+  it('demo beat names match PREVIEW_SAMPLES', () => {
+    expect(LARGE_BEAT_NAMES).toHaveLength(PREVIEW_SAMPLES.length);
+  });
 });

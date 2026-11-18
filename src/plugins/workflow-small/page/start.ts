@@ -5,9 +5,11 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowSmallManifest } from '../manifest';
 import { SMALL_PAGE_STAGES } from '../stages';
+import { registerDemoSteps } from './demo-steps';
 
 // Small's page half on the engine: its stages, its layouts and its letter. The
-// engine's `defaultChecklist` draws the agent's list.
+// engine's `defaultChecklist` draws the agent's list. Registers the
+// `workflow-small.run` demo step.
 export const workflowSmallPagePart: PagePart<typeof workflowSmallManifest> = {
   manifest: workflowSmallManifest,
   start(api) {
@@ -27,6 +29,9 @@ export const workflowSmallPagePart: PagePart<typeof workflowSmallManifest> = {
       }),
       runAction: () => Promise.reject(new Error('Small has no actions')),
       progressText: checklistCount,
+    });
+    registerDemoSteps(api.services, {
+      showSample: (flow) => workflow.showSample(flow),
     });
 
     return { commands: {} };

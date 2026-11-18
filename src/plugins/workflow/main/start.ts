@@ -1,4 +1,5 @@
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import { DEMO_PROFILE } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
   ChannelShape,
@@ -43,6 +44,7 @@ import {
   SET_WORKFLOW_CHECKLIST_TOOL,
   startChecklistTool,
 } from './checklist-tool';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { createFlowStore } from './flow-store';
 import { createHeadlessLines } from './headless-line';
@@ -77,7 +79,8 @@ type WorkflowApi = MainApi<
 // meters each session's active time and spend and appends a line to `runs.jsonl`
 // when a fold enters a stage that finishes its workflow, writes each open session's
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
-// actions. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
+// actions. A demo session (profile `demo`) opens no flow, so nothing of it reaches
+// `flows.json`; registers the `workflow.engine` demo step's main half. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
 // `stageFinishes` for whether a flow sits in a stage that finishes its run.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
@@ -276,6 +279,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       addDriveActions(api.drive, { reportStep, reportChecklist });
     }
     chat.addInstructions(SESSION_NOTE);
+    registerDemoSteps(services);
 
     // Contributes the tool again when the reportable stages change, so its
     // schema lists a stage a workflow added; with none left, no tool.
@@ -333,7 +337,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     // A start while chat runs hears no `sessionOpened` for the rows it already
     // holds, so each row chat holds under a registered harness's profile opens here
     // under its row's host id, as that event would have opened it. A row an
-    // event opened first is left.
+    // event opened first is left, and a demo row opens no flow.
     const openRowsAlreadyOpen = () => {
       const profileNames = new Set(
         registeredProfiles(harnesses.all()).map(({ name }) => name),
@@ -346,7 +350,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           continue;
         }
         const isHeld = store.hostIdOf(sessionId) !== null;
-        if (isHeld || !profileNames.has(info.profile)) {
+        const isDemo = info.profile === DEMO_PROFILE;
+        if (isHeld || isDemo || !profileNames.has(info.profile)) {
           continue;
         }
         openFlow(sessionId, hostSessionId, projectDir);
@@ -355,10 +360,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
 
     // Chat's open carries the host id and folder: a session chat adopts across
     // its own restart fires no `sessions.connected`. A row already held under
-    // that host id is left.
+    // that host id is left, and a demo session opens no flow.
     events.on(
       'chat.sessionOpened',
-      ({ sessionId, hostSessionId, projectDir }) => {
+      ({ sessionId, hostSessionId, projectDir, profile }) => {
+        if (profile === DEMO_PROFILE) {
+          return;
+        }
         void ready.then(() => {
           if (store.hostIdOf(sessionId) === hostSessionId) {
             return;

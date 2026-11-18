@@ -2,6 +2,7 @@
 // flows slot.
 
 import type { CommandKey } from '../../contracts/commands';
+import type { DemoMainStep } from '../../contracts/demo';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -128,6 +129,77 @@ export interface MainWorkflow {
   sameState?(a: unknown, b: unknown): boolean;
   // Review fix cycles for the run log. Left out: 0.
   fixCycles?(flow: SessionFlow): number;
+}
+
+// A demo sample's whole flow: each field `fields` leaves out takes a new flow's
+// value (`newFlow` in flow.ts, which imports this file).
+export function sampleFlow(
+  sessionId: string,
+  projectDir: string,
+  fields: Partial<Omit<SessionFlow, 'sessionId' | 'projectDir'>>,
+): SessionFlow {
+  return {
+    sessionId,
+    projectDir,
+    workflow: null,
+    movedUpFrom: null,
+    stage: IDLE_STAGE,
+    checklist: null,
+    state: null,
+    missedLevel: false,
+    turnRunning: false,
+    runningSubagents: [],
+    ...fields,
+  };
+}
+
+// A sample checklist of `texts`, its first `done` items done.
+export function sampleChecklist(
+  texts: readonly string[],
+  done: number,
+): ChecklistItem[] {
+  return texts.map((text, index) => ({ text, done: index < done }));
+}
+
+// The samples a demo stage shows in turn: `show` draws `flow` through
+// `showSample`, then disposes the sample before it, so the row never draws its
+// stored flow between beats; `dispose` disposes the last.
+export interface SampleSequence extends Disposable {
+  show(flow: SessionFlow): void;
+}
+
+export function createSampleSequence(
+  showSample: (flow: SessionFlow) => Disposable,
+): SampleSequence {
+  let last: Disposable | null = null;
+  return {
+    show(flow) {
+      const previous = last;
+      last = showSample(flow);
+      previous?.dispose();
+    },
+    dispose() {
+      last?.dispose();
+      last = null;
+    },
+  };
+}
+
+// A workflow step's main half: one demo session, `session`, opened with plain
+// text naming the step, which the fake answers with an echo turn. The demo run
+// closes it when the step is left, so the dispose does nothing.
+export function sampleSessionStep(id: string, title: string): DemoMainStep {
+  return {
+    id,
+    enter: async (context) => ({
+      sessions: {
+        session: await context.launchSession(
+          `A sample session for the ${title} step.`,
+        ),
+      },
+      dispose() {},
+    }),
+  };
 }
 
 // A flow is busy while a turn runs or a subagent at any depth runs (a skill
@@ -434,13 +506,18 @@ export interface WorkflowDrawOptions {
 }
 
 // `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the
-// plugin's layouts through its `api`, which owns the show's life.
+// plugin's layouts through its `api`, which owns the show's life. `showSample`
+// draws a demo sample on its session's row (once the row is there) over its
+// stored flow until the dispose, and activates the session; a sample runs no
+// action, as the preview runs none. The dispose draws the stored flow again,
+// unless a newer sample of the session shows.
 export interface WorkflowPageExports {
   addWorkflow(workflow: PageWorkflow): Disposable;
   createWorkflowDraw(
     api: PagePluginApi,
     options: WorkflowDrawOptions,
   ): WorkflowDraw;
+  showSample(flow: SessionFlow): Disposable;
 }
 
 export const workflowPageKey: DependencyKey<
