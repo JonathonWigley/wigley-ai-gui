@@ -245,7 +245,7 @@ Critical path: 01 → 02 → 03 → 04
 - [x] [Self-test runs a playtest command](03-selftest-playtest.md) — after 02
 
 ### Wave 4
-- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 - [ ] [Final verification](05-final-verification.md) — after 01, 02, 03; run by `wigley:make` after its test gate
 
 ## Run log
@@ -256,6 +256,7 @@ Review base: c4cbc082a0f39eaa57c3550b3f50f3513872e0e2
 - 01 · hard · 16a017f9b · diff read: both Produces present in playtest-command.ts; wave 1 tsc --noEmit passes · concerns: tab is a separator, CR is not; TS narrowing through a const boolean
 - 02 · deep · 74a7701c7 · diff read: playtestStarted, playtestStopped, createPlaytestWatch, PlaytestWatch present; wave 2 tsc --noEmit passes · concerns: commandOf copied from chat-sessions.ts (drift risk); tests rely on entries.on hearing puts after a late publish; table 6 agent-first row answers lists by index
 - 03 · hard · b753dc8e5 · diff read: FAKE_PLAYTEST_TEXT exported, emitToolTurn takes the run, self-test waits on picks; wave 3 tsc --noEmit passes · concerns: problems copies live-tools pickText text; no test pins the toolStarted event of the fake tool turns
+- 04 · standard · 19db3b20d · diff read; grep for plan-auto-open over design.md and SKILL.md prints nothing; check_manifests passed, no bump · concerns: none; hide_live_view description still correct since editor_stop closes only app-opened picks
 ### Contract changes
 ### Rulings
 - A missing or empty --project-path value keeps an earlier path (rule 4 "sets no path" read as no assignment) — no table row covers it — a stale path in one edge case · group 01 · group 01

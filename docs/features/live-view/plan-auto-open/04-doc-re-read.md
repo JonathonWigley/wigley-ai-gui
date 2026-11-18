@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · a doc-only task against landed code
 Wave: 4 · Depends on: 01 (its parser rules are re-read), 02 (AGENTS.md and the watch are re-read), 03 (the self-test claims are re-read)
@@ -44,4 +44,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 19db3b20d · proof: diff read; grep for plan-auto-open over design.md and SKILL.md prints nothing; check_manifests passed, no bump · concerns: none; hide_live_view description still correct since editor_stop closes only app-opened picks
