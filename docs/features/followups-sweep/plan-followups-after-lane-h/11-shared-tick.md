@@ -1,6 +1,6 @@
 # 11 — Shared tick and fake timers
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the shared tick and fakeTimers seam other tests consume and moves four timer lifecycles
 Wave: 5 · Depends on: 07, 08 (each lists `src/plugins/chat/page/entry-list.test.ts`), 10 (both list `src/shared/page/ui/split.test.ts`)
@@ -117,3 +117,4 @@ src/shared for ten test copies (follow-up: One shared tick and one shared fakeTi
 
 ## Proof
 
+Commit d17f69752 · proof: diff read: createPendingTick replaces the four pendingTick copies (grep pendingTick src empty); shared fakeTimers replaces eleven suite copies (grep 'function fakeTimers' src prints only the shared file); typecheck and lint pass · concerns: toasts.test moved to the shared fake beyond Files; its draw-throws row now asserts armed.size 0, which also passes on a set-then-cleared timer

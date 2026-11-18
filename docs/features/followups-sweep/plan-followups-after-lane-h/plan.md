@@ -147,11 +147,11 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [x] [Git.commitPaths removed](15-git-commit-paths.md) — after 01, 05
 
 ### Wave 4
-- [ ] [DrawnPart reports drewBundled](08-drawn-part-bundled.md) — after 07, 09, 10
-- [ ] [Self-test click step and step helpers](23-selftest-steps.md) — after 15
+- [x] [DrawnPart reports drewBundled](08-drawn-part-bundled.md) — after 07, 09, 10
+- [x] [Self-test click step and step helpers](23-selftest-steps.md) — after 15
 
 ### Wave 5
-- [ ] [Shared tick and fake timers](11-shared-tick.md) — after 07, 08, 10
+- [x] [Shared tick and fake timers](11-shared-tick.md) — after 07, 08, 10
 
 ### Wave 6
 - [ ] [Teardown rules after a stop](24-teardown-rules.md) — after 08, 11, 23
@@ -186,6 +186,9 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 05 · hard · f36d169c3 89a777915 · diff read: createSessionsPageModel and its Deps/View/Model interfaces present, start.ts closure-state grep empty, model has no DOM reads; typecheck and lint clean (oxfmt run as lead) · concerns: view callbacks and keysToFocusedPane reference model before its declaration (safe: the mount calls no callback synchronously); model echo test relies on the fake focus calling panesChanged before paneFocused
 - 15 · standard · 8213e6a96 · diff read: commitPaths gone from contract, adapter, tests, two fakes and AGENTS.md git/ entry; grep empty; typecheck and lint clean · concerns: none
 - 10 · hard · ee3469550 · diff read: UiState.on in contract, page store and uiStateOver fake; createSplitDivider subscribes and disposes; manual reloads gone from primer, docs shown, side-sections; typecheck and lint clean · concerns: forms round-view.ts:214 still calls split.reloadWidth() (left per the plan); notes/popup.test.ts's cast fake has no on; harness listeners shared only within one services object
+- 08 · standard · 85f3723d5 · diff read: DrawnPart.drewBundled replaces drewPick, set true only by the bundled-default fallback; chat isBundledView and the primer read it; typecheck and lint pass · concerns: entry-list.test's new row asserts a guessed slot value (chat-entry chat-assistant@default); the renamed table test keeps the subject_Case title form
+- 23 · deep · b1ce47c79 37a37f861 · diff read: SelfTestStep.click runs after write/remove and before keys; stepToSessionRow replaces forms' stepToRow and sessions' stepNextTo; chat steps by single presses and clicks an unfocused pane's hub head; compile fix 37a37f861 on the same rung; typecheck and lint pass · concerns: the cross-Bridge bind and the first click on an unfocused pane's hub head are checked only live (test gate and live session); chat and forms imports from sessions/contract are now value imports
+- 11 · hard · d17f69752 · diff read: createPendingTick replaces the four pendingTick copies (grep pendingTick src empty); shared fakeTimers replaces eleven suite copies (grep 'function fakeTimers' src prints only the shared file); typecheck and lint pass · concerns: toasts.test moved to the shared fake beyond Files; its draw-throws row now asserts armed.size 0, which also passes on a set-then-cleared timer
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
@@ -200,5 +203,8 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 01: start.test.ts edited outside Tests: startDocsPage passes fakeFuzzyMatcher and restorePending's saved place takes the new shape · group 01
 - 05: rows.on/selection.on and followRows subscribe after the view mounts (before: ahead of the mount); the view takes neither slot, so listener order is unchanged · group 05
 - 10: reloadWidth checks !isDisposed as well as !isDragging (the tree checked only dragging); reloadWidth stays on Split for theme-token widths and forms' caller · group 10
+- The forms.choose live step (L224) is struck: a self-test page bind to another process's command makes the page throw 'Keymap names unregistered commands' (renderer.ts:507), since selftest-config.ts:183 skips the check that drops such a bind; the fix needs a page runtime command in forms' page part, so the follow-up stays open with this finding · group 23
+- The folder-picker <A-S-i> step stays unconverted: stepToSessionRow covers session rows only · group 23
+- toasts.test.ts joins group 11: a merge brought back its fakeTimers copy · group 11
 ### Review rounds
 ### Test gate

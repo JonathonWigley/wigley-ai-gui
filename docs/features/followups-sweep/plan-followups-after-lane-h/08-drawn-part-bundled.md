@@ -1,6 +1,6 @@
 # 08 — DrawnPart reports drewBundled
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · replaces one field of `DrawnPart` with its inverse-kind twin, following the existing `drewPick` field and its table test; no other group consumes it
 Wave: 4 · Depends on: 07 (`entry-list.ts`), 09 (`draw-part.ts`), 10 (`primer-view.ts`)
@@ -83,3 +83,4 @@ the bundled check (follow-up: DrawnPart reports which layout object drew)".
 
 ## Proof
 
+Commit 85f3723d5 · proof: diff read: DrawnPart.drewBundled replaces drewPick, set true only by the bundled-default fallback; chat isBundledView and the primer read it; typecheck and lint pass · concerns: entry-list.test's new row asserts a guessed slot value (chat-entry chat-assistant@default); the renamed table test keeps the subject_Case title form

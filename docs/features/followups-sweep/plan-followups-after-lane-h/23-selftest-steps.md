@@ -1,6 +1,6 @@
 # 23 — Self-test click step and step helpers
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · rests on two low-confidence claims the worker checks in a filtered self-test run: a runtime main command bound by a script's page bind crosses page → main → page through the Bridge, and a click on an unfocused pane's hub head reaches the head on the first press
 Wave: 4 · Depends on: 15 (each lists `AGENTS.md`)
@@ -170,3 +170,5 @@ Commit:    one commit for the group, e.g. "Self-test click step, one row-step he
            presses; Docs page test seam for a session's host id change; forms.choose through runCommand not proved)"
 
 ## Proof
+
+Commit b1ce47c79 37a37f861 · proof: diff read: SelfTestStep.click runs after write/remove and before keys; stepToSessionRow replaces forms' stepToRow and sessions' stepNextTo; chat steps by single presses and clicks an unfocused pane's hub head; compile fix 37a37f861 on the same rung; typecheck and lint pass · concerns: the cross-Bridge bind and the first click on an unfocused pane's hub head are checked only live (test gate and live session); chat and forms imports from sessions/contract are now value imports
