@@ -3427,11 +3427,12 @@ describe('createClaudeCodeHarness on the session host', () => {
     host.output('p-1', 'out', asText(lifecycle('uuid-1', 'started')));
     await settle();
 
+    // The lifecycle line joins the turn's events entry, as every gathered event does.
     expect(
       entriesOf(timeline).map((entry) =>
         entry.kind === 'user' ? [entry.id, entry.text] : [entry.id],
       ),
-    ).toEqual([['user-1', 'run it']]);
+    ).toEqual([['user-1', 'run it'], ['turn-events-1']]);
     host.output('p-1', 'out', asText(successResult('done', ['uuid-1'])));
     await settle();
     const requests = record.writes

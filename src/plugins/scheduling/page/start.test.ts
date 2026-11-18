@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
+import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { asFake, installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
   countingEditors,
-  fakeDependency,
+  providerManifest,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
@@ -65,7 +66,8 @@ interface FakeBox {
 
 // The Schedules page on the harness, drawing its layout for real, with `state` published to `scheduling.state`.
 // `saveTask` answers with `save`, else `bbbb2222`; `calls` holds each invoke, `boxes` each box made in order,
-// `activated` each row sessions' `activate` got, and `sections` each section sessions' `addSection` got.
+// `activated` each row sessions' `activate` got, `sections` each section sessions' `addSection` got, and
+// `sessionsShows` one entry per run of sessions' `showMode`.
 function startSchedulesPage(
   state: SchedulingState | undefined,
   save: () => Promise<string> = async () => 'bbbb2222',
@@ -76,6 +78,7 @@ function startSchedulesPage(
   const boxes: FakeBox[] = [];
   const activated: string[] = [];
   const sections: SidebarSection[] = [];
+  const sessionsShows: string[] = [];
   const editor: EditorHost = {
     ...countingEditors().host,
     create(_parent, doc, events) {
@@ -106,22 +109,39 @@ function startSchedulesPage(
   const harness = startDrawingPagePart(schedulingPagePart, {
     firstModeTaken,
     state: store,
-    services: { editor },
-    dependencies: [
-      fakeDependency(
-        sessionsPageKey,
-        () =>
-          ({
-            activate(sessionId: string) {
-              activated.push(sessionId);
+    services: { editor, picker: fakeListPickerService() },
+    // Sessions as a part rather than a dependency fake: the page runs its `showMode`, which only a part declares.
+    parts: [
+      {
+        manifest: {
+          ...providerManifest(sessionsPageKey.id),
+          commands: {
+            showMode: {
+              label: 'Sessions mode',
+              group: 'sessions',
+              runsIn: 'page',
             },
-            addSection(section: SidebarSection) {
-              sections.push(section);
-              return { dispose: () => undefined };
+          },
+        },
+        start: () => ({
+          commands: {
+            showMode() {
+              sessionsShows.push('showMode');
             },
-            setActivity: () => undefined,
-          }) as unknown as SessionsPageExports,
-      ),
+          },
+          exports: () =>
+            ({
+              activate(sessionId: string) {
+                activated.push(sessionId);
+              },
+              addSection(section: SidebarSection) {
+                sections.push(section);
+                return { dispose: () => undefined };
+              },
+              setActivity: () => undefined,
+            }) as unknown as SessionsPageExports,
+        }),
+      },
     ],
     invoke: async (method, ...args) => {
       calls.push({ method, args });
@@ -138,7 +158,7 @@ function startSchedulesPage(
   const run = (
     command: Exclude<keyof typeof commands, 'selectTask' | 'openRunRow'>,
   ) => commands[command]({ arg: undefined });
-  return { harness, calls, boxes, activated, sections, run };
+  return { harness, calls, boxes, activated, sections, sessionsShows, run };
 }
 
 async function settle() {
@@ -307,6 +327,7 @@ describe('scheduling page part', () => {
     page.run('openRun');
 
     expect(page.activated).toEqual(['s1']);
+    expect(page.sessionsShows).toEqual(['showMode']);
   });
 
   it('the slot runRows reach the Scheduled runs section sessions gets', () => {

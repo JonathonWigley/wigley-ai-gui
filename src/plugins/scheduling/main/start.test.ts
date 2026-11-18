@@ -608,22 +608,16 @@ describe('schedulingMainPart', () => {
     part.host.connectAgain();
     await settle();
 
-    const holdAndPlanCalls = [
-      'holdConnects',
-      'listRuns',
-      'adopt',
-      'hold settled',
-      'setPending',
-    ];
-    expect(
-      part.calls.filter((call) => holdAndPlanCalls.includes(call)),
-    ).toEqual([
-      'holdConnects',
-      'listRuns',
-      'adopt',
-      'hold settled',
-      'setPending',
-    ]);
+    // The hold's release resolves before the plan, but `hold settled` is noted a microtask later, after the plan's
+    // synchronous `setPending`; so the hold and the plan are each ordered against the adopt.
+    const holdCalls = ['holdConnects', 'listRuns', 'adopt', 'hold settled'];
+    expect(part.calls.filter((call) => holdCalls.includes(call))).toEqual(
+      holdCalls,
+    );
+    const planCalls = ['holdConnects', 'listRuns', 'adopt', 'setPending'];
+    expect(part.calls.filter((call) => planCalls.includes(call))).toEqual(
+      planCalls,
+    );
   });
 
   it('run_Pushed_AdoptsRecordsReplaysForgetsAndReplans', async () => {
@@ -937,6 +931,37 @@ describe('schedulingMainPart', () => {
       part.calls.filter((call) => readAndPlanCalls.includes(call)),
     ).toEqual(['holdConnects', 'listRuns', 'setPending', 'setPending']);
     expect(part.prepares.at(-1)?.request.message.text).toBe('Triage C.');
+  });
+
+  it('plan_TaskEditJoinsAQueuedRead_ListRunsOnceMore', async () => {
+    const part = startPart();
+    await settle();
+    const releaseList = part.holdListRuns();
+    part.calls.length = 0;
+
+    // The first edit's read waits in `listRuns`; a reconnect queues a second read behind it, and the next edit
+    // arrives while that read is queued and not begun.
+    await part.harness.files.write(
+      TASK_PATH,
+      taskFileText({ tasks: [task({ prompt: 'Triage A.' })] }),
+    );
+    await settle();
+    part.host.connectAgain();
+    await settle();
+    await part.harness.files.write(
+      TASK_PATH,
+      taskFileText({ tasks: [task({ prompt: 'Triage B.' })] }),
+    );
+    await settle();
+    releaseList();
+    await settle();
+
+    // Joined, the edit costs no third read and no plan beyond the two reads' own.
+    const readAndPlanCalls = ['holdConnects', 'listRuns', 'setPending'];
+    expect(
+      part.calls.filter((call) => readAndPlanCalls.includes(call)),
+    ).toEqual([...readAndPlanCalls, ...readAndPlanCalls]);
+    expect(part.prepares.at(-1)?.request.message.text).toBe('Triage B.');
   });
 
   it('tools_ViewsReadTheStoresAtCallTime', async () => {

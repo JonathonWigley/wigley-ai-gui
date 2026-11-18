@@ -314,7 +314,7 @@ started this way reads its pending table and runs record at start. `LoginStart` 
   open run row (`SchedulingState.runRows`).
 - **The finished mark.** A run is finished at its row's first `chat.turnFinished`, at adoption by the rule in
   § Adoption, when its row closes, or, after chat has restored its rows, when its row is not open or its session
-  does not run. A run row that chat restores under a new row id stops counting as a run row: its history entry names
+  does not run; that restore check skips a row this start adopted a run on, which the adoption rule has judged. A run row that chat restores under a new row id stops counting as a run row: its history entry names
   the old id, so no section claims the new row and no mark or badge count stands for it. A finished run stays unviewed until `sessions.selection` names its row; a run that finishes while its row is
   selected is viewed at once. The mark is the history entry's `viewed` flag, so it survives an app restart. The page
   sets row activity

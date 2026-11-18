@@ -283,9 +283,11 @@ describe('planRuns', () => {
   );
 
   it('planRuns_TwoTasks_KeepsTaskOrderAndOneRunEach', () => {
+    // Edited today, so yesterday's 15:00 is outside its catch-up window and its run is today's 15:00.
     const late = dailyTask({
       id: 'aaaa0001',
       schedule: { kind: 'daily', time: '15:00' },
+      updatedAt: TODAY_10,
     });
     const paused = dailyTask({ id: 'aaaa0002', paused: true });
     const early = dailyTask({

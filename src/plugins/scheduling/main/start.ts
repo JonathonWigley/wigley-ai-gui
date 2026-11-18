@@ -159,6 +159,8 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     let lastWant: boolean | null = null;
     let loginStatus: LoginStartStatus | null = null;
     const handledRuns = new Set<string>();
+    // The rows this start adopted a run on: their outcome is judged at adoption, never by the restore sweep.
+    const adoptedRows = new Set<string>();
     const subscriptions: Disposable[] = [];
 
     const taskName = (taskId: string): string =>
@@ -272,9 +274,14 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       }
     };
 
-    // After chat's restore: a running entry whose row is gone, or whose session reads not running, is finished.
+    // After chat's restore: a running entry whose row is gone, or whose session reads not running, is finished. A row
+    // this start adopted is skipped: the first read is queued before the restore settles, so its unheld rows read not
+    // running here while their process may still run.
     const finishRestoredRuns = () => {
       for (const entry of history.entries()) {
+        if (entry.rowId !== null && adoptedRows.has(entry.rowId)) {
+          continue;
+        }
         const isRowOpen =
           entry.rowId !== null && rowsSlot.get(entry.rowId) !== undefined;
         const isSessionRunning =
@@ -502,6 +509,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         forget(run);
         return;
       }
+      adoptedRows.add(rowId);
       const hasEntry = history
         .entries()
         .some((entry) => isSameRun(entry, record));
@@ -692,16 +700,20 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     });
 
     // A re-plan that prepares a launch again reads the host's runs first, so an occurrence the host fired but the
-    // part has not heard is in history and is not queued again under a new spawn id. Before the first read, the read
-    // already queued plans after it. A re-plan joins a read still queued, and a read already going plans once more
-    // after it, however many re-plans arrived meanwhile.
+    // part has not heard is in history and is not queued again under a new spawn id. A re-plan joins a read still
+    // queued, the first read and the task file's load included, and a read already going plans once more after it,
+    // however many re-plans arrived meanwhile. With no read queued or going and none read yet (the dev app's live run,
+    // or a failed read waiting on its retry), the step only publishes, since `plan` sends nothing then.
     const replanAfterRuns = () => {
-      if (!hasReadRuns) {
-        serial(plan);
-      } else if (isReadGoing && !isReadQueued) {
+      if (isReadQueued) {
+        return;
+      }
+      if (isReadGoing) {
         isPlanAfterRead = true;
-      } else {
+      } else if (hasReadRuns) {
         queueReadRuns();
+      } else {
+        serial(plan);
       }
     };
     taskStore.onChanged(replanAfterRuns);
