@@ -56,11 +56,11 @@ export function demoSelfTestScript(deps: DemoSelfTestDeps): SelfTestScript {
     },
     {
       name: 'panel',
-      why: 'Alt+l reaches the Demo panel at the top of the right bar with the cursor on the held step; j and Enter go to the next step, and Alt+h gives the keys back.',
+      why: 'Alt+h reaches the Demo panel at the top of the left bar with the cursor on the held step; j and Enter go to the next step, whose Gallery mode has no side bar, and Alt+l gives the keys back to main.',
       steps: [
         {
-          // Presses past the panel only log `no pane right`, so three reach it from a Chat tab with its hub and one more pane.
-          keys: ['<A-l>', '<A-l>', '<A-l>'],
+          // Presses past the panel only log `no pane left`, so five reach it from a Chat tab's panes through the side bar.
+          keys: ['<A-h>', '<A-h>', '<A-h>', '<A-h>', '<A-h>'],
           expect: line('panel focused'),
           alsoExpect: [cursorOn(FIRST)],
         },
@@ -71,7 +71,7 @@ export function demoSelfTestScript(deps: DemoSelfTestDeps): SelfTestScript {
           alsoExpect: [firstBeatShown(SECOND)],
           screenshot: 'panel-cursor',
         },
-        { keys: ['<A-h>'], expect: '[page] focus back in main' },
+        { keys: ['<A-l>'], expect: '[page] focus back in main' },
       ],
     },
     {

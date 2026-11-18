@@ -85,8 +85,8 @@ export type PageApiServices = Omit<
 // `config` is the config main serves now, which the keymap, commands, scopes
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas` holds
-// every area; plugins get the title bar, panel, status bar, right bar and
-// overlay. `setLayout` replaces the shell's layout. `transparency` is the
+// every area; plugins get the title bar, panel, status bar, left bar, right
+// bar and overlay. `setLayout` replaces the shell's layout. `transparency` is the
 // page's one transparency override. `services` are the ones every plugin
 // shares; `uiState` gives each plugin its own scope of the ui state. `layouts`
 // shows each owner's layouts. `paneTargets` takes the resize and focus targets
@@ -142,7 +142,8 @@ export function liveKeysFor(
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it. Its areas are the title bar, panel, status bar, right bar and overlay:
+// it. Its areas are the title bar, panel, status bar, left bar, right bar and
+// overlay:
 // they leave out `main`, which only the mode registry fills, and the activity
 // bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
@@ -514,6 +515,7 @@ function pluginAreas(
     titleBar: tracked(areas.titleBar),
     panel: tracked(areas.panel),
     statusBar: tracked(areas.statusBar),
+    leftBar: tracked(areas.leftBar),
     rightBar: tracked(areas.rightBar),
     overlay: tracked(areas.overlay),
   };

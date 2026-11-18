@@ -88,17 +88,18 @@
 }
 
 /* The test shell layout: the title bar across the top, the status bar under
-   it, the side bar down the start side, main with the panel under it, the
-   right bar beside them, and the activity bar down the end side. The area
-   named `right` places the shell's right bar handle here too. */
+   it, the left bar and side bar down the start side, main with the panel
+   under it, the right bar beside them, and the activity bar down the end
+   side. The areas named `left` and `right` place the shell's left and right
+   bar handles here too. */
 .gallery-test-shell {
   display: grid;
   grid-template-areas:
-    'title title title title'
-    'status status status status'
-    'side main right activity'
-    'side panel right activity';
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+    'title title title title title'
+    'status status status status status'
+    'left side main right activity'
+    'left side panel right activity';
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   grid-template-rows: var(--wg-toolbar-height) auto minmax(0, 1fr) auto;
   height: 100vh;
   overflow-wrap: anywhere;
@@ -184,6 +185,14 @@
   border-right: 1px solid var(--wg-border-default);
 }
 
+.gallery-test-left-bar {
+  grid-area: left;
+  width: calc(var(--shell-left-bar-width) * 1px);
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--wg-border-default);
+}
+
 .gallery-test-right-bar {
   grid-area: right;
   width: calc(var(--shell-right-bar-width) * 1px);
@@ -196,7 +205,17 @@
    own column collapses. */
 .gallery-test-side-bar[data-side-bar='over'] {
   box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
-  grid-column: 2;
+  grid-column: 3;
+  grid-row: 3 / 5;
+  justify-self: start;
+  z-index: 1;
+}
+
+/* Over the content, the left bar lies on the start of the main and panel
+   cell while its own column collapses. */
+.gallery-test-left-bar[data-left-bar='over'] {
+  box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
+  grid-column: 3;
   grid-row: 3 / 5;
   justify-self: start;
   z-index: 1;
@@ -206,7 +225,7 @@
    while its own column collapses. */
 .gallery-test-right-bar[data-right-bar='over'] {
   box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 3 / 5;
   justify-self: end;
   z-index: 1;

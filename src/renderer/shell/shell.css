@@ -1,19 +1,19 @@
-/* Layout: the title bar across the top, the activity bar and side bar down
-   the left, main with the panel under it, the right bar down the right beside
-   both, the status bar across the bottom. Areas are placed by name so a
-   hidden area leaves its track empty instead of shifting the others: the
-   right bar's column is empty while no plugin contributes to it, and while
-   the right bar lies over main in a window too narrow for both. The main
-   column never grows past the window, so content wraps to fit it; long
-   unbroken words break anywhere. */
+/* Layout: the title bar across the top, the activity bar, left bar and side
+   bar down the left, main with the panel under it, the right bar down the
+   right beside both, the status bar across the bottom. Areas are placed by
+   name so a hidden area leaves its track empty instead of shifting the
+   others: the left and right bars' columns are empty while no plugin
+   contributes to them, and while either bar lies over main in a window too
+   narrow for it. The main column never grows past the window, so content
+   wraps to fit it; long unbroken words break anywhere. */
 .shell {
   display: grid;
   grid-template-areas:
-    'title title title title'
-    'activity side main right'
-    'activity side panel right'
-    'status status status status';
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+    'title title title title title'
+    'activity left side main right'
+    'activity left side panel right'
+    'status status status status status';
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   grid-template-rows: var(--wg-toolbar-height) minmax(0, 1fr) auto auto;
   height: 100vh;
   overflow-wrap: anywhere;
@@ -134,6 +134,18 @@
   width: calc(var(--shell-side-bar-width) * 1px);
 }
 
+/* Its hairline is on its end edge, toward the side bar and the content; its
+   width is the user's, drawn no wider than leaves main its least width while
+   beside. */
+.shell-left-bar {
+  border-right: 1px solid var(--wg-material-chrome-edge);
+  grid-area: left;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-1);
+  width: calc(var(--shell-left-bar-width) * 1px);
+}
+
 /* Its hairline is on its start edge, toward the content; its width is the
    user's, drawn no wider than leaves main its least width while beside. */
 .shell-right-bar {
@@ -148,7 +160,7 @@
 /* Each bar's resize handle lies centred on its edge toward the content in
    the bar's grid area, taking no track space: its negative margins cancel its
    width. Its 1px line covers the bar's hairline. */
-:is(.shell-side-bar-handle, .shell-right-bar-handle) {
+:is(.shell-side-bar-handle, .shell-left-bar-handle, .shell-right-bar-handle) {
   cursor: col-resize;
   margin-inline: calc(var(--wg-space-1) / -2);
   position: relative;
@@ -161,17 +173,27 @@
   justify-self: end;
 }
 
+.shell-left-bar-handle {
+  grid-area: left;
+  justify-self: end;
+}
+
 .shell-right-bar-handle {
   grid-area: right;
   justify-self: start;
 }
 
-/* No key resizes the right bar, so its handle shows no resize prompt. */
-.shell-right-bar-handle > .ui-split-prompt {
+/* No key resizes the left or right bar, so their handles show no resize
+   prompt. */
+:is(.shell-left-bar-handle, .shell-right-bar-handle) > .ui-split-prompt {
   display: none;
 }
 
-:is(.shell-side-bar-handle, .shell-right-bar-handle)::after {
+:is(
+  .shell-side-bar-handle,
+  .shell-left-bar-handle,
+  .shell-right-bar-handle
+)::after {
   background: var(--wg-border-default);
   bottom: 0;
   content: '';
@@ -182,8 +204,10 @@
   width: 1px;
 }
 
-:is(.shell-side-bar-handle, .shell-right-bar-handle):hover::after,
-:is(.shell-side-bar-handle, .shell-right-bar-handle).is-active::after {
+:is(.shell-side-bar-handle, .shell-left-bar-handle, .shell-right-bar-handle):is(
+    :hover,
+    .is-active
+  )::after {
   background: var(--wg-focus-border);
 }
 
@@ -191,7 +215,16 @@
    own column collapses; it keeps its glass and hairline, and casts no
    shadow. */
 .shell-side-bar[data-side-bar='over'] {
-  grid-column: 3;
+  grid-column: 4;
+  grid-row: 2 / 4;
+  justify-self: start;
+  z-index: 1;
+}
+
+/* Over the content, the left bar lies on the start of the main and panel
+   cell while its own column collapses, as the side bar does. */
+.shell-left-bar[data-left-bar='over'] {
+  grid-column: 4;
   grid-row: 2 / 4;
   justify-self: start;
   z-index: 1;
@@ -200,7 +233,7 @@
 /* Over the content, the right bar lies on the end of the main and panel cell
    while its own column collapses, as the side bar does. */
 .shell-right-bar[data-right-bar='over'] {
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 2 / 4;
   justify-self: end;
   z-index: 1;

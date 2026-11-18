@@ -419,12 +419,18 @@ export interface PluginEvents<
 export type AreaName =
   | 'titleBar'
   | 'activityBar'
+  | 'leftBar'
   | 'sideBar'
   | 'main'
   | 'rightBar'
   | 'panel'
   | 'statusBar'
   | 'overlay';
+
+// The two bars that belong to no mode and hide while empty: the left bar
+// between the activity bar and the side bar, and the right bar past `main`'s
+// end.
+export type BarName = 'leftBar' | 'rightBar';
 
 // Where a contribution sits in its area: contributions sort by `align`
 // (`start`, then `center`, then `end`; default `start`), then by `order`
@@ -443,45 +449,51 @@ export interface Area {
   contribute(element: HTMLElement, options?: ContributeOptions): Disposable;
 }
 
-// A right-bar contribution's placement, and its turn under the core's focus
-// keys. `focus` makes the contribution a stop for them, in the right bar's
-// drawn order: the core calls it when Alt+l leaves main's right edge and this
-// is the first stop, or Alt+j/Alt+k reach it from the stop before or after.
+// A left-bar or right-bar contribution's placement, and its turn under the
+// core's focus keys. `focus` makes the contribution a stop for them, in its
+// bar's drawn order: the core calls it when the focus keys enter the bar and
+// this is the bar's first stop (the right bar by Alt+l past main's right
+// edge; the left bar by Alt+h past the side bar's left edge, or main's while
+// no side bar shows), or Alt+j/Alt+k reach it from the stop before or after.
 // It sets the contribution's own key scope, draws its cursor and moves the DOM
 // focus into the contribution's element. The turn ends when the DOM focus
-// leaves the right bar (a click into main, on a focusable spot or not, a mode
-// change), Alt+h moves back to main, a base scope change the core did not make
-// runs while `keepsTurn` is absent or returns false, or the contribution is
-// disposed; the core calls `left` each time, then blurs the focused element if
-// the contribution's element still holds it. The core calls the shown mode's
-// `focusMain` on Alt+h, when the DOM focus left for no element, when it landed
-// on an element whose view set no base scope of its own, and on a disposal
-// holding the keys. While a scope is pushed (a dialog, a picker, help) the DOM
-// focus moving into its overlay leaves the turn running, and a disposal ends
-// it but holds `focusMain` until no scope is pushed. `keepsTurn` lets a
-// contribution keep its turn through base scope changes it makes itself, such
-// as an agent pane inside it taking the keys.
-export interface RightBarOptions extends ContributeOptions {
+// leaves the bar (a click into main, on a focusable spot or not, a mode
+// change), the bar's exit key moves out of it (Alt+h from the right bar to
+// main; Alt+l from the left bar to the side bar, or to main while no side bar
+// shows), a base scope change the core did not make runs while `keepsTurn` is
+// absent or returns false, or the contribution is disposed; the core calls
+// `left` each time, then blurs the focused element if the contribution's
+// element still holds it. The core calls the shown mode's `focusMain` on an
+// exit key that lands in main, when the DOM focus left for no element, when
+// it landed on an element whose view set no base scope of its own, and on a
+// disposal holding the keys. While a scope is pushed (a dialog, a picker,
+// help) the DOM focus moving into its overlay leaves the turn running, and a
+// disposal ends it but holds `focusMain` until no scope is pushed. `keepsTurn`
+// lets a contribution keep its turn through base scope changes it makes
+// itself, such as an agent pane inside it taking the keys.
+export interface BarOptions extends ContributeOptions {
   focus?(): void;
   left?(): void;
   keepsTurn?(): boolean;
 }
 
-// The right bar beside `main`: an `Area` whose contributions take
-// `RightBarOptions`.
-export interface RightBarArea {
-  contribute(element: HTMLElement, options?: RightBarOptions): Disposable;
+// The left bar or the right bar: an `Area` whose contributions take
+// `BarOptions`.
+export interface BarArea {
+  contribute(element: HTMLElement, options?: BarOptions): Disposable;
 }
 
 // The areas a plugin contributes to: the title bar, the panel, the status
-// bar, the right bar beside `main` (a `RightBarArea`, whose contributions may
-// be stops for the core's focus keys) and the overlay. The core draws the
-// activity bar and the side bar from the modes, and `main` belongs to the
-// modes, filled through `modes.add`.
+// bar, the left bar between the activity bar and the side bar and the right
+// bar past `main`'s end (each a `BarArea`, whose contributions may be stops
+// for the core's focus keys), and the overlay. The core draws the activity
+// bar and the side bar from the modes, and `main` belongs to the modes,
+// filled through `modes.add`.
 export type PluginAreas = Record<
   'titleBar' | 'panel' | 'statusBar' | 'overlay',
   Area
-> & { rightBar: RightBarArea };
+> &
+  Record<BarName, BarArea>;
 
 // What the title bar shows for a mode at its centre: `title`, with `detail`
 // after it in the secondary text colour when it is not null.
@@ -516,8 +528,8 @@ export interface ModeContext {
 // side bar's key scope, focuses the side bar's list and draws its cursor, and
 // the core then holds the side bar as the area with the keys. A mode without
 // it is no stop on the left. `focusMain` runs when Alt+l leaves the side bar,
-// Alt+h leaves the right bar, or the right-bar stop holding the keys is
-// disposed: it gives main's last focused pane back its key scope, its resize
+// Alt+h leaves the right bar, Alt+l leaves the left bar while no side bar
+// shows, or the bar stop holding the keys is disposed: it gives main's last focused pane back its key scope, its resize
 // and focus targets and the DOM focus, as `shown` does for that pane, so no
 // box in the area left behind keeps the caret.
 // `stepTab` runs when the next-tab or previous-tab key fires while this mode

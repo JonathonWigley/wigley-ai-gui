@@ -502,11 +502,12 @@ describe('createPageApi', () => {
     expect(heard).toEqual([4]);
   });
 
-  it('hands the plugin the title bar, panel, status bar, right bar and overlay areas', () => {
+  it('hands the plugin the title bar, panel, status bar, left bar, right bar and overlay areas', () => {
     const area = (): Area => ({ contribute: () => ({ dispose: () => {} }) });
     const areas: PageApiDeps['areas'] = {
       titleBar: area(),
       activityBar: area(),
+      leftBar: area(),
       sideBar: area(),
       main: area(),
       rightBar: area(),
@@ -518,6 +519,7 @@ describe('createPageApi', () => {
     const api = createPageApi(manifest, deps({ areas }));
 
     expect(Object.keys(api.areas).sort()).toEqual([
+      'leftBar',
       'overlay',
       'panel',
       'rightBar',
@@ -670,7 +672,7 @@ type RecordedRow = {
 };
 
 function areaRow(
-  name: 'titleBar' | 'panel' | 'statusBar' | 'rightBar' | 'overlay',
+  name: 'titleBar' | 'panel' | 'statusBar' | 'leftBar' | 'rightBar' | 'overlay',
 ): RecordedRow {
   return {
     member: `areas.${name}.contribute`,
@@ -687,6 +689,7 @@ const RECORDED_ROWS: RecordedRow[] = [
   areaRow('titleBar'),
   areaRow('panel'),
   areaRow('statusBar'),
+  areaRow('leftBar'),
   areaRow('rightBar'),
   areaRow('overlay'),
   {

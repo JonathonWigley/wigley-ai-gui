@@ -73,7 +73,7 @@ import {
 import { createPageRestores } from './page-restores';
 import {
   createPaneTargets,
-  listenToRightBarFocus,
+  listenToBarFocus,
   listenToScopes,
 } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
@@ -311,17 +311,17 @@ async function start() {
     {
       focusSideBar: () => modes.focusSideBar(),
       focusMain: () => modes.focusMain(),
-      rightBarStops: () => shell.rightBarStops(),
+      barStops: (bar) => shell.barStops(bar),
     },
     queueMicrotask,
   );
   listenToScopes(scopeStack, paneTargets);
-  shell.onRightBarStopRemoved((stop) => paneTargets.stopRemoved(stop));
+  shell.onBarStopRemoved((stop) => paneTargets.stopRemoved(stop));
   // A click on no focusable spot sends the focus to the body with no
-  // `focusin`, so a `focusout` from the right bar tells that drop.
-  listenToRightBarFocus(
+  // `focusin`, so a `focusout` from a bar tells that drop.
+  listenToBarFocus(
     document,
-    (target) => target instanceof Node && shell.rightBarHolds(target),
+    (target) => (target instanceof Node ? shell.barHolding(target) : null),
     queueMicrotask,
     paneTargets,
   );
@@ -537,8 +537,8 @@ async function start() {
     },
     {
       live,
-      // The side bar's and right bar's open widths are the theme's
-      // `sidebar-width` and `rightbar-width` tokens.
+      // The side, left and right bars' open widths are the theme's
+      // `sidebar-width`, `leftbar-width` and `rightbar-width` tokens.
       applier: {
         apply(theme, applied) {
           themeApplier.apply(theme, applied);

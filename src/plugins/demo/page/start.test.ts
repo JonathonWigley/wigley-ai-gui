@@ -5,7 +5,7 @@ import {
 } from '../../../contracts/core-state';
 import type { DemoStep } from '../../../contracts/demo';
 import type { EditorHost } from '../../../contracts/editor';
-import type { RightBarOptions } from '../../../contracts/plugin';
+import type { BarOptions } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
 import {
@@ -67,7 +67,7 @@ function pluginStatus(id: string): PluginStatus {
 
 interface Contribution {
   area: 'panel' | 'caption';
-  options: RightBarOptions | undefined;
+  options: BarOptions | undefined;
   isLive: boolean;
 }
 
@@ -79,7 +79,7 @@ function settled(): Promise<void> {
 // The demo page part over fake `sessions` and `scoped-agents` exports and a fake channel, with the steps `p.one`
 // (beats one-a, one-b) and `p.two` (beat two-a) registered beside its own real-session step. `events` holds, in
 // order: each channel call but `describeStep` as `invoke <method>[ <step id>]`, `addSection <id>`,
-// `showOnly <id>` and the dispose of each, each step's enter and dispose, and each right-bar (`panel`) and status-bar
+// `showOnly <id>` and the dispose of each, each step's enter and dispose, and each left-bar (`panel`) and status-bar
 // (`caption`) contribution and its dispose. `reports` holds each `report` invoke's argument. `start` and `stop` answer
 // main's methods of those names.
 function startDemo({
@@ -136,10 +136,10 @@ function startDemo({
       area: Contribution['area'],
       contribute: (
         element: HTMLElement,
-        options?: RightBarOptions,
+        options?: BarOptions,
       ) => { dispose(): void },
     ) =>
-    (element: HTMLElement, options?: RightBarOptions) => {
+    (element: HTMLElement, options?: BarOptions) => {
       const live = contribute(element, options);
       const contribution: Contribution = { area, options, isLive: true };
       contributions.push(contribution);
@@ -161,8 +161,8 @@ function startDemo({
         ...api,
         areas: {
           ...api.areas,
-          rightBar: {
-            contribute: record('panel', api.areas.rightBar.contribute),
+          leftBar: {
+            contribute: record('panel', api.areas.leftBar.contribute),
           },
           statusBar: {
             contribute: record('caption', api.areas.statusBar.contribute),

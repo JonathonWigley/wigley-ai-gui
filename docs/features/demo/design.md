@@ -16,8 +16,10 @@ The `demo` plugin walks through every user-facing feature of the app, one **step
 for showing the app to a team and for trying one feature without building a real case from
 scratch. It runs inside the everyday app, over whatever mode is shown:
 
-- **The Demo panel** sits at the top of the right bar, in every mode: the step list, grouped by
-  section, above the current step's agent chat (the step agent below).
+- **The Demo panel** sits at the top of the left bar, between the activity bar and the shown
+  mode's side bar, in every mode: the step list, grouped by section, above the current step's
+  agent chat (the step agent below). The left bar belongs to no mode, so the panel stays put as
+  the steps change modes.
 - **The caption** runs along the bottom of the window in the status bar: one high-level line per
   step, naming the feature on screen. It points at nothing; the feature fills main.
 - **The keys** are the leader `d` group, bound in every scope:
@@ -155,7 +157,7 @@ demo running, with the current step still set up.
 ## Rejected
 
 - **A separate demo window or a mode of its own**: the user chose the everyday app, with the
-  panel in the right bar on screen in every mode.
+  panel in the left bar on screen in every mode.
 - **A highlight ring or per-element callouts**: the caption stays high level; what it points at
   is obvious on screen.
 - **Real agents for every step**: steps use the scripted harness, and one optional last step

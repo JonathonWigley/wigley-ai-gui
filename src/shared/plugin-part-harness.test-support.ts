@@ -1515,6 +1515,7 @@ function fakePageApi(
     titleBar: area,
     panel: area,
     statusBar: area,
+    leftBar: area,
     rightBar: area,
     overlay: area,
   };

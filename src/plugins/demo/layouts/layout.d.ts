@@ -1,16 +1,17 @@
 // The demo layout contract: what a layout in `layouts/demo/<name>/layout.js` draws the Demo panel's step list and the
-// caption with. While the demo runs, the app draws one `steps` into the Demo panel at the top of the right bar and one
+// caption with. While the demo runs, the app draws one `steps` into the Demo panel at the top of the left bar and one
 // `caption` into the status bar's centre. The app sets `data-layout-owner="demo"` and `data-layout="<name>"` on the
 // element each part returns, `<name>` being the layout that drew it, so `[data-layout-owner="demo"][data-layout="<name>"]
 // …` in a layout's CSS selects only its own parts.
 //
 // The app keeps:
-// - the right-bar slot, contributed while the panel is shown (`Space d d`), and the status-bar slot, contributed while
+// - the left-bar slot, contributed while the panel is shown (`Space d d`), and the status-bar slot, contributed while
 //   the demo runs;
 // - the step agent's pane, below the step list in the panel;
-// - the keys and the focus: Alt+l past main's right edge gives the panel the keys, `j`/`k` walk a cursor over the
-//   steps, Enter goes to the cursor's step and `i` moves the keys into the step agent's pane; the layout adds
-//   `is-cursor` to the row whose `isCursor` is true, and the app scrolls the first `.is-cursor` into view;
+// - the keys and the focus: Alt+h past the side bar's left edge (main's while no side bar shows) gives the panel the
+//   keys, `j`/`k` walk a cursor over the steps, Enter goes to the cursor's step and `i` moves the keys into the step
+//   agent's pane; the layout adds `is-cursor` to the row whose `isCursor` is true, and the app scrolls the first
+//   `.is-cursor` into view;
 // - the cursor, the current step and beat, and autoplay;
 // - every redraw: on each move, each step registered or removed, each cursor move, each settings change and each
 //   layouts set.

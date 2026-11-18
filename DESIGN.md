@@ -56,6 +56,8 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 │ │    │              │ │        │ composer, picker    │   │ │ │
 │ │    │              │ └────────┴─────────────────────┴───┘ │ │
 │ └────┴──────────────┴──────────────────────────────────────┘ │
+│ L1 left bar (glass, dense) sits between the activity bar and │
+│   the side bar, hidden while empty (the Demo panel)          │
 │ L1 right bar (glass, dense) sits beside the sheet, hidden    │
 │   while empty (usage details, the unity pool panel)          │
 │ L1 status bar (glass; only while a plugin contributes to it) │
@@ -63,12 +65,12 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
 
-| Layer       | What lives here                                                                          | Material                                                                                              |
-| ----------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| L0 backdrop | The window itself                                                                        | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header       | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
-| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                               | The `material-floating` class                                                                         |
+| Layer       | What lives here                                                                              | Material                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| L0 backdrop | The window itself                                                                            | `--wg-window-background` with `--wg-window-ambient`                                                   |
+| L1 chrome   | Title bar, activity bar, left bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the left, side and right bars)              |
+| L2 content  | the session popup (forms, primer), chat transcript, docs, editors, the forms rail, diffs     | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                                   | The `material-floating` class                                                                         |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
@@ -174,7 +176,7 @@ means something.
 - **Spacing** is the `space-*` scale only (2, 4, 6, 8, 12, 16, 24, 32 in Mocha).
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
-  the side bar's opening width `sidebar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
+  the side bar's opening width `sidebar-width`, the left bar's `leftbar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
   `icon-size`, the docs page's right column `docs.aside-width`, the system stats panel's number columns `system-stats.column-width`, the body a session hub section keeps while a `shrinksLast` section takes the room `chat.side-section-floor`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
@@ -380,11 +382,16 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   plugins' row parts ordered below 2 (the profile, then the workflow chip with its `Working` and `Headless` tags beside it, the chip's stage tag ellipsizing in the line's room), and a third, `space-0_5` under it, always holding the end group, the parts ordered 2 and later: the context bar filling the free room, then the run time and the cache mark in slots of fixed least width, so the bars line up from row to row. Every card keeps these lines whatever its parts' widths; a line with no parts takes no height. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
+- **Left bar:** L1 dense glass between the activity bar and the side bar in every mode, belonging to no mode,
+  opening at `leftbar-width` and then the user's width (by drag on its end edge; it carries no resize keys); hidden
+  while no plugin contributes to it. Its hairline is on its end edge. With too little room for its least width and the
+  sheet's, once the side bar is at its least width and the right bar has taken its own, it lies over the sheet's start
+  at its least width. Rows and hover follow the side bar.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
   user's width (by drag; it carries no resize keys); hidden while no plugin contributes to it. In a window too narrow
-  for both bars, the side bar narrows to its least width first, then the right bar to its own; with too little room left
-  for its least width and the sheet's, it lies over the sheet's end at its least width. Rows and hover follow the side
-  bar.
+  for every bar, the side bar narrows to its least width first, then the left bar, then the right bar to its own; with
+  too little room left for its least width and the sheet's, it lies over the sheet's end at its least width. Rows and
+  hover follow the side bar.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
 - **Status bar:** L1, `statusbar-height`, `text-12`, shown only while a plugin contributes to it;

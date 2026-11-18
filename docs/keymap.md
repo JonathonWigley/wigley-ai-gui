@@ -94,15 +94,17 @@ hjkl is the direction in every layer; the modifier picks the verb.
   popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
   and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
   Practice's interviewer pane under its editor and console, reached with Alt+j from the console and left with Alt+k, from the chat box after a first Alt+k to its transcript), then, at main's edge, to the shown mode's side bar on the left (the
-  Sessions list, the docs tree, the Settings sections, the Schedules list from its details or editor) and the right bar on the right (each part of
-  it that has rows, Alt+j/k between them). Backlog has no side bar;
+  Sessions list, the docs tree, the Settings sections, the Schedules list from its details or editor), past it to the left bar
+  (between the activity bar and the side bar; from main itself while no side bar shows), and the right bar on the right
+  (in each bar, each part of it that has rows, Alt+j/k between them). Backlog has no side bar;
   Alt+h/l move between its table and review pane, Alt+j from the table or review pane to the chunk strip and Alt+k
   back to the table, and Alt+l from the review pane or the strip into the assistant pane while it shows (its outer
   pane). From the side bar Alt+l, and from the right bar Alt+h, return to main's last
-  pane. A hidden side bar or right bar is no stop: focus stops at the outer edge, and stays put while any scope is
+  pane; from the left bar Alt+l goes to the side bar, or to main's last pane while no side bar shows. A hidden side
+  bar, left bar or right bar is no stop: focus stops at the outer edge, and stays put while any scope is
   pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the core's
   `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every scope; a view takes part
-  through its focus target, a mode's side bar through the mode, and a right bar part through its contribution (AGENTS.md
+  through its focus target, a mode's side bar through the mode, and a left or right bar part through its contribution (AGENTS.md
   § Architecture), never a bind of its own. Each move takes the keyboard with it: the box or list of the pane left
   behind keeps no focus.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
@@ -123,7 +125,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   gallery and the key help; the Backlog table moves a row. The doc's right column also opens its cursor row on `Enter`
   or `l` and returns to the doc on `Esc`. The right bar's system stats panel (scope `system-stats.panel`) moves its
   process rows with `j`/`k` and `gg`/`G`, cycles its sort column on `s`, opens a group on `Enter` or `l` and closes it
-  on `h`. The Demo panel (scope `demo.panel`, first in the right bar) moves its step cursor with `j`/`k`, goes to the
+  on `h`. The Demo panel (scope `demo.panel`, first in the left bar) moves its step cursor with `j`/`k`, goes to the
   cursor's step on `Enter`, and on `i` moves the keys into the step agent's pane below; `Esc` in its ask box gives them back.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider

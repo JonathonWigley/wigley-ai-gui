@@ -430,7 +430,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  demo harness registered while it runs, the scratch folder, demo sessions through chat's ephemeral
                  `launch`, the main halves of steps from `services.demoSteps`, off-by-default plugins through the
                  plugin switch's `runDisabledForNow`, one scoped-agents step agent per step, the real-session step, its
-                 self-test script: the keys, a walk through every step before the Live section, and the coverage check), page/ (the Demo panel in the right bar: the step list over
+                 self-test script: the keys, a walk through every step before the Live section, and the coverage check), page/ (the Demo panel in the left bar: the step list over
                  the step agent's pane; the caption in the status bar; the Demo side-bar section through sessions'
                  `addSection` and `showOnly`; autoplay; the `Space d` commands; `coverage.ts`: `missingCoverage`, the built-in plugins with neither a step nor a `demoSkip`, reported to main's script), layouts/ (the demo Layout contract and
                  the built-in `default` layout); `docs/features/demo/design.md`
@@ -697,18 +697,20 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   a slot, and an event is the moment: a note filed, a doc saved, a turn started or finished, a message sent, a help
   overlay opened. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
-- **The shell** is a registry of areas — title bar, activity bar, side bar, main, right bar, panel, status bar, overlay — laid
+- **The shell** is a registry of areas — title bar, activity bar, left bar, side bar, main, right bar, panel, status bar, overlay — laid
   out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
   API (`shell.setLayout`); every contribution it makes returns a `Disposable`, and so does replacing the layout. The
   areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
-  editing the default layout or adding a plugin; track sizes are theme tokens, except the side and right bars' widths, which
+  editing the default layout or adding a plugin; track sizes are theme tokens, except the side, left and right bars' widths, which
   open at their tokens and then are the user's, resized through the split core and kept in `uiState`
-  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, stays hidden
-  while empty, and takes contributions through `api.areas.rightBar`; a contribution with rows to act on passes
-  `focus` with it, which sets its own key scope and cursor, and `left`, which the core calls when its turn ends, and becomes a stop for the core's focus keys. In a window too narrow for both bars beside `main`,
-  the side bar narrows to its least width first; the right bar then narrows to its own, and lies over `main`'s end when
-  the room left with the side bar at its least width is less than its least width and `main`'s. Only the side bar
-  resizes by keys; the right bar by drag alone.
+  (`shell.side-bar-width`, `shell.left-bar-width`, `shell.right-bar-width`). The left bar (between the activity bar and
+  the side bar) and the right bar (beside `main`'s end) belong to no mode: each sits in place across every mode, stays
+  hidden while empty, and takes contributions through `api.areas.leftBar` or `api.areas.rightBar` (a `BarArea`); a
+  contribution with rows to act on passes `focus` with it, which sets its own key scope and cursor, and `left`, which
+  the core calls when its turn ends, and becomes a stop for the core's focus keys (`BarOptions`). In a window too
+  narrow for every bar beside `main`, the side bar narrows to its least width first, then the left bar, then the right
+  bar; the left or right bar lies over `main`'s start or end when the room left for it is less than its least width
+  and `main`'s. Only the side bar resizes by keys; the left and right bars by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
@@ -835,14 +837,16 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   `move(direction)` moves focus to the view's own pane that way and returns true, or returns false at the view's edge;
   the core then moves to the outer pane that way, then, at main's edge, to the **areas**: left to the shown mode's
   side bar through the mode's `focusSideBar`, right to the right bar's first contribution that took `focus`, Alt+j/k
-  between such contributions, and back to main from either through the mode's `focusMain`. The core keeps which
+  between such contributions in one bar, and back to main from either through the mode's `focusMain`. Left of the
+  side bar, or of main while no side bar shows, Alt+h reaches the left bar's first stop, and Alt+l leaves it for the
+  side bar while one shows, else for main. The core keeps which
   area holds the keys and resets it to main on every base scope change it did not make, so a click into main ends
-  an area's turn; the right bar's turn also ends when the DOM focus moves out of it, to an element or to none (a click
+  an area's turn; a left-bar or right-bar stop's turn also ends when the DOM focus moves out of its bar, to an element or to none (a click
   on no focusable spot in main), and the core then calls the contribution's `left` and blurs whatever the
   contribution still holds focused; focus gone to no element, or to an element whose view sets no base scope of its own
   as the focus move settles, also runs the mode's `focusMain`. Under a pushed scope
   the focus moving into its overlay leaves the turn running, and a disposed stop holding the keys gives main its keys
-  back only once no scope is pushed. A narrow mode's side bar opened over main holds the keys as the side area. A right-bar stop whose `keepsTurn()` returns true (`RightBarOptions` in `src/contracts/plugin.ts`, `RightBarStop` in `src/renderer/pane-targets.ts`) keeps its turn through a base scope change it makes itself, as the Demo panel does while its step agent's pane holds the keys. A hidden side bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
+  back only once no scope is pushed. A narrow mode's side bar opened over main holds the keys as the side area. A bar stop whose `keepsTurn()` returns true (`BarOptions` in `src/contracts/plugin.ts`, `BarStop` in `src/renderer/pane-targets.ts`) keeps its turn through a base scope change it makes itself, as the Demo panel does while its step agent's pane holds the keys. A hidden side bar, left bar or right bar is no stop. Every move takes the DOM focus with it, so no box in
   the pane left behind keeps the caret. The core does nothing at the outer edge but log `no pane <direction>`.
   While a scope is pushed (a dialog, a confirm, a picker, help) the core asks neither and logs
   `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses

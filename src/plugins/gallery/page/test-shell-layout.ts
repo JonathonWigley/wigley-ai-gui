@@ -28,6 +28,10 @@ export const testShellLayout: ShellLayout = {
     const areas: Record<AreaName, HTMLElement | AlignedArea> = {
       titleBar: alignedArea('gallery-test-title-bar material-chrome'),
       statusBar: alignedArea('gallery-test-status-bar material-chrome'),
+      leftBar: element(
+        'div',
+        'gallery-test-left-bar material-chrome material-chrome--dense',
+      ),
       sideBar: element(
         'div',
         'gallery-test-side-bar material-chrome material-chrome--dense',

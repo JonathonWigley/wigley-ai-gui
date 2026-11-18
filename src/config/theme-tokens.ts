@@ -144,6 +144,7 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'icon-button': 'length',
   'icon-size': 'length',
   'sidebar-width': 'length',
+  'leftbar-width': 'length',
   'rightbar-width': 'length',
   'traffic-light-inset': 'length',
 

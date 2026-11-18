@@ -42,7 +42,7 @@ import { createRunDriver } from './run-driver';
 
 type DemoApi = PageApi<typeof demoManifest, DemoChannel>;
 
-// Ahead of usage's details (0), the unity-pool panel (10) and system stats (20): the Demo panel tops the right bar.
+// Ahead of any later left-bar contribution at the default order (0): the Demo panel tops the left bar.
 const PANEL_ORDER = -10;
 const SECTION_ID = 'demo';
 // The longest the panel keeps its turn through a step its Enter enters, so a hung enter cannot hold the turn.
@@ -66,13 +66,13 @@ interface LiveRun {
 }
 
 // Drives the demo run from the page. The first `togglePanel` (or a `goTo`) starts a run: main's `start` gives the
-// scratch folder, the Demo section claims the demo rows and shows alone, the panel joins the top of the right bar and
+// scratch folder, the Demo section claims the demo rows and shows alone, the panel joins the top of the left bar and
 // the caption the status bar's centre, and the run driver enters the first step. Each step enters main's half first,
 // then the page's, and leaves in the reverse order; main is told each step's brief for its step agent. `togglePanel`
 // then hides and shows the panel, the run kept; `stop` ends the run and removes all it set up. Every command that
 // reads or changes whether a run lives runs in one queue, so two arriving during a start act on the run it started.
 // The panel holds the step list, drawn by the `demo.layout` layout's `steps` part, over the step agent's pane, whose
-// scope is the held step; as a right-bar stop it walks a cursor over the steps, and `i` moves the keys into the pane
+// scope is the held step; as a left-bar stop it walks a cursor over the steps, and `i` moves the keys into the pane
 // and back. `demo.run` is published at each change. At each stop it first logs and reports to main the built-in
 // plugins with no step or skip and the run's failed steps. At `ready` it stops a run a reload left in main. Registers
 // the real-session step's page half.
@@ -355,7 +355,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     };
 
     const showPanel = () => {
-      panelContribution = api.areas.rightBar.contribute(panelSlot, {
+      panelContribution = api.areas.leftBar.contribute(panelSlot, {
         order: PANEL_ORDER,
         focus: focusPanel,
         left: leavePanel,
@@ -569,7 +569,7 @@ export const demoPagePart: PagePart<typeof demoManifest> = {
     };
 
     // While the step agent's pane holds the keys, a mode change ends the panel's turn: the core gives main the keys
-    // once the focus leaves the right bar.
+    // once the focus leaves the left bar.
     const modeListener = modeSlot.on(() => {
       if (!pane.holdsKeys()) {
         return;
