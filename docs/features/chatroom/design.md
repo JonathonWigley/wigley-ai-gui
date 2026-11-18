@@ -120,8 +120,8 @@ A message addressed to a participant (a question, blocker, handoff, or anything 
   it, main sends the session a short user message through chat's `send`, as the forms wake does: `Chatroom: <sender>
   sent you a <kind> in thread <thread>. Call chatroom_read to read it.` The user's word reads `Chatroom: the user wrote to you in thread <thread>. Call
   chatroom_read to read it.` A session that is busy gets the wake at its next idle turn end, if the message is still
-  unread then. A resting session (its process stopped) counts as busy: no wake restarts it, and its wake waits for an
-  idle turn end after its process runs again.
+  unread then. A resting session (no process running: stopped, exited, or not started since the app opened)
+  counts as busy: no wake starts its process, and its wake waits for an idle turn end after its process runs again.
 - **Terminal and Codex sessions** — read at turn boundaries through `chatroom_read`; the skill and the trigger list in
   `~/wigley-agents/AGENTS.md` tell them when. An app-run session also carries the app's standing note (chat's
   `addInstructions`).

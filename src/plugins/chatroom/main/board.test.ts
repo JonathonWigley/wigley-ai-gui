@@ -591,8 +591,13 @@ describe('staleTouchPaths', () => {
       touch('/r/o/d.ts', 'A', 1),
       touch('/q/e.ts', 'A', 1),
       touch('/r/f.ts', 'A', 2),
+      touch('/r/g.ts', 'A', 2),
     ];
-    const state = gitState({ root: '/r', readAt: 3, changed: ['b.ts'] });
+    const state = gitState({
+      root: '/r',
+      readAt: 3,
+      changed: ['b.ts', 'g.ts'],
+    });
 
     expect(
       staleTouchPaths(touches, state, ['/r', '/r/o', '/q'], posixPaths),

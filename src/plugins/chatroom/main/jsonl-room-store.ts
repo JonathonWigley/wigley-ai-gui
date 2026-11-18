@@ -10,6 +10,7 @@ import {
   ENTRY_KINDS,
   isMessageRef,
   isParticipant,
+  isStringOrNull,
   type NewMessage,
   POST_KINDS,
   type RoomMessage,
@@ -24,10 +25,6 @@ const MESSAGE_KINDS: readonly string[] = [...POST_KINDS, ...ENTRY_KINDS];
 interface LoadedRoom {
   messages: RoomMessage[];
   tailMayBeCut: boolean;
-}
-
-function isStringOrNull(value: unknown): boolean {
-  return value === null || typeof value === 'string';
 }
 
 function isNumberOrNull(value: unknown): boolean {

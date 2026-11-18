@@ -44,8 +44,9 @@ function wakeText(message: RoomMessage, isUserWord: boolean): string {
 // Wakes an app-run session's main agent with a chat message when a question,
 // blocker or handoff names it, or the user's word reaches it: at once when the
 // session is idle with its process running, else at its next idle turn end if
-// still unread. A resting session is never woken, so a wake never restarts a
-// process the user stopped.
+// still unread. A resting session (no process running: stopped, exited, or not
+// started since the app opened) is never woken, so a wake never starts a resting
+// session's process.
 export function startDelivery(deps: DeliveryDeps): Disposable {
   const { room, roster, chat } = deps;
 

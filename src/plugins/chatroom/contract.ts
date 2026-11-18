@@ -52,7 +52,8 @@ export const PARTICIPANT_KINDS: readonly Participant['kind'][] = [
   'mirror',
 ];
 
-function isStringOrNull(value: unknown): boolean {
+// Whether `value`, as parsed from JSON, is a string or null.
+export function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
