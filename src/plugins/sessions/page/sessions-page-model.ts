@@ -372,11 +372,7 @@ export function createSessionsPageModel(
 
   // Ends the waits `nextRows` settle and loads the panes `fillPlan` fills.
   const fillWaiting = (nextRows: readonly SessionRow[]) => {
-    const { ended, loads } = fillPlan(
-      waiting,
-      nextRows,
-      view.panes.sessions(),
-    );
+    const { ended, loads } = fillPlan(waiting, nextRows, view.panes.sessions());
     for (const paneId of ended) {
       waiting.delete(paneId);
     }
