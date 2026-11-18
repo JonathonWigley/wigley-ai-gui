@@ -65,7 +65,10 @@ describe('largeChecklist', () => {
       groups: [{ title: 'Tasks', items }],
     });
     expect(
-      largeChecklist({ ...flow, ...flowWith(planOf([[null, false, null]])) }),
+      largeChecklist({
+        ...flowWith(planOf([[null, false, null]])),
+        checklist: items,
+      }),
     ).toMatchObject({ title: 'Plan A', total: 1 });
   });
 

@@ -50,8 +50,8 @@ self-test script to the fake agent harness: `src/plugins/workflow-large/main/sel
   (§ Signals).
 - **Trail** — the stepper's row of step words, each workflow's own steps: Scope to Land for Small, Interview to Land for
   Medium and Spike, Primer or Explore to Close for Large.
-- **Checklist** — the work items the side pane shows. Large's comes from `plan.md`; the others' from the agent through
-  `set_workflow_checklist`.
+- **Checklist** — the work items the side pane shows. Large's comes from `plan.md` once a plan is read; the others',
+  and Large's until then, from the agent through `set_workflow_checklist`.
 - **Run log** — `runs.jsonl`, one line per finished workflow (§ Signals).
 - **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons. A stage with no button has none.
 - **Key-only action** — an action that runs from its own `Space w` key and draws no button (`keyOnly`).
@@ -254,7 +254,8 @@ leaves the flow in its last step.
   `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
-  so a missed call cannot leave the app out of step. Large never calls it: Large's checklist comes from `plan.md`.
+  so a missed call cannot leave the app out of step. Large calls it while it explores and plans; once a plan is read,
+  Large's checklist comes from `plan.md`.
 - Only the main agent's call counts. The engine contributes both tools as main-agent-only. Sessions asks its tool-call
   guards before it runs a contributed tool, and chat's guard names the agent behind the call's tool-use id from the
   stream's tool events. A subagent's call succeeds with a
@@ -331,7 +332,7 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
 - **Side pane** — one section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub) for each workflow, drawn only while a session's flow is of that
   workflow. The section's title is `Plan` for Large and `Checklist` for Small, Medium and Spike.
-  - Large's pane shows once the agent has set a checklist or a plan is read, until Dismiss or a new plan: the status line, the detail, a progress bar, the checklist and every button of the stage. Until a plan is read the
+  - Large's pane shows once the agent has set a checklist or a plan is read, until Dismiss, and a new plan swaps the agent's list back in until that plan is read: the status line, the detail, a progress bar, the checklist and every button of the stage. Until a plan is read the
     checklist is the agent's own, as Small's is. A read plan's checklist shows every wave in full: the finished waves
     under a fold row that starts open, then the current wave, then each later wave.
     A task in the current wave whose task document reads `Status: in progress` shows the stage's state — running while make runs, paused while it pauses, pending in a stage that runs no tasks; every other open task shows pending.
