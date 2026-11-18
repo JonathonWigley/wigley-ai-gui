@@ -1541,7 +1541,11 @@ export function createDocView(deps: DocViewDeps): DocView {
       deps.paths,
     );
     try {
-      await deps.channel.invoke('writeBytes', path, await file.bytes());
+      const bytes = await file.bytes();
+      if (isDisposed) {
+        return null;
+      }
+      await deps.channel.invoke('writeBytes', path, bytes);
       if (isDisposed) {
         return null;
       }

@@ -214,9 +214,9 @@ export interface DocsView {
   // unsaved and go into each place written, until their doc opens and they go
   // back in its editor. They are toasted as not restored and dropped instead
   // when the index stops listing their doc, when the user types in that doc
-  // first, or when the doc refuses them (its editor already open). The open goes to `trackRestore` once the view has
-  // shown: an open waits on the view's first index read, which its first show
-  // starts.
+  // first, or when the doc refuses them (its editor already open). The open
+  // goes to `trackRestore` once the view has shown: an open waits on the
+  // view's first index read, which its first show starts.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a

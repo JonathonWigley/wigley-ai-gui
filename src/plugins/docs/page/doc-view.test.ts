@@ -1452,7 +1452,7 @@ describe('createDocView', () => {
   // dispose logging, or the take writing its next file once disposed.
   it.each<{
     case: string;
-    act(shown: ReturnType<typeof docViewOver>): void;
+    act(shown: ReturnType<typeof docViewOver>, held: Promise<void>): void;
     writes: [string, number[]][];
   }>([
     {
@@ -1465,6 +1465,20 @@ describe('createDocView', () => {
       case: 'a pasted file written, another to come',
       act: ({ targets }) => targets[0].target.take([pasted([1]), pasted([2])]),
       writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+    },
+    {
+      case: 'a pasted file read',
+      act: ({ targets }, held) =>
+        targets[0].target.take([
+          {
+            ...pasted([1]),
+            bytes: async () => {
+              await held;
+              return new Uint8Array([1]);
+            },
+          },
+        ]),
+      writes: [],
     },
   ])(
     'a call landing after the dispose logs and writes nothing more ($case)',
@@ -1482,7 +1496,7 @@ describe('createDocView', () => {
       deps.openExternal = () => answer.promise;
       await view.open(target(null, '/n/docs/guide.md'));
       view.edit(1);
-      act(shown);
+      act(shown, answer.promise);
       await settled();
 
       view.dispose();

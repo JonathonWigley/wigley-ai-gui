@@ -72,4 +72,61 @@ describe('sidebar view', () => {
 
     expect(paneDisposes).toBe(1);
   });
+
+  // Breaks: a row dispose that throws leaving the later rows undisposed, or
+  // the throwing row still held, so the next dispose runs it again.
+  it('disposes every other row and not the throwing one again when a row refuses', () => {
+    const { parts } = sessionsPartsSetup();
+    const disposes: string[] = [];
+    const view = mountSidebarView(
+      {
+        activate: () => undefined,
+        toggleFavorite: () => undefined,
+        dropped: () => undefined,
+      },
+      {
+        ...parts,
+        row(parent, input) {
+          const drawn = parts.row(parent, input);
+          return {
+            ...drawn,
+            dispose() {
+              disposes.push(input.sessionId);
+              drawn.dispose();
+              if (input.sessionId === 'a1') {
+                throw new Error('row refused');
+              }
+            },
+          };
+        },
+      },
+      { set: () => 0, clear: () => undefined },
+      () => new Map(),
+    );
+    const rows = [
+      sessionRow('a1', { project: 'alpha' }),
+      sessionRow('a2', { project: 'alpha' }),
+    ];
+    view.render(
+      { rows, selectedSessionId: null },
+      {
+        favorites: [],
+        recent: [{ project: 'alpha', isFavorite: false, rows }],
+        plugins: [],
+      },
+      () => ({
+        title: null,
+        activity: null,
+        partTooltips: () => [],
+        onScreen: false,
+      }),
+      new Set(),
+      { sessionId: null, hasKeys: false },
+    );
+
+    expect(() => view.dispose()).toThrow('row refused');
+    view.dispose();
+
+    expect(disposes).toEqual(['a1', 'a2']);
+  });
 });

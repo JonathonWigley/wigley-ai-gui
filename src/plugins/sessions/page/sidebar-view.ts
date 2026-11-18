@@ -195,13 +195,12 @@ export function mountSidebarView(
   });
 
   const disposeRows = () => {
-    for (const drawn of [...rows, ...groups, ...sections]) {
-      drawn.dispose();
-    }
+    const drawns = [...rows, ...groups, ...sections];
     rows = [];
     groups = [];
     sections = [];
     dragReorder.clear();
+    callEach(drawns, (drawn) => drawn.dispose());
   };
 
   const drawGroup = (

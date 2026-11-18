@@ -1576,6 +1576,49 @@ describe('docs view state', () => {
     await harness.stop();
   });
 
+  // Breaks: a held draft going over the user's typing when its doc opens by
+  // a path that skips `applyDraft` (a followed link), with no toast.
+  it('a held draft is toasted and dropped when the user types in its doc, opened by a link', async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const edits = { path: TARGET, text: 'Edited.\n', baseText: TEXTS[TARGET] };
+    const page = startDocsPage(
+      rebuildingMain(rebuilt.promise, () => {
+        isRebuildAsked = true;
+      }),
+    );
+    const { harness, editors } = page;
+    await reloadWith(page, { [MACHINE_SOURCE_ID]: placeAt(TARGET, edits) }, []);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    openByMessage(page, GUIDE);
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(GUIDE));
+    rebuilt.resolve(listingOf([PLAIN, GUIDE, TARGET]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    commands.followLink({
+      arg: { viewId: 'machine', href: 'target.md', title: '' },
+    });
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(TARGET));
+    commands.edit({ arg: undefined });
+
+    editors.type('Typed.\n');
+
+    await vi.waitFor(() =>
+      expect(
+        harness.logs.filter(({ message }) =>
+          message.includes('edits not restored'),
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          message: `toast error: Unsaved edits not restored: ${TARGET}`,
+        }),
+      ]),
+    );
+    await harness.stop();
+  });
+
   // Breaks: a page reloaded under a running main throwing on a place an
   // older page wrote, before docs places held `trees`.
   it('a saved place of the older shape is dropped and the page starts', async () => {
