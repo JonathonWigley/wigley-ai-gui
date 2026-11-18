@@ -10,8 +10,6 @@ export interface AppUpdatePageDemoDeps {
 
 const BEATS: readonly { name: string; kind: DemoUpdateKind }[] = [
   { name: 'Update available', kind: 'available' },
-  { name: 'Installing', kind: 'installing' },
-  { name: 'Install failed', kind: 'failed' },
 ];
 
 // Step `app-update.button`: each beat asks main for its sample status, which

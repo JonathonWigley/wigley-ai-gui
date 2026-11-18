@@ -70,32 +70,14 @@ function docsModeStage(
   const { paths, commands } = deps;
   const home = paths.join(context.scratchDir, SAMPLE_HOME_FOLDER);
   const sample = deps.showSample(SAMPLE_SOURCE_ID);
-  const showMode = () => commands.run(MODES_SHOW, 'docs.docs');
-  const openDoc = async (path: string) => {
-    await showMode();
-    sample.openDoc(path, null);
-  };
   return {
     beats: [
-      { name: 'tree', show: showMode },
       {
         name: 'page',
-        show: () => openDoc(paths.join(home, '.claude', 'CLAUDE.md')),
-      },
-      {
-        name: 'skill',
-        show: () =>
-          openDoc(
-            paths.join(
-              home,
-              'dev',
-              'selftest-repo',
-              '.claude',
-              'skills',
-              'demo',
-              'SKILL.md',
-            ),
-          ),
+        async show() {
+          await commands.run(MODES_SHOW, 'docs.docs');
+          sample.openDoc(paths.join(home, '.claude', 'CLAUDE.md'), null);
+        },
       },
     ],
     dispose: () => sample.dispose(),
@@ -108,14 +90,18 @@ function sessionTabStage(
 ): DemoStage {
   const { commands } = deps;
   const sessionId = context.sessions.session;
-  const showTab = async (tab: string) => {
-    await commands.run(sessionsSelectRowCommand, sessionId);
-    await commands.run(sessionsSelectTabCommand, { sessionId, tab });
-  };
   return {
     beats: [
-      { name: 'session', show: () => showTab('chat') },
-      { name: 'Docs tab', show: () => showTab('docs') },
+      {
+        name: 'Docs tab',
+        async show() {
+          await commands.run(sessionsSelectRowCommand, sessionId);
+          await commands.run(sessionsSelectTabCommand, {
+            sessionId,
+            tab: 'docs',
+          });
+        },
+      },
     ],
     dispose: () => undefined,
   };

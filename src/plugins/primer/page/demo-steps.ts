@@ -6,7 +6,7 @@ import {
   demoFormBeat,
   isDemoFormActive,
 } from '../../../shared/page/demo-form-wait';
-import { primerSelectItemCommand, primerSelectTaskCommand } from '../contract';
+import { primerSelectTaskCommand } from '../contract';
 
 // Primer's page store and commands, the sessions plugin's `activate`, and the
 // timers the wait for the sample primer runs on.
@@ -15,14 +15,13 @@ export interface PrimerPageDemoDeps extends DemoFormWaitDeps {
   log: PluginLog;
 }
 
-// Positions in DEMO_PRIMER_ARGS: `taskRows` puts the feature row at 0 and
-// task `1` (need `yes`) at 1; items count from 1, item 3 being the long one.
+// The first task's position in DEMO_PRIMER_ARGS: `taskRows` puts the feature
+// row at 0 and task `1` at 1.
 const FIRST_TASK = 1;
-const LONG_ITEM = 3;
 
-// The page half of `primer.primer`: each beat shows the demo session's sample
-// primer and puts it in the beat's whole state. Leaving dismisses a cancel
-// prompt and closes the review while the sample primer is active.
+// The page half of `primer.primer`: the demo session's sample primer on its
+// first task. Leaving dismisses a cancel prompt and closes the review while
+// the sample primer is active.
 export function registerDemoSteps(
   services: PageServices,
   deps: PrimerPageDemoDeps,
@@ -50,24 +49,8 @@ export function registerDemoSteps(
     ],
     enter: (context) => {
       const sessionId = context.sessions.session;
-      const beat = (name: string, run: () => Promise<void>) =>
-        demoFormBeat(deps, sessionId, name, run);
       return Promise.resolve({
-        beats: [
-          beat('Tasks', onFirstTask),
-          beat('Items', async () => {
-            await onFirstTask();
-            await commands.run(primerSelectItemCommand, LONG_ITEM);
-          }),
-          beat('A need', async () => {
-            await onFirstTask();
-            await commands.run('primer.needUnclear');
-          }),
-          beat('Review', async () => {
-            await commands.run('primer.dismissConfirm');
-            await commands.run('primer.openReview');
-          }),
-        ],
+        beats: [demoFormBeat(deps, sessionId, 'Tasks', onFirstTask)],
         dispose() {
           if (isDemoFormActive(deps.store, sessionId)) {
             void commands.run('primer.dismissConfirm');

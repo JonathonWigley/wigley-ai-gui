@@ -12,8 +12,6 @@ export interface UnityPoolPageDemoDeps {
 
 const BEATS: readonly { name: string; stage: DemoPoolStage }[] = [
   { name: 'Clone held', stage: 'panel' },
-  { name: 'Warm-up and stranded', stage: 'tiles' },
-  { name: 'Long wait', stage: 'longWait' },
 ];
 
 // Step `unity-pool.pool`: each beat asks main for its stage of the demo pool

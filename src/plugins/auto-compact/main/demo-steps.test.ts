@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { DemoMainContext, DemoMainStep } from '../../../contracts/demo';
 import type { MainServices } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
@@ -37,7 +36,6 @@ async function startCompactStep() {
           sent.push(sessionId);
         },
       },
-      harnesses: { get: () => null } as unknown as AgentHarnessRegistry,
       onTurnFinished(heard) {
         listener = heard;
         return { dispose() {} };

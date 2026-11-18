@@ -52,44 +52,16 @@ afterEach(() => {
 });
 
 describe('primer page demo steps', () => {
-  it.each([
-    {
-      name: 'Tasks',
-      commands: [
-        ['primer.dismissConfirm'],
-        ['primer.closeReview'],
-        ['primer.selectTask', 1],
-      ],
-    },
-    {
-      name: 'Items',
-      commands: [
-        ['primer.dismissConfirm'],
-        ['primer.closeReview'],
-        ['primer.selectTask', 1],
-        ['primer.selectItem', 3],
-      ],
-    },
-    {
-      name: 'A need',
-      commands: [
-        ['primer.dismissConfirm'],
-        ['primer.closeReview'],
-        ['primer.selectTask', 1],
-        ['primer.needUnclear'],
-      ],
-    },
-    {
-      name: 'Review',
-      commands: [['primer.dismissConfirm'], ['primer.openReview']],
-    },
-  ])('beat $name runs $commands', async ({ name, commands }) => {
+  it('the Tasks beat closes the review and selects the first task', async () => {
     const stage = await enter(DEMO_SESSION);
-    const beat = stage.beats.find((each) => each.name === name);
 
-    await beat?.show();
+    await stage.beats[0].show();
 
-    expect(ran).toEqual(commands);
+    expect(ran).toEqual([
+      ['primer.dismissConfirm'],
+      ['primer.closeReview'],
+      ['primer.selectTask', 1],
+    ]);
   });
 
   it('a beat whose primer never shows logs and runs nothing', async () => {

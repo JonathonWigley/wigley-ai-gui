@@ -264,21 +264,6 @@ describe('keys page part', () => {
 
   it.each([
     {
-      name: 'help the user opened stays open',
-      async run(harness: KeysHarness, enter: () => Promise<DemoStage>) {
-        const { toggleHelp } = harness.started().commands;
-        toggleHelp({ arg: undefined });
-        const stage = await enter();
-
-        await stage.beats[1].show();
-        stage.dispose();
-        // Closes help when the dispose left it open; else opens it again.
-        toggleHelp({ arg: undefined });
-
-        expect(dataEmitted(harness, 'keys.helpOpened')).toEqual([null]);
-      },
-    },
-    {
       name: 'no leader binds',
       async run(harness: KeysHarness, enter: () => Promise<DemoStage>) {
         const stage = await enter();

@@ -225,11 +225,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         },
       };
     };
-    registerDemoSteps(services, {
-      showSample,
-      setHeadless: (sessionId, headless) =>
-        chat.setHeadless(sessionId, headless),
-    });
+    registerDemoSteps(services, { showSample });
 
     const runKey = keyRunner(api.commands, log);
     // Acts on the run's target when it names one; else on the session

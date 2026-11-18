@@ -17,10 +17,6 @@ function registerEngineStep() {
       log.push(`showSample#${n}`);
       return { dispose: () => log.push(`dispose#${n}`) };
     },
-    setHeadless(sessionId, headless) {
-      log.push(`setHeadless(${sessionId}, ${headless})`);
-      return Promise.resolve();
-    },
   });
   const [step] = demoSteps.list();
   return { step, log };
@@ -53,28 +49,22 @@ describe('workflow page demo steps', () => {
   });
 
   // Breaks: a dropped handle, or a gap where the row draws the stored flow.
-  it('each beat disposes the previous handle after showing its own', async () => {
+  it('a shown beat disposes the previous handle after showing its own', async () => {
     const { step, log } = registerEngineStep();
 
-    await enterAndShow(step, ['No level', 'Headless']);
+    await enterAndShow(step, ['No level', 'No level']);
 
-    expect(log).toEqual([
-      'setHeadless(s1, false)',
-      'showSample#1',
-      'showSample#2',
-      'dispose#1',
-      'setHeadless(s1, true)',
-    ]);
+    expect(log).toEqual(['showSample#1', 'showSample#2', 'dispose#1']);
   });
 
-  // Breaks: a stranded headless flag on the demo row.
-  it('stage dispose clears headless, then disposes the last handle', async () => {
+  // Breaks: a sample flow left on the demo row after the step.
+  it('stage dispose disposes the last handle', async () => {
     const { step, log } = registerEngineStep();
-    const stage = await enterAndShow(step, ['No level', 'Headless']);
+    const stage = await enterAndShow(step, ['No level']);
     log.length = 0;
 
     stage.dispose();
 
-    expect(log).toEqual(['setHeadless(s1, false)', 'dispose#2']);
+    expect(log).toEqual(['dispose#1']);
   });
 });

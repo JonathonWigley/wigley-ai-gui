@@ -75,50 +75,16 @@ afterEach(() => {
 });
 
 describe('forms page demo steps', () => {
-  it.each([
-    {
-      name: 'Question',
-      commands: [
-        ['forms.dismissConfirm'],
-        ['forms.closeReview'],
-        ['forms.focusItem', 3],
-      ],
-    },
-    {
-      name: 'Finding',
-      commands: [
-        ['forms.dismissConfirm'],
-        ['forms.closeReview'],
-        ['forms.focusItem', 0],
-      ],
-    },
-    {
-      name: 'Notice',
-      commands: [
-        ['forms.dismissConfirm'],
-        ['forms.closeReview'],
-        ['forms.focusItem', 5],
-      ],
-    },
-    {
-      name: 'Review',
-      commands: [['forms.dismissConfirm'], ['forms.openReview']],
-    },
-    {
-      name: 'Cancel',
-      commands: [
-        ['forms.dismissConfirm'],
-        ['forms.openReview'],
-        ['forms.askCancel'],
-      ],
-    },
-  ])('beat $name runs $commands', async ({ name, commands }) => {
+  it('the Round beat closes the review and focuses the first question', async () => {
     const stage = await enter(storeWith(DEMO_SESSION));
-    const beat = stage.beats.find((each) => each.name === name);
 
-    await beat?.show();
+    await stage.beats[0].show();
 
-    expect(ran).toEqual(commands);
+    expect(ran).toEqual([
+      ['forms.dismissConfirm'],
+      ['forms.closeReview'],
+      ['forms.focusItem', 3],
+    ]);
   });
 
   it('a beat whose form never shows logs and runs nothing', async () => {
@@ -154,17 +120,13 @@ describe('forms page demo steps', () => {
     },
   );
 
-  it('the rail puts the first question at 3 and the notices at 5', () => {
+  it('the rail puts the first question at 3', () => {
     const round = active(
       initialState([presentedRound('r1', ROUND_PARTS)], DEMO_SESSION),
     );
 
     const rail = railItems(round);
 
-    expect([rail[0], rail[3], rail[5]]).toEqual([
-      { kind: 'finding', index: 1 },
-      { kind: 'question', index: 1 },
-      { kind: 'notices' },
-    ]);
+    expect(rail[3]).toEqual({ kind: 'question', index: 1 });
   });
 });

@@ -15,23 +15,22 @@ export interface FormsPageDemoDeps extends DemoFormWaitDeps {
   log: PluginLog;
 }
 
-// Rail positions in DEMO_ROUND_ARGS: findings 0–2, questions 3–4, notices 5.
-const FIRST_FINDING = 0;
+// The rail position of the first question in DEMO_ROUND_ARGS, after its three
+// findings.
 const FIRST_QUESTION = 3;
-const NOTICES = 5;
 
-// The page half of `forms.round`: each beat shows the demo session's sample
-// round and puts it in the beat's whole state. Leaving dismisses a cancel
-// prompt and closes the review while the sample round is active.
+// The page half of `forms.round`: the demo session's sample round on its first
+// question, every card kind on its rail. Leaving dismisses a cancel prompt and
+// closes the review while the sample round is active.
 export function registerDemoSteps(
   services: PageServices,
   deps: FormsPageDemoDeps,
 ): Disposable {
   const { commands } = deps;
-  const onForm = async (position: number) => {
+  const onFirstQuestion = async () => {
     await commands.run('forms.dismissConfirm');
     await commands.run('forms.closeReview');
-    await commands.run(formsFocusItemCommand, position);
+    await commands.run(formsFocusItemCommand, FIRST_QUESTION);
   };
   return services.demoSteps.register({
     id: 'forms.round',
@@ -51,23 +50,8 @@ export function registerDemoSteps(
     ],
     enter: (context) => {
       const sessionId = context.sessions.session;
-      const beat = (name: string, run: () => Promise<void>) =>
-        demoFormBeat(deps, sessionId, name, run);
       return Promise.resolve({
-        beats: [
-          beat('Question', () => onForm(FIRST_QUESTION)),
-          beat('Finding', () => onForm(FIRST_FINDING)),
-          beat('Notice', () => onForm(NOTICES)),
-          beat('Review', async () => {
-            await commands.run('forms.dismissConfirm');
-            await commands.run('forms.openReview');
-          }),
-          beat('Cancel', async () => {
-            await commands.run('forms.dismissConfirm');
-            await commands.run('forms.openReview');
-            await commands.run('forms.askCancel');
-          }),
-        ],
+        beats: [demoFormBeat(deps, sessionId, 'Round', onFirstQuestion)],
         dispose() {
           if (isDemoFormActive(deps.store, sessionId)) {
             void commands.run('forms.dismissConfirm');

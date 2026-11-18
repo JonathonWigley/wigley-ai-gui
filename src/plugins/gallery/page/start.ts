@@ -115,14 +115,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       api.transparency.override(value);
       view.showTransparency(value);
     };
-    registerDemoSteps(api.services, {
-      showMode,
-      transparency: () => api.transparency.overridden(),
-      setTransparency,
-      isSwapped: () => swappedLayout !== null,
-      swap,
-      restore,
-    });
+    registerDemoSteps(api.services, { showMode });
     const scrollSheetTo = (edge: ScrollEdge) => {
       scrollToEdge(view.sheet, edge);
       log(edgeText('the gallery', edge));

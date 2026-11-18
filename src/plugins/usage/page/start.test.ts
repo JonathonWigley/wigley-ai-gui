@@ -189,7 +189,7 @@ describe('usagePagePart', () => {
         .map(({ message }) => message)
         .filter((message) => message.startsWith('details'));
 
-    await stage.beats[1].show();
+    await stage.beats[0].show();
     expect(detailsLines()).toEqual([expect.stringMatching(/^details shown: /)]);
 
     stage.dispose();

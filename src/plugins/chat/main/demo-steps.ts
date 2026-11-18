@@ -2,23 +2,20 @@ import type { DemoMainContext } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MainServices } from '../../../contracts/plugin';
 import {
-  FAKE_BLOCKS_TEXT,
   FAKE_HOLD_TEXT,
-  FAKE_PERMISSION_TEXT,
   FAKE_STEPS_TEXT,
 } from '../../../shared/fake-agent-harness';
 import { createRegistrations } from '../../../shared/registrations';
 import type { ChatSessions } from './chat-sessions';
 
 export interface ChatDemoMainDeps {
-  chat: Pick<ChatSessions, 'send' | 'interrupt'>;
+  chat: Pick<ChatSessions, 'send'>;
 }
 
 const PLAN_TEXT = 'Plan the next change.';
 
 // The main halves of chat's steps: each launches the demo sessions its page
-// half shows. The composer step's queued send and interrupt run here, at
-// enter, each on a session of its own.
+// half shows. The composer step's queued send runs here, at enter.
 export function registerDemoSteps(
   services: MainServices,
   deps: ChatDemoMainDeps,
@@ -41,17 +38,12 @@ export function registerDemoSteps(
       }),
     );
   register('chat.transcript', async (context) => ({
-    blocks: await context.launchSession(FAKE_BLOCKS_TEXT),
     steps: await context.launchSession(FAKE_STEPS_TEXT),
-    permission: await context.launchSession(FAKE_PERMISSION_TEXT),
   }));
   register('chat.composer', async (context) => {
     const queued = await context.launchSession(FAKE_HOLD_TEXT);
     await chat.send(queued, { text: 'Then run the tests.', images: [] });
-    const interrupted = await context.launchSession(FAKE_HOLD_TEXT);
-    chat.interrupt(interrupted);
-    const slash = await context.launchSession(PLAN_TEXT);
-    return { queued, interrupted, slash };
+    return { queued };
   });
   register('chat.controls', async (context) => ({
     session: await context.launchSession(PLAN_TEXT),

@@ -42,22 +42,13 @@ export function registerDemoSteps(
 function practiceStage(deps: PracticeDemoPageDeps): DemoStage {
   const { commands } = deps;
   const placeHold = deps.holdPlace();
-  const showMode = () => commands.run(MODES_SHOW, 'practice.main');
-  const openTwoSum = async () => {
-    await showMode();
-    deps.openProblemRow('two-sum');
-  };
   return {
     beats: [
-      { name: 'problem list', show: showMode },
-      { name: 'problem', show: openTwoSum },
       {
-        name: 'run',
-        // The judge compiles the solution before it runs the cases.
-        dwellSeconds: 8,
+        name: 'problem',
         async show() {
-          await openTwoSum();
-          await commands.run('practice.run');
+          await commands.run(MODES_SHOW, 'practice.main');
+          deps.openProblemRow('two-sum');
         },
       },
     ],

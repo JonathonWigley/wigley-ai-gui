@@ -7,14 +7,13 @@ import {
   sampleFlow,
 } from '../contract';
 
-// `showSample` is the part's own; `setHeadless` is chat's page export.
+// `showSample` is the part's own.
 export interface WorkflowPageDemoDeps {
   showSample(flow: SessionFlow): Disposable;
-  setHeadless(sessionId: string, headless: boolean): Promise<void>;
 }
 
 // The engine step: the demo session's chip with no level, warning of an agent
-// working with none, then headless. Leaving it turns headless off again.
+// working with none.
 export function registerDemoSteps(
   services: PageServices,
   deps: WorkflowPageDemoDeps,
@@ -48,8 +47,7 @@ function engineStage(
     beats: [
       {
         name: 'No level',
-        async show() {
-          await deps.setHeadless(sessionId, false);
+        show() {
           shown.show(
             sampleFlow(sessionId, projectDir, {
               missedLevel: true,
@@ -58,17 +56,7 @@ function engineStage(
           );
         },
       },
-      {
-        name: 'Headless',
-        async show() {
-          shown.show(sampleFlow(sessionId, projectDir, {}));
-          await deps.setHeadless(sessionId, true);
-        },
-      },
     ],
-    dispose() {
-      void deps.setHeadless(sessionId, false);
-      shown.dispose();
-    },
+    dispose: () => shown.dispose(),
   };
 }

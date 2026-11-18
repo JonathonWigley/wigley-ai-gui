@@ -133,7 +133,6 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       state,
       timers: services.timers,
       selectTask: (taskId) => view.selectTask(taskId),
-      openRunRow: (rowId) => view.openRunRow(rowId),
     });
 
     // The core logs the side bar's hiding and showing.

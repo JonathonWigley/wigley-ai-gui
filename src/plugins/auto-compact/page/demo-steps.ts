@@ -8,8 +8,8 @@ export interface AutoCompactDemoPageDeps {
   activate: SessionsPageExports['activate'];
 }
 
-// The auto compact step: a cold session, one compacting before its message,
-// and one that compacted and then sent it.
+// The auto compact step: a cold session, then one that compacted and then
+// sent its message.
 export function registerDemoSteps(
   services: PageServices,
   deps: AutoCompactDemoPageDeps,
@@ -30,7 +30,6 @@ export function registerDemoSteps(
       enter: async ({ sessions }: DemoPageContext) => ({
         beats: [
           { name: 'cold cache', show: () => deps.activate(sessions.cold) },
-          { name: 'compacting', show: () => deps.activate(sessions.held) },
           { name: 'compacted', show: () => deps.activate(sessions.compacted) },
         ],
         dispose() {},

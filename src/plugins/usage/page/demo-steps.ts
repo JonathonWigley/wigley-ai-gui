@@ -33,19 +33,18 @@ export function registerDemoSteps(
     async enter(context): Promise<DemoStage> {
       const session = context.sessions.session;
       const before = deps.detailsShown();
-      let lastSet = before;
-      const showWithDetails = (shown: boolean) => {
-        deps.activate(session);
-        deps.setDetailsShown(shown);
-        lastSet = shown;
-      };
       return {
         beats: [
-          { name: 'meters', show: () => showWithDetails(before) },
-          { name: 'details', show: () => showWithDetails(true) },
+          {
+            name: 'meters and details',
+            show() {
+              deps.activate(session);
+              deps.setDetailsShown(true);
+            },
+          },
         ],
         dispose() {
-          if (deps.detailsShown() === lastSet) {
+          if (deps.detailsShown()) {
             deps.setDetailsShown(before);
           }
         },

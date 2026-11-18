@@ -42,23 +42,7 @@ describe('workflow-medium page demo steps', () => {
   // Breaks: a wrong done count, stage or fix cycle count that ships with no
   // other check.
   it.each([
-    {
-      name: 'Interview',
-      stage: 'interview',
-      done: 0,
-      fixCycles: 0,
-      turnRunning: true,
-    },
     { name: 'Build', stage: 'build', done: 1, fixCycles: 0, turnRunning: true },
-    {
-      name: 'Review',
-      stage: 'review',
-      done: 2,
-      fixCycles: 0,
-      turnRunning: true,
-    },
-    { name: 'Fix', stage: 'fix', done: 2, fixCycles: 1, turnRunning: true },
-    { name: 'Land', stage: 'land', done: 3, fixCycles: 1, turnRunning: true },
     { name: 'Done', stage: 'done', done: 3, fixCycles: 1, turnRunning: false },
   ])(
     'beat $name shows its flow',

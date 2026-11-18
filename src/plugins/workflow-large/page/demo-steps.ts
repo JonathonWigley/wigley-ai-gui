@@ -18,26 +18,18 @@ export interface WorkflowLargePageDemoDeps {
   autoStartSeconds(): number;
 }
 
-// One beat name per PREVIEW_SAMPLES row, in its order.
-export const LARGE_BEAT_NAMES: readonly string[] = [
-  'Idle',
-  'Primer',
-  'Explore',
-  'Interview',
-  'Plan',
-  'Cold read',
-  'Plan ready',
-  'Countdown',
-  'Make',
-  'Make idle',
-  'Review',
-  'Fix',
-  'Closed',
+// The beats: a run early on, then the closed run, each the PREVIEW_SAMPLES row
+// of its stage.
+const BEATS: readonly {
+  name: string;
+  stage: (typeof PREVIEW_SAMPLES)[number]['stage'];
+}[] = [
+  { name: 'Interview', stage: 'interview' },
+  { name: 'Closed', stage: 'closed' },
 ];
 
-// The Large step: the layout preview's samples on the demo session, over a
-// sample plan in the scratch folder. The countdown beat dwells until it runs
-// out, and starts nothing: main's auto-start runs only for a stored flow.
+// The Large step: two of the layout preview's samples on the demo session,
+// over a sample plan in the scratch folder.
 export function registerDemoSteps(
   services: PageServices,
   deps: WorkflowLargePageDemoDeps,
@@ -80,21 +72,23 @@ function largeStage(
   };
   const shown = createSampleSequence(deps.showSample);
   return {
-    beats: PREVIEW_SAMPLES.map(({ countdown }, index): DemoBeat => {
-      const show = () =>
-        shown.show(
-          previewFlow(
-            index,
-            sessionId,
-            services.clock.now(),
-            autoStartSeconds,
-            plan,
+    beats: BEATS.map(({ name, stage }): DemoBeat => {
+      const index = PREVIEW_SAMPLES.findIndex(
+        (sample) => sample.stage === stage,
+      );
+      return {
+        name,
+        show: () =>
+          shown.show(
+            previewFlow(
+              index,
+              sessionId,
+              services.clock.now(),
+              autoStartSeconds,
+              plan,
+            ),
           ),
-        );
-      const name = LARGE_BEAT_NAMES[index];
-      return countdown
-        ? { name, dwellSeconds: autoStartSeconds, show }
-        : { name, show };
+      };
     }),
     dispose: () => shown.dispose(),
   };

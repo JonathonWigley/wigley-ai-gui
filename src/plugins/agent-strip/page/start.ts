@@ -60,9 +60,6 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     registerDemoSteps(services, {
       activate: (sessionId) => sessions.activate(sessionId),
-      runCommand: (key, arg) => api.commands.run(key, arg),
-      firstAgentKey: (sessionId) =>
-        rosters.get(sessionId)?.agents[0]?.agentId ?? null,
     });
 
     followRows(rows, { removed: (sessionId) => strip.forget(sessionId) });

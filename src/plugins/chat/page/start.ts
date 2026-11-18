@@ -51,7 +51,6 @@ import {
   createPermissionActions,
   fillComposer,
 } from './chat-commands';
-import { chatCommand } from '../ids';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { registerDemoSteps } from './demo-steps';
 import { createChatLayouts } from './chat-layouts';
@@ -415,18 +414,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       api.channel.invoke('setHeadless', sessionId, headless);
     registerDemoSteps(services, {
       activate: (sessionId) => sessions.activate(sessionId),
-      fillComposer: fillComposerOf,
       setHeadless,
-      typeInto: (element, keys) => services.editor.typeInto(element, keys),
       startPrompt: {
         runCommand: (id) => void api.commands.run(id),
         scope: api.state.read(coreScopeSlot),
         timers: services.timers,
         log: services.log,
       },
-      pickModel: () => api.commands.run(chatCommand('pickModel')),
-      cancelPicker: () => picker.close(),
-      isPickerOpen: () => picker.isOpen(),
     });
     const exports = (consumer: Registrations): ChatPageExports => ({
       addSlashCommand: (command) => consumer.track(slashCommands.add(command)),

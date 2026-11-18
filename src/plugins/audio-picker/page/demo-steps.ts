@@ -24,9 +24,9 @@ export function registerDemoSteps(
   deps: AudioPickerPageDemoDeps,
 ): Disposable {
   const { commands } = deps;
-  const onRow = async (moment: number, row: number) => {
+  const onFirstRow = async () => {
     await commands.run('audio-picker.dismissConfirm');
-    await commands.run(audioPickerSelectRowCommand, { moment, row });
+    await commands.run(audioPickerSelectRowCommand, { moment: 0, row: 0 });
   };
   return services.demoSteps.register({
     id: 'audio-picker.picker',
@@ -45,15 +45,8 @@ export function registerDemoSteps(
     ],
     enter: (context) => {
       const sessionId = context.sessions.session;
-      const beat = (name: string, run: () => Promise<void>) =>
-        demoFormBeat(deps, sessionId, name, run);
       return Promise.resolve({
-        beats: [
-          beat('Candidates', () => onRow(0, 0)),
-          beat('Choose', () => onRow(1, 1)),
-          // Moment 2's one candidate is `broken.wav`, which does not decode.
-          beat('Broken file', () => onRow(2, 0)),
-        ],
+        beats: [demoFormBeat(deps, sessionId, 'Candidates', onFirstRow)],
         dispose() {
           if (isDemoFormActive(deps.store, sessionId)) {
             void commands.run('audio-picker.dismissConfirm');

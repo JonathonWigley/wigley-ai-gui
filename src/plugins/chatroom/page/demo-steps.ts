@@ -1,12 +1,7 @@
-import { type CommandKey, MODES_SHOW } from '../../../contracts/commands';
-import type { DemoPageContext, DemoStage } from '../../../contracts/demo';
+import { MODES_SHOW } from '../../../contracts/commands';
+import type { DemoStage } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices, PluginCommands } from '../../../contracts/plugin';
-import { sessionsSelectRowCommand } from '../../sessions/contract';
-
-const openRowRoomCommand: CommandKey<string, 'chatroom.openRowRoom'> = {
-  id: 'chatroom.openRowRoom',
-};
 
 // `holdPlace` stops `chatroom.place` writes until its dispose.
 export interface ChatroomDemoPageDeps {
@@ -14,10 +9,8 @@ export interface ChatroomDemoPageDeps {
   holdPlace(): Disposable;
 }
 
-// The Chatroom step: the lead's row with the peer's question to the user as
-// its badge, Chatroom mode on the demo room main holds, then the lead's room
-// opened at the question's thread, which marks it read. It holds the place so
-// the user's saved one outlasts the demo room.
+// The Chatroom step: Chatroom mode on the demo room main holds. It holds the
+// place so the user's saved one outlasts the demo room.
 export function registerDemoSteps(
   services: PageServices,
   deps: ChatroomDemoPageDeps,
@@ -35,28 +28,16 @@ export function registerDemoSteps(
       'src/plugins/chatroom/main/start.ts',
       'src/plugins/chatroom/main/room-service.ts',
     ],
-    enter: async (context) => chatroomStage(deps, context),
+    enter: async () => chatroomStage(deps),
   });
 }
 
-function chatroomStage(
-  deps: ChatroomDemoPageDeps,
-  context: DemoPageContext,
-): DemoStage {
+function chatroomStage(deps: ChatroomDemoPageDeps): DemoStage {
   const { commands } = deps;
-  const { lead } = context.sessions;
   const placeHold = deps.holdPlace();
   return {
     beats: [
-      {
-        name: 'row badge',
-        show: () => commands.run(sessionsSelectRowCommand, lead),
-      },
       { name: 'room', show: () => commands.run(MODES_SHOW, 'chatroom.main') },
-      {
-        name: 'thread',
-        show: () => commands.run(openRowRoomCommand, lead),
-      },
     ],
     dispose: () => placeHold.dispose(),
   };

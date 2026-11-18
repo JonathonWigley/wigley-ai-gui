@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { largeStateOf } from '../contract';
-import { LARGE_BEAT_NAMES } from './demo-steps';
-import {
-  PREVIEW_PLAN,
-  PREVIEW_SAMPLES,
-  previewFlow,
-  type SamplePlan,
-} from './preview';
+import { PREVIEW_PLAN, previewFlow, type SamplePlan } from './preview';
 
 const NOW = 1_000_000;
 
@@ -69,10 +63,5 @@ describe('previewFlow', () => {
       planDir: large.planDir,
       title: large.progress?.title,
     }).toEqual(expected);
-  });
-
-  // Breaks: a sample added without a beat.
-  it('demo beat names match PREVIEW_SAMPLES', () => {
-    expect(LARGE_BEAT_NAMES).toHaveLength(PREVIEW_SAMPLES.length);
   });
 });

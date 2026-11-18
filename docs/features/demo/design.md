@@ -44,10 +44,14 @@ key or a jump enters, since it starts a real Claude session, and on the last bea
 
 ## Steps
 
-A step is one feature, shown through its **beats**: the states worth seeing, in order. The
-session-card step's beats are the card's activities (working, waiting on you, finished, …); the
-forms step's beats are a question, a finding, a notice, a review and a cancel. A step carries one
-high-level caption for all its beats.
+A step is one feature, shown through its **beats**: the states worth seeing, in order. The demo is
+a showcase, not a tutorial: a step shows that the feature exists and what it looks like at its
+best, in one beat, with several states on one screen where they fit (the session-card step shows
+working, waiting on you, finished and error cards side by side). A step takes a second beat only
+when the feature's point is a change one frame cannot show: auto compact going from a cold
+cache to compacted, a stash and the start prompt offering it back, a workflow run early on and
+then finished. No step has more than two. A step carries one high-level caption for all its
+beats, naming what the feature is, not how to use it.
 
 A step stays set up until the demo leaves it. Entering a step builds its sample data and opens
 what it shows; leaving it, resetting it or stopping the demo removes them. Going back a beat

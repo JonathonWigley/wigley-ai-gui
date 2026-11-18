@@ -13,10 +13,11 @@ export interface SessionsDemoPageDeps {
   closeWaiting(): void;
 }
 
-// The session card and pane steps. The card step's `done` and `error` beats
-// keep the pane on the `waiting` session, since viewing a session clears those
-// words. The pane step splits the panes a pane key would, with no picker, and
-// closes every pane it split, newest first, before each beat and at dispose.
+// The session card and pane steps. The card step shows every card's state at
+// once, its pane on the `waiting` session, since viewing a session clears the
+// `done` and `error` words. The pane step splits the panes a pane key would,
+// with no picker, and closes every pane it split, newest first, before its
+// beat and at dispose.
 export function registerDemoSteps(
   services: PageServices,
   deps: SessionsDemoPageDeps,
@@ -31,7 +32,7 @@ export function registerDemoSteps(
       order: 10,
       title: 'Session cards',
       caption:
-        'Every agent session has a card in the side bar that shows what it is doing.',
+        'Every agent session has a card in the side bar showing what it is doing.',
       files: [
         'src/plugins/sessions/page/sidebar-view.ts',
         'src/plugins/chat/page/chat-state.ts',
@@ -40,10 +41,7 @@ export function registerDemoSteps(
       async enter({ sessions }: DemoPageContext) {
         return {
           beats: [
-            { name: 'working', show: () => activate(sessions.working) },
-            { name: 'needs you', show: () => activate(sessions.waiting) },
-            { name: 'done', show: () => activate(sessions.waiting) },
-            { name: 'error', show: () => activate(sessions.waiting) },
+            { name: 'every state', show: () => activate(sessions.waiting) },
           ],
           dispose() {},
         };
@@ -83,18 +81,14 @@ export function registerDemoSteps(
           deps.closeWaiting();
           return true;
         };
-        const sideBySide = () => {
-          closeSplitPanes();
-          activate(sessions.first);
-          return splitTo('row', sessions.second);
-        };
         return {
           beats: [
-            { name: 'side by side', show: () => void sideBySide() },
             {
-              name: 'stacked',
+              name: 'side by side and stacked',
               show() {
-                if (sideBySide()) {
+                closeSplitPanes();
+                activate(sessions.first);
+                if (splitTo('row', sessions.second)) {
                   splitTo('column', sessions.third);
                 }
               },

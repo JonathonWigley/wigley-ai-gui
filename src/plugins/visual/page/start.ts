@@ -78,7 +78,6 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     registerDemoSteps(services, {
       activate: (sessionId) => sessions.activate(sessionId),
-      overlay,
     });
 
     api.layouts.show<Layout>({

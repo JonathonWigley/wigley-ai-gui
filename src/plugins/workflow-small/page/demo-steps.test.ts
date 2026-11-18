@@ -41,10 +41,7 @@ describe('workflow-small page demo steps', () => {
 
   // Breaks: a wrong done count or stage that ships with no other check.
   it.each([
-    { name: 'Scope', stage: 'scope', done: 0, turnRunning: true },
     { name: 'Build', stage: 'build', done: 1, turnRunning: true },
-    { name: 'Check', stage: 'check', done: 2, turnRunning: true },
-    { name: 'Land', stage: 'land', done: 3, turnRunning: true },
     { name: 'Done', stage: 'done', done: 3, turnRunning: false },
   ])(
     'beat $name shows its flow',

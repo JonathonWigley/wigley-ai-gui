@@ -52,19 +52,14 @@ afterEach(() => {
 });
 
 describe('audio picker page demo steps', () => {
-  it.each([
-    { name: 'Candidates', row: { moment: 0, row: 0 } },
-    { name: 'Choose', row: { moment: 1, row: 1 } },
-    { name: 'Broken file', row: { moment: 2, row: 0 } },
-  ])('beat $name selects $row', async ({ name, row }) => {
+  it('the Candidates beat selects the first row', async () => {
     const stage = await enter(DEMO_SESSION);
-    const beat = stage.beats.find((each) => each.name === name);
 
-    await beat?.show();
+    await stage.beats[0].show();
 
     expect(ran).toEqual([
       ['audio-picker.dismissConfirm'],
-      ['audio-picker.selectRow', row],
+      ['audio-picker.selectRow', { moment: 0, row: 0 }],
     ]);
   });
 

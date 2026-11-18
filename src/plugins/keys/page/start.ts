@@ -214,19 +214,6 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
           keys.label,
           platform,
         ),
-      openHelp() {
-        if (helpScope === null) {
-          openHelp(null);
-        }
-      },
-      closeHelp,
-      isHelpOpen: () => helpScope !== null,
-      openLeaderSearch,
-      closeLeaderSearch() {
-        if (picker.isOpen()) {
-          picker.close();
-        }
-      },
     });
 
     keys.onKeymapChanged(() => {

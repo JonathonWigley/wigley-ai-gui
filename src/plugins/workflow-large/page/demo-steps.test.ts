@@ -3,12 +3,11 @@ import type { DemoStep } from '../../../contracts/demo';
 import type { PageServices } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import type { SessionFlow } from '../../workflow/contract';
 import { registerDemoSteps } from './demo-steps';
 
-const AUTO_START_SECONDS = 7;
-
-// The Large step registered with `autoStartSeconds` set to AUTO_START_SECONDS.
-function registerStep() {
+// The Large step registered over a `showSample` that records each flow shown.
+function registerStep(shown: SessionFlow[] = []) {
   const demoSteps = createDemoStepRegistry<DemoStep>();
   registerDemoSteps(
     {
@@ -17,8 +16,11 @@ function registerStep() {
       paths: posixPaths,
     } as unknown as PageServices,
     {
-      showSample: () => ({ dispose: () => undefined }),
-      autoStartSeconds: () => AUTO_START_SECONDS,
+      showSample(flow) {
+        shown.push(flow);
+        return { dispose: () => undefined };
+      },
+      autoStartSeconds: () => 7,
     },
   );
   const [step] = demoSteps.list();
@@ -37,15 +39,18 @@ describe('workflow-large page demo steps', () => {
     }).toEqual({ id: 'workflow-large.run', section: 'workflows', order: 50 });
   });
 
-  // Breaks: autoplay leaving the countdown before it runs down.
-  it('Countdown dwells for autoStartSeconds', async () => {
-    const stage = await registerStep().enter({
+  // Breaks: a beat that shows another stage's sample.
+  it('the beats show the interview, then the closed run', async () => {
+    const shown: SessionFlow[] = [];
+    const stage = await registerStep(shown).enter({
       scratchDir: '/scratch',
       sessions: { session: 's1' },
     });
 
-    const countdown = stage.beats.find((beat) => beat.name === 'Countdown');
+    for (const beat of stage.beats) {
+      await beat.show();
+    }
 
-    expect(countdown?.dwellSeconds).toBe(AUTO_START_SECONDS);
+    expect(shown.map((flow) => flow.stage)).toEqual(['interview', 'closed']);
   });
 });

@@ -35,7 +35,7 @@ async function drawSampleImage(): Promise<Uint8Array> {
 
 // The page half of `notes.note`: the note popup showing a sample note that
 // names the demo session, in place of the user's draft, which it never reads
-// or writes. Each beat opens the popup on one field.
+// or writes.
 export function registerDemoSteps(
   services: PageServices,
   deps: NotesPageDemoDeps,
@@ -67,12 +67,7 @@ export function registerDemoSteps(
       });
       const view = deps.popup.showSample(channel);
       return Promise.resolve({
-        beats: [
-          { name: 'Target', show: () => view.show('target') },
-          { name: 'Body', show: () => view.show('body') },
-          { name: 'Images', show: () => view.show('images') },
-          { name: 'Session', show: () => view.show('session') },
-        ],
+        beats: [{ name: 'Note', show: () => view.show('body') }],
         dispose: () => view.dispose(),
       });
     },

@@ -143,7 +143,6 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       },
       place: () => placeWriter.get(),
       openSectionAt: (index) => view.openSectionAt(index),
-      openSectionById: (id) => view.openSectionById(id),
       returnToPlace: (value) => view.returnToPlace(value),
     });
 

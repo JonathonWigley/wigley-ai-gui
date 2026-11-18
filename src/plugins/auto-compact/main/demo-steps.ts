@@ -1,19 +1,12 @@
-import type { AgentHarnessRegistry } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
-import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { MainServices } from '../../../contracts/plugin';
-import {
-  FAKE_COLD_TEXT,
-  type FakeAgentHarness,
-  isFakeAgentHarness,
-} from '../../../shared/fake-agent-harness';
+import { FAKE_COLD_TEXT } from '../../../shared/fake-agent-harness';
 import { createRegistrations } from '../../../shared/registrations';
 import type { ChatMainExports } from '../../chat/contract';
 
 export interface AutoCompactDemoMainDeps {
   chat: Pick<ChatMainExports, 'send'>;
-  harnesses: AgentHarnessRegistry;
   onTurnFinished(
     listener: (finished: { sessionId: string; how: 'idle' | 'rested' }) => void,
   ): Disposable;
@@ -71,9 +64,7 @@ function idleTurnCounter(
 }
 
 // The auto compact step's main half: `compacted`, a cold session whose next
-// send the gate held and compacted, its compaction ended before compactions
-// are held; `held`, the same with its compaction held open; `cold`, a cold
-// session nothing was sent to. The stage releases the held compactions.
+// send the gate held and compacted; `cold`, a cold session nothing was sent to.
 export function registerDemoSteps(
   services: MainServices,
   deps: AutoCompactDemoMainDeps,
@@ -84,12 +75,7 @@ export function registerDemoSteps(
       id: 'auto-compact.compact',
       async enter(context) {
         const turns = idleTurnCounter(deps, services.timers);
-        let heldHarness: FakeAgentHarness | null = null;
-        const dispose = () => {
-          heldHarness?.releaseCompactions();
-          heldHarness = null;
-          turns.dispose();
-        };
+        const dispose = () => turns.dispose();
         try {
           const compacted = await context.launchSession(FAKE_COLD_TEXT);
           await turns.idle(compacted, 1);
@@ -97,18 +83,8 @@ export function registerDemoSteps(
           // `send` resolves as the gate starts the compaction; the second idle
           // finish comes after it ended.
           await turns.idle(compacted, 2);
-          const harness = deps.harnesses.get(DEMO_HARNESS_ID);
-          if (harness !== null && isFakeAgentHarness(harness)) {
-            harness.holdCompactions();
-            heldHarness = harness;
-          } else {
-            services.log('demo compact: no demo harness to hold');
-          }
-          const held = await context.launchSession(FAKE_COLD_TEXT);
-          await turns.idle(held, 1);
-          await deps.chat.send(held, CARRY_ON);
           const cold = await context.launchSession(FAKE_COLD_TEXT);
-          return { sessions: { compacted, held, cold }, dispose };
+          return { sessions: { compacted, cold }, dispose };
         } catch (error) {
           dispose();
           throw error;
