@@ -6,7 +6,7 @@ import {
   type TaskFile,
   type TaskSchedule,
 } from './contract';
-import { readSchedule } from './schedule';
+import { readSchedule, shown } from './schedule';
 
 // The `ScheduledTask` keys, in the order the file writes them.
 const TASK_KEYS = [
@@ -184,9 +184,4 @@ function orderedSchedule(schedule: TaskSchedule): TaskSchedule {
 
 function isFilledString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
-}
-
-// A parsed JSON value as the file writes it.
-function shown(value: unknown): string {
-  return JSON.stringify(value);
 }

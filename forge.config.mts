@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { readdirSync, renameSync } from 'node:fs';
 import path from 'node:path';
 import type {
   ForgeConfig,
@@ -8,6 +8,7 @@ import type {
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { writeLoginItemPlist } from './scripts/login-item-plist.mts';
 import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
 import {
   copyDeclarationInputs,
@@ -16,10 +17,6 @@ import {
 
 // `tsconfig.plugin-types.json`'s `outDir`.
 const PLUGIN_TYPES_FOLDER = '.plugin-types';
-// `LOGIN_START_LABEL` and `LOGIN_START_FLAG` in `src/contracts/login-start.ts`,
-// which this config does not import.
-const LOGIN_START_LABEL = 'wigley-ai-gui.session-host';
-const LOGIN_START_FLAG = '--start-session-host';
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -195,39 +192,6 @@ function showMacBundleAs(
     '--preserve-metadata=entitlements,requirements,flags,runtime',
     appPath,
   ]);
-}
-
-// The `agentService` login item that starts the session host at login: macOS
-// runs the bundle's executable with `LOGIN_START_FLAG`, and the app starts the
-// host detached and exits.
-function writeLoginItemPlist(appPath: string, executableName: string): void {
-  const folder = path.join(appPath, 'Contents', 'Library', 'LaunchAgents');
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(
-    path.join(folder, `${LOGIN_START_LABEL}.plist`),
-    [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-      '<plist version="1.0">',
-      '<dict>',
-      '\t<key>Label</key>',
-      `\t<string>${LOGIN_START_LABEL}</string>`,
-      '\t<key>BundleProgram</key>',
-      `\t<string>Contents/MacOS/${executableName}</string>`,
-      '\t<key>ProgramArguments</key>',
-      '\t<array>',
-      `\t\t<string>${executableName}</string>`,
-      `\t\t<string>${LOGIN_START_FLAG}</string>`,
-      '\t</array>',
-      '\t<key>RunAtLoad</key>',
-      '\t<true/>',
-      '\t<key>AbandonProcessGroup</key>',
-      '\t<true/>',
-      '</dict>',
-      '</plist>',
-      '',
-    ].join('\n'),
-  );
 }
 
 function setPlistStrings(

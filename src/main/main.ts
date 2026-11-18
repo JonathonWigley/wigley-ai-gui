@@ -686,6 +686,27 @@ function sessionHostFolder(homeDir: string): string {
     : path.join(app.getPath('userData'), 'session-host');
 }
 
+// The live app instance's user data folder, which the stable session host's folder sits in.
+function liveUserDataFolder(): string {
+  return path.join(app.getPath('appData'), appInstance.id);
+}
+
+// Where the session host lives and what starts it: shared by the client and the login start, so
+// both name the one stable host.
+function sessionHostLocation(folder: string, homeDir: string) {
+  return {
+    folder,
+    channel: sessionHostChannel(
+      platform.os,
+      homeDir,
+      platform.relay.username,
+      appInstance.id,
+    ),
+    hostScript: path.join(__dirname, 'session-host.js'),
+    execPath: process.execPath,
+  };
+}
+
 // The login item the bundle ships, for the live stable app on macOS; no login start for the dev app, which never
 // fires, the self-test and drive runs, which must not register one on the user's Mac, and the other platforms.
 function loginStartOf(): LoginStart {
@@ -1532,15 +1553,10 @@ function startApp() {
         serveVisual(source),
       );
       const sessionHost = createSessionHostClient({
-        folder: sessionHostFolder(inputs.homeDir),
-        channel: sessionHostChannel(
-          platform.os,
+        ...sessionHostLocation(
+          sessionHostFolder(inputs.homeDir),
           inputs.homeDir,
-          platform.relay.username,
-          appInstance.id,
         ),
-        hostScript: path.join(__dirname, 'session-host.js'),
-        execPath: process.execPath,
         env: process.env,
         spawn,
         clock,
@@ -1579,7 +1595,7 @@ function disableCodeCache() {
 // each take their own lock and run side by side.
 function startLiveApp() {
   try {
-    app.setPath('userData', path.join(app.getPath('appData'), appInstance.id));
+    app.setPath('userData', liveUserDataFolder());
   } catch (error) {
     failStart(error);
     return;
@@ -1599,18 +1615,13 @@ function startSessionHostAtLogin() {
   if (platform.lifecycle.hidesFromDockBesideApp) {
     app.setActivationPolicy('accessory');
   }
-  const launch = sessionHostLaunch({
-    // The live run's `sessionHostFolder`, whose user data is `<appData>/<appInstance.id>`.
-    folder: path.join(app.getPath('appData'), appInstance.id, 'session-host'),
-    channel: sessionHostChannel(
-      platform.os,
+  // The live run's `sessionHostFolder`, whose user data is `liveUserDataFolder()`.
+  const launch = sessionHostLaunch(
+    sessionHostLocation(
+      path.join(liveUserDataFolder(), 'session-host'),
       os.homedir(),
-      platform.relay.username,
-      appInstance.id,
     ),
-    hostScript: path.join(__dirname, 'session-host.js'),
-    execPath: process.execPath,
-  });
+  );
   const host = spawn(launch.command, launch.args, {
     detached: true,
     stdio: 'ignore',

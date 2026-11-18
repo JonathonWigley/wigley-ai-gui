@@ -496,6 +496,7 @@ function isWholeNumberIn(
   );
 }
 
-function shown(value: unknown): string {
+// A value as JSON for an error line, `String` for one JSON cannot write.
+export function shown(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
