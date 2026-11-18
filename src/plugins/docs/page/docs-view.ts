@@ -29,6 +29,7 @@ import {
   docsOpenNodeCommand,
   docsOpenRecentPageCommand,
   docsSwitchTreeViewCommand,
+  type DocsEdits,
   type DocsPlace,
   type IndexContext,
   type IndexDocument,
@@ -209,8 +210,11 @@ export interface DocsView {
   // written, so a place not restored yet stays in the slot, and its edits
   // count as unsaved (`unsavedPath`); a doc the index no longer lists toasts
   // as `openDoc` does, and an open that fails toasts that its edits were not
-  // restored. The open goes to `trackRestore` once the view has shown: an open
-  // waits on the view's first index read, which its first show starts.
+  // restored. An open a newer open beats keeps its edits: they still count as
+  // unsaved and go into each place written, until their doc opens and they go
+  // back in its editor. The open goes to `trackRestore` once the view has
+  // shown: an open waits on the view's first index read, which its first show
+  // starts.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
   // unless a newer open was asked, the empty Main page taking focus; nothing in a
@@ -495,6 +499,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // A reloaded page's place, and its open, while that open has not settled.
   let restoring: DocsPlace | null = null;
   let restoringOpen: Promise<void> | null = null;
+  // A reloaded page's unsaved edits whose open a newer open beat, until their
+  // doc opens.
+  let draft: DocsEdits | null = null;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -675,6 +682,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         .open(targetFor(entry.path, entry, match.line, null))
         .then((opened) => {
           if (opened && !isDisposed) {
+            applyDraft(entry.path);
             openedFromTree(focusesDoc);
           }
         });
@@ -816,8 +824,21 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     deps.placeChanged({
       openPath: doc.openPath(),
       trees: tree.place(),
-      edits: doc.edits(),
+      edits: doc.edits() ?? draft,
     });
+  };
+
+  // Puts the beaten restore's edits back in the editor once their doc at
+  // `path` shows.
+  const applyDraft = (path: string) => {
+    const held = draft;
+    if (held === null || !deps.paths.samePath(held.path, path)) {
+      return;
+    }
+    doc.restoreEdits(held);
+    if (doc.hasUnsavedEdits()) {
+      draft = null;
+    }
   };
 
   const refreshRecentOnMain = () => {
@@ -838,6 +859,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     if (opened) {
       deps.docOpened(target.path);
+      applyDraft(target.path);
     }
     return opened;
   };
@@ -1877,7 +1899,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           if (isDisposed) {
             return;
           }
-          if (!opened) {
+          if (!opened && edits !== null && number !== askedOpens) {
+            draft = edits;
+            const shownPath = doc.openPath();
+            if (shownPath !== null) {
+              applyDraft(shownPath);
+            }
+          } else if (!opened) {
             toastEditsDropped();
           } else if (edits !== null) {
             doc.restoreEdits(edits);
@@ -1967,7 +1995,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     hasUnsavedEdits: () => view.unsavedPath() !== null,
     unsavedPath: () =>
-      doc.hasUnsavedEdits() ? doc.openPath() : (restoring?.edits?.path ?? null),
+      doc.hasUnsavedEdits()
+        ? doc.openPath()
+        : ((restoring?.edits ?? draft)?.path ?? null),
     dispose() {
       isDisposed = true;
       callEach<() => void>(

@@ -234,7 +234,7 @@ describe('createTreeView', () => {
   it.each([
     { text: 'Reading…', isHidden: false },
     { text: null, isHidden: true },
-  ])('setStatus_$text_DrawsOnlyTheStatusPart', ({ text, isHidden }) => {
+  ])('setStatus draws only the status part ($text)', ({ text, isHidden }) => {
     let paneDraws = 0;
     const counting: Layout = {
       treePane(parent, input, kit) {

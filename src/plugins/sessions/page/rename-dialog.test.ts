@@ -39,10 +39,12 @@ function deferred() {
 // parts, whose `setUserTitle` records each call and answers as `answer` says,
 // and whose pushed scope records its pushes and pops and runs its base-change
 // listener on `baseChanged`. `opener` is a connected element holding focus
-// before the dialog opens; `view` is the sessions view whose parts draw it.
+// before the dialog opens; `view` is the sessions view whose parts draw it;
+// `stop` marks the plugin stopped.
 function dialogSetup(answer: () => Promise<void> = async () => undefined) {
   const invoked: [string, string | null][] = [];
   const logged: string[] = [];
+  let isStopped = false;
   let pushes = 0;
   let pops = 0;
   let onBaseChanged: (base: string) => void = () => undefined;
@@ -70,6 +72,7 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
     titleMaxLength: () => 40,
     parts: view.parts,
     log: (message) => logged.push(message),
+    isStopped: () => isStopped,
   });
   const root = asFake(dialog.element);
   const opener = new FocusFakeElement('div');
@@ -91,6 +94,9 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
     pushes: () => pushes,
     pops: () => pops,
     baseChanged: () => onBaseChanged('idle'),
+    stop: () => {
+      isStopped = true;
+    },
   };
 }
 
@@ -209,6 +215,51 @@ describe('createRenameDialog', () => {
       expect(dialog.isOpen()).toBe(false);
       expect(problem()).toBeNull();
       expect(logged).toEqual([line]);
+    },
+  );
+
+  it.each([
+    {
+      case: 'main sets it, dialog open',
+      isCancelled: false,
+      settleWith: (pending: ReturnType<typeof deferred>) => pending.resolve(),
+    },
+    {
+      case: 'main refuses it, dialog open',
+      isCancelled: false,
+      settleWith: (pending: ReturnType<typeof deferred>) =>
+        pending.reject(new Error('main said no')),
+    },
+    {
+      case: 'main sets it, dialog cancelled',
+      isCancelled: true,
+      settleWith: (pending: ReturnType<typeof deferred>) => pending.resolve(),
+    },
+    {
+      case: 'main refuses it, dialog cancelled',
+      isCancelled: true,
+      settleWith: (pending: ReturnType<typeof deferred>) =>
+        pending.reject(new Error('main said no')),
+    },
+  ])(
+    'an answer landing after the plugin stopped closes the dialog and logs nothing ($case)',
+    async ({ isCancelled, settleWith }) => {
+      const pending = deferred();
+      const setup = dialogSetup(() => pending.promise);
+      setup.dialog.open(row());
+
+      setup.box().value = 'Fix it';
+      setup.dialog.accept();
+      if (isCancelled) {
+        setup.dialog.cancel();
+      }
+      setup.stop();
+      settleWith(pending);
+      await settle();
+
+      expect(setup.dialog.isOpen()).toBe(false);
+      expect(setup.problem()).toBeNull();
+      expect(setup.logged).toEqual([]);
     },
   );
 

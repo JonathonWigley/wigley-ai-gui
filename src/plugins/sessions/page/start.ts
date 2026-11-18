@@ -581,6 +581,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       titleMaxLength: () => api.settings().titleMaxLength,
       parts: view.parts,
       log,
+      isStopped: () => isStopped,
     });
     api.areas.overlay.contribute(renameDialog.element);
 

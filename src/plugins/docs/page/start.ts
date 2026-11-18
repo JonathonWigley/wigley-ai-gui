@@ -263,9 +263,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             .filter((path) => path !== null),
         placeChanged: (value) => place.write(value),
       });
-      const savedPlace = placeWriter.get(sourceId);
-      if (savedPlace !== undefined) {
-        view.restorePlace(savedPlace);
+      // A place of the older shape, with no `trees`, which a page reloaded
+      // under a running main can find, is dropped.
+      const savedPlace: Partial<DocsPlace> | undefined =
+        placeWriter.get(sourceId);
+      if (savedPlace?.trees !== undefined) {
+        view.restorePlace(savedPlace as DocsPlace);
       }
       return view;
     };

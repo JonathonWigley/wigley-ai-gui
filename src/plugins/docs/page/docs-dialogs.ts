@@ -137,7 +137,11 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     const listed = deps.channel
       .invoke('listFolder', folder)
       .catch((error: unknown) => {
-        deps.log(`not listed ${folder}: ${errorText(error)}`);
+        // A box closed meanwhile, as the dialogs' dispose closes it, logs
+        // nothing.
+        if (request !== null) {
+          deps.log(`not listed ${folder}: ${errorText(error)}`);
+        }
         return [];
       });
     listings.set(folder, listed);
@@ -200,10 +204,13 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   };
 
   const refreshQuietly = () => {
-    if (request?.completes === true) {
-      refresh().catch((error) =>
-        deps.log(`completion failed: ${errorText(error)}`),
-      );
+    const shown = request;
+    if (shown?.completes === true) {
+      refresh().catch((error) => {
+        if (request === shown) {
+          deps.log(`completion failed: ${errorText(error)}`);
+        }
+      });
     }
   };
 
@@ -264,9 +271,15 @@ function createTextBox(deps: TextBoxDeps): TextBox {
           input.value = completeTyped(typed, matches, deps.paths);
           cursorToEnd();
           await refresh();
-          deps.log(`completed to ${input.value}`);
+          if (request === shown) {
+            deps.log(`completed to ${input.value}`);
+          }
         })
-        .catch((error) => deps.log(`completion failed: ${errorText(error)}`));
+        .catch((error) => {
+          if (request === shown) {
+            deps.log(`completion failed: ${errorText(error)}`);
+          }
+        });
     },
     accept() {
       const shown = request;

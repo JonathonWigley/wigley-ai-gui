@@ -116,6 +116,8 @@ interface StartOptions {
   picker?: ListPickerService;
   // What main's `activate` answers; true when left out.
   activateReply?: () => Promise<unknown>;
+  // What main's `closeSession` answers, in place of `closeRefusal`.
+  closeReply?: () => Promise<unknown>;
 }
 
 // `part` on the harness, its rows and selection written, up to the first
@@ -132,6 +134,7 @@ async function startApplied(
     part = sessionsPagePart,
     picker = fakeListPickerService(),
     activateReply = async () => true,
+    closeReply = async () => closeRefusal,
   }: StartOptions = {},
 ) {
   const activations: unknown[] = [];
@@ -145,7 +148,7 @@ async function startApplied(
       }
       if (method === 'closeSession') {
         closes.push(args);
-        return closeRefusal;
+        return closeReply();
       }
       return true;
     },
@@ -1216,7 +1219,7 @@ describe('sessions page part', () => {
       logged: 'tab keys ignored: the shown mode has no tabs',
     },
   ] as const)(
-    '$command_ModeHidden_DoesNothing',
+    'does nothing while the mode is hidden ($command)',
     async ({ command, logged }) => {
       const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
         withOtherMode: true,
@@ -1304,29 +1307,98 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
-  it('logs nothing when an activate reply rejects after the part stopped', async () => {
-    const rejects: ((error: Error) => void)[] = [];
-    const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
-      activateReply: () =>
-        new Promise((_resolve, reject) => {
-          rejects.push(reject);
-        }),
-    });
-    setup.exports.activate('s2');
-    const logCount = setup.harness.logs.length;
+  // Breaks: a continuation of an ask begun before the stop logging,
+  // toasting or asking main again once it lands.
+  it.each<{
+    case: string;
+    isRejected: boolean;
+    reply?: unknown;
+    // How many closes main was asked, all before the stop.
+    closes: number;
+    // Holds the ask's answer in `answer`, then asks.
+    act(
+      answer: Promise<unknown>,
+    ): Promise<Awaited<ReturnType<typeof startApplied>>>;
+  }>([
+    {
+      case: 'an activate reply rejects',
+      isRejected: true,
+      closes: 0,
+      act: async (answer) => {
+        const setup = await startApplied(['s1', 's2'], 's1', fakeUiState(), {
+          activateReply: () => answer,
+        });
+        setup.exports.activate('s2');
+        return setup;
+      },
+    },
+    {
+      case: 'main refuses a close',
+      isRejected: false,
+      reply: "Finish or cancel label s1's round first",
+      closes: 1,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+          closeReply: () => answer,
+        });
+        void setup.exports.closeSession('s1');
+        await settle();
+        return setup;
+      },
+    },
+    {
+      case: 'a close ask fails',
+      isRejected: true,
+      closes: 1,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+          closeReply: () => answer,
+        });
+        void setup.exports.closeSession('s1');
+        await settle();
+        return setup;
+      },
+    },
+    {
+      case: "a tab's close guard answers",
+      isRejected: false,
+      reply: true,
+      closes: 0,
+      act: async (answer) => {
+        const setup = await startApplied(['s1'], 's1');
+        setup.exports.addTab('s1', {
+          id: 'tab',
+          title: 'Tab',
+          icon: 'book',
+          element: document.createElement('div'),
+          beforeClose: () => answer as Promise<boolean>,
+          shown: () => undefined,
+        });
+        void setup.exports.closeSession('s1');
+        return setup;
+      },
+    },
+  ])(
+    'an ask landing after the part stopped does nothing ($case)',
+    async ({ isRejected, reply, closes, act }) => {
+      const answer = Promise.withResolvers<unknown>();
+      const setup = await act(answer.promise);
 
-    await setup.harness.stop();
-    for (const reject of rejects) {
-      reject(new Error('main stopped'));
-    }
-    await settle();
+      await setup.harness.stop();
+      const logCount = setup.harness.logs.length;
+      if (isRejected) {
+        answer.reject(new Error('main stopped'));
+      } else {
+        answer.resolve(reply);
+      }
+      await settle();
 
-    expect(
-      setup
-        .logsSince(logCount)
-        .filter((line) => line.startsWith('session not activated')),
-    ).toEqual([]);
-  });
+      expect({
+        logs: setup.logsSince(logCount),
+        closes: setup.closes.length,
+      }).toEqual({ logs: [], closes });
+    },
+  );
 });
 
 describe('the sessions list in the page part', () => {

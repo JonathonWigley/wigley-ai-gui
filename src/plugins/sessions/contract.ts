@@ -51,7 +51,9 @@ const SESSION_STEP_COMMANDS = {
 // A self-test step to a session row however the rows draw: presses `key`
 // again past each row on the way until the `until` line is logged, at most
 // `max` presses. A press logs its command's line, the row's activation and the
-// shown tab's line in one task.
+// shown tab's line in one task. It steps rather than pressing a fixed count
+// because rows opened together can tie on their stamps and earlier scripts can
+// leave rows open, so the rows draw in no fixed order.
 export function stepToSessionRow(
   key: keyof typeof SESSION_STEP_COMMANDS,
   until: string,
@@ -61,7 +63,7 @@ export function stepToSessionRow(
     keys: [key],
     expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
     repeat: { until, max },
-    why: "Rows opened together can tie on their stamps and earlier scripts can leave rows open, so this script's rows draw in no fixed order.",
+    why: `${key} runs ${SESSION_STEP_COMMANDS[key]} and steps the rows until the session row this step wants is shown.`,
   };
 }
 
