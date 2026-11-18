@@ -1,6 +1,6 @@
 # 24 — Teardown rules after a stop
 
-Status: not started
+Status: done
 Type: Batch
 Rung: deep · crosses every plugin's stop lifecycle and its async continuations (main and page), and changes how main's plugin router answers an invoke to a stopped part
 Wave: 6 · Depends on: 08 (its sweeps may edit 08's files), 11 (its sweeps reach 11's `dispose` bodies), 23 (its
@@ -212,3 +212,5 @@ Commit:    one commit for the group, e.g. "Stopped parts drop late continuations
            invoke after its plugin's main part stopped; A throwing teardown step skips the rest)"
 
 ## Proof
+
+Commit 592af3fa5 · proof: diff read of the Rule 2 router, switch wiring, detachAll, chat main dispose and session-tabs drop; the sweep sites checked against the worker's per-file list; typecheck and lint (after lead oxfmt over four files) clean · concerns: Rule 3 sweep sites have no test rows (task asks a row per changed site in a tested file); popup.test flipped: a note send landing after stop now toasts nothing; workflow-large countdown timers are guarded, not cancelled; scheduling main's nested finally lets a later error win; residual log-only continuations in rename-dialog, stash-flow, account-commands, sign-in-flow, attachments, and forms/main/start.ts untouched
