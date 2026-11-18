@@ -659,9 +659,9 @@ because the earlier items rewrite many of these tests anyway.
 - **A refused review click returns focus to the assistant pane's frame, not its ask box** — *needs a feature plan*
   (it adds a seam): in `src/plugins/backlog/page/backlog-view.ts` (844-849) a click into the review with no row
   selected, while the assistant holds the keys, calls `pane.element.focus()`. In the real pane that is the
-  `scoped-agents-pane` body (`src/plugins/scoped-agents/page/agent-pane.ts`, 98-99 and 382), while the assistant's
-  keys act in the ask box editor (`askBox.editor.focus`, 160-161) or the chat mount. A user typing in the ask box who
-  clicks the empty review loses the caret. The `AgentPane` contract (`src/plugins/scoped-agents/contract.ts`, 96-108)
+  `scoped-agents-pane` body (`src/plugins/scoped-agents/page/agent-pane.ts`, 108-109 and 409), while the assistant's
+  keys act in the ask box editor (`askBox.editor.focus`, 178-179) or the chat mount. A user typing in the ask box who
+  clicks the empty review loses the caret. The `AgentPane` contract (`src/plugins/scoped-agents/contract.ts`, 113-129)
   has no member that returns DOM focus to where the pane's keys act; the fix is one (for example running
   `holdKeys(true)`), and the view test's fake should then assert that element. Test gap: the backlog view test's fake
   `pushScope` returns an `onBaseChanged` that never fires (`backlog-view.test.ts`, 353 and 362), so a box-close chain

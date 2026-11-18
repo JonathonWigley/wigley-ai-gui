@@ -103,10 +103,18 @@ registrations.
   - `setShown(shown)`: the host shows or hides the slot holding the pane
   - `isAlwaysShown`: the pane shows from the start and never hides (Practice), else it starts hidden (Backlog)
   - `entersFrom`: the Alt move from the host into the pane, `right` for a slot right of the host (Backlog), `down`
-    for one below it (Practice); the opposite move leaves the pane
-  - `resizeTarget`: the slot's divider, for the resize keys
+    for one below it (Practice); the opposite move leaves the pane. Null when the host owns the moves (the Demo
+    panel): `outerPanes.focus` takes none, `toggle` gives the pane the keys at once, and the pane must be
+    `isAlwaysShown`
+  - `resizeTarget`: the slot's divider, for the resize keys; null when the host owns them, and
+    `outerPanes.resize` then moves nothing
   - `tookKeys()`: the pane took the keys, so the host's focus is the pane
   - `leave()`: `Esc` in the ask box or the move opposite `entersFrom` from the pane; the host takes the keys back
+- A pane inside a host's right-bar contribution is host-owned (the Demo panel's step agent): the spec passes
+  `isAlwaysShown: true` and null `entersFrom` and `resizeTarget`; the contribution passes
+  `keepsTurn: () => pane.holdsKeys()` and its `left` calls `pane.hostTookKeys()`; the host's own command calls
+  `toggle()`; `leave` sets the host's scope and focuses its element; and on a mode change while `holdsKeys()`, the
+  host blurs the focused element in its contribution so the core gives main the keys.
 - The host drives the pane through `AgentPane`:
   - `toggle()` shows the pane and gives it the keys, or hides it; an always-shown pane takes the keys, or hands them
     back to the host, and never hides. An always-shown pane reads `sessionOf` on each `scopeOpened` and takes no keys
@@ -121,6 +129,7 @@ registrations.
   - `redraw()` draws the ask box again; the page part redraws every pane on a layout set, so a host calls it only
     when its heading changes
   - `hostTookKeys()` hears the keys leave the pane; `modeHidden()` gives them back as the mode hides
+  - `holdsKeys()` says whether the pane holds the keys, from taking them until it gives them up or is disposed
   - `outerPanes` moves the `entersFrom` direction into the shown pane from wherever the host has the keys, and the
     opposite direction from the pane to the host; no move enters a pane with no scope open. A host that must refuse
     the move in from one of its own panes wraps it (Practice takes `Alt+j` only from its console).

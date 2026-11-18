@@ -32,7 +32,7 @@ scratch. It runs inside the everyday app, over whatever mode is shown:
   | `Space d x` | stop the demo and remove everything it set up |
 
   Inside the focused panel (scope `demo.panel`), `j`/`k` move through the step list, `Enter` goes to
-  the step and `i` moves the keys into the step agent's pane and back.
+  the step, `i` moves the keys into the step agent's pane, and `Esc` there gives them back.
 
 **Autoplay** shows each beat for `demo.autoplaySeconds` (default 5, at least 1), or for a beat's own
 longer dwell, then moves on. It stops on the last beat before the real-session step, which only a

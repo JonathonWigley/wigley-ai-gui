@@ -124,7 +124,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   or `l` and returns to the doc on `Esc`. The right bar's system stats panel (scope `system-stats.panel`) moves its
   process rows with `j`/`k` and `gg`/`G`, cycles its sort column on `s`, opens a group on `Enter` or `l` and closes it
   on `h`. The Demo panel (scope `demo.panel`, first in the right bar) moves its step cursor with `j`/`k`, goes to the
-  cursor's step on `Enter`, and on `i` moves the keys into the step agent's pane below and back.
+  cursor's step on `Enter`, and on `i` moves the keys into the step agent's pane below; `Esc` in its ask box gives them back.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
   moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its
