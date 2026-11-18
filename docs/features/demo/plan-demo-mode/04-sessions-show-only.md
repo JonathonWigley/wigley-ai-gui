@@ -15,7 +15,7 @@ Files:
 - modify `wigley-ai-gui/src/plugins/sessions/page/start.ts`
 - test `wigley-ai-gui/src/plugins/sessions/page/start.test.ts`
 
-Consumes: `SidebarSection` (`sessions/contract.ts:569`), `SessionsPageExports` (`:655-685`), `sessionsClaimedSlot` (`:759`), `sidebarSections` and `drawnRows` (`sessions/page/sidebar-order.ts`), `realSections`, `drawSidebar`, `publishClaimed` and `orderedRows` (`sessions/page/sessions-view.ts:296, 384, 366, 617`) — all in the tree now.
+Consumes: `SidebarSection` (`sessions/contract.ts:569`), `SessionsPageExports` (`:655-685`), `sessionsClaimedSlot` (`:759`), `sidebarSections` and `drawnRows` (`sessions/page/sidebar-order.ts`), `realSections`, `drawSidebar`, `publishClaimed`, `orderedRows` and `moveFavorite` (`sessions/page/sessions-view.ts:297, 384, 366, 617, 623`) — all in the tree now.
 
 Produces:
 - `SessionsPageExports.showOnly(sectionId: string): Disposable` in `wigley-ai-gui/src/plugins/sessions/contract.ts`
@@ -37,7 +37,7 @@ Produces:
   nothing new. Disposing the top one reveals the next one down, or every section. A second
   dispose of the same holder does nothing.
 - **Only the shown section claims.** While a holder is held, every other section claims nothing:
-  `realSections()` calls `sidebarSections` with `registered` filtered to the section whose
+  `shownSections()` (below) calls `sidebarSections` with `registered` filtered to the section whose
   `id === sectionId` (an empty list for an unregistered id), so a row that a lower-`order` section
   would win today (the Demo section, order 0, against auto-retro's Retro section) draws in the shown
   one. Task 10's Retro step relies on this: it holds `showOnly('auto-retro')` over the demo's
@@ -48,25 +48,43 @@ Produces:
   section is registered but claims no row now (its header draws over no rows); a `sectionId` with
   no registered section gives `plugins: []`. Today `sidebarSections` drops a plugin section that
   has no rows; `onlySection` reads `registered` so the held header still draws.
-- **One source of shown sections.** `realSections()` (`sessions-view.ts:296`) applies the
-  filtered `sidebarSections` call and `onlySection` while a holder is held. So `drawSidebar`, `orderedRows` (`:617`), the list's
-  enter and move, the step keys (`start.ts:884` `stepToSession`) and the split picker
-  (`start.ts:1030`) all follow the shown rows with no change of their own. `moveFavorite` reads
-  the unfiltered sections, so a favorite keeps its place among every favorite.
+- **Two accessors, one source of shown sections.** Rename today's `realSections()`
+  (`sessions-view.ts:297`) to `allSections()`: the unfiltered sections, as today. Add
+  `shownSections()`: `allSections()` while no holder is held; while one is held, the filtered
+  `sidebarSections` call and `onlySection`. `drawSidebar` (`:347`), `orderedRows` (`:617`) and
+  `publishClaimed` read `shownSections()`, so the list's enter and move, the step keys
+  (`start.ts:884` `stepToSession`) and the split picker (`start.ts:1030`) all follow the shown
+  rows with no change of their own. `moveFavorite` (`:632`) reads `allSections().favorites`, so
+  a favorite keeps its place among every favorite and moves while a holder is held (reading the
+  shown sections there would find no favorites and log `<project> cannot move …`).
 - **The preview wins while it shows.** `sidebarDraw` draws the preview first, as today.
 - **Post-close selection.** Main's `removeRow` (`session-list.ts:390`) already skips each row id
-  in `claimed`. While a holder is held, `publishClaimed` (`:366`) publishes every row of the
-  page's state that the side bar does not draw, in main's order, plus the rows it publishes
-  today. Main then selects only a shown row after a close. Main is not touched. The slot keeps
-  its name; its comment (`contract.ts:759`) gains: "While `showOnly` is held, also every row the
-  side bar does not draw."
+  in `claimed`. With no holder, `publishClaimed` (`:366`) publishes what it publishes today: the
+  rows the sections claim. While a holder is held, `claimed` is the page state's rows the side
+  bar does not draw, in the page state's order, and nothing else: the shown section's rows are
+  left out. So closing a selected shown row selects a neighbouring shown row, and a close with no
+  shown neighbour selects nothing. Main is not touched; only `removeRow` reads the slot
+  (`sessions/main/start.ts:104`). The slot keeps its name; its comment (`contract.ts:756-758`)
+  becomes: "The rows main's post-close selection skips, by sessionId, as the side bar's last
+  draw found them: with no `showOnly` held, the rows a registered side bar section claims; while
+  one is held, every row the side bar does not draw. [] before the first draw and at each page
+  start."
 - **Log lines** (verbatim): `side bar shows only <sectionId>` when a holder becomes the top;
   `side bar shows every section` when the last holder goes.
 
 GIVEN a Demo section that claims two rows, and three other rows in Recent
 WHEN a host holds `showOnly('demo')`
 THEN the side bar draws the Demo header and its two rows only, `orderedRows()` returns those two,
-the next/previous keys move between them, and `claimed` holds the three Recent rows
+the next/previous keys move between them, and `claimed` holds exactly the three Recent rows'
+ids, without the two Demo rows
+
+GIVEN `showOnly('demo')` held and a selected Demo row with a Demo row beside it
+WHEN main closes the selected row
+THEN main's `removeRow` selects the other Demo row, since `claimed` leaves it out
+
+GIVEN `showOnly('demo')` held and two favorites
+WHEN `moveFavorite` moves one
+THEN the real favorites reorder and `moved <project> <direction>` logs
 
 GIVEN `showOnly('demo')` then `showOnly('other')`
 WHEN the second holder is disposed
@@ -95,8 +113,15 @@ THEN the Demo header draws over no rows
   - `sessionsView_ShowOnly_ShownSectionKeepsARowAnotherSectionClaims`: the GIVEN above, a row both
     sections claim draws under the shown section. The break it catches is a shown section that
     loses its rows to a hidden one.
+  - `sessionsView_ShowOnly_MoveFavoriteReordersTheRealFavorites`: two favorites, a holder held;
+    `moveFavorite` reorders them and logs `moved <project> <direction>`. The break it catches is
+    `moveFavorite` reading the shown sections, which hold no favorites while a holder is held.
 - `start.test.ts`: `showOnly_HidesRows_WritesThemToClaimed`, beside
-  `addSection_ClaimsARow_WritesItToClaimed` (`:397`).
+  `addSection_ClaimsARow_WritesItToClaimed` (`:397`): a Demo section claiming two rows, three
+  Recent rows; while `showOnly('demo')` is held, `claimed` equals the three Recent ids in state
+  order, exactly (the two Demo ids absent); after the holder is disposed, `claimed` is the two
+  Demo ids again. The break it catches is the shown section's rows left in `claimed`, which
+  sends main's post-close selection to nothing.
 
 Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 

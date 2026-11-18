@@ -3,16 +3,16 @@
 Status: not started
 Type: Parallel
 Rung: deep · crosses chat, sessions and agents through the async session lifecycle (turn ends, held compactions, held rosters) and changes what agents writes to its log
-Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/chat/page/start-prompt.ts`, its test and `src/plugins/chat/main/start.ts`), 04 (both modify `src/plugins/sessions/page/start.ts`)
+Wave: 2 · Depends on: 01, 02 (both modify `src/plugins/chat/page/start-prompt.ts`, its test and `src/plugins/chat/main/start.ts`), 03 (both modify `src/plugins/chat/page/start.ts`: 03 adds the `showHubForNow` export, this task registers chat's demo steps), 04 (both modify `src/plugins/sessions/page/start.ts`)
 Plan: [plan.md](plan.md)
 
 The demo steps of section `sessions` for seven plugins: sessions, chat, agent-strip, agents,
 agent-lines, visual, auto-compact, and the sessions plugin's skip of demo rows in its saved
 recency and panes. One reference pattern, then each plugin's own values.
 
-No step here holds `showOnly` or relies on it (the Demo section's hold is 07's), so 04 is not a
-dependency. Task 04 also modifies `wigley-ai-gui/src/plugins/sessions/page/start.ts`, in Wave 1:
-the worker of this task builds on 04's change to that file.
+No step here holds `showOnly` or relies on it (the Demo section's hold is 07's). The edge to 04
+is a shared file only: 04 also modifies `wigley-ai-gui/src/plugins/sessions/page/start.ts`, in
+Wave 1, and the worker of this task builds on 04's change to that file.
 
 Files paths are written from the `ai` repo root; every other path is relative to `wigley-ai-gui/`.
 
@@ -109,13 +109,14 @@ Produces:
     no stamp for a demo row, and the side bar orders it as a row with no stamp. A change made only of
     demo rows alters nothing, so nothing is saved to the `recency` or `projectRecency` entries.
   - **Panes** (`savedPaneSessions`, `src/plugins/sessions/page/pane-sessions.ts:202`): a pane that
-    shows a demo row saves `null`, as an empty pane does, so a restart after a stopped or crashed
-    demo opens that pane empty instead of on a session id no harness holds.
+    shows a demo row saves `null`, as an empty pane does. On a restart after a stopped or crashed
+    demo, `restorePlan` closes a pane saved empty (`RestorePlan.closing`, `pane-sessions.ts:127-138`),
+    so that pane closes instead of waiting on a session id no harness holds.
 
 ### chat
 
 - Main deps (`ChatDemoMainDeps`): `chat: Pick<ChatSessions, 'send' | 'interrupt'>` (the `chat` object of `src/plugins/chat/main/start.ts:390`).
-- Page deps (`ChatDemoPageDeps`): `activate` (the sessions page export chat already holds), `fillComposer`, `setHeadless` (the same functions the exports object at `src/plugins/chat/page/start.ts:403-418` builds), `typeInto: EditorHost['typeInto']` (`services.editor`), `openStartPrompt()` (`startPrompt.open()`), `pickModel(sessionId)` (the code path the `pickModel` command runs, aimed at `sessionId`), `cancelPicker()` (chat's list picker `cancel()`), `isPickerOpen()` (its `isOpen()`).
+- Page deps (`ChatDemoPageDeps`): `activate` (the sessions page export chat already holds), `fillComposer`, `setHeadless` (the same functions the exports object at `src/plugins/chat/page/start.ts:403-418` builds), `typeInto: EditorHost['typeInto']` (`services.editor`), `openStartPrompt()` (`startPrompt.open()`), `pickModel()` (`api.commands.run(chatCommand('pickModel'))`, `chatCommand` from `src/plugins/chat/ids.ts`: the command acts on the shown tab's session, `chat-commands.ts:375`, so the beat activates the session first), `cancelPicker()` (chat's list picker `cancel()`), `isPickerOpen()` (its `isOpen()`).
 - `chat.transcript`
   - files: `src/plugins/chat/page/entry-list.ts`, `src/plugins/chat/layouts/default/layout.js`
   - main keys: `blocks` ← `FAKE_BLOCKS_TEXT`; `steps` ← `FAKE_STEPS_TEXT`; `permission` ← `FAKE_PERMISSION_TEXT`
@@ -134,7 +135,7 @@ Produces:
 - `chat.controls`
   - files: `src/plugins/chat/page/chat-view.ts`, `src/plugins/chat/page/picker.ts`
   - main key: `session` ← `Plan the next change.`
-  - beats: `chips` cancels the picker when this stage opened it, then activates `session`; `model picker` activates `session`, then `pickModel(session)`
+  - beats: `chips` cancels the picker when this stage opened it, then activates `session`; `model picker` activates `session`, then runs `pickModel()` when `isPickerOpen()` is false. The stage counts the picker as its own when `isPickerOpen()` is true after that run. When it is still false (the session has no running process or no model control, which the command logs), the beat logs `demo controls: no model picker` and shows the chips.
   - dispose: `cancelPicker()` when this stage opened the picker and `isPickerOpen()`
 - `chat.startPrompt`
   - files: `src/plugins/chat/page/start-prompt.ts`, `src/plugins/chat/page/start-prompt-items.ts`
@@ -169,7 +170,7 @@ Produces:
   - beat: `roster` activates `session`
 - Changes in `src/plugins/agents/main/start.ts`:
   - A session `holdSample` holds keeps its sample roster: the `chat.agentEvent` fold writes and deletes no `rowRosters` key for it until the hold's dispose. The fold still folds its events into `rosters`.
-  - The agent log skips demo rows: the `chat.agentEvent` handler appends no line when `sessionsRowsSlot`'s row for `sessionId` has `harness === DEMO_HARNESS_ID`. The skip sits beside the `isPreviewHost` skip at `:85-89`.
+  - The agent log skips demo sessions: the part reads `sessionsRowsSlot` and keeps a `Set` of demo session ids for its life. The `chat.agentEvent` handler adds `sessionId` to the set when `sessionsRowsSlot`'s row for it has `harness === DEMO_HARNESS_ID`, and appends no line when the set holds `sessionId`. The skip sits beside the `isPreviewHost` skip at `:85-89`. The set is needed because a user close removes the row before chat ends the process (`session-list.ts:471-475`, then `chat.closed` → `endClosed`), so the process's last events, `sessionEnded` included, arrive with no row. Ids are never removed: a demo run adds about 30, and a removal on `sessionEnded` would drop the id while a cleared row's new process still runs.
 
 ### agent-lines
 
@@ -195,10 +196,10 @@ Produces:
   - files: `src/plugins/auto-compact/main/send-gate.ts`, `src/plugins/auto-compact/main/start.ts`
   - main deps: `chat: Pick<ChatMainExports, 'send'>`, `harnesses: AgentHarnessRegistry` (`services.agentHarnesses`), `onTurnFinished(listener: (finished: { sessionId: string; how: 'idle' | 'rested' }) => void): Disposable` (a listener on `chat.turnFinished`, which the part already hears at `src/plugins/auto-compact/main/start.ts:64`)
   - main half, in this order:
-    1. Subscribe `onTurnFinished` before the first launch; keep the ids whose turn finished `idle` in a stage-local set. `idle(id)` resolves once the set holds `id`.
-    2. `compacted` ← `FAKE_COLD_TEXT`; `await idle(compacted)`; `chat.send(compacted, { text: 'Carry on with the plan.', images: [] })`. The send gate holds the send and compacts first (`sendGateVerdict`, `src/plugins/auto-compact/main/send-gate.ts:37`).
+    1. Subscribe `onTurnFinished` before the first launch; count the turns each id finished `idle` in a stage-local map. `idle(id, n)` resolves once the count for `id` is `n` or more.
+    2. `compacted` ← `FAKE_COLD_TEXT`; `await idle(compacted, 1)`; `await chat.send(compacted, { text: 'Carry on with the plan.', images: [] })`. The send gate holds the send and compacts first (`sendGateVerdict`, `src/plugins/auto-compact/main/send-gate.ts:37`). `send` resolves when the gate starts the compaction (`chat-sessions.ts:3150-3155`), not when it ends, and the fake harness checks the compaction hold when it emits `compactionStarted`. So `await idle(compacted, 2)` before step 3: a second idle finish comes only after the compaction ended. Without this wait, step 3's hold can catch `compacted`'s compaction, and the `compacting` and `compacted` beats show the same state.
     3. When `harnesses.get(DEMO_HARNESS_ID)` is a fake (`isFakeAgentHarness`), call its `holdCompactions()`; else log `demo compact: no demo harness to hold`.
-    4. `held` ← `FAKE_COLD_TEXT`; `await idle(held)`; `chat.send(held, { text: 'Carry on with the plan.', images: [] })`. Its compaction stays open after `compactionStarted`.
+    4. `held` ← `FAKE_COLD_TEXT`; `await idle(held, 1)`; `await chat.send(held, { text: 'Carry on with the plan.', images: [] })`. Its compaction stays open after `compactionStarted`.
     5. `cold` ← `FAKE_COLD_TEXT`; nothing more.
   - main dispose: `releaseCompactions()` when step 3 held them; the subscription's dispose
   - beats: `cold cache` activates `cold`; `compacting` activates `held`; `compacted` activates `compacted`
@@ -208,7 +209,7 @@ Decisions:
 - One beat shows one state that already exists, by activating its session: beats never act on a session in a way the previous beat cannot undo. Irreversible actions (the interrupt, the error end, the cold send) run in the main half at enter, each on a session of its own.
 - The card step keeps the pane on `waiting` for the `done` and `error` beats: viewing a session clears its `done` and `error` words (`src/plugins/chat/page/chat-state.ts:39-44`).
 - While the demo runs (the demo harness is registered), the start prompt hides the user's projects and recent folders and resumes no sample row, for any opener, not only the start-prompt step: the side bar hides real sessions the same way for the whole run (plan.md Decisions).
-- The session hub, the details and the sections keep the user's own show and fold state; no step here toggles them.
+- The session hub, the details and the sections keep the user's own show and fold state; no step here toggles them or writes their uiState. No step here shows a hub section. The steps that do (task 12's `agent-skills`, `context-sources` and `live-view`) hold `ChatPageExports.showHubForNow` (03), which shows the hub and expands the section in memory for the hold's length and writes no uiState. This task wires nothing for it.
 - The sessions page skips demo rows in its saved recency and panes (plan.md ruling: no demo row in recency or ui-state), so a demo run changes neither entry; the check is the row's harness, the boundary rule plan.md names.
 - auto-compact reads the user's `minTokens` setting as is. With it at 0 or at 200000 or above, the gate does not hold the send (`FAKE_COLD_TEXT` reads 200000 context), and the `compacting` and `compacted` beats show plain sends.
 
@@ -216,16 +217,18 @@ GIVEN the demo harness is registered WHEN the start prompt opens THEN its first 
 GIVEN the demo harness is registered WHEN the user picks a resume row whose profile is `DEMO_PROFILE` THEN the prompt toasts `A sample session: the demo resumes nothing` and asks chat to resume nothing.
 GIVEN no demo harness WHEN the start prompt opens THEN it lists projects and recent folders as before.
 GIVEN a demo row's agent event WHEN agents folds it THEN no line is appended to its log.
+GIVEN agents saw an event of a demo row WHEN the row is removed and a later event of that session arrives THEN no line is appended to its log.
+GIVEN the `compacted` session's held send WHEN the main half holds compactions THEN the `compacted` session's compaction has already ended.
 GIVEN a saved recency record WHEN a sessions state adds, moves or removes only demo rows THEN no stamp changes and `uiState` is not written; WHEN a state adds a demo row and a `claude` row THEN only the `claude` row and its project are stamped.
-GIVEN a pane showing a demo row WHEN the panes are saved THEN that pane's saved session is `null`.
+GIVEN a pane showing a demo row WHEN the panes are saved THEN that pane's saved session is `null`, and a restart closes that pane.
 GIVEN a session `holdSample` holds WHEN an agent event for it arrives THEN its `agents.rosters` key keeps the sample roster; after the hold's dispose the next event writes the folded roster.
 
 Tests:
 - `src/plugins/chat/page/start-prompt.test.ts`: add the case `hides projects and recent folders while the demo harness is registered` — harnesses hold `DEMO_HARNESS_ID` and one listed harness, the channel answers two projects, one recent folder and one section row; the picker opens `Folder` with the section row and `Other folder…` only. The break it catches: a dropped demo check shows the user's project names in a team demo.
 - `src/plugins/chat/page/start-prompt.test.ts`: add the case `a sample section row resumes nothing` — a section row with `profile: DEMO_PROFILE` is chosen; the channel's `resume` gets no call and the toast text is `A sample session: the demo resumes nothing`. The break: a sample row starts a resume of a session id no harness holds.
-- `src/plugins/agents/main/start.test.ts`: add the case `appends no log line for a demo row` — the rows slot holds the session with `harness: DEMO_HARNESS_ID`; an `agentSpawned` event appends nothing to the fake data files, while the same event for a `claude` row appends one line. The break: demo runs fill the user's agent logs.
+- `src/plugins/agents/main/start.test.ts`: `startAgentsPart`'s fake `api.state` gains `read`, returning the test store's reader (`store.read(slot, 'test')`), and the test publishes rows through `store.publish(sessionsRowsSlot)`. Add an `it.each` `agentLog_DemoSession_AppendsNoLine: $name`, rows: `{ name: 'a demo row', row: 'demo', lines: 0 }`; `{ name: 'a claude row', row: 'claude', lines: 1 }`; `{ name: 'a demo row already removed', row: 'demo-then-removed', lines: 0 }` (emit one `agentSpawned` with the demo row present, delete the row, then emit a second `agentSpawned`; count the lines the second event added to `logs/h1.jsonl`). The breaks: demo runs fill the user's agent logs; a skip that reads only the row logs the events after a close.
 - `src/plugins/sessions/page/session-recency.test.ts`: add an `it.each` `recency_DemoRows_AreNeverStamped: $case` in the shape of the existing table (line 60), rows: `{ case: 'a demo row arrives' }` (no stamp, no `uiState` write), `{ case: 'a demo row leaves' }` (no write), `{ case: 'a demo row and a claude row arrive together' }` (only the `claude` row and its project stamped). The break it catches: a demo run stamps the scratch folder as a project and pushes the user's real stamps toward the 200 cap.
-- `src/plugins/sessions/page/pane-sessions.test.ts`: add a row to the `savedPaneSessions: $name` table (line 227): a pane on a row with `harness: DEMO_HARNESS_ID` saves `null`. The break: a restart reopens a pane on a demo session id.
+- `src/plugins/sessions/page/pane-sessions.test.ts`: add a row to the `savedPaneSessions: $name` table (line 227): a pane on a row with `harness: DEMO_HARNESS_ID` saves `null`. The break: a restart keeps a pane waiting on a demo session id.
 - `src/plugins/agents/main/start.test.ts`: add the case `a held sample roster outlasts the fold` — hold a session, set a sample roster, emit `agentSpawned` for it; the slot keeps the sample; dispose the hold, emit again; the slot holds the folded roster.
 
 Done when: compiles (`npm run typecheck`); `npm run lint` passes; the test gate runs the tests above. Live checks of the steps are in task 17.

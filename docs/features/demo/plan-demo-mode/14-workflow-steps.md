@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Parallel
-Rung: hard · it adds a page export to the workflow engine that overrides a session's drawn flow and must hand the row back at dispose, and a guard in workflow main's flow-open path; five plugins then follow one pattern over it
+Rung: deep · `showSample` holds per-session state across a rows-slot listener, a handle's dispose order and chat's headless flag (async, through chat main), and task 17 marks checks 36 and 38 on these steps `low-confidence`
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
 
@@ -12,6 +12,11 @@ Files:
 - modify `wigley-ai-gui/src/plugins/workflow/contract.ts`
 - modify `wigley-ai-gui/src/plugins/workflow/page/start.ts`
 - test `wigley-ai-gui/src/plugins/workflow/page/start.test.ts`
+- test `wigley-ai-gui/src/plugins/workflow/page/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/workflow-small/page/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/workflow-medium/page/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/workflow-spike/page/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/workflow-large/page/demo-steps.test.ts`
 - modify `wigley-ai-gui/src/plugins/workflow/main/start.ts`
 - test `wigley-ai-gui/src/plugins/workflow/main/start.test.ts`
 - create `wigley-ai-gui/src/plugins/workflow/main/demo-steps.ts`
@@ -47,7 +52,7 @@ Consumes:
   - the page part's `flowOf`, `isPreview`, `drawFlow` and `createPreview` (`src/plugins/workflow/page/start.ts:80-120,172`)
   - the rows slot's `on` listener, as `flows.on` is used (`src/plugins/workflow/page/start.ts:232`)
   - `SessionsPageExports.activate` (`src/plugins/sessions/contract.ts:668`)
-  - `ChatPageExports.setHeadless` (`src/plugins/chat/contract.ts:497`)
+  - `ChatPageExports.setHeadless(sessionId, headless): Promise<void>` (`src/plugins/chat/contract.ts:969`; the main exports' `setHeadless` at `:497` is a different member)
   - workflow main's `openFlow`, the `chat.sessionOpened` handler and `openRowsAlreadyOpen` (`src/plugins/workflow/main/start.ts:324-368`); `apply` returns on a session with no flow (`:166-169`), and so does the `chat.agentEvent` handler (`:393-396`)
   - `chat.sessionOpened`'s payload `profile`
   - `SMALL_WORKFLOW_ID`, `MEDIUM_WORKFLOW_ID` and `MediumState`, `SPIKE_WORKFLOW_ID`, `LARGE_WORKFLOW_ID`
@@ -56,7 +61,7 @@ Consumes:
 
 Produces:
 - `src/plugins/workflow/contract.ts`:
-  - `export function sampleFlow(sessionId: string, projectDir: string, fields: Partial<Omit<SessionFlow, 'sessionId' | 'projectDir'>>): SessionFlow`
+  - `export function sampleFlow(sessionId: string, projectDir: string, fields: Partial<Omit<SessionFlow, 'sessionId' | 'projectDir'>>): SessionFlow`. A field `fields` leaves out takes `newFlow`'s value (`src/plugins/workflow/flow.ts:12`): `workflow: null`, `movedUpFrom: null`, `stage: IDLE_STAGE`, `checklist: null`, `state: null`, `missedLevel: false`, `turnRunning: false`, `runningSubagents: []`. `contract.ts` writes these values itself and does not import `flow.ts`, because `flow.ts` imports `contract.ts`. Small and Spike beats pass no `state`, so it stays `null`. Every sample `ChecklistItem` sets `text` and `done` only; `running` is left out.
   - `WorkflowPageExports.showSample(flow: SessionFlow): Disposable`
 - `src/plugins/workflow-large/page/preview.ts`:
   - `export interface SamplePlan { projectDir: string; planDir: string; title: string }`
@@ -273,9 +278,16 @@ Workflow main tests name `method_Condition_Result` (`src/plugins/workflow/main/s
 - `src/plugins/workflow-large/page/preview.test.ts`:
   - `it.each` `'previewFlow plan: $name'`, rows `{ name: 'default', plan: undefined }` and `{ name: 'demo plan', plan: <Daily quests> }`. Break: a demo plan leaking into the layout preview, or the reverse.
   - `'demo beat names match PREVIEW_SAMPLES'`. Break: a sample added without a beat.
-- The level steps' beat tables change only what a live run sees; they are checked in task 17.
+- `src/plugins/workflow-small/page/demo-steps.test.ts`, `src/plugins/workflow-medium/page/demo-steps.test.ts`, `src/plugins/workflow-spike/page/demo-steps.test.ts`: each registers its steps into a recording `services.demoSteps`, enters the step with a fake context (`sessions: { session: 's1' }`, `scratchDir: '/scratch'`) and a `showSample` fake that records each flow, and runs each beat's `show()`.
+  - `it('registers <step id>')`: the registered step's `id`, `section` (`workflows`) and `order` match the Per-plugin values table. Break: a step in the wrong section or order.
+  - `it.each` `'beat $name shows its flow'` over that level's beat table, one row per table row: the recorded flow's `workflow`, `stage`, number of leading `done: true` items, `turnRunning`, and, for Medium, `state` equal to `{ fixCycles: <the row's fixCycles> }` (`MediumState` holds only `fixCycles`); for Small and Spike `state` is `null`. Break: a wrong `done` count or stage that ships with no other check.
+- `src/plugins/workflow-large/page/demo-steps.test.ts`: `it('registers workflow-large.run')` as above, and `it('Countdown dwells for autoStartSeconds')`: the `Countdown` beat's `dwellSeconds` equals the `autoStartSeconds` setting the fake `api.settings()` returns. Break: autoplay leaving the countdown before it runs down.
+- `src/plugins/workflow/page/demo-steps.test.ts`, with fakes for `showSample` (each returns a handle that records its dispose) and `setHeadless`, all appending to one ordered call log:
+  - `it('registers workflow.engine')` as above.
+  - `it('each beat disposes the previous handle after showing its own')`: run `No level` then `Headless`; the log holds `showSample#2` before `dispose#1`. Break: a dropped handle, or a gap where the row draws the stored flow.
+  - `it('stage dispose clears headless, then disposes the last handle')`: after `Headless`, stage dispose logs `setHeadless(s1, false)` before `dispose#2`, and `dispose#2` runs once. Break: a stranded headless flag on the demo row.
 
-Done when: `npm run typecheck`, `npm run lint` and the tests above pass; `grep -rln "registerDemoSteps" src/plugins/workflow src/plugins/workflow-small src/plugins/workflow-medium src/plugins/workflow-spike src/plugins/workflow-large` lists both `demo-steps.ts` files in each of the five plugins.
+Done when: `npm run typecheck` and the tests above pass; `npm run lint` passes apart from the known composition-root failure on the parts tasks 11, 12 and 13 create, when any of them has landed in this wave (plan.md, lint line); `grep -rln "registerDemoSteps" src/plugins/workflow src/plugins/workflow-small src/plugins/workflow-medium src/plugins/workflow-spike src/plugins/workflow-large` lists both `demo-steps.ts` files in each of the five plugins.
 
 Commit: one commit for the group.
 

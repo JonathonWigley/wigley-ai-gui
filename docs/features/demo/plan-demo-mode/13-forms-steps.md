@@ -19,16 +19,21 @@ Files:
 - modify `wigley-ai-gui/src/plugins/forms/page/start.ts`
 - modify `wigley-ai-gui/src/plugins/forms/contract.ts`
 - test `wigley-ai-gui/src/plugins/forms/main/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/forms/page/demo-steps.test.ts`
 - create `wigley-ai-gui/src/plugins/primer/main/demo-steps.ts`
 - create `wigley-ai-gui/src/plugins/primer/page/demo-steps.ts`
 - modify `wigley-ai-gui/src/plugins/primer/main/start.ts`
 - modify `wigley-ai-gui/src/plugins/primer/page/start.ts`
+- test `wigley-ai-gui/src/plugins/primer/main/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/primer/page/demo-steps.test.ts`
 - create `wigley-ai-gui/src/plugins/audio-picker/main/demo-steps.ts`
 - create `wigley-ai-gui/src/plugins/audio-picker/page/demo-steps.ts`
 - modify `wigley-ai-gui/src/plugins/audio-picker/main/start.ts`
 - modify `wigley-ai-gui/src/plugins/audio-picker/page/start.ts`
 - modify `wigley-ai-gui/src/plugins/audio-picker/main/fixtures.ts`
 - test `wigley-ai-gui/src/plugins/audio-picker/main/fixtures.test.ts`
+- test `wigley-ai-gui/src/plugins/audio-picker/main/demo-steps.test.ts`
+- test `wigley-ai-gui/src/plugins/audio-picker/page/demo-steps.test.ts`
 - create `wigley-ai-gui/src/plugins/agent-commands/main/demo-steps.ts`
 - create `wigley-ai-gui/src/plugins/agent-commands/page/start.ts`
 - create `wigley-ai-gui/src/plugins/agent-commands/page/demo-steps.ts`
@@ -78,7 +83,8 @@ Produces:
 - `src/plugins/forms/page/demo-steps.ts`: `export function registerDemoSteps(services: PageServices, deps: FormsPageDemoDeps): Disposable`, `export interface FormsPageDemoDeps`
 - the same pair (`registerDemoSteps`, `<Plugin>MainDemoDeps` / `<Plugin>PageDemoDeps`) in `src/plugins/primer/`, `src/plugins/audio-picker/`, `src/plugins/agent-commands/` and `src/plugins/notes/`, under `main/demo-steps.ts` and `page/demo-steps.ts`; primer also exports `DEMO_PRIMER_ARGS`
 - `src/plugins/audio-picker/main/fixtures.ts`: `export function writeSampleSoundsIn(files: Pick<Files, 'writeBytes'>, dir: string, paths: Pick<Paths, 'join'>): Promise<void>`
-- `src/plugins/agent-commands/main/tools.ts`: `confirmRequest` exported, signature unchanged
+- `src/plugins/agent-commands/main/tools.ts`: `export function confirmRequest(deps: Pick<AgentCommandToolDeps, 'senderName'>, callerId: string, info: CommandInfo, session: string | undefined, arg: unknown): ConfirmRequest` — exported, its `deps` narrowed to the one member it reads; the existing callers pass their full deps unchanged
+- `src/plugins/agent-commands/main/demo-steps.ts`: `export interface AgentCommandsMainDemoDeps { senderName(sessionId: string): string; list(): readonly CommandInfo[]; forms: Pick<FormsMainExports, 'confirmSample'>; log: (line: string) => void }`
 - `src/plugins/agent-commands/page/start.ts`: `export const agentCommandsPagePart: PagePart<typeof agentCommandsManifest>`
 - `src/plugins/notes/page/sample-note.ts`: `export interface SampleNoteDeps { session: NoteSession | null; drawImage(): Promise<Uint8Array> }`, `export function createSampleNoteChannel(deps: SampleNoteDeps): NoteDraftChannel`, `export const SAMPLE_NOTE: NoteDraft`
 - `src/plugins/notes/page/popup.ts`: `export type NoteDraftChannel = Pick<PageChannel<NotesChannel>, 'invoke'>`; `NotePopupDeps.channel: NoteDraftChannel`; `NotePopup.showSample(channel: NoteDraftChannel): NoteSampleView`; `export interface NoteSampleView extends Disposable { show(field: NoteField): Promise<void> }`
@@ -166,16 +172,16 @@ Main half:
   - `summary: 'Three tasks and the standing tests, each with the need the agent sees.'`
   - `entries` unchanged
 
-Beats:
+Beats. The `selectTask` arg is a 0-based position in `taskRows` (`src/plugins/primer/page/primer-state.ts:369`): 0 is the feature row, 1 is task `1` (`Quest data model`, need `yes`, six items). The `selectItem` arg is 1-based in the selected task's items. `entries` stay as `PREVIEW_PRIMER_ARGS` has them, so these positions hold.
 
 | name | show() |
 |---|---|
-| `Tasks` | `dismissConfirm`, `closeReview`, then `selectTask` 0 |
-| `Items` | `dismissConfirm`, `closeReview`, `selectTask` 0, then `selectItem` 3 |
-| `A need` | `dismissConfirm`, `closeReview`, `selectTask` 1, then `needUnclear` |
+| `Tasks` | `dismissConfirm`, `closeReview`, then `selectTask` 1 |
+| `Items` | `dismissConfirm`, `closeReview`, `selectTask` 1, then `selectItem` 3 (the long `Reset daily quests …` item) |
+| `A need` | `dismissConfirm`, `closeReview`, `selectTask` 1, then `needUnclear` (task 1's need changes from `yes` to `unclear`, so the chip changes on screen) |
 | `Review` | `dismissConfirm`, then `openReview` |
 
-`needUnclear` on the sample changes only the sample form's memory store.
+`needUnclear` on the sample changes only the sample form's memory store. A later beat keeps task 1 at `unclear`: no other beat shows a need.
 
 ### audio-picker — step `audio-picker.picker`
 
@@ -195,7 +201,7 @@ Main half:
    - `heading: 'Daily quests: sounds'`
    - `overview: 'A sample picker for the demo; nothing chosen here reaches an agent.'`
 
-`writeSampleSounds(api.data)` stays as it is and now calls `writeSampleSoundsIn` for its own folder.
+`writeSampleSounds(api.data)` stays as it is: `api.data` takes `/`-separated paths relative to the plugin data folder, and `paths.join` writes `\` on Windows. The two functions share only the `SAMPLE_SOUNDS` list. `writeSampleSoundsIn` joins `dir` and each file with `paths.join`, against `services.files`, which takes absolute paths.
 
 Beats (`selectRow` arg `{ moment, row }`, both 0-based):
 
@@ -217,12 +223,13 @@ No beat plays a sound. The user plays one with the picker's own keys.
 | caption | `Agent commands: an agent runs app commands, and a risky one waits on the user's Allow` |
 | files | `src/plugins/agent-commands/main/tools.ts`, `src/plugins/agent-commands/main/start.ts`, `src/plugins/forms/main/confirm.ts`, `src/plugins/forms/page/forms-view.ts` |
 
-Main half:
+Main half. `agentCommandsMainPart` calls `registerDemoSteps(api.services, deps)` with `AgentCommandsMainDemoDeps` built from what it already holds: `senderName` from chat, `list` from `api.commands.list()`, `forms` from its forms dependency, and its `log`.
 1. `launchSession('A sample session for the agent commands step.')`.
-2. It builds the request with `confirmRequest(deps, <session id>, <the sessions.closeSession command info>, <session id>, undefined)` (`src/plugins/agent-commands/main/tools.ts:322`: caller, info, target session, argument), the same text a real `run_command` call shows.
-3. It calls `forms.confirmSample(<session id>, request, <the stage's AbortController signal>)`.
-4. The answer runs nothing. It is logged `sample confirm answered: allow` or `… deny`.
-5. Dispose aborts the signal; 06 closes the session (§ Shared pattern).
+2. It finds the `sessions.closeSession` entry in `deps.list()`. When none is listed, it logs `demo confirm: sessions.closeSession not listed`, asks nothing, and the stage's sessions are still `{ session: <id> }`; the page beat then shows the session with no confirm.
+3. It builds the request with `confirmRequest(deps, <session id>, <that command info>, <session id>, undefined)` (`src/plugins/agent-commands/main/tools.ts:322`: caller, info, target session, argument), the same text a real `run_command` call shows.
+4. It calls `forms.confirmSample(<session id>, request, <the stage's AbortController signal>)`.
+5. The answer runs nothing. It is logged `sample confirm answered: allow` or `… deny`.
+6. Dispose aborts the signal; 06 closes the session (§ Shared pattern).
 
 Page half (new page part):
 - `agentCommandsPagePart` starts and calls `registerDemoSteps(services, { activate: sessions.activate })`.
@@ -273,12 +280,17 @@ The sample channel is in memory and touches no main handler:
 - `sendToFollowup` and `sendToSession` resolve `{ type: 'refused', reason: 'A sample note sends nothing.' }`.
 - `capture` rejects with `A sample note captures nothing.`
 
-`NotePopup.showSample(channel)`:
-1. When the popup is open, it closes it first. That close saves to the real channel, as today.
-2. It routes every `invoke` to `channel`. The markup view gets the same routed channel.
-3. It skips `deps.placeChanged` while the sample shows, so the user's place is not overwritten.
-4. `show(field)` opens the popup at `field` with no box focused (as `open(restored)` does for a place), or moves the field cursor when open.
-5. Dispose closes the popup, routes back to the real channel, and lets place writes resume.
+`NotePopup.showSample(channel)` returns its view at once. It acts in this order:
+1. A draft operation in flight (`inFlight` not null: a send, a capture or a discard): the view is inert. `show` logs `note sample not shown: <operation> in flight` and does nothing; dispose does nothing. `Space d r` tries again.
+2. Phase `loading` (an `open` waiting on `loadDraft` and `homes`): it sets phase `closed` and writes the place (`isOpen: false`). The load's `isStillLoading` check then drops the real draft when it arrives, so it never lands in the sample.
+3. Phase `open`: it calls `close()`. `close` starts `saveNow`, whose `saveDraft` invoke reaches the real channel at once, before step 5 changes the routing; `close` also writes the place (`isOpen: false`).
+4. It waits for that save, when step 3 started one. A failed save makes the view inert: the routing does not change, `close`'s toast shows as today, the log reads `note sample not shown: draft not saved`, and the user's fields stay in the store for autosave.
+5. It routes every `invoke` to `channel`. The markup view gets the same routed channel.
+6. It skips `deps.placeChanged` while the sample shows, so the user's place stays `isOpen: false`.
+
+`show(field)` first awaits steps 1 to 6. It then opens the popup at `field` with no box focused (as `open(restored)` does for a place), or moves the field cursor when open.
+
+Dispose closes the popup (its save goes to the sample channel), routes back to the real channel, then lets place writes resume, in that order. It does not reopen the user's popup, so a reload shows what the user last saw. A dispose before step 5 cancels the routing change.
 
 Beats:
 
@@ -299,6 +311,9 @@ Beats:
 - **Notes reroute.** The sample routes the popup's channel and does not stand up a second popup. One popup keeps the `notes.open` toggle, the `popup` scope and the layout parts as they are. Closing a user's open draft first saves it, so no typing is lost.
 - **No audio auto-play.** The picker plays only on the user's key, so autoplay does not make sound in a team demo.
 - **Wait timeout.** 5000 ms (`DEMO_FORM_WAIT_MS`) covers a main launch and a form push. A miss logs and leaves the beat inert, so a slow machine does not fail the demo.
+- **An answered sample is spent until Reset.** A submit or a cancel (the `Cancel` beat's confirm, an answer, the picker's keys) ends the sample form. Every beat after that, Previous included, waits `DEMO_FORM_WAIT_MS`, logs `demo form for <id> not shown` and does nothing. `Space d r` (`demo.reset`) enters the step again with a new form. The main half does not reopen the form, so an answer the user gives in a demo ends that form as it would end a real one.
+- **Primer bases.** `selectTask` counts `taskRows` positions with the feature row at 0; `selectItem` counts items from 1. The beats use task 1 because its need is `yes`, so `needUnclear` changes what shows.
+- **Notes order.** `showSample` closes and saves the user's popup on the real channel before it routes anything, abandons a load in flight, and refuses to start under a draft operation or after a failed save, so the user's draft never lands in the sample and the sample never lands in the user's draft.
 - **Session close.** No stage closes its own session: 06 closes every session in a main stage's `sessions` map when the run leaves the step, after both stages are disposed.
 
 GIVEN a demo session `s1` WHEN `openSampleForm` asks a round and the presenter returns a draft THEN it asks again; WHEN it returns submit THEN the form ends and the log reads `round sample closed: submit`.
@@ -309,7 +324,12 @@ GIVEN `confirmSample` asked WHEN the presenter answers Allow THEN it resolves `t
 GIVEN the agent-commands step entered WHEN the user allows THEN no command runs and the log reads `sample confirm answered: allow`.
 GIVEN the audio-picker step entered WHEN the main half runs THEN each `SAMPLE_SOUNDS` file exists under `<scratchDir>/audio-picker/sample-sounds/` and nothing under the plugin's data folder changed.
 GIVEN the notes sample shows WHEN a send to follow-up or to a session runs THEN it is refused with `A sample note sends nothing.` and the real channel's `invoke` is never called; WHEN the sample is disposed THEN the next `invoke` goes to the real channel and `placeChanged` fires again.
-GIVEN the user's popup is open with a typed draft WHEN `showSample` runs THEN `saveDraft` reaches the real channel once before the sample shows.
+GIVEN the user's popup is open with a typed draft WHEN `showSample` runs THEN `saveDraft` reaches the real channel once before the sample shows, and the place written last reads `isOpen: false`.
+GIVEN the popup is loading the real draft WHEN `showSample` runs and the load then resolves THEN the real draft does not show and the sample shows on `show`.
+GIVEN a send in flight WHEN `showSample` runs and `show` is called THEN nothing opens and the log reads `note sample not shown: send in flight`.
+GIVEN the first close's save fails WHEN `show` is called THEN nothing opens, and the next `invoke` still goes to the real channel.
+GIVEN the forms sample was cancelled WHEN a beat runs THEN after 5000 ms it logs `demo form for <id> not shown` and runs no command.
+GIVEN the agent-commands step entered with no `sessions.closeSession` listed THEN no confirm is asked and the log reads `demo confirm: sessions.closeSession not listed`.
 
 ## Tests
 
@@ -325,17 +345,31 @@ Follow the local naming style: `describe` by unit, `it` names the behaviour; tab
   - `'entering forms.round asks the sample service and saves no round'`: the saved-rounds folder in the harness files stays empty, and the wake is not called. Break: a step wired to the agents' service.
   - `'DEMO_ROUND_ARGS keeps 3 findings, 2 questions and notices'`: asserts the counts the page rail positions rest on. Break: a sample edit that moves the page's `focusItem` positions.
   - `'confirmSample resolves the answer and starts no agent session'`.
-- `src/plugins/agent-commands/main/demo-steps.test.ts`: `it.each` `'answer $answer runs nothing'`, rows `allow` and `deny`. Each asserts no command handler ran and the log line. Break: a sample confirm that closes the demo session through the real tool path.
+  - `'leaving forms.round ends the form and closes no session'`. Break: a step that closes its own session, which 06 then closes again.
+- `src/plugins/forms/page/demo-steps.test.ts`, with a fake store and a recording `runCommand`:
+  - `it.each` `'beat $name runs $commands'`, one row per beat of the forms table, the `focusItem` args included. Break: a beat that depends on the beat before it.
+  - `'a beat whose form never shows logs and runs nothing'`, with fake timers. Break: a beat that acts on another session's form.
+  - `'dispose dismisses the confirm and closes the review while the demo form is active'`, and runs neither when another form is active.
+  - `'the rail puts the first question at 3 and the notices at 5'`: `railItems` of a round with 3 findings, 2 questions and 3 notices, built with `./test-rounds`, holds a finding at 0, the first question at 3 and the notices stop at 5. Break: a rail order change that sends the `Question` and `Notice` beats to the wrong item.
+- `src/plugins/primer/main/demo-steps.test.ts`, through the main-part harness: `'entering primer.primer asks the sample service and saves nothing'` — nothing is written under the harness files, and the wake is not called.
+- `src/plugins/primer/page/demo-steps.test.ts` and `src/plugins/audio-picker/page/demo-steps.test.ts`, as the forms page test: `it.each` over each beat's command sequence (primer's `selectTask` 1 and `selectItem` 3; the picker's `selectRow` args), and the not-shown case.
+- `src/plugins/audio-picker/main/demo-steps.test.ts`, through the main-part harness: `'entering audio-picker.picker writes the sounds under the scratch folder only'` — each `SAMPLE_SOUNDS` file exists under `<scratchDir>/audio-picker/sample-sounds/`, and the harness's plugin data holds no new file.
+- `src/plugins/agent-commands/main/demo-steps.test.ts`: `it.each` `'answer $answer runs nothing'`, rows `allow` and `deny`. Each asserts no command handler ran and the log line. Break: a sample confirm that closes the demo session through the real tool path. Add `'a missing closeSession asks nothing'`.
 - `src/plugins/audio-picker/main/fixtures.test.ts`: `'writeSampleSoundsIn writes every sample under the given folder'`. Break: sounds written under plugin data, which leaves them in the user's audio picker data.
 - `src/plugins/notes/page/sample-note.test.ts`: `it.each` `'$call is refused or inert'`, rows `sendToFollowup`, `sendToSession`, `capture`, `discard`. Break: a sample action that reaches main.
 - `src/plugins/notes/page/popup.test.ts`:
   - `'showSample routes invoke to the sample and back at dispose'`
   - `'showSample saves an open draft to the real channel first'`
   - `'showSample skips placeChanged while it shows'`
+  - `'showSample writes the closed place before it skips place writes'`
+  - `'showSample during a load drops the real draft'`
+  - `'showSample stays inert while a draft operation is in flight'`
+  - `'showSample keeps the real channel when the first save fails'`
+  - `'dispose leaves the user popup closed'`
 
-  Breaks: a sample that writes the user's draft, loses the user's typing, or overwrites the user's saved place.
+  Breaks: a sample that writes the user's draft, loses the user's typing, overwrites the user's saved place, or reopens a popup the user no longer sees.
 
-Done when: `npm run typecheck`, `npm run lint` and the tests above pass; `grep -rln "registerDemoSteps" src/plugins/forms src/plugins/primer src/plugins/audio-picker src/plugins/agent-commands src/plugins/notes` lists a `demo-steps.ts` in each of the five plugins.
+Done when: `npm run typecheck` and the tests above pass; `npm run lint` passes apart from the known composition-root failure of `scripts/check-layers.mts` naming `agentCommandsPagePart`, which stays until 07 lists it (plan.md Boundary rules); the gate records that failure as known and does not edit `src/plugins/page.ts`; `grep -rln "registerDemoSteps" src/plugins/forms src/plugins/primer src/plugins/audio-picker src/plugins/agent-commands src/plugins/notes` lists a `demo-steps.ts` in each of the five plugins.
 
 Commit: one commit for the group.
 

@@ -36,7 +36,7 @@ Systems touched, all in `wigley-ai-gui/`:
   layouts, its self-test script with the coverage check, the real-session step.
 - **Every other built-in plugin**: a `page/demo-steps.ts` (and `main/demo-steps.ts` where sample
   data lives in main) registering its steps, or a `demoSkip` in its manifest; safety changes in
-  auto-retro, scheduling, unity-pool, chatroom, forms, app-update, notes and docs so their steps
+  auto-retro, scheduling, unity-pool, chatroom, forms, app-update, notes, docs, backlog, practice and workflow (main's flow guard) so their steps
   never reach real state.
 
 ## Preconditions
@@ -216,12 +216,17 @@ settings.json; `dispose` re-applies the config's `plugins.disabled`.
 **Harness flag** (task 02): `AgentHarnessInfo.unlisted?: true`; `FakeHarnessIdentity.unlisted?: true`
 carried into the fake's info.
 
-**Chat** (task 03): `LaunchRequest.ephemeral?: true`.
+**Chat** (task 03): `LaunchRequest.ephemeral?: true`. `ChatPageExports.showHubForNow(sectionId: string): Disposable` —
+shows the session hub and expands side part `sectionId`'s section until the dispose, writing no
+uiState; holds stack; task 12's hub steps hold it.
 
 **Sessions** (task 04): `SessionsPageExports.showOnly(sectionId: string): Disposable`.
 
 **Scoped agents** (task 05): `AgentPaneSpec.resizeTarget: ResizeTarget | null` and
 `AgentPaneSpec.entersFrom: PaneDirection | null`; null = the host owns resizing and pane moves.
+`AgentPane.holdsKeys(): boolean`; a host-owned pane is `isAlwaysShown: true`. Core:
+`RightBarOptions.keepsTurn?(): boolean` keeps a right-bar stop's turn through base scope changes
+while it returns true.
 
 **Demo plugin** (task 06): `src/plugins/demo/contract.ts` exports
 `demoRunSlot` (`demo.run`): `{ running: boolean; stepId: string | null; beat: number; autoplay: boolean; realShown: boolean }`.
@@ -266,18 +271,21 @@ summary below shortens them to `src/…`, under `wigley-ai-gui/`.
 
 - 01 creates `src/contracts/demo.ts` and `src/shared/demo-step-registry.ts`; modifies `src/contracts/plugin.ts` (`demoSteps`, `demoSkip`, `runDisabledForNow`, `MainServices.cloneDir`), `src/contracts/core-state.ts` (`PluginStatus.demoSkip`), `src/shared/define-plugin.ts`, `src/shared/plugin-catalog/validate-manifest.ts`, `src/shared/plugin-catalog/manifest-schema.ts`, `src/main/plugins/plugin-switch.ts`, `src/main/plugins/main-api.ts`, `src/main/main.ts`, `src/renderer/renderer.ts`, `src/renderer/plugins/page-api.ts`, `src/shared/plugin-part-harness.test-support.ts`.
 - 02 modifies `src/contracts/agent.ts`, `src/shared/fake-agent-harness.ts`, `src/shared/harness-profiles.ts`, and the profile readers in chat, usage, scheduling and docs.
-- 03 modifies `src/plugins/chat/contract.ts`, `src/plugins/chat/main/chat-sessions.ts`, and session-log's and session-stash's main.
+- 03 modifies `src/plugins/chat/contract.ts`, `src/plugins/chat/main/chat-sessions.ts`, `src/plugins/chat/page/side-sections.ts` and `src/plugins/chat/page/start.ts` (the `showHubForNow` export), and session-log's and session-stash's main.
 - 04 modifies `src/plugins/sessions/contract.ts` and the sessions page.
 - 05 modifies `src/plugins/scoped-agents/contract.ts`, `src/plugins/scoped-agents/page/agent-pane.ts`, `src/renderer/pane-targets.ts`, `src/renderer/shell/shell.ts`, and one comment in `src/contracts/plugin.ts` (after 01).
 - 06 creates `src/plugins/demo/{manifest.ts,contract.ts,main/}`; modifies `src/plugins/manifests.ts` and `src/plugins/main.ts` (the demo manifest and main part).
 - 07 creates `src/plugins/demo/{page/,layouts/}`; modifies `src/plugins/page.ts` and `src/plugins/main.ts` (the demo page part and every new part tasks 11–13 create: `autoCompactPagePart`, `sessionLogPagePart`, `usageTabLineMainPart`, `agentCommandsPagePart`), `src/plugins/keymap.ts`.
 - 08 creates `src/plugins/demo/main/selftest-script.ts` and `src/plugins/demo/page/coverage.ts`; modifies the demo plugin's contract and parts.
 - 11 also modifies sessions' `page/session-recency.ts` and `page/pane-sessions.ts` (demo rows never stamped or saved), with their tests.
-- 09–15 each touch only the plugin folders in their coverage-table row; none edits `src/plugins/main.ts`, `page.ts` or `manifests.ts` (07 lists their new parts).
+- 09–15 each touch only the plugin folders in their coverage-table row, except `src/shared/agent-forms/demo-form.ts` and `src/shared/page/demo-form-wait.ts` (13) and `src/shared/page/demo-start-prompt.ts` (12), each with its test; none edits `src/plugins/main.ts`, `page.ts` or `manifests.ts` (07 lists their new parts).
 
 Boundary rules: no plugin imports `src/plugins/demo/`; plugins reach demo only through core
 `services.demoSteps` and `src/contracts/demo.ts`. Safety readers detect demo rows by
-`row.harness === DEMO_HARNESS_ID`. `npm run lint` (layer and style checks) passes after every task, with one known
+`row.harness === DEMO_HARNESS_ID`. A listener of chat's session events (`sessionClosed`,
+`sessionCleared`) checks the event's `ephemeral` key (03) instead, because a user close removes
+the row before chat fires `sessionClosed`; agents' log skip remembers demo ids it saw, for the
+same reason (11). `npm run lint` (layer and style checks) passes after every task, with one known
 failure: `scripts/check-layers.mts`' composition-root check fails on the parts 11, 12 and 13
 create (`autoCompactPagePart`, `sessionLogPagePart`, `usageTabLineMainPart`, the agent-commands
 page part) from when each lands until 07 lists them in Wave 3. Those tasks' gates and the Wave 2
@@ -300,8 +308,8 @@ Critical path: 01 → 06 → 07 → 08 → 16 → 17
 - [ ] [Host-owned agent pane](05-host-owned-agent-pane.md) — after 01
 - [ ] [Demo main](06-demo-main.md) — after 01, 02, 03
 - [ ] [Shell steps and skips](09-shell-steps.md) — after 01
-- [ ] [Bar steps](10-bar-steps.md) — after 01, 04
-- [ ] [Session card and chat steps](11-session-chat-steps.md) — after 01, 02, 04
+- [ ] [Bar steps](10-bar-steps.md) — after 01, 03, 04
+- [ ] [Session card and chat steps](11-session-chat-steps.md) — after 01, 02, 03, 04
 - [ ] [Session extras steps](12-session-extras-steps.md) — after 01, 02, 03
 - [ ] [Agent forms steps](13-forms-steps.md) — after 01
 - [ ] [Workflow steps](14-workflow-steps.md) — after 01

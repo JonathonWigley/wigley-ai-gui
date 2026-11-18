@@ -9,7 +9,7 @@ Plan: [plan.md](plan.md)
 Files:
 - create `wigley-ai-gui/src/plugins/demo/manifest.ts`
 - create `wigley-ai-gui/src/plugins/demo/contract.ts`
-- create `wigley-ai-gui/src/plugins/demo/main/start.ts`
+- create `wigley-ai-gui/src/plugins/demo/main/start.ts` · test `wigley-ai-gui/src/plugins/demo/main/start.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/main/demo-run.ts` · test `wigley-ai-gui/src/plugins/demo/main/demo-run.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/main/step-agent.ts` · test `wigley-ai-gui/src/plugins/demo/main/step-agent.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/main/real-session-step.ts` · test `wigley-ai-gui/src/plugins/demo/main/real-session-step.test.ts`
@@ -79,7 +79,7 @@ Produces:
   - `processEvents(sessionId)`: the `events` of the last record in the run's harness `processes` whose `request.rowId === sessionId`. It throws `No demo session <sessionId>.` for an id the launched set does not hold or no record holds. The last record wins, since a resumed session adds a record.
 - **`stop`**, a no-op with no live run. In order, each step's error logged, never stopping the next:
   1. Leave the held main stage, as `leaveStep` does (dispose, then close its sessions).
-  2. `await chat.closeSessionsIn(scratchDir)`: every other demo session the run left open, the real-session step's included, before the harness leaves, so no session waits detached (`src/plugins/chat/main/start.ts:265-305`).
+  2. `await chat.closeSessionsIn(scratchDir)`: every other demo session the run left open, the real-session step's included, before the harness leaves, so no session waits detached (`closeSessionsIn`, `src/plugins/chat/main/start.ts:693-707`: it closes every held session whose `projectDir` is `samePath` to the folder and awaits each one's end).
   3. Dispose the plugin-switch hold.
   4. Dispose the harness registration.
   5. Clear the launched set. Log `run stopped`.
@@ -169,6 +169,11 @@ GIVEN chat has a default profile WHEN the real-session step enters THEN `chat.la
 - `step-agent.test.ts`:
   - `createStepAgentStore`, as backlog's `src/plugins/backlog/main/assistant.test.ts` covers its store: write then read and `entries` round-trip; `write(scope, null)` removes the scope; an unreadable file reads as no records and logs once.
   - `stepAgentInstructions_BriefAndRun_NamesStepFilesBeatAndFolder`: one test that the text holds the step id, every file, `beat 2 of step p.one` for `run.beat` 1, and the folder. The break it catches is a dropped field. With no brief, the text holds the one-line opening.
+  - `stepAgentInstructions_NoStepOnScreen_LeavesOutTheStartedLine`: one `it.each` table over `run` `undefined` and `{ running: false, stepId: null, … }`; the text holds no `When this conversation started` line. The break it catches is `beat 1 of step null` in a step agent's instructions.
+- `start.test.ts`, `describe('demoMainPart')`, on `startMainPart` with fake `chat` and `scoped-agents` main exports, as `src/plugins/backlog/main/start.test.ts:451-469` does. The `scoped-agents` fake records the `addScopedAgent` spec, so the test calls its `instructions`, `title` and `folder`:
+  - `describeStep_ThenInstructions_HoldsTheBrief`: `describeStep` a brief for `p.one` through the channel; the recorded `instructions('p.one')` holds the brief's title and `title('p.one')` is `Demo · <title>`. The break it catches is a brief stored under one key and read under another.
+  - `folder_ByCloneDir_FallsBackToHome`: one `it.each` table over `cloneDir` `'/clone'` → `'/clone'` and `null` → the services' `homeDir`.
+  - `dispose_LiveRun_StopsTheRun`: `start` through the channel, then the part's `dispose`; the `chat` fake's `closeSessionsIn` got the scratch folder and `run stopped` logs. The break it catches is a run left live (harness registered, plugin switch held) after the part stops. The `stop failed:` branch is a guard: `stop` logs each of its own steps' errors and does not reject, so no test reaches it.
 - `real-session-step.test.ts`, `describe('realSessionMainStep')`:
   - `enter_DefaultProfile_LaunchesEphemeralInScratch`: the exact request above.
   - `enter_NoProfile_Throws`: `Chat has no profiles.`, and `launch` is not called.

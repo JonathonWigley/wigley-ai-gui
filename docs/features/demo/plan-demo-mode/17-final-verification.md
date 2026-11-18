@@ -29,6 +29,19 @@ Consumes:
   keys: `j`, `k`, Enter, `i`.
 - A file check compares a `shasum` of the file taken before the demo starts with one taken after
   `Space d x`; the run home is `.drive/<run-id>/home/` (find each file under it with `find`).
+- **Reading a state slot.** The drive has no slot reader. Read a slot through agent-commands'
+  `read_state` tool, called as the seeded session `S` (the `sessionId` that walk step 1's
+  `chat.start` returns): `npm run drive -- do agent-commands.call '{"sessionId":"<S>","tool":"read_state","args":{"slot":"<slot id>"}}'`
+  returns `{ callId }`; `npm run drive -- do agent-commands.result '{"callId":"<callId>"}'` returns
+  the result, or `{ pending: true }` until it settles. `src/plugins/agent-commands/main/drive-actions.ts`
+  builds the tool session for any session id it is given.
+- **Running a command as an agent.** The same `agent-commands.call` with
+  `"tool":"run_command","args":{"command":"<command id>","arg":"<arg>"}`. The checks use it
+  for `demo.goTo <step id>`, which has no key.
+- **Plugins stay as the run home has them.** No check changes `plugins.disabled`. The drive skill's
+  route for a Docs-tab check (`setting plugins.disabled …`, then `restart`) is not used here:
+  checks 5, 28 and 41 prove that the run itself starts the off-by-default plugins in memory
+  (`runDisabledForNow`), and that route would make them pass without it.
 - Tags: `expected` — the check confirms wiring the tests already shape, and is expected to pass;
   `low-confidence` — the behaviour rests on timing, focus or a path no test reaches, and the
   reason says which.
@@ -40,10 +53,12 @@ Consumes:
 
 Run this first; it covers the run lifecycle and the real-state guarantees.
 
-1. `start`. Seed one real session: `do chat.start '{}'`, press `i`, type `Map the session list.`,
-   press Enter, and wait for its turn to end. Close nothing.
-2. Take `shasum` of: the run home's `settings.json`; chat's `open-sessions.json` and
-   `recent-folders.json` in chat's plugin data folder; `ui-state.json`.
+1. `start`. Seed one real session: `do chat.start '{}'` (record its `sessionId` as `S`), press `i`,
+   type `Map the session list.`, press Enter, and wait for its turn to end. Close nothing.
+2. Take `shasum` of: the run home's `settings.json`; `recent-folders.json` in chat's plugin data
+   folder; `ui-state.json`. Read chat's `open-sessions.json` and record its rows. A `shasum` does
+   not fit that file: task 03 saves `selectedHostSessionId: null` while a demo row is selected, and
+   each row carries `activeMs` and `busy`, which change while the app runs.
 3. `key Space d d`. The run starts (`[demo] run started`), the Demo panel opens.
 4. `key Space d n` until the log reads `[demo] at the last beat`. Each press logs
    `showing <id> beat <n> of <count>: <name>`; record every `step <id> failed: …` line. The press
@@ -51,14 +66,17 @@ Run this first; it covers the run lifecycle and the real-state guarantees.
    it, 07), which under the fake harness launches a fake session in the scratch folder.
 5. `key Space d h`: the real sessions show, the seeded session among them (`real sessions shown`).
 6. `key Space d x`: `[demo] run stopped`.
-7. Take the four `shasum`s again. Each matches step 2, except `ui-state.json`, whose `recency`,
-   `projectRecency` and `panes` entries hold no demo session id and no scratch-folder path (read
-   the file; the page may have saved other keys).
-8. The side bar shows the seeded session and no demo row; the start prompt (chat's `newSession`
-   command, by its key) lists the run's projects and recent folders again, with no
-   `~/dev/sample-app` rows.
+7. Take the three `shasum`s again. `settings.json` and `recent-folders.json` match step 2.
+   `ui-state.json` may differ: its `recency`, `projectRecency` and `panes` entries hold no demo
+   session id and no scratch-folder path (read the file; the page may have saved other keys).
+   Read `open-sessions.json` again: no row names a demo session id or the scratch folder, the same
+   row ids are there as in step 2, and each row's fields other than `activeMs` and `busy` equal
+   step 2's.
+8. The side bar shows the seeded session and no demo row. `key Space b n` (`<Leader>bn` →
+   `chat.newSession`, `src/plugins/keymap.ts:323`) opens the start prompt: it lists the run's
+   projects and recent folders again, with no `~/dev/sample-app` rows. Esc closes it.
 
-Pass: no `failed` step, every file unchanged as above.
+Pass: no `failed` step, every file as above.
 
 ## Checks
 
@@ -75,8 +93,10 @@ Pass: no `failed` step, every file unchanged as above.
 4. `expected` — `Space d x` removes the panel, caption and Demo section, and restores the side bar.
    Reason: stop is unit-tested per piece; the whole teardown is only seen live.
 5. `expected` — an off-by-default built-in starts for the run: during `agent-lines.lines` the
-   working line draws and agent-lines' keys work; after `Space d x` the plugin is off again
-   (`core.plugins` reads it disabled) and `plugins.disabled` in `settings.json` is unchanged.
+   working line draws (`query ".session-row-part[data-part='agent-lines.workingLine']"` finds it)
+   and agent-lines' keys work; after `Space d x` the plugin is off again (`read_state` of slot
+   `core.plugins` shows agent-lines disabled, and the `query` finds no working line) and the
+   `shasum` of `settings.json` is unchanged. `plugins.disabled` is never changed for this check.
    Reason: the switch logic is unit-tested, but the forwarder in `main.ts` and the page start over
    `bridge:plugin-parts` are reached only live.
 6. `low-confidence` — `<A-l>` from the main view reaches the Demo panel as the right bar's first
@@ -88,8 +108,14 @@ Pass: no `failed` step, every file unchanged as above.
    to the panel; the right bar's drag resizes it. Reason: async scope changes meet DOM focus, and
    the unit tests fake `activeElement`.
 8. `low-confidence` — the step agent launches (fake harness) in the dev app's clone folder with the
-   step's instructions, and its `run_command demo.goTo <id>` moves the demo. Reason: an owner
-   session's `run_command` route has no test.
+   step's instructions, and a `run_command demo.goTo <id>` as the step agent moves the demo. The
+   fake harness calls no tool, so the drive call stands in for the agent's: read slot
+   `chat.session` with `read_state` before and after the first ask; the key the ask added is the
+   step agent's session id `A`. Then `do agent-commands.call` with `"sessionId":"<A>"`,
+   `"tool":"run_command"` and `"args":{"command":"demo.goTo","arg":"settings.mode"}`, and
+   `do agent-commands.result` until it settles: the result reports the run, the log reads
+   `went to settings.mode`, and `read_state` of `demo.run` names `settings.mode` as its step.
+   Reason: an owner session's `run_command` route has no test.
 9. `low-confidence` — closing a demo session from its row selects another demo row, never a
    hidden real row. Reason: crosses the page's `claimed` slot and main's `removeRow` timing.
 10. `low-confidence` — a page reload mid-run (`eval location.reload()`) stops the run main still
@@ -157,7 +183,8 @@ Pass: no `failed` step, every file unchanged as above.
     snapshot returns after the step. Reason: the sample over the real snapshot is tested; the page
     is not.
 28. `expected` — `usage-tab-line.line`: the usage line shows in the tab bar during the step and is
-    gone after `Space d x`. Reason: the run's in-memory start of an off-by-default plugin, live.
+    gone after `Space d x`, with `plugins.disabled` left as the run home has it. Reason: the run's
+    in-memory start of an off-by-default plugin, live.
 
 ### Live (12)
 
@@ -204,9 +231,11 @@ Pass: no `failed` step, every file unchanged as above.
 40. `low-confidence` — `docs.mode`: the sample split replaces the doc and the side bar hides;
     leaving puts the machine view back with the last open doc. Reason: page surgery in
     `docs/page/start.ts` with no test over it.
-41. `low-confidence` — `docs.sessionTab`: docs-session-tab (off by default in a drive run) shows
-    its tab for the run; the demo session's Docs tab lists the sample docs, and the log shows no
-    index script run for it. Reason: wiring across docs main, the in-memory start and the demo
+41. `low-confidence` — `docs.sessionTab`: docs-session-tab is off by default in a drive run and
+    stays off in `settings.json` (do not enable it; How to run › Plugins stay as the run home has
+    them). It still shows its tab for the run, because the run starts it in memory. The demo
+    session's Docs tab lists the sample docs, and the log shows no index script run for it. After
+    `Space d x` no session shows a Docs tab. Reason: wiring across docs main, the in-memory start and the demo
     harness.
 42. `low-confidence` — `backlog.mode`: the table lists `backlog-repo`'s five follow-ups with
     `Moved item` marked moved; after `Space d x` Backlog reads the run's own repos again. Reason:
@@ -220,6 +249,34 @@ Pass: no `failed` step, every file unchanged as above.
 45. `low-confidence` — `chatroom.room`: the row badge on the lead row, the room board, the
     `plan-demo` thread; after `Space d x` Chatroom mode holds no room for the scratch folder.
     Reason: the release path's slot delete has no test of its draw.
+
+### Run controls (07)
+
+Run these after checks 1–45, in one run.
+
+46. `low-confidence` — autoplay on screen. `demo.goTo practice.mode` (How to run › Running a
+    command as an agent), then `key Space d a`: the log reads `autoplay on`. The `showing
+    practice.mode beat 2 of 3` line comes 5 s or more after beat 1's, and the next step's first
+    `showing` line comes 8 s or more after `beat 3 of 3: run` (dwell = max of the 5 s setting and
+    the beat's `dwellSeconds: 8`); time each gap with `date +%s` around the `wait-log` calls. Then
+    `demo.goTo` the step listed just before `demo.realSession` in the panel: `wait-log`, with a
+    timeout past that step's beat count × 5 s, reads `autoplay stopped before demo.realSession`,
+    no `entered demo.realSession` line follows, and `read_state` of `demo.run` still names that
+    step. Reason: real timers on screen; the driver tests use fake timers.
+47. `expected` — `Space d r` and `demo.goTo`. On `backlog.mode` beat 3, `key Space d r`: the log
+    reads `reset backlog.mode`, then `entered backlog.mode` and `showing backlog.mode beat 1 of 3`,
+    with no `failed` line. A `demo.goTo chatroom.room` logs `went to chatroom.room` and the panel's
+    current step moves to it. Reason: the driver tests shape both; the keys and the main re-enter
+    are only seen live.
+48. `low-confidence` — a second run in the same app. After `Space d x`, `key Space d d` again:
+    `[demo] run started`. `demo.goTo` `docs.mode`, `backlog.mode`, `practice.mode` and
+    `chatroom.room` in turn: each shows its sample as on the first run (the Docs tree; the backlog
+    table with `backlog-repo`'s five follow-ups; Two Sum; the `plan-demo` posts), and no
+    `step <id> failed` line is logged. `find` under the run home's demo plugin data finds at
+    least one folder under `scratch/old-backlog/` (an earlier run's emptied repo moved aside, task
+    15). Then `Space d x`.
+    Reason: catches a leaked hold or harness from the first run, and a fixture that sees the
+    first run's emptied folders.
 
 ## User-only
 

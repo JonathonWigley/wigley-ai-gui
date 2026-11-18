@@ -10,7 +10,7 @@ Files:
 - create `wigley-ai-gui/src/plugins/demo/page/start.ts` · test `wigley-ai-gui/src/plugins/demo/page/start.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/page/run-driver.ts` · test `wigley-ai-gui/src/plugins/demo/page/run-driver.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/page/panel-view-model.ts` · test `wigley-ai-gui/src/plugins/demo/page/panel-view-model.test.ts`
-- create `wigley-ai-gui/src/plugins/demo/page/real-session-step.ts`
+- create `wigley-ai-gui/src/plugins/demo/page/real-session-step.ts` · test `wigley-ai-gui/src/plugins/demo/page/real-session-step.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/page/layout/read-demo-layout.ts`
 - create `wigley-ai-gui/src/plugins/demo/layouts/layout.d.ts`
 - create `wigley-ai-gui/src/plugins/demo/layouts/default/layout.js`
@@ -25,6 +25,7 @@ Consumes:
 - `PageServices.demoSteps: DemoStepRegistry<DemoStep>` ← 01
 - `SessionsPageExports.showOnly(sectionId: string): Disposable` ← 04
 - `AgentPaneSpec.resizeTarget: ResizeTarget | null`, `AgentPaneSpec.entersFrom: PaneDirection | null` ← 05
+- `AgentPane.holdsKeys(): boolean`, `RightBarOptions.keepsTurn?(): boolean` ← 05
 - `demoManifest`, `DemoChannel`, `DemoStepBrief`, `DemoRunState`, `demoRunSlot`, `REAL_SESSION_STEP_ID`, `STEP_AGENT_ID` ← 06
 - `autoCompactPagePart` in `src/plugins/auto-compact/page/start.ts` ← 11
 - `sessionLogPagePart` in `src/plugins/session-log/page/start.ts` ← 12
@@ -73,7 +74,8 @@ Produces:
 - **The page's `enter` and `leave`** for the driver:
   - `enter(step)`: `sessions = await api.channel.invoke('enterStep', step.id)`, then `stage = await step.enter({ scratchDir, sessions })`. When the page half rejects, the main half is left before the rejection reaches the driver (`invoke('leaveStep', step.id)`). Once the stage holds, the page sends `invoke('describeStep', brief)`, with `plugin` the id's part before its first `.` and `beats` the stage's beat names.
   - `leave(step, stage)`: `stage.dispose()`, then `await invoke('leaveStep', step.id)` (design Overview, step 3: page stage first, then main stage). Main's `leaveStep` then closes every session in the main stage's `sessions` map (06); a page stage never closes a session.
-- **Starting the run** (the first `demo.togglePanel`, or a `goTo` with no run):
+- **The page's serial queue.** The page holds its own `createSerialQueue`, apart from the driver's. Every call that reads or changes whether a run lives runs in it, and judges "no run" inside it: `ready`'s stop, and the commands `togglePanel`, `goTo`, `next`, `previous`, `reset`, `autoplay`, `showReal` and `stop`. So a second `togglePanel` or a `demo.goTo` from the step agent's `run_command` that arrives while a start awaits main waits for it and then acts on the live run, and never starts a second run or adds a second Demo section (`addSection` throws `part demo is already added`). A queued job never awaits another page-queue job: it calls the driver, whose own queue orders the moves, and autoplay's timer moves go through the driver alone. `cursorDown`, `cursorUp`, `goToCursor` and `askAgent` run outside it: they act only while the panel holds the keys, which needs a live run; `goToCursor` calls `driver.goTo`.
+- **Starting the run** (the first `demo.togglePanel`, or a `goTo` with no run), inside the page queue:
   1. `{ scratchDir } = await invoke('start')`. A rejection logs `start failed: <errorText>`, toasts `The demo did not start: <errorText>` with tone `error`, and changes nothing.
   2. Add the Demo section: `sessions.addSection({ id: 'demo', label: 'Demo', order: 0, claims: (row) => row.harness === DEMO_HARNESS_ID || (row.projectDir !== null && services.paths.samePath(row.projectDir, scratchDir)) })`. Order 0 sits below every section's order today: live-view 15 (`live-view/page/live-section.ts:443`), context-sources 35, scheduling 900, auto-retro 1000. So a demo row another section also claims goes to Demo. The `projectDir` clause claims the real-session step's row, which runs on the default harness.
   3. Hold `sessions.showOnly('demo')`.
@@ -82,7 +84,11 @@ Produces:
 - **Stopping** (`demo.stop`, which is also what the step agent's `demo.stop` runs): `await driver.stop()`, then `await invoke('stop')`. Then dispose the showOnly hold, the section, the panel and caption contributions, call `pane.scopeOpened(null)`, publish `{ running: false, stepId: null, beat: 0, autoplay: false, realShown: false }`, and log `run stopped`. Each step's error is logged and never stops the next.
 - **Page load**: in `ready`, the page invokes `stop` once and logs a rejection. A run that a reload left in main ends, since no page drives it any more.
 - **Commands** (every one runs from agent-commands' `run_command` too, since agent-commands lists every live command, `src/plugins/agent-commands/main/tools.ts`):
-  - `togglePanel`: with no run, it starts one. With the panel shown, it hides the panel and logs `panel hidden`; the run and its step stay. With the panel hidden, it shows it and logs `panel shown`.
+  - `togglePanel`: with no run, it starts one, the panel shown. With the panel shown, it hides the panel and logs `panel hidden`; with the panel hidden, it shows it and logs `panel shown` (design.md § Starting and stopping: "Hiding the panel alone keeps the demo running, with the current step still set up").
+    - Hiding disposes the panel's right-bar contribution and holds null, as system-stats' hide does (`system-stats/page/start.ts:290-294`). A panel that held the keys, its agent pane's included, gives them back to main through the core's `stopRemoved` (`src/renderer/pane-targets.ts`), so the scope `demo.panel` binds stop applying with no step of the page's own. The cursor is kept.
+    - Everything else stays: the held step and its stage, the caption contribution, the Demo section and the showOnly hold, autoplay and its timer, and every `<Leader>d` bind. The panel's redraws while hidden draw into the detached `panelSlot`, so showing it again contributes the same `panelSlot` with `{ order: PANEL_ORDER, focus: focusPanel, left: leavePanel, keepsTurn: () => pane.holdsKeys() }` and it is current.
+    - `demo.run` gains no panel field: the step agent drives steps, and `togglePanel`'s log line tells it which way it went.
+    - Stop disposes the panel contribution only when one is held.
   - `next`, `previous`, `reset`, `autoplay` (toggles), `showReal`, `stop`: with no run, each logs `the demo is not running` and does nothing.
   - `goTo(arg)`: starts the run when none runs, then `driver.goTo(arg)`. Its rejection reaches the caller.
   - `showReal`: disposes the showOnly hold and logs `real sessions shown`; run again, it takes a new `showOnly('demo')` hold and logs `real sessions hidden`. It publishes `realShown`.
@@ -91,8 +97,10 @@ Produces:
   - `askAgent`: `pane.toggle()`, which moves the keys into the shown pane and back (`src/plugins/scoped-agents/page/agent-pane.ts:384-391`, an `isAlwaysShown` pane).
 - **The panel**, a right-bar contribution (`system-stats/page/start.ts:251-255` is the pattern):
   - `panelSlot` (`div.demo-panel-slot`, `tabIndex = -1`, no outline) holds `stepsSlot`, drawn by the layout's `steps` part, over `agentSlot`, which holds the pane's `element`.
-  - It contributes with `{ order: PANEL_ORDER, focus: focusPanel, left: leavePanel }` and `PANEL_ORDER = -10`. That puts it first: usage's details take the default order 0 (`renderer/shell/shell.ts:57`), unity-pool 10, system-stats 20.
-  - `focusPanel` sets scope `panel`, puts the cursor on the held step when it is on none, focuses `panelSlot`, redraws, and logs `panel focused` and `cursor on <stepId>`. `leavePanel` drops the cursor's ring and redraws.
+  - It contributes with `{ order: PANEL_ORDER, focus: focusPanel, left: leavePanel, keepsTurn: () => pane.holdsKeys() }` and `PANEL_ORDER = -10` (05's host recipe: the panel keeps its turn through a base scope change while the pane holds the keys). That puts it first: usage's details take the default order 0 (`renderer/shell/shell.ts:57`), unity-pool 10, system-stats 20.
+  - `focusPanel` sets scope `panel`, puts the cursor on the held step when it is on none, focuses `panelSlot`, redraws, and logs `panel focused` and `cursor on <stepId>`. `leavePanel` drops the cursor's ring, calls `pane.hostTookKeys()`, and redraws.
+  - When `coreModeSlot` changes while `pane.holdsKeys()` is true, the page blurs the focused element inside `panelSlot`; the core then ends the panel's turn and gives main the keys.
+  - A step change needs no step here: `scopeOpened` keeps the keys in the pane (05).
   - The panel redraws on each `deps.changed`, each `demoSteps.onChanged`, each cursor move, settings change and layouts set.
 - **The agent pane**, added once at page start through `addAgentPane`, owner `'demo'`, agent id `STEP_AGENT_ID`:
   - `isAlwaysShown: true`, `entersFrom: null`, `resizeTarget: null` (05: the right bar owns resizing and pane moves).
@@ -129,6 +137,7 @@ Produces:
   - A `// ── Demo ──` banner section holds the leader binds, each `scope: 'any'`, `where: 'page'`, as the preview binds do (`keymap.ts:1282-1287`, `<Leader>zlo`).
   - Below them go the panel binds in scope `demo.panel`: `j` cursorDown, `k` cursorUp, `<CR>` goToCursor, `i` askAgent.
   - `i` is not in the brief's key list. Without it the pane's ask box takes the keys only by a click, and `i` is the insert key that chatroom's log also uses for its composer (`keymap.ts:1206`, `chatroom.compose`).
+  - `docs/keymap.md` is not edited here: task 16 adds its `demo.panel` line (`j`, `k`, `<CR>`, `i`) against the landed binds.
 
 ## Pinned values
 
@@ -152,6 +161,9 @@ GIVEN autoplay on and the held step's last beat, with `demo.realSession` next WH
 GIVEN a step whose `enter` rejects WHEN the driver enters it THEN `failed` gets its id, a one-beat `failed` stage holds, and `next` moves on
 GIVEN no run WHEN `demo.togglePanel` runs THEN main's `start` is invoked, the Demo section is added, `showOnly('demo')` is held, and the first step shows
 GIVEN a run WHEN `demo.stop` runs THEN the held step's page stage is disposed before main's `leaveStep`, then main's `stop` runs, and the hold, section, panel and caption are disposed
+GIVEN no run and main's `start` held on a deferred promise WHEN `demo.togglePanel` runs twice, the second without awaiting the first THEN main's `start` is invoked once, `addSection` runs once, and the second call hides the panel once the first start ends
+GIVEN a run with the panel shown WHEN `demo.togglePanel` runs THEN the panel contribution is disposed and `panel hidden` logs, the caption stays contributed, and `demo.next` still moves the driver; run again, the panel is contributed and `panel shown` logs
+GIVEN main's `start` rejects WHEN `demo.togglePanel` runs THEN `start failed: <errorText>` logs, an error toast shows, and no section, showOnly hold, panel or caption is added
 
 ## Tests
 
@@ -181,6 +193,14 @@ GIVEN a run WHEN `demo.stop` runs THEN the held step's page stage is disposed be
   - `stop_Run_LeavesPageStageThenMainThenDisposesHolds`.
   - `showReal_Twice_DisposesThenRetakesTheHold`.
   - `command_NoRun_LogsNotRunning`: one table over `next`, `previous`, `reset`, `autoplay`, `showReal` and `stop`.
+  - `togglePanel_TwiceWhileStarting_StartsOnce`: main's `start` held on a deferred promise; two `togglePanel` calls, the second not awaited before the first; `invoke('start')` and `addSection` each run once, and once the deferred resolves the log reads `run started` then `panel hidden`. The break it catches is a second run started mid-start.
+  - `start_Rejects_ToastsAndAddsNothing`: main's `start` rejects; the log holds `start failed: <errorText>`, one toast `The demo did not start: <errorText>` with tone `error`, and no `addSection`, `showOnly`, right-bar or status-bar contribution.
+  - `ready_StopsALeftoverRun`: at `ready` the fake channel gets one `invoke('stop')`; a rejecting one logs its error and the part still starts.
+  - `panelToggle_HideShow_KeepsTheRun`: with a run, `togglePanel` disposes the right-bar contribution and logs `panel hidden`; the status-bar caption is still contributed and `next` still logs `moved next`; `togglePanel` again contributes the panel and logs `panel shown`.
+  - `goTo_NoRunOrUnknownId_StartsOrRejects`: one table. `goTo('p.two')` with no run → `invoke('start')`, then `enterStep('p.two')`; `goTo('nope')` on a live run → rejects `No demo step nope.` to the caller.
+  - `panelCommands_MoveCursorAndGo`: one `it.each` over `cursorDown` → `cursor on <second>`, `cursorUp` at the first step → `cursor on <first>`, `goToCursor` with the cursor on the second → `went to <second>`. A first row checks that `focusPanel` (the contribution's `focus`) puts the cursor on the held step and logs `panel focused` and `cursor on <held>`.
+  - `stop_Run_ClosesThePaneScope`: after `stop`, the fake pane's `scopeOpened` last got `null`.
+- `real-session-step.test.ts`, `describe('realSessionPageStep')`: `realSessionPageStep_Sessions_ActivatesOrThrows`, one table. `{ session: 's1' }` → the `hello` beat's `show` calls `sessions.activate('s1')`; `{}` → `enter` throws `The real session did not start.`
 - The keymap's build-time check covers the new binds, through `src/plugins/keymap.test.ts`, `defaultKeymap_MergedWithBuiltIns_PassesKeymapChecks`: a misspelt command or scope fails to compile.
 
 Dropped: nothing. The panel's look, the caption's place and the agent pane in the right bar are live checks for task 17.

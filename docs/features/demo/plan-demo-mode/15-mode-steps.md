@@ -28,6 +28,16 @@ part lists gain nothing from it.
   and events** keep the real one. Taking or releasing the hold sends the page the plugin's existing
   reload message, so the page reads again. This is what keeps a real agent's tool call during the
   demo on the user's data, and the demo's clicks on the sample.
+- **An `enter` that throws releases what it took.** 06 holds nothing for a rejecting `enter`
+  (06 › `enterStep`), so no stage `dispose` runs for it. Each main half and page half catches a
+  throw that comes after its first hold, releases every hold it took in reverse order (the
+  `SampleDocs`, the backlog or practice hold, the shown demo tasks, the held room, a page sample
+  view), and then rethrows the same error. Sessions it launched before the throw stay open until
+  Stop's `closeSessionsIn` (06).
+- **Leftover folders.** 06's `start` empties `scratch` by deleting files only; folders stay, empty
+  (06 › `start` step 2), and `Files` has no folder delete. So a folder an earlier run made can
+  exist with no files in it. No step hands such a folder to a fixture writer that trashes what it
+  finds (backlog, practice below).
 - Beats are re-entrant: each beat's `show` sets the whole visible state of that beat, so Previous
   shows it again. A beat that cannot undo a side effect of a later beat (a thread marked read) says
   so below.
@@ -69,8 +79,9 @@ Consumes:
   `sessionsSelectRowCommand`, `sessionsSelectTabCommand` (`src/plugins/sessions/contract.ts:17,25`);
   `createMemoryFiles` (`src/shared/memory-files.ts:37`, a production module); `createMemoryRoomStore`
   (`src/plugins/chatroom/main/memory-room-store.ts`); `writeDocsFixture`
-  (`src/plugins/docs/main/selftest-fixture.ts:92`); `writeBacklogFixture`, `hasBacklogFixture`,
-  `BACKLOG_REPO` (`src/plugins/backlog/main/selftest-fixture.ts`); `writePracticeFixture`,
+  (`src/plugins/docs/main/selftest-fixture.ts:92`); `writeBacklogFixture`, `BACKLOG_REPO`,
+  `BACKLOG_FOLLOWUPS` (`src/plugins/backlog/main/selftest-fixture.ts:13,15`); `Files.rename`
+  (`src/contracts/files.ts:84`); `writePracticeFixture`,
   `PRACTICE_FIXTURE_SLUGS` (`src/plugins/practice/main/selftest-fixture.ts`); `seedChatroomFixture`,
   `FIXTURE_THREAD` (`src/plugins/chatroom/main/selftest-fixture.ts`); `nextOccurrence`
   (`src/plugins/scheduling/schedule.ts:109`); `Paths.isInside` (`src/contracts/paths.ts:23`)
@@ -150,12 +161,12 @@ Main (`docs/main/start.ts`):
   runs and the user's index is never rebuilt. It holds the sample home; `dispose` unregisters the
   source and ends the hold. `load()` returns `registry.load(SAMPLE_SOURCE_ID)`. A second
   `addSampleDocs` while one is held rejects (the registry's duplicate-id throw).
-- While a sample home is held, `writeDoc`, `writeBytes`, `createDoc`, `renameDoc` (both paths) and
+- While a sample home is held, `writeDoc`, `writeBytes`, `createDoc`, `renameDoc` and
   `trashDoc` — channel handlers and exports alike — reject any target outside it
   (`paths.isInside(target, sampleHome)` false) with
   `Error('While the demo shows sample docs, only the sample docs change.')`. The target of a
   `CreateRequest` is `request.path` for `type: 'path'` and `request.place.folder` for
-  `type: 'kind'`.
+  `type: 'kind'`. `renameDoc(from, to)` has two targets: it rejects when `from` or `to` is outside.
 - `addSessionSource` for a session whose `info.harness === DEMO_HARNESS_ID` registers, under the
   same `sessionSourceId(id)` and `SESSION_SOURCE_TITLE`, a load-only source over
   `paths.join(info.projectDir, SAMPLE_HOME_FOLDER)` built the same way, instead of
@@ -192,9 +203,19 @@ index is not read for the step. Dispose puts `machineView.doc` back and disposes
 
 ### backlog (`backlog.mode`)
 
-Sample: the backlog self-test repo at `paths.join(sampleHome, BACKLOG_REPO)` — `makeFolder(sampleHome)`
-then `writeBacklogFixture({ files, processes, paths }, sampleHome)` only when `hasBacklogFixture` is
-false (its `trash` of an old repo never runs). The docs fixture's index already lists this repo's
+Sample: the backlog self-test repo at `repo = paths.join(sampleHome, BACKLOG_REPO)`. `makeFolder(sampleHome)`, then:
+
+1. When `paths.join(sampleHome, BACKLOG_FOLLOWUPS)` exists, the sample is in place: write nothing.
+2. Else, when `repo` exists, it is an earlier run's folder with its files deleted (Leftover
+   folders, above). `makeFolder(paths.join(scratchDir, 'old-backlog'))`, then
+   `files.rename(repo, paths.join(scratchDir, 'old-backlog', String(n)))`, `n` the first whole
+   number from 1 whose folder does not exist. A rename is a permanent move; nothing reaches the
+   OS Trash.
+3. Then `writeBacklogFixture({ files, processes, paths }, sampleHome)`.
+
+`writeBacklogFixture` trashes a repo it finds (`backlog/main/selftest-fixture.ts:129-130`); after
+steps 1 and 2 it never finds one. `hasBacklogFixture` is not used: it stats the folder
+(`:157-164`), which an emptied earlier run leaves in place. The docs fixture's index already lists this repo's
 follow-ups, plan and tasks (`backlogEntries`, `docs/main/selftest-fixture.ts:292`); then
 `docs.addSampleDocs(scratchDir)`.
 
@@ -227,9 +248,12 @@ The page half never runs `backlog.toggleAssistant` and never sends to the assist
 ### practice (`practice.mode`)
 
 Sample: `writePracticeFixture({ files, paths }, folder)` into a fresh
-`folder = paths.join(scratchDir, 'practice', String(n))`, `n` a counter the part raises on each
-`enter`, so a reset never trashes the last sample's problems (`writePracticeFixture` trashes every
-entry of `<folder>/problems/`).
+`folder = paths.join(scratchDir, 'practice', String(n))`. `n` is the first whole number, at or
+above a counter the part holds (starting at 1), whose folder does not exist (`files.stat` null);
+the counter then becomes `n + 1`. `writePracticeFixture` trashes every entry of
+`<folder>/problems/`, so the folder must be new: a reset never trashes the last sample's
+problems, and an earlier app launch's emptied `practice/<n>/problems/<slug>/` folders (Leftover
+folders, above) never reach the OS Trash.
 
 Main (`practice/main/start.ts`), by the sample-serving rule: a second `store`, `progress`, `judge`
 and `runs`, built as the real ones are (`practice/main/start.ts`) over `() => folder`. While held,
@@ -314,6 +338,13 @@ Main (`chatroom/main/start.ts`):
 - `createDemoRooms` builds each held room's service with `createRoomService` over
   `createMemoryRoomStore()` and `createMemoryFiles()`, with the real `clock`, `randomHex`, `limits`,
   `participants` and `log`. `hold` subscribes the held service's `onMessage` to `rewriteRoom`.
+- `hold(roomName)` is idempotent per name: while `roomName` is held, a second `hold(roomName)`
+  returns the same service object and adds no second subscription. Disposing that object once
+  releases the hold. So the fixture's many `roomFor` calls share one room, and `held` names it.
+- Before the fixture's first `roomFor` call, its board wait runs `rewriteRoom` for the scratch
+  folder's project name through the real `room`. That path only reads (`threads`, `claims`,
+  `userUnread`, `messages`, `src/plugins/chatroom/main/start.ts:130-155`); no room file is
+  written for that name.
 - `rewriteRoom` and the channel handlers `readThread`, `postAsUser` and `markUserRead` use
   `demoRooms.serviceFor(roomName) ?? room`. Tools, hooks, delivery and agent entries keep `room`.
 - Releasing a hold rewrites the room from `room` when `room.rooms()` lists it, else deletes its key
@@ -343,12 +374,15 @@ Page beats (`chatroom/page/demo-steps.ts`):
 - Docs mode shows the sample through a sample view in the Docs sheet; the wiki sidebar, which only
   the machine view draws (`docs/page/docs-view.ts:605`, `hasWiki: isMachine`), is not part of the
   step.
-- No fixture writer runs where it would trash: docs and backlog write only into a home without
-  their fixture; practice writes into a fresh folder per enter.
+- No fixture writer runs where it would trash: docs writes only into a home without its index
+  file (its rules folder holds files only, which 06 deletes, and no load-states folder is made);
+  backlog moves an emptied earlier repo aside with a rename before it writes; practice writes into
+  a folder that does not exist yet.
 - Scheduling's demo tasks never enter `taskStore`, so the planner, the session host, the login
   start and the task file never see them; the Dock badge counts real runs only.
 - The chatroom's demo room is a separate memory room service; the user's room files, cursors,
-  threads and claims are never opened for it.
+  threads and claims are never written for it. A real room with the scratch folder's project name
+  is only read, and only before the hold.
 
 ## GIVEN / WHEN / THEN
 
@@ -357,8 +391,8 @@ Page beats (`chatroom/page/demo-steps.ts`):
   written, and `scheduling.state` lists the three demo tasks after the real ones.
 - GIVEN demo tasks shown WHEN the channel's `saveTask` (demo id), `runNow` or `removeTask` runs
   THEN it rejects with the demo-task text and the task file and `history.json` are unwritten; WHEN
-  `setPaused(DEMO_TASK_IDS.triage, true)` runs THEN the published view reads paused and the file is
-  unwritten.
+  the channel's `setPaused(DEMO_TASK_IDS.triage, true)` runs THEN the published view reads paused,
+  `taskStore.setPaused` is not called and the file is unwritten.
 - GIVEN demo tasks shown with an unviewed demo run row THEN `alerts.setOpenCount` reads 0; WHEN the
   stage is disposed THEN the demo tasks and run rows leave `scheduling.state`.
 - GIVEN `chatroom.room` entered WHEN the seed posts and claims, and the channel's `postAsUser` and
@@ -373,6 +407,13 @@ Page beats (`chatroom/page/demo-steps.ts`):
   chunk file is unwritten; the export `load` still reads the machine index.
 - GIVEN the practice sample held WHEN `saveCode` runs THEN the file lands under the sample folder;
   `startImport` rejects.
+- GIVEN `docs.sessionTab` whose `launchSession` rejects WHEN `enter` runs THEN it rejects with that
+  error and the sample source is unregistered, so a later `addSampleDocs` resolves.
+- GIVEN `<sampleHome>/dev/backlog-repo` exists with no files in it WHEN `backlog.mode` enters THEN
+  the folder is renamed to `<scratchDir>/old-backlog/1`, `files.trash` is never called, and the
+  sample repo is written fresh.
+- GIVEN `<scratchDir>/practice/1` exists WHEN `practice.mode` enters for the first time in the part
+  THEN the sample is written into `<scratchDir>/practice/2` and `files.trash` is never called.
 
 ## Tests
 
@@ -386,28 +427,50 @@ Page beats (`chatroom/page/demo-steps.ts`):
     Break: a guard dropped, so the call reaches `taskStore`.
   - `it('counts no demo run in the Dock badge and leaves at dispose')` — `alerts.at(-1)?.count` is 0
     with the demo row unviewed; after stage dispose `runRows` holds no `'row-demo'`.
+  - `it('pauses a demo task through the channel without the task store')` — the channel's
+    `setPaused(DEMO_TASK_IDS.triage, true)`: `part.state()` shows the triage view paused, and the
+    files fake records no write of the task file. Break: the handler left on `taskStore.setPaused`.
 - `src/plugins/scheduling/main/demo-tasks.test.ts`: `setPaused` changes only that view;
   `markViewed` clears the row from `unviewedRows`; `show` twice replaces, and the first Disposable
   no longer clears the second. Break: a stale dispose clearing a later show.
 - `src/plugins/chatroom/main/start.test.ts`: `it('keeps the demo room in memory')` — enter with a
-  `launchSession` that launches through the test's chat fake; after the seed and a `postAsUser`, the
-  data files fake lists no `rooms/` file and no `claims.json`; the rooms slot holds the
-  `plan-demo` posts; after dispose its key is gone. Break: a handler routed to `room`.
+  `launchSession` that launches through the test's chat fake; after the seed, a `postAsUser` and a
+  `markUserRead` on the demo room, the data files fake lists no `rooms/` file, no `claims.json` and
+  no cursor file; the rooms slot holds the `plan-demo` posts; after dispose its key is gone. Break:
+  a handler routed to `room`.
+- `src/plugins/chatroom/main/start.test.ts`: `it('holds one demo room per name')` — two
+  `demoRooms.hold('p')` calls return the same object; a post through the first shows in the second's
+  `messages('p')`; one dispose makes `serviceFor('p')` null. Break: a second hold that drops the
+  first's posts.
 - `src/plugins/docs/main/start.test.ts`: `it('runs no index script for a demo session')` —
   `FakeProcesses` records no run after a `sessions.connected` with harness `demo` and a
-  `loadIndex` of its source; `it('refuses changes outside the sample home while it is held')` — a
-  table over `writeDoc`, `trashDoc`, `createDoc` (`type: 'path'`). Break: the harness check or the
-  guard removed.
+  `loadIndex` of its source; `it.each` `'refuses $call outside the sample home while it is held'`,
+  rows `writeDoc`, `writeBytes`, `trashDoc`, `createDoc` (`type: 'path'`), `createDoc`
+  (`type: 'kind'`, `place.folder` outside), `renameDoc` (`from` outside), `renameDoc` (`to`
+  outside), each run once through the channel and once through the export. Break: the harness check
+  or one guard removed.
+  `it('releases the sample docs when an enter fails')` — `docs.sessionTab` with a `launchSession`
+  that rejects: `enter` rejects, and a later `addSampleDocs` resolves. Break: a leaked source id
+  that makes every later `addSampleDocs` reject as a duplicate.
 - `src/plugins/backlog/main/start.test.ts`: `it('serves the sample without rebuilding the machine index')`
   — the docs fake records no `rebuildMachineIndex` on `rescan`; `editChunks` and `startChunks`
   reject; `exports.load` reads `machineIndex`. Break: the channel left on the real instance.
+  `it('moves an emptied earlier repo aside before it writes')` — the files fake holds the folder
+  `<sampleHome>/dev/backlog-repo` with no files: after `enter` it was renamed to
+  `<scratchDir>/old-backlog/1` and the fake records no `trash`. Break: a second demo run that trashes
+  the folder, or shows an empty repo.
 - `src/plugins/practice/main/start.test.ts`: `it('serves the sample folder to the page only')` —
   `saveCode` writes under the sample folder; the `read_practice_state` tool lists the setting
   folder's problems; `startImport` rejects. Break: the tools moved to the sample store.
+  `it('writes the sample into a folder that does not exist')` — with `<scratchDir>/practice/1`
+  present, `enter` writes under `practice/2` and the fake records no `trash`. Break: an app
+  restart's first enter trashing the last launch's problem folders.
 
 ## Done when
 
-`npm run typecheck`, `npm run lint` and `npm test` pass; each plugin above registers its step or
+`npm run typecheck` and `npm test` pass; `npm run lint` passes apart from the known
+composition-root failure on the parts tasks 11, 12 and 13 create, when any of them has landed in
+this wave (plan.md, lint line); each plugin above registers its step or
 declares its `demoSkip`; the Proof lists each test above passing. Live checks are in task 17.
 
 ## Commit

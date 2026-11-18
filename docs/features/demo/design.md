@@ -100,6 +100,10 @@ The Settings and keys steps show the user's own settings and keymap, read only:
 - **App update**: the button shows a sample status; pressing it installs nothing.
 - **Notes**: the popup shows a sample note; its follow-up actions write nothing.
 - **Docs**: sample pages from the scratch folder; the user's docs index is never rebuilt.
+- **Backlog and Practice**: a sample repo and a sample problem folder in the scratch folder; the
+  user's backlog and practice state are never read or written.
+- **Session hub**: a step that shows the hub holds it open for its length without writing the
+  user's hub and section choices.
 
 **Off-by-default plugins** (agent lines, the usage tab line, the docs session tab, and any later
 one) start in memory for the demo's run, through the plugin switch's `runDisabledForNow`, so their steps

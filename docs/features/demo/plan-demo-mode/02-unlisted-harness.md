@@ -15,6 +15,7 @@ Files:
 - modify `wigley-ai-gui/src/plugins/chat/page/start-prompt.ts`
 - test `wigley-ai-gui/src/plugins/chat/page/start-prompt.test.ts`
 - modify `wigley-ai-gui/src/plugins/chat/main/start.ts`
+- test `wigley-ai-gui/src/plugins/chat/main/start.test.ts`
 - modify `wigley-ai-gui/src/plugins/chat/main/folder-choices.ts`
 - test `wigley-ai-gui/src/plugins/chat/main/folder-choices.test.ts`
 - test `wigley-ai-gui/src/plugins/chat/main/lookups.test.ts`
@@ -78,7 +79,7 @@ Produces:
   | sessions page row harness label (`sessions/page/start.ts:565`) | no | names a row's harness; demo rows show their label |
   | notes page session chips (`notes/page/start.ts:93`) | no | label lookup |
   | chatroom page `harnessLabel` (`chatroom/page/start.ts:95`) | no | label lookup |
-  | workflow main `openRowsAlreadyOpen` (`workflow/main/start.ts:337-340`) | no | opens a flow for each held row under a registered profile; demo rows must open flows for the workflow steps (14) |
+  | workflow main `openRowsAlreadyOpen` (`workflow/main/start.ts:337-340`) | no | no change to `registeredProfiles`; task 14 adds the demo-profile skip (demo sessions open no flow; the workflow steps draw sample flows on the page) |
   | auto-retro `begin` profiles (`auto-retro/main/start.ts:304-306`) | no | judges whether a queued retro's profile is gone; it offers and polls nothing, and task 10 keeps demo sessions out of the queue |
 
 - **Start prompt copy stays.** A project pinned to an unlisted profile gets the existing toast
@@ -112,17 +113,28 @@ THEN it returns the listed harness
 - `start-prompt.test.ts`: row beside `projectStep_ProjectPinsAnotherHarnessesProfile_StartsOnThatHarness`
   — the pinned profile's harness is unlisted: nothing starts and the toast above shows.
 - `folder-choices.test.ts`: row beside `list_TwoHarnesses_ListsEachProfilesFoldersWithItsHarness`
-  — the second harness unlisted: only the first harness's folders list.
+  — the second harness unlisted: only the first harness's folders list. `harnessListing` (`:30`)
+  gains an `unlisted?: true` parameter and builds
+  `info: () => ({ ...fake.info(), profiles, ...(unlisted === true ? { unlisted } : {}) })`.
 - `usage/main/start.test.ts`: `usageMainPart_UnlistedHarness_NeitherPolledNorListed`, built as
-  `usageMainPart_TwoHarnesses_PollsEachProfileThroughItsHarness` (`:324`) with `lab` unlisted:
-  `heard.lab` is empty and `planNames` holds `personal` only.
+  `usageMainPart_TwoHarnesses_PollsEachProfileThroughItsHarness` (`:324`) with `lab` unlisted
+  (`harnesses.set('lab', harnessInfo({ profiles: [LAB], unlisted: true }))`; `harnessInfo` takes
+  a `Partial<AgentHarnessInfo>`, so it needs no change): `heard.lab` is empty and `planNames`
+  holds `personal` only.
 - `scheduling/main/start.test.ts`: row beside `editorChoices_ReadsChatAndTheHarness` (`:1215`) —
   an unlisted harness with its own profile and controls registered first: `editorChoices` has the
   same `profiles` and `controls` as with the listed harness alone.
 - `harness-folders.test.ts`: row beside `roots_HarnessNotRegistered_LeftOut` — an unlisted
   harness's profiles give no roots.
-- No test for the chat `profileNames` and docs page chip call sites: each is one call of
-  `listedHarnesses`, whose rule the table above pins, and neither has a test seam today.
+- `chat/main/start.test.ts`: `startSessionTool_UnlistedHarnessProfile_AnswersUnknownProfile`,
+  beside `startSessionTool_NoProfileNamed_…` (`:1042`). `startChatPart` (`:318`) gains an
+  `unlistedProfiles?: { name: string; configDir: string }[]` option that sets a second
+  `coreAgentHarnessesSlot` entry `demo` with `harnessInfo({ profiles: options.unlistedProfiles,
+  unlisted: true })`. Start the part with `unlistedProfiles: [{ name: 'demo', configDir: '/demo' }]`
+  and call `start_session` with `{ prompt: 'hi', profile: 'demo' }`: the result's problem is
+  `Unknown profile "demo". Profiles: work.`
+- No test for the docs page chip call site: it is one call of `listedHarnesses`, whose rule the
+  table above pins, and it has no test seam today.
 
 Done when: `npm run typecheck`, `npm run lint` and the tests above pass.
 

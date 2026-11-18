@@ -10,7 +10,7 @@ Files:
 - create `wigley-ai-gui/src/plugins/demo/main/selftest-script.ts` · test `wigley-ai-gui/src/plugins/demo/main/selftest-script.test.ts`
 - create `wigley-ai-gui/src/plugins/demo/page/coverage.ts` · test `wigley-ai-gui/src/plugins/demo/page/coverage.test.ts`
 - modify `wigley-ai-gui/src/plugins/demo/contract.ts`
-- modify `wigley-ai-gui/src/plugins/demo/main/start.ts`
+- modify `wigley-ai-gui/src/plugins/demo/main/start.ts` · test `wigley-ai-gui/src/plugins/demo/main/start.test.ts` (06's file)
 - modify `wigley-ai-gui/src/plugins/demo/page/start.ts` · test `wigley-ai-gui/src/plugins/demo/page/start.test.ts`
 
 Consumes:
@@ -48,12 +48,13 @@ Produces:
 - **Main's side.** `demoMainPart` handles `report`. When a self-test result waits, it resolves that result with the report. It hands the script over with `services.selfTest?.run(demoSelfTestScript({ open, nextReport }))`, where:
   - `open(run)` sends the message `selfTestOpened` with `run`; the page logs `self-test run <run>`.
   - `nextReport()` returns a promise that the next `report` resolves.
+  - A `report` with no waiting result is dropped: the page reports at every stop, a user's own stop outside a self-test included, and a report held for a later `nextReport()` would settle a later run's result with a stale run's data. A second `nextReport()` while one waits replaces the waiter; the self-test opens one run at a time, so it does not happen in practice.
 - **The script order.** Hand-over order is start order (`src/main/selftest.ts:233-246`). 06 put `demo` second to last, so this script runs after every other plugin's and before app-update's.
 - **The script's groups.** The keys are all `<Space>`-led page keys, as in `system-stats/main/selftest-script.ts`. `FIRST` and `SECOND` are the ids of the first two steps in run order, read from the landed `page/demo-steps.ts` files: section `shell`, lowest `order`. At plan time 09's task gives `keys.hints` (order 1) and `gallery.mode` (order 2). Write the landed ids as constants.
   1. `start`: keys `[' ', 'd', 'd']`, expect `[demo] run started`, alsoExpect `/^\[demo\] showing FIRST beat 1 of \d+: .+$/`, `screenshot: 'started'`, `checksFit: true`.
   2. `first-beat`: `[' ', 'd', 'p']`, expect `[demo] at the first beat`.
   3. `panel`:
-     - `<A-l>`, pressed as often as a filtered run shows it takes to reach the right bar's first stop: expect `[demo] panel focused`, alsoExpect `/^\[demo\] cursor on FIRST$/`. system-stats' script needs two presses from a Chat tab with its hub.
+     - `['<A-l>', '<A-l>', '<A-l>']`: expect `[demo] panel focused`, alsoExpect `/^\[demo\] cursor on FIRST$/`. From main, `<A-l>` first moves between main's own panes, then enters the right bar's first stop, which is the Demo panel (`PANEL_ORDER = -10`, first in the right bar). From a right-bar stop, `<A-l>` only logs `no pane right` and keeps the stop (`focusFromRight`, `src/renderer/pane-targets.ts`: only down and up move between stops). So presses past the panel are harmless, and three reach it from a Chat tab with its hub and one more pane, in a filtered run and a full one alike. system-stats' script needs two presses from a Chat tab with its hub (`system-stats/main/selftest-script.ts:44-45`). A `repeat` does not fit: each press must log `expect` or `until` (`repeatUntil`, `src/main/selftest-runner.ts:170-210`), and a move between main's panes logs neither.
      - `['j']`: expect `[demo] cursor on SECOND`.
      - `['Enter']`: expect `[demo] went to SECOND`, alsoExpect `/^\[demo\] showing SECOND beat 1 of \d+: .+$/`, `screenshot: 'panel-cursor'`.
      - `['<A-h>']`: expect `[page] focus back in main`.
@@ -79,11 +80,13 @@ Produces:
 - Log lines: `coverage: every built-in plugin has a step or a skip`, `coverage: no step or skip for <ids>`, `failed steps: <ids>`, `self-test run <run>`.
 - Problem lines: `<id> has no demo step and no demoSkip`, `step <id> failed`.
 - Screenshot names: `started`, `panel-cursor`, `before-live`.
+- The `panel` group's focus keys: three `<A-l>` presses.
 - The walk's `max: 400` and `timeoutMs: 15000`; the autoplay setting `1`.
 
 GIVEN slot rows `a` (built-in, no skip), `b` (built-in, skip `'Draws nothing.'`), `c` (built-in, no skip) and `u` (user), and step ids `a.one` and `ab.two` WHEN `missingCoverage` runs THEN it returns `['c']`
 GIVEN a report `{ missing: ['c'], failed: ['p.one'] }` WHEN `reportProblems` runs THEN it returns `['c has no demo step and no demoSkip', 'step p.one failed']`
 GIVEN a run with a failed step WHEN the demo stops THEN the page logs the coverage line and `failed steps: p.one`, and main's waiting result resolves to the report
+GIVEN no self-test result waits WHEN the page invokes `report` THEN main drops it, and a later `nextReport()` resolves only with the report after it
 
 ## Tests
 
@@ -96,6 +99,9 @@ GIVEN a run with a failed step WHEN the demo stops THEN the page logs the covera
 - `selftest-script.test.ts`, `describe('demoSelfTestScript')`:
   - `reportProblems_Report_NamesEachMissingThenFailed`: a table of `{ report, expected }`; the empty report gives `[]`.
   - `open_Run_SendsTheOpenAndWaitsForTheNextReport`: `open(3)` calls `deps.open(3)`, returns `shownLine` `[demo] self-test run 3`, and its result resolves to what `nextReport` resolves. `src/plugins/usage/main/selftest-script.test.ts` is the pattern.
+- `src/plugins/demo/main/start.test.ts` (06's file), on `startMainPart` with a `services.selfTest` fake that records the handed-over script:
+  - `report_AfterOpen_ResolvesTheResult`: the script's `open(2)` sends the channel message `selfTestOpened` with `2`; a `report({ missing: ['c'], failed: [] })` through the channel resolves `open`'s `result` to it.
+  - `report_NoWaiter_IsDropped`: a `report` before any `open`, then `open(1)` and a second `report`; the result resolves to the second report. The break it catches is a stale run's report settling a later run's result.
 - `src/plugins/demo/page/start.test.ts` (07's file): add `stop_FailedStep_ReportsCoverageAndFailures`. A registry holds one step that rejects, the fake `core.plugins` slot holds one uncovered built-in, and the test asserts the `report` invoke's argument and that it comes before `leaveStep`.
 - The script itself runs in the test gate as `npm run selftest -- --plugin demo` (AGENTS.md § Running and testing). `wigley:make` owns when it runs.
 
