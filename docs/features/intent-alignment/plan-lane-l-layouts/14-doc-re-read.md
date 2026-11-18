@@ -1,6 +1,6 @@
 # 14 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 8 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: each line checked; each stale line fixed; nothing else edited
 Commit:    one commit holding the doc fixes, pathspecs the docs changed; no commit when nothing was stale
 
 ## Proof
+
+Commit f7c1c3000 · proof: diff read (5 doc fixes, 3 comment fixes) + compile (typecheck, lint clean); Lane L followups count 0, every Lane L master-plan box ticked · concerns: forms code names still say mount (mountTextBox, MountingDeps, card.mounted, isMounted) — names left for review; 'every text box survives a reload' checked only for EditorBoxes owners and chat

@@ -293,7 +293,7 @@ every part its contract adds.
 - [x] [Forms keeps its boxes and redraws only changed parts](13-forms-boxes-and-part-redraw.md) — after 05, 06, 12
 
 ### Wave 8
-- [ ] [Doc re-read](14-doc-re-read.md) — after 13
+- [x] [Doc re-read](14-doc-re-read.md) — after 13
 
 ### Wave 9
 - [ ] [Final verification](15-final-verification.md) — after 14
@@ -316,6 +316,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 11 · hard · 1dc26df2e · diff read (Produces present: layout-dialog.ts draws, dialogFrame/confirmBody in layout.d.ts and default, drawFrame required, code frame deleted) + wave 5 compile (typecheck, lint clean after oxfmt) · concerns: formatting fixed by oxfmt; withUser<Layout> default widening unchecked until the test gate; followups bullet already gone before this run, only the master-plan tick applied
 - 12 · hard · 7b834bb98 · diff read (railHead/railFoot/pager in layout.d.ts, default, resolver PANES/PART_READS, read-layout; drawRailHead/drawRailFoot/drawPager; view-model inputs; CSS moved) + wave 6 compile (typecheck, lint clean after oxfmt) · concerns: createStatusLine import kept (one status line per build, per Decisions); isSameInput copies primer-view's private helper; task 11's followups bullet was renamed, removed in this commit; layout-dialog.ts missed by 1dc26df2e, committed in 6ecb55d0b
 - 13 · hard · 46f57d4de · diff read (changedPicks, placeBox/releaseBox, per-part redraw, mount deleted, no mount caller left by grep) + wave 7 compile (typecheck clean after the worker's test fix; lint clean after oxfmt) · concerns: keepFocusedBox refocuses any still-placed focused box (brief's 'only when lost' was practice's setLayouts rule); draw-part.ts RollbackDeps.recordBox comment still says destroy (outside Files); round anchors list grows per redraw until dispose; forms-view.ts doc comment edited outside Files
+- 14 · hard · f7c1c3000 · diff read (5 doc fixes, 3 comment fixes) + compile (typecheck, lint clean); Lane L followups count 0, every Lane L master-plan box ticked · concerns: forms code names still say mount (mountTextBox, MountingDeps, card.mounted, isMounted) — names left for review; 'every text box survives a reload' checked only for EditorBoxes owners and chat
 ### Contract changes
 - 11 layout-resolver LayoutPart: 'dialogFrame' | 'confirmBody' string members → { dialog: LayoutDialogPart } variant; pickLayout takes { dialog: 'dialogFrame' } · consumers: forms-view only
 ### Rulings
@@ -334,6 +335,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 13: rebuild builds the round's parts again whole (kinds change can add or drop cards), keeping editors via release; setLayouts sends a kinds change to rebuild · group 13 · group 13
 - 13: buildField's labelKeys lost its default (placeFrame is the required last parameter); a redrawn part takes the old one's place with replaceWith; a head pick change builds a new slot before the pager's · group 13 · group 13
 - 13: AGENTS.md Reloads says style (.css) is style-only, per layout-registry's changeKindOf · group 13 · group 13
+- 14: comment fixes outside Files (forms layout.d.ts, default layout.js, draw-part.ts recordBox) per the brief's flagged stale lines · group 14 · group 14
 ### Review rounds
 - Round 1 fixes 6ed1fba05..6a18f4615: Medium — behaviour changes in shared EditorBoxes (setText, editorOf, keepFocusedBox caret, place scrollTop) and the layout-loader restyled filter; re-review correctness only.
 - Re-review 1 (correctness): all 29 findings closed; 3 Minor style findings lead-applied at review step 7 and closed by commit and compile; no new bug. #30 to step 7 as follow-up.
