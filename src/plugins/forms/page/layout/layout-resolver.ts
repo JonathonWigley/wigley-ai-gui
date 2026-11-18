@@ -9,7 +9,7 @@ import {
   railItems,
   type RoundItem,
   type RoundState,
-} from '../form-state';
+} from '../round-model';
 
 // A pane of the forms view.
 export type LayoutPane = 'head' | 'rail' | 'review' | 'notices';

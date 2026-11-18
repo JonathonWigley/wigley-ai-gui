@@ -45,8 +45,8 @@ import {
   type FormsAction,
   type FormsState,
   type FormsStore,
-  type RoundState,
 } from './form-state';
+import type { RoundState } from './round-model';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createRoundView, type RoundView } from './round-view';
 import { sessionTitle } from './view-model';

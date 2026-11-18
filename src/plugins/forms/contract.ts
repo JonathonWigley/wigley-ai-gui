@@ -551,7 +551,7 @@ export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
 
 // What the forms page shows: a round's cards, its review, the cancel prompt
 // over the review, or no round.
-export type FormsView = 'forms' | 'review' | 'confirm' | 'idle';
+export type FormsScreen = 'forms' | 'review' | 'confirm' | 'idle';
 
 // A round the forms page holds, as main presented it.
 export interface OpenRound {
@@ -591,7 +591,7 @@ export interface FormsPageEvents extends EventShape {
     outcome: RoundFinishOutcome;
     body: FormBody;
   };
-  viewChanged: { view: FormsView; roundId: string | null };
+  viewChanged: { view: FormsScreen; roundId: string | null };
 }
 
 // The card a part draws on, of any registered kind; `index` is 1-based in its

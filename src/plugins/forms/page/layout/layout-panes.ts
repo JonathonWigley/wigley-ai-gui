@@ -28,7 +28,7 @@ import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
 import type { KeyHints } from '../../../../contracts/plugin';
-import type { FormsItemRef, FormsView, Notice } from '../../contract';
+import type { FormsItemRef, FormsScreen, Notice } from '../../contract';
 import { type FormsCommandName, formsCommand, formsScope } from '../../ids';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
@@ -42,18 +42,17 @@ import type {
   ReviewInput,
   ReviewKit,
 } from '../../layouts/layout';
+import { answerStatus, progress } from '../round-answers';
 import {
   answerableItems,
-  answerStatus,
   isAnswerable,
   isNoticesStop,
   kindItems,
-  progress,
   type RailItem,
   railItems,
   type RoundState,
   type TextTarget,
-} from '../form-state';
+} from '../round-model';
 import {
   appendBoxKeys,
   buildField,
@@ -111,7 +110,7 @@ export interface PaneDeps {
 // when the rail drew none.
 export interface RailPane {
   element: HTMLElement;
-  update(round: RoundState, view: FormsView): void;
+  update(round: RoundState, view: FormsScreen): void;
   showEntry(position: number): void;
 }
 
@@ -351,7 +350,7 @@ function drawRail(
   const items = railItems(round);
   const updaters: Updater[] = [];
   const entries = new Map<number, HTMLElement>();
-  let shownView: FormsView = 'forms';
+  let shownView: FormsScreen = 'forms';
   const base = createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms')));
   const kit: RailKit = {
     ...base,
@@ -444,7 +443,7 @@ function updateRailEntry(
   round: RoundState,
   item: RailItem,
   position: number,
-  view: FormsView,
+  view: FormsScreen,
 ) {
   const status = railStatus(round, item);
   const isReview = view === 'review';

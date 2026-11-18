@@ -9,33 +9,34 @@ import type {
   AnswerStatus,
   Finding,
   FindingAction,
-  FormsView,
+  FormsScreen,
   ItemKind,
   PageKind,
 } from '../contract';
 import { activeForm, formById } from '../../../shared/page/session-forms';
+import type { FormsAction, FormsState } from './form-state';
 import {
-  answerableItems,
   answerStatus,
   findingActionOf,
   findingActionWord,
-  type FormsAction,
-  type FormsState,
-  focusedItem,
-  isNoticesStop,
   itemAnswer,
-  kindItems,
   pickIsComplete,
   pickNumber,
   type Progress,
   progress,
+  unansweredItem,
+} from './round-answers';
+import {
+  answerableItems,
+  focusedItem,
+  isNoticesStop,
+  kindItems,
   type RailItem,
   railItems,
   railPosition,
   type RoundItem,
   type RoundState,
-  unansweredItem,
-} from './form-state';
+} from './round-model';
 import { itemLabel } from './kinds/formats';
 
 // One item of an answerable kind as the review lists it.
@@ -291,7 +292,7 @@ export function pickRailItem(
     getState(): FormsState;
     log: PluginLog;
   },
-  view: FormsView,
+  view: FormsScreen,
   item: RailItem,
   position: number,
   reviewRow: number | undefined,
@@ -324,7 +325,7 @@ export function reviewRowsByRailPosition(
 // which has no row; null under the confirm, whose scrim takes the pointer, and
 // with no round.
 export function railPickAction(
-  view: FormsView,
+  view: FormsScreen,
   position: number,
   reviewRow: number | undefined,
 ): FormsAction | null {

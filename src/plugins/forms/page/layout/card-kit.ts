@@ -31,15 +31,17 @@ import type {
   QuestionKit,
 } from '../../layouts/layout';
 import {
-  type AnswerableItem,
   answerStatus,
   itemAnswer,
   kindAnswer,
   pickNumber,
-  type RoundItem,
-  type RoundState,
-  type TextTarget,
-} from '../form-state';
+} from '../round-answers';
+import type {
+  AnswerableItem,
+  RoundItem,
+  RoundState,
+  TextTarget,
+} from '../round-model';
 import {
   appendBoxKeys,
   appendPickKeys,

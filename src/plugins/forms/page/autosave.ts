@@ -3,7 +3,8 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import { startAutosave } from '../../../shared/page/autosave';
 import type { FormBody } from '../contract';
-import { buildBody, type FormsStore } from './form-state';
+import type { FormsStore } from './form-state';
+import { buildBody } from './round-draft';
 
 export interface RoundAutosaveDeps {
   store: FormsStore;

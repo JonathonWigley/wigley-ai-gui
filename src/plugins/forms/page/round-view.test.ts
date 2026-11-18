@@ -15,7 +15,7 @@ import type { Layout } from '../layouts/layout';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
-import type { RoundState } from './form-state';
+import type { RoundState } from './round-model';
 import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../manifest';

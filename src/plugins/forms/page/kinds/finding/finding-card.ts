@@ -13,14 +13,7 @@ import {
   isFindingAction,
 } from '../../../finding-pick';
 import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
-import {
-  chooseEntry,
-  clearFindingPick,
-  type FindingAnswer,
-  type FindingPick,
-  holdsPick,
-  NO_PICK,
-} from '../../form-state';
+import type { FindingAnswer } from '../../round-model';
 import { labelFor, roundInfo } from '../card-parts';
 import {
   ANSWER_BOXES,
@@ -32,6 +25,13 @@ import {
   withAnswerText,
 } from '../item-answer';
 import type { CardInputs } from '../item-format';
+import {
+  chooseEntry,
+  clearFindingPick,
+  type FindingPick,
+  holdsPick,
+  NO_PICK,
+} from './finding-answer';
 import { drawnOriginSpec, verdictOf } from './verdict';
 
 const RAIL_PREFIX = 'F';

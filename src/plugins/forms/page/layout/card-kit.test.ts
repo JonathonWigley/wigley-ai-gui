@@ -12,7 +12,7 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import type { RoundState } from '../form-state';
+import type { RoundState } from '../round-model';
 import { findingPageKind } from '../kinds/finding/finding-card';
 import { questionPageKind } from '../kinds/question/question-card';
 import type { CardDeps } from '../kinds/item-format';

@@ -10,7 +10,7 @@ import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
 import { scrollContent } from '../../../shared/content-scroll';
-import type { FormsView } from '../contract';
+import type { FormsScreen } from '../contract';
 import { formsCommand, formsScope } from '../ids';
 import type { Layout } from '../layouts/layout';
 import { element } from '../../../shared/page/dom';
@@ -35,13 +35,13 @@ import {
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import type { FormsContributions } from './contributions';
 import type { BoxRef } from './boxes';
+import { progress } from './round-answers';
 import {
   isNoticesStop,
-  progress,
   railItems,
   type RoundState,
   type TextTarget,
-} from './form-state';
+} from './round-model';
 import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
 import { baseKitDepsFor, createFormsBaseKit } from './layout/card-kit';
@@ -118,7 +118,7 @@ export interface RoundViewDeps {
 // drops the view.
 export interface RoundView {
   element: HTMLElement;
-  update(round: RoundState, view: FormsView): void;
+  update(round: RoundState, view: FormsScreen): void;
   rebuild(round: RoundState): void;
   setLayouts(shown: ShownLayouts<Layout>, round: RoundState): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll;
@@ -187,7 +187,7 @@ export function createRoundView(
   split.end.classList.add('round-main');
   // Editors mount into attached elements, so they can measure themselves.
   attach(root);
-  let shownView: FormsView = 'forms';
+  let shownView: FormsScreen = 'forms';
   let shownFocus = -1;
   const build = (current: RoundState, roundPicks: RoundPicks) =>
     buildRoundParts(split, current, roundPicks, deps);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Layout, LayoutCard, LayoutPane } from '../../layouts/layout';
-import type { RoundState } from '../form-state';
+import type { RoundState } from '../round-model';
 import {
   apply,
   finding,

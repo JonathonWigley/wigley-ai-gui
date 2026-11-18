@@ -11,7 +11,8 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import type { FormsState, RoundState } from '../form-state';
+import type { FormsState } from '../form-state';
+import type { RoundState } from '../round-model';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../../manifest';
 import type { CardDeps } from '../kinds/item-format';

@@ -1,11 +1,9 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
-import {
-  type FormsStore,
-  type RoundState,
-  unregisteredKinds,
-} from './form-state';
+import type { FormsStore } from './form-state';
+import { unregisteredKinds } from './round-answers';
+import type { RoundState } from './round-model';
 
 // What a round's kinds have already reported: the kinds seen registered on
 // it, and the kinds whose leaving it toasted.

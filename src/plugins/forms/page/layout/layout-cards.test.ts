@@ -5,7 +5,7 @@ import {
   createFormsContributions,
   type FormsContributions,
 } from '../contributions';
-import type { RoundState, TextTarget } from '../form-state';
+import type { RoundState, TextTarget } from '../round-model';
 import type { CardDeps } from '../kinds/item-format';
 import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
 import { fakeKitCommandsOf } from '../../../../shared/page/layout-host/fake-kit-commands.test-support';

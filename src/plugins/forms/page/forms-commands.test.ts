@@ -14,18 +14,16 @@ import type {
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import type {
   Finding,
-  FormsView,
+  FormsScreen,
+  ItemAnswer,
   Notice,
   Question,
   RoundEnd,
 } from '../contract';
 import type { BoxRef } from './boxes';
-import {
-  buildBody,
-  focusedItem,
-  type FormsAction,
-  type ItemAnswer,
-} from './form-state';
+import type { FormsAction } from './form-state';
+import { buildBody } from './round-draft';
+import { focusedItem } from './round-model';
 import {
   closeRoundFromMain,
   formsCommandHandlers,
@@ -1202,7 +1200,7 @@ describe('formsCommandHandlers', () => {
     name: string;
     before: (FormsCommand | FormsAction)[];
     position: number;
-    view: FormsView;
+    view: FormsScreen;
     focus: number;
     logs: string[];
   }>([

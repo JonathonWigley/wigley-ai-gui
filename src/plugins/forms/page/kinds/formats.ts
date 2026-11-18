@@ -1,5 +1,5 @@
 import type { PageKind } from '../../contract';
-import type { RoundItem } from '../form-state';
+import type { RoundItem } from '../round-model';
 import { labelFor } from './card-parts';
 import { findingPageKind } from './finding/finding-card';
 import { noticePageKind } from './notice/notice-card';

@@ -7,7 +7,7 @@ import type { LayoutState } from '../../../../contracts/state';
 import type { BuiltInItemKind } from '../../contract';
 import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
-import type { RoundState, TextTarget } from '../form-state';
+import type { RoundState, TextTarget } from '../round-model';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
 import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../../shared/page/session-forms';
-import type { FormsAction, RoundState } from '../form-state';
+import type { FormsAction } from '../form-state';
+import type { RoundState } from '../round-model';
 import {
   apply,
   finding,

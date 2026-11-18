@@ -23,7 +23,7 @@ import {
   mayCloseSessionForm,
   type SessionFormWords,
 } from '../../../shared/page/session-forms';
-import type { FormsView, RoundEnd } from '../contract';
+import type { FormsScreen, ItemAnswer, RoundEnd } from '../contract';
 import type { formsManifest } from '../manifest';
 import {
   type BoxField,
@@ -33,25 +33,20 @@ import {
   shownBox,
   shownBoxes,
 } from './boxes';
+import type { FormsAction, FormsState, FormsStore } from './form-state';
+import { itemAnswer, pickNumber, unansweredItem } from './round-answers';
+import { buildBody } from './round-draft';
 import {
   type AnswerableItem,
-  buildBody,
   focusedItem,
-  type FormsAction,
-  type FormsState,
-  type FormsStore,
-  type ItemAnswer,
   isAnswerable,
   isNoticesStop,
-  itemAnswer,
   answerableItems,
-  pickNumber,
   type RailItem,
   railItems,
   railPosition,
   type RoundState,
-  unansweredItem,
-} from './form-state';
+} from './round-model';
 import {
   itemName,
   jumpedToLine,
@@ -647,7 +642,7 @@ export function mayCloseRound(
 // Hands main the active round's finish, as finishActiveForm sends it.
 function finishActiveRound(
   deps: FormsCommandDeps,
-  from: FormsView,
+  from: FormsScreen,
   kind: AgentFormEndKind,
 ) {
   finishActiveForm(

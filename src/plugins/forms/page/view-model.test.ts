@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { Finding, FormsView } from '../contract';
-import type {
-  FormsAction,
-  FormsState,
-  RoundState,
-  TextTarget,
-} from './form-state';
+import type { Finding, FormsScreen } from '../contract';
+import type { FormsAction, FormsState } from './form-state';
+import type { RoundState, TextTarget } from './round-model';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import {
   apply,
@@ -631,7 +627,7 @@ describe('railPickAction', () => {
     { view: 'confirm', position: 2, reviewRow: 1, expected: null },
     { view: 'idle', position: 3, reviewRow: undefined, expected: null },
   ] satisfies {
-    view: FormsView;
+    view: FormsScreen;
     position: number;
     reviewRow: number | undefined;
     expected: FormsAction | null;

@@ -39,12 +39,8 @@ import { formsManifest } from '../manifest';
 import { startRoundAutosave } from './autosave';
 import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
-import {
-  buildBody,
-  createFormsState,
-  type FormsStore,
-  roundPlace,
-} from './form-state';
+import { createFormsState, type FormsStore, roundPlace } from './form-state';
+import { buildBody } from './round-draft';
 import {
   closeRoundFromMain,
   formsCommandHandlers,

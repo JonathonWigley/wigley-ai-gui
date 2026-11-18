@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  buildBody,
-  type FormsAction,
-  type FormsState,
-  type FormsStore,
-} from './form-state';
+import type { FormsAction, FormsState, FormsStore } from './form-state';
 import {
   createFormsEventLog,
   type FormsPageEvent,
@@ -15,6 +10,7 @@ import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
 import { createPageKinds } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
 import { createFormsState } from './form-state';
+import { buildBody } from './round-draft';
 import { apply, initialState, presentedRound } from './test-rounds';
 
 const presented = presentedRound('r1');

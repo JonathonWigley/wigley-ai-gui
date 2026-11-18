@@ -4,17 +4,16 @@ import {
   formById,
   sessionPaneView,
 } from '../../../shared/page/session-forms';
+import type { FormsAction, FormsState } from './form-state';
+import { kindAnswer } from './round-answers';
 import {
   focusedItem,
-  type FormsAction,
-  type FormsState,
   isNoticesStop,
-  kindAnswer,
   railPosition,
   type RoundItem,
   type RoundState,
   type TextTarget,
-} from './form-state';
+} from './round-model';
 
 // One text box: the round it belongs to and the answer field it edits.
 export interface BoxRef {

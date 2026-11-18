@@ -9,12 +9,8 @@ import type {
   Round,
 } from '../contract';
 import { BUILT_IN_KIND_SPECS } from '../item-kinds';
-import {
-  createFormsState,
-  type FindingAnswer,
-  type NoticeAnswer,
-  type RoundState,
-} from './form-state';
+import { createFormsState } from './form-state';
+import type { FindingAnswer, NoticeAnswer, RoundState } from './round-model';
 import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
 import { pageKindTable } from './kinds/page-kinds';
 

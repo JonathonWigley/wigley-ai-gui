@@ -1,7 +1,7 @@
 import type { Notice, NoticeComment, PageKind } from '../../../contract';
 import { formsCommand } from '../../../ids';
 import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
-import type { NoticeAnswer } from '../../form-state';
+import type { NoticeAnswer } from '../../round-model';
 import { labelFor, roundInfo } from '../card-parts';
 import { entryAt } from '../item-answer';
 import type { CardInputs } from '../item-format';
