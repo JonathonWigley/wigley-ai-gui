@@ -18,7 +18,9 @@ leader holds everything named. `DESIGN.md` § Keys and focus holds the scope rul
 - `src/plugins/keymap.ts` holds every default key of the core and the built-in plugins, in banner
   sections by area, each command and scope named in full (`sessions.nextTab`, `docs.tree`). A
   wrong name fails the build. Built-in manifests declare commands and scopes only; the optional
-  manifest `keys` is for a plugin from outside the repo.
+  manifest `keys` is for a plugin from outside the repo; it takes binds and `remaps` (editor key
+  remaps, in the user keymap's shape), which layer by dependency order, under the user's `keymap.json`.
+  A disabled plugin's remaps leave the served keymap.
 - The user's `~/.config/wigley-ai-gui/keymap.json` takes the same entries and lays them over the
   defaults and any plugin's keys, so a line copies across unchanged. A user bind replaces a bind on
   the same keys in the same scope; `unbind` entries remove a default. A command's user binds come

@@ -63,6 +63,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **One fence registry in the core.** `addFence` on the markdown service is the extension point; html is a live
   contribution (it runs its source) and the built-in `diff` a non-live one (it only formats), so one fence rule
   serves chat-style and document rendering. A draw with `liveFences: false` skips only the live contributions.
+  `:::name` blocks register beside fences, through `addBlock` (the `markdown-blocks` plugin adds `:::changes`,
+  `:::tree` and `:::details`); the adapter keeps the block syntax, and a block's render returns HTML.
 - **The adapter stays strings; the mount owns the DOM.** `MarkdownRenderer` stays the markdown-it adapter and
   returns HTML text. One page module draws markdown into an element and owns the live parts: hydrating fences,
   reusing them across redraws, disposing them.

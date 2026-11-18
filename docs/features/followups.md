@@ -400,40 +400,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **View and interaction behaviours as switchable plugins** — *needs a feature plan*: behaviours such as
   `chat.completionDescriptions` and `keys.showHints` could ship as plugins the user switches on and off, rather than as
   settings inside the plugin they change. The live enable switch exists, so the split costs only the plugin boundary.
-- **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
-  and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
-  `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
-  `FormBody` / `AnswersPayload` hold `Record<kind, …>` inside and convert at the store and payload edge. On the page
-  each kind is a `PageKind` module (items, restore/entry codec, reduce, boxes, kit, card input, review facts, rail
-  order), replacing `ANSWERABLE_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
-  `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s `CARD_KINDS`, and the kind branches in `view-model.ts` and
-  `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The tool schema then needs disposable
-  tool contributions (landed, plan-foundation-sweeps), and retro reads unknown result keys.
-- **Finding origin specs and open layout unions** — *agent-ready*: finding origins become one `FindingOriginSpec`
-  each (card, meaning, choice noun, choice bounds, severity required, action words, chip, theme token), the single
-  source for the parser, tool text and card input. One `Finding` type with `severity: Severity | null` replaces the
-  per-origin types; each saved round carries its origin action words so retro reads data rather than keeping
-  `ORIGIN_ACTION_LABELS`. `origin` / `card` / `FindingAction` in forms' `layout.d.ts` become strings, so a new
-  finding origin, card or action does not break a user forms layout typed against the closed unions.
-- **A finding's proof becomes optional off a Nit** — *agent-ready*: the default forms layout draws a finding's `proof`
-  only on a Nit card (as Why it's safe), yet `finding-format.ts` still requires it on every origin, so agents send a
-  filler line nobody sees. Make `proof` required on `nit` alone in the finding origins table and the tool schema, and
-  update the forms README (marketplace), `~/wigley-agents/forms.md` § Findings and the review skill's `triage.md` to
-  match, in the same piece of work.
-- **Markdown block contributions** — *agent-ready*: `MarkdownRenderer.addBlock({ opener, render })` in the contract's
-  own terms, beside the fence registry `addFence` (`docs/features/visuals/design.md`); the wigley `:::changes` /
-  `:::tree` / `:::details` blocks move out of the core adapter (`markdown-it-renderer.ts`) into a contribution.
-- **EditorHost.defineEx** — *agent-ready*: `EditorHost.defineEx(name, prefix, handler)`, disposable: the document
-  editor's write/quit become ex commands the docs plugin registers, replacing the closed `DOCUMENT_EX_COMMANDS` and
-  its loop in `codemirror-vim-host.ts`.
-- **Plugin editor remaps** — *agent-ready*: a plugin manifest's `keys` gains remaps beside its binds and groups
-  (today only the user keymap layer has remaps, `src/contracts/keymap.ts`).
-- **Setting control kinds as registrations** — *agent-ready*: `SettingKind` (`'string' | 'number' | 'boolean'`,
-  `src/contracts/plugin.ts`) and the settings layout's row `control` union (`src/plugins/settings/layouts/layout.d.ts`)
-  are closed, and Settings mode switches over them (`setting-rows.ts`, `setting-rows-view.ts`). A plugin with a
-  structured setting (the `claude-code` plugin's profiles, docs' config folders) cannot contribute its editor. A plugin registers a
-  control kind with its row editor and its layout part, and the `control` field becomes a string so a new kind does
-  not break a user settings layout. The layout name picker (Features) is then one such kind.
 - **Layout hot reload keeps the user's place** — *agent-ready*: `round-view.ts` `rebuild` (run by `setLayouts` when a
   reload changes a layout it draws with, and by a card part or review column added or disposed) destroys and
   remounts every box. It focuses the focused box again (`keepFocusedBox`), in insert mode at the text's end when it
@@ -498,9 +464,6 @@ User-facing features, those other work builds on first.
   workflow, forms, docs, backlog and gallery (`src/plugins/keymap.ts`). Still missing: settings sections and rows, the
   chat, docs and settings pickers, and the chat session list. `Ctrl+j`/`Ctrl+k` move the cursor a line and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, so the scroll keys (`docs/keymap.md`, Layers) reach every view. Open: pickers have no half-page commands, so the `Ctrl+Shift` keys need new commands, and new keys are the user's call.
-- **Layout name picker in Settings mode** — *agent-ready*: each `<owner>.layout` setting (and `shell.layout`) draws as
-  a plain text row; a picker listing the owner's layout names, as the theme row lists themes, would read main's
-  `api.layouts.names()`.
 - **Latte theme and OS light/dark following** — *needs a feature plan*: the token model is theme-neutral
   (`colorScheme` per theme), so this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.
 - **Theme editor in Settings mode** — *needs a feature plan*: the user's `themes/*.json` token sheets are hand-edited
@@ -566,17 +529,9 @@ Duplication and drift with no user-visible defect.
 - **Redundant docs.css rule** — *agent-ready*: `src/plugins/docs/page/docs.css` keeps
   `.docs-tree.is-pane-inactive .ui-row.is-selected`, which the one rule in `src/shared/page/ui/row.css`
   (`.is-pane-inactive .ui-row.is-selected`) now covers.
-- **Split form-state.ts and rename the FormsView union** — *agent-ready*: `src/plugins/forms/page/form-state.ts`
-  (about 800 lines; autosave already split out) splits into session state, answers (dispatching to `PageKind.reduce`
-  once kinds register), finding rules (into `kinds/finding/`) and a draft codec. Two types are named `FormsView` (the
-  union in `src/plugins/forms/contract.ts`, the interface in `forms/page/forms-view.ts`): rename the union, which also
-  names the key scope.
-- **Forms tool table from one list** — *agent-ready*, taken by Lane E's task 06 (`formsTools(kinds)` replaces
-  `FORMS_TOOLS`, and the question and finding results share `kinds/answer-results.ts`); `SAVED_OUTCOMES` rides with
-  it: forms' tool routing derives `FORMS_TOOLS`
-  (`src/plugins/forms/main/tool-definitions.ts`) and the dispatch from one list of `{ definition, call }`;
-  `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`) derives from a `SAVED_OUTCOMES` const; `answerResult` and
-  `findingResult` (`forms/main/round.ts`) share one status ladder on the answerable format.
+- **Saved outcomes from one list** — *agent-ready*: `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`)
+  hard-codes `'open' | 'submitted' | 'cancelled'` beside the `SavedOutcome` type; derive both from one
+  `SAVED_OUTCOMES` const.
 - **Sessions page model** — *agent-ready*: the sessions page `start` (`src/plugins/sessions/page/start.ts`) moves its
   closure state and its multi-job `apply` into a DOM-free `createSessionsPageModel`.
 - **"Answered" or "responded" on the forms page** — *needs a feature plan*: the forms page counts a notes-only item as

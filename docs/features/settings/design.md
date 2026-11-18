@@ -52,11 +52,18 @@ plan is written from them. A decision here stands unless the user changes it.
   (`claude-code.profiles`), and so is an optional member (`fonts.ui`).
 - One row per leaf: label, description, the value in force, and its control. A row the user set shows a "Set" tag and
   the default in `fg-tertiary`; `r` resets it, removing the key from `settings.json` (an object left empty drops too).
-- Controls by kind, opened by Enter or `i` on the row:
-  - number and string: a one-line text box; Enter commits, Esc reverts, and an empty box commits as unset
-  - a closed choice (`transparency`), a boolean, and `theme`: the shared list picker. `theme` lists the built-in
-    themes and the user's `themes/*.json` by name, as served at that moment
-  - an array, or an object inside one: a JSON document box (the document editor with the JSON language); Enter on
+- A control is a kind: a string id on the leaf's `control` (`{ kind, choices }`) that the settings page registers
+  through `SettingsPageExports.addControlKind` (`src/plugins/settings/contract.ts`). A kind says how a value prints on
+  the row and how it edits, in a box or in the list picker. The page registers the built-ins
+  (`built-in-control-kinds.ts`); a plugin manifest's `settingControls` binds one of its setting paths to a kind id, so
+  a plugin adds a kind without an edit to the page. A row whose kind no registration holds draws its value as JSON
+  text and offers reset only. Main still checks a written value by the default's shape, whatever the kind. The
+  built-ins, opened by Enter or `i` on the row:
+  - `number` and `string`: a one-line text box; Enter commits, Esc reverts, and an empty box commits as unset
+  - a closed `choice` (`transparency`), a `boolean`, `theme` and `layout`: the shared list picker. `theme` lists the
+    built-in themes and the user's `themes/*.json` by name, as served at that moment. `layout` is the kind of each
+    `<owner>.layout` row and of the core `shell.layout`: it lists that owner's layout names, `default` first
+  - `json`, an array or an object inside one: a JSON document box (the document editor with the JSON language); Enter on
     the row focuses the editor and Esc closes the box; `:w`, `:wq` and `:x` commit, `:q` and `:q!` close without
     committing
 - A value commits on Enter or a pick, never per keystroke. A value that fails the check stays in its box with the
@@ -177,12 +184,12 @@ The leader tree as which-key shows it, edited in place, in two panes moved betwe
   `src/main/config/user-config.ts` beside the ConfigStore, filled in by `main.ts`. Any plugin may use it; the
   `settings` plugin is its first caller.
 - It serves:
-  - the schema: core and plugin setting defaults, each leaf's declaration (label, description, control, default), the
+  - the schema: core and plugin setting defaults, each leaf's declaration (label, description, `control` as `{ kind, choices }` with `kind` a string id, default), the
     plugin sections in order, every command and scope, the default binds as `KeyBind` entries by the layer they come
     from (defaults, then each manifest's `keys`), unmerged because which one replaces which depends on the user's
     leader, the default `app`, `global` and `intercept` accelerators merged across those layers, and the default leader
   - a read of both files: each file's user layer (null when the file is missing), its problem, and its text (null when missing), plus
-    the theme names
+    the theme names and each owner's layout names (`layoutNames`)
   - a write of each file's whole new user layer against the text it was read at (stale: `changedOnDisk`)
   - a change signal, each time the ConfigStore serves a new config
 - A write runs the same check the ConfigStore runs on that file — for `settings.json` the settings merge and the

@@ -168,15 +168,15 @@ item draws a button through `kit.button`, which runs a command, and no closure b
 Start after Wave 1 step 1.
 
 - ∥:
-  - [ ] Markdown block contributions
-  - [ ] EditorHost.defineEx
-  - [ ] Plugin editor remaps
-  - [ ] Setting control kinds as registrations, then [ ] Layout name picker in Settings mode
+  - [x] Markdown block contributions
+  - [x] EditorHost.defineEx
+  - [x] Plugin editor remaps
+  - [x] Setting control kinds as registrations, then [x] Layout name picker in Settings mode
 - Forms chain, in order; after Lane H's Structured round results and before Lane L's forms items:
-  1. [ ] Forms item kinds as registrations
-  2. [ ] Finding origin specs and open layout unions, with [ ] A finding's proof becomes optional off a Nit (the
+  1. [x] Forms item kinds as registrations
+  2. [x] Finding origin specs and open layout unions, with [x] A finding's proof becomes optional off a Nit (the
      same origins table; its marketplace and `~/wigley-agents/forms.md` text lands in the same run)
-  3. [ ] Split form-state.ts and rename the FormsView union
+  3. [x] Split form-state.ts and rename the FormsView union
 - [ ] Command palette and fuzzy finders [plan], last and outside the lane's plan: it builds on the runtime command
   API, the core picker and the `FuzzyMatcher` service, all landed.
 

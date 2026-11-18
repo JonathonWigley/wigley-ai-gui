@@ -360,8 +360,7 @@ Settled in the 2026-11-09 interview for Wave 4 step 3 of `docs/features/intent-a
 ## Extension points (Lane E)
 
 Settled in the 2026-11-09 interview for Lane E of `docs/features/intent-alignment/master-plan.md`; the plan is
-`intent-alignment/plan-lane-e-extension-points/`. Written before the code: the plan's docs task re-reads it against
-the landed code.
+`intent-alignment/plan-lane-e-extension-points/`. Re-read against the landed code.
 
 - **Markdown blocks.** `MarkdownRenderer.addBlock` registers a `:::name` block by name. The adapter keeps the
   `:::name` syntax, the closing line and nesting; a block's render gets the header text, the body lines and helpers
@@ -374,29 +373,35 @@ the landed code.
   root was rejected: everything is a plugin.
 - **defineEx hands the handler its editor.** `EditorHost.defineEx(name, prefix, handler)` returns a Disposable; the
   handler gets the editor the command ran in, the argument text and the bang. The document editor's `:w`, `:q`,
-  `:wq` and `:x` register through it inside the host and stay per-editor `DocumentEditorEvents`, because docs,
-  Practice and Settings each bind `:w` to their own editor. Moving `:w` to each plugin was rejected: a global `:w`
-  per plugin needs a claiming rule to do what the per-editor event already does.
+  `:wq` and `:x` register through it inside the host (`DOCUMENT_COMMANDS`) and stay per-editor
+  `DocumentEditorEvents`, because docs, Practice and Settings each bind `:w` to their own editor. Moving `:w` to each
+  plugin was rejected: a global `:w` per plugin needs a claiming rule to do what the per-editor event already does.
+  The pinned vim engine (`@replit/codemirror-vim-core` 0.1.0) has no ex undefine, so a dispose cannot bring back an
+  earlier command: `defineEx` refuses a name, or a prefix, that names one of vim's own ex commands (a pinned list
+  that a test checks) and one another definition holds, and a dispose leaves a stub, so `:name` then reports an
+  unknown command.
 - **Plugin remaps.** A manifest's `keys.remaps` takes the user keymap's `{ mode, keys, to }` shape and layers in
   dependency order under the user's keymap, as binds do. A disabled plugin's remaps leave the served keymap and the
   layer under them shows through again; a paused plugin keeps them, since a remap has no handler to restart.
 - **Setting control kinds.** A setting's control kind is a string id. A manifest names each setting's kind by path
   (static, so main reads it before any part starts), and the page registers each kind's row text and editor through
-  Settings' page exports; the built-in six kinds register the same way. Main registers nothing: `settings.json` is
+  Settings' page exports (`addControlKind`); the seven built-in kinds register the same way. A row whose kind no
+  registration holds draws its value as JSON text and offers reset only. Main registers nothing: `settings.json` is
   checked by the shape of each default before any plugin part starts, which already covers a structured setting. A
   page-only kind with no manifest binding was rejected: main derives each row's control. One registration object
   both processes import was rejected: the layering has no cross-process registry.
 - **Settings layouts stay one row part.** The `settingRow` part's `control` is a string, and a layout that does not
   know a kind still draws its row; the app, not the layout kit, draws the kind's row box or list picker.
 - **The layout name picker is a kind.** Each `<owner>.layout` setting and `shell.layout` declare the `layout` kind;
-  its picker lists the owner's names from `UserConfigRead`, as the theme row lists themes. A name a user folder no
+  its picker lists the owner's names from `UserConfigRead.layoutNames`, as the theme row lists themes. A name a user folder no
   longer holds stays valid in `settings.json`: the layout host already falls back to `default`.
 - **Forms item kinds register per process.** Main's registration carries parse, schema, fingerprint and the wire
   keys; the page's carries restore, reduce, boxes and the card input, tied by the kind's id. The built-in kinds
   register through the same calls, and plugins reach them through forms' main and page exports. Rounds hold a
   record by kind inside (`Round.items`, and `Round.bodyKeys` so the page can write back a kind it has no
   registration for) and keep each kind's list at its wire key at the store and payload edge, so files the built-in
-  kinds alone wrote stay byte-identical. A forms layout keeps its three named cards and gains a string-keyed record for new kinds. One
+  kinds alone wrote stay byte-identical. A forms layout keeps its three named cards and gains `cards.kinds`, a builder
+  per kind id, and `cards.other`, the card of a kind no layout in the chain has a builder for. One
   shared registration module was rejected: page code may not reach main.
 - **Finding origins register.** `registerFindingOrigin(spec)` through forms' main and page exports, disposable, the
   four built-in origins registered the same way; each spec is the single source for the parser, tool text and card.
@@ -409,6 +414,6 @@ the landed code.
   at a time.
 - **A proof is required on a Nit alone.** An omitted proof is left out of the fingerprint, so old files keep their
   hashes; a proof sent off a Nit is accepted and drawn only by a layout that reads it.
-- **`FormsScreen`.** Forms' screen union (`forms | review | confirm | idle`) is renamed `FormsScreen`, since the page
-  interface keeps `FormsView`. The `viewChanged` event keeps its name: only forms emits it, and its log line is pinned
+- **`FormsScreen`.** Forms' screen union (`forms | review | confirm | idle`) is renamed `FormsScreen`, since the
+  mounted view's interface in `page/forms-view.ts` keeps `FormsView`. The `viewChanged` event keeps its name: only forms emits it, and its log line is pinned
   by `forms-events.test.ts`.

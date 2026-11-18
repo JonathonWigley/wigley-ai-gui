@@ -249,7 +249,8 @@ src/renderer/    core page; renderer.ts is its composition root
   key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
                  redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
                  a text box
-  markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
+  markdown-it/   markdown adapter behind MarkdownRenderer; it owns the `:::name` block syntax, and blocks register
+                 through `addBlock` beside `addFence`   → the only markdown-it import
   visual-frames/ the visual frames service plugins open a visual through: the sandboxed frame on the `wigley-visual:`
                  scheme, the theme posted in on load and on each change, and the height and `Esc` it posts out
   fzf/           fuzzy matcher adapter behind FuzzyMatcher: the `/` filters match with it and keep their order, while
@@ -429,6 +430,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
                  usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
+  markdown-blocks/ manifest.ts, page/ only (the `:::changes`, `:::tree` and `:::details` blocks, added through the
+                 `markdown` service's `addBlock`; forms and chat depend on it)
   docs-session-tab/ page/ only (each session's Docs tab through sessions' `addTab`, a split of tree and page built
                  through docs' `addView`); in `plugins.disabled` by default; `docs/features/docs-browser/design.md`
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow, run through the
@@ -510,8 +513,10 @@ first: a tab or popup that `closesAtOnce` has the guard's `cancelHold` cancel th
 with no prompt. The review's Cancel prompt is a different act: it cancels the round and leaves the session open.
 
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
-  and the process it runs in), key scopes (each with the title help shows over its keys), settings
-  and the plugins it depends on (a built-in plugin's default keys sit in `src/plugins/keymap.ts`); `main/`
+  and the process it runs in), key scopes (each with the title help shows over its keys), settings (and
+  `settingControls`, which binds a setting to its control kind: A setting), an optional `keys` field (binds and
+  editor `remaps`: A key) and the plugins it depends on (a built-in plugin's default keys sit in
+  `src/plugins/keymap.ts`); `main/`
   and `page/` each export a part, the manifest with a start function that receives that process's plugin API and
   returns the handlers for the manifest's commands that run in that process, plus `exports` and `dispose`.
   `exports(consumer)` gives each dependent its own view of the plugin's exports, and every registration a
@@ -536,7 +541,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
   returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,
-  `files.watch`, `processes.run`, editors, alert counts), and the host disposes them when the plugin stops. A
+  `files.watch`, `processes.run`, editors and their ex commands, markdown fences and blocks, alert counts), and the host disposes them when the plugin stops. A
   registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
   DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: none of its parts run, and the list applies
@@ -724,7 +729,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   manifest's optional `keys` is for a plugin from outside the repo. The keymap merges in layers — the default
   keymap, then each manifest's `keys` in dependency order, then the user's `keymap.json`, in the same entry format —
   where a later layer's bind replaces an earlier one with the same keys in the same scope and an `unbind` entry
-  removes one; only a clash inside one layer is an error. Which key a bind takes follows `docs/keymap.md`, and its
+  removes one; only a clash inside one layer is an error. A manifest's `keys` also takes `remaps`, in the user
+  keymap's shape and layered the same way; main serves the remaps again without the disabled plugins' (`appliedRemaps`), so a disabled plugin's remaps
+  leave and a paused plugin's stay, as they have no handler. Which key a bind takes follows `docs/keymap.md`, and its
   leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
@@ -847,35 +854,33 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   `--wg-<name>` and never write a raw value (`DESIGN.md` § Tokens and themes). Built-in themes live in
   `src/config/themes/`; the user's own in the `themes` folder of the user config folder override a built-in of the
   same name. A broken theme keeps the last good one and shows its error.
-- **An item kind** in a forms round — question, finding, notice — is a format module in a folder of its own,
-  `src/plugins/forms/main/kinds/<kind>/<kind>-format.ts` and `src/plugins/forms/page/kinds/<kind>/<kind>-card.ts`,
-  each listed in the typed `FORMATS` table of its process's `kinds/formats.ts`; the page module hands a layout the
-  kind's card input, and the layout builds the card. A new kind starts as its name in
-  the forms contract's `ItemKind` (and in `AnswerableKind`'s exclusion when it takes no answer), its item type, and
-  its `ItemOf` entry in main's `kinds/item-format.ts`; from there the compiler flags each of the rest missing: that
-  folder pair, its table entries, its array in the contract's `Round`, `FormBody` and `AnswersPayload`, `round.ts`'s
-  fixed keys (`parseRound`, `readFormBody`, the answers result) and `mcp-wording.ts`'s answers payload, and the
-  per-kind records: `ROUND_ITEM_LISTS` and
-  `FINGERPRINT_LISTS` in `round.ts`, `ROUND_ITEMS` in `page/form-state.ts`, and for an answerable kind `ANSWER_LISTS` in
-  `round-type.ts`, and `ANSWER_ARRAYS`, `PICK_ANSWERS` and `RECOMMENDED_PICKS` (what Enter accepts) in
-  `form-state.ts`, then its card input and kit parts in the Layout contract (`layouts/layout.d.ts`), the page's
-  layout tables (`KIT_BUILDERS` in `page/layout/card-kit.ts`, `CARD_KINDS` in `read-layout.ts`, `LayoutPart` in
-  `layout-resolver.ts`) and its card in the `default` layout. The order lists are plain arrays the compiler cannot
-  check: `formats.test.ts` fails when main's `ITEM_KINDS` or `ANSWERABLE_KINDS` misses a kind, and `ANSWERABLE_ORDER` in
-  `form-state.ts` is added to by hand for an answerable kind.
-- **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is an entry in
-  `src/plugins/forms/finding-origins.ts`: the card it draws as (Defect, Decision, Nit), the fields it requires and
-  forbids, its choice bounds, and the actions it offers with the card's word for each. Main's parser (which rejects a
-  choice opening with one of those words) and the page's card both read that table. A new origin starts as its name
-  in the forms contract's `FindingOrigin` and its variant in the `Finding` union (and in `DefectFinding`'s origin when
-  it takes severity); the compiler then flags its table entry, its chip text in `ORIGIN_CHIPS` in
-  `page/kinds/finding/verdict.ts` and its meaning in `ORIGIN_MEANINGS` in `main/kinds/finding/finding-format.ts`,
-  and a new card its `CARD_TEXT` in `finding-card.ts` and its `CARD_CHOICES` in `finding-format.ts`. The card list
-  in `ASK_ROUND_DESCRIPTION` is built from the table by `findingCardsText()` in `main/kinds/finding/finding-text.ts`.
-  The rest it cannot check: the `FINDING_ORIGINS` list in the contract, an `origin-*` token in forms'
-  manifest `themeTokens` with its `.badge-origin` rule in `forms.css`, and retro's
-  `ORIGIN_ACTION_LABELS` in the marketplace's `answers.py`, which otherwise labels the new origin's actions with the
-  Defect words. Every finding card shows all its choices grouped under the action each one names (`fix_now` when it
+- **An item kind** in a forms round — question, finding, notice, or a plugin's own — is two registrations tied by
+  one `ItemKindSpec` id (its wire keys `argsKey`, `bodyKey` and `resultKey`, and whether it is answerable): a
+  `MainItemKind` (the kind's part of the `ask_round` schema, its validation, fingerprint, saved entries and results)
+  through `FormsMainExports.registerKind` (`formsMainKey`), and a `PageKind` (how its saved entries restore, how its
+  answers change and what Enter accepts, its text boxes, its card input and its rail place) through
+  `FormsPageExports.registerKind`. The built-ins register the same way: `BUILT_IN_KINDS` in
+  `main/kinds/formats.ts` from `main/kinds/<kind>/<kind>-format.ts`, and `BUILT_IN_PAGE_KINDS` in
+  `page/kinds/formats.ts` from `page/kinds/<kind>/<kind>-card.ts`; each process keeps a registry
+  (`main/kinds/registry.ts`, `page/kinds/page-kinds.ts`) that checks a registration and tells the rest when the set
+  changes. Main re-contributes the MCP tools on each change, and the page re-derives every open round, keeping a
+  departed kind's draft entries. A round's lists are records keyed by kind id (`Round.items`, `Round.bodyKeys`,
+  `FormBody` and `AnswersPayload` by wire key), so a new kind edits no table. The page's round state sits in
+  `page/round-model.ts` (types, the rail order), `round-answers.ts` (answers and picks; `findingActionOf` and
+  `findingActionWord`), `round-draft.ts` (the saved body and the restore) and `form-state.ts` (the store and its
+  reducer); the finding's pick rules are in `page/kinds/finding/finding-answer.ts`. The page hands a layout each
+  kind's card input, and a layout draws a plugin kind through `cards.kinds[id]` or its `cards.other` (A forms layout).
+- **A finding origin** — `caused`, `pre_existing`, `design`, `nit` — is one `FindingOriginSpec` (forms' `contract.ts`;
+  the built-ins in `finding-origins.ts`) registered through `registerFindingOrigin` in both processes,
+  `FormsMainExports` and `FormsPageExports`, each with the same spec: the card it draws as (Defect, Decision, Nit),
+  the words of its sections, the fields it requires (`requiresSeverity`, `requiresProof`; `proof` is required on
+  `nit` alone), its choice bounds, its meaning, its chip text and theme token, and the actions it offers with the
+  card's word for each. Origins that share a card carry equal card-level fields. Main's parser (which rejects a choice
+  opening with one of those words), the tool text (`findingCardsText()` in `main/kinds/finding/finding-text.ts`) and
+  the page's card read the registered specs; a disposed origin is retired, so new rounds refuse it and open rounds
+  keep reading it. An origin's chip colour is its qualified `themeToken`, which its plugin declares in its manifest's
+  `themeTokens`. A saved finding entry carries `action_label` and `recommend_action_label`, the card's words for the
+  picked and the recommended action, so retro reads them from the data. Every finding card shows all its choices grouped under the action each one names (`fix_now` when it
   names none), numbered down the card, and an action with no choices takes one number on its own header; picking a
   choice or a bare header sets the action, so choice and action are one pick. The recommended pick is tagged
   Recommended in the accent, and Accept (Enter) takes it: the user ruled out folding the alternatives away, since
@@ -929,7 +934,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   workflow tools and `set_session_title`); chat's guard, which it registers through `addToolCallGuard`, answers a subagent's call of such a tool with a success that
   changes nothing. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
   session: sessions starts or ends the contribution's tool session there and sends MCP
-  `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
+  `notifications/tools/list_changed`. A plugin whose tool text depends on a registry contributes again on each change
+  (forms, on a kind or origin change), keeping its sessions' state. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
   relay answers `tools/list` from `tools.json` while the app is away. Claude Code keeps the tool schemas a session
   started with, so a new tool reaches only sessions started after it lands. Planned in `plan-agent-commands`, not built
   yet: an agent reaches every app action through `agent-commands`' three tools, `list_commands`, `run_command` and
@@ -937,7 +943,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
-  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
+  watches, aborts its running processes, destroys its editors, drops its ex commands (`editor.defineEx`: after the
+  drop `:name` reports an unknown command; the pinned engine cannot restore an earlier command, so `defineEx` refuses
+  a name or prefix that names one of vim's own) and zeroes its alert counts. `services.log` is
   scoped to the plugin: a plugin calls `log(message)`, and the line shows as `[<id>] message` under its own id. The page's services add `picker` (the shared list picker,
   wired to the plugin's scope, log and overlay), `chooseFolder` (the native folder dialog, null when dismissed) and
   `openExternal` (an http or https link in the default app; main refuses any other). The page's home folder
@@ -955,7 +963,13 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 - **A setting** is a core setting in `src/contracts/settings.ts` and `src/config/settings.ts`, or a plugin's own in
   its manifest's `settings`. Each one declares a label and a one-line description by its dotted path, in
   `settingInfo` beside its default (`src/config/settings.ts` or the manifest), which Settings mode draws as its row;
-  the compiler fails on a setting with no declaration. The user overrides any of them in `settings.json` (plugin
+  the compiler fails on a setting with no declaration. A setting's **control kind** is a string id on its row's
+  `control` (`{ kind, choices }`): the built-ins are `number`, `string`, `boolean`, `choice`, `theme`, `json` and
+  `layout`, and a manifest's `settingControls` binds a plugin setting's dotted path to another id. The settings
+  page registers each kind through `SettingsPageExports.addControlKind` (how its row prints a value and edits it, in
+  a box or the list picker); a row whose kind no registration holds prints its value as JSON and only resets. Main
+  still checks a written value by its default's shape, whatever the kind. The `layout` kind picks from the layout
+  names of the owner the path starts with, which the user config service's `read()` serves as `layoutNames`. The user overrides any of them in `settings.json` (plugin
   settings under the plugin id), by hand or from Settings mode. The ConfigStore rejects a `settings.json` naming a
   setting that no longer exists, and the app keeps no table of renamed settings, so a change that renames, moves or
   removes a setting also edits `~/.config/wigley-ai-gui/settings.json` to match, and the report names that edit. When
@@ -992,7 +1006,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the shell registers with the core (`layouts.register('shell', shellLayoutTypes, 'src/renderer/shell/layouts/default')`
   in `main.ts`) and shows through the page host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit
   types) and `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the
-  layout (the owner's setting — `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it
+  layout (the owner's setting — `<plugin>.layout`, or the core `shell.layout` — and `default` when unset; each such row in Settings mode picks from the owner's layout names, its
+  `layout` control kind), checks it
   with the owner's reader, draws each part, rolls back a part that throws and draws it with `default`, redraws on a
   reload, and refreshes every show on each config change. The page claims the Bridge once at start, so a layout reaches
   the app only through its kit, and no `window.wigley` holds the Bridge; this is no sandbox, since a layout shares the
@@ -1035,8 +1050,10 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the user's layout when it names the kind; else with the plugin renderers, the latest added first, the first whose
   `kind` matches and whose `match` passes when given; else with `default`, whose `raw` builder draws a harness kind. A
   harness kind joins no activity run.
-- **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
-  `rail`, `review` and `notices` panes. The `notices` pane is the round's one notices page, after every finding and
+- **A forms layout** draws the forms view: the three named cards (`question`, `finding`, `notice`), `cards.kinds` (a
+  builder per plugin kind id), `cards.other` (the card of a plugin kind no layout in the chain has a `kinds` builder
+  for) and the `head`, `rail`, `review` and `notices` panes. A finding's card, origin, action and severity are strings,
+  since a plugin may register more. The `notices` pane is the round's one notices page, after every finding and
   question: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
@@ -1048,7 +1065,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the rail, review and notices panes, and draws the forms look. The user's forms layouts are folders in
   `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the cards and panes it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
-    the round's `layout`, the `forms.layout` setting and `default`; a pane the same way without the item. One page
+    the round's `layout`, the `forms.layout` setting and `default` (a plugin kind: the first `cards.kinds[id]`, else
+    the first `cards.other`); a pane the same way without the item. One page
     module resolves this, so round-view names no layout. An `ask_round` naming a layout missing from the folder
     fails with the names the folder holds. A user layout counts as missing until the layout registry has listed it,
     which briefly it has not at app start and just after a new layout folder is written, so an agent retries such a
@@ -1062,9 +1080,11 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
     raises no notification or badge.
   - **Other plugins** reach the forms view through the page exports (`FormsPageExports` in
     `src/plugins/forms/contract.ts`): `activeRound`, `answers`, `addCardPart` (drawn where a card calls
-    `kit.contributedParts`, else at the card's end) and `addReviewColumn` (one `span.review-cell` per review row). The
-    page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
-    `page/forms-events.ts`), each logged as `[forms] event <name> …`.
+    `kit.contributedParts`, else at the card's end), `addReviewColumn` (one `span.review-cell` per review row),
+    `registerKind` and `registerFindingOrigin` (An item kind, A finding origin); forms' main exports the same two
+    (`FormsMainExports`). The page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged`
+    (`FormsPageEvents`, from `page/forms-events.ts`; `viewChanged` carries the `FormsScreen` shown), each logged as
+    `[forms] event <name> …`.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
   allow. A plugin's rules are derived in `scripts/layer-rules.mts` from the folder convention and its manifest's
   per-process `dependsOn` and `reads`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main` or
