@@ -1,6 +1,6 @@
 # 01 — Docs view state
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · an async open race and the `docs.place` data format, with a core mode-registry change
 Wave: 1 · Depends on: none
@@ -160,3 +160,4 @@ outside renames and trashes keep a selection, one newest-wins open rule (follow-
 
 ## Proof
 
+Commit 7112b86a0 f36b10d57 · proof: diff read: DocsTreePlace per view, sideBarNarrowed told on beside→hidden, rowIdsIn/selectNearestIn reselect after outside rename/trash, askedOpens on every open checked after both waits; typecheck and lint clean (oxfmt run as lead) · concerns: D makes a reload's restored open lose to any open asked before the first index read (its edits toast as not restored); outside-change page test uses two added views; a page-scoped saved place in the old shape is not read back after this change

@@ -123,7 +123,7 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 `dispose` bodies no Files line names.
 
 ### Wave 1
-- [ ] [Docs view state](01-docs-view-state.md)
+- [x] [Docs view state](01-docs-view-state.md)
 - [x] [One ownsRoot helper](02-docs-owns-root.md)
 - [x] [Sessions pane clicks and presses](03-sessions-pane-presses.md)
 - [x] [Step and tool-call durations](07-step-durations.md)
@@ -181,6 +181,7 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 07 · hard (compile error back on hard) · 023a8d3d1 e6fcb5480 · diff read: stepDurationMs, StepDuration on tool/thinking inputs, card trailing, fillStepTime; compile error in read-chat-layout InputAddition fixed on the same rung; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: layout.test asserts '· 65s' not '· 1m 05s' (fake kit counts whole seconds)
 - 20 · deep · 59726fbeb · diff read: titleCandidates settled by entry delivery, cleared on drop/beginProcess/clear; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: a test reading a first-message title right after an unawaited send now finds none; relaunch row relies on the silent fake's second process
 - 06 · hard · 12af5da63 · diff read: scrollsToStop also needs the list off its bottom; scrollToFocus settles a following cursor with by='list'; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: rebuilds of a shown list now settle the cursor, which may move existing rebuild tests
+- 01 · deep · 7112b86a0 f36b10d57 · diff read: DocsTreePlace per view, sideBarNarrowed told on beside→hidden, rowIdsIn/selectNearestIn reselect after outside rename/trash, askedOpens on every open checked after both waits; typecheck and lint clean (oxfmt run as lead) · concerns: D makes a reload's restored open lose to any open asked before the first index read (its edits toast as not restored); outside-change page test uses two added views; a page-scoped saved place in the old shape is not read back after this change
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
@@ -192,5 +193,6 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 12: requireDrivenWindow helper in main.ts throws for a selfTest or drive run with no driven window · group 12
 - 20: setFirstMessageTitle became firstMessageTitleToSet with the same guards; a candidate is recorded only for a message that would title the row; a save follows the delayed title · group 20
 - 06: settleInBand takes the PlaceChange; scrollToFocus's settle reports 'list' so a restored place survives · group 06
+- 01: start.test.ts edited outside Tests: startDocsPage passes fakeFuzzyMatcher and restorePending's saved place takes the new shape · group 01
 ### Review rounds
 ### Test gate
