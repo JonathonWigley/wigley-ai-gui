@@ -351,6 +351,8 @@ describe('chatroomPagePart', () => {
       const box = page.box();
       box.value = 'a note';
       page.commands.send({ arg: undefined });
+      await settle();
+      expect(page.callsOf('postAsUser')).toHaveLength(1);
       await page.harness.stop();
       const loggedBefore = page.logged();
 

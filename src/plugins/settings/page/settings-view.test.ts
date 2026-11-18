@@ -1157,20 +1157,25 @@ describe('createSettingsView', () => {
     async ({ held, outcome, value, before }) => {
       const reply = deferred<unknown>();
       let isArmed = false;
+      let isHeldCalled = false;
       const setup = await pickerOnPlugin('gallery', {
         schema: pluginsSchema([]),
         plugins: () => [status('gallery', 'Gallery', true)],
-        held: (method) =>
-          isArmed && method === held
-            ? reply.promise
-            : isArmed && method in before
-              ? Promise.resolve(before[method as keyof typeof before])
-              : undefined,
+        held(method) {
+          if (isArmed && method === held) {
+            isHeldCalled = true;
+            return reply.promise;
+          }
+          return isArmed && method in before
+            ? Promise.resolve(before[method as keyof typeof before])
+            : undefined;
+        },
       });
       isArmed = true;
       setup.view.commands.pickerDown();
       setup.view.commands.pickerChoose();
       await settle();
+      expect(isHeldCalled).toBe(true);
       setup.view.dispose();
       const logsBefore = [...setup.logs];
       const toastsBefore = [...setup.toasts];
@@ -1199,13 +1204,20 @@ describe('createSettingsView', () => {
     async ({ outcome }) => {
       const reply = deferred<unknown>();
       let isArmed = false;
+      let isHeldCalled = false;
       const setup = await shownView({
-        held: (method) =>
-          isArmed && method === 'read' ? reply.promise : undefined,
+        held(method) {
+          if (isArmed && method === 'read') {
+            isHeldCalled = true;
+            return reply.promise;
+          }
+          return undefined;
+        },
       });
       isArmed = true;
       setup.view.commands.edit();
       await settle();
+      expect(isHeldCalled).toBe(true);
       setup.view.dispose();
       const logsBefore = [...setup.logs];
       const toastsBefore = [...setup.toasts];

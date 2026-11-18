@@ -10,6 +10,7 @@ import {
   type PartPick,
   type RollbackDeps,
 } from './draw-part';
+import { callEach } from '../../call-each';
 import { pickLayout } from './pick';
 
 // `defaultLayout` is the owner's built-in layout, defining every part. `owner`
@@ -53,7 +54,8 @@ export interface LayoutParts<L, C> {
     build: BuildPart<C[K], R>,
     slot?: string,
   ): DrawnPart<R>;
-  // Disposes every draw `redraw` keeps and forgets them; their elements stay.
+  // Disposes every draw `redraw` keeps and forgets them, a throw skipping none
+  // and the first error rethrown after; their elements stay.
   dispose(): void;
 }
 
@@ -110,9 +112,7 @@ export function createLayoutParts<L extends object, C extends L>(
     dispose() {
       const draws = [...kept.values()];
       kept.clear();
-      for (const drawn of draws) {
-        drawn.dispose();
-      }
+      callEach(draws, (drawn) => drawn.dispose());
     },
   };
 }

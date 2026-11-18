@@ -52,12 +52,9 @@ export interface DrawnPart<R> {
 }
 
 // Disposes each of `draws`, a throw skipping none, then throws the first
-// error; returns the empty list that replaces them.
-export function disposeDraws<R>(
-  draws: readonly DrawnPart<R>[],
-): DrawnPart<R>[] {
+// error. The caller clears its held list first.
+export function disposeDraws<R>(draws: readonly DrawnPart<R>[]): void {
   callEach(draws, (draw) => draw.dispose());
-  return [];
 }
 
 // The part names whose failure was logged, by the layout object that failed.

@@ -408,7 +408,7 @@ describe('disposeDraws', () => {
       const run = () => disposeDraws(draws);
 
       if (error === null) {
-        expect(run()).toEqual([]);
+        run();
       } else {
         expect(run).toThrow(error);
       }

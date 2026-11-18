@@ -77,6 +77,13 @@ const DRAFT: NoteDraft = {
   ],
 };
 
+// A draft a send accepts: a title and a target a home holds.
+const SENDABLE: NoteDraft = {
+  ...DRAFT,
+  target: '/home/me/a',
+  title: 'A note',
+};
+
 const PASTED_PATH = '/app/pasted/20261102-090000-1.txt';
 
 const AUTOSAVE_DELAY_MS = 1000;
@@ -158,6 +165,8 @@ interface Fakes {
   addImage(bytes: Uint8Array): Promise<NoteDraft>;
   sendToFollowup(): Promise<NoteSendResult>;
   homes(): Promise<NoteHomes>;
+  capture(): Promise<NoteDraft>;
+  saveDraft(fields: NoteFields): Promise<void>;
 }
 
 function droppedFile(
@@ -291,7 +300,9 @@ function fakeChannel(
         }
         case 'saveDraft':
           saved.push(args[0] as NoteFields);
-          return Promise.resolve();
+          return fakes.saveDraft(args[0] as NoteFields);
+        case 'capture':
+          return fakes.capture();
         case 'saveMarkup':
           savedMarkups.push([args[0] as number, args[1] as string]);
           return Promise.resolve(draft);
@@ -337,6 +348,8 @@ async function openPopup(
     },
     sendToFollowup: () => new Promise(() => undefined),
     homes: () => Promise.resolve({ homes: [], message: null }),
+    capture: () => Promise.reject(new Error('no capture in the fake')),
+    saveDraft: () => Promise.resolve(),
   };
   const targets: DropTarget[] = [];
   let body: TextEditor | null = null;
@@ -1043,8 +1056,98 @@ describe('note popup', () => {
   // draws.
   it.each<{
     call: string;
+    draft?: NoteDraft;
     run: (harness: Harness, dispose: () => void) => Promise<void> | void;
   }>([
+    {
+      call: 'capture, main fails late',
+      run: async (harness, dispose) => {
+        vi.stubGlobal('requestAnimationFrame', (frame: () => void) => {
+          frame();
+          return 0;
+        });
+        const late = Promise.withResolvers<NoteDraft>();
+        let isInvoked = false;
+        harness.fakes.capture = () => {
+          isInvoked = true;
+          return late.promise;
+        };
+        harness.popup.commands.capture(NO_ARG);
+        await settle();
+        expect(isInvoked).toBe(true);
+        dispose();
+        late.reject(new Error('no screen'));
+      },
+    },
+    {
+      call: 'appendFollowup, homes lands late',
+      draft: SENDABLE,
+      run: async (harness, dispose) => {
+        const late = Promise.withResolvers<NoteHomes>();
+        let isInvoked = false;
+        harness.fakes.homes = () => {
+          isInvoked = true;
+          return late.promise;
+        };
+        harness.popup.commands.appendFollowup(NO_ARG);
+        await settle();
+        expect(isInvoked).toBe(true);
+        dispose();
+        late.resolve({ homes: [], message: null });
+      },
+    },
+    {
+      call: 'an autosave that resolves late',
+      run: async (harness, dispose) => {
+        const late = Promise.withResolvers<void>();
+        let isInvoked = false;
+        harness.fakes.saveDraft = () => {
+          isInvoked = true;
+          return late.promise;
+        };
+        harness.body.insert('an edit');
+        harness.advance(AUTOSAVE_DELAY_MS);
+        await settle();
+        expect(isInvoked).toBe(true);
+        dispose();
+        late.resolve();
+      },
+    },
+    {
+      call: 'an autosave that fails late',
+      run: async (harness, dispose) => {
+        const late = Promise.withResolvers<void>();
+        let isInvoked = false;
+        harness.fakes.saveDraft = () => {
+          isInvoked = true;
+          return late.promise;
+        };
+        harness.body.insert('an edit');
+        harness.advance(AUTOSAVE_DELAY_MS);
+        await settle();
+        expect(isInvoked).toBe(true);
+        dispose();
+        late.reject(new Error('disk full'));
+      },
+    },
+    {
+      call: 'the save before a send that fails late',
+      draft: SENDABLE,
+      run: async (harness, dispose) => {
+        const late = Promise.withResolvers<void>();
+        let isInvoked = false;
+        harness.fakes.saveDraft = () => {
+          isInvoked = true;
+          return late.promise;
+        };
+        harness.body.insert('an edit');
+        harness.popup.commands.sendFollowup(NO_ARG);
+        await settle();
+        expect(isInvoked).toBe(true);
+        dispose();
+        late.reject(new Error('disk full'));
+      },
+    },
     {
       call: 'pickTarget, homes fails',
       run: (harness, dispose) => {
@@ -1105,8 +1208,8 @@ describe('note popup', () => {
     },
   ])(
     'a late reply after the dispose toasts, logs and inserts nothing ($call)',
-    async ({ run }) => {
-      const harness = await openPopup();
+    async ({ draft, run }) => {
+      const harness = await openPopup(draft);
       let logMark = Infinity;
       let toastMark = Infinity;
 
@@ -1135,6 +1238,7 @@ describe('note popup', () => {
     harness.advance(AUTOSAVE_DELAY_MS);
     await settle();
 
+    expect(harness.pops()).toBe(harness.pushes());
     expect(harness.doc.activeElement).toBeNull();
     expect(harness.liveTimers()).toBe(0);
     expect(liveAnchors(harness)).toEqual([]);

@@ -358,6 +358,7 @@ describe('createAgentPane', () => {
       await setup.openTwoSum(null);
       setup.boxes[0]!.text = 'hint please';
       setup.pane.send();
+      expect(setup.asks).toHaveLength(1);
       setup.pane.dispose();
       const logsBefore = [...setup.logs];
 
@@ -371,9 +372,10 @@ describe('createAgentPane', () => {
     },
   );
 
-  it('dispose destroys the ask box and gives the keys up when a mount dispose throws, then rethrows', async () => {
+  it('dispose gives the keys up when a mount dispose throws, then rethrows', async () => {
     const setup = paneSetup({ mountDisposeError: 'mount dispose failed' });
     await setup.openTwoSum('s1');
+    expect(setup.heldKeysCalls.at(-1)).toBe('held');
 
     expect(() => setup.pane.dispose()).toThrow('mount dispose failed');
 
