@@ -31,11 +31,12 @@ scratch. It runs inside the everyday app, over whatever mode is shown:
   | `Space d h` | show the user's real sessions again, or hide them |
   | `Space d x` | stop the demo and remove everything it set up |
 
-  Inside the focused panel, `j`/`k` move through the step list and `Enter` goes to the step.
+  Inside the focused panel (scope `demo.panel`), `j`/`k` move through the step list, `Enter` goes to
+  the step and `i` moves the keys into the step agent's pane and back.
 
-**Autoplay** shows each beat for `demo.autoplaySeconds` (default 5), or for a beat's own longer
-dwell, then moves on. It stops after the last step before the real-session step, which only a
-key or a jump enters, since it starts a real Claude session.
+**Autoplay** shows each beat for `demo.autoplaySeconds` (default 5, at least 1), or for a beat's own
+longer dwell, then moves on. It stops on the last beat before the real-session step, which only a
+key or a jump enters, since it starts a real Claude session, and on the last beat of the last step.
 
 ## Steps
 
@@ -57,8 +58,9 @@ depends on `demo`: the demo plugin reads the registry, and turning it off turns 
 
 **Coverage.** Every built-in plugin registers at least one step or declares why it has none, in
 its manifest's `demoSkip` (`demoSkip: 'Its global summon shortcut acts from outside the window.'`).
-The demo's self-test script (`npm run selftest -- --plugin demo`) starts the demo and fails on
-each plugin that does neither. A new plugin lands with its step or its skip reason.
+The demo's self-test script (`npm run selftest -- --plugin demo`) starts the demo, walks every
+step before the Live section, and fails on each plugin that does neither and on each step that
+failed. A new plugin lands with its step or its skip reason.
 
 Sections, in order: Shell, Sessions and chat, Agent forms, Workflows, Modes, Bars, Live. The Live
 section ends on the demo's own **real-session step**.
@@ -87,14 +89,16 @@ registers it when the demo starts and disposes it at Stop, in the live app as in
 
 ## Real state stays untouched
 
-No step writes the user's real state, and none shows the user's sessions, rounds, schedules,
-follow-ups or docs. Each plugin's step shows sample data, and its actions do nothing on that data.
+No step writes the user's real state, and none shows the user's sessions, rounds, follow-ups or
+docs. The Schedules step shows three demo tasks beside the user's real ones. Each plugin's step shows sample data, and its actions do nothing on that data.
 The Settings and keys steps show the user's own settings and keymap, read only:
 
 - **Unity pool**: the badge and panel show sample clones; Hold, Release and Open do nothing on
   them.
-- **Schedules**: demo schedules never fire and never reach the schedule store.
-- **Auto-retro**: ignores demo sessions (harness `demo`); it never launches a retro for one.
+- **Schedules**: the three demo tasks live in memory; they never fire, run, save or reach the
+  schedule store.
+- **Auto-retro**: ignores demo sessions (the `ephemeral` key on chat's events); it never queues a
+  retro for one.
 - **Chatroom**: the demo room lives in memory.
 - **Forms**: the forms step shows sample rounds only, never the user's saved rounds.
 - **App update**: the button shows a sample status; pressing it installs nothing.
@@ -106,8 +110,9 @@ The Settings and keys steps show the user's own settings and keymap, read only:
   user's hub and section choices.
 
 **Off-by-default plugins** (agent lines, the usage tab line, the docs session tab, and any later
-one) start in memory for the demo's run, through the plugin switch's `runDisabledForNow`, so their steps
-can show; `settings.json` is never written, and Stop restores the user's list.
+one) start in memory for the demo's run, through the plugin switch's `runDisabledForNow`, which
+starts the built-in plugins the user's `plugins.disabled` lists and leaves any other plugin as it
+is, so their steps can show; `settings.json` is never written, and Stop restores the user's list.
 
 The **Live view** step streams a real window — the Unity editor when one is running, else the
 app's own — through the existing Screen Recording grant, and stops the stream when the step is
@@ -117,10 +122,11 @@ left.
 
 Under the step list, the Demo panel holds the current step's **step agent**: a real Claude
 session, one conversation per step (scoped-agents, scope = the step id), working in the clone the
-app was built from (the dev app's own repo in the dev app). Its instructions carry the step's
+app was built from (`services.cloneDir`; the home folder when none resolves). Its instructions carry the step's
 id, plugin, title, caption and files, and tell it to read the `demo.run` slot (agent-commands'
-`read_state`) for the current beat, so the user can ask for a change to the feature on screen. Through agent-commands' `run_command` the agent can jump the demo (`demo.goTo`), step it,
-reset the step or stop the demo. The conversations persist across demo runs, as Backlog's
+`read_state`) for the current beat, so the user can ask for a change to the feature on screen.
+Through agent-commands' `run_command` the agent can jump the demo (`demo.goTo`), step it
+(`demo.next`, `demo.previous`), set the step up again (`demo.reset`) or stop the demo (`demo.stop`). The conversations persist across demo runs, as Backlog's
 assistant does; Stop leaves them.
 
 ## Starting and stopping
