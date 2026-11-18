@@ -1,6 +1,6 @@
 import type { HostedRun } from '../../../contracts/session-host';
-import { isJsonObject, isStringArray } from '../../../shared/json';
-import type { AdoptRequest } from '../../chat/contract';
+import { isJsonObject } from '../../../shared/json';
+import { type AdoptRequest, readAdoptRequest } from '../../chat/contract';
 import type { RunHistoryEntry } from '../contract';
 
 // What a `PendingSpawn.record` holds for a scheduled run.
@@ -16,7 +16,7 @@ export function readRunRecord(record: unknown): ScheduledRunRecord | null {
     isJsonObject(record) &&
     typeof record.taskId === 'string' &&
     typeof record.occurrence === 'number' &&
-    isAdoptRequest(record.adopt);
+    readAdoptRequest(record.adopt) !== null;
   return isRunRecord ? (record as unknown as ScheduledRunRecord) : null;
 }
 
@@ -69,36 +69,4 @@ function spawnFailure(record: ScheduledRunRecord, error: string): string {
   return error.includes('ENOENT')
     ? `${where}: the folder or the agent command is missing (${error})`
     : `${where}: ${error}`;
-}
-
-function isAdoptRequest(value: unknown): value is AdoptRequest {
-  if (!isJsonObject(value)) {
-    return false;
-  }
-  const hasStrings = [
-    'hostSessionId',
-    'processId',
-    'rowId',
-    'projectDir',
-    'profile',
-  ].every((key) => typeof value[key] === 'string');
-  const hasFlags =
-    typeof value.headless === 'boolean' &&
-    typeof value.unattended === 'boolean';
-  const hasOwner = value.owner === null || typeof value.owner === 'string';
-  return (
-    hasStrings &&
-    hasFlags &&
-    hasOwner &&
-    isStringArray(value.instructions) &&
-    isStringRecord(value.controls) &&
-    isJsonObject(value.titles)
-  );
-}
-
-function isStringRecord(value: unknown): boolean {
-  return (
-    isJsonObject(value) &&
-    Object.values(value).every((field) => typeof field === 'string')
-  );
 }

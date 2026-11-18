@@ -94,6 +94,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: { contract: { layers: ['src/shared/followups'] } },
   chat: {
+    // Its contract's `readAdoptRequest` reads JSON with the shared readers.
+    contract: { layers: ['src/shared'] },
     // Its main joins paths with `node:path`.
     main: NODE_ONLY,
     sublayers: {

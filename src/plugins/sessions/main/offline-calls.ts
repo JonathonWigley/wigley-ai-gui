@@ -1,4 +1,8 @@
-import { type Files, isMissingFile } from '../../../contracts/files';
+import {
+  type Files,
+  isMissingFile,
+  readIfPresent,
+} from '../../../contracts/files';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
@@ -64,13 +68,14 @@ function parseCallLine(line: string): OfflineCall | string {
 
 // Routes each replayable call the relay logged in `<folder>/<hostSessionId>.jsonl`,
 // in file order, each awaited before the next, then deletes the file. It first
-// claims the file by renaming it to `<id>.jsonl.replaying`, an earlier run's
-// leftover there deleted, so a line the relay appends meanwhile starts a new
-// `<id>.jsonl` that a later replay reads. A bad line and a route that rejects
-// are logged and skipped; a failed delete is logged. Resolves to the number of
-// calls routed, rejected ones included; 0 with no file. Rejects a host id that
-// is not one path segment, reading nothing, and a rename or read failing for
-// any reason but a missing file.
+// claims the file by renaming it to `<id>.jsonl.replaying`, so a line the relay
+// appends meanwhile starts a new `<id>.jsonl` that a later replay reads. A
+// claimed file an earlier replay left is routed first and deleted before the
+// claim. A bad line and a route that rejects are logged and skipped; a failed
+// delete of the claimed file is logged. Resolves to the number of calls routed,
+// rejected ones included; 0 with no file. Rejects a host id that is not one
+// path segment, reading nothing, a rename or read failing for any reason but a
+// missing file, and a failed delete of the leftover.
 export async function replayOfflineCalls(
   deps: {
     files: Files;
@@ -87,16 +92,42 @@ export async function replayOfflineCalls(
   const { files, paths, log } = deps;
   const file = paths.join(deps.folder, `${hostSessionId}.jsonl`);
   const claimed = `${file}${CLAIMED_SUFFIX}`;
-  await files.deleteFile(claimed);
+  let routed = 0;
+  const leftover = await readIfPresent(files, claimed);
+  if (leftover !== null) {
+    routed += await routeCallLines(deps, hostSessionId, leftover);
+    await files.deleteFile(claimed);
+  }
   try {
     await files.rename(file, claimed);
   } catch (error) {
     if (isMissingFile(error)) {
-      return 0;
+      return routed;
     }
     throw error;
   }
-  const lines = (await files.read(claimed)).split('\n');
+  routed += await routeCallLines(
+    deps,
+    hostSessionId,
+    await files.read(claimed),
+  );
+  try {
+    await files.deleteFile(claimed);
+  } catch (error) {
+    log(`offline calls of ${hostSessionId} not deleted: ${errorText(error)}`);
+  }
+  return routed;
+}
+
+// Routes each replayable call of a calls file's `text`, in order, resolving to
+// the number routed.
+async function routeCallLines(
+  deps: { route(call: OfflineCall): Promise<unknown>; log: PluginLog },
+  hostSessionId: string,
+  text: string,
+): Promise<number> {
+  const { log } = deps;
+  const lines = text.split('\n');
   let routed = 0;
   for (const [index, line] of lines.entries()) {
     if (line.trim() === '') {
@@ -120,11 +151,6 @@ export async function replayOfflineCalls(
         `offline call ${call.tool} of ${hostSessionId} not replayed: ${errorText(error)}`,
       );
     }
-  }
-  try {
-    await files.deleteFile(claimed);
-  } catch (error) {
-    log(`offline calls of ${hostSessionId} not deleted: ${errorText(error)}`);
   }
   return routed;
 }

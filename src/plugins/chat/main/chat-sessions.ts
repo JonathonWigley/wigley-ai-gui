@@ -31,6 +31,7 @@ import {
 } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
+import { createListeners } from '../../../shared/listeners';
 import { refusalOf } from '../image-rules';
 import { isWorkRunning } from '../session-work';
 import {
@@ -197,8 +198,10 @@ export interface ChatSessions {
   // running, with origin `launched`; resolves to its sessionId once its attach
   // settled and, for a resting row, its history was read and its tool calls
   // noted, then saves. A host session id a row already holds opens nothing and
-  // resolves to that row, checked before and after the host list. Rejects
-  // after `detachAll`, and when the row cannot open.
+  // resolves to that row, checked before and after the host list, once a
+  // resting row chat holds has its history read and its tool calls noted. A
+  // control id the harness no longer declares is dropped and logged, never
+  // refused. Rejects after `detachAll`, and when the row cannot open.
   adopt(run: AdoptRequest): Promise<string>;
   // `pastSessions` of every folder the project covers under the profile (a
   // folder project's expanded folder, a pool project's clones), each row with
@@ -385,7 +388,8 @@ export interface ChatSessions {
   // registration drops it from later starts; a second dispose does nothing.
   addInstructions(text: string): Disposable;
   // Calls `listener` after each `addInstructions` registration and after each
-  // disposal that drops one, until the returned handle is disposed.
+  // disposal that drops one, until the returned handle is disposed. A listener
+  // that throws is logged, and the other listeners and the registration go on.
   onInstructionsChanged(listener: () => void): Disposable;
   // Adds `gate` at the end of the gates an idle send asks, in order: the first
   // non-null verdict holds the send and no later gate is asked, and a gate that
@@ -676,14 +680,41 @@ function requireAttachableImages(message: UserMessage) {
   }
 }
 
+// `run.controls` without the ids the harness no longer declares, logging each
+// one it drops.
+function declaredControlValuesOf(
+  run: AdoptRequest,
+  harness: AgentHarness,
+  log: PluginLog,
+): Record<string, string> {
+  const declaredIds = new Set(
+    harness.startControls().map((control) => control.id),
+  );
+  const values: Record<string, string> = {};
+  for (const [id, value] of Object.entries(run.controls)) {
+    if (declaredIds.has(id)) {
+      values[id] = value;
+    } else {
+      log(
+        `session ${run.hostSessionId}: control "${id}" dropped, the harness no longer declares it`,
+      );
+    }
+  }
+  return values;
+}
+
 // The saved record `restore` would open an adopted run's row from: a first
 // start that sent its message, with no turn running and nothing queued, its
-// controls opened as a launch's.
+// declared controls opened as a launch's.
 function adoptedRecordOf(
   run: AdoptRequest,
   harness: AgentHarness,
+  log: PluginLog,
 ): SavedSession {
-  const { controls, confirmedPicks } = openingControlsOf(harness, run.controls);
+  const { controls, confirmedPicks } = openingControlsOf(
+    harness,
+    declaredControlValuesOf(run, harness, log),
+  );
   return {
     hostSessionId: run.hostSessionId,
     projectDir: run.projectDir,
@@ -861,8 +892,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   deps.slots.dropKept();
   // One object per `addInstructions` call, in registration order.
   const instructionRegistrations = new Set<{ text: string }>();
-  // One object per `onInstructionsChanged` call.
-  const instructionListeners = new Set<{ listener: () => void }>();
+  const instructionListeners = createListeners<void>();
   // One object per `addSendGate` call, in registration order.
   const sendGateRegistrations = new Set<{ gate: SendGate }>();
   // One object per `addIdleCompactThreshold` call, in registration order.
@@ -2071,12 +2101,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return headless ? [...texts, HEADLESS_NOTE] : texts;
   }
 
-  function instructionsChanged() {
-    for (const { listener } of [...instructionListeners]) {
-      listener();
-    }
-  }
-
   // The session's own texts after the global ones, then the headless note
   // while the row is headless.
   function currentInstructions(session: HeldSession): string[] {
@@ -3219,7 +3243,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const { hostSessionId } = run;
     const rowAtStart = adoptedRowOf(hostSessionId);
     if (rowAtStart !== null) {
-      return rowAtStart;
+      return notedOpenRow(rowAtStart);
     }
     let hosted: readonly HostedProcessInfo[] | null;
     try {
@@ -3229,13 +3253,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     const rowAfterList = adoptedRowOf(hostSessionId);
     if (rowAfterList !== null) {
-      return rowAfterList;
+      return notedOpenRow(rowAfterList);
     }
     const profile = knownProfile(run.profile);
     let record: SavedSession;
     let session: HeldSession;
     try {
-      record = adoptedRecordOf(run, requireHarness());
+      record = adoptedRecordOf(run, requireHarness(), log);
       session = openRestoredRow(
         record,
         profile === undefined ? null : profileDirOf(profile),
@@ -3256,6 +3280,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     save();
     return session.sessionId;
+  }
+
+  // A row chat holds with no process notes its calls from its history before
+  // any replayed call of the run asks who made them, as a row adopt opens does.
+  async function notedOpenRow(sessionId: string): Promise<string> {
+    if (held.get(sessionId)?.process === null) {
+      await loadHistory(sessionId);
+    }
+    return sessionId;
   }
 
   function restoreSavedUsageOrLog(session: HeldSession, profile: ChatProfile) {
@@ -4033,23 +4066,23 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     addInstructions(text) {
       const registration = { text };
       instructionRegistrations.add(registration);
-      instructionsChanged();
+      instructionListeners.tell();
       return {
         dispose() {
           if (instructionRegistrations.delete(registration)) {
-            instructionsChanged();
+            instructionListeners.tell();
           }
         },
       };
     },
     onInstructionsChanged(listener) {
-      const registration = { listener };
-      instructionListeners.add(registration);
-      return {
-        dispose() {
-          instructionListeners.delete(registration);
-        },
-      };
+      return instructionListeners.add(() => {
+        try {
+          listener();
+        } catch (error) {
+          log(`instructions listener threw: ${errorText(error)}`);
+        }
+      });
     },
     addSendGate(gate) {
       const registration = { gate };

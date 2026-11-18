@@ -20,6 +20,7 @@ import type {
 } from '../../contracts/plugin';
 import type { HostedSpawn } from '../../contracts/session-host';
 import type { KeyedSlotKey, ListSlotKey, SlotKey } from '../../contracts/state';
+import { isJsonObject, isStringArray } from '../../shared/json';
 import type { SessionTitles } from '../sessions/contract';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
@@ -121,6 +122,40 @@ export interface AdoptRequest {
   owner: string | null;
   controls: Readonly<Record<string, string>>;
   titles: SessionTitles; // `firstMessage` from the prompt, the others null
+}
+
+// The request `value` holds, or null when it is not one: a field missing or of
+// another type.
+export function readAdoptRequest(value: unknown): AdoptRequest | null {
+  if (!isJsonObject(value)) {
+    return null;
+  }
+  const hasStrings = [
+    'hostSessionId',
+    'processId',
+    'rowId',
+    'projectDir',
+    'profile',
+  ].every((key) => typeof value[key] === 'string');
+  const hasFlags =
+    typeof value.headless === 'boolean' &&
+    typeof value.unattended === 'boolean';
+  const hasOwner = value.owner === null || typeof value.owner === 'string';
+  const isRequest =
+    hasStrings &&
+    hasFlags &&
+    hasOwner &&
+    isStringArray(value.instructions) &&
+    isStringRecord(value.controls) &&
+    isJsonObject(value.titles);
+  return isRequest ? (value as unknown as AdoptRequest) : null;
+}
+
+function isStringRecord(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    Object.values(value).every((field) => typeof field === 'string')
+  );
 }
 
 export interface PreparedLaunch {
@@ -653,8 +688,10 @@ export interface ChatMainExports {
   // process, else resting with its history pending. Resolves to the row's
   // sessionId once the attach settled and, for a resting row, its history was
   // read. When a row already holds the host session id, opens nothing and
-  // resolves to that row's sessionId. Rejects after `detachAll` and when the
-  // row cannot open.
+  // resolves to that row's sessionId, once a resting row chat holds has its
+  // history read. Never rejects over controls: an id the harness no longer
+  // declares is dropped and logged. Rejects after `detachAll` and when the row
+  // cannot open.
   adopt(run: AdoptRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner
@@ -713,6 +750,7 @@ export interface ChatMainExports {
   addInstructions(text: string): Disposable;
   // Hears each `addInstructions` registration and each disposal of one, so a
   // prepared run can be prepared again with the texts a live start would get.
+  // A listener that throws is logged and breaks no registration.
   onInstructionsChanged(listener: () => void): Disposable;
   // Gates are asked in registration order before a write to an idle session; the
   // first non-null verdict holds the send, and no later gate is asked. A gate

@@ -9526,6 +9526,25 @@ describe('createChatSessions prepare and adopt', () => {
     },
   );
 
+  it('adopt_ControlTheHarnessNoLongerDeclares_OpensTheRowAndLogsTheDroppedId', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    const sessionId = await test.chat.adopt(
+      adoptRun({ controls: { ...PLAN_HIGH, gone: 'x' } }),
+    );
+    await test.chat.send(sessionId, { text: 'next', images: [] });
+    await flush();
+
+    expect(sessionId).toBe('row-run');
+    expect(test.logged).toContain(
+      'session host-run: control "gone" dropped, the harness no longer declares it',
+    );
+    expect(startsOf(test).map(({ request }) => request.controls)).toEqual([
+      PLAN_HIGH,
+    ]);
+  });
+
   it('adopt_HostListRejects_RestsUnheld', async () => {
     const test = setUp({
       sessionHost: { list: () => Promise.reject(new Error('no host')) },
@@ -9570,6 +9589,25 @@ describe('createChatSessions prepare and adopt', () => {
         ),
       duringList: false,
       expected: 'row-1',
+      noted: [],
+    },
+    {
+      given: 'a resting restored row whose history holds a main-agent call',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        vi.spyOn(test.harness, 'history').mockResolvedValue([
+          toolEntry('main', 'Bash', BASH_ARGS.input),
+        ]);
+        test.chat.restore(
+          {
+            sessions: [record('host-run', { sent: true })],
+            selectedHostSessionId: null,
+          },
+          [],
+        );
+      },
+      duringList: false,
+      expected: 'row-1',
+      noted: [['row-1', 'tu-main', MAIN_AGENT_ID]],
     },
     {
       given: 'a relay row',
@@ -9577,6 +9615,7 @@ describe('createChatSessions prepare and adopt', () => {
         test.chat.recordOpenHostId(connected('row-relay', 'host-run')),
       duringList: false,
       expected: 'row-relay',
+      noted: [],
     },
     {
       given: 'a relay row opened during the host list',
@@ -9584,10 +9623,11 @@ describe('createChatSessions prepare and adopt', () => {
         test.chat.recordOpenHostId(connected('row-relay', 'host-run')),
       duringList: true,
       expected: 'row-relay',
+      noted: [],
     },
   ])(
     'adopt_HostIdOpen_ResolvesToThatRowAndOpensNothing given $given',
-    async ({ arrange, duringList, expected }) => {
+    async ({ arrange, duringList, expected, noted }) => {
       let onList = () => {};
       const test = setUp({
         sessionHost: {
@@ -9604,8 +9644,12 @@ describe('createChatSessions prepare and adopt', () => {
       }
       const opensBefore = test.opened.length;
 
-      await expect(test.chat.adopt(adoptRun())).resolves.toBe(expected);
+      const { sessionId, notedAtResolve } = await test.chat
+        .adopt(adoptRun())
+        .then((id) => ({ sessionId: id, notedAtResolve: notedOf(test) }));
 
+      expect(sessionId).toBe(expected);
+      expect(notedAtResolve).toEqual(noted);
       expect(test.opened).toHaveLength(opensBefore);
       expect(test.logged).toContain(
         `session host-run already open as ${expected}`,
@@ -9634,20 +9678,36 @@ describe('createChatSessions prepare and adopt', () => {
     expect(test.opened).toEqual([]);
   });
 
-  it('onInstructionsChanged_RegisterAndDispose_CallsEachLiveListener', () => {
-    const test = setUp();
-    const calls: string[] = [];
-    const first = test.chat.onInstructionsChanged(() => calls.push('first'));
-    test.chat.onInstructionsChanged(() => calls.push('second'));
+  it.each([
+    { given: 'listeners that return', throws: false },
+    { given: 'a listener that throws, added first', throws: true },
+  ])(
+    'onInstructionsChanged_RegisterAndDispose_CallsEachLiveListener given $given',
+    ({ throws }) => {
+      const test = setUp();
+      const calls: string[] = [];
+      if (throws) {
+        test.chat.onInstructionsChanged(() => {
+          throw new Error('re-plan failed');
+        });
+      }
+      const first = test.chat.onInstructionsChanged(() => calls.push('first'));
+      test.chat.onInstructionsChanged(() => calls.push('second'));
 
-    const registration = test.chat.addInstructions('note');
-    expect(calls).toEqual(['first', 'second']);
-    first.dispose();
-    registration.dispose();
-    registration.dispose();
+      const registration = test.chat.addInstructions('note');
+      expect(calls).toEqual(['first', 'second']);
+      first.dispose();
+      registration.dispose();
+      registration.dispose();
 
-    expect(calls).toEqual(['first', 'second', 'second']);
-  });
+      expect(calls).toEqual(['first', 'second', 'second']);
+      expect(
+        test.logged.filter(
+          (line) => line === 'instructions listener threw: re-plan failed',
+        ),
+      ).toHaveLength(throws ? 2 : 0);
+    },
+  );
 
   it('adopt_RowIdHeld_OpensOnANewRow', async () => {
     const test = setUp();

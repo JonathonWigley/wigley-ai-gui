@@ -161,15 +161,32 @@ describe('replayOfflineCalls', () => {
     ]);
   });
 
-  it('replaces a claimed file an earlier replay left, never reading it', async () => {
-    const files = await filesWith(`${line('a')}\n`);
-    await files.write(CLAIMED_FILE, `${line('stale')}\n`);
+  // Breaks on deleting the leftover unread, which drops the calls a replay
+  // that died mid-way never routed.
+  it.each<{ case: string; newLines: string[] | null; routed: string[] }>([
+    {
+      case: 'and a new calls file',
+      newLines: [line('a')],
+      routed: ['left', 'a'],
+    },
+    { case: 'and no new calls file', newLines: null, routed: ['left'] },
+  ])(
+    'routes a claimed file an earlier replay left first, then deletes both: $case',
+    async ({ newLines, routed }) => {
+      const files = createMemoryFiles();
+      await files.write(CLAIMED_FILE, `${line('left')}\n`);
+      if (newLines !== null) {
+        await files.write(CALLS_FILE, `${newLines.join('\n')}\n`);
+      }
 
-    const { routed } = await replay(files);
+      const result = await replay(files);
 
-    expect(routed.map((call) => call.tool)).toEqual(['a']);
-    expect(await files.stat(CLAIMED_FILE)).toBeNull();
-  });
+      expect(result.routed.map((call) => call.tool)).toEqual(routed);
+      expect(result.count).toBe(routed.length);
+      expect(await files.stat(CALLS_FILE)).toBeNull();
+      expect(await files.stat(CLAIMED_FILE)).toBeNull();
+    },
+  );
 
   it.each(['', '.', '..', 'a/b', 'a\\b'])(
     'rejects a host session id that is not one path segment, reading nothing: %j',

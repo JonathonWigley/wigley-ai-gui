@@ -61,7 +61,7 @@ describe('readRunRecord', () => {
       expected: null,
     },
     {
-      case: 'an adopt missing rowId',
+      case: 'an adopt chat does not read',
       value: { ...RECORD, adopt: { ...ADOPT, rowId: undefined } },
       expected: null,
     },
