@@ -13,7 +13,10 @@ import {
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { chatFocusSlot } from '../../chat/contract';
-import { sessionsPageKey } from '../../sessions/contract';
+import {
+  type SessionsPageExports,
+  sessionsPageKey,
+} from '../../sessions/contract';
 import { visualPagePart } from './start';
 
 // The part on the harness, over fake frames and a `chat.focus` naming `entry`,
@@ -32,7 +35,11 @@ function startOnHarness() {
     services: { visualFrames: frames },
     parts: [probePart(runs)],
     dependencies: [
-      fakeDependency(sessionsPageKey, () => ({ activate: () => undefined })),
+      fakeDependency(
+        sessionsPageKey,
+        () =>
+          ({ activate: () => undefined }) as unknown as SessionsPageExports,
+      ),
     ],
   });
   harness.state

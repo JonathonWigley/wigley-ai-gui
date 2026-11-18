@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DemoStep } from '../../../contracts/demo';
 import type { PageServices } from '../../../contracts/plugin';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import {
+  FocusFakeElement,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import { registerDemoSteps } from './demo-steps';
 import type { StashTarget } from './note-dialog';
 
@@ -27,7 +30,7 @@ async function enterStashStep(hasRow: boolean) {
       open(target) {
         opened.push(target);
         isDialogOpen = true;
-        doc.createElement('textarea').focus();
+        new FocusFakeElement('textarea').focus();
       },
       cancel: () => {
         isDialogOpen = false;

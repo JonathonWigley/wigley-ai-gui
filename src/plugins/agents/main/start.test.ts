@@ -230,6 +230,9 @@ function startAgentsPart() {
   // Enters agents' roster demo step with its one launch answering `s1`.
   const enterRosterStep = () => {
     const step = demoSteps.list().find(({ id }) => id === 'agents.roster');
+    if (step === undefined) {
+      throw new Error('agents registered no agents.roster step');
+    }
     return step.enter({
       scratchDir: '/scratch',
       launchSession: () => Promise.resolve('s1'),

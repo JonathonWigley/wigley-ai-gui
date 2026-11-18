@@ -4,14 +4,21 @@ import {
   noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { sessionsPageKey } from '../../sessions/contract';
+import {
+  type SessionsPageExports,
+  sessionsPageKey,
+} from '../../sessions/contract';
 import { agentsPagePart } from './start';
 
 // The part on the harness over a sessions page whose `activate` does nothing.
 function startOnHarness() {
   return startPagePart(agentsPagePart, {
     dependencies: [
-      fakeDependency(sessionsPageKey, () => ({ activate: () => undefined })),
+      fakeDependency(
+        sessionsPageKey,
+        () =>
+          ({ activate: () => undefined }) as unknown as SessionsPageExports,
+      ),
     ],
   });
 }

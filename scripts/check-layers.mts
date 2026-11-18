@@ -76,6 +76,28 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: [],
       },
+      // Enters the picker demo step through the real sessions main, beside chat's fake.
+      'src/plugins/audio-picker/main/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/audio-picker/main',
+          'src/plugins/sessions/main',
+        ],
+        packages: [],
+      },
+      // Waits out the demo form wait on the shared global timers under fake timers.
+      'src/plugins/audio-picker/page/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/agent-forms',
+          'src/shared/page',
+          'src/plugins/audio-picker/page',
+        ],
+        packages: [],
+      },
       // Starts the real sessions page, whose exports the picker files under.
       'src/plugins/audio-picker/page/start.test.ts': {
         layers: [
@@ -142,6 +164,30 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
         ],
         packages: [],
       },
+      // Enters the round demo step over the shared fake sessions' previews.
+      'src/plugins/forms/main/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/forms/contract.ts',
+          'src/plugins/forms/main',
+        ],
+        packages: [],
+      },
+      // Waits out the demo form wait on the shared global timers under fake timers.
+      'src/plugins/forms/page/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/agent-forms',
+          'src/shared/page',
+          'src/plugins/forms',
+          'src/plugins/forms/page',
+        ],
+        packages: [],
+      },
       // Starts the real sessions page, whose exports forms files under.
       'src/plugins/forms/page/start.test.ts': {
         layers: [
@@ -187,6 +233,29 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/primer/main',
           'src/plugins/sessions/contract.ts',
           'src/plugins/sessions/main',
+        ],
+        packages: [],
+      },
+      // Enters the primer demo step through the real sessions main.
+      'src/plugins/primer/main/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/chat/contract.ts',
+          'src/plugins/primer/contract.ts',
+          'src/plugins/primer/main',
+          'src/plugins/sessions/main',
+        ],
+        packages: [],
+      },
+      // Waits out the demo form wait on the shared global timers under fake timers.
+      'src/plugins/primer/page/demo-steps.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/agent-forms',
+          'src/shared/page',
+          'src/plugins/primer/page',
         ],
         packages: [],
       },

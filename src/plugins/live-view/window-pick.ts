@@ -161,15 +161,13 @@ export function demoStreamPick(
   const unityWindow = list.windows.find((window) =>
     UNITY_EDITOR_TITLE.test(window.title),
   );
-  if (unityWindow !== undefined) {
-    return streamPick(
-      pickEditorWindow(list.windows, unityWindow.processId, null),
-      'Unity editor',
-      null,
-    );
+  const processId = unityWindow?.processId ?? ownProcessId;
+  const window = pickEditorWindow(list.windows, processId, null);
+  if (window === null) {
+    return null;
   }
-  const ownWindow = pickEditorWindow(list.windows, ownProcessId, null);
-  return ownWindow === null ? null : streamPick(ownWindow, 'This app', null);
+  const summary = unityWindow === undefined ? 'This app' : 'Unity editor';
+  return streamPick(window, summary, null);
 }
 
 // `[x, y, width, height]` as a rect.
