@@ -1,5 +1,8 @@
 import type {
   BaseKit,
+  ConfirmButtonsKit,
+  DialogFrameInput,
+  DialogFramePart,
   KeyHintOptions,
   TagTone,
 } from '../../../shared/page/layout-host/kit';
@@ -289,12 +292,19 @@ export interface NoticesKit extends FormsBaseKit {
   line(parent: HTMLElement, index: number): HTMLElement;
 }
 
-// A layout defines only the cards and panes it changes. A built-in kind's card comes from the first layout defining
-// its card (`cards.question`, `cards.finding`, `cards.notice`) among the item's `layout`, the round's `layout`, the
+// `body` is the prompt's body text.
+export interface ConfirmBodyInput {
+  body: string;
+}
+// The prompt's own buttons (label, variant, key anchor in `forms.confirm`), each appended to `parent`.
+export interface ConfirmBodyKit extends FormsBaseKit, ConfirmButtonsKit {}
+
+// A layout defines only the parts it changes. A built-in kind's card comes from the first layout defining its card
+// (`cards.question`, `cards.finding`, `cards.notice`) among the item's `layout`, the round's `layout`, the
 // `forms.layout` setting and `default`; a plugin kind's from the first layout in that chain defining
-// `cards.kinds[id]`, else from the first defining `cards.other`; each pane the same way without the item. A card or
-// pane that throws, or returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by
-// its `other`).
+// `cards.kinds[id]`, else from the first defining `cards.other`; each pane the same way without the item; the cancel
+// prompt's `dialogFrame` and `confirmBody` from the `forms.layout` setting, then `default`. A part that throws, or
+// returns no element appended to `parent`, is drawn by `default` instead (a plugin kind's card by its `other`).
 export interface Layout {
   cards?: Partial<LayoutCards>;
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
@@ -311,9 +321,26 @@ export interface Layout {
     input: NoticesInput,
     kit: NoticesKit,
   ): LayoutPane;
+  // The cancel prompt's frame. Picked by the `forms.layout` setting, then `default`; never by a round or item. It
+  // draws the panel, its title (`input.title`) and, when `input.hasActions`, its actions row, and returns the panel,
+  // appended to `parent`, with `body` and `actions` inside it; the app fills them and keeps the scrim, showing and
+  // hiding, keys and focus. A frame whose `body` or `actions` is not inside its panel, or whose `actions` is not null
+  // exactly when `hasActions` is false, draws with `default`.
+  dialogFrame?(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: FormsBaseKit,
+  ): DialogFramePart;
+  // The cancel prompt's body, drawn into the frame's body, scope `forms.confirm`: `input.body` and the prompt's two
+  // buttons. Picked as `dialogFrame` is. A button the part leaves out goes at the end of the frame's actions row.
+  confirmBody?(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
 }
 
-// The built-in `default` layout, which defines every card and pane but the head.
+// The built-in `default` layout, which defines every part but the head.
 export interface CompleteLayout extends Layout {
   cards: LayoutCards;
   rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
@@ -323,4 +350,14 @@ export interface CompleteLayout extends Layout {
     input: NoticesInput,
     kit: NoticesKit,
   ): LayoutPane;
+  dialogFrame(
+    parent: HTMLElement,
+    input: DialogFrameInput,
+    kit: FormsBaseKit,
+  ): DialogFramePart;
+  confirmBody(
+    parent: HTMLElement,
+    input: ConfirmBodyInput,
+    kit: ConfirmBodyKit,
+  ): HTMLElement;
 }

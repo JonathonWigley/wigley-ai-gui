@@ -18,9 +18,15 @@ import {
 // A pane of the forms view.
 export type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
 
-// The card of a kind, or a pane of the forms view: what one layout in a chain
-// draws.
-export type LayoutPart = { card: ItemKind } | { pane: LayoutPane };
+// A part of the cancel prompt's dialog.
+export type LayoutDialogPart = 'dialogFrame' | 'confirmBody';
+
+// The card of a kind, a pane of the forms view, or a part of the cancel
+// prompt's dialog: what one layout in a chain draws.
+export type LayoutPart =
+  | { card: ItemKind }
+  | { pane: LayoutPane }
+  | { dialog: LayoutDialogPart };
 
 // The layout that draws a part, and its name.
 export type LayoutPick = PartPick<Layout>;
@@ -53,13 +59,17 @@ export interface RoundPicks {
 const DEFAULT_NAME = 'default';
 const PANES: readonly LayoutPane[] = ['head', 'rail', 'review', 'notices'];
 
-// What each pane reads from a layout; a layout defines the pane when the read
-// is a function.
-const PANE_READS: { [P in LayoutPane]: (layout: Layout) => unknown } = {
+// What each pane and dialog part reads from a layout; a layout defines the
+// part when the read is a function.
+const PART_READS: {
+  [P in LayoutPane | LayoutDialogPart]: (layout: Layout) => unknown;
+} = {
   head: (layout) => layout.head,
   rail: (layout) => layout.rail,
   review: (layout) => layout.review,
   notices: (layout) => layout.notices,
+  dialogFrame: (layout) => layout.dialogFrame,
+  confirmBody: (layout) => layout.confirmBody,
 };
 
 // The names to look a part up in, first to last: the item's layout, the
@@ -84,8 +94,8 @@ export function pickLayout(
   chain: readonly string[],
   loaded: ReadonlyMap<string, Layout>,
 ): LayoutPick {
-  if ('pane' in part) {
-    const read = PANE_READS[part.pane];
+  if (!('card' in part)) {
+    const read = PART_READS['pane' in part ? part.pane : part.dialog];
     return pickHostLayout(
       chain,
       loaded,
@@ -236,6 +246,7 @@ function isSamePickList(a: LayoutPick[], b: LayoutPick[]): boolean {
   );
 }
 
-function isSamePick(a: LayoutPick, b: LayoutPick): boolean {
+// True when both picks have the same name and the same layout object.
+export function isSamePick(a: LayoutPick, b: LayoutPick): boolean {
   return a.name === b.name && a.layout === b.layout;
 }

@@ -15,7 +15,10 @@ import {
 // A dialog over a fake `drawFrame` that appends a panel holding a body and,
 // when `hasActions`, an actions row, and records each input. While
 // `frames.isBroken` is set it throws `frame broke` before drawing.
-function dialogSetup(title: string, options: DialogOptions = {}) {
+function dialogSetup(
+  title: string,
+  options: Omit<DialogOptions, 'drawFrame'> = {},
+) {
   const frames = { inputs: [] as DialogFrameInput[], isBroken: false };
   const drawFrame: DrawDialogFrame = (parent, input) => {
     frames.inputs.push(input);
@@ -51,7 +54,7 @@ function dialogMarks(panel: HTMLElement) {
   };
 }
 
-describe('createDialog with drawFrame', () => {
+describe('createDialog', () => {
   let doc: FocusFakeDocument;
   beforeEach(() => {
     doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));

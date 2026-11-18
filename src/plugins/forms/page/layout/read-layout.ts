@@ -11,6 +11,8 @@ const FUNCTION_PARTS: Record<Exclude<keyof Layout, 'cards'>, true> = {
   rail: true,
   review: true,
   notices: true,
+  dialogFrame: true,
+  confirmBody: true,
 };
 // The named cards; `kinds` is read on its own.
 const CARD_KINDS: Record<Exclude<keyof LayoutCards, 'kinds'>, true> = {

@@ -18,6 +18,8 @@ import type { LayoutState } from '../../../contracts/state';
 import type { UiState } from '../../../contracts/ui-state';
 import { callEach } from '../../../shared/call-each';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
+import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import type { DialogFramePart } from '../../../shared/page/ui/dialog';
 import {
   boxDropTake,
   type EditorBoxes,
@@ -46,6 +48,17 @@ import {
   type FormsState,
   type FormsStore,
 } from './form-state';
+import {
+  drawFormsConfirmBody,
+  drawFormsDialogFrame,
+} from './layout/layout-dialog';
+import {
+  isSamePick,
+  type LayoutDialogPart,
+  layoutChain,
+  type LayoutPick,
+  pickLayout,
+} from './layout/layout-resolver';
 import type { RoundState } from './round-model';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createRoundView, type RoundView } from './round-view';
@@ -59,8 +72,8 @@ import { sessionTitle } from './view-model';
 // prompt's scope over it. `platform` is the OS key hints are drawn for;
 // `uiState` keeps the rail's dragged width, which every round's rail opens at;
 // `timers` runs each round's split resize prompt linger. `commands`,
-// `contributions` and `state` reach every round view's kits and cards. Each
-// round view is a drop target through `drops`, typing files into the round's
+// `contributions` and `state` reach every round view's kits and cards, and
+// `commands` and `state` the cancel prompt's kits. Each round view is a drop target through `drops`, typing files into the round's
 // box used last. `savedPlaces` holds the places the last page saved, read once
 // at start: a round it holds was shown before the reload, and its popup comes
 // back hidden or shown as that page left it.
@@ -92,19 +105,34 @@ export interface FormsViewDeps {
   savedPlaces: ReadonlyMap<string, RoundPlace>;
 }
 
-// The layouts every round view picks its cards and panes from.
+// The layouts every round view picks its cards and panes from, and the cancel
+// prompt its frame and body.
 interface ActiveLayouts {
   shown: ShownLayouts<Layout>;
 }
 
+// A cancel prompt part's last draw, and the pick it drew with.
+interface PickedDraw<R> {
+  draw: DrawnPart<R>;
+  pick: LayoutPick;
+}
+
+// The cancel prompt's last frame and body draws; null until the first.
+interface ConfirmDraws {
+  frame: PickedDraw<DialogFramePart> | null;
+  body: PickedDraw<{ element: HTMLElement }> | null;
+}
+
 // `forgetSession` drops a session's form popup entry and destroys its round
 // views once sessions dropped the popup, so the next render rebuilds a round
-// still open for the session in a new form popup. `setLayouts` hands `shown` to every open round
-// view, which rebuilds when a layout it draws with changed, and rounds that
-// open later are built with it. A round view's throw does not skip the rest;
-// the first is rethrown once all have run. `rebuild` rebuilds every open round
-// view with the layouts it holds, keeping its answers, as after a card part or
-// review column is added or removed.
+// still open for the session in a new form popup. `setLayouts` draws the
+// cancel prompt again when `shown` picks another layout for its frame or body,
+// then hands `shown` to every open round view, which rebuilds when a layout it
+// draws with changed, and rounds that open later are built with it. A round
+// view's throw does not skip the rest; the first is rethrown once all have
+// run. `rebuild` rebuilds every open round view with the layouts it holds,
+// keeping its answers, as after a card part or review column is added or
+// removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet. `dispose`
 // destroys every open round view.
@@ -123,8 +151,8 @@ export interface FormsView {
 // visible surface the key scope follows the view; the cancel prompt pushes its
 // own scope over it and is dismissed when another view sets the scope. While
 // the round sends, that dismiss waits: a failed send dismisses the prompt, and
-// a sent round closes it with the round. Round views start on the default
-// layout alone.
+// a sent round closes it with the round. Round views and the cancel prompt
+// start on the default layout alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const popups = createSessionFormPopups({
@@ -147,6 +175,15 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   });
   const statusPart = deps.sessions.addRowPart(popups.statusPart);
   const dispatch = (action: FormsAction) => store.dispatch(action);
+  // The cancel prompt draws its frame and body while it is made, so these are
+  // declared before it.
+  const active: ActiveLayouts = {
+    shown: {
+      layouts: new Map<string, Layout>([['default', defaultLayout]]),
+      user: 'default',
+    },
+  };
+  const confirmDraws: ConfirmDraws = { frame: null, body: null };
   const confirm = createConfirmPrompt({
     title: 'Cancel this round?',
     body: 'The agent is told the round was cancelled. Your answers stay saved.',
@@ -160,6 +197,19 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
+    drawFrame(parent, input) {
+      const pick = pickConfirmPart('dialogFrame', active.shown);
+      const draw = drawFormsDialogFrame(parent, input, pick, deps);
+      confirmDraws.frame?.draw.dispose();
+      confirmDraws.frame = { draw, pick };
+      return draw.built;
+    },
+    drawBody(body, parts) {
+      const pick = pickConfirmPart('confirmBody', active.shown);
+      const draw = drawFormsConfirmBody(body, parts, pick, deps);
+      confirmDraws.body?.draw.dispose();
+      confirmDraws.body = { draw, pick };
+    },
   });
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
@@ -172,12 +222,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     const round = state.view === 'idle' ? null : activeForm(state);
     const roundView = round === null ? undefined : roundViews.get(round.formId);
     deps.setResizeTarget(roundView?.resizeTarget ?? null);
-  };
-  const active: ActiveLayouts = {
-    shown: {
-      layouts: new Map<string, Layout>([['default', defaultLayout]]),
-      user: 'default',
-    },
   };
 
   const render = () => {
@@ -214,6 +258,9 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     },
     setLayouts(shown) {
       active.shown = shown;
+      if (isConfirmPickChanged(confirmDraws, shown)) {
+        confirm.redraw();
+      }
       callEach(store.get().forms, (round) =>
         roundViews.get(round.formId)?.setLayouts(shown, round),
       );
@@ -322,6 +369,36 @@ function destroyRoundView(
   roundView?.dispose();
   roundView?.element.remove();
   roundViews.views.delete(roundId);
+}
+
+// The pick for the cancel prompt's `part`: the `forms.layout` setting's
+// layout, then `default`. One prompt serves every round, so a round's or
+// item's `layout` never picks it.
+function pickConfirmPart(
+  part: LayoutDialogPart,
+  shown: ShownLayouts<Layout>,
+): LayoutPick {
+  return pickLayout(
+    { dialog: part },
+    layoutChain(null, null, shown.user),
+    shown.layouts,
+  );
+}
+
+// Whether `shown` picks another layout, or another layout object, for the
+// cancel prompt's frame or body than its last draw did.
+function isConfirmPickChanged(
+  draws: ConfirmDraws,
+  shown: ShownLayouts<Layout>,
+): boolean {
+  const isSameAsDrawn = (
+    drawn: PickedDraw<unknown> | null,
+    part: LayoutDialogPart,
+  ) => drawn !== null && isSamePick(drawn.pick, pickConfirmPart(part, shown));
+  return (
+    !isSameAsDrawn(draws.frame, 'dialogFrame') ||
+    !isSameAsDrawn(draws.body, 'confirmBody')
+  );
 }
 
 function showRound(

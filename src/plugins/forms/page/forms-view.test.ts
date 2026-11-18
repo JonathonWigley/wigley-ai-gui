@@ -16,7 +16,13 @@ import type { FormsAction } from './form-state';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
 import { formsManifest } from '../manifest';
 import { mountFormsView } from './forms-view';
-import { apply, initialState, presentedRound } from './test-rounds';
+import { apply, initialState, presentedRound, roundOf } from './test-rounds';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { RoundPlace } from '../contract';
@@ -81,16 +87,20 @@ type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 // insert into a box's editor, and `activities` every row activity the view
 // set. `savedPlaces` stands for the places the last page saved; `restoredAdds`
 // holds each added popup's session and whether it was added restored.
+// `presented` is r1 as main presented it; `overlays` holds each element the
+// view contributed to the overlay area, the cancel prompt's scrim, and `view`
+// is the mounted view.
 function formPopupSetup(
   others: string[] = [],
   savedPlaces: ReadonlyMap<string, RoundPlace> = new Map(),
+  presented = presentedRound('r1'),
 ) {
   const calls: ScopeCall[] = [];
   const restoredAdds: [string, boolean][] = [];
   const activities: [string, string, RowActivity | null][] = [];
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
-  const presented = presentedRound('r1');
+  const overlays: FakeElement[] = [];
   const store = createReducerStore(
     initialState(
       [presented, ...others.map((roundId) => presentedRound(roundId))],
@@ -107,9 +117,14 @@ function formPopupSetup(
   const popups = new Map<string, FakeElement>();
   const added: [string, string][] = [];
   let isPopupHidden = false;
-  mountFormsView({
+  const view = mountFormsView({
     areas: {
-      overlay: { contribute: () => ({ dispose: () => undefined }) },
+      overlay: {
+        contribute: (element) => {
+          overlays.push(asFake(element));
+          return { dispose: () => undefined };
+        },
+      },
     },
     sessions: {
       addPopup: (sessionId, view, options) => {
@@ -197,6 +212,8 @@ function formPopupSetup(
       isPopupHidden = true;
     },
     restoredAdds,
+    overlays,
+    view,
   };
 }
 
@@ -233,6 +250,99 @@ describe('form popup under the cancel prompt', () => {
     expect(store.get().view).toBe('confirm');
     expect(itemsPane(popup).hidden).toBe(true);
     expect(reviewPane(popup).hidden).toBe(false);
+  });
+});
+
+// A user layout drawing the cancel prompt's frame and body, the frame's body
+// classed as `default`'s is.
+const USER_CONFIRM: Layout = {
+  dialogFrame(parent, input, kit) {
+    const panel = kit.el(parent, 'section', 'user-frame');
+    const body = kit.el(panel, 'div', 'ui-dialog-body');
+    const actions = input.hasActions
+      ? kit.el(panel, 'div', 'user-frame-actions')
+      : null;
+    return { element: panel, body, actions };
+  },
+  confirmBody: (parent, input, kit) =>
+    kit.el(parent, 'p', 'user-confirm-body', input.body),
+};
+
+// The `data-layout` and `data-layout-owner` of the cancel prompt's frame root,
+// the scrim's one child, and of its body root, the frame body's first child.
+function confirmRootMarks(scrim: FakeElement) {
+  expect(scrim.childNodes).toHaveLength(1);
+  const [frame] = scrim.childNodes;
+  const [body] = findAll(frame, 'ui-dialog-body');
+  const [bodyRoot] = body.childNodes;
+  return {
+    frame: [frame.dataset.layout, frame.dataset.layoutOwner],
+    body: [bodyRoot.dataset.layout, bodyRoot.dataset.layoutOwner],
+  };
+}
+
+describe('form cancel prompt layout', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      row: 'the setting names it',
+      user: USER_LAYOUT,
+      roundLayout: null,
+      drawnBy: USER_LAYOUT,
+    },
+    {
+      row: 'only the round names it',
+      user: 'default',
+      roundLayout: USER_LAYOUT,
+      drawnBy: 'default',
+    },
+  ])(
+    'cancelPrompt_Layout_FollowsTheSettingNotTheRound: $row',
+    ({ user, roundLayout, drawnBy }) => {
+      const presented = {
+        ...presentedRound('r1'),
+        round: { ...roundOf('r1'), layout: roundLayout },
+      };
+      const { store, view, overlays } = formPopupSetup(
+        [],
+        new Map(),
+        presented,
+      );
+      view.setLayouts({
+        ...withUser<Layout>(defaultLayout, USER_CONFIRM),
+        user,
+      });
+
+      store.dispatch({ type: 'openReview' });
+      store.dispatch({ type: 'askCancel' });
+
+      expect(store.get().view).toBe('confirm');
+      expect(confirmRootMarks(overlays[0])).toEqual({
+        frame: [drawnBy, 'forms'],
+        body: [drawnBy, 'forms'],
+      });
+    },
+  );
+
+  it('cancelPrompt_SetLayoutsSamePicks_DrawsNothingAgain', () => {
+    let bodyDraws = 0;
+    const counting: Layout = {
+      confirmBody(parent, input, kit) {
+        bodyDraws += 1;
+        return kit.el(parent, 'p', '', input.body);
+      },
+    };
+    const { view } = formPopupSetup();
+    view.setLayouts(withUser<Layout>(defaultLayout, counting));
+    expect(bodyDraws).toBe(1);
+
+    view.setLayouts(withUser<Layout>(defaultLayout, counting));
+
+    expect(bodyDraws).toBe(1);
   });
 });
 

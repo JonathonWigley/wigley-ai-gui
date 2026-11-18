@@ -13,17 +13,40 @@ import type { DrawDialogFrame } from './ui/dialog';
 
 const DISMISSED = 'cancel prompt dismissed: the view moved on';
 
+// One frame the fake `drawFrame` drew: a panel holding a body and an actions
+// row.
+interface DrawnFrame {
+  panel: HTMLElement;
+  actions: HTMLElement;
+}
+
+// A `drawFrame` that appends a panel holding a body and an actions row to its
+// parent, and records each frame it drew in `frames`.
+function fakeFrames(): { drawFrame: DrawDialogFrame; frames: DrawnFrame[] } {
+  const frames: DrawnFrame[] = [];
+  const drawFrame: DrawDialogFrame = (parent) => {
+    const panel = document.createElement('section');
+    const body = document.createElement('div');
+    const actions = document.createElement('div');
+    panel.append(body, actions);
+    parent.append(panel);
+    frames.push({ panel, actions });
+    return { element: panel, body, actions };
+  };
+  return { drawFrame, frames };
+}
+
 // A prompt over a caller whose state is `asked` and `sending`, as the test
 // sets them; `dismiss` drops the prompt unless the form is sending, as the
 // forms and primer reducers do. `calls` records the scope work in order, and
-// `anchors` each anchor named, `disposed` each anchor's dispose. Without
-// `hasOnBaseChanged` the deps leave out `onBaseChanged`; `drawBody` and
-// `drawFrame` are handed on when given.
+// `anchors` each anchor named, `disposed` each anchor's dispose; `frames`
+// holds each frame the fake `drawFrame` drew. Without `hasOnBaseChanged` the
+// deps leave out `onBaseChanged`; `drawBody` is handed on when given.
 function promptSetup(
   hasOnBaseChanged = true,
   drawBody?: ConfirmPromptDeps['drawBody'],
-  drawFrame?: DrawDialogFrame,
 ) {
+  const { drawFrame, frames } = fakeFrames();
   const caller = { asked: false, sending: false };
   const calls: string[] = [];
   const baseListeners: ((base: ViewScope) => void)[] = [];
@@ -73,7 +96,7 @@ function promptSetup(
       : {}),
     log,
     ...(drawBody === undefined ? {} : { drawBody }),
-    ...(drawFrame === undefined ? {} : { drawFrame }),
+    drawFrame,
   });
   const scrim = asFake(prompt.element);
   return {
@@ -81,6 +104,7 @@ function promptSetup(
     calls,
     anchors,
     disposed,
+    frames,
     prompt,
     scrim,
     run,
@@ -252,7 +276,7 @@ describe('confirm prompt', () => {
     'drawBody_ButtonNotInTheDialog_AppendedToActions: $row',
     ({ rollsBack, ownButtons, actionButtons }) => {
       const own = new FakeElement('section');
-      const { scrim, anchors } = promptSetup(true, (parent, parts) => {
+      const { frames, anchors } = promptSetup(true, (parent, parts) => {
         own.append(parts.body);
         parent.append(asHtml(own));
         parts.keepButton(asHtml(own));
@@ -261,7 +285,7 @@ describe('confirm prompt', () => {
         }
       });
 
-      const [actions] = findAll(scrim, 'ui-dialog-actions');
+      const actions = asFake(frames[0].actions);
       expect(own.childNodes[0].textContent).toBe('The agent is told.');
       expect(buttons(own).map((button) => button.textContent)).toEqual(
         ownButtons,
@@ -291,30 +315,16 @@ describe('confirm prompt', () => {
     expect(buttons(scrim)).toHaveLength(2);
   });
 
-  it('redraw_DrawFrame_DrawsTheFrameAndButtonsAgain', () => {
-    // Each frame drawn: a panel holding a body and an actions row.
-    const panels: HTMLElement[] = [];
-    const drawFrame: DrawDialogFrame = (parent) => {
-      const panel = document.createElement('section');
-      const body = document.createElement('div');
-      const actions = document.createElement('div');
-      actions.className = 'ui-dialog-actions';
-      panel.append(body, actions);
-      parent.append(panel);
-      panels.push(panel);
-      return { element: panel, body, actions };
-    };
-    const { prompt, scrim } = promptSetup(true, undefined, drawFrame);
+  it('redraw_DrawsTheFrameAndButtonsAgain', () => {
+    const { prompt, scrim, frames } = promptSetup();
 
     prompt.redraw();
 
-    expect(panels).toHaveLength(2);
+    expect(frames).toHaveLength(2);
     expect(scrim.childNodes).toHaveLength(1);
-    expect(scrim.childNodes[0]).toBe(asFake(panels[1]));
-    const [actions] = findAll(scrim, 'ui-dialog-actions');
-    expect(buttons(actions).map((button) => button.textContent)).toEqual([
-      'Keepn',
-      'Cancel formy',
-    ]);
+    expect(scrim.childNodes[0]).toBe(asFake(frames[1].panel));
+    expect(
+      buttons(asFake(frames[1].actions)).map((button) => button.textContent),
+    ).toEqual(['Keepn', 'Cancel formy']);
   });
 });
