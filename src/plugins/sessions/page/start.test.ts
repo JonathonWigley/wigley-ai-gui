@@ -409,6 +409,25 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  it('showOnly_HidesRows_WritesThemToClaimed', async () => {
+    const setup = await startApplied(['r1', 'd1', 'r2', 'd2', 'r3'], 'r1');
+    const claimed = setup.harness.state.read(sessionsClaimedSlot, 'test');
+    setup.exports.addSection({
+      id: 'demo',
+      label: 'Demo',
+      order: 0,
+      claims: (row) => row.sessionId.startsWith('d'),
+    });
+
+    const held = setup.exports.showOnly('demo');
+    const whileHeld = claimed.get();
+    held.dispose();
+
+    expect(whileHeld).toEqual(['r1', 'r2', 'r3']);
+    expect([...(claimed.get() ?? [])].sort()).toEqual(['d1', 'd2']);
+    await setup.harness.stop();
+  });
+
   it('start_SetsActiveToNull', () => {
     const state = createSlotStore(() => undefined);
     const oldPage = state.publish(sessionsActiveSlot);

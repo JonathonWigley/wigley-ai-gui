@@ -104,6 +104,29 @@ export function sidebarSections<R extends OrderedRow, S extends RowClaim<R>>(
   return { favorites: favoriteGroups, recent: recentGroups, plugins };
 }
 
+// `sections` narrowed to the one registered section `sectionId`: no Favorites
+// or Recent groups, and that section with the rows it claimed, its header over
+// no rows when it claimed none; no section when none in `registered` holds
+// that id.
+export function onlySection<R extends OrderedRow, S extends RowClaim<R>>(
+  sections: SidebarSections<R, S>,
+  registered: readonly S[],
+  sectionId: string,
+): SidebarSections<R, S> {
+  const section = registered.find((each) => each.id === sectionId);
+  if (section === undefined) {
+    return { favorites: [], recent: [], plugins: [] };
+  }
+  const claimed = sections.plugins.find(
+    (each) => each.section.id === sectionId,
+  );
+  return {
+    favorites: [],
+    recent: [],
+    plugins: [{ section, rows: claimed?.rows ?? [] }],
+  };
+}
+
 // Every row in drawn order: favorites' groups, then recent's, then each
 // registered section's rows.
 export function drawnRows<R extends OrderedRow>(

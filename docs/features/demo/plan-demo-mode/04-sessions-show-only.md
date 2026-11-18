@@ -1,6 +1,6 @@
 # 04 — Sessions showOnly
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `showOnly`, which 07 and 10 consume, and changes the side bar's drawn rows, cursor, step keys and post-close selection
 Wave: 1 · Depends on: none

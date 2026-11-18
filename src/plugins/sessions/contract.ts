@@ -648,10 +648,18 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // `claims` that throws counts as false and is logged. The sections that claim
 // a row draw after Recent, by `order`, a tie in registration order; one that
 // claims none draws nothing. A row a section claims is never where main's
-// selection lands after a close (`sessionsClaimedSlot`). Adding a
+// selection lands after a close (`sessionsClaimedSlot`), unless `showOnly`
+// shows that section. Adding a
 // section and disposing its `Disposable` each redraw the side bar. `header`
 // builds on each side bar draw, so a header whose content changes between
 // draws redraws into its own wrapper itself.
+// `showOnly`: while held, the side bar draws only that section — its header
+// and its rows — and the list cursor, the next/previous session keys and the
+// selection after a close move only among those rows. The latest holder wins;
+// disposing it shows what the previous holder asked for, or every section.
+// While a section shows alone, only its own `claims` decides its rows: a row
+// another section also claims still draws in it. A section id no section
+// registered gives an empty side bar.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   addPopup(
@@ -665,6 +673,7 @@ export interface SessionsPageExports {
   addRowPart(part: SessionPart): Disposable;
   addBarPart(part: SessionPart): Disposable;
   addSection(section: SidebarSection): Disposable;
+  showOnly(sectionId: string): Disposable;
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose(false)` in turn, then its
   // popups, waiting on a promise's answer and asking too a tab or popup added
@@ -753,9 +762,10 @@ export const sessionsActiveSlot: SlotKey<string | null, 'page', 'sessions'> = {
   kind: 'value',
 };
 
-// The rows a registered side bar section claims, by sessionId, as the side
-// bar's last draw found them; [] before the first draw and at each page start.
-// Main's post-close selection skips them.
+// The rows main's post-close selection skips, by sessionId, as the side bar's
+// last draw found them: with no `showOnly` held, the rows a registered side
+// bar section claims; while one is held, every row the side bar does not draw.
+// [] before the first draw and at each page start.
 export const sessionsClaimedSlot: SlotKey<
   readonly string[],
   'page',

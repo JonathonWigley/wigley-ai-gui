@@ -5,6 +5,7 @@ import {
   type CursorMove,
   drawnRows,
   movedCursor,
+  onlySection,
   type OrderedRow,
   type RowClaim,
   type SidebarGroup,
@@ -284,6 +285,69 @@ describe('sidebarSections', () => {
       expect(drawnRows(sections).map((row) => row.sessionId)).toEqual(
         expectedDrawn,
       );
+    },
+  );
+});
+
+describe('onlySection', () => {
+  // Rows f1 in the favorite fav, r1 and r2 in recent proj, d1 and d2 claimed
+  // by demo; demo and retro registered, retro claiming nothing.
+  const registered: RowClaim<OrderedRow>[] = [
+    { id: 'demo', order: 0, claims: (row) => row.sessionId.startsWith('d') },
+    { id: 'retro', order: 1000, claims: () => false },
+  ];
+  const sections = sidebarSections(
+    [
+      { sessionId: 'f1', project: 'fav' },
+      { sessionId: 'r1', project: 'proj' },
+      { sessionId: 'd1', project: 'proj' },
+      { sessionId: 'r2', project: 'proj' },
+      { sessionId: 'd2', project: 'fav' },
+    ],
+    ['fav'],
+    new Map([
+      ['f1', 5],
+      ['r1', 4],
+      ['d1', 3],
+      ['r2', 2],
+      ['d2', 1],
+    ]),
+    new Map(),
+    registered,
+  );
+
+  it.each<{ case: string; sectionId: string; expectedPlugins: string[] }>([
+    {
+      case: 'a held section with rows keeps them',
+      sectionId: 'demo',
+      expectedPlugins: ['demo: d1 d2'],
+    },
+    {
+      case: 'a held section registered with no rows draws over none',
+      sectionId: 'retro',
+      expectedPlugins: ['retro: '],
+    },
+    {
+      case: 'an unregistered id gives no section',
+      sectionId: 'missing',
+      expectedPlugins: [],
+    },
+  ])(
+    'onlySection_EmptiesFavoritesAndRecent: $case',
+    ({ sectionId, expectedPlugins }) => {
+      const only = onlySection(sections, registered, sectionId);
+
+      expect({
+        before: [...sections.favorites, ...sections.recent].map(drawnGroup),
+        favorites: only.favorites.map(drawnGroup),
+        recent: only.recent.map(drawnGroup),
+        plugins: only.plugins.map(drawnSection),
+      }).toEqual({
+        before: ['fav*: f1', 'proj: r1 r2'],
+        favorites: [],
+        recent: [],
+        plugins: expectedPlugins,
+      });
     },
   );
 });

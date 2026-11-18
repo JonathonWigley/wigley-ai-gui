@@ -682,7 +682,187 @@ describe('sessions view side bar', () => {
     expect(r1.classList.contains('session-row--claimed')).toBe(false);
     expect(findAll(setup.sideBar, 'session-section--plugin')).toEqual([]);
   });
+
+  it('sessionsView_ShowOnly_DrawsOnlyThatSectionAndOrdersItsRows', () => {
+    const setup = sessionsViewSetup(undefined, undefined, undefined, {
+      uiState: fakeUiState([['favorites', ['alpha']]]),
+    });
+    setup.sections.add(sectionClaiming('demo', 'Demo', 0, ['d1', 'd2']));
+    setup.view.render(
+      stateWith([
+        rowIn('a1', 'alpha'),
+        rowIn('d1', 'alpha'),
+        rowIn('b1', 'beta'),
+        rowIn('d2', 'beta'),
+        rowIn('c1', 'gamma'),
+      ]),
+    );
+
+    setup.view.showOnly('demo');
+
+    expect(shownSideBar(setup)).toEqual({
+      labels: [expect.stringContaining('Demo')],
+      groups: 0,
+      rows: ['d1', 'd2'],
+      ordered: ['d1', 'd2'],
+    });
+    expect(setup.logged).toContain('side bar shows only demo');
+  });
+
+  it('sessionsView_ShowOnlyTwoHolders_LatestWinsAndDisposeReveals', () => {
+    const setup = sessionsViewSetup();
+    let otherBuilds = 0;
+    setup.sections.add(sectionClaiming('demo', 'Demo', 0, ['d1']));
+    setup.sections.add({
+      ...sectionClaiming('other', 'Other', 1, []),
+      header: {
+        build() {
+          otherBuilds++;
+          return {};
+        },
+      },
+    });
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('d1', 'alpha')]));
+    const shown = () => shownSideBar(setup);
+    const showLines = () =>
+      setup.logged.filter((line) => line.startsWith('side bar shows'));
+
+    const demo = setup.view.showOnly('demo');
+    const other = setup.view.showOnly('other');
+    const whileOther = shown();
+    other.dispose();
+    const afterOther = shown();
+    const otherAgain = setup.view.showOnly('other');
+    const buildsBeforeLowerDispose = otherBuilds;
+    demo.dispose();
+    const afterLowerDispose = shown();
+    const buildsAfterLowerDispose = otherBuilds;
+    otherAgain.dispose();
+    const linesAtLastDispose = showLines();
+    otherAgain.dispose();
+    demo.dispose();
+
+    expect({
+      whileOther,
+      afterOther,
+      afterLowerDispose,
+      lowerDisposeBuilds: buildsAfterLowerDispose - buildsBeforeLowerDispose,
+      afterAll: shown(),
+    }).toEqual({
+      whileOther: {
+        labels: [expect.stringContaining('Other')],
+        groups: 0,
+        rows: [],
+        ordered: [],
+      },
+      afterOther: {
+        labels: [expect.stringContaining('Demo')],
+        groups: 0,
+        rows: ['d1'],
+        ordered: ['d1'],
+      },
+      afterLowerDispose: whileOther,
+      lowerDisposeBuilds: 0,
+      afterAll: {
+        labels: [expect.stringContaining('Demo')],
+        groups: 1,
+        rows: ['a1', 'd1'],
+        ordered: ['a1', 'd1'],
+      },
+    });
+    expect(showLines()).toEqual([
+      'side bar shows only demo',
+      'side bar shows only other',
+      'side bar shows only demo',
+      'side bar shows only other',
+      'side bar shows every section',
+    ]);
+    expect(showLines()).toEqual(linesAtLastDispose);
+  });
+
+  it('sessionsView_ShowOnly_ShownSectionKeepsARowAnotherSectionClaims', () => {
+    const setup = sessionsViewSetup();
+    setup.sections.add(sectionClaiming('demo', 'Demo', 0, ['x1']));
+    setup.sections.add(sectionClaiming('auto-retro', 'Retro', 1000, ['x1']));
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('x1', 'alpha')]));
+    setup.view.showOnly('demo');
+
+    const retro = setup.view.showOnly('auto-retro');
+    const whileRetro = shownSideBar(setup);
+    retro.dispose();
+
+    expect([whileRetro, shownSideBar(setup)]).toEqual([
+      {
+        labels: [expect.stringContaining('Retro')],
+        groups: 0,
+        rows: ['x1'],
+        ordered: ['x1'],
+      },
+      {
+        labels: [expect.stringContaining('Demo')],
+        groups: 0,
+        rows: ['x1'],
+        ordered: ['x1'],
+      },
+    ]);
+  });
+
+  it('sessionsView_ShowOnly_MoveFavoriteReordersTheRealFavorites', () => {
+    const uiState = fakeUiState([['favorites', ['alpha', 'gamma']]]);
+    const setup = sessionsViewSetup(undefined, undefined, undefined, {
+      uiState,
+    });
+    setup.sections.add(sectionClaiming('demo', 'Demo', 0, ['d1']));
+    setup.view.render(
+      stateWith([
+        rowIn('a1', 'alpha'),
+        rowIn('g1', 'gamma'),
+        rowIn('d1', 'beta'),
+      ]),
+    );
+    const held = setup.view.showOnly('demo');
+
+    setup.view.moveFavorite('alpha', 1);
+    const savedWhileHeld = uiState.get('favorites');
+    held.dispose();
+
+    expect(savedWhileHeld).toEqual(['gamma', 'alpha']);
+    expect(setup.view.orderedRows().map((row) => row.sessionId)).toEqual([
+      'g1',
+      'a1',
+      'd1',
+    ]);
+    expect(setup.logged).toContain('moved alpha down');
+  });
 });
+
+// A side bar section `id` that claims the rows in `sessionIds`.
+function sectionClaiming(
+  id: string,
+  label: string,
+  order: number,
+  sessionIds: string[],
+): SidebarSection {
+  return {
+    id,
+    label,
+    order,
+    claims: (row) => sessionIds.includes(row.sessionId),
+  };
+}
+
+// What the side bar shows: its plugin sections' labels, how many project
+// groups it draws, its drawn rows' ids and `orderedRows`' ids.
+function shownSideBar({ sideBar, view }: Setup) {
+  return {
+    labels: findAll(sideBar, 'session-section--plugin').map(
+      (section) => findAll(section, 'session-section-label')[0].textContent,
+    ),
+    groups: findAll(sideBar, 'session-group').length,
+    rows: drawnRows(sideBar).map((row) => row.title.replace(/.*label /, '')),
+    ordered: view.orderedRows().map((row) => row.sessionId),
+  };
+}
 
 describe('the sessions list', () => {
   beforeEach(() => {

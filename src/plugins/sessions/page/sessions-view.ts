@@ -1,5 +1,6 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
 import {
   PANE_DIRECTIONS,
   type OuterPanes,
@@ -50,6 +51,7 @@ import {
   type CursorMove,
   drawnRows,
   movedCursor,
+  onlySection,
   type SidebarSections,
   sidebarSections,
 } from './sidebar-order';
@@ -79,7 +81,8 @@ import { rowChanges, stepSession } from './tabs';
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
 // removing one draws the tab bars again; `sections` are the side bar sections
 // other plugins registered, and adding or removing one draws the side bar
-// again; `claimed` holds the rows they claim at the last draw of main's rows;
+// again; `claimed` holds the rows main's post-close selection skips at the
+// last draw of main's rows;
 // `titleMaxLength` reads the setting
 // each row draw cuts a first-message title to; `recency` and `favorites` order
 // the side bar's rows; the rest is what the sessions layout's kits read.
@@ -110,8 +113,9 @@ export interface SessionsViewDeps extends Omit<
   activities: KeyedSlotWriter<RowActivitySource[]>;
   // Holds `sessionsPlaceSlot`, each session's place.
   places: KeyedSlotWriter<SessionsPlace>;
-  // Holds `sessionsClaimedSlot`: each draw of main's rows writes the rows the
-  // sections claim, in drawn order, when they differ from the value it holds.
+  // Holds `sessionsClaimedSlot`: each draw of main's rows writes the rows main's
+  // post-close selection skips, as `SessionsView.showOnly` says, when they
+  // differ from the value it holds.
   claimed: SlotWriter<readonly string[]>;
   // Each registered harness's info by id, which a row's harness label reads.
   harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
@@ -179,7 +183,12 @@ export interface SessionPanes {
 // the row's shown activity changed; `render` drops the activities of the rows
 // that left and hands the rows' changes to recency. `redrawRows` draws the side
 // bar's rows again, for a changed title length. `orderedRows` lists main's rows
-// in the order the side bar draws them, the preview's sample never among them.
+// the side bar draws, in its order, the preview's sample never among them.
+// `showOnly` holds the side bar to one registered section, as
+// `SessionsPageExports.showOnly` says: while held, the list and `orderedRows`
+// walk that section's rows, and `claimed` holds main's rows the side bar does
+// not draw, in state order; with none held it holds the rows the sections
+// claim, in drawn order. The preview still draws over it while it shows.
 // `toggleFavorite` and `moveFavorite` change the user's favorites, draw the
 // side bar again and log the outcome; a drop does the same, and a star's click
 // runs `runFavorite`.
@@ -210,6 +219,7 @@ export interface SessionsView {
   redrawRows(): void;
   dispose(): void;
   orderedRows(): SessionRow[];
+  showOnly(sectionId: string): Disposable;
   toggleFavorite(project: string): void;
   moveFavorite(project: string, by: 1 | -1): void;
 }
@@ -292,17 +302,38 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 
-  // The real rows' order, each section's `claims` guarded so one that throws
-  // claims nothing and logs once per call.
-  const realSections = () => {
+  // The `showOnly` holders, the latest last: the last one decides.
+  const holders: { sectionId: string }[] = [];
+
+  // Main's rows in sections, `registered` the only sections that claim.
+  const sectionsOf = (registered: readonly SidebarSection[]) => {
     const rows = state?.rows ?? [];
     return sidebarSections(
       rows,
       favorites.list(),
       recency.stampsOf(rows),
       recency.projectStamps(),
-      guardedSections(deps.sections.parts(), deps.log),
+      registered,
     );
+  };
+
+  // The real rows' order with every registered section, each section's
+  // `claims` guarded so one that throws claims nothing and logs once per call.
+  const allSections = () =>
+    sectionsOf(guardedSections(deps.sections.parts(), deps.log));
+
+  // The real rows' order as the side bar shows them: every section while no
+  // holder is held, else only the top holder's section, which alone claims.
+  const shownSections = () => {
+    const held = holders.at(-1);
+    if (held === undefined) {
+      return allSections();
+    }
+    const registered = guardedSections(
+      deps.sections.parts().filter((section) => section.id === held.sectionId),
+      deps.log,
+    );
+    return onlySection(sectionsOf(registered), registered, held.sectionId);
   };
 
   // Each row part's tooltip for the session, in part order; a part that
@@ -344,7 +375,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
               ...state,
               selectedSessionId: assigned.get(tree.focusedId) ?? null,
             },
-      sections: realSections(),
+      sections: shownSections(),
       rowStateOf: (row) => ({
         title: shownTitle(row.titles, titleMax),
         activity: activities.top(row.sessionId),
@@ -361,14 +392,28 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       (row) => row.sessionId === sessionId,
     ) ?? null;
 
-  // Writes the rows the sections claim, in drawn order, unless `claimed`
-  // already holds that list.
+  // The rows main's post-close selection skips: with no holder, the rows the
+  // sections claim, in drawn order; while one is held, main's rows `sections`
+  // does not draw, in state order.
+  const claimedIds = (
+    sections: SidebarSections<SessionRow, SidebarSection>,
+  ): string[] => {
+    if (holders.length === 0) {
+      return sections.plugins.flatMap((claimed) =>
+        claimed.rows.map((row) => row.sessionId),
+      );
+    }
+    const drawn = new Set(drawnRows(sections).map((row) => row.sessionId));
+    return (state?.rows ?? [])
+      .map((row) => row.sessionId)
+      .filter((sessionId) => !drawn.has(sessionId));
+  };
+
+  // Writes `claimedIds`, unless `claimed` already holds that list.
   const publishClaimed = (
     sections: SidebarSections<SessionRow, SidebarSection>,
   ) => {
-    const ids = sections.plugins.flatMap((claimed) =>
-      claimed.rows.map((row) => row.sessionId),
-    );
+    const ids = claimedIds(sections);
     const held = deps.claimed.get() ?? [];
     const isHeld =
       ids.length === held.length &&
@@ -378,8 +423,8 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     }
   };
 
-  // Draws the side bar, publishing the rows its sections claim unless the
-  // preview shows; while the list holds the keys, a cursor whose row left
+  // Draws the side bar, publishing the rows main's post-close selection skips
+  // unless the preview shows; while the list holds the keys, a cursor whose row left
   // moves by `cursorAfterDraw` and reports its new row.
   const drawSidebar = () => {
     const drawn = sidebarDraw();
@@ -614,7 +659,33 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
         (step) => step(),
       );
     },
-    orderedRows: () => drawnRows(realSections()),
+    orderedRows: () => drawnRows(shownSections()),
+    showOnly(sectionId) {
+      const holder = { sectionId };
+      holders.push(holder);
+      deps.log(`side bar shows only ${sectionId}`);
+      drawSidebar();
+      return {
+        dispose() {
+          const index = holders.indexOf(holder);
+          if (index === -1) {
+            return;
+          }
+          const wasTop = index === holders.length - 1;
+          holders.splice(index, 1);
+          if (!wasTop) {
+            return;
+          }
+          const next = holders.at(-1);
+          deps.log(
+            next === undefined
+              ? 'side bar shows every section'
+              : `side bar shows only ${next.sectionId}`,
+          );
+          drawSidebar();
+        },
+      };
+    },
     toggleFavorite(project) {
       if (!isKeyIgnoredByPreview()) {
         toggleFavorite(project);
@@ -629,7 +700,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
         deps.log(`${project} is not a favorite`);
         return;
       }
-      const shown = realSections().favorites.map((group) => group.project);
+      const shown = allSections().favorites.map((group) => group.project);
       if (!favorites.move(project, by, shown)) {
         deps.log(`${project} cannot move ${direction}`);
         return;

@@ -227,6 +227,7 @@ function createExports(
       }
       return sections.add(section);
     },
+    showOnly: (sectionId) => view.showOnly(sectionId),
     activate,
     closeSession: (sessionId) =>
       closeSession(api, view, labelOf, sessionId, PLAIN_CLOSE),
@@ -272,7 +273,8 @@ function createExports(
 // uiState, less the rows a section another plugin registers (`addSection`)
 // claims, which draw in that section after Recent and which each draw writes to
 // `sessions.claimed`, [] at each start, for main's post-close selection to
-// skip; the session step keys follow
+// skip; `showOnly` holds the side bar to one section, `sessions.claimed` then
+// holding every row it does not draw; the session step keys follow
 // that drawn order, and the project keys change the focused pane's session's
 // project's favorite. The side bar's rows are the Sessions list, reached by
 // Alt+h past the leftmost pane (`focusSideBar`) or by opening the side bar over

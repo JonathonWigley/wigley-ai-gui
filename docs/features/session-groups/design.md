@@ -42,7 +42,12 @@ The side bar holds **Favorites** then **Recent**, each a list of project groups,
 then each section a plugin registers (`addSection`) that claims a row, its claimed rows flat with no groups. The
 default layout draws the Favorites and Recent labels only while a favorite project has an open session or a group is
 dragged; otherwise the groups sit directly under the Sessions header. A plugin section draws only while it claims a
-row, and always with its label.
+row, and always with its label, unless a plugin holds `showOnly` on it.
+
+- **`showOnly`** holds the side bar to one registered section: its label over the rows its own `claims` takes, even
+  over no rows, with no Favorites, Recent or other section. The list cursor, the session step keys and main's
+  selection after a close move only among those rows. The latest hold wins; disposing it shows what the hold below
+  asked for, or every section.
 
 - **Plugin sections** come after Recent, by their `order`, a tie in registration order. A claimed row leaves its
   project group and sits in its section, newest arrival first; a row two sections claim goes to the lower `order`.
