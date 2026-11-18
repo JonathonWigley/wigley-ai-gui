@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { createReducerStore } from '../../../shared/page/reducer-store';
@@ -160,7 +161,7 @@ function formPopupSetup(
     contributions: createFormsContributions(),
     platform: 'macos',
     state: noLayoutState,
-    uiState: { get: () => undefined, set: () => undefined },
+    uiState: uiStateOver(new Map()),
     timers: { set: () => 0, clear: () => undefined },
     drops: {
       addTarget: (target) => {

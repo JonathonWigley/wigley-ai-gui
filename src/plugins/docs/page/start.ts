@@ -456,9 +456,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       return {
         element: split.element,
         shown() {
-          // Another view's drag may have stored a new width since this one
-          // last showed.
-          split.reloadWidth();
           closeOverlaysBesides(added.view);
           api.keys.setScope(added.view.focusScope());
           api.panes.setResizeTarget(split);

@@ -743,9 +743,6 @@ function createPrimerFormView(
   return {
     element: root,
     update(current, viewName) {
-      // Every primer's columns share their stored widths.
-      outer.reloadWidth();
-      inner.reloadWidth();
       statusLine.update(true, saveContent(current));
       const layouts = shown();
       updateStrips(strips, current, layouts);

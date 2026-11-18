@@ -15,6 +15,7 @@ import type {
 import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   asFake,
@@ -366,7 +367,7 @@ function mounted(
         layouts,
         kit,
         parts: sideParts,
-        uiState: { get: () => undefined, set: noEvent },
+        uiState: uiStateOver(new Map()),
         timers: { set: () => 0, clear: noEvent },
         toggleClicked: noEvent,
         log,

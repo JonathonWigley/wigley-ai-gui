@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../fake-ui-state.test-support';
 import type { AnchorNamer } from './key-anchors';
 import { createSplit, createSplitDivider } from './split';
+import { SPLIT_NUDGE_STEP } from './split-width';
 
 type Listener = (event: Event) => void;
 
@@ -88,13 +90,6 @@ function fakeElement(): FakeElement {
 const limits = { initial: 240, min: 160, endMin: 200 };
 let created: FakeElement[];
 
-function stateOver(values: Map<string, unknown>): UiState {
-  return {
-    get: (key) => values.get(key),
-    set: (key, value) => values.set(key, value),
-  };
-}
-
 // Every armed run with its delay, by handle; a clear removes it and is
 // recorded.
 function fakeTimers() {
@@ -149,23 +144,30 @@ function fakeAnchor() {
 
 // The split's root reports an 800px rect along its axis, wide on a row and
 // tall on a column, at the client's top-left corner; the handle is the element
-// createSplit gives the `ui-split-handle` class.
+// createSplit last gave the `ui-split-handle` class. `uiState` is a store over
+// `saved` unless given.
 function splitWithHandle(
   saved: Map<string, unknown>,
-  options: { axis?: 'row' | 'column'; sizedPane?: 'start' | 'end' } = {},
+  options: {
+    axis?: 'row' | 'column';
+    sizedPane?: 'start' | 'end';
+    uiState?: UiState;
+  } = {},
 ) {
   const timers = fakeTimers();
   const anchor = fakeAnchor();
   const split = createSplit({
     ...limits,
     ...options,
-    uiState: stateOver(saved),
+    uiState: options.uiState ?? uiStateOver(saved),
     stateKey: 'side',
     anchor: anchor.anchor,
     timers: timers.timers,
   });
   asFakeElement(split.element).rect = rectOn(options.axis ?? 'row', 800);
-  const handle = created.find((node) => node.className === 'ui-split-handle')!;
+  const handle = created.findLast(
+    (node) => node.className === 'ui-split-handle',
+  )!;
   return { split, handle, timers, anchor };
 }
 
@@ -378,6 +380,57 @@ describe('createSplit reloadWidth', () => {
     saved.set('side', 350);
     split.reloadWidth();
     expect(split.width()).toBe(300);
+  });
+});
+
+describe('createSplit follows its key', () => {
+  it('a split takes the width another split over its key stores', () => {
+    const saved = new Map<string, unknown>();
+    const uiState = uiStateOver(saved);
+    const first = splitWithHandle(saved, { uiState });
+    const second = splitWithHandle(saved, { uiState });
+    first.handle.rect = rectOn('row', 4);
+
+    first.split.nudge('right');
+
+    expect(second.split.width()).toBe(limits.initial + SPLIT_NUDGE_STEP);
+  });
+
+  it('a drag in progress keeps its width when another split stores one', () => {
+    const saved = new Map<string, unknown>();
+    const uiState = uiStateOver(saved);
+    splitWithHandle(saved, { uiState });
+    const { split, handle } = splitWithHandle(saved, { uiState });
+    press(handle, 1, 240);
+    move(handle, 1, 300);
+
+    uiState.set('side', 350);
+
+    expect(split.width()).toBe(300);
+  });
+
+  it('a disposed split no longer follows its key', () => {
+    const saved = new Map<string, unknown>();
+    const uiState = uiStateOver(saved);
+    const { split } = splitWithHandle(saved, { uiState });
+
+    split.dispose();
+    uiState.set('side', 350);
+
+    expect(split.width()).toBe(240);
+  });
+
+  it('a split disposed from inside another listener of its key keeps its width', () => {
+    const saved = new Map<string, unknown>();
+    const uiState = uiStateOver(saved);
+    splitWithHandle(saved, { uiState });
+    let second: ReturnType<typeof splitWithHandle> | undefined;
+    uiState.on('side', () => second?.split.dispose());
+    second = splitWithHandle(saved, { uiState });
+
+    uiState.set('side', 350);
+
+    expect(second.split.width()).toBe(240);
   });
 });
 
@@ -675,7 +728,7 @@ describe('createSplitDivider', () => {
       const shown: number[] = [];
       createSplitDivider({
         ...limits,
-        uiState: stateOver(new Map([['side', stored]])),
+        uiState: uiStateOver(new Map([['side', stored]])),
         stateKey: 'side',
         sizedPane,
         handle: handle as unknown as HTMLElement,
@@ -704,7 +757,7 @@ describe('createSplitDivider', () => {
       const saved = new Map<string, unknown>([['side', stored]]);
       const divider = createSplitDivider({
         ...limits,
-        uiState: stateOver(saved),
+        uiState: uiStateOver(saved),
         stateKey: 'side',
         sizedPane: 'end',
         handle: fakeElement() as unknown as HTMLElement,

@@ -1,6 +1,6 @@
 # 10 — Split subscribes to its width key
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds a member to the `UiState` contract every implementer and fake must carry, moves four owners off a manual reload, and the subscription must not fight a drag in progress
 Wave: 3 · Depends on: 01 (`docs/page/start.ts`), 05 (`sessions/page/session-fakes.ts`), 07 (`DESIGN.md`, another section)

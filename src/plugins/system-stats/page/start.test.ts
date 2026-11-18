@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunMode } from '../../../contracts/plugin';
-import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import {
   FakeElement,
   installFakeDom,
@@ -72,12 +72,7 @@ function startOnHarness({
   const invoked: unknown[][] = [];
   const focuses: (() => void)[] = [];
   const disposals: string[] = [];
-  const uiState: UiState = {
-    get: (key) => stored.get(key),
-    set(key, value) {
-      stored.set(key, value);
-    },
-  };
+  const uiState = uiStateOver(stored);
   const part: typeof systemStatsPagePart = {
     ...systemStatsPagePart,
     start(api) {

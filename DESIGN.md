@@ -315,7 +315,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
   width, side by side or, with `axis: 'column'`, one above the other; the sized pane's width (or height) lives in
-  `uiState`, written when a drag ends and on each keyboard resize. The sized pane is the start pane unless
+  `uiState`, written when a drag ends and on each keyboard resize; every split over the same key follows a width
+  any of them writes. The sized pane is the start pane unless
   `sizedPane: 'end'` names the end one, and either pane can be hidden. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt

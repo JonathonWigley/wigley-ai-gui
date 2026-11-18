@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type {
   OuterPanes,
@@ -322,7 +323,7 @@ async function backlogSetup(options: SetupOptions = {}) {
     },
     paths: { tilde: (path: string) => path } as unknown as Paths,
     homeDir: '/home',
-    uiState: { get: () => undefined, set: () => undefined },
+    uiState: uiStateOver(new Map()),
     timers: { set: () => 0, clear: () => undefined },
     log: (line) => logs.push(line),
     toast: (text, tone) => toasts.push([text, tone]),

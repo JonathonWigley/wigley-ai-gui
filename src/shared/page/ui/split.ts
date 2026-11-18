@@ -49,8 +49,9 @@ export interface Split extends ResizeTarget {
   start: HTMLElement;
   end: HTMLElement;
   width(): number;
-  // Shows the width stored under `stateKey` now, so a split another split's
-  // drag wrote over takes that width; a drag in progress keeps its own.
+  // Shows the width stored under `stateKey` now. The split already follows
+  // every `set` of its key, so only a width that changed without one (a
+  // theme's token) needs it; a drag in progress keeps its own.
   reloadWidth(): void;
   setStartHidden(hidden: boolean): void;
   // Hides the end pane and the handle, the start pane taking the whole split.
@@ -68,7 +69,8 @@ export interface Split extends ResizeTarget {
 // widens it. `show` draws a width. The divider owns the drag on `handle`, the
 // stored width under `stateKey` and `nudge`; a drag writes
 // uiState once at its end, a nudge on each press, each only when the width
-// changed. A nudge steps from the drawn width, the stored one clamped to the
+// changed. It follows every `set` of `stateKey`, its own included, as
+// `reloadWidth` does. A nudge steps from the drawn width, the stored one clamped to the
 // span, so a press at a limit writes nothing and keeps a wider stored width;
 // nudge does nothing while a drag is running. `nudge` returns false, moving
 // nothing, for the directions off the divider's axis (up and down on a row,
@@ -94,6 +96,8 @@ export interface SplitDividerOptions extends SplitLimits {
 
 export interface SplitDivider extends ResizeTarget {
   width(): number;
+  // Shows the width stored under `stateKey` now, for a width that changed
+  // without a `set` of it; a drag in progress keeps its own.
   reloadWidth(): void;
   dispose(): void;
 }
@@ -316,13 +320,16 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
     },
   });
 
+  const reloadWidth = () => {
+    if (!isDisposed && !handle.isDragging()) {
+      showWidth(storedSplitWidth(options.uiState, options.stateKey, options));
+    }
+  };
+  const subscription = options.uiState.on(options.stateKey, reloadWidth);
+
   return {
     width: () => width,
-    reloadWidth() {
-      if (!handle.isDragging()) {
-        showWidth(storedSplitWidth(options.uiState, options.stateKey, options));
-      }
-    },
+    reloadWidth,
     nudge(direction: PaneDirection) {
       const hasLayoutBox = options.handle.getClientRects().length > 0;
       const side = sideOnAxis(direction, isColumn);
@@ -348,6 +355,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         return;
       }
       isDisposed = true;
+      subscription.dispose();
       handle.dispose();
     },
   };
@@ -359,7 +367,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 // pane's width, or a column's height, opens from `uiState` under `stateKey`
 // and is written back at the end of a drag and on each nudge, when either
 // changed it; a nudge steps from the drawn width and is ignored mid-drag.
-// `reloadWidth` reads it again. With `sizedPane` `end` the root carries
+// Every split over one `stateKey` follows a width any of them stores. With `sizedPane` `end` the root carries
 // `is-end-sized` and the end pane holds the size. Its owner calls `dispose`
 // when it drops the split.
 export function createSplit(options: SplitOptions): Split {

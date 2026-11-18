@@ -70,6 +70,7 @@ import { gateExternalLinks } from './external-links';
 import { createFakeLoginStart } from './fake-login-start';
 import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
+import { uiStateOver } from './fake-ui-state.test-support';
 import { createListeners, type Listeners } from './listeners';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
@@ -1639,16 +1640,7 @@ function fakePageApi(
       paths: posixPaths,
       homeDir: '/home',
       runMode: 'selfTest',
-      uiState: {
-        get: (key) => record.uiState.get(key),
-        set(key, value) {
-          if (value === undefined) {
-            record.uiState.delete(key);
-          } else {
-            record.uiState.set(key, value);
-          }
-        },
-      },
+      uiState: uiStateOver(record.uiState),
       ...replaced,
       picker:
         replaced.picker === undefined

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../fake-ui-state.test-support';
 import {
   clampSplitWidth,
   nudgedSplitWidth,
@@ -7,14 +7,6 @@ import {
 } from './split-width';
 
 const limits = { initial: 240, min: 160, endMin: 200 };
-
-function stateOver(values: Record<string, unknown>): UiState {
-  const map = new Map(Object.entries(values));
-  return {
-    get: (key) => map.get(key),
-    set: (key, value) => map.set(key, value),
-  };
-}
 
 describe('clampSplitWidth', () => {
   it.each([
@@ -63,8 +55,7 @@ describe('storedSplitWidth', () => {
     { stored: {}, expected: 240 },
     { stored: { 'docs-tree': '300' }, expected: 240 },
   ])('reads $stored as $expected', ({ stored, expected }) => {
-    expect(storedSplitWidth(stateOver(stored), 'docs-tree', limits)).toBe(
-      expected,
-    );
+    const uiState = uiStateOver(new Map(Object.entries(stored)));
+    expect(storedSplitWidth(uiState, 'docs-tree', limits)).toBe(expected);
   });
 });

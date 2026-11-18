@@ -22,6 +22,7 @@ import {
   type SampleCell,
 } from './gallery-parts';
 import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
+import { uiStateOver } from '../../../../shared/fake-ui-state.test-support';
 import { noLayoutState } from '../../../../shared/page/layout-host/fake-layout-state.test-support';
 
 function fakeDeps(
@@ -220,7 +221,7 @@ describe('galleryView', () => {
     createGalleryView(
       {
         ...deps,
-        uiState: { get: () => undefined, set: () => undefined },
+        uiState: uiStateOver(new Map()),
         timers: { set: () => 0, clear: () => undefined },
       },
       'reduced',

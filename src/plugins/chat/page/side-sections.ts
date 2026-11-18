@@ -166,16 +166,15 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
   const draws = chatPartDraws(deps.layouts, 'sideSection', log);
   const openTabs = new Set<OpenTab>();
 
-  // Every tab's divider writes through this, so one drag moves every tab's hub.
+  // Every tab's divider writes through this and follows the key, so one drag
+  // moves every tab's hub.
   const sharedWidthState: UiState = {
     get: (key) => uiState.get(key),
     set(key, value) {
       uiState.set(key, value);
       log(`session hub width ${String(value)}`);
-      for (const tab of openTabs) {
-        tab.widthDivider.reloadWidth();
-      }
     },
+    on: (key, listener) => uiState.on(key, listener),
   };
 
   const inputOf = (frame: Frame): SideSectionInput => ({

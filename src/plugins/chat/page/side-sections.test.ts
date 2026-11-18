@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
   recordingAnchors,
@@ -31,13 +32,7 @@ const HIDDEN = 'hub-hidden';
 const WIDTH = 'hub-width';
 
 function fakeUiState(initial: Record<string, unknown> = {}): UiState {
-  const held = new Map(Object.entries(initial));
-  return {
-    get: (key) => held.get(key),
-    set: (key, value) => {
-      held.set(key, value);
-    },
-  };
+  return uiStateOver(new Map(Object.entries(initial)));
 }
 
 // Side sections over a real part store and the default layout. `openTab` opens

@@ -3,7 +3,7 @@ import type { Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import { PANE_RESIZE_COMMANDS } from '../../contracts/panes';
 import type { KeyHints, ShellLayout } from '../../contracts/plugin';
-import type { UiState } from '../../contracts/ui-state';
+import { uiStateOver } from '../../shared/fake-ui-state.test-support';
 import { recordingAnchors } from '../../shared/page/layout-host/test-layouts';
 import {
   asHtml,
@@ -232,13 +232,6 @@ function measuredLayout(
 
 const NO_TIMERS: Timers = { set: () => 0, clear: () => undefined };
 
-function stateOver(values: Map<string, unknown>): UiState {
-  return {
-    get: (key) => values.get(key),
-    set: (key, value) => values.set(key, value),
-  };
-}
-
 // A shell mounted on the default layout over a fake DOM, at `DEFAULT_EDGES`
 // unless given, `stored` under `side-bar-width` and `rightStored` under
 // `right-bar-width` when given. `resizeRoot` runs the observers watching the
@@ -279,7 +272,7 @@ function mountMeasuredShell(
   const shell = mountShell(
     asHtml(root),
     measuredLayout(edges),
-    stateOver(values),
+    uiStateOver(values),
     NO_TIMERS,
     options.keys ?? recordingAnchors().keys,
   );
@@ -351,7 +344,7 @@ describe('mountShell', () => {
     const shell = mountShell(
       asHtml(root),
       measuredLayout(DEFAULT_EDGES),
-      stateOver(new Map()),
+      uiStateOver(new Map()),
       NO_TIMERS,
       recordingAnchors().keys,
     );
@@ -480,7 +473,7 @@ describe('mountShell', () => {
       const shell = mountShell(
         asHtml(root),
         countedLayout('initial'),
-        stateOver(new Map()),
+        uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
       );
@@ -592,7 +585,7 @@ describe('mountShell', () => {
           DEFAULT_EDGES,
           rangedLayout({ sideBar: sideBarRanges.first, main: 400 }),
         ),
-        stateOver(new Map()),
+        uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
       );
@@ -689,7 +682,7 @@ describe('mountShell', () => {
       const shell = mountShell(
         asHtml(new FakeElement('div')),
         measuredLayout(DEFAULT_EDGES),
-        stateOver(new Map()),
+        uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
       );

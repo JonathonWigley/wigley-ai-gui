@@ -1,13 +1,10 @@
 import type { UiState } from '../../../contracts/ui-state';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { sessionRow } from '../contract.test-support';
 
 // A uiState over a map holding `entries`.
 export function fakeUiState(entries: [string, unknown][] = []): UiState {
-  const values = new Map(entries);
-  return {
-    get: (key) => values.get(key),
-    set: (key, value) => values.set(key, value),
-  };
+  return uiStateOver(new Map(entries));
 }
 
 // A row whose host session id is `host-<sessionId>`.
