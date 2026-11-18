@@ -13,6 +13,7 @@ import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
 import { chatroomMainPart } from './chatroom/main/start';
 import { claudeCodeMainPart } from './claude-code/main/start';
+import { demoMainPart } from './demo/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
 import { galleryMainPart } from './gallery/main/start';
@@ -80,6 +81,7 @@ export const mainParts: readonly MainPart[] = [
   schedulingMainPart,
   galleryMainPart,
   windowMainPart,
+  demoMainPart,
   // Last, so its self-test script's title bar button shows in no other script.
   appUpdateMainPart,
 ];

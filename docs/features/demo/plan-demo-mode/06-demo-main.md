@@ -1,6 +1,6 @@
 # 06 — Demo main: the run, the demo harness, the step agents and the real-session step
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses lifecycle and async: registers and disposes a harness, holds the plugin switch, launches and closes chat sessions, and serializes page requests against Stop
 Wave: 2 · Depends on: 01, 02, 03

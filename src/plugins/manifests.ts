@@ -13,6 +13,7 @@ import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
 import { chatroomManifest } from './chatroom/manifest';
 import { claudeCodeManifest } from './claude-code/manifest';
+import { demoManifest } from './demo/manifest';
 import { docsManifest } from './docs/manifest';
 import { docsSessionTabManifest } from './docs-session-tab/manifest';
 import { formsManifest } from './forms/manifest';
@@ -90,6 +91,7 @@ export const builtInManifests = [
   // first and never re-prepares its runs without their text.
   schedulingManifest,
   windowManifest,
+  demoManifest,
   appUpdateManifest,
 ] as const;
 
