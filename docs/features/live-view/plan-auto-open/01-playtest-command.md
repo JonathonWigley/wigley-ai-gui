@@ -1,6 +1,6 @@
 # 01 — Playtest command parser
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the PlaytestSignal contract that 02 consumes
 Wave: 1 · Depends on: none
