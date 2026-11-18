@@ -291,7 +291,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
                  sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs and popups (`addTab`, `addPopup`, the hidden bar), the row and bar parts other plugins add,
-                 each row's activities, the rename dialog, and the layout preview rows),
+                 each row's activities, the rename dialog, and the layout preview rows;
+                 sessions-page-model.ts, DOM-free: the page's state and how a rows or selection notice applies to the panes),
                  layouts/ (the sessions Layout contract and the built-in `default` layout, with the `popup` and `popupBar` parts);
                  `docs/features/session-popups/design.md`, `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),

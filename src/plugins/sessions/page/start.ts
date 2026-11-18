@@ -16,8 +16,6 @@ import { listPickerCommands } from '../../../shared/page/list-picker';
 import { pruneKeys } from '../../../shared/page/place-slot';
 import {
   leafIds,
-  type PaneTree,
-  parsePaneTree,
   type SplitAxis,
 } from '../../../shared/page/pane-tree/pane-tree';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -37,7 +35,6 @@ import {
   sessionsSelectionSlot,
   sessionsSelectRowCommand,
   sessionsSelectTabCommand,
-  type SessionsState,
   type SidebarSection,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -48,42 +45,25 @@ import { cutTitle, titleLimit } from '../session-title';
 import { sessionsPageView } from './consumer-view';
 import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
-  type ActivationTarget,
-  activationTarget,
-  echoesAfterReply,
-  fillPlan,
   isPressSelection,
-  liveWaits,
-  type PaneSessions,
-  type PendingEcho,
-  panesToClose,
   pickerRows,
   pressedFocusAction,
-  restorePlan,
   type SelectionEnds,
-  type SelectionTarget,
-  savedPaneSessions,
-  selectionAction,
-  selectionTarget,
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
 import { createProjectFavorites } from './project-favorites';
 import { createRenameDialog } from './rename-dialog';
 import { createSessionRecency } from './session-recency';
+import { createSessionsPageModel } from './sessions-page-model';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import type { CursorMove } from './sidebar-order';
 import {
   closesAtOnce,
-  isMarkToast,
-  isSameVisibleTab,
   markToastText,
   mayClose,
-  rowChanges,
   stepSession,
   stepTab,
-  type VisibleTab,
-  visibleTab,
 } from './tabs';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
@@ -92,51 +72,6 @@ type SessionsApi = PageApi<
   SessionsChannel,
   SessionsPageEvents
 >;
-
-// The uiState key holding the chat panes: the pane tree and each pane's
-// session by host session id, null for an empty pane or a row with none.
-const PANES_KEY = 'panes';
-
-// The chat panes as uiState holds them.
-interface SavedPanes {
-  tree: PaneTree;
-  sessions: Record<string, string | null>;
-}
-
-// The pane tree and each of its panes' host session id read back from
-// uiState; null when the value is not a saved pane layout.
-function readSavedPanes(
-  value: unknown,
-): { tree: PaneTree; hostIds: Map<string, string | null> } | null {
-  if (typeof value !== 'object' || value === null) {
-    return null;
-  }
-  const { tree: savedTree, sessions } = value as Partial<SavedPanes>;
-  const tree = parsePaneTree(savedTree);
-  if (tree === null || typeof sessions !== 'object' || sessions === null) {
-    return null;
-  }
-  const hostIds = new Map<string, string | null>();
-  for (const paneId of leafIds(tree)) {
-    const hostId: unknown = sessions[paneId];
-    hostIds.set(paneId, typeof hostId === 'string' ? hostId : null);
-  }
-  return { tree, hostIds };
-}
-
-// What the mid-operation states of one main operation added up to, for the state
-// that settles it: a later one's own panes are already closed.
-interface MidOperation {
-  removed: readonly string[];
-  wasSplit: boolean;
-  hasClosedPane: boolean;
-}
-
-const NO_MID_OPERATION: MidOperation = {
-  removed: [],
-  wasSplit: false,
-  hasClosedPane: false,
-};
 
 // The line a popup opened or hidden logs, by `togglePopup` or its bar entry.
 function popupToggledLine(
@@ -320,232 +255,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     api.restores.onSettled(() =>
       pruneKeys(places, (sessionId) => rows.all().has(sessionId)),
     );
-    let state: SessionsState = { rows: [], selectedSessionId: null };
-    // False until the first state's focus is written to `active`.
-    let hasPublished = false;
-    let isModeShown = false;
-    let lastVisible: VisibleTab = null;
-    // The sessions the page asked main to activate whose state has not come
-    // back yet, oldest first.
-    let pendingEchoes: PendingEcho[] = [];
-    // Read once; the first state places it.
-    const saved = readSavedPanes(uiState.get(PANES_KEY));
-    let hasRestored = false;
-    // The one restore tracked from the first apply, a throwing one included,
-    // until the first apply that is not mid-operation shows the restored
-    // panes' visible tab, setting the key base, in its microtask.
-    let restoreFollowed: PromiseWithResolvers<void> | null = null;
-    // The restored panes still waiting for their sessions (`restorePlan`),
-    // until the first pane key closes them.
-    let waiting = new Map<string, string>();
-    // True while `activate` places a session, so the focus change it makes
-    // does not ask main a second time; true while `apply` runs, so the panes
-    // publish once its state is in.
-    let isPlacing = false;
-    let isApplying = false;
-    let midOperation = NO_MID_OPERATION;
-
-    const applyNotice = () => {
-      if (hasRestored) {
-        apply(currentState());
-      }
-    };
-    rows.on(applyNotice);
-    selection.on(applyNotice);
-    // After `applyNotice`, so the row's frame is dropped before its place goes.
-    followRows(rows, { removed: (sessionId) => places.delete(sessionId) });
-
-    const rowOf = (sessionId: string) =>
-      state.rows.find((row) => row.sessionId === sessionId);
-    const labelOf = (sessionId: string) => rowOf(sessionId)?.label ?? sessionId;
-
-    // The tab `visible` names, while its session still holds it; undefined
-    // for a popup.
-    const tabOfVisible = (visible: VisibleTab) =>
-      typeof visible === 'object' && visible?.kind === 'tab'
-        ? view.tabs
-            .tabsOf(visible.sessionId)
-            .find((tab) => tab.id === visible.tabId)
-        : undefined;
-
-    // Tells the tab that was visible, when the visible surface changed, that it
-    // is hidden, then tells the visible surface, a popup or a tab, that it
-    // shows; with none visible while the mode shows, sets the `idle` scope.
-    // `isShownAgain` tells an unchanged visible surface again, after a pane
-    // move or a layout redraw took keyboard focus from its element. Does
-    // nothing while the Sessions list holds the keys, so no surface takes the
-    // scope from it.
-    const checkVisible = (isShownAgain = false) => {
-      if (view.list.holdsKeys()) {
-        return;
-      }
-      const sessionId = view.panes.focusedSessionId();
-      const tab =
-        sessionId === null ? null : view.tabs.selectedTabOf(sessionId);
-      const popup =
-        sessionId === null ? null : view.tabs.openPopupOf(sessionId);
-      const next = visibleTab(
-        isModeShown,
-        sessionId,
-        tab?.id ?? null,
-        popup?.id ?? null,
-      );
-      const isSurfaceShown = typeof next === 'object' && next !== null;
-      if (
-        isSameVisibleTab(lastVisible, next) &&
-        !(isShownAgain && isSurfaceShown)
-      ) {
-        return;
-      }
-      if (!isSameVisibleTab(lastVisible, next)) {
-        tabOfVisible(lastVisible)?.hidden?.();
-      }
-      lastVisible = next;
-      if (next === 'none') {
-        api.keys.setScope('idle');
-        log(
-          sessionId === null
-            ? 'nothing shown'
-            : `nothing shown in ${labelOf(sessionId)}`,
-        );
-      } else if (next?.kind === 'popup') {
-        popup?.shown();
-      } else if (next !== null && tab !== null) {
-        tab.shown();
-        api.events.emit('tabShown', {
-          sessionId: next.sessionId,
-          tabId: tab.id,
-        });
-      }
-    };
-
-    // Sets the title bar to the focused pane's session, and publishes it when
-    // it changed; a row a mark selected while the mode is hidden toasts.
-    const publishFocused = () => {
-      const sessionId = view.panes.focusedSessionId();
-      const focused = sessionId === null ? undefined : rowOf(sessionId);
-      mode.setContext(
-        focused === undefined
-          ? null
-          : {
-              title: focused.label,
-              detail:
-                focused.projectDir === null
-                  ? null
-                  : api.services.paths.tilde(
-                      focused.projectDir,
-                      api.services.homeDir,
-                    ),
-            },
-      );
-      const lastPublished = hasPublished ? (active.get() ?? null) : undefined;
-      if (sessionId === lastPublished) {
-        return;
-      }
-      hasPublished = true;
-      if (focused !== undefined) {
-        log(`activated ${focused.label}`);
-      }
-      active.set(sessionId);
-      const markToast = focused?.markToast ?? null;
-      if (
-        markToast !== null &&
-        isMarkToast(lastPublished, sessionId, isModeShown)
-      ) {
-        api.services.toast(
-          markToastText(
-            markToast,
-            api.keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
-          ),
-          'info',
-        );
-      }
-    };
-
-    const savePanes = () => {
-      const panes: SavedPanes = {
-        tree: view.panes.tree(),
-        sessions: savedPaneSessions(view.panes.sessions(), waiting, state.rows),
-      };
-      uiState.set(PANES_KEY, panes);
-    };
-
-    // The selection main will hold once the activations it was sent land.
-    const mainSelection = () =>
-      pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
-
-    // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold, until
-    // `echoesAfterReply` drops it.
-    const tellMain = (sessionId: string) => {
-      const echo = sessionId === mainSelection() ? null : { sessionId };
-      if (echo !== null) {
-        pendingEchoes.push(echo);
-      }
-      api.channel
-        .invoke('activate', sessionId)
-        .then((sentState) => {
-          pendingEchoes = echoesAfterReply(pendingEchoes, echo, sentState);
-        })
-        .catch((error) => {
-          pendingEchoes = [];
-          log(`session not activated: ${errorText(error)}`);
-        });
-    };
-
-    // Focuses the target pane, or loads `sessionId` into it and focuses it.
-    const placeSession = (
-      target: ActivationTarget | SelectionTarget,
-      sessionId: string,
-    ) => {
-      const { panes } = view;
-      isPlacing = true;
-      try {
-        if (target.kind === 'focus') {
-          panes.focus(target.paneId);
-          return;
-        }
-        panes.load(target.paneId, sessionId);
-        if (target.paneId !== panes.focusedPaneId()) {
-          panes.focus(target.paneId);
-        }
-      } finally {
-        isPlacing = false;
-      }
-    };
-
-    const activate = (sessionId: string) => {
-      if (rowOf(sessionId) !== undefined) {
-        const { panes } = view;
-        placeSession(
-          activationTarget(panes.sessions(), panes.focusedPaneId(), sessionId),
-          sessionId,
-        );
-      }
-      tellMain(sessionId);
-    };
-
-    const paneLabel = (panes: PaneSessions, paneId: string) => {
-      const sessionId = panes.get(paneId) ?? null;
-      return sessionId === null ? 'empty' : labelOf(sessionId);
-    };
-
-    // Sets main's scope again, whatever `checkVisible` last saw: the visible
-    // tab's `shown`, or `idle` when the focused pane shows no tab.
-    const setMainScope = () => {
-      lastVisible = null;
-      checkVisible(true);
-    };
 
     // Hands the keys to the focused pane as a key move does: the focused
     // element blurs and the visible tab is told it shows again, so the keys
     // land on its transcript in normal mode, or the pane's `idle`.
     const keysToFocusedPane = () => {
-      log(
-        `keys to pane ${paneLabel(view.panes.sessions(), view.panes.focusedPaneId())}`,
-      );
+      log(`keys to pane ${model.paneLabel(view.panes.focusedPaneId())}`);
       blurFocusedElement();
-      setMainScope();
+      model.setMainScope();
     };
 
     const logListCursor = (row: SessionRow | null) =>
@@ -562,34 +279,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         void api.commands.run(sessionsFavoriteProjectAtCommand, project),
       selectTab: (sessionId, tab) =>
         void api.commands.run(sessionsSelectTabCommand, { sessionId, tab }),
-      isModeShown: () => isModeShown,
-      tabsChanged() {
-        if (!isApplying) {
-          checkVisible();
-        }
-      },
+      isModeShown: () => model.isModeShown(),
+      tabsChanged: () => model.tabsChanged(),
       popupOpenedFromBar(sessionId, popup) {
-        log(popupToggledLine(popup.title, true, labelOf(sessionId)));
+        log(popupToggledLine(popup.title, true, model.labelOf(sessionId)));
       },
       keys: api.keys,
       timers: api.services.timers,
       harnesses: () => harnesses.all(),
-      panesChanged() {
-        waiting = liveWaits(waiting, view.panes.sessions());
-        savePanes();
-        if (!isApplying) {
-          publishFocused();
-          checkVisible();
-        }
-      },
-      paneFocused(paneId) {
-        const panes = view.panes.sessions();
-        log(`pane focused ${paneLabel(panes, paneId)}`);
-        const sessionId = panes.get(paneId) ?? null;
-        if (!isPlacing && sessionId !== null && sessionId !== mainSelection()) {
-          tellMain(sessionId);
-        }
-      },
+      panesChanged: () => model.panesChanged(),
+      paneFocused: (paneId) => model.paneFocused(paneId),
       paneKeyFocused: () => keysToFocusedPane(),
       cursorMoved: (row) => logListCursor(row),
       // The keys follow a release into its pane, as `pressedFocusAction` says.
@@ -637,6 +336,46 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       places,
       claimed,
     });
+    const model = createSessionsPageModel({
+      view,
+      uiState,
+      readRows: () => rows.all().values(),
+      readSelection: () => selection.get() ?? null,
+      active,
+      activateInMain: (sessionId) => api.channel.invoke('activate', sessionId),
+      restores: api.restores,
+      setContext: (focused) =>
+        mode.setContext(
+          focused === undefined
+            ? null
+            : {
+                title: focused.label,
+                detail:
+                  focused.projectDir === null
+                    ? null
+                    : api.services.paths.tilde(
+                        focused.projectDir,
+                        api.services.homeDir,
+                      ),
+              },
+        ),
+      markToast: (mark) =>
+        api.services.toast(
+          markToastText(
+            mark,
+            api.keys.keysFor(qualify(sessionsManifest.id, 'showMode')),
+          ),
+          'info',
+        ),
+      setIdleScope: () => api.keys.setScope('idle'),
+      tabShown: (sessionId, tabId) =>
+        api.events.emit('tabShown', { sessionId, tabId }),
+      log,
+    });
+    rows.on(model.applyNotice);
+    selection.on(model.applyNotice);
+    // After `applyNotice`, so the row's frame is dropped before its place goes.
+    followRows(rows, { removed: (sessionId) => places.delete(sessionId) });
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {
       if (settings.titleMaxLength !== titleMaxLength) {
@@ -650,9 +389,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       rowParts,
       barParts,
       sections,
-      activate,
-      labelOf,
-      () => (isModeShown ? view.panes.focusedSessionId() : null),
+      model.activate,
+      model.labelOf,
+      () => (model.isModeShown() ? view.panes.focusedSessionId() : null),
     );
 
     // Gives the Sessions list the keys, the cursor on the selected row.
@@ -676,7 +415,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         mode.picked();
       }
       if (view.panes.paneHolding(document.activeElement) !== null) {
-        setMainScope();
+        model.setMainScope();
       } else {
         keysToFocusedPane();
       }
@@ -690,16 +429,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       element: view.element,
       sideBar: view.sideBar,
       shown() {
-        isModeShown = true;
+        model.setModeShown(true);
         api.panes.setOuterPanes(view.panes.outer);
         view.tabs.rescroll();
-        checkVisible();
+        model.checkVisible();
       },
       hidden() {
-        isModeShown = false;
+        model.setModeShown(false);
         view.list.leave();
         api.panes.setOuterPanes(null);
-        checkVisible();
+        model.checkVisible();
       },
       focusSideBar: focusList,
       focusMain,
@@ -717,7 +456,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const endListByMain = () => {
       if (view.list.leave()) {
         log('list left');
-        setMainScope();
+        model.setMainScope();
       }
     };
     view.element.addEventListener('pointerdown', endListByMain, true);
@@ -731,160 +470,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       selectionAtPress = selectionEnds(window.getSelection());
     };
     window.addEventListener('pointerdown', noteSelectionAtPress, true);
-
-    // Lays out the first state's panes as `restorePlan` says.
-    const restoreSavedPanes = (first: SessionsState) => {
-      const plan = restorePlan(saved?.hostIds ?? null, first.rows);
-      if (saved === null || plan.kind === 'fallback') {
-        if (first.selectedSessionId !== null) {
-          view.panes.load(view.panes.focusedPaneId(), first.selectedSessionId);
-        }
-        return;
-      }
-      waiting = plan.waiting;
-      view.panes.restore(saved.tree, plan.sessions);
-      for (const paneId of plan.closing) {
-        view.panes.close(paneId);
-      }
-      const focused = view.panes.focusedSessionId();
-      if (focused !== null && focused !== first.selectedSessionId) {
-        activate(focused);
-      }
-    };
-
-    // Ends the waits `nextRows` settle and loads the panes `fillPlan` fills.
-    const fillWaiting = (nextRows: readonly SessionRow[]) => {
-      const { ended, loads } = fillPlan(
-        waiting,
-        nextRows,
-        view.panes.sessions(),
-      );
-      for (const paneId of ended) {
-        waiting.delete(paneId);
-      }
-      for (const [paneId, sessionId] of loads) {
-        view.panes.load(paneId, sessionId);
-        log(`pane restored ${labelOf(sessionId)}`);
-      }
-    };
-
-    // Ends the restore: the panes still waiting close, the last pane staying.
-    const closeWaiting = () => {
-      if (waiting.size === 0) {
-        return;
-      }
-      const paneIds = [...waiting.keys()];
-      waiting = new Map();
-      for (const paneId of paneIds) {
-        view.panes.close(paneId);
-      }
-      log('waiting panes closed');
-    };
-
-    // Applies the selection rules (`selectionAction`) to the state `apply`
-    // took in. A notice that leaves the selection alone answers no echo, however
-    // its id compares with the ones still waited for.
-    const placeSelection = (
-      before: SessionsState,
-      next: SessionsState,
-      removed: readonly string[],
-      wasSplit: boolean,
-    ) => {
-      if (next.selectedSessionId === before.selectedSessionId) {
-        return;
-      }
-      const { action, echoes } = selectionAction({
-        before: before.selectedSessionId,
-        next: next.selectedSessionId,
-        removed,
-        wasSplit,
-        pendingEchoes,
-      });
-      pendingEchoes = echoes;
-      if (action.kind === 'place') {
-        const { panes } = view;
-        const target = selectionTarget(
-          panes.sessions(),
-          panes.focusedPaneId(),
-          action.sessionId,
-          waiting,
-        );
-        if (target.kind === 'loadEndingWait') {
-          log(
-            `wait ended: ${labelOf(action.sessionId)} loaded into a waiting pane`,
-          );
-        }
-        placeSession(target, action.sessionId);
-      } else if (action.kind === 'tellFocused') {
-        const focused = view.panes.focusedSessionId();
-        if (focused !== null) {
-          activate(focused);
-        }
-      }
-    };
-
-    const currentState = (): SessionsState => ({
-      rows: [...rows.all().values()].filter((row) => row.owner === null),
-      selectedSessionId: selection.get() ?? null,
-    });
-
-    const apply = (next: SessionsState) => {
-      const before = state;
-      if (!hasRestored && restoreFollowed === null) {
-        restoreFollowed = Promise.withResolvers<void>();
-        api.restores.track(restoreFollowed.promise);
-      }
-      state = next;
-      isApplying = true;
-      const changes = rowChanges(before.rows, next.rows);
-      const closing = panesToClose(view.panes.sessions(), changes.removed);
-      const isSelectionRowless =
-        next.selectedSessionId !== null &&
-        !next.rows.some((row) => row.sessionId === next.selectedSessionId);
-      const seen: MidOperation = {
-        removed: [...midOperation.removed, ...changes.removed],
-        wasSplit:
-          midOperation.wasSplit || leafIds(view.panes.tree()).length > 1,
-        hasClosedPane: midOperation.hasClosedPane || closing.length > 0,
-      };
-      try {
-        view.render(next);
-        for (const paneId of closing) {
-          if (!view.panes.close(paneId)) {
-            view.panes.load(paneId, null);
-          }
-        }
-        for (const sessionId of changes.removed) {
-          view.tabs.drop(sessionId);
-        }
-        if (!hasRestored) {
-          hasRestored = true;
-          restoreSavedPanes(next);
-        } else {
-          fillWaiting(next.rows);
-          if (!isSelectionRowless) {
-            placeSelection(before, next, seen.removed, seen.wasSplit);
-          }
-        }
-      } finally {
-        isApplying = false;
-      }
-      if (isSelectionRowless) {
-        midOperation = seen;
-        return;
-      }
-      midOperation = NO_MID_OPERATION;
-      const followed = restoreFollowed;
-      restoreFollowed = null;
-      queueMicrotask(() => {
-        try {
-          publishFocused();
-          checkVisible(seen.hasClosedPane);
-        } finally {
-          followed?.resolve();
-        }
-      });
-    };
 
     // Main sends `activated` before the writes it causes, so the mode shows
     // before they arrive and the round never toasts.
@@ -913,7 +498,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       const { panes } = view;
       const sessionId = stepSession(
         {
-          ...state,
+          ...model.state(),
           rows: view.orderedRows(),
           selectedSessionId: panes.focusedSessionId(),
         },
@@ -948,11 +533,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       );
       const tab = tabs.find((candidate) => candidate.id === tabId);
       if (tab === undefined) {
-        log(`no other tab in ${labelOf(sessionId)}`);
+        log(`no other tab in ${model.labelOf(sessionId)}`);
         return;
       }
       view.tabs.select(sessionId, tab.id);
-      log(`showed ${tab.title} tab in ${labelOf(sessionId)}`);
+      log(`showed ${tab.title} tab in ${model.labelOf(sessionId)}`);
     };
 
     // Hides the focused pane's session's open popup, else opens the one it hid
@@ -969,14 +554,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       const toggled = view.tabs.togglePopup(sessionId);
       if (toggled === null) {
-        log(`no popup in ${labelOf(sessionId)}`);
+        log(`no popup in ${model.labelOf(sessionId)}`);
         return;
       }
       log(
         popupToggledLine(
           toggled.popup.title,
           toggled.isOpen,
-          labelOf(sessionId),
+          model.labelOf(sessionId),
         ),
       );
     };
@@ -1002,7 +587,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         view.setLayouts(shown);
         renameDialog.redraw();
         picker.redraw();
-        checkVisible(true);
+        model.checkVisible(true);
       },
     });
 
@@ -1017,7 +602,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       const sessionId = targetSessionId ?? view.panes.focusedSessionId();
-      const row = sessionId === null ? undefined : rowOf(sessionId);
+      const row = sessionId === null ? undefined : model.rowOf(sessionId);
       if (row === undefined) {
         log('no session to rename');
         return;
@@ -1036,7 +621,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       const sessionId = view.panes.focusedSessionId();
-      const row = sessionId === null ? undefined : rowOf(sessionId);
+      const row = sessionId === null ? undefined : model.rowOf(sessionId);
       if (row === undefined) {
         log('no session for projects');
         return;
@@ -1094,7 +679,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           if (isStillEmpty) {
             view.panes.close(paneId);
             log('split cancelled');
-            checkVisible(true);
+            model.checkVisible(true);
           }
         },
       });
@@ -1129,7 +714,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log(`pane split ${axis === 'column' ? 'down' : 'right'}`);
-      closeWaiting();
+      model.closeWaiting();
       openSplitPicker(paneId);
     };
 
@@ -1139,8 +724,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log('pane closed');
-      closeWaiting();
-      checkVisible(true);
+      model.closeWaiting();
+      model.checkVisible(true);
     };
 
     const swapPane = (direction: PaneDirection) => {
@@ -1149,8 +734,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log('panes swapped');
-      closeWaiting();
-      checkVisible(true);
+      model.closeWaiting();
+      model.checkVisible(true);
     };
 
     // Runs a list key while the side bar shows; a narrowing hides it without
@@ -1171,7 +756,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const cursorRowKey = (run: (row: SessionRow) => void) =>
       listKey(() => {
         const sessionId = view.list.cursorSessionId();
-        const row = sessionId === null ? undefined : rowOf(sessionId);
+        const row = sessionId === null ? undefined : model.rowOf(sessionId);
         if (row === undefined) {
           log('no session under the cursor');
           return;
@@ -1209,7 +794,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
                 ...view.tabs.tabsOf(sessionId),
                 ...view.tabs.popupsOf(sessionId),
               ]);
-            void closeSession(api, view, labelOf, sessionId, {
+            void closeSession(api, view, model.labelOf, sessionId, {
               viewsAtOnce: isTargeted || isKeyAtOnce,
               cancelsHolds: isKeyAtOnce,
             });
@@ -1266,7 +851,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           followRows(rows, { removed: listener }),
         ),
       ready() {
-        apply(currentState());
+        model.ready();
       },
       dispose() {
         window.removeEventListener('pointerdown', noteSelectionAtPress, true);

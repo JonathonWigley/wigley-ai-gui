@@ -1,6 +1,6 @@
 # 05 — Sessions page model
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · moves a dozen interacting state fields and `apply`'s jobs across a new seam, keeping the view-then-model construction order and `apply`'s microtask and restore tracking exactly as they run now
 Wave: 2 · Depends on: 03 (lists `src/plugins/sessions/page/start.ts`)
