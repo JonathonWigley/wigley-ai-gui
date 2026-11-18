@@ -1,6 +1,6 @@
 # 27 — Final verification
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 8 · Depends on: every group (runs after `wigley:make`'s test gate)
 Plan: [plan.md](plan.md)

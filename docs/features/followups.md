@@ -858,3 +858,8 @@ because the earlier items rewrite many of these tests anyway.
   Options: `createTab` tears down what it built when a step throws and rethrows, or `hold` sets the tab in `tabs`
   before building it, so `dispose` reaches a partly built tab (and `tearDownTab` then copes with null `box`/`host`).
   Add a row where `rebuild` throws on arrival, then stop, and assert every registration was released.
+- **node-files watch rows flake under load** — *agent-ready*: `src/main/files/node-files.test.ts` has a
+  `watch_TempFileEvent_ReportsItsTargetOnceWhenPresent` table. Different rows fail at random: "target and temp file in
+  one window", "temp file only, target present" and "temp file then rename". They fail on `main` as well, 2 of 5 runs
+  alone and once in a full suite run, with no change to the watcher. They depend on real file-system event timing.
+  Options: drive the watcher with a fake event source, or widen the window the rows wait on.
