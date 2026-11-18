@@ -290,7 +290,7 @@ every part its contract adds.
 - [x] [Forms column chrome](12-forms-chrome.md) — after 11
 
 ### Wave 7
-- [ ] [Forms keeps its boxes and redraws only changed parts](13-forms-boxes-and-part-redraw.md) — after 05, 06, 12
+- [x] [Forms keeps its boxes and redraws only changed parts](13-forms-boxes-and-part-redraw.md) — after 05, 06, 12
 
 ### Wave 8
 - [ ] [Doc re-read](14-doc-re-read.md) — after 13
@@ -315,6 +315,7 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 10 · hard · ca910ef9e · Diff read: primer appendField and audio-picker appendNotesField place/release through EditorBoxes (Pick 'place'|'release'); practice textBoxSlot places with placedFor/boxTabKey, destroying on a changed key. Wave 4 typecheck clean; lint clean after oxfmt (ff9075cae). Tests written in primer-view, picker-kit, picker-view, practice start tests; run at the test gate. · concerns: Practice problem-change test drives customCases (opening a problem resets the problem tab to Description, so Notes cannot stay shown); primer and practice layout.d.ts still say 'mounts' (lines 65/189, 29) outside Files, for task 14's doc pass; after addItem the add-item box shows '' only on the next card redraw (card key unchanged), as before — check in task 15 live run; followups hot-reload item rewritten (text's start; fix now names place/release).
 - 11 · hard · 1dc26df2e · diff read (Produces present: layout-dialog.ts draws, dialogFrame/confirmBody in layout.d.ts and default, drawFrame required, code frame deleted) + wave 5 compile (typecheck, lint clean after oxfmt) · concerns: formatting fixed by oxfmt; withUser<Layout> default widening unchecked until the test gate; followups bullet already gone before this run, only the master-plan tick applied
 - 12 · hard · 7b834bb98 · diff read (railHead/railFoot/pager in layout.d.ts, default, resolver PANES/PART_READS, read-layout; drawRailHead/drawRailFoot/drawPager; view-model inputs; CSS moved) + wave 6 compile (typecheck, lint clean after oxfmt) · concerns: createStatusLine import kept (one status line per build, per Decisions); isSameInput copies primer-view's private helper; task 11's followups bullet was renamed, removed in this commit; layout-dialog.ts missed by 1dc26df2e, committed in 6ecb55d0b
+- 13 · hard · 46f57d4de · diff read (changedPicks, placeBox/releaseBox, per-part redraw, mount deleted, no mount caller left by grep) + wave 7 compile (typecheck clean after the worker's test fix; lint clean after oxfmt) · concerns: keepFocusedBox refocuses any still-placed focused box (brief's 'only when lost' was practice's setLayouts rule); draw-part.ts RollbackDeps.recordBox comment still says destroy (outside Files); round anchors list grows per redraw until dispose; forms-view.ts doc comment edited outside Files
 ### Contract changes
 - 11 layout-resolver LayoutPart: 'dialogFrame' | 'confirmBody' string members → { dialog: LayoutDialogPart } variant; pickLayout takes { dialog: 'dialogFrame' } · consumers: forms-view only
 ### Rulings
@@ -330,6 +331,9 @@ Review base: e6c894d93a3a717fdd10693a13130b63a7484e75
 - 11: setLayouts redraws the cancel prompt before handing shown to the round views · group 11 · group 11
 - 12: pagerInput counts railItems(round) (Lane E's railItems takes the round state); pagerText no longer exported · group 12 · group 12
 - 12: each strip's draw owns its anchors (chromeDeps record nothing into the build list); parts.dispose disposes each strip's last draw · group 12 · group 12
+- 13: rebuild builds the round's parts again whole (kinds change can add or drop cards), keeping editors via release; setLayouts sends a kinds change to rebuild · group 13 · group 13
+- 13: buildField's labelKeys lost its default (placeFrame is the required last parameter); a redrawn part takes the old one's place with replaceWith; a head pick change builds a new slot before the pager's · group 13 · group 13
+- 13: AGENTS.md Reloads says style (.css) is style-only, per layout-registry's changeKindOf · group 13 · group 13
 ### Review rounds
 - Round 1 fixes 6ed1fba05..6a18f4615: Medium — behaviour changes in shared EditorBoxes (setText, editorOf, keepFocusedBox caret, place scrollTop) and the layout-loader restyled filter; re-review correctness only.
 - Re-review 1 (correctness): all 29 findings closed; 3 Minor style findings lead-applied at review step 7 and closed by commit and compile; no new bug. #30 to step 7 as follow-up.

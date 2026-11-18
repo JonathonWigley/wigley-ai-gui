@@ -1,6 +1,6 @@
 # 13 — Forms keeps its boxes and redraws only changed parts
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: 05, 06, 12
 Plan: [plan.md](plan.md)
@@ -162,3 +162,5 @@ Done when: `npm run lint` and the typecheck pass; the test gate runs every test 
 Commit: one commit for the group — every path in Files.
 
 ## Proof
+
+Commit 46f57d4de · proof: diff read (changedPicks, placeBox/releaseBox, per-part redraw, mount deleted, no mount caller left by grep) + wave 7 compile (typecheck clean after the worker's test fix; lint clean after oxfmt) · concerns: keepFocusedBox refocuses any still-placed focused box (brief's 'only when lost' was practice's setLayouts rule); draw-part.ts RollbackDeps.recordBox comment still says destroy (outside Files); round anchors list grows per redraw until dispose; forms-view.ts doc comment edited outside Files
