@@ -17,7 +17,9 @@ import { refusesFrameNavigation } from '../shared/visual-url';
 // window stays on the app's page: a navigation the page starts to another URL,
 // such as Chromium opening a file dropped on the window, is refused and logged.
 // A frame inside the page stays on the `wigley-visual:` scheme: a frame
-// navigation off it is refused and logged.
+// navigation off it is refused and logged. The window starts empty: the caller
+// loads the page with `loadAppPage` once every listener that counts loads is in
+// place.
 export function createMainWindow(
   settings: Settings['window'],
   title: string,
@@ -66,6 +68,11 @@ export function createMainWindow(
       log('main', `frame navigation refused: ${details.url}`);
     }
   });
+  return window;
+}
+
+// Starts the window's load of the app's page.
+export function loadAppPage(window: BrowserWindow): void {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -73,7 +80,6 @@ export function createMainWindow(
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
-  return window;
 }
 
 // Whether `target` is the page at `current`, apart from its hash, as a page

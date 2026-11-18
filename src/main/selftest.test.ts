@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../contracts/files';
 import type { SelfTestScript } from '../contracts/plugin';
 import type { DrivenWindow } from './drive/driven-window';
+import { fakeDrivenWindow } from './drive/fake-driven-window';
 import type { ScriptRun, SelfTestFilter } from './selftest-config';
 
 const NO_FILTER: SelfTestFilter = { plugins: [], groups: [] };
@@ -27,21 +28,8 @@ vi.mock('./drive/page-driver', async (importOriginal) => ({
   readStartFailure: async () => null,
   waitForNewLogLine,
 }));
-// The window's navigation count, which a test moves to stand in for a new
-// navigation, and the page log (newest first) its `#log li` read answers; any
-// other script the window runs answers nothing.
-const navigation = vi.hoisted(() => ({ count: 1 }));
-const pageLog = vi.hoisted(() => ({ lines: [] as string[] }));
-vi.mock('./electron-driven-window', () => ({
-  electronDrivenWindow: () => ({
-    focus: () => {},
-    emulateFocus: async () => {},
-    contentSize: () => ({ width: 800, height: 600 }),
-    navigationCount: () => navigation.count,
-    run: async (script: string) =>
-      script.includes('#log li') ? [...pageLog.lines] : undefined,
-  }),
-}));
+// The page log (newest first) the driven window's `#log li` read answers.
+const pageLog = { lines: [] as string[] };
 
 // `failSelfTest` keeps whether the self-test has exited in module state, so
 // each test loads a fresh copy.
@@ -306,12 +294,19 @@ function windowFiringLoads() {
 describe('startSelfTest', () => {
   let screenshotFolder: string;
   let lines: string[];
+  let driven: ReturnType<typeof fakeDrivenWindow>;
 
   beforeEach(() => {
     exit.mockClear();
     press.mockClear();
-    navigation.count = 1;
     pageLog.lines = [];
+    // The placement check's event dispatch answers nothing.
+    driven = fakeDrivenWindow([
+      ['#log li', () => [...pageLog.lines]],
+      ['dispatchEvent', () => undefined],
+    ]);
+    // The window stands on page load 1.
+    driven.navigate();
     screenshotFolder = mkdtempSync(path.join(tmpdir(), 'selftest-test-'));
     lines = [];
     vi.spyOn(console, 'log').mockImplementation((line: string) => {
@@ -352,6 +347,7 @@ describe('startSelfTest', () => {
     };
     const driver = startSelfTest(
       window,
+      driven.window,
       {} as Files,
       async () => {},
       screenshotFolder,
@@ -383,6 +379,7 @@ describe('startSelfTest', () => {
     const { window, loaded } = windowFiringLoads();
     const driver = startSelfTest(
       window,
+      driven.window,
       {} as Files,
       async () => {},
       screenshotFolder,
@@ -407,7 +404,7 @@ describe('startSelfTest', () => {
     loaded[0]();
     loaded[0]();
     await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(1));
-    navigation.count = 2;
+    driven.navigate();
     loaded[0]();
     await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(2));
 
@@ -441,6 +438,7 @@ describe('startSelfTest', () => {
       const { window, loaded } = windowFiringLoads();
       const driver = startSelfTest(
         window,
+        driven.window,
         {} as Files,
         async () => {},
         screenshotFolder,
@@ -473,6 +471,7 @@ describe('startSelfTest', () => {
     const { window, loaded } = windowFiringLoads();
     const driver = startSelfTest(
       window,
+      driven.window,
       {} as Files,
       async () => {},
       screenshotFolder,

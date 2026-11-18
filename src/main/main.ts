@@ -120,6 +120,7 @@ import {
   serveVisualScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
+import type { DrivenWindow } from './drive/driven-window';
 import { electronDrivenWindow } from './electron-driven-window';
 import { createNodeFiles } from './files/node-files';
 import { createProcessGit } from './git/process-git';
@@ -212,6 +213,7 @@ import {
 import { loadUiStateFile, type UiStateFile } from './ui-state/ui-state-file';
 import {
   createMainWindow,
+  loadAppPage,
   offscreenWindowService,
   windowService,
 } from './window';
@@ -902,6 +904,18 @@ function livePage(window: BrowserWindow): WebContents | null {
   return isGone ? null : window.webContents;
 }
 
+// The driven window `createWindow` made for `run`, a run that reads the page
+// through one.
+function requireDrivenWindow(
+  window: DrivenWindow | null,
+  run: string,
+): DrivenWindow {
+  if (window === null) {
+    throw new Error(`driven window missing in ${run}`);
+  }
+  return window;
+}
+
 // The app's window, or null before it is made and once it is destroyed, as on
 // quit, when another start or an activate may still ask for it.
 function liveMainWindow(): BrowserWindow | null {
@@ -1106,6 +1120,11 @@ function createWindow(
   window.webContents.on('did-start-loading', pageLog.pageLoading);
   window.webContents.on('did-finish-load', pageLog.pageLoaded);
   window.webContents.on('did-stop-loading', pageLog.pageLoaded);
+  // Only a self-test or drive run reads the page through a driven window.
+  const drivenWindow =
+    runMode === 'selfTest' || inputs.driveRunDir !== null
+      ? electronDrivenWindow(window)
+      : null;
   const recolour = () => {
     if (window.isDestroyed()) {
       return;
@@ -1129,6 +1148,7 @@ function createWindow(
     runMode === 'selfTest'
       ? startSelfTest(
           window,
+          drivenWindow,
           scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
@@ -1153,7 +1173,7 @@ function createWindow(
     inputs.driveRunDir === null
       ? null
       : startDriveRun({
-          window: electronDrivenWindow(window),
+          window: requireDrivenWindow(drivenWindow, 'drive run'),
           runDir: inputs.driveRunDir,
           files,
           homeDir: inputs.homeDir,
@@ -1171,6 +1191,9 @@ function createWindow(
     onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
+  // The page loads only once every driven window over it exists, so its
+  // navigation count numbers the first load 1.
+  loadAppPage(window);
   const layouts = serveLayouts(
     window,
     inputs.homeDir,
