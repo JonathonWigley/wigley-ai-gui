@@ -1635,6 +1635,12 @@ describe('docs view after the page stops', () => {
       act: (page) => openByMessage(page, PLAIN),
     },
     {
+      case: "an asked doc's read failed",
+      held: 'readDoc',
+      isRejected: true,
+      act: (page) => openByMessage(page, PLAIN),
+    },
+    {
       case: "a restore's read answered",
       held: 'readDoc',
       reply: TEXTS[PLAIN],

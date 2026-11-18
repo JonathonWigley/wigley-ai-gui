@@ -11,6 +11,9 @@ export interface StashFlowDeps {
   closeSession(sessionId: string): Promise<boolean>;
   log(message: string): void;
   toast(text: string, tone: ToastTone): void;
+  // Whether the page stopped; a call that lands after logs, toasts and asks
+  // nothing.
+  isStopped(): boolean;
 }
 
 export const REFUSED_TOAST = 'Only sessions the app started can be stashed';
@@ -19,7 +22,9 @@ export const REFUSED_TOAST = 'Only sessions the app started can be stashed';
 // event finds it, then the session closes the normal way. A close a tab, a
 // guard or main keeps (chat's end-session confirm answered no, or main's guard
 // refusing a session with an open round) drops the note again; a session main
-// refuses toasts and stays open. Resolves once settled; a failed ask or drop is logged.
+// refuses toasts and stays open. Resolves once settled; a failed ask or drop is
+// logged. Once the page stops, a pending call lands with no log, toast or
+// further ask.
 export async function stashSession(
   deps: StashFlowDeps,
   request: StashRequest,
@@ -29,7 +34,12 @@ export async function stashSession(
   try {
     isKept = await deps.ask(request);
   } catch (error) {
-    deps.log(`stash not asked: ${errorText(error)}`);
+    if (!deps.isStopped()) {
+      deps.log(`stash not asked: ${errorText(error)}`);
+    }
+    return;
+  }
+  if (deps.isStopped()) {
     return;
   }
   if (!isKept) {
@@ -37,13 +47,18 @@ export async function stashSession(
     deps.toast(REFUSED_TOAST, 'error');
     return;
   }
-  if (await deps.closeSession(request.sessionId)) {
+  const isClosed = await deps.closeSession(request.sessionId);
+  if (isClosed || deps.isStopped()) {
     return;
   }
   try {
     await deps.drop(request.sessionId);
-    deps.log(`stash dropped: ${name} stayed open`);
+    if (!deps.isStopped()) {
+      deps.log(`stash dropped: ${name} stayed open`);
+    }
   } catch (error) {
-    deps.log(`stash drop not sent for ${name}: ${errorText(error)}`);
+    if (!deps.isStopped()) {
+      deps.log(`stash drop not sent for ${name}: ${errorText(error)}`);
+    }
   }
 }

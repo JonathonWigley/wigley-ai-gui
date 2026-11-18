@@ -53,10 +53,14 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
       return editableTitle(row.titles) || row.label;
     };
 
+    let isStopped = false;
+
     // A page that reloaded can no longer drop a note it asked for.
-    void api.channel
-      .invoke('forgetKept')
-      .catch((error) => log(`kept stashes not forgotten: ${errorText(error)}`));
+    void api.channel.invoke('forgetKept').catch((error) => {
+      if (!isStopped) {
+        log(`kept stashes not forgotten: ${errorText(error)}`);
+      }
+    });
 
     const flow: StashFlowDeps = {
       ask: (request) => api.channel.invoke('stash', request),
@@ -64,6 +68,7 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
       closeSession: (sessionId) => sessions.closeSession(sessionId),
       log,
       toast: services.toast,
+      isStopped: () => isStopped,
     };
 
     const noteDialog = createNoteDialog({
@@ -113,6 +118,9 @@ export const sessionStashPagePart: PagePart<typeof sessionStashManifest> = {
         noteDialog.isOpen()
           ? 'Stash or cancel the open stash note first'
           : null,
+      dispose: () => {
+        isStopped = true;
+      },
     };
   },
 };

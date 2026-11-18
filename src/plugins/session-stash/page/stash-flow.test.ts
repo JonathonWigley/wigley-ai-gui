@@ -9,7 +9,11 @@ import { REFUSED_TOAST, stashSession } from './stash-flow';
 function flowSetup(
   kept: boolean | Error,
   closed: boolean,
-  options: { closing?: Promise<void>; dropFailure?: Error } = {},
+  options: {
+    closing?: Promise<void>;
+    dropFailure?: Error;
+    isStopped?: () => boolean;
+  } = {},
 ) {
   const calls: string[] = [];
   const logged: string[] = [];
@@ -39,6 +43,7 @@ function flowSetup(
     toast: (text: string, tone: ToastTone) => {
       toasts.push([text, tone]);
     },
+    isStopped: options.isStopped ?? (() => false),
   };
   return { deps, calls, logged, toasts };
 }
@@ -85,6 +90,75 @@ describe('stashSession', () => {
     expect(calls).toEqual(test.calls);
     expect(logged).toEqual(test.logged);
     expect(toasts).toEqual(test.toasts);
+  });
+
+  // Breaks: a call that lands after the page stops logging, toasting or
+  // asking main again.
+  it.each([
+    {
+      case: 'the ask answers kept',
+      kept: true,
+      closed: true,
+      calls: ['ask'],
+    },
+    {
+      case: 'the ask answers refused',
+      kept: false,
+      closed: true,
+      calls: ['ask'],
+    },
+    {
+      case: 'the ask fails',
+      kept: new Error('main gone'),
+      closed: true,
+      calls: ['ask'],
+    },
+  ])(
+    'stashSession_PageStopsDuringTheAsk_DoesNothingMore ($case)',
+    async (test) => {
+      let isStopped = false;
+      const { deps, calls, logged, toasts } = flowSetup(
+        test.kept,
+        test.closed,
+        {
+          isStopped: () => isStopped,
+        },
+      );
+      const asking = deps.ask;
+      deps.ask = async () => {
+        try {
+          return await asking();
+        } finally {
+          isStopped = true;
+        }
+      };
+
+      await stashSession(deps, { sessionId: 's1', note: 'n' }, 'gamma');
+
+      expect({ calls, logged, toasts }).toEqual({
+        calls: test.calls,
+        logged: [],
+        toasts: [],
+      });
+    },
+  );
+
+  it('stashSession_PageStopsDuringTheClose_DropsAndLogsNothing', async () => {
+    let isStopped = false;
+    const { deps, calls, logged } = flowSetup(true, false, {
+      isStopped: () => isStopped,
+    });
+    const closing = deps.closeSession;
+    deps.closeSession = async (sessionId) => {
+      const closed = await closing(sessionId);
+      isStopped = true;
+      return closed;
+    };
+
+    await stashSession(deps, { sessionId: 's1', note: 'n' }, 'gamma');
+
+    expect(calls).toEqual(['ask', 'close s1']);
+    expect(logged).toEqual([]);
   });
 
   it('stashSession_DropFails_LogsTheDrop', async () => {
