@@ -1,6 +1,6 @@
 # 13 — Agent forms steps
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: deep · each form step crosses main and page through async seams (a form service in main, a page store that must show the demo form before a beat acts), adds two shared helpers and two new exports, and the notes step reroutes the popup's channel while it lives
 Wave: 2 · Depends on: 01

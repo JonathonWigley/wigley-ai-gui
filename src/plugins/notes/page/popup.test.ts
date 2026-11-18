@@ -43,6 +43,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { createNotePopup, type NotePopup } from './popup';
+import { createSampleNoteChannel } from './sample-note';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 import { fakeKitCommandsOf } from '../../../shared/page/layout-host/fake-kit-commands.test-support';
@@ -119,6 +120,8 @@ interface Harness {
   inserts: string[];
   // The fields of each `saveDraft` call, in order.
   saved: NoteFields[];
+  // The method of each invoke on the real channel, in order.
+  invokes: string[];
   // How many scopes were pushed, and how many `pop` was called on.
   pushes(): number;
   pops(): number;
@@ -153,6 +156,7 @@ interface Fakes {
   savePasted(file: DroppedFile): Promise<string>;
   encode: ImageEncoder['encode'];
   addImage(bytes: Uint8Array): Promise<NoteDraft>;
+  saveDraft(fields: NoteFields): Promise<void>;
   sendToFollowup(): Promise<NoteSendResult>;
   homes(): Promise<NoteHomes>;
 }
@@ -259,16 +263,19 @@ function handTimers() {
   };
 }
 
-// Main's side: `addImage`, `saveDraft` and `saveMarkup` record what they get.
+// Main's side: `addImage`, `saveDraft` and `saveMarkup` record what they get,
+// and `invokes` every method called.
 function fakeChannel(
   draft: NoteDraft,
   fakes: Fakes,
   added: number[][],
   saved: NoteFields[],
   savedMarkups: [number, string][],
+  invokes: string[],
 ): PageChannel<NotesChannel> {
   return {
     invoke(name: string, ...args: unknown[]) {
+      invokes.push(name);
       switch (name) {
         case 'loadDraft':
           return fakes.loadDraft();
@@ -285,7 +292,7 @@ function fakeChannel(
         }
         case 'saveDraft':
           saved.push(args[0] as NoteFields);
-          return Promise.resolve();
+          return fakes.saveDraft(args[0] as NoteFields);
         case 'saveMarkup':
           savedMarkups.push([args[0] as number, args[1] as string]);
           return Promise.resolve(draft);
@@ -315,6 +322,7 @@ async function openPopup(
   const added: number[][] = [];
   const inserts: string[] = [];
   const saved: NoteFields[] = [];
+  const invokes: string[] = [];
   const savedMarkups: [number, string][] = [];
   const places: NotesPlace[] = [];
   const markupChangeListeners: (() => void)[] = [];
@@ -329,6 +337,7 @@ async function openPopup(
       images = [...images, { id, hasMarkup: false }];
       return Promise.resolve({ ...draft, images });
     },
+    saveDraft: () => Promise.resolve(),
     sendToFollowup: () => new Promise(() => undefined),
     homes: () => Promise.resolve({ homes: [], message: null }),
   };
@@ -386,7 +395,7 @@ async function openPopup(
   });
   const anchoring = recordingAnchors();
   const popup = createNotePopup({
-    channel: fakeChannel(draft, fakes, added, saved, savedMarkups),
+    channel: fakeChannel(draft, fakes, added, saved, savedMarkups, invokes),
     services,
     keys: anchoring.keys,
     overlay: {
@@ -445,6 +454,7 @@ async function openPopup(
     added,
     inserts,
     saved,
+    invokes,
     pushes: () => pushes,
     pops: () => pops,
     savedMarkups,
@@ -1267,5 +1277,160 @@ describe('note popup', () => {
     expect(harness.logged).not.toContainEqual(
       expect.stringMatching(/^popup shown/),
     );
+  });
+});
+
+describe('note popup sample', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const CLOSED: NotesPlace = { isOpen: false, field: 'body', imageIndex: 0 };
+
+  const sampleChannel = () =>
+    createSampleNoteChannel({
+      session: {
+        sessionId: 'demo-1',
+        harness: 'demo',
+        hostSessionId: 'demo-1',
+        projectDir: '/scratch',
+      },
+      drawImage: () => Promise.resolve(new Uint8Array([7])),
+    });
+
+  // The title of each popup the harness showed, in order.
+  const shownTitles = (harness: Harness) =>
+    harness.logged.flatMap(
+      (line) => /^popup shown: title "([^"]*)"/.exec(line)?.[1] ?? [],
+    );
+
+  it('showSample routes invoke to the sample and back at dispose', async () => {
+    const harness = await openPopup(DRAFT, CLOSED);
+    const realCalls = harness.invokes.length;
+
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('body');
+    await settle();
+    const callsWhileShown = harness.invokes.length;
+    view.dispose();
+    harness.popup.commands.open(NO_ARG);
+    await settle();
+
+    expect(callsWhileShown).toBe(realCalls);
+    expect(shownTitles(harness)).toEqual(['Quest timer drifts', DRAFT.title]);
+    expect(harness.invokes.slice(realCalls)).toContain('loadDraft');
+  });
+
+  it('showSample saves an open draft to the real channel first', async () => {
+    const harness = await openPopup();
+    harness.body.insert(' typed');
+
+    const view = harness.popup.showSample(sampleChannel());
+    const savedAtCall = harness.saved.map((fields) => fields.body);
+    await view.show('body');
+    await settle();
+
+    expect(savedAtCall).toEqual([' typed']);
+    expect(harness.saved).toHaveLength(1);
+    expect(shownTitles(harness)).toEqual([DRAFT.title, 'Quest timer drifts']);
+  });
+
+  it('showSample skips placeChanged while it shows', async () => {
+    const harness = await openPopup(DRAFT, CLOSED);
+    const placesBefore = harness.places.length;
+
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('target');
+    await settle();
+    harness.popup.commands.nextField(NO_ARG);
+    const placesWhileShown = harness.places.length;
+    view.dispose();
+    harness.popup.commands.open(NO_ARG);
+    await settle();
+
+    expect(placesWhileShown).toBe(placesBefore);
+    expect(harness.places.length).toBeGreaterThan(placesBefore);
+  });
+
+  it('showSample writes the closed place before it skips place writes', async () => {
+    const harness = await openPopup();
+
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('body');
+    await settle();
+
+    expect(harness.places.at(-1)?.isOpen).toBe(false);
+    expect(shownTitles(harness)).toEqual([DRAFT.title, 'Quest timer drifts']);
+  });
+
+  it('showSample during a load drops the real draft', async () => {
+    const harness = await openPopup(DRAFT, CLOSED);
+    let answerLoad: (draft: NoteDraft) => void = () => undefined;
+    harness.fakes.loadDraft = () =>
+      new Promise((resolve) => {
+        answerLoad = resolve;
+      });
+    harness.popup.commands.open(NO_ARG);
+
+    const view = harness.popup.showSample(sampleChannel());
+    answerLoad({ ...DRAFT, title: 'Real note' });
+    await settle();
+    const titlesBeforeShow = shownTitles(harness);
+    await view.show('body');
+    await settle();
+
+    expect(titlesBeforeShow).toEqual([]);
+    expect(shownTitles(harness)).toEqual(['Quest timer drifts']);
+  });
+
+  it('showSample stays inert while a draft operation is in flight', async () => {
+    const harness = await openPopup({
+      ...DRAFT,
+      target: '/home/me/a',
+      title: 'A note',
+    });
+    harness.popup.commands.sendFollowup(NO_ARG);
+    await settle();
+
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('body');
+    await settle();
+
+    expect(harness.logged).toContain('note sample not shown: send in flight');
+    expect(harness.logged).not.toContain('popup closed');
+    expect(shownTitles(harness)).toEqual(['A note']);
+  });
+
+  it('showSample keeps the real channel when the first save fails', async () => {
+    const harness = await openPopup();
+    harness.fakes.saveDraft = () => Promise.reject(new Error('disk full'));
+    harness.body.insert(' typed');
+
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('body');
+    await settle();
+    const realCalls = harness.invokes.length;
+    harness.popup.commands.open(NO_ARG);
+    await settle();
+
+    expect(harness.logged).toContain('note sample not shown: draft not saved');
+    expect(harness.toasts).toContainEqual([
+      'Draft not saved: disk full',
+      'error',
+    ]);
+    expect(harness.invokes.slice(realCalls)).toContain('loadDraft');
+    expect(shownTitles(harness)).toEqual([DRAFT.title, DRAFT.title]);
+  });
+
+  it('dispose leaves the user popup closed', async () => {
+    const harness = await openPopup();
+    const view = harness.popup.showSample(sampleChannel());
+    await view.show('body');
+    await settle();
+
+    view.dispose();
+    await settle();
+
+    expect(shownTitles(harness)).toEqual([DRAFT.title, 'Quest timer drifts']);
+    expect(harness.logged.at(-1)).toBe('popup closed');
+    expect(harness.places.at(-1)?.isOpen).toBe(false);
   });
 });

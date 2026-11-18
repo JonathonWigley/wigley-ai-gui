@@ -319,8 +319,10 @@ function namedSessions(
   return typeof sendToTarget === 'string' ? [...named, sendToTarget] : named;
 }
 
-function confirmRequest(
-  deps: AgentCommandToolDeps,
+// The Allow or Deny round's title and detail for a run of `info` that
+// `callerId`'s agent asks for, naming the target `session` and `arg` when set.
+export function confirmRequest(
+  deps: Pick<AgentCommandToolDeps, 'senderName'>,
   callerId: string,
   info: CommandInfo,
   session: string | undefined,

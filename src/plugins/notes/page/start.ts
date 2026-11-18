@@ -22,6 +22,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { readNotesLayout } from './layout/read-notes-layout';
+import { registerDemoSteps } from './demo-steps';
 import { createNotePopup, type NotePopupDeps } from './popup';
 import { kitCommandsOf } from '../../../shared/page/layout-host/base-kit';
 
@@ -59,7 +60,7 @@ export function noteSessions(
 // cursors go to `notes.place` on each change, and a page load opens the popup
 // again where the last page left it, open through the base changes made
 // before the restore window's restores settle. A draft not yet saved refuses a
-// switch-off.
+// switch-off. It registers the page half of the `notes.note` demo step.
 export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
@@ -92,6 +93,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       placeChanged: (value) => place.write(value),
       harnesses: () => harnesses.all(),
     });
+    registerDemoSteps(services, { popup });
     const savedPlace = placeWriter.get();
     if (savedPlace !== undefined) {
       popup.restorePlace(savedPlace);

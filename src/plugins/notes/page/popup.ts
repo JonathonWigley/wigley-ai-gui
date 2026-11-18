@@ -123,6 +123,18 @@ export interface NotePopupDeps {
   harnesses(): ReadonlyMap<string, AgentHarnessInfo>;
 }
 
+// What the popup invokes on notes main: the real channel, or a sample note's
+// channel while `showSample` shows it.
+export type NoteDraftChannel = Pick<PageChannel<NotesChannel>, 'invoke'>;
+
+// A sample note shown in the popup. `show` waits for the switch to the sample,
+// then opens the popup on `field` with no box focused, or moves the field
+// cursor there when it is open; while the switch was refused it logs why and
+// does nothing.
+export interface NoteSampleView extends Disposable {
+  show(field: NoteField): Promise<void>;
+}
+
 export interface NotePopup {
   commands: PageStart<typeof notesManifest>['commands'];
   // Draws every part again with `shown`, keeping the boxes, their text and
@@ -137,6 +149,14 @@ export interface NotePopup {
   // the popup is locked, or after a failed save, which names the save's error;
   // null once it is saved.
   mayStop(): string | null;
+  // Shows the sample note `sample` in place of the user's draft, which it
+  // never reads or writes: it closes an open popup first, its save reaching
+  // the real channel, and abandons a load in flight, then routes every invoke
+  // to `sample` and holds place writes, so the user's place stays closed.
+  // Under a draft operation in flight, or after that save failed, the view is
+  // inert. Its dispose closes the popup, saving to the sample, routes back and
+  // lets place writes resume; it does not reopen the user's popup.
+  showSample(sample: NoteDraftChannel): NoteSampleView;
   // Closes an open markup session, starting its save, and ends autosave: an
   // edit it has not saved yet is dropped. A send still in flight then closes
   // nothing, since its scopes end with the plugin, and no later change redraws
@@ -151,7 +171,19 @@ export interface NotePopup {
 // unsaved edit at once. Its commands are the notes page commands, each a
 // no-op while the popup cannot take it.
 export function createNotePopup(deps: NotePopupDeps): NotePopup {
-  const { channel, services } = deps;
+  const { services } = deps;
+  // The sample note's channel while one shows; null routes to the real one.
+  let routed: NoteDraftChannel | null = null;
+  // Every invoke of the popup and its markup view, read at the call.
+  const channel: PageChannel<NotesChannel> = {
+    invoke<K extends keyof NotesChannel['invoke'] & string>(
+      method: K,
+      ...args: Parameters<NotesChannel['invoke'][K]>
+    ) {
+      return (routed ?? deps.channel).invoke(method, ...args);
+    },
+    on: (message, listener) => deps.channel.on(message, listener),
+  };
   const { log, toast, paths, homeDir, editor: editorHost } = services;
   const partsDeps: NotesPartsDeps = {
     markdown: services.markdown,
@@ -189,6 +221,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   let focusBodyWhenFree = false;
   // Counts the drafts put into the boxes, so a take can tell its draft left.
   let draftsLoaded = 0;
+  // Counts the loads `open` started, so a load can tell a later one began.
+  let loadsStarted = 0;
+  // While a sample note shows, no place is written.
+  let isPlaceHeld = false;
   // While a draft operation is in flight no send, discard, image change,
   // picker or autosave starts, and no box takes focus; typing in a box already
   // focused still lands.
@@ -464,6 +500,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // The popup counts as open from the start of its load.
   const writePlace = () => {
+    if (isPlaceHeld) {
+      return;
+    }
     const { field, imageIndex } = store.get();
     deps.placeChanged({ isOpen: phase !== 'closed', field, imageIndex });
   };
@@ -775,15 +814,22 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // `restored` is a reloaded page's place: its cursors replace the body's, no
   // box takes focus, and a base change closes the popup only once the
   // restore window's restores have settled.
+  // A load another load replaced, or one a close or `showSample` ended, puts
+  // nothing into the popup.
   const open = async (restored?: NotesPlace) => {
     phase = 'loading';
     writePlace();
-    const isStillLoading = () => phase === 'loading';
+    loadsStarted += 1;
+    const load = loadsStarted;
+    const isStillLoading = () => phase === 'loading' && loadsStarted === load;
     try {
       const [draft, found] = await Promise.all([
         channel.invoke('loadDraft'),
         channel.invoke('homes'),
       ]);
+      if (!isStillLoading()) {
+        return;
+      }
       homes = found.homes;
       await cacheImages(draft);
       if (!isStillLoading()) {
@@ -832,16 +878,19 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     );
   };
 
-  const close = () => {
+  // Closes the open popup, saving an unsaved edit at once: returns that save,
+  // whose failure it toasts, or null when the popup was not open.
+  const closePopup = (): Promise<void> | null => {
     if (phase !== 'open') {
-      return;
+      return null;
     }
     markupView.close();
     if (picker.isOpen()) {
       picker.cancel();
     }
     keepDraft();
-    saveNow().catch((error: unknown) =>
+    const saved = saveNow();
+    saved.catch((error: unknown) =>
       toast(`Draft not saved: ${errorText(error)}`, 'error'),
     );
     blurBoxes();
@@ -852,6 +901,89 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     popupScope = null;
     dialog.hide();
     log('popup closed');
+    return saved;
+  };
+
+  const close = () => {
+    void closePopup()?.catch(() => undefined);
+  };
+
+  // ── The sample note ───────────────────────────────────────────────────────
+  // Ends a load in flight and closes the open popup, waiting for its save on
+  // the real channel, then routes to `sample`; resolves null once routed, or
+  // why it did not route. `isDisposed` cancels the route.
+  const routeToSample = async (
+    sample: NoteDraftChannel,
+    isDisposed: () => boolean,
+  ): Promise<string | null> => {
+    if (inFlight !== null) {
+      return `${inFlight} in flight`;
+    }
+    if (phase === 'loading') {
+      phase = 'closed';
+      writePlace();
+    }
+    const saved = closePopup();
+    if (saved !== null) {
+      try {
+        await saved;
+      } catch {
+        return 'draft not saved';
+      }
+    }
+    if (isDisposed()) {
+      return 'view disposed';
+    }
+    if (phase !== 'closed' || inFlight !== null) {
+      return 'popup reopened';
+    }
+    routed = sample;
+    images.clear();
+    isPlaceHeld = true;
+    return null;
+  };
+
+  const showSample = (sample: NoteDraftChannel): NoteSampleView => {
+    let isDisposed = false;
+    let isRouted = false;
+    const ready = routeToSample(sample, () => isDisposed).then((refusal) => {
+      isRouted = refusal === null;
+      return refusal;
+    });
+    return {
+      async show(field) {
+        const refusal = await ready;
+        if (refusal !== null) {
+          log(`note sample not shown: ${refusal}`);
+          return;
+        }
+        if (isDisposed) {
+          return;
+        }
+        if (phase === 'open') {
+          blurBoxes();
+          moveTo(field);
+        } else if (phase === 'closed') {
+          await open({ isOpen: true, field, imageIndex: 0 });
+        }
+      },
+      dispose() {
+        if (isDisposed) {
+          return;
+        }
+        isDisposed = true;
+        if (!isRouted) {
+          return;
+        }
+        if (phase === 'loading') {
+          phase = 'closed';
+        }
+        close();
+        routed = null;
+        images.clear();
+        isPlaceHeld = false;
+      },
+    };
   };
 
   // ── Capture ───────────────────────────────────────────────────────────────
@@ -1392,6 +1524,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         ? 'Wait for the note to finish saving'
         : `The note did not save: ${state.saveError}; edit or close it to save again`;
     },
+    showSample,
     dispose() {
       markupView.close();
       blurBoxes();

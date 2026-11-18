@@ -27,6 +27,7 @@ import {
 import { type PrimerChannel, SAVED_PRIMERS_FOLDER } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { primerManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
 import { createPrimerPreview } from './preview/primer-preview';
 import { primerType } from './primer-type';
@@ -72,7 +73,8 @@ export function addDriveActions(
 // and shows it on the page, wakes a primer's chat session when the primer
 // finishes with no call waiting, registers the primer layouts, and opens the
 // layout preview on the page's ask over a service of its own whose store is in
-// memory and whose primers go through the presenter's quiet view; refuses a
+// memory and whose primers go through the presenter's quiet view, which the
+// `primer.primer` demo step asks through too; refuses a
 // switch-off while an agent's primer is open; in the self-test it hands the
 // driver its script, and in a drive run it adds the drive actions.
 export const primerMainPart: MainPart<typeof primerManifest> = {
@@ -134,6 +136,11 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       log: services.log,
     });
     api.channel.handle('openPreview', () => preview.open());
+    registerDemoSteps(services, {
+      samples: previewService,
+      activate: (sessionId) => sessions.activate(sessionId),
+      log: services.log,
+    });
     api.layouts.register({ layoutTypes });
     sessions.contributeTools(PRIMER_TOOLS, (session) =>
       createAgentFormToolSession(primer.startSession(session), primerType),

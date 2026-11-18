@@ -35,6 +35,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { PrimerLayout } from '../layouts/layout';
 import { primerManifest } from '../manifest';
 import { focusActionFor, PRIMER_BOX_IDENTITY, type PrimerBox } from './boxes';
+import { registerDemoSteps } from './demo-steps';
 import { readPrimerLayout } from './layout/read-primer-layout';
 import {
   closePrimerFromMain,
@@ -149,7 +150,8 @@ function listenForPrimers(
 // active primer through the exports. The popup draws
 // through the primer layout `primer.layout` names, redrawing as it or the
 // layout changes. Each open primer's place (`primerPlaceSlot`) and its unsaved
-// edits, saved at once on page hide, outlive a page reload.
+// edits, saved at once on page hide, outlive a page reload. It registers the
+// page half of the `primer.primer` demo step.
 export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
@@ -230,6 +232,13 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       api.events.emit(event.name, event.data);
     });
     const primersRead = listenForPrimers(api, store, places);
+    registerDemoSteps(services, {
+      store,
+      activate: (sessionId) => sessions.activate(sessionId),
+      timers: services.timers,
+      commands: api.commands,
+      log: services.log,
+    });
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());

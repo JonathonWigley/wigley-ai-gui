@@ -44,7 +44,9 @@ import {
 import { FINDING_ORIGIN_SPECS, findingOrigins } from '../finding-origins';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
+import { sampleFormOwner } from '../../../shared/agent-forms/demo-form';
 import { askConfirm } from './confirm';
+import { registerDemoSteps } from './demo-steps';
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { createKindRegistry } from './kinds/registry';
 import { ROUND_OPEN_TOOL } from './mcp-wording';
@@ -83,8 +85,9 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // with their recommendations; the preview's wakes nothing and answers none.
 // Both services and the preview read `kinds` for the registered item kinds
 // and `layoutNames` for the layouts a round may name; both services share
-// `roundType`. `flushed` settles once every saved-round write queued before
-// it has. `shown` settles once the agents' service shows a round of the
+// `roundType`. `samples` is the preview's service with the layout check, which
+// the demo step and `confirmSample` ask through too. `flushed` settles once
+// every saved-round write queued before it has. `shown` settles once the agents' service shows a round of the
 // session, by its app id, after the call, until `signal` aborts.
 function createForms(
   api: FormsApi,
@@ -95,6 +98,7 @@ function createForms(
   layoutNames: () => readonly string[],
 ): {
   forms: FormsService;
+  samples: FormsService;
   preview: { open(): void } & Disposable;
   presenter: AgentFormChannelPresenter<Round, FormBody>;
   flushed(): Promise<void>;
@@ -149,9 +153,10 @@ function createForms(
     defaultDeadlineSeconds,
     timers: services.timers,
   });
+  const samples = withKnownLayouts(previewService, kinds, layoutNames);
   const preview = createLayoutPreview({
     sessions,
-    forms: withKnownLayouts(previewService, kinds, layoutNames),
+    forms: samples,
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
     kinds,
     layoutNames,
@@ -163,6 +168,7 @@ function createForms(
       kinds,
       layoutNames,
     ),
+    samples,
     preview,
     presenter,
     flushed: () => store.flushed(),
@@ -281,12 +287,13 @@ export function addDriveActions(
 // ask_round with its offline answer, to every agent session; shows each
 // session's rounds on the page, wakes a round's chat session when the round
 // finishes with no call waiting, registers its layouts and opens the layout
-// preview on the page's ask, and refuses a switch-off while an agent's round
+// preview on the page's ask, registers the `forms.round` demo step over the
+// preview's sample service, and refuses a switch-off while an agent's round
 // is open; in the self-test it writes the fixture layouts and hands the driver
 // its script, and in a drive run it adds the drive actions. Its exports
 // register a dependent's item kinds and finding origins, and hand each
 // dependent `confirm`, an Allow or Deny round in a session's own forms
-// session.
+// session, and `confirmSample`, the same round as a demo sample.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -326,7 +333,7 @@ function startOverOrigins(
   }
   const kinds = () => registry.kinds();
   const roundType = createRoundType(kinds);
-  const { forms, preview, presenter, flushed, shown } = createForms(
+  const { forms, samples, preview, presenter, flushed, shown } = createForms(
     api,
     sessions,
     chat,
@@ -335,6 +342,11 @@ function startOverOrigins(
     layoutNames,
   );
   api.channel.handle('openPreview', () => preview.open());
+  registerDemoSteps(api.services, {
+    samples,
+    activate: (sessionId) => sessions.activate(sessionId),
+    log: api.services.log,
+  });
   const tools = contributeFormsTools({
     sessions,
     tools: () => formsTools(kinds()),
@@ -390,6 +402,20 @@ function startOverOrigins(
           signal,
           toolUseId,
         );
+      },
+      confirmSample: async (sessionId, request, signal) => {
+        const formSession = samples.startSession(sampleFormOwner(sessionId));
+        try {
+          return await askConfirm(
+            formSession,
+            request,
+            api.services.randomHex(),
+            signal,
+            null,
+          );
+        } finally {
+          formSession.end();
+        }
       },
     }),
     // The origins listener goes first, so removing the built-in origins

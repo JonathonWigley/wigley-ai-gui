@@ -36,6 +36,7 @@ import type { AudioPickerLayout } from '../layouts/layout';
 import { audioPickerManifest } from '../manifest';
 import type { AudioOutput } from './audio/audio-output';
 import { createWebAudioOutput } from './audio/web-audio-output';
+import { registerDemoSteps } from './demo-steps';
 import { PICKER_BOX_IDENTITY, type PickerBox } from './layout/picker-kit';
 import { readPickerLayout } from './layout/read-picker-layout';
 import {
@@ -140,7 +141,8 @@ function listenForPickers(
 // `audio-picker.layout` names, redrawing as it or the layout changes. Each
 // open picker's place (`audioPickerPlaceSlot`) and its unsaved edits, saved at
 // once on page hide, outlive a page reload. `makeOutput` makes the output the
-// part decodes and plays through, disposed when the part stops.
+// part decodes and plays through, disposed when the part stops. It registers
+// the page half of the `audio-picker.picker` demo step.
 export function createAudioPickerPagePart(
   makeOutput: () => AudioOutput,
 ): PagePart<typeof audioPickerManifest> {
@@ -227,6 +229,13 @@ export function createAudioPickerPagePart(
         log: services.log,
       });
       const pickersRead = listenForPickers(api, store, places);
+      registerDemoSteps(services, {
+        store,
+        activate: (sessionId) => sessions.activate(sessionId),
+        timers: services.timers,
+        commands: api.commands,
+        log: services.log,
+      });
       const exports: AudioPickerPageExports = {
         activePicker() {
           const picker = activeForm(store.get());

@@ -34,6 +34,7 @@ import {
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { audioPickerManifest } from '../manifest';
 import { createAudioReads, withAudioFileCheck } from './audio-reads';
+import { registerDemoSteps } from './demo-steps';
 import {
   samplePickerArgs,
   type SamplePickerArgs,
@@ -93,8 +94,8 @@ export function addDriveActions(
 // answers a headless chat session's pickers with their recommendations;
 // registers the picker layouts; opens the layout preview on the page's ask over
 // a service of its own whose store is in memory and whose pickers go through
-// the presenter's quiet view; refuses a switch-off while an agent's picker is
-// open. Outside a live run it writes the sample sounds into the plugin's data
+// the presenter's quiet view, which the `audio-picker.picker` demo step asks
+// through too; refuses a switch-off while an agent's picker is open. Outside a live run it writes the sample sounds into the plugin's data
 // folder first; once written, the self-test gets its picker and a drive run
 // gets its drive actions.
 export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
@@ -167,6 +168,13 @@ export const audioPickerMainPart: MainPart<typeof audioPickerManifest> = {
     });
     api.channel.handle('readAudio', reads.readAudio);
     api.channel.handle('openPreview', () => preview.open());
+    registerDemoSteps(services, {
+      samples: previewService,
+      files: services.files,
+      paths: services.paths,
+      activate: (sessionId) => sessions.activate(sessionId),
+      log: services.log,
+    });
     api.layouts.register({ layoutTypes });
     sessions.contributeTools(
       AUDIO_PICKER_TOOLS,

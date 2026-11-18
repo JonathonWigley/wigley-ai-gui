@@ -7,6 +7,7 @@ import { chatMainKey } from '../../chat/contract';
 import { formsMainKey } from '../../forms/contract';
 import { sessionsMainKey, sessionsRowsSlot } from '../../sessions/contract';
 import { agentCommandsManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { AGENT_COMMAND_TOOLS, createAgentCommandTools } from './tools';
 
@@ -15,7 +16,8 @@ type AgentCommandsApi = MainApi<typeof agentCommandsManifest, ChannelShape>;
 // Contributes `list_commands`, `run_command` and `read_state` to every agent
 // session, subagents included, over the command catalog, the rows of
 // `sessions.rows`, chat's names and flags, forms' confirm and every slot; in a
-// drive run it adds the drive actions that call them.
+// drive run it adds the drive actions that call them. It registers the main
+// half of the `agent-commands.confirm` demo step.
 export const agentCommandsMainPart: MainPart<typeof agentCommandsManifest> = {
   manifest: agentCommandsManifest,
   start(api: AgentCommandsApi) {
@@ -42,6 +44,12 @@ export const agentCommandsMainPart: MainPart<typeof agentCommandsManifest> = {
     if (api.drive !== null) {
       addDriveActions(api.drive, tools);
     }
+    registerDemoSteps(api.services, {
+      senderName: (sessionId) => chat.senderName(sessionId),
+      list: () => api.commands.list(),
+      forms,
+      log: api.services.log,
+    });
     return { commands: {} };
   },
 };

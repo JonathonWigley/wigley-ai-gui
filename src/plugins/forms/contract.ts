@@ -590,7 +590,11 @@ export interface ConfirmRequest {
 // `sessionId`; it queues behind that session's open round. It resolves true
 // only on a submitted Allow of that round, and false on any other answer or
 // once `signal` aborts. It rejects with `no forms session for <sessionId>`
-// when that session has no live forms tool session.
+// when that session has no live forms tool session. `confirmSample` asks the
+// same Allow or Deny round for a demo step, as a sample owned by the app
+// session `sessionId`: it saves no round and wakes no session, ends its form
+// once answered or aborted, and resolves the user's Allow (true) or Deny
+// (false), false once `signal` aborts.
 export interface FormsMainExports {
   registerKind(kind: MainItemKind): Disposable;
   registerFindingOrigin(spec: FindingOriginSpec): Disposable;
@@ -599,6 +603,11 @@ export interface FormsMainExports {
     request: ConfirmRequest,
     signal: AbortSignal,
     toolUseId: string | null,
+  ): Promise<boolean>;
+  confirmSample(
+    sessionId: string,
+    request: ConfirmRequest,
+    signal: AbortSignal,
   ): Promise<boolean>;
 }
 

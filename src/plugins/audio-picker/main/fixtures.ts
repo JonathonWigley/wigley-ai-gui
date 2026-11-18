@@ -54,7 +54,7 @@ export function sineWav(hz: number, seconds: number): Uint8Array {
 
 // Every file the sample and preview pickers name; `broken.wav` is not audio,
 // so its decode fails.
-const SAMPLE_SOUNDS: readonly { file: string; bytes(): Uint8Array }[] = [
+export const SAMPLE_SOUNDS: readonly { file: string; bytes(): Uint8Array }[] = [
   { file: 'tap_a.wav', bytes: () => sineWav(880, 0.15) },
   { file: 'tap_b.wav', bytes: () => sineWav(660, 0.2) },
   { file: 'hum.wav', bytes: () => sineWav(110, 1) },
@@ -89,6 +89,20 @@ export async function writeSampleSounds(
   await Promise.all(
     SAMPLE_SOUNDS.map((sound) =>
       data.writeBytes(`${SAMPLE_SOUNDS_FOLDER}/${sound.file}`, sound.bytes()),
+    ),
+  );
+}
+
+// Writes every sample sound into the absolute folder `dir` through `files`,
+// which makes missing parent folders, overwriting what is there.
+export async function writeSampleSoundsIn(
+  files: Pick<Files, 'writeBytes'>,
+  dir: string,
+  paths: Pick<Paths, 'join'>,
+): Promise<void> {
+  await Promise.all(
+    SAMPLE_SOUNDS.map((sound) =>
+      files.writeBytes(paths.join(dir, sound.file), sound.bytes()),
     ),
   );
 }

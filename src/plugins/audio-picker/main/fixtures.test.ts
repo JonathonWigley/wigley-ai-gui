@@ -6,8 +6,10 @@ import { MAX_CANDIDATES } from '../contract';
 import {
   samplePickerArgs,
   sampleSoundsDir,
+  SAMPLE_SOUNDS,
   sineWav,
   writeSampleSounds,
+  writeSampleSoundsIn,
 } from './fixtures';
 import { createAudioPickerType } from './picker-type';
 import { previewPickerArgs } from './preview/preview-picker';
@@ -87,5 +89,22 @@ describe('writeSampleSounds', () => {
     );
     const stats = await Promise.all(named.map((path) => files.stat(path)));
     expect(stats.map((stat) => stat?.isFolder)).toEqual(named.map(() => false));
+  });
+});
+
+describe('writeSampleSoundsIn', () => {
+  it('writes every sample under the given folder', async () => {
+    const files = createMemoryFiles();
+    const dir = '/scratch/audio-picker/sample-sounds';
+
+    await writeSampleSoundsIn(files, dir, posixPaths);
+
+    const written = await files.list(dir);
+    expect(
+      written
+        .filter((entry) => entry.kind === 'file')
+        .map((entry) => entry.path)
+        .sort(),
+    ).toEqual(SAMPLE_SOUNDS.map((sound) => sound.file).sort());
   });
 });

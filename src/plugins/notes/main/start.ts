@@ -7,6 +7,7 @@ import { sessionsMainKey } from '../../sessions/contract';
 import type { NotesChannel, NotesMainEvents } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { notesManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
 import { createDraftStore } from './draft-store';
 import { noteHomes } from './note-homes';
@@ -19,7 +20,8 @@ type NotesApi = MainApi<typeof notesManifest, NotesChannel, NotesMainEvents>;
 // serves it to the page, with the window capture, Backlog's homes and tags,
 // and the two sends: a follow-up through Backlog, its images at full size, and
 // a new session through chat, each image shrunk under the API's cap. It hands
-// the self-test its script, and in a drive run it adds the drive actions.
+// the self-test its script, and in a drive run it adds the drive actions. It
+// registers the main half of the `notes.note` demo step.
 export const notesMainPart: MainPart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
@@ -93,6 +95,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       addDriveActions(api.drive, { store, data: api.data });
     }
     api.layouts.register({ layoutTypes });
+    registerDemoSteps(services);
     return { commands: {} };
   },
 };

@@ -40,6 +40,7 @@ import { formsManifest } from '../manifest';
 import { startRoundAutosave } from './autosave';
 import { type BoxRef, FORMS_BOX_IDENTITY, focusActionFor } from './boxes';
 import { createFormsContributions } from './contributions';
+import { registerDemoSteps } from './demo-steps';
 import { createFormsState, type FormsStore, roundPlace } from './form-state';
 import { buildBody } from './round-draft';
 import {
@@ -157,7 +158,8 @@ function listenForRounds(
 // `registerFindingOrigin`; each register or removal redraws the open rounds,
 // keeping their answers. Each
 // open round's place (`formsPlaceSlot`) and its unsaved answers, saved at
-// once on page hide, outlive a page reload.
+// once on page hide, outlive a page reload. It registers the page half of the
+// `forms.round` demo step.
 export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -269,6 +271,13 @@ function startOverOrigins(
     setLayouts: (shown) => view.setLayouts(shown),
   });
   const layoutRefresh = store.subscribe(() => layoutShow.refresh());
+  registerDemoSteps(services, {
+    store,
+    activate: (sessionId) => sessions.activate(sessionId),
+    timers: services.timers,
+    commands: api.commands,
+    log: services.log,
+  });
   return {
     exports: (consumer): FormsPageExports => ({
       activeRound() {
