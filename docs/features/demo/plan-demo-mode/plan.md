@@ -316,7 +316,7 @@ Critical path: 01 → 06 → 07 → 08 → 16 → 17
 - [x] [Mode steps](15-mode-steps.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Demo page](07-demo-page.md) — after 04, 05, 06, 11, 12, 13
+- [x] [Demo page](07-demo-page.md) — after 04, 05, 06, 11, 12, 13
 
 ### Wave 4
 - [ ] [Demo self-test and coverage check](08-demo-selftest.md) — after 06, 07, 09–15
@@ -345,6 +345,7 @@ Review base: 7811ca8a2
 - 13 · deep · 9d1103678 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: forms/main/demo-steps.test.ts fails 3 tests (no rounds shown; finding origin caused already registered) — for the test gate; popup.ts open() reorder; sample fields stay in the popup store after dispose; cacheImages race; six demo-steps tests needed check-layers entries (8ac2f4304)
 - 14 · deep · c0b932931 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07) · concerns: workflow main's guard checks the profile, so a user profile named demo gets no flow; leadingDone copied into 3 tests; level page tests fake workflowPageKey without showSample; workflow-large-main.test.ts edited outside Files
 - 15 · deep · 1a22ef0a0 · diff read against Shared names; Wave 2 typecheck and lint pass (8ac2f4304 compile fixes, a5664e8f1 formats; check-layers part-list misses wait for 07); one commit per plugin 3d34d2205..1a22ef0a0 · concerns: board feed claims still read the real room during a hold; a real message for the scratch project's room rewrites from the demo service; docs sample split writes the sessionTree width; backlog sample row selections write the backlog place slot; a resumed demo task's nextRun counts from show time; no part disposes its registrations in dispose (the per-plugin view does)
+- 07 · deep · 41780f05a · diff read (composition entries, keymap binds, layouts register); typecheck and lint clean; demo tests 77 pass after the panel test moved to installFocusFakeDom · concerns: test areas spread over the fake API may drop a getter-backed member; two tests wait with a real setTimeout(0); blur on a mode change while the step agent holds the keys has no test (live check)
 ### Contract changes
 - 11: main registerDemoSteps of sessions, agent-strip, agent-lines and visual take no deps; agents/main/preview.ts exports sampleRoster; chat page fillComposerOf and setHeadless are locals
 - 12: session-extras main registerDemoSteps take no deps where none are needed; SessionStashDeps gains isDemoRunning() and sampleProjectDir; new shared/page/demo-start-prompt.ts (demoStartPrompt); new parts sessionLogPagePart and usageTabLineMainPart for 07
@@ -362,5 +363,6 @@ Review base: 7811ca8a2
 - 10: the app-update seed goes through updaterStatus; install skipped during the demo · group 10 · group 10
 - 15: scheduling's channel refuses save, run and remove of any DEMO_TASK_IDS id, and pauses a shown one in memory · group 15 · group 15
 - 15: chatroom release rebuilds through the room's chain, deleting the view key only when no saved room has the name · group 15 · group 15
+- 16 runs alongside 08 rather than after it, to meet the user's 3:00 deadline: 16 documents 08's self-test from its task document, and the review checks the prose against 08's landed code
 ### Review rounds
 ### Test gate

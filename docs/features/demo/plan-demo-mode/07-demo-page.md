@@ -1,6 +1,6 @@
 # 07 — Demo page: the panel, the caption, the Demo section, the run driver and the keys
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses async and lifecycle: the run driver serializes step enters across processes, runs autoplay on timers, and tears down page and main halves in order
 Wave: 3 · Depends on: 04, 05, 06, 11, 12, 13
@@ -210,3 +210,5 @@ Done when: `npm run typecheck`, `npm test` and `npm run lint` pass.
 Commit: one commit for the group: "Demo page: the right-bar panel with the step agent, the caption, the Demo section and the Space d keys"
 
 ## Proof
+
+Commit 41780f05a · proof: diff read (composition entries, keymap binds, layouts register); typecheck and lint clean; demo tests 77 pass after the panel test moved to installFocusFakeDom · concerns: test areas spread over the fake API may drop a getter-backed member; two tests wait with a real setTimeout(0); blur on a mode change while the step agent holds the keys has no test (live check)

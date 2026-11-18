@@ -1,6 +1,6 @@
 # 08 — Demo self-test and coverage check
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds a page-to-main report and a script that walks every plugin's landed steps before the `live` section; nothing a wrong guess here ships to the user's state
 Wave: 4 · Depends on: 06, 07, 09 (its coverage check and step walk expect every plugin's step or skip to have landed), 10 (same), 11 (same), 12 (same), 13 (same), 14 (same), 15 (same)

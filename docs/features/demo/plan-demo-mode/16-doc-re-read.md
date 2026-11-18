@@ -1,6 +1,6 @@
 # 16 — Doc re-read against the landed code
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · doc-only: prose checked against settled code
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15 (it reads every group's landed code)
