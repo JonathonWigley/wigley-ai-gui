@@ -549,7 +549,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   plugin runs. The problem shows under the description as a `status-error` line, wrapped whole. A plugin that failed its
   first load has a row labelled with its id and no description. A file that fails its check shows an error Card at the section's top.
 - **Schedules** (`docs/features/scheduled-tasks/design.md`): in Schedules mode the task list is the side bar, `row-list`
-  rows: a task's name in `fg`, its schedule and next run under it in `fg-secondary`, `Paused` as a neutral Tag; the
+  rows: a task's name in `fg`, then inline after it the schedule and next run (the schedule alone while paused) as the
+  row's detail in `fg-tertiary`, the kit row-list look; `Paused` as a neutral Tag at the row's end; the
   "+ New task" row first, its label in `fg-link`. The cursor row shows its keys' prompts at its end. The details pane is
   one sheet: notices as one-line Cards in their tone, the task's name as a heading, its fields as label (`fg-secondary`)
   and value (`fg`) pairs, the prompt in `font-mono` wrapped, the Edit, Pause or Resume, Run now and Remove buttons in

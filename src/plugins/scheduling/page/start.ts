@@ -1,5 +1,5 @@
 import './schedules.css';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type { ModeHandle, PageApi, PagePart } from '../../../contracts/plugin';
 import { coreModeSlot } from '../../../contracts/core-state';
 import {
   keyRunner,
@@ -36,6 +36,12 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
     const sessions = api.dependency(sessionsPageKey);
     const modeSlot = api.state.read(coreModeSlot);
     let isShown = false;
+    // The mode, once added. A reload while the mode shows can show it during `add`, before this is assigned, and the
+    // view sets the title bar's context then with no handle: the last context waits here for the handle.
+    let mode: ModeHandle | null = null;
+    const pending: { context: Parameters<ModeHandle['setContext']>[0] } = {
+      context: null,
+    };
     const view = createSchedulesView({
       channel: api.channel,
       log: services.log,
@@ -55,7 +61,13 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       setResizeTarget: (target) => api.panes.setResizeTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
       isShown: () => isShown,
-      setContext: (context) => mode.setContext(context),
+      setContext: (context) => {
+        if (mode === null) {
+          pending.context = context;
+          return;
+        }
+        mode.setContext(context);
+      },
       runKey: keyRunner(api.commands, services.log),
       run: (command) => void api.commands.run(command),
       addOverlay: (element) => api.areas.overlay.contribute(element),
@@ -64,9 +76,7 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       isSessionsShown: () => modeSlot.get() === SESSIONS_MODE,
     });
 
-    // The view reads `mode` only once a key runs or a slot value lands, after `add`: Schedules mode is never the
-    // first mode added.
-    const mode = api.modes.add({
+    mode = api.modes.add({
       id: 'main',
       title: 'Schedules',
       icon: 'calendar',
@@ -84,6 +94,9 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       focusSideBar: () => view.focusSideBar(),
       focusMain: () => view.focusMain(),
     });
+    if (pending.context !== null) {
+      mode.setContext(pending.context);
+    }
 
     api.layouts.show<SchedulingLayout>({
       defaultLayout,
@@ -115,6 +128,9 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
 
     // The core logs the side bar's hiding and showing.
     const showMode = () => {
+      if (mode === null) {
+        return;
+      }
       if (!mode.isShown()) {
         mode.show();
         return;

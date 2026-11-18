@@ -19,6 +19,7 @@ import {
   type SchedulingState,
   schedulingStateSlot,
 } from '../contract';
+import { coreModeSlot } from '../../../contracts/core-state';
 import { schedulingPagePart } from './start';
 
 const CHOICES: EditorChoices = {
@@ -68,6 +69,7 @@ interface FakeBox {
 function startSchedulesPage(
   state: SchedulingState | undefined,
   save: () => Promise<string> = async () => 'bbbb2222',
+  firstModeTaken = true,
 ) {
   installFocusFakeDom(vi.stubGlobal);
   const calls: { method: string; args: unknown[] }[] = [];
@@ -102,7 +104,7 @@ function startSchedulesPage(
     store.publish(schedulingStateSlot).set(state);
   }
   const harness = startDrawingPagePart(schedulingPagePart, {
-    firstModeTaken: true,
+    firstModeTaken,
     state: store,
     services: { editor },
     dependencies: [
@@ -206,6 +208,50 @@ describe('scheduling page part', () => {
     ]);
     expect(page.harness.logs.map((line) => line.message)).toContain(
       'task saved: Nightly',
+    );
+  });
+
+  it('save run twice before the invoke settles makes one saveTask call', async () => {
+    let settleSave: (id: string) => void = () => undefined;
+    const page = startSchedulesPage(
+      undefined,
+      () => new Promise<string>((resolve) => (settleSave = resolve)),
+    );
+    await openFilledEditor(page);
+
+    page.run('save');
+    page.run('save');
+    settleSave('bbbb2222');
+    await settle();
+
+    expect(page.calls.filter((call) => call.method === 'saveTask')).toHaveLength(
+      1,
+    );
+  });
+
+  it('nextField with no box focused steps from the cursor row to the next box row', async () => {
+    const page = startSchedulesPage(undefined);
+    page.run('showMode');
+    page.run('newTask');
+    await settle();
+    // The cursor starts on Name; Profile, the third row, is a choice.
+    page.run('fieldDown');
+    page.run('fieldDown');
+
+    page.run('nextField');
+
+    expect(
+      sheetOf(page).querySelector('.is-cursor')?.textContent,
+    ).toContain('Time');
+  });
+
+  it('a part restarted while Schedules mode shows starts with the mode shown', async () => {
+    const page = startSchedulesPage(undefined, undefined, false);
+
+    await page.harness.restart();
+
+    expect(page.harness.state.read(coreModeSlot, 'test').get()).toBe(
+      'scheduling.main',
     );
   });
 

@@ -89,7 +89,7 @@ export type SchedulesAction =
   | { type: 'stateChanged'; scheduling: SchedulingState }
   | { type: 'move'; to: Move }
   | { type: 'select'; id: string | null }
-  | { type: 'focus'; focus: SchedulesFocus }
+  | { type: 'focus'; focus: SchedulesFocus; isOpening?: boolean }
   | { type: 'historyMove'; to: Move }
   | { type: 'editorOpened'; editor: TaskEditor }
   | { type: 'fieldChanged'; field: string; value: string }
@@ -171,7 +171,12 @@ export function schedulesReducer(
       return {
         ...state,
         focus: action.focus,
-        historyCursor: action.focus === 'detail' ? 0 : state.historyCursor,
+        // The history cursor starts at the newest run only when the details open from the list; any other focus
+        // move into them keeps it.
+        historyCursor:
+          action.focus === 'detail' && action.isOpening === true
+            ? 0
+            : state.historyCursor,
       };
     case 'historyMove':
       return { ...state, historyCursor: historyIndex(state, action.to) };

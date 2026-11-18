@@ -684,11 +684,15 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
   store.subscribe(() => render());
 
   // Sets the focus; `movesFocus` moves the DOM focus to it too, else the DOM focus is already there.
-  const changeFocus = (focus: SchedulesFocus, movesFocus: boolean) => {
+  const changeFocus = (
+    focus: SchedulesFocus,
+    movesFocus: boolean,
+    isOpening = false,
+  ) => {
     if (!movesFocus) {
       shownFocus = focus;
     }
-    dispatch({ type: 'focus', focus });
+    dispatch({ type: 'focus', focus, isOpening });
     render(movesFocus);
   };
   const setFocus = (focus: SchedulesFocus) => changeFocus(focus, true);
@@ -773,6 +777,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
 
   // ── The editor ───────────────────────────────────────────────────────────
   let isOpening = false;
+  let isSaving = false;
 
   // Reads the editor's choices and opens the editor on `view`, or on a new task for null; a rejection toasts and
   // opens nothing. While the editor is open, focuses it instead.
@@ -817,7 +822,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
 
   const save = async () => {
     const { editor } = store.get();
-    if (editor === null) {
+    if (editor === null || isSaving) {
       return;
     }
     const draft = draftOf(editor);
@@ -827,6 +832,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       return;
     }
     let id: string;
+    isSaving = true;
     try {
       id = await channel.invoke('saveTask', draft);
     } catch (error) {
@@ -834,6 +840,8 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       dispatch({ type: 'problem', problem: reason });
       log(`save refused: ${reason}`);
       return;
+    } finally {
+      isSaving = false;
     }
     if (store.get().editor === null) {
       return;
@@ -923,11 +931,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
     if (editor === null) {
       return;
     }
-    const field = taskEditorView.stepBox(
-      editor,
-      cursorRow()?.field ?? null,
-      step,
-    );
+    const field = taskEditorView.stepBox(editor, step);
     if (field !== null && taskEditorView.focusBox(field)) {
       dispatch({ type: 'fieldCursor', field });
     }
@@ -963,7 +967,7 @@ export function createSchedulesView(deps: SchedulesViewDeps): SchedulesView {
       return;
     }
     if (isFocusMoved) {
-      setFocus('detail');
+      changeFocus('detail', true, true);
       log(`details focused: ${view.task.name}`);
     }
   };

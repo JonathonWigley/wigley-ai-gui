@@ -466,6 +466,32 @@ describe('selection', () => {
     },
   );
 
+  it.each<{ name: string; isOpening: boolean; cursor: number }>([
+    { name: 'opened from the list: back to the newest run', isOpening: true, cursor: 0 },
+    { name: 'any other focus move: keeps the cursor', isOpening: false, cursor: 1 },
+  ])('focus_DetailWithHistoryCursor: $name', ({ isOpening, cursor }) => {
+    const runs = view(
+      {},
+      {
+        history: [
+          { taskId: 'aaaa1111', occurrence: 2, at: 2, outcome: 'finished', reason: null, rowId: null, processId: null, viewed: true },
+          { taskId: 'aaaa1111', occurrence: 1, at: 1, outcome: 'finished', reason: null, rowId: null, processId: null, viewed: true },
+        ],
+      },
+    );
+    const state = reduce(
+      [
+        { type: 'focus', focus: 'detail', isOpening: true },
+        { type: 'historyMove', to: 'down' },
+        { type: 'focus', focus: 'list' },
+        { type: 'focus', focus: 'detail', isOpening },
+      ],
+      shown([runs]),
+    );
+
+    expect(state.historyCursor).toBe(cursor);
+  });
+
   it('emptyReason_NewTaskRowWithTasks_IsNewTask', () => {
     const state = reduce([{ type: 'select', id: null }], shown([A, B]));
 

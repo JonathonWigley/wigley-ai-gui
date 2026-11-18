@@ -57,8 +57,9 @@ export interface TaskEditorView {
   leave(): string | null;
   // The field of the box with focus, or null.
   active(): string | null;
-  // The box field `step` boxes from the focused box (or from `from`), clamped at the ends; null with no boxes.
-  stepBox(editor: TaskEditor, from: string | null, step: 1 | -1): string | null;
+  // The box field `step` boxes from the focused box, clamped at the ends. With no box focused, the next or previous
+  // box or multiline row from the cursor's row, null when there is none.
+  stepBox(editor: TaskEditor, step: 1 | -1): string | null;
   dispose(): void;
 }
 
@@ -225,11 +226,25 @@ export function createTaskEditor(deps: TaskEditorDeps): TaskEditorView {
       return field;
     },
     active: () => boxes.active(),
-    stepBox(editor, from, step) {
-      const boxFields = editorRows(editor)
-        .filter((row) => row.kind !== 'choice')
-        .map((row) => row.field);
-      return stepBox(boxFields, (field) => field, boxes.active() ?? from, step);
+    stepBox(editor, step) {
+      const rows = editorRows(editor);
+      const active = boxes.active();
+      if (active !== null) {
+        const boxFields = rows
+          .filter((row) => row.kind !== 'choice')
+          .map((row) => row.field);
+        return stepBox(boxFields, (field) => field, active, step);
+      }
+      for (
+        let index = editor.cursor + step;
+        index >= 0 && index < rows.length;
+        index += step
+      ) {
+        if (rows[index].kind !== 'choice') {
+          return rows[index].field;
+        }
+      }
+      return null;
     },
     dispose() {
       shownEditor = null;
