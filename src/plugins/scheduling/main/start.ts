@@ -58,14 +58,14 @@ type SchedulingApi = MainApi<
 type RunHeard = 'listed' | 'pushed';
 
 // One plan's queue: the pending entries, the prepared launches by reuse key, each planned task's `at`, the times a
-// prepare that threw before its run's time tries again, and whether a run that was due failed to prepare.
+// prepare that threw before its run's time tries again, and the tasks whose due run failed to prepare.
 interface PlannedQueue {
   entries: PendingSpawn[];
   prepared: Map<string, PreparedLaunch>;
   nextRuns: Map<string, number>;
   retryAts: number[];
   want: boolean;
-  hasDueFailure: boolean;
+  dueFailures: Set<string>;
 }
 
 const ALERT_NOUN: AlertNoun = {
@@ -89,9 +89,10 @@ function isSameRun(
   );
 }
 
-// The reuse key of a planned run's `PreparedLaunch`: a task edit or a new occurrence prepares again.
+// The reuse key of a planned run's `PreparedLaunch`: a task edit, a hand edit that keeps `updatedAt` included, or a
+// new occurrence prepares again.
 function preparedKey(run: PlannedRun, task: ScheduledTask): string {
-  return `${run.taskId} ${run.occurrence} ${task.updatedAt}`;
+  return `${run.taskId} ${run.occurrence} ${JSON.stringify(task)}`;
 }
 
 // Each entry's row id once, in the entries' order.
@@ -280,14 +281,19 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       }
     };
 
-    // A relay row has no chat session to report its turn's end. A listed run started while no app heard it, so an
-    // idle read after the attach replay means its turn ended; a pushed run's first turn has just begun.
-    const isFinishedAtAdoption = (rowId: string, heard: RunHeard): boolean => {
+    // A relay row has no chat session to report its turn's end, and a run with an exit has no process. A listed run
+    // started while no app heard it, so an attached row's idle read after the attach replay means its turn ended; a
+    // pushed run's first turn has just begun. An unheld row reads not running while its process may still run.
+    const isFinishedAtAdoption = (
+      run: HostedRun,
+      rowId: string,
+      heard: RunHeard,
+    ): boolean => {
       const info = sessionSlot.get(rowId);
-      if (info === undefined) {
+      if (info === undefined || run.exit !== null) {
         return true;
       }
-      return !info.running || (heard === 'listed' && info.activity === 'idle');
+      return heard === 'listed' && info.running && info.activity === 'idle';
     };
 
     const launchRequest = (task: ScheduledTask): LaunchRequest => {
@@ -332,7 +338,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         viewed: true,
       });
       log(`run of ${task.name} failed to start: ${reason}`);
-      queue.hasDueFailure = true;
+      queue.dueFailures.add(task.id);
     };
 
     // Plans every task and prepares each planned run, reusing a launch `prepares` or the last plan holds.
@@ -355,7 +361,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         nextRuns: new Map(),
         retryAts: [],
         want: planned.length > 0,
-        hasDueFailure: false,
+        dueFailures: new Set(),
       };
       for (const run of planned) {
         // planRuns plans only from `tasks`, so every run's task is in it.
@@ -407,10 +413,13 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       const tasks = taskStore.tasks();
       const now = clock.now();
       const prepares = new Map<string, PreparedLaunch>();
-      let queue = queueRuns(tasks, presses, now, prepares);
+      let runNow = presses;
       presses = [];
-      while (queue.hasDueFailure) {
-        queue = queueRuns(tasks, [], now, prepares);
+      let queue = queueRuns(tasks, runNow, now, prepares);
+      while (queue.dueFailures.size > 0) {
+        const failed = queue.dueFailures;
+        runNow = runNow.filter((id) => !failed.has(id));
+        queue = queueRuns(tasks, runNow, now, prepares);
       }
       kept = queue.prepared;
       nextRuns = queue.nextRuns;
@@ -495,15 +504,22 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         history.add(runEntry(run, record, rowId));
       }
       log(`adopted run of ${name} as ${rowId}`);
-      if (isFinishedAtAdoption(rowId, heard)) {
+      if (isFinishedAtAdoption(run, rowId, heard)) {
         const entry = history.entries().find((each) => isSameRun(each, record));
         if (entry !== undefined) {
           finish(entry);
         }
       }
-      const replayed = await sessions.replayCalls(record.adopt.hostSessionId);
-      if (replayed > 0) {
-        log(`replayed ${replayed} calls for ${rowId}`);
+      // A replay that rejects leaves the calls file on disk.
+      try {
+        const replayed = await sessions.replayCalls(
+          record.adopt.hostSessionId,
+        );
+        if (replayed > 0) {
+          log(`replayed ${replayed} calls for ${rowId}`);
+        }
+      } catch (error) {
+        log(`calls for ${rowId} not replayed: ${errorText(error)}`);
       }
       forget(run);
     };
@@ -646,7 +662,11 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
       mainAgentOnly: true,
     });
 
-    taskStore.onChanged(() => serial(plan));
+    // A re-plan that prepares a launch again reads the host's runs first, so an occurrence the host fired but the
+    // part has not heard is in history and is not queued again under a new spawn id. Before the first read, the read
+    // already queued plans after it.
+    const replanAfterRuns = () => (hasReadRuns ? readRunsThenPlan : plan);
+    taskStore.onChanged(() => serial(replanAfterRuns()));
     followRows(rowsSlot, {
       added: () => serial(() => undefined),
       removed: (rowId) => serial(() => finishRowRun(rowId)),
@@ -657,12 +677,13 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
     );
     chat.restored().then(() => serial(finishRestoredRuns));
     if (fires) {
-      chat.onInstructionsChanged(() =>
+      chat.onInstructionsChanged(() => {
+        const replan = replanAfterRuns();
         serial(() => {
           kept = new Map();
-          return plan();
-        }),
-      );
+          return replan();
+        });
+      });
       subscriptions.push(
         sessionHost.onRunStarted((run) =>
           serial(async () => {

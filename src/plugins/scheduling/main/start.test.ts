@@ -16,6 +16,7 @@ import {
   fakeDependency,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { MAX_TIMER_MS } from '../../../shared/tracked-timers';
 import {
   type AdoptRequest,
   type ChatMainExports,
@@ -349,6 +350,9 @@ function startPart(options: StartOptions = {}) {
     offlineEnv: () => OFFLINE_ENV,
     replayCalls(hostSessionId: string) {
       note(`replayCalls ${hostSessionId}`);
+      if (part.replayError !== null) {
+        return Promise.reject(new Error(part.replayError));
+      }
       return Promise.resolve(part.replayed);
     },
     contributeTools(
@@ -416,6 +420,8 @@ function startPart(options: StartOptions = {}) {
     selection,
     prepareErrors: [] as string[],
     replayed: 0,
+    // What `replayCalls` rejects with; null resolves to `replayed`.
+    replayError: null as string | null,
     // What the adopted row's chat session reads; null opens a relay row, with no chat session.
     session: { running: true, activity: 'working' } as Pick<
       ChatSessionInfo,
@@ -632,6 +638,7 @@ describe('schedulingMainPart', () => {
     session?: Pick<ChatSessionInfo, 'running' | 'activity'> | null;
     history?: RunHistoryEntry[];
     replayed?: number;
+    replayError?: string;
     expected: RunHistoryEntry[];
     log?: string;
     forgets: boolean;
@@ -722,8 +729,32 @@ describe('schedulingMainPart', () => {
     {
       case: 'pushed, process gone',
       heard: 'pushed',
+      run: { exit: { code: 0, signal: null, error: null } },
       session: { running: false, activity: 'idle' },
       expected: [runningEntry({ outcome: 'finished' })],
+      forgets: true,
+    },
+    {
+      case: 'listed, a host death',
+      heard: 'listed',
+      run: { exit: { code: null, signal: null, error: null } },
+      session: { running: false, activity: 'idle' },
+      expected: [runningEntry({ outcome: 'finished' })],
+      forgets: true,
+    },
+    {
+      case: 'listed, an unheld row whose process may still run',
+      heard: 'listed',
+      session: { running: false, activity: 'idle' },
+      expected: [runningEntry()],
+      forgets: true,
+    },
+    {
+      case: 'replayCalls rejects',
+      heard: 'pushed',
+      replayError: 'EACCES',
+      expected: [runningEntry()],
+      log: 'calls for row-run not replayed: EACCES',
       forgets: true,
     },
   ])('run_Outcome_WritesHistory: $case', async (row) => {
@@ -737,6 +768,7 @@ describe('schedulingMainPart', () => {
       part.session = row.session;
     }
     part.replayed = row.replayed ?? 0;
+    part.replayError = row.replayError ?? null;
     let rejectAdopt = (_error: Error) => undefined as void;
     if (row.adopt === 'reject') {
       part.answerAdopt = () => Promise.reject(new Error('row not opened'));
@@ -758,7 +790,9 @@ describe('schedulingMainPart', () => {
     }
     await settle();
 
-    expect(part.adopts).toHaveLength(run.skipped || run.exit !== null ? 0 : 1);
+    expect(part.adopts).toHaveLength(
+      run.skipped || run.exit?.error != null ? 0 : 1,
+    );
     expect(await part.historyFile()).toEqual(row.expected);
     expect(part.host.forgotten).toEqual(row.forgets ? [run.id] : []);
     if (row.log !== undefined) {
@@ -851,6 +885,23 @@ describe('schedulingMainPart', () => {
     expect(spawnIdOf(part.lastPending()?.[0])).not.toBe(before);
   });
 
+  it('plan_InstructionsChange_RecordsFiredRunsBeforeQueueing', async () => {
+    // Edited yesterday, so today's 09:00 is a catch-up the first plan queues at once.
+    const part = startPart({ tasks: [task({ updatedAt: YESTERDAY_10 })] });
+    await settle();
+    part.holdPushes(true);
+    part.host.startRun(hostedRun());
+    part.holdPushes(false);
+
+    part.changeInstructions();
+    await settle();
+
+    expect(part.lastPending()).toMatchObject([
+      { at: TOMORROW_09, record: { occurrence: TOMORROW_09 } },
+    ]);
+    expect(await part.historyFile()).toEqual([runningEntry()]);
+  });
+
   it('tools_ViewsReadTheStoresAtCallTime', async () => {
     const part = startPart();
     await settle();
@@ -922,6 +973,23 @@ describe('schedulingMainPart', () => {
     expect(part.lastPending()?.[0]?.at).toBe(TOMORROW_09);
   });
 
+  it('plan_PrepareThrows_RecordsFailedOnlyWhenDue: past the timer cap', async () => {
+    // An hour past the longest delay a timer takes, to the minute a `once` task names.
+    const pastCap = new Date(TODAY_12 + MAX_TIMER_MS + 3_600_000)
+      .toISOString()
+      .slice(0, 16);
+    const part = startPart({
+      tasks: [task({ schedule: { kind: 'once', at: pastCap } })],
+    });
+    part.prepareErrors.push('no folder /home/me/dev/a');
+    await settle();
+
+    await part.advance(60_000);
+
+    expect(part.prepares).toEqual([]);
+    expect(await part.historyFile()).toEqual([]);
+  });
+
   it('plan_UnchangedOccurrence_ReusesThePreparedLaunch', async () => {
     const part = startPart();
     await settle();
@@ -934,12 +1002,21 @@ describe('schedulingMainPart', () => {
     await settle();
     expect(spawnIdOf(part.lastPending()?.[0])).toBe(first);
 
-    await part.harness.invoke(
-      'saveTask',
-      draftOf(task({ prompt: 'Triage the backlog.' })),
+    // A hand edit of the prompt alone keeps the `updatedAt` the file holds.
+    await part.harness.files.write(
+      TASK_PATH,
+      taskFileText({ tasks: [task({ prompt: 'Triage the backlog.' })] }),
     );
     await settle();
-    expect(spawnIdOf(part.lastPending()?.[0])).not.toBe(first);
+    const handEdited = spawnIdOf(part.lastPending()?.[0]);
+    expect(handEdited).not.toBe(first);
+
+    await part.harness.invoke(
+      'saveTask',
+      draftOf(task({ prompt: 'Triage the inbox.' })),
+    );
+    await settle();
+    expect(spawnIdOf(part.lastPending()?.[0])).not.toBe(handEdited);
   });
 
   it('runNow_Press_QueuesAtNow', async () => {
@@ -953,6 +1030,32 @@ describe('schedulingMainPart', () => {
       at: TODAY_12,
       record: { occurrence: TODAY_12 },
     });
+  });
+
+  it("runNow_Press_QueuesAtNow: another task's due prepare throws", async () => {
+    // Listed first, so its prepare takes the error; edited yesterday, so its 09:00 is due.
+    const due = task({
+      id: OTHER_ID,
+      name: 'Nightly check',
+      updatedAt: YESTERDAY_10,
+    });
+    const part = startPart({ tasks: [due, task()] });
+    await settle();
+    const before = part.host.pendingLists.length;
+
+    // The instruction change drops the kept launches, so the press's plan prepares both tasks again.
+    part.prepareErrors.push('no folder /home/me/dev/a');
+    part.changeInstructions();
+    part.harness.invoke('runNow', TASK_ID);
+    await settle();
+
+    expect(part.host.pendingLists[before]).toMatchObject([
+      { at: TOMORROW_09, record: { taskId: OTHER_ID } },
+      { at: TODAY_12, record: { taskId: TASK_ID, occurrence: TODAY_12 } },
+    ]);
+    expect(await part.historyFile()).toMatchObject([
+      { taskId: OTHER_ID, outcome: 'failed' },
+    ]);
   });
 
   it.each<{ case: string; options: StartOptions; id: string; text: string }>([

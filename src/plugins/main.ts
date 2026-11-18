@@ -35,8 +35,8 @@ import { workflowMediumMainPart } from './workflow-medium/main/start';
 import { workflowSmallMainPart } from './workflow-small/main/start';
 import { workflowSpikeMainPart } from './workflow-spike/main/start';
 
-// Every built-in plugin's main part, in start order where no dependency says
-// otherwise.
+// Every built-in plugin's main part. `builtInManifests`' order, not this
+// list's, sets the start order where no dependency says otherwise.
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
@@ -49,7 +49,6 @@ export const mainParts: readonly MainPart[] = [
   sessionStashMainPart,
   sessionLogMainPart,
   autoRetroMainPart,
-  schedulingMainPart,
   agentsMainPart,
   agentLinesMainPart,
   agentStripMainPart,
@@ -71,6 +70,7 @@ export const mainParts: readonly MainPart[] = [
   unityPoolMainPart,
   systemStatsMainPart,
   visualMainPart,
+  schedulingMainPart,
   galleryMainPart,
   windowMainPart,
   // Last, so its self-test script's title bar button shows in no other script.

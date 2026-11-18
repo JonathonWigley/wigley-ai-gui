@@ -53,7 +53,6 @@ export const builtInManifests = [
   sessionStashManifest,
   sessionLogManifest,
   autoRetroManifest,
-  schedulingManifest,
   agentsManifest,
   agentLinesManifest,
   agentStripManifest,
@@ -79,6 +78,9 @@ export const builtInManifests = [
   unityPoolManifest,
   systemStatsManifest,
   visualManifest,
+  // After every plugin that calls chat's `addInstructions`, so at quit it stops
+  // first and never re-prepares its runs without their text.
+  schedulingManifest,
   windowManifest,
   appUpdateManifest,
 ] as const;
