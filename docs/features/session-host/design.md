@@ -84,7 +84,9 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
   - **A message is open**: opened by a stdin line that opens a turn with a message id (every user line the Claude
     adapter writes carries `uuid`); closed by its end line in an end state (`completed`, `cancelled`, `discarded` or
     `refused`), or by a turn-end line that lists it. So a message written during a turn stays open past that turn's
-    `result` until its own end.
+    `result` until its own end. Until the process has printed a line of the message-end kind, in any state, a turn-end
+    line closes every open message: a CLI without `msg_lifecycle_v1` prints no `command_lifecycle` line, and the
+    adapter's turn tracker falls back the same way.
   - **Background work runs**: the last background line counted more than 0 items of the kinds the rule names. For
     Claude only a background subagent counts; a background Bash does not.
 
@@ -94,9 +96,12 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
   last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
   (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees only pipe
   lines, so a background shell that stays silent past the window ends with its process. An interrupt that stops a
-  background subagent prints no `result`, and the process turns idle at the background line that lists none. A
-  process ending this way, or through a drain, lists as not running and refuses an attach: its stdin is closed, so its
-  row rests and the next message resumes the session.
+  background subagent prints no `result`, and the process turns idle at the background line that lists none. Under a
+  drain, a process that a background line listing none turned idle ends 2 s after that line rather than at once,
+  since Claude runs a turn of its own right after it to report the subagent's result: a busy line within the 2 s
+  cancels the end, and the process then ends at its next idle. A process ending this way, or through a drain, lists
+  as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the
+  session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
   appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
   process runs on with its row unheld. That holds after a relaunch too: such a process cannot be re-attached, so its

@@ -34,7 +34,7 @@ import {
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
-import { CLAUDE_IDLE_RULE, claudeEnv, claudeLaunch } from './claude-launch';
+import { CLAUDE_IDLE_RULE } from './claude-launch';
 import {
   appCommandUuid,
   createSessionFoldState,
@@ -3275,53 +3275,6 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
-  it.each([
-    { label: 'no profile', profileDir: null, unsetsConfigDir: false },
-    {
-      label: 'the default folder',
-      profileDir: '~/.claude',
-      unsetsConfigDir: true,
-    },
-    { label: 'another folder', profileDir: '/p', unsetsConfigDir: false },
-  ])(
-    'claudeLaunch_UnsetEnv_NamesWhatClaudeEnvRemoves: $label',
-    ({ profileDir, unsetsConfigDir }) => {
-      const appNames = [
-        'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS',
-        'WIGLEY_SESSION_ROW',
-      ];
-      const everyName = [
-        ...NESTED_SESSION_ENV,
-        ...appNames,
-        'CLAUDE_CONFIG_DIR',
-      ];
-      const inherited = Object.fromEntries(
-        everyName.map((name) => [name, 'inherited']),
-      );
-
-      const launch = claudeLaunch(
-        { ...request, profileDir, idleCompactMinTokens: 5000 },
-        'tool',
-        inherited,
-        '/h',
-        posixPaths,
-      );
-      const cleaned = claudeEnv(inherited, profileDir, '/h', posixPaths);
-
-      expect(launch.unsetEnv).toEqual([
-        ...NESTED_SESSION_ENV,
-        ...appNames,
-        ...(unsetsConfigDir ? ['CLAUDE_CONFIG_DIR'] : []),
-      ]);
-      expect(launch.unsetEnv.filter((name) => name in cleaned)).toEqual([]);
-      expect(launch.unsetEnv.filter((name) => name in launch.env)).toEqual(
-        appNames,
-      );
-      expect(launch.env.WIGLEY_SESSION_ROW).toBe('row-1');
-      expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe('5000');
-    },
-  );
-
   it('idleRule_LinesBetweenTurns_AreNotBusy', () => {
     // `user` on stdout: a `set_model` acknowledgement prints one with no turn.
     const stdoutBetweenTurns = [
@@ -3419,17 +3372,48 @@ describe('createClaudeCodeHarness on the session host', () => {
     expect(spawn.env).not.toHaveProperty('CLAUDECODE');
   });
 
-  it('prepareRun_DefaultProfile_CarriesInheritedConfigDir', () => {
-    const host = createFakeSessionHost(clock);
+  it.each<{
+    label: string;
+    env: NodeJS.ProcessEnv;
+    configDir: string | undefined;
+    unsetCarried: string[];
+  }>([
+    {
+      label: 'an inherited config folder',
+      env: { PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/h/cfg' },
+      configDir: '/h/cfg',
+      unsetCarried: ['WIGLEY_AI_GUI_ENDPOINT_DIR'],
+    },
+    {
+      label: 'no config folder',
+      env: { PATH: '/usr/bin' },
+      configDir: undefined,
+      unsetCarried: ['WIGLEY_AI_GUI_ENDPOINT_DIR', 'CLAUDE_CONFIG_DIR'],
+    },
+  ])(
+    'prepareRun_DefaultProfile_CarriesInheritedConfigDirElseUnsetsIt: $label',
+    ({ env, configDir, unsetCarried }) => {
+      const host = createFakeSessionHost(clock);
 
-    const spawn = hostHarness(host, clock, {
-      env: { CLAUDE_CONFIG_DIR: '/h/cfg' },
-    }).prepareRun(request, RUN_IT, {});
+      const spawn = hostHarness(host, clock, { env }).prepareRun(
+        request,
+        RUN_IT,
+        {},
+      );
 
-    expect(spawn.env.CLAUDE_CONFIG_DIR).toBe('/h/cfg');
-  });
+      const carriedNames = [
+        'PATH',
+        'WIGLEY_AI_GUI_ENDPOINT_DIR',
+        'CLAUDE_CONFIG_DIR',
+      ];
+      expect(spawn.env.CLAUDE_CONFIG_DIR).toBe(configDir);
+      expect(
+        spawn.unsetEnv.filter((name) => carriedNames.includes(name)),
+      ).toEqual(unsetCarried);
+    },
+  );
 
-  it('prepareRun_StdinReplayedOnAttach_WritesNothingAndHoldsTheMessage', async () => {
+  it('prepareRun_StdinReplayedOnAttach_WritesNothingHoldsTheMessageAndNumbersRequestsOn', async () => {
     const host = createFakeSessionHost(clock);
     const spawn = hostHarness(host, clock).prepareRun(request, RUN_IT, {});
     const record = host.addRunning(
@@ -3448,6 +3432,12 @@ describe('createClaudeCodeHarness on the session host', () => {
         entry.kind === 'user' ? [entry.id, entry.text] : [entry.id],
       ),
     ).toEqual([['user-1', 'run it']]);
+    host.output('p-1', 'out', asText(successResult('done', ['uuid-1'])));
+    await settle();
+    const requests = record.writes
+      .map((text) => JSON.parse(text) as { type: string })
+      .filter((line) => line.type === 'control_request');
+    expect(requests[0]).toEqual(contextUsageRequest('wigley-4'));
   });
 
   it('prepareRun_Resume_Throws', () => {

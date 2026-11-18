@@ -19,6 +19,8 @@ import { createPipeLog, type PipeLog } from './pipe-log';
 
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 const MS_PER_MINUTE = 60_000;
+// Claude starts the turn that reports a finished background subagent a few ms after the line that lists none.
+export const DRAIN_REPORT_GRACE_MS = 2000;
 
 export type HostSpawn = (
   command: string,
@@ -71,7 +73,8 @@ export interface ProcessTable {
   setKeepIdleMinutes(minutes: number): void;
   // The keep window runs only while this is false, the state the table starts in.
   setClientConnected(connected: boolean): void;
-  // Ends each idle process now and each other when it turns idle; every later spawn is refused.
+  // Ends each idle process now and each other when it turns idle; every later spawn is refused. A process the end of
+  // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first.
   drain(): void;
   // Calls `done` once the table is empty, at once when it already is.
   stopAll(done: () => void): void;
@@ -82,6 +85,8 @@ interface TurnState {
   isTurnOpen: boolean;
   openMessages: Set<string>;
   backgroundCount: number;
+  // True once a stdout line whose `key` equals `messageEnd.value` has arrived, whatever its state.
+  printsMessageEnds: boolean;
 }
 
 interface TableProcess {
@@ -97,7 +102,10 @@ interface TableProcess {
   // True while no part of `turnState` holds.
   isIdle: boolean;
   idleSince: number;
+  // True when the line that turned the process idle ended its background work.
+  isIdleFromBackgroundEnd: boolean;
   keepTimer: number | null;
+  drainGraceTimer: number | null;
   signalTimers: number[];
   isEnding: boolean;
 }
@@ -147,35 +155,52 @@ function countOfKinds(
   ).length;
 }
 
-// A turn end closes the main turn and the messages it lists, a main busy line opens the turn, a message end closes
-// its message, and a background line sets the count.
+// The messages the turn-end `line` lists, or every open message while the process has printed no message-end line,
+// as a CLI without message ends needs.
+function closeTurnEndMessages(
+  line: Record<string, unknown>,
+  rule: IdleRule,
+  state: TurnState,
+) {
+  if (!state.printsMessageEnds) {
+    state.openMessages.clear();
+    return;
+  }
+  const listedIds =
+    rule.turnEndIdsKey === null ? undefined : line[rule.turnEndIdsKey];
+  if (Array.isArray(listedIds)) {
+    for (const id of listedIds) {
+      if (typeof id === 'string') {
+        state.openMessages.delete(id);
+      }
+    }
+  }
+}
+
+// A turn end closes the main turn and its messages, a main busy line opens the turn, a message end closes its
+// message, and a background line sets the count.
 function readStdoutLine(
   line: Record<string, unknown>,
   rule: IdleRule,
   state: TurnState,
 ) {
   const value = line[rule.key];
+  const { messageEnd, background } = rule;
+  const isMessageEndLine = messageEnd !== null && value === messageEnd.value;
+  if (isMessageEndLine) {
+    state.printsMessageEnds = true;
+  }
   if (value === rule.value) {
     state.isTurnOpen = false;
-    const listedIds =
-      rule.turnEndIdsKey === null ? undefined : line[rule.turnEndIdsKey];
-    if (Array.isArray(listedIds)) {
-      for (const id of listedIds) {
-        if (typeof id === 'string') {
-          state.openMessages.delete(id);
-        }
-      }
-    }
+    closeTurnEndMessages(line, rule, state);
   } else if (
     isOneOf(value, rule.busyStdoutValues) &&
     !isSideLine(line, rule.sideKey)
   ) {
     state.isTurnOpen = true;
   }
-  const { messageEnd, background } = rule;
   const endedMessageId =
-    messageEnd !== null &&
-    value === messageEnd.value &&
+    isMessageEndLine &&
     isOneOf(line[messageEnd.stateKey], messageEnd.endStates)
       ? line[messageEnd.idKey]
       : undefined;
@@ -406,12 +431,20 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     );
   }
 
+  function cancelDrainGraceTimer(hosted: TableProcess) {
+    if (hosted.drainGraceTimer !== null) {
+      timers.clear(hosted.drainGraceTimer);
+      hosted.drainGraceTimer = null;
+    }
+  }
+
   function endProcess(hosted: TableProcess) {
     if (hosted.isEnding) {
       return;
     }
     hosted.isEnding = true;
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
     hosted.child.stdin.end();
     hosted.signalTimers.push(
       timers.set(() => {
@@ -423,14 +456,29 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     );
   }
 
-  function turnIdle(hosted: TableProcess) {
+  // Ends an idle process for the drain: at once, or at the end of the report grace when the end of its background
+  // work turned it idle.
+  function endIdleForDrain(hosted: TableProcess) {
+    cancelDrainGraceTimer(hosted);
+    const graceLeft = hosted.isIdleFromBackgroundEnd
+      ? hosted.idleSince + DRAIN_REPORT_GRACE_MS - clock.now()
+      : 0;
+    if (graceLeft > 0) {
+      hosted.drainGraceTimer = timers.set(() => endProcess(hosted), graceLeft);
+    } else {
+      endProcess(hosted);
+    }
+  }
+
+  function turnIdle(hosted: TableProcess, endedBackgroundWork: boolean) {
     if (hosted.isIdle) {
       return;
     }
     hosted.isIdle = true;
     hosted.idleSince = clock.now();
+    hosted.isIdleFromBackgroundEnd = endedBackgroundWork;
     if (draining) {
-      endProcess(hosted);
+      endIdleForDrain(hosted);
     } else {
       armKeepTimer(hosted);
     }
@@ -439,21 +487,24 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   function turnBusy(hosted: TableProcess) {
     hosted.isIdle = false;
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
   }
 
-  // Turns the process busy or idle when its turn state changed what it reads.
-  function settleIdle(hosted: TableProcess) {
+  // Turns the process busy or idle when its turn state changed what it reads; `endedBackgroundWork` when the line
+  // read took the background count to 0.
+  function settleIdle(hosted: TableProcess, endedBackgroundWork: boolean) {
     const isBusy = isTurnStateBusy(hosted.turnState);
     if (isBusy && hosted.isIdle) {
       turnBusy(hosted);
     } else if (!isBusy) {
-      turnIdle(hosted);
+      turnIdle(hosted, endedBackgroundWork);
     }
   }
 
   function childLine(hosted: TableProcess, dir: PipeDirection, text: string) {
     // Only stdout reads the idle rule; its line is parsed once.
     const parsed = dir === 'out' ? lineObject(text) : null;
+    const hadBackgroundWork = hosted.turnState.backgroundCount > 0;
     if (parsed !== null) {
       // Before the drop, which may delete a key the rule reads.
       readStdoutLine(parsed, hosted.idleRule, hosted.turnState);
@@ -465,7 +516,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     const line = hosted.log.append(dir, delivered);
     hosted.subscriber?.line(hosted.id, line);
     if (parsed !== null) {
-      settleIdle(hosted);
+      settleIdle(
+        hosted,
+        hadBackgroundWork && hosted.turnState.backgroundCount === 0,
+      );
     }
   }
 
@@ -475,6 +529,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       return;
     }
     cancelKeepTimer(hosted);
+    cancelDrainGraceTimer(hosted);
     for (const timer of hosted.signalTimers) {
       timers.clear(timer);
     }
@@ -543,7 +598,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     const parsed = lineObject(text);
     if (parsed !== null) {
       readStdinLine(parsed, hosted.idleRule, hosted.turnState);
-      settleIdle(hosted);
+      settleIdle(hosted, false);
     }
     hosted.child.stdin.write(`${text}\n`);
   }
@@ -590,10 +645,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
             isTurnOpen: false,
             openMessages: new Set(),
             backgroundCount: 0,
+            printsMessageEnds: false,
           },
           isIdle: true,
           idleSince: startedAt,
+          isIdleFromBackgroundEnd: false,
           keepTimer: null,
+          drainGraceTimer: null,
           signalTimers: [],
           isEnding: false,
         };
@@ -685,7 +743,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       draining = true;
       for (const hosted of processes.values()) {
         if (hosted.isIdle) {
-          endProcess(hosted);
+          endIdleForDrain(hosted);
         }
       }
     },

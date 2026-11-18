@@ -8,13 +8,18 @@ import type {
 import { APP_ENDPOINT_ENV } from '../../shared/app-endpoint-dir';
 import { NESTED_SESSION_ENV, SESSION_ROW_ENV } from '../../shared/session-env';
 import { launchMode } from './claude-controls';
+import { TERMINAL_STATES } from './turn-tracker';
 
 // A stdout line of type `result` ends a turn. A main `assistant` or
 // `stream_event` line shows one, Claude's own after a background task ended
 // included; a subagent's carries `parent_tool_use_id`. The app's `user` lines
 // carry `uuid`, and each stays open until its `command_lifecycle` end or a
-// `result` that lists it. Only a background subagent holds the process busy:
-// a background Bash ends with it at the keep window.
+// `result` that lists it; before any `command_lifecycle` line, as from a CLI
+// without `msg_lifecycle_v1`, every `result` closes them all. Only a background
+// subagent holds the process busy: a background Bash ends with it at the keep
+// window.
+// turn-tracker.ts reads the same lines for the working state and
+// process-table.test.ts holds a copy of this rule: a change here reaches both.
 export const CLAUDE_IDLE_RULE: IdleRule = {
   key: 'type',
   value: 'result',
@@ -26,7 +31,7 @@ export const CLAUDE_IDLE_RULE: IdleRule = {
     value: 'command_lifecycle',
     idKey: 'command_uuid',
     stateKey: 'state',
-    endStates: ['completed', 'cancelled', 'discarded', 'refused'],
+    endStates: [...TERMINAL_STATES],
   },
   turnEndIdsKey: 'user_message_uuids',
   background: {

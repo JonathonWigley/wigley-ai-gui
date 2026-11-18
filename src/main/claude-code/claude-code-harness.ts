@@ -750,9 +750,11 @@ function startClaudeProcess(
 const CHECKED_START_CONTROLS = ['mode', 'effort'] as const;
 
 // The spec of a new session the host starts later: its stdin opens the session
-// and sends `firstMessage`, and its env holds the `CLAUDE_CARRIED_ENV` names of
-// `deps.env` under `env`, before the launch's own values. Throws on a resumed
-// request and on a `mode` or `effort` value Claude does not offer.
+// and sends `firstMessage`, its env holds the `CLAUDE_CARRIED_ENV` names of
+// `deps.env` under `env`, before the launch's own values, and its unset names
+// also hold each carried name that env lacks, so the child takes none from the
+// host's own environment. Throws on a resumed request and on a `mode` or
+// `effort` value Claude does not offer.
 function prepareClaudeRun(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -772,7 +774,7 @@ function prepareClaudeRun(
   const carried = Object.fromEntries(
     CLAUDE_CARRIED_ENV.map((name) => [name, deps.env[name]]),
   );
-  return claudeSpawn({
+  const spec = claudeSpawn({
     request,
     command: deps.command(),
     permissionTool: deps.permissionTool,
@@ -782,6 +784,10 @@ function prepareClaudeRun(
     stdin: claudeOpeningLines(firstMessage, deps.randomUuid()),
     inheritEnv: true,
   });
+  const absentNames = CLAUDE_CARRIED_ENV.filter(
+    (name) => !(name in spec.env) && !spec.unsetEnv.includes(name),
+  );
+  return { ...spec, unsetEnv: [...spec.unsetEnv, ...absentNames] };
 }
 
 // Attaches to the running process `request.processId`: replays a resumed

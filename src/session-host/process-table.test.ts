@@ -16,6 +16,7 @@ import type { HostedExit, IdleRule } from '../contracts/session-host';
 import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
 import {
   createProcessTable,
+  DRAIN_REPORT_GRACE_MS,
   type HostSpawn,
   type ProcessTable,
 } from './process-table';
@@ -35,9 +36,12 @@ const USER = '{"type":"user"}';
 const RESULT = '{"type":"result"}';
 const SYSTEM = '{"type":"system"}';
 
-// Every part of the rule on, in Claude's shape (claude-stream.md § Message lifecycle, § Subagents).
-const TURN_STATE_RULE: IdleRule = {
-  ...IDLE_RULE,
+// A copy of claude-launch.ts's CLAUDE_IDLE_RULE, which the layer rules keep this file from importing.
+const CLAUDE_IDLE_RULE_COPY: IdleRule = {
+  key: 'type',
+  value: 'result',
+  busyStdoutValues: ['assistant', 'stream_event'],
+  busyStdinValues: ['user'],
   sideKey: 'parent_tool_use_id',
   messageIdKey: 'uuid',
   messageEnd: {
@@ -617,6 +621,27 @@ describe('process table', () => {
       busy: true,
     },
     {
+      label: 'messages open at a turn end, no lifecycle frame printed',
+      steps: [
+        ['in', userLine('A')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', RESULT],
+      ],
+      busy: false,
+    },
+    {
+      label: 'a message a turn end does not list, after a lifecycle frame',
+      steps: [
+        ['in', userLine('A')],
+        ['out', lifecycle('A', 'queued')],
+        ['out', MAIN_ASSISTANT],
+        ['in', userLine('B')],
+        ['out', resultFor('A')],
+      ],
+      busy: true,
+    },
+    {
       label: 'a discarded message',
       steps: [
         ['in', userLine('A')],
@@ -668,7 +693,7 @@ describe('process table', () => {
     async ({ steps, busy }) => {
       const { table, time, children } = setUp();
       table.spawn(
-        { ...spawnRequest('a'), idleRule: TURN_STATE_RULE },
+        { ...spawnRequest('a'), idleRule: CLAUDE_IDLE_RULE_COPY },
         recordingSubscriber().subscriber,
       );
       for (const [dir, text] of steps) {
@@ -804,28 +829,66 @@ describe('process table', () => {
     },
   );
 
-  it('drain_BackgroundWork_EndsTheProcessWhenItsCountReachesZero', async () => {
-    const { table, children } = setUp();
-    table.spawn(
-      { ...spawnRequest('a'), idleRule: TURN_STATE_RULE },
-      recordingSubscriber().subscriber,
-    );
-    for (const [dir, text] of SUBAGENT_LAUNCHED) {
-      if (dir === 'in') {
-        table.write('a', text);
-      } else {
-        children[0].stdout.write(`${text}\n`);
+  it.each([
+    {
+      label: 'no report turn',
+      drainsFirst: true,
+      report: [],
+      endsAtTheGrace: true,
+    },
+    {
+      label: 'a report turn started within the grace',
+      drainsFirst: true,
+      report: [INIT, MAIN_ASSISTANT],
+      endsAtTheGrace: false,
+    },
+    {
+      label: 'a drain sent within the grace',
+      drainsFirst: false,
+      report: [],
+      endsAtTheGrace: true,
+    },
+  ])(
+    'drain_BackgroundWorkEnds_EndsAfterTheGraceOrAtTheReportTurnEnd: $label',
+    async ({ drainsFirst, report, endsAtTheGrace }) => {
+      const { table, time, children } = setUp();
+      table.spawn(
+        { ...spawnRequest('a'), idleRule: CLAUDE_IDLE_RULE_COPY },
+        recordingSubscriber().subscriber,
+      );
+      for (const [dir, text] of SUBAGENT_LAUNCHED) {
+        if (dir === 'in') {
+          table.write('a', text);
+        } else {
+          children[0].stdout.write(`${text}\n`);
+        }
       }
-    }
-    await streamsDelivered();
+      await streamsDelivered();
+      if (drainsFirst) {
+        table.drain();
+      }
+      expect(children[0].stdin.writableEnded).toBe(false);
 
-    table.drain();
-    expect(children[0].stdin.writableEnded).toBe(false);
+      children[0].stdout.write(`${backgroundTasks()}\n`);
+      await streamsDelivered();
+      time.advanceTo(DRAIN_REPORT_GRACE_MS / 2);
+      if (!drainsFirst) {
+        table.drain();
+      }
+      for (const line of report) {
+        children[0].stdout.write(`${line}\n`);
+      }
+      await streamsDelivered();
+      time.advanceTo(DRAIN_REPORT_GRACE_MS - 1);
+      expect(children[0].stdin.writableEnded).toBe(false);
+      time.advanceTo(DRAIN_REPORT_GRACE_MS);
+      expect(children[0].stdin.writableEnded).toBe(endsAtTheGrace);
 
-    children[0].stdout.write(`${backgroundTasks()}\n`);
-    await streamsDelivered();
-    expect(children[0].stdin.writableEnded).toBe(true);
-  });
+      children[0].stdout.write(`${RESULT}\n`);
+      await streamsDelivered();
+      expect(children[0].stdin.writableEnded).toBe(true);
+    },
+  );
 
   it('setKeepIdle_LongerWindow_ReArmsTheTimer', () => {
     const { table, time, children } = setUp();
@@ -1101,7 +1164,7 @@ describe('process table', () => {
       request: {
         ...spawnRequest('a'),
         idleRule: {
-          ...TURN_STATE_RULE,
+          ...CLAUDE_IDLE_RULE_COPY,
           messageEnd: {
             value: 'command_lifecycle',
             idKey: 'command_uuid',
@@ -1117,7 +1180,7 @@ describe('process table', () => {
       request: {
         ...spawnRequest('a'),
         idleRule: {
-          ...TURN_STATE_RULE,
+          ...CLAUDE_IDLE_RULE_COPY,
           background: {
             match: { type: 1 },
             listKey: 'tasks',

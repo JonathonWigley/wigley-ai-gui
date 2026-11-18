@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
+import { NESTED_SESSION_ENV } from '../../shared/session-env';
 import {
-  CLAUDE_IDLE_RULE,
   claudeConfigFolder,
   claudeEnv,
   claudeLaunch,
@@ -10,32 +10,6 @@ import {
 } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
-
-describe('CLAUDE_IDLE_RULE', () => {
-  it('claudeIdleRule_Fields_ReadTurnsMessagesAndBackgroundSubagents', () => {
-    expect(CLAUDE_IDLE_RULE).toEqual({
-      key: 'type',
-      value: 'result',
-      busyStdoutValues: ['assistant', 'stream_event'],
-      busyStdinValues: ['user'],
-      sideKey: 'parent_tool_use_id',
-      messageIdKey: 'uuid',
-      messageEnd: {
-        value: 'command_lifecycle',
-        idKey: 'command_uuid',
-        stateKey: 'state',
-        endStates: ['completed', 'cancelled', 'discarded', 'refused'],
-      },
-      turnEndIdsKey: 'user_message_uuids',
-      background: {
-        match: { type: 'system', subtype: 'background_tasks_changed' },
-        listKey: 'tasks',
-        kindKey: 'task_type',
-        kinds: ['local_agent'],
-      },
-    });
-  });
-});
 
 describe('claudeLaunch', () => {
   it('claudeLaunch_NewSession_PinnedArgsAndProfileEnv', () => {
@@ -352,6 +326,63 @@ describe('claudeLaunch', () => {
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\jo\\.claude-work');
   });
+
+  it.each([
+    { label: 'no profile', profileDir: null, unsetsConfigDir: false },
+    {
+      label: 'the default folder',
+      profileDir: '~/.claude',
+      unsetsConfigDir: true,
+    },
+    { label: 'another folder', profileDir: '/p', unsetsConfigDir: false },
+  ])(
+    'claudeLaunch_UnsetEnv_NamesWhatClaudeEnvRemoves: $label',
+    ({ profileDir, unsetsConfigDir }) => {
+      const appNames = [
+        'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS',
+        'WIGLEY_SESSION_ROW',
+      ];
+      const everyName = [
+        ...NESTED_SESSION_ENV,
+        ...appNames,
+        'CLAUDE_CONFIG_DIR',
+      ];
+      const inherited = Object.fromEntries(
+        everyName.map((name) => [name, 'inherited']),
+      );
+
+      const launch = claudeLaunch(
+        {
+          processId: 'p-1',
+          sessionId: 's-1',
+          resume: false,
+          projectDir: '/proj',
+          profileDir,
+          controls: {},
+          instructions: [],
+          idleCompactMinTokens: 5000,
+          rowId: 'row-1',
+        },
+        TOOL,
+        inherited,
+        '/h',
+        posixPaths,
+      );
+      const cleaned = claudeEnv(inherited, profileDir, '/h', posixPaths);
+
+      expect(launch.unsetEnv).toEqual([
+        ...NESTED_SESSION_ENV,
+        ...appNames,
+        ...(unsetsConfigDir ? ['CLAUDE_CONFIG_DIR'] : []),
+      ]);
+      expect(launch.unsetEnv.filter((name) => name in cleaned)).toEqual([]);
+      expect(launch.unsetEnv.filter((name) => name in launch.env)).toEqual(
+        appNames,
+      );
+      expect(launch.env.WIGLEY_SESSION_ROW).toBe('row-1');
+      expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe('5000');
+    },
+  );
 });
 
 describe('claudeSpawn', () => {
