@@ -221,13 +221,21 @@
   z-index: 1;
 }
 
-/* Over the content, the left bar lies on the start of the main and panel
-   cell while its own column collapses, as the side bar does. */
+/* Over the content, the left bar lies against the activity bar, from the
+   side bar's column across main's, while its own column collapses: over a
+   beside side bar's start, or over main's start. */
 .shell-left-bar[data-left-bar='over'] {
-  grid-column: 4;
+  grid-column: 3 / 5;
   grid-row: 2 / 4;
   justify-self: start;
   z-index: 1;
+}
+
+/* A side bar over the content lies past an over left bar, so neither covers
+   the other. */
+.shell:has(> .shell-left-bar[data-left-bar='over'])
+  > .shell-side-bar[data-side-bar='over'] {
+  margin-inline-start: calc(var(--shell-left-bar-width) * 1px);
 }
 
 /* Over the content, the right bar lies on the end of the main and panel cell

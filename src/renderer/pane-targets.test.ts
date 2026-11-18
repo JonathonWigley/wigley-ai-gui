@@ -308,7 +308,9 @@ describe('createPaneTargets', () => {
   // Pane targets whose view and outer panes answer false, over fake areas
   // that record each ask into the same `asked`: `side bar`, `main`, and
   // `stop <n>` for the nth right-bar stop, plus `left <n>` when `hasLeft`,
-  // and `left-bar stop <n>` for the nth of `leftStops` left-bar stops.
+  // and `left-bar stop <n>` for the nth of `leftStops` left-bar stops, plus
+  // `left-bar left <n>` when `hasLeft`. `remove` takes a stop of either bar
+  // out of its list, then tells the targets.
   // Each right-bar stop's `keepsTurn` answers `keepsTurn`, and a stop has none
   // when it is undefined.
   // `focusSideBar` answers `sideBar`, after the targets' own `baseChanged`
@@ -331,6 +333,9 @@ describe('createPaneTargets', () => {
       { length: options.leftStops ?? 0 },
       (_, index) => ({
         focus: () => fakes.asked.push(`left-bar stop ${index + 1}`),
+        left: options.hasLeft
+          ? () => fakes.asked.push(`left-bar left ${index + 1}`)
+          : undefined,
       }),
     );
     const stops: BarStop[] = Array.from(
@@ -344,6 +349,7 @@ describe('createPaneTargets', () => {
       }),
     );
     let liveStops = stops;
+    let liveLeftStops = leftStops;
     const deferred: (() => void)[] = [];
     const targets: PaneTargets = createPaneTargets(
       fakes.resizer('side bar resize', true),
@@ -358,7 +364,7 @@ describe('createPaneTargets', () => {
           return options.sideBar ?? false;
         },
         focusMain: () => fakes.asked.push('main'),
-        barStops: (bar) => (bar === 'leftBar' ? leftStops : liveStops),
+        barStops: (bar) => (bar === 'leftBar' ? liveLeftStops : liveStops),
       },
       (run) => deferred.push(run),
     );
@@ -372,6 +378,7 @@ describe('createPaneTargets', () => {
       ...fakes,
       targets,
       stops,
+      leftStops,
       push() {
         const pushed = scopes.push('overlay.popup');
         pushed.onBaseChanged(() => pushed.pop());
@@ -381,6 +388,7 @@ describe('createPaneTargets', () => {
       setBase: (scope: string) => scopes.setBase(scope),
       remove(stop: BarStop) {
         liveStops = liveStops.filter((live) => live !== stop);
+        liveLeftStops = liveLeftStops.filter((live) => live !== stop);
         targets.stopRemoved(stop);
       },
       flush() {
@@ -690,10 +698,27 @@ describe('createPaneTargets', () => {
       asked: [],
       logged: [],
     },
+    {
+      // Breaks when the removal guard matches only a held right-bar stop.
+      case: 'the holding left-bar stop removed',
+      act(fakes) {
+        fakes.targets.focus('left');
+        fakes.targets.focus('left');
+        fakes.clear();
+        fakes.remove(fakes.leftStops[0]);
+      },
+      asked: ['left-bar left 1', 'main'],
+      logged: ['focus back in main'],
+    },
   ])(
     "stopRemoved ends only the holding stop's turn: $case",
     ({ act, asked, logged }) => {
-      const fakes = areaTargets({ sideBar: true, stops: 3, hasLeft: true });
+      const fakes = areaTargets({
+        sideBar: true,
+        stops: 3,
+        leftStops: 2,
+        hasLeft: true,
+      });
 
       act(fakes);
 
@@ -762,6 +787,19 @@ describe('createPaneTargets', () => {
       logged: [],
     },
     {
+      // Breaks when focus dropping out of the left bar leaves its stop the
+      // keys.
+      case: 'focus dropped from the left bar while its stop holds the keys',
+      act(fakes) {
+        fakes.targets.focus('left');
+        fakes.targets.focus('left');
+        fakes.clear();
+        fakes.targets.focusDroppedFrom('leftBar');
+      },
+      asked: ['left-bar left 1', 'main'],
+      logged: ['focus back in main'],
+    },
+    {
       case: 'a base change, then focus left the right bar',
       act(fakes) {
         fakes.targets.baseChanged();
@@ -796,9 +834,9 @@ describe('createPaneTargets', () => {
       logged: ['focus back in main'],
     },
   ])(
-    "ends a right-bar stop's turn with its left, but not under a pushed scope: $case",
+    "ends a bar stop's turn with its left, but not under a pushed scope: $case",
     ({ act, asked, logged }) => {
-      const fakes = areaTargets({ stops: 2, hasLeft: true });
+      const fakes = areaTargets({ stops: 2, leftStops: 1, hasLeft: true });
       fakes.targets.focus('right');
       fakes.clear();
 

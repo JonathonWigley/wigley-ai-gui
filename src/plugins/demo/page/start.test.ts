@@ -80,14 +80,16 @@ function settled(): Promise<void> {
 // (beats one-a, one-b) and `p.two` (beat two-a) registered beside its own real-session step. `events` holds, in
 // order: each channel call but `describeStep` as `invoke <method>[ <step id>]`, `addSection <id>`,
 // `showOnly <id>` and the dispose of each, each step's enter and dispose, and each left-bar (`panel`) and status-bar
-// (`caption`) contribution and its dispose. `reports` holds each `report` invoke's argument. `start` and `stop` answer
-// main's methods of those names.
+// (`caption`) contribution and its dispose. `reports` holds each `report` invoke's argument. `start`, `stop` and
+// `enterStep` answer main's methods of those names.
 function startDemo({
   start = async () => ({ scratchDir: SCRATCH }),
   stop = async () => undefined,
+  enterStep = async () => ({}),
 }: {
   start?: () => Promise<{ scratchDir: string }>;
   stop?: () => Promise<void>;
+  enterStep?: () => Promise<object>;
 } = {}) {
   const events: string[] = [];
   const reports: unknown[] = [];
@@ -188,7 +190,7 @@ function startDemo({
         return stop();
       }
       if (method === 'enterStep') {
-        return {};
+        return enterStep();
       }
       if (method === 'report') {
         reports.push(args[0]);
@@ -532,6 +534,24 @@ describe('demoPagePart', () => {
       }).toEqual({ isFocused: false, tookKeys: true });
     },
   );
+
+  // Breaks when the run takes the keys back only once a step's enter returns: main's half of the first step can be
+  // slow or fail, and a box left focused meanwhile types the next `<Leader>d` keys as text.
+  it('start_BoxFocusedWhileTheFirstStepIsPending_TakesTheKeysBack', async () => {
+    const pending = deferred<object>();
+    const demo = startDemo({ enterStep: () => pending.promise });
+    const box = Object.assign(document.createElement('div'), {
+      isContentEditable: true,
+    });
+    box.focus();
+
+    const running = startRun(demo);
+    await settled();
+
+    expect(document.activeElement === box).toBe(false);
+    pending.resolve({});
+    await running;
+  });
 
   it('stop_FailedStep_ReportsCoverageAndFailures', async () => {
     const demo = startDemo();

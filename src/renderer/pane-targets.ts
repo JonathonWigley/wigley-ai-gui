@@ -189,7 +189,7 @@ export function createPaneTargets(
     }
   };
 
-  // Leaves the left bar for the side bar while it shows, else for main.
+  // Leaves the left bar for the side bar while it is a stop, else for main.
   const leaveLeftBar = () => {
     endStopTurn();
     if (areas.focusSideBar()) {

@@ -1300,6 +1300,17 @@ describe('mountShell', () => {
       drawn: '220',
     },
     {
+      row: 'shown, the side bar beside, main ending at 600, over at its least width',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.showLeftBar();
+        resizeTo(shell, 600);
+      },
+      drawn: '200',
+      layout: 'over',
+      handleHidden: true,
+    },
+    {
       row: 'shown, the right bar shown, right edge 900, the right bar keeping its width',
       steps: (shell: NarrowingShell) => {
         shell.showLeftBar();

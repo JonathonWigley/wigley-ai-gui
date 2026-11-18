@@ -454,13 +454,14 @@ export interface Area {
 // bar's drawn order: the core calls it when the focus keys enter the bar and
 // this is the bar's first stop (the right bar by Alt+l past main's right
 // edge; the left bar by Alt+h past the side bar's left edge, or main's while
-// no side bar shows), or Alt+j/Alt+k reach it from the stop before or after.
+// the side bar is no stop: hidden, or the shown mode gives no `focusSideBar`),
+// or Alt+j/Alt+k reach it from the stop before or after.
 // It sets the contribution's own key scope, draws its cursor and moves the DOM
 // focus into the contribution's element. The turn ends when the DOM focus
 // leaves the bar (a click into main, on a focusable spot or not, a mode
 // change), the bar's exit key moves out of it (Alt+h from the right bar to
-// main; Alt+l from the left bar to the side bar, or to main while no side bar
-// shows), a base scope change the core did not make runs while `keepsTurn` is
+// main; Alt+l from the left bar to the side bar, or to main while the side
+// bar is no stop), a base scope change the core did not make runs while `keepsTurn` is
 // absent or returns false, or the contribution is disposed; the core calls
 // `left` each time, then blurs the focused element if the contribution's
 // element still holds it. The core calls the shown mode's `focusMain` on an
@@ -523,13 +524,14 @@ export interface ModeContext {
 // there. None of the three
 // runs for a hidden mode, a mode without a side bar, or a side bar already
 // in that state.
-// `focusSideBar` runs when the core's Alt+h leaves main's left edge while
-// this mode shows with its side bar beside or over the content: it sets the
-// side bar's key scope, focuses the side bar's list and draws its cursor, and
-// the core then holds the side bar as the area with the keys. A mode without
-// it is no stop on the left. `focusMain` runs when Alt+l leaves the side bar,
-// Alt+h leaves the right bar, Alt+l leaves the left bar while no side bar
-// shows, or the bar stop holding the keys is disposed: it gives main's last focused pane back its key scope, its resize
+// `focusSideBar` runs when the core's Alt+h leaves main's left edge, or Alt+l
+// leaves the left bar, while this mode shows with its side bar beside or over
+// the content: it sets the side bar's key scope, focuses the side bar's list
+// and draws its cursor, and the core then holds the side bar as the area with
+// the keys. A mode without it is no stop on the left. `focusMain` runs when
+// Alt+l leaves the side bar, Alt+h leaves the right bar, Alt+l leaves the left
+// bar while the side bar is no stop, or the bar stop holding the keys is
+// disposed: it gives main's last focused pane back its key scope, its resize
 // and focus targets and the DOM focus, as `shown` does for that pane, so no
 // box in the area left behind keeps the caret.
 // `stepTab` runs when the next-tab or previous-tab key fires while this mode

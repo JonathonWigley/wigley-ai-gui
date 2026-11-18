@@ -709,8 +709,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   contribution with rows to act on passes `focus` with it, which sets its own key scope and cursor, and `left`, which
   the core calls when its turn ends, and becomes a stop for the core's focus keys (`BarOptions`). In a window too
   narrow for every bar beside `main`, the side bar narrows to its least width first, then the left bar, then the right
-  bar; the left or right bar lies over `main`'s start or end when the room left for it is less than its least width
-  and `main`'s. Only the side bar resizes by keys; the left and right bars by drag alone.
+  bar; the left or right bar lies over when the room left for it is less than its least width and `main`'s, the right
+  bar over `main`'s end and the left bar against the activity bar, over the side bar's start (a side bar over `main`
+  is laid past it). Only the side bar resizes by keys; the left and right bars by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
@@ -838,8 +839,8 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   the core then moves to the outer pane that way, then, at main's edge, to the **areas**: left to the shown mode's
   side bar through the mode's `focusSideBar`, right to the right bar's first contribution that took `focus`, Alt+j/k
   between such contributions in one bar, and back to main from either through the mode's `focusMain`. Left of the
-  side bar, or of main while no side bar shows, Alt+h reaches the left bar's first stop, and Alt+l leaves it for the
-  side bar while one shows, else for main. The core keeps which
+  side bar, or of main while the side bar is no stop (hidden, or the shown mode gives no `focusSideBar`), Alt+h
+  reaches the left bar's first stop, and Alt+l leaves it for the side bar while that is a stop, else for main. The core keeps which
   area holds the keys and resets it to main on every base scope change it did not make, so a click into main ends
   an area's turn; a left-bar or right-bar stop's turn also ends when the DOM focus moves out of its bar, to an element or to none (a click
   on no focusable spot in main), and the core then calls the contribution's `left` and blurs whatever the

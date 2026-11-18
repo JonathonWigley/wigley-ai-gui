@@ -406,8 +406,9 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // shown), and the side bar gets what is left. Shown in a span with room for
 // its least width and main's, a left or right bar sits beside main
 // (`data-left-bar` or `data-right-bar` `beside`), drawn no wider than leaves
-// main its least width; in a narrower span it lies over main's start or end
-// (`over`) at its least width, no wider than the span; hidden, it draws its
+// main its least width; in a narrower span it lies over (`over`) at its least
+// width, no wider than the span, the left bar against the activity bar and
+// the right bar on main's end, as `shell.css` lays them; hidden, it draws its
 // width unclamped. Beside, the side bar draws no wider than leaves main its
 // least width beside the other bars, each taking its least width while over
 // main; over the content, no wider than reaches them. Each bar's drawn width
@@ -591,8 +592,9 @@ export function mountShell(
   // The edges of the span the left bar, the side bar, main and the right bar
   // share: the start of the leftmost of the left bar, the side bar and main
   // that shows, to the right bar's end, main's while the right bar is hidden.
-  // Neither moves with a bar's width or layout, since a bar over main lies in
-  // main's column; the handles take no layout space.
+  // Neither moves with a bar's width or layout, since an over left bar starts
+  // where its collapsed column did and an over right bar lies in main's
+  // column; the handles take no layout space.
   const measureBarSpan = () => {
     const main = mounted.main.element.getBoundingClientRect();
     const starts = [main.left];

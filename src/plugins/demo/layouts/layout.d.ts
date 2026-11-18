@@ -8,8 +8,8 @@
 // - the left-bar slot, contributed while the panel is shown (`Space d d`), and the status-bar slot, contributed while
 //   the demo runs;
 // - the step agent's pane, below the step list in the panel;
-// - the keys and the focus: Alt+h past the side bar's left edge (main's while no side bar shows) gives the panel the
-//   keys, `j`/`k` walk a cursor over the steps, Enter goes to the cursor's step and `i` moves the keys into the step
+// - the keys and the focus: Alt+h past the side bar's left edge (main's while the side bar is hidden or no stop) gives
+//   the panel the keys, `j`/`k` walk a cursor over the steps, Enter goes to the cursor's step and `i` moves the keys into the step
 //   agent's pane; the layout adds `is-cursor` to the row whose `isCursor` is true, and the app scrolls the first
 //   `.is-cursor` into view;
 // - the cursor, the current step and beat, and autoplay;
