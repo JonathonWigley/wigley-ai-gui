@@ -114,6 +114,7 @@ function fakeAgentPane(pane: FakePane): AgentPane {
     hostTookKeys() {
       pane.calls.push('hostTookKeys');
     },
+    holdsKeys: () => false,
     modeHidden() {
       pane.calls.push('modeHidden');
     },

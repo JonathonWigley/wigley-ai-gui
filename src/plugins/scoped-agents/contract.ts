@@ -68,6 +68,20 @@ export const scopedAgentsMainKey: DependencyKey<
   'scoped-agents'
 > = { id: 'scoped-agents', process: 'main' };
 
+// What a host tells its agent pane. A pane inside a host's right-bar
+// contribution is host-owned, the contribution being the core's focus stop:
+// - the spec passes `isAlwaysShown: true`, `entersFrom: null` and
+//   `resizeTarget: null`;
+// - the contribution passes `keepsTurn: () => pane.holdsKeys()`, so the base
+//   scope changes the pane makes keep the stop's turn, and its `left` calls
+//   `pane.hostTookKeys()` beside its own work;
+// - the host's command that moves the keys into the pane and back calls
+//   `pane.toggle()`;
+// - `leave` sets the host's own scope and focuses the host's element, a base
+//   change that keeps the turn, as the pane still holds the keys then;
+// - when the shown mode changes while `pane.holdsKeys()`, the host blurs the
+//   focused element inside its contribution, so the core ends the turn and
+//   gives main the keys.
 export interface AgentPaneSpec {
   owner: string;
   agentId: string;
@@ -83,9 +97,12 @@ export interface AgentPaneSpec {
   isAlwaysShown: boolean;
   // The Alt move from the host into the shown pane: `right` for a slot right
   // of the host, `down` for one below it. The opposite move leaves the pane.
-  entersFrom: PaneDirection;
-  // The slot's divider.
-  resizeTarget: ResizeTarget;
+  // Null: the host owns the moves, `outerPanes.focus` takes none, and `toggle`
+  // gives the pane the keys at once; such a pane must be `isAlwaysShown`.
+  entersFrom: PaneDirection | null;
+  // The slot's divider; null when the host owns the resize keys, and
+  // `outerPanes.resize` then moves nothing.
+  resizeTarget: ResizeTarget | null;
   // The pane took the keys: the host's focus is the pane.
   tookKeys(): void;
   // Esc in the ask box or the move opposite `entersFrom`: the host takes the
@@ -103,6 +120,9 @@ export interface AgentPane extends Disposable {
   // Re-reads sessionOf after a host-made ask (backlog's sweep).
   refresh(): void;
   hostTookKeys(): void;
+  // Whether the pane holds the keys: from taking them until it gives them up
+  // or is disposed.
+  holdsKeys(): boolean;
   modeHidden(): void;
   outerPanes: OuterPanes;
   redraw(): void;

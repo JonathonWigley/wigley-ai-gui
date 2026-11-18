@@ -308,6 +308,8 @@ describe('createPaneTargets', () => {
   // Pane targets whose view and outer panes answer false, over fake areas
   // that record each ask into the same `asked`: `side bar`, `main`, and
   // `stop <n>` for the nth right-bar stop, plus `left <n>` when `hasLeft`.
+  // Each stop's `keepsTurn` answers `keepsTurn`, and a stop has none when it
+  // is undefined.
   // `focusSideBar` answers `sideBar`, after the targets' own `baseChanged`
   // when `sideBarSetsScope`, as a mode's own `setScope` runs it. The targets
   // hear a real scope stack through `listenToScopes`; `push` pushes an overlay
@@ -316,11 +318,13 @@ describe('createPaneTargets', () => {
     sideBar?: boolean;
     stops?: number;
     hasLeft?: boolean;
+    keepsTurn?: boolean;
     sideBarSetsScope?: boolean;
   }) {
     const fakes = recordingTargets();
     const scopes = createScopeStack('main.view');
     let overlay: PushedScope | null = null;
+    const { keepsTurn } = options;
     const stops: RightBarStop[] = Array.from(
       { length: options.stops ?? 0 },
       (_, index) => ({
@@ -328,6 +332,7 @@ describe('createPaneTargets', () => {
         left: options.hasLeft
           ? () => fakes.asked.push(`left ${index + 1}`)
           : undefined,
+        ...(keepsTurn === undefined ? {} : { keepsTurn: () => keepsTurn }),
       }),
     );
     let liveStops = stops;
@@ -717,6 +722,43 @@ describe('createPaneTargets', () => {
       expect(fakes.logged).toEqual(logged);
     },
   );
+
+  // Breaks when a base change ends a stop's turn that `keepsTurn` keeps, or
+  // keeps one whose `keepsTurn` is false or absent.
+  it.each<{
+    case: string;
+    keepsTurn?: boolean;
+    asked: string[];
+  }>([
+    {
+      case: 'keepsTurn true keeps the turn',
+      keepsTurn: true,
+      asked: ['base changed', 'left 1', 'main'],
+    },
+    {
+      case: 'keepsTurn false ends it',
+      keepsTurn: false,
+      asked: ['left 1', 'base changed', 'outer left', 'side bar'],
+    },
+    {
+      case: 'no keepsTurn ends it',
+      asked: ['left 1', 'base changed', 'outer left', 'side bar'],
+    },
+  ])("a base change and a right-bar stop's turn: $case", (row) => {
+    const fakes = areaTargets({
+      stops: 2,
+      hasLeft: true,
+      keepsTurn: row.keepsTurn,
+    });
+    fakes.targets.focus('right');
+    fakes.clear();
+
+    fakes.setBase('backlog.homes');
+    fakes.asked.push('base changed');
+    fakes.targets.focus('left');
+
+    expect(fakes.asked).toEqual(row.asked);
+  });
 
   it('ignores focus leaving the right bar while main or the side bar holds the keys', () => {
     const fakes = areaTargets({ sideBar: true, stops: 2, hasLeft: true });

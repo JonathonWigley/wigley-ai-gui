@@ -7,10 +7,12 @@ import type {
 import type { ScopeStack } from './key-scope';
 
 // One right-bar contribution that passed `focus`: a stop for the core's focus
-// keys. `focus` hands it the keys; `left` tells it its turn ended.
+// keys. `focus` hands it the keys; `left` tells it its turn ended;
+// `keepsTurn` returning true keeps its turn through a base scope change.
 export interface RightBarStop {
   focus(): void;
   left?(): void;
+  keepsTurn?(): boolean;
 }
 
 // The areas past main's edges, as the core's focus keys reach them.
@@ -41,7 +43,7 @@ export interface PaneAreas {
 // `baseChanged` runs on every base scope change: it forgets the view's two
 // targets, keeping the outer panes until `setOuterPanes(null)`, and gives the
 // keys back to main without calling `focusMain`, so a click into main ends an
-// area's turn. `stopRemoved` ends the turn of the stop holding the keys, with
+// area's turn; a held stop whose `keepsTurn` returns true keeps its turn. `stopRemoved` ends the turn of the stop holding the keys, with
 // `focusMain`; another stop's removal does nothing. `sideBarOpened` holds the
 // side bar as the area, for a narrow mode's side bar opened over main.
 // `focusLeftRightBar` hears the DOM focus land on an element outside the right
@@ -180,7 +182,9 @@ export function createPaneTargets(
       resizeTarget = null;
       focusTarget = null;
       isAwaitingView = false;
-      endStopTurn();
+      if (heldStop?.keepsTurn?.() !== true) {
+        endStopTurn();
+      }
     },
     stopRemoved(stop) {
       if (area !== 'right' || heldStop !== stop) {

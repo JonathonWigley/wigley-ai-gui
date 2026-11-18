@@ -715,6 +715,30 @@ describe('mountShell', () => {
     },
   );
 
+  // Breaks when the stop drops the contribution's `keepsTurn`, reads it once
+  // at contribute time, or gives a stop one its contribution never passed.
+  it('mountShell_RightBarStopKeepsTurn_FollowsTheContribution', () => {
+    const { shell } = mountMeasuredShell();
+    let answer = false;
+    shell.areas.rightBar.contribute(asHtml(new FakeElement('div')), {
+      order: 0,
+      focus: () => undefined,
+      keepsTurn: () => answer,
+    });
+    shell.areas.rightBar.contribute(asHtml(new FakeElement('div')), {
+      order: 1,
+      focus: () => undefined,
+    });
+    const [keeping, plain] = shell.rightBarStops();
+
+    const answers = [keeping.keepsTurn?.()];
+    answer = true;
+    answers.push(keeping.keepsTurn?.());
+
+    expect(answers).toEqual([false, true]);
+    expect(plain.keepsTurn).toBeUndefined();
+  });
+
   it('mountShell_RightBarStopDisposed_TellsOnce', () => {
     const { shell } = mountMeasuredShell();
     const removed: unknown[] = [];

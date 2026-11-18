@@ -251,6 +251,7 @@ function fakeAgentPane(record: FakePane, spec: AgentPaneSpec): AgentPane {
       record.calls.push('hostTookKeys');
       holdsKeys = false;
     },
+    holdsKeys: () => holdsKeys,
     modeHidden() {
       record.calls.push('modeHidden');
       giveBack();

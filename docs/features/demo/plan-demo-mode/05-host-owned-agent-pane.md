@@ -1,6 +1,6 @@
 # 05 — Host-owned agent pane
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · changes how the core right bar ends a held stop's turn, across async scope changes and focus moves
 Wave: 2 · Depends on: 01

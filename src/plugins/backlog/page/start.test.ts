@@ -38,6 +38,7 @@ const fakeScopedAgents = fakeDependency(scopedAgentsPageKey, () => ({
       scopeOpened: () => undefined,
       refresh: () => undefined,
       hostTookKeys: () => undefined,
+      holdsKeys: () => false,
       modeHidden() {
         paneCalls.push('modeHidden');
       },

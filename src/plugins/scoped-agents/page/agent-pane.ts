@@ -57,6 +57,9 @@ const OPPOSITE_DIRECTIONS: Record<PaneDirection, PaneDirection> = {
   down: 'up',
 };
 
+// The resize target of a pane whose host owns the resize keys.
+const NO_DIVIDER: ResizeTarget = { nudge: () => false };
+
 // The open scope; a new object on each change, so an answer can tell whether
 // the scope it was asked for is still open, even when the same scope was
 // closed and opened again.
@@ -87,12 +90,19 @@ interface AskBox {
 // `modeHidden`, the move opposite `entersFrom` and `leaveBox` give them back
 // to the host and give them up whether or not the host's `leave` answers.
 // `outerPanes` moves the spec's `entersFrom` direction from the host into the
-// shown pane, and the opposite one from the pane to the host.
+// shown pane, and the opposite one from the pane to the host. A host-owned
+// pane (`entersFrom` null) takes no move and no resize, and its `toggle` takes
+// the keys at once, before the first answer; it must be always shown. While
+// the pane holds the keys and swaps what it shows, the DOM focus waits on the
+// pane's element, never dropping to the document.
 // After `dispose` every method does nothing.
 export function createAgentPane(
   deps: AgentPaneDeps,
   spec: AgentPaneSpec,
 ): AgentPaneView {
+  if (spec.entersFrom === null && !spec.isAlwaysShown) {
+    throw new Error('a host-owned agent pane must be always shown');
+  }
   const log = (line: string) => deps.log(line);
   const { agentId } = spec;
   const body = element('div', 'scoped-agents-pane');
@@ -133,6 +143,14 @@ export function createAgentPane(
     askBox.editor.destroy();
     askBox.frame.remove();
     askBox = null;
+  };
+
+  // Moves the DOM focus onto the pane's element while the pane holds the keys
+  // and the focus sits inside it, before what holds the focus is removed.
+  const keepFocusInPane = () => {
+    if (hasKeys && body.contains(document.activeElement)) {
+      body.focus();
+    }
   };
 
   const dropMount = () => {
@@ -237,6 +255,7 @@ export function createAgentPane(
     if (mount !== null && mountedSessionId === sessionId) {
       return false;
     }
+    keepFocusInPane();
     dropMount();
     destroyAskBox();
     mountSession(scope, sessionId);
@@ -288,8 +307,16 @@ export function createAgentPane(
 
   // Gives the shown pane the keys, once `sessionOf` answers when it shows
   // nothing yet, or no chat view in a pane that hides; an always-shown pane
-  // read `sessionOf` on its scope's open.
+  // read `sessionOf` on its scope's open. A host-owned pane takes them at
+  // once, and its answer moves the focus onto what it shows.
   const enter = () => {
+    if (spec.entersFrom === null) {
+      takeKeys(true);
+      if (mount === null && askBox === null) {
+        readSession();
+      }
+      return;
+    }
     const showsAnswer =
       mount !== null || (spec.isAlwaysShown && askBox !== null);
     if (showsAnswer) {
@@ -336,7 +363,6 @@ export function createAgentPane(
           return;
         }
         isSending = false;
-        destroyAskBox();
         showSession(asked.scope, sessionId);
         if (hasKeys) {
           holdKeys(true);
@@ -359,11 +385,12 @@ export function createAgentPane(
   const outerPanes: OuterPanes = {
     focus: {
       move(direction) {
-        if (isDisposed) {
+        const { entersFrom } = spec;
+        if (isDisposed || entersFrom === null) {
           return false;
         }
-        const entersPane = direction === spec.entersFrom;
-        const leavesPane = direction === OPPOSITE_DIRECTIONS[spec.entersFrom];
+        const entersPane = direction === entersFrom;
+        const leavesPane = direction === OPPOSITE_DIRECTIONS[entersFrom];
         if (leavesPane && hasKeys) {
           leaveToHost();
           return true;
@@ -375,7 +402,7 @@ export function createAgentPane(
         return false;
       },
     },
-    resize: spec.resizeTarget,
+    resize: spec.resizeTarget ?? NO_DIVIDER,
   };
 
   const view: AgentPaneView = {
@@ -405,6 +432,7 @@ export function createAgentPane(
       if (isDisposed || isOpenAlready) {
         return;
       }
+      keepFocusInPane();
       dropMount();
       destroyAskBox();
       isSending = false;
@@ -433,6 +461,7 @@ export function createAgentPane(
       }
     },
     hostTookKeys: releaseKeys,
+    holdsKeys: () => hasKeys,
     modeHidden() {
       takesKeysOnAnswer = false;
       leaveToHost();

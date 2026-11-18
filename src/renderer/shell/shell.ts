@@ -118,7 +118,8 @@ export type ShellAreas = Record<Exclude<AreaName, 'rightBar'>, Area> & {
 // `rightBarStops` lists one `RightBarStop` per right-bar contribution that
 // passed `focus`, in the right bar's drawn order, top to bottom; a stop's
 // `left` runs the contribution's, then blurs the focused element when the
-// contribution still holds it. A stop's contribution `dispose` takes it out
+// contribution still holds it, and a stop has `keepsTurn` only when its
+// contribution passed one. A stop's contribution `dispose` takes it out
 // of that list, then tells each
 // `onRightBarStopRemoved` listener once. `rightBarHolds` is whether `node` is
 // in the right bar's element. `dispose` disposes both dividers, stops
@@ -407,6 +408,7 @@ export function mountShell(
   // A stop for a right-bar contribution that passed `focus`. Its `left` runs
   // the contribution's own, then blurs the focused element when `element`
   // still holds it, so a turn the contribution did not end keeps no caret.
+  // It carries the contribution's `keepsTurn` when one was passed.
   const stopFor = (
     name: AreaName,
     element: HTMLElement,
@@ -416,7 +418,7 @@ export function mountShell(
     if (name !== 'rightBar' || focus === undefined) {
       return undefined;
     }
-    return {
+    const stop: RightBarStop = {
       focus,
       left() {
         options?.left?.();
@@ -425,6 +427,11 @@ export function mountShell(
         }
       },
     };
+    const keepsTurn = options?.keepsTurn;
+    if (keepsTurn !== undefined) {
+      stop.keepsTurn = keepsTurn;
+    }
+    return stop;
   };
 
   const createArea = (name: AreaName): RightBarArea => {

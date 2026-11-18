@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
-import type { PaneDirection } from '../../../contracts/panes';
+import {
+  PANE_DIRECTIONS,
+  type PaneDirection,
+} from '../../../contracts/panes';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, installFocusFakeDom } from '../../../shared/page/test-dom';
 import { deferred } from '../../../shared/plugin-part-harness.test-support';
@@ -9,7 +12,8 @@ import type { AskBoxInput } from '../layouts/layout';
 import { createAgentPane } from './agent-pane';
 
 // One box the fake host made: the element it mounted in, its text, each
-// focus call's options, and whether it was destroyed.
+// focus call's options, and whether it was destroyed. A focus call moves the
+// DOM focus onto the element it mounted in.
 interface FakeBox {
   parent: HTMLElement;
   text: string;
@@ -46,6 +50,7 @@ function fakeEditorHost() {
         charBeforeCursor: () => '',
         focus: (options: unknown) => {
           box.focusOptions.push(options);
+          parent.focus();
           events.focused();
         },
         blur: () => events.blurred(),
@@ -63,23 +68,28 @@ function fakeEditorHost() {
 // spec's `tookKeys` gives the fake host's focus to the pane and its `leave`
 // takes it back and tells the pane, as a host does, unless `hostAnswersLeave`
 // is false; `calls` records them and `setShown`. The pane starts hidden and is
-// entered from the right unless `isAlwaysShown` and `entersFrom` say
-// otherwise. `events` records each
-// `sessionOf`, each `setScope`, `setFocusTarget` and `setResizeTarget`, and
-// each mount's `dispose`, in order. `mountError` makes every `mountChat` throw
-// it.
+// entered from the right, with a divider of its own, unless `isAlwaysShown`,
+// `entersFrom` and `resizeTarget` say otherwise. `events` records each
+// `sessionOf`, each `setScope`, `setFocusTarget` and `setResizeTarget` (with
+// `null` for a null target), and each mount's `dispose`, in order. `held`
+// records each `heldKeys`, `pane` or `null`, and `activeAtMount` the DOM's
+// `activeElement` as each `mountChat` runs. `mountError` makes every
+// `mountChat` throw it.
 function paneSetup(
   options: {
     mountError?: string;
     hostAnswersLeave?: boolean;
     isAlwaysShown?: boolean;
-    entersFrom?: PaneDirection;
+    entersFrom?: PaneDirection | null;
+    resizeTarget?: null;
   } = {},
 ) {
   const logs: string[] = [];
   const toasts: [string, string][] = [];
   const events: string[] = [];
   const calls: string[] = [];
+  const held: string[] = [];
+  const activeAtMount: unknown[] = [];
   const asks: [string, string][] = [];
   const drawnInputs: AskBoxInput[] = [];
   const sessionAnswers: ReturnType<typeof deferred<string | null>>[] = [];
@@ -95,8 +105,8 @@ function paneSetup(
     hint: 'Ask about the problem.',
     setShown: (shown) => calls.push(`setShown ${shown}`),
     isAlwaysShown: options.isAlwaysShown ?? false,
-    entersFrom: options.entersFrom ?? 'right',
-    resizeTarget: { nudge: () => true },
+    entersFrom: options.entersFrom === undefined ? 'right' : options.entersFrom,
+    resizeTarget: options.resizeTarget === null ? null : { nudge: () => true },
     tookKeys() {
       calls.push('tookKeys');
       focus = 'pane';
@@ -128,10 +138,14 @@ function paneSetup(
       log: (line) => logs.push(line),
       toast: (text, tone) => toasts.push([text, tone]),
       setScope: (scope) => events.push(`setScope ${scope}`),
-      setResizeTarget: () => events.push('setResizeTarget'),
+      setResizeTarget: (target) =>
+        events.push(
+          target === null ? 'setResizeTarget null' : 'setResizeTarget',
+        ),
       setFocusTarget: (target) =>
         events.push(`setFocusTarget ${target === null ? 'null' : 'target'}`),
       mountChat(element, sessionId) {
+        activeAtMount.push(document.activeElement);
         if (options.mountError !== undefined) {
           throw new Error(options.mountError);
         }
@@ -166,7 +180,7 @@ function paneSetup(
           dispose: () => undefined,
         };
       },
-      heldKeys: () => undefined,
+      heldKeys: (next) => held.push(next === null ? 'null' : 'pane'),
     },
     spec,
   );
@@ -176,6 +190,8 @@ function paneSetup(
     toasts,
     events,
     calls,
+    held,
+    activeAtMount,
     asks,
     drawnInputs,
     mounts,
@@ -213,6 +229,11 @@ function paneSetup(
 }
 
 type Setup = ReturnType<typeof paneSetup>;
+
+// A pane its host owns, as in a right-bar contribution: always shown, with no
+// move and no divider of its own.
+const hostOwnedSetup = () =>
+  paneSetup({ isAlwaysShown: true, entersFrom: null, resizeTarget: null });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -870,6 +891,95 @@ describe('createAgentPane', () => {
 
     expect(result).toBe(row.result);
     expect(setup.calls).toEqual(row.calls);
+  });
+
+  // Breaks when a host-owned pane takes a move or a resize the host owns, or
+  // hands the core a divider it does not have.
+  it.each(
+    PANE_DIRECTIONS.flatMap((direction) =>
+      [true, false].map((holdsKeys) => ({
+        case: `${direction}, keys held ${holdsKeys}`,
+        direction,
+        holdsKeys,
+        resizeEvents: holdsKeys ? ['setResizeTarget null'] : [],
+      })),
+    ),
+  )('outer panes of a host-owned pane: $case', async (row) => {
+    const setup = hostOwnedSetup();
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession(null);
+    if (row.holdsKeys) {
+      setup.pane.toggle();
+    }
+    setup.calls.length = 0;
+
+    const moved = setup.pane.outerPanes.focus.move(row.direction);
+    const resized = setup.pane.outerPanes.resize.nudge(row.direction);
+
+    expect([moved, resized]).toEqual([false, false]);
+    expect(setup.calls).toEqual([]);
+    expect(setup.pane.holdsKeys()).toBe(row.holdsKeys);
+    expect(
+      setup.events.filter((event) => event.startsWith('setResizeTarget')),
+    ).toEqual(row.resizeEvents);
+  });
+
+  it('toggle_HostOwnedBeforeFirstAnswer_TakesKeysAtOnce', async () => {
+    const setup = hostOwnedSetup();
+    setup.pane.scopeOpened('two-sum');
+
+    setup.pane.toggle();
+    const callsBeforeAnswer = [...setup.calls];
+    const holdsBeforeAnswer = setup.pane.holdsKeys();
+    await setup.answerSession(null);
+
+    expect(callsBeforeAnswer).toEqual(['setShown true', 'tookKeys']);
+    expect(holdsBeforeAnswer).toBe(true);
+    expect(setup.boxes.map((box) => box.focusOptions)).toEqual([
+      [{ insertAtEnd: true }],
+    ]);
+  });
+
+  // Breaks when the ask box goes before the focus moves onto the pane, so the
+  // DOM focus drops to the document and the core ends the right-bar turn.
+  it('send_HostOwnedHoldsKeys_KeepsKeysThroughTheMount', async () => {
+    const setup = hostOwnedSetup();
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession(null);
+    setup.pane.toggle();
+    setup.boxes[0]!.text = 'how do I start';
+
+    setup.pane.send();
+    await setup.answerAsk({ sessionId: 's1' });
+
+    expect(setup.pane.holdsKeys()).toBe(true);
+    expect(
+      setup.mounts.map((mount) => [mount.sessionId, mount.shown]),
+    ).toEqual([['s1', 1]]);
+    expect(setup.held).not.toContain('null');
+    expect(
+      setup.activeAtMount.map((active) => active === setup.pane.element),
+    ).toEqual([true]);
+  });
+
+  // Breaks when another scope's swap drops the DOM focus out of the pane
+  // while it holds the keys.
+  it('scopeOpened_HostOwnedHoldsKeys_KeepsFocusInThePane', async () => {
+    const setup = hostOwnedSetup();
+    setup.pane.scopeOpened('two-sum');
+    await setup.answerSession(null);
+    setup.pane.toggle();
+
+    setup.pane.scopeOpened('lru-cache');
+
+    expect(setup.pane.holdsKeys()).toBe(true);
+    expect(document.activeElement === setup.pane.element).toBe(true);
+  });
+
+  it('createAgentPane_HostOwnedNotAlwaysShown_Throws', () => {
+    expect(() => paneSetup({ entersFrom: null, resizeTarget: null })).toThrow(
+      'a host-owned agent pane must be always shown',
+    );
   });
 
   it('opens nothing with no scope', () => {
