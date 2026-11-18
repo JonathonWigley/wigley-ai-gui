@@ -1,6 +1,6 @@
 # 09 — Retro reads action words; proof text in the marketplace and forms.md
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 08
 Plan: [plan.md](plan.md)

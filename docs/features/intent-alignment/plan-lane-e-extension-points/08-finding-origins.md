@@ -1,6 +1,6 @@
 # 08 — Finding origin specs, open layout unions, proof off a Nit
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -386,3 +386,4 @@ Where the text above and these differ, these win.
 
 ## Proof
 
+Commit 80df93896 · proof: diff read: FindingOriginSpec, string FindingOrigin/FindingCard, registerFindingOrigin on main and page exports, action_label/recommend_action_label on FindingAnswerEntry, FindingCard.originToken; golden diff is the three proof lines only (ask_round proof sentence, proof out of required, proof description); wave 4 compile: typecheck, lint, forms tests 922 pass · concerns: a page start that throws partway leaves its registered built-in origins undisposed (main guards, page does not); an origin with no spec on the page draws the caused card's action headers with no entries behind them; saved finding entries now carry the two label keys, old bodies still read since main recomputes them

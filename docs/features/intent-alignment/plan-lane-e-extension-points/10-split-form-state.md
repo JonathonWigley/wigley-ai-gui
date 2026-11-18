@@ -1,6 +1,6 @@
 # 10 — Split form-state.ts and rename the screen union
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 07, 08
 Plan: [plan.md](plan.md)
