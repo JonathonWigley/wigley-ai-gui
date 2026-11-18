@@ -209,6 +209,32 @@ Defects seen in a drive run, a transcript or the user's own use.
   from the sessions list the thread falls back to the raw id. Fix: keep the last title seen for a row id (in the
   thread's record or the page's state) and show it, marked ended. Source session: Claude Code
   ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **A session host killed while the app runs is not replaced until the next request** — *needs a feature plan*: in
+  the scheduled-tasks live check, after the drive run's host was killed with the app open, no new host started and no
+  `[scheduling] queued` line came within 65 s; one started only when a chat request needed it. Until then the queued
+  runs have no host to fire them. The client's connect loop (`src/main/session-host/session-host-client.ts`,
+  `startConnecting`, `adopt`) starts only from a caller; the plan wanted the dropped link to reconnect and hand over
+  the pending list (session-host design.md, task 13). Decide whether a dropped link with a pending list reconnects at
+  once.
+- **Main's startup log lines never reach the page log** — *agent-ready*: `createPageLog` (`src/main/page-log.ts`) holds
+  lines until `did-finish-load`, then sends them, but the renderer registers `bridge.onLog` inside its async `start()`
+  (`src/renderer/renderer.ts:126`), so lines sent before that are dropped. A drive run never shows a main part's start
+  lines, such as `[scheduling] queued 0 runs` or the adoption and replay lines after a restart, while later lines show.
+  Fix: let the page ask for the held lines once its listener is on, or hold them until a page-side ready message.
+- **A scheduled run's `done` mark clears as its turn ends** — *needs a feature plan*: in the live check, the app
+  selected the run's row by itself right after its turn ended (`[sessions] activated drive-project`), so the `done`
+  mark and the Dock badge cleared before the user saw them. Find what activates a headless run row at turn end, and
+  keep run rows out of it.
+- **The scheduling tools leave `tools.json` at a keep-sessions quit** — *agent-ready*: at `quit --keep-sessions` the
+  endpoint's `tools.json` is rewritten without the four scheduling tools, since scheduling stops before the endpoint's
+  last write, and they return at the next start. A relay that starts while the app is closed reads that file. Decide
+  whether the endpoint keeps a stopping part's tools at quit, then make it so.
+- **The Schedules editor's mode line wraps and hides the Prompt text** — *agent-ready*: each editor field's
+  `--NORMAL--` line wraps onto two lines, and the Prompt box cuts its text off behind it (live check 1 screenshots, in
+  the drive run `sched-check2`). Lay the mode line out per `DESIGN.md`'s form rows.
+- **No test checks that the restore sweep still finishes a row this start did not adopt** — *agent-ready*: the
+  `adoptedRows` skip in `src/plugins/scheduling/main/start.ts` (`finishRestoredRuns`) has a test for the adopted row
+  only. Add the non-adopted row as a case in the outcome table of `start.test.ts`.
 
 ## Harness seams
 
