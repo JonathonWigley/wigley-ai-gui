@@ -78,6 +78,8 @@ function setup(cursor?: PickerCursor) {
   const finished: { formId: string; end: AgentFormEnd<AudioPickerBody> }[] = [];
   const logs: string[] = [];
   const toasts: [string, ToastTone][] = [];
+  let previewFailure: Error | null = null;
+  let isStopped = false;
   const deps: PickerCommandDeps = {
     store,
     boxes: {
@@ -102,10 +104,13 @@ function setup(cursor?: PickerCursor) {
       return Promise.resolve();
     },
     scrollPicker: () => ({ moved: true, atEnd: false }),
-    openPreview: () => Promise.resolve(),
+    openPreview: () =>
+      previewFailure === null
+        ? Promise.resolve()
+        : Promise.reject(previewFailure),
     toast: (text, tone) => toasts.push([text, tone]),
     log: (message) => logs.push(message),
-    isStopped: () => false,
+    isStopped: () => isStopped,
   };
   const handlers = pickerCommandHandlers(deps);
   const run = (
@@ -126,6 +131,15 @@ function setup(cursor?: PickerCursor) {
     toggles,
     finished,
     logs,
+    toasts,
+    // The page part stopping.
+    stop: () => {
+      isStopped = true;
+    },
+    // Makes every later preview open reject with `error`.
+    failPreview: (error: Error) => {
+      previewFailure = error;
+    },
     leaves: () => leaves,
     // Puts the focused box in vim mode `name`, as typing in it does.
     setMode: (name: string) => {
@@ -425,6 +439,28 @@ describe('pickerCommandHandlers', () => {
       );
       expect(h.store.get().view).toBe(view);
       expect(h.logs).toEqual(logs);
+    },
+  );
+});
+
+describe('openPreview', () => {
+  it.each([
+    { state: 'running', isStopped: false, logs: 1, toasts: 1 },
+    { state: 'stopped', isStopped: true, logs: 0, toasts: 0 },
+  ])(
+    'a failed preview open logs and toasts only while the part runs ($state)',
+    async ({ isStopped, logs, toasts }) => {
+      const h = setup();
+      h.failPreview(new Error('no preview picker'));
+
+      h.run('openPreview');
+      if (isStopped) {
+        h.stop();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(h.logs).toHaveLength(logs);
+      expect(h.toasts).toHaveLength(toasts);
     },
   );
 });

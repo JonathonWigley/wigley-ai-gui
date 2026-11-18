@@ -668,7 +668,7 @@ describe('Large over the engine page part', () => {
     { stage: 'make', fields: {}, word: null, tag: true },
     { stage: 'make', fields: BUSY.turn, word: null, tag: true },
   ])(
-    'setFlow_RowLabelReadsItsWord ($stage, word $word)',
+    'the row label reads its word for a flow ($stage, word $word)',
     ({ stage, fields, word, tag }) => {
       const { view, put, rowActivities } = setUp();
       const wrapper = new FakeElement('div');
@@ -782,7 +782,7 @@ describe('Large over the engine page part', () => {
       steps: trail(7, 'Close', 'done'),
     },
   ])(
-    'steps_FlowIn_CarryThePinnedStates ($stage, $busy)',
+    'the steps carry the pinned states for a flow ($stage, $busy)',
     ({ stage, busy, steps }) => {
       const { view, put, setLayouts } = setUp();
       const recording = recordingLayout();

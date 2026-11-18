@@ -183,6 +183,32 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
+  it('stopping with one dispose throwing still releases every other part', async () => {
+    const editors = countingEditors();
+    let isThrowOwed = true;
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart],
+      anchorDispose() {
+        if (isThrowOwed) {
+          isThrowOwed = false;
+          throw new Error('anchor gone');
+        }
+      },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
+    });
+    harness.send('formShown', openForm());
+    expect(harness.anchors.length).toBeGreaterThan(0);
+
+    await expect(harness.stop()).rejects.toThrow('anchor gone');
+
+    expect(editors.live()).toBe(0);
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
   // The stop-order ruling: the kinds and origins listeners leave before the
   // built-ins do.
   it('stop throws nothing and rebuilds nothing', async () => {

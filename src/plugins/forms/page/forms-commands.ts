@@ -128,6 +128,9 @@ export function formsCommandHandlers(
     (invoke: () => Promise<unknown>): Handler =>
     () =>
       void invoke().catch((error) => {
+        if (deps.isStopped()) {
+          return;
+        }
         log(`layout command failed: ${errorText(error)}`);
         deps.toast(`Layout command failed: ${errorText(error)}`, 'error');
       });

@@ -155,6 +155,9 @@ export function pickerCommandHandlers(
 
 function openPreview(deps: PickerCommandDeps) {
   deps.openPreview().catch((error: unknown) => {
+    if (deps.isStopped()) {
+      return;
+    }
     deps.log(`layout preview failed: ${errorText(error)}`);
     deps.toast(`Layout preview failed: ${errorText(error)}`, 'error');
   });

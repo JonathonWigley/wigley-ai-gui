@@ -307,7 +307,7 @@ describe('default layout sidePane', () => {
     { finishedOpen: false, tasks: [] },
     { finishedOpen: true, tasks: ['row:Wave 1 task 1'] },
   ])(
-    'sidePane_FinishedOpen_DrawsFinishedTasksOnlyWhenOpen ($finishedOpen)',
+    'the side pane draws finished tasks only when open ($finishedOpen)',
     ({ finishedOpen, tasks }) => {
       const parts = drawPane({
         finishedGroups: [doneWave('Wave 1', 1)],
@@ -323,7 +323,7 @@ describe('default layout sidePane', () => {
     { checked: 3, total: 4, percent: 75 },
     { checked: 0, total: 0, percent: 0 },
   ])(
-    'sidePane_CheckedOfTotal_FillsTheBarToPercent ($checked of $total, $percent)',
+    'the side pane fills the bar to the percent ($checked of $total, $percent)',
     ({ checked, total, percent }) => {
       const meter = drawPane({ checked, total }).find((part) =>
         part.startsWith('meter:'),

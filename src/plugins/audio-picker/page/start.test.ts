@@ -424,6 +424,34 @@ describe('audio picker page part', () => {
     },
   );
 
+  it('stopping with one dispose throwing still disposes the output and leaves nothing live', async () => {
+    const outputs = fakeOutputs();
+    const editors = countingEditors();
+    let isThrowOwed = true;
+    const harness = startPagePart(createAudioPickerPagePart(outputs.make), {
+      parts: [sessionsPagePart],
+      anchorDispose() {
+        if (isThrowOwed) {
+          isThrowOwed = false;
+          throw new Error('anchor gone');
+        }
+      },
+      services: {
+        editor: editors.host,
+        markdown: PLAIN_MARKDOWN,
+        picker: fakeListPickerService(),
+      },
+    });
+    harness.send('formShown', presentedPicker('p1'));
+    expect(harness.anchors.length).toBeGreaterThan(0);
+
+    await expect(harness.stop()).rejects.toThrow('anchor gone');
+
+    expect(outputs.outputs).toEqual([{ isDisposed: true }]);
+    expect(editors.live()).toBe(0);
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
   it('audioPickerPagePart_Stop_LeavesNothingLive', async () => {
     const forms = deferred<PresentedAudioPicker[]>();
     const bytes = deferred<Uint8Array>();

@@ -91,6 +91,7 @@ function setup(
   const logs: string[] = [];
   let finishFailure: Error | null = null;
   let previewFailure: Error | null = null;
+  let isStopped = false;
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
   const log = (message: string) => logs.push(message);
@@ -131,7 +132,7 @@ function setup(
         : Promise.reject(previewFailure),
     toast,
     log,
-    isStopped: () => false,
+    isStopped: () => isStopped,
   };
   const handlers = primerCommandHandlers(deps);
   const focusTarget = primerFocusTarget(deps);
@@ -169,6 +170,10 @@ function setup(
     // Makes every later finish reject with `error`.
     failFinish: (error: Error) => {
       finishFailure = error;
+    },
+    // The page part stopping.
+    stop: () => {
+      isStopped = true;
     },
     // Makes every later preview open reject with `error`.
     failPreview: (error: Error) => {
@@ -902,6 +907,18 @@ describe('openPreview', () => {
     );
     expect(toastTones).toEqual(['error']);
     expect(logs).toEqual([expect.stringContaining('no preview session')]);
+  });
+
+  it('a preview failure that lands after the part stopped logs and toasts nothing', async () => {
+    const { run, stop, failPreview, logs, toasts } = setup();
+    failPreview(new Error('no preview session'));
+
+    run('openPreview');
+    stop();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(toasts).toEqual([]);
+    expect(logs).toEqual([]);
   });
 });
 

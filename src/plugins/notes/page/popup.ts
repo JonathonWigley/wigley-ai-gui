@@ -1460,6 +1460,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
           () => rendering.dispose(),
           () => writingPlace.dispose(),
           () => autosave.dispose(),
+          () => parts.dispose(),
         ],
         (step) => step(),
       );

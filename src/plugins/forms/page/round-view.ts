@@ -210,9 +210,6 @@ export function createRoundView(
         view.rebuild(current);
         return;
       }
-      // Every round's rail shares one stored width, and the view is updated
-      // each time it is shown, so this picks up another round's drag.
-      split.reloadWidth();
       shownView = viewName;
       const isForms = viewName === 'forms';
       const isReview = viewName === 'review';

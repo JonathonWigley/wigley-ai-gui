@@ -796,6 +796,28 @@ describe('chatroomMainPart', () => {
     expect(writes).toEqual([]);
   });
 
+  // Breaks if a room rebuild that fails after the stop logs its failure.
+  it('a room rebuild that fails after the stop logs nothing', async () => {
+    const { harness, postAsUser } = startChatroom();
+    await settle();
+    let refuse = () => undefined as void;
+    userUnreadGate.next = new Promise<void>((_resolve, reject) => {
+      refuse = () => reject(new Error('read refused'));
+    });
+    await postAsUser('plan-x', { body: 'first' });
+    await settle();
+    const logged = harness.logs.length;
+
+    const stopped = harness.stop();
+    refuse();
+    await stopped;
+    await settle();
+
+    expect(
+      harness.logs.slice(logged).map(({ message }) => message),
+    ).not.toContainEqual(expect.stringContaining('not written'));
+  });
+
   // Breaks if a teardown step that throws skips the steps after it.
   it.each(['boardFeed', 'delivery'] as const)(
     'a %s stop that throws still runs every other step and rejects',

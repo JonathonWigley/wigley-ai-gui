@@ -51,8 +51,8 @@ type KeysApi = PageApi<
 // logging how far it went. The core holds the anchors: this part tells it the
 // `showHints` setting. Records each scope in force and checks it against the
 // core's placed anchors for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
-// `document` listener `dispose` removes; `dispose` also disposes help's and
-// which-key's draws.
+// `document` listener `dispose` removes; `dispose` also disposes help's,
+// which-key's and the Keys button's draws.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -215,6 +215,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
               ),
             () => help.dispose(),
             () => whichKeyView.dispose(),
+            () => keysButton.dispose(),
           ],
           (step) => step(),
         );

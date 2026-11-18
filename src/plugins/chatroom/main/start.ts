@@ -158,6 +158,9 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
           );
         })
         .catch((error: unknown) => {
+          if (isStopped) {
+            return;
+          }
           log(`room view of ${roomName} not written: ${errorText(error)}`);
         });
     };

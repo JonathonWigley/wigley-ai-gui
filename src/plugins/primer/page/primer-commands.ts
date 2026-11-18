@@ -164,6 +164,9 @@ export function primerCommandHandlers(
 
 function openPreview(deps: PrimerCommandDeps) {
   deps.openPreview().catch((error: unknown) => {
+    if (deps.isStopped()) {
+      return;
+    }
     deps.log(`layout preview failed: ${errorText(error)}`);
     deps.toast(`Layout preview failed: ${errorText(error)}`, 'error');
   });

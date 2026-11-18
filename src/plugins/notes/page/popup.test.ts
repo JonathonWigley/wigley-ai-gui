@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
@@ -98,6 +99,8 @@ const MINE_ROW: Layout = {
 interface FakeMarkup {
   tools: string[];
   isDisposed: boolean;
+  // Makes its dispose throw this once marked.
+  disposeError?: Error;
 }
 
 interface Harness {
@@ -224,6 +227,9 @@ function fakeMarkupEditor(
         toPng: () => Promise.resolve(new Uint8Array()),
         dispose() {
           made.isDisposed = true;
+          if (made.disposeError !== undefined) {
+            throw made.disposeError;
+          }
         },
       } as unknown as MarkupSession);
     },
@@ -377,7 +383,7 @@ async function openPopup(
     clock: { now: () => 0 },
     paths: posixPaths,
     homeDir: '/home/me',
-    uiState: { get: () => undefined, set: () => undefined },
+    uiState: uiStateOver(new Map()),
   } as unknown as PageServices;
   services.picker = fakeListPickerService({
     editor: services.editor,
@@ -1033,7 +1039,108 @@ describe('note popup', () => {
     expect(harness.saved).toHaveLength(savedBefore);
   });
 
-  it('dispose_SendInFlight_LateSentPopsNoScopeWritesNoPlaceAndToastsNothing', async () => {
+  // Breaks if a reply or failure that lands after the dispose toasts, logs or
+  // draws.
+  it.each<{
+    call: string;
+    run: (harness: Harness, dispose: () => void) => Promise<void> | void;
+  }>([
+    {
+      call: 'pickTarget, homes fails',
+      run: (harness, dispose) => {
+        harness.fakes.homes = () => Promise.reject(new Error('main gone'));
+        harness.popup.commands.pickTarget(NO_ARG);
+        dispose();
+      },
+    },
+    {
+      call: 'pickTags, tags fails',
+      run: (harness, dispose) => {
+        harness.popup.commands.pickTags(NO_ARG);
+        dispose();
+      },
+    },
+    {
+      call: 'discard, main fails',
+      run: (harness, dispose) => {
+        harness.popup.commands.discard(NO_ARG);
+        harness.popup.commands.confirmYes(NO_ARG);
+        dispose();
+      },
+    },
+    {
+      call: 'removeImageAt, main fails',
+      run: (harness, dispose) => {
+        harness.popup.commands.removeImageAt({ arg: 0 });
+        dispose();
+      },
+    },
+    {
+      call: 'a pasted file whose save fails',
+      run: (harness, dispose) => {
+        harness.fakes.savePasted = () => Promise.reject(new Error('disk full'));
+        harness.take([droppedFile('bad.txt', 'text/plain', '')]);
+        dispose();
+      },
+    },
+    {
+      call: 'an image whose add lands late',
+      run: (harness, dispose) => {
+        const late = Promise.withResolvers<NoteDraft>();
+        harness.fakes.addImage = () => late.promise;
+        harness.take([png('late.png')]);
+        dispose();
+        late.resolve({
+          ...DRAFT,
+          images: [...DRAFT.images, { id: 3, hasMarkup: false }],
+        });
+      },
+    },
+    {
+      call: 'a path dropped after the dispose',
+      run: (harness, dispose) => {
+        dispose();
+        harness.take([droppedFile('a.md', 'text/markdown', '/d/a.md')]);
+      },
+    },
+  ])(
+    'a late reply after the dispose toasts, logs and inserts nothing ($call)',
+    async ({ run }) => {
+      const harness = await openPopup();
+      let logMark = Infinity;
+      let toastMark = Infinity;
+
+      await run(harness, () => {
+        harness.popup.dispose();
+        logMark = harness.logged.length;
+        toastMark = harness.toasts.length;
+      });
+      await settle();
+
+      expect(harness.logged.slice(logMark)).toEqual([]);
+      expect(harness.toasts.slice(toastMark)).toEqual([]);
+      expect(harness.inserts).toEqual([]);
+    },
+  );
+
+  it('disposing with the markup dispose throwing still runs the other steps', async () => {
+    const harness = await openPopup();
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.nextField(NO_ARG);
+    harness.popup.commands.act(NO_ARG);
+    await settle();
+    harness.markups[0].disposeError = new Error('markup refused');
+
+    expect(() => harness.popup.dispose()).toThrow('markup refused');
+    harness.advance(AUTOSAVE_DELAY_MS);
+    await settle();
+
+    expect(harness.doc.activeElement).toBeNull();
+    expect(harness.liveTimers()).toBe(0);
+    expect(liveAnchors(harness)).toEqual([]);
+  });
+
+  it('a send answered after the dispose pops no scope, writes no place and toasts nothing', async () => {
     const harness = await openPopup({
       ...DRAFT,
       target: '/home/me/a',

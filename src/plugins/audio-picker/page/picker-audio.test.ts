@@ -33,6 +33,8 @@ interface Options {
   // Files whose decode rejects with `bad data`.
   badDecodes?: FileKey[];
   playThrows?: boolean;
+  // A play's stop counts, then throws.
+  stopThrows?: boolean;
 }
 
 function keyOf(at: AudioPosition): FileKey {
@@ -54,13 +56,23 @@ async function flush() {
 function setup(options: Options = {}) {
   const inner = createPickerStore(initialState([], 'p1-session'));
   const dispatched: PickerAction[] = [];
+  let liveSubscriptions = 0;
   const store: PickerStore = {
     get: () => inner.get(),
     dispatch: (action) => {
       dispatched.push(action);
       inner.dispatch(action);
     },
-    subscribe: (listener) => inner.subscribe(listener),
+    subscribe: (listener) => {
+      const subscription = inner.subscribe(listener);
+      liveSubscriptions += 1;
+      return {
+        dispose: () => {
+          liveSubscriptions -= 1;
+          subscription.dispose();
+        },
+      };
+    },
   };
   const started: FileKey[] = [];
   const pending: PendingRead[] = [];
@@ -107,6 +119,9 @@ function setup(options: Options = {}) {
           stop: () => {
             play.stops += 1;
             end();
+            if (options.stopThrows === true) {
+              throw new Error('stop refused');
+            }
           },
           ended,
         };
@@ -180,6 +195,7 @@ function setup(options: Options = {}) {
     timers,
     hidden,
     maxInFlight: () => maxInFlight,
+    liveSubscriptions: () => liveSubscriptions,
     show: (formId = 'p1') =>
       store.dispatch({
         type: 'formShown',
@@ -571,6 +587,17 @@ describe('createPickerAudio', () => {
       expect(h.plays.map((play) => play.file)).toEqual(played);
     },
   );
+
+  it('disposing while a play whose stop throws still unsubscribes from the store', async () => {
+    const h = setup({ stopThrows: true });
+    h.show();
+    await h.settleAll();
+    h.audio.toggle('p1', 0, 0);
+
+    expect(() => h.audio.dispose()).toThrow('stop refused');
+
+    expect(h.liveSubscriptions()).toBe(0);
+  });
 
   it('createPickerAudio_PickerClosedDuringReads_DropsItsQueue', async () => {
     const h = setup();
