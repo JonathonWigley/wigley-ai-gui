@@ -99,7 +99,8 @@ export interface PluginSwitchDeps {
   >;
   page(request: PluginPartsRequest): Promise<PluginPartsReply>;
   // Drops the invokes parked for `pluginId`'s stopped main part, once its page
-  // part stopped and again once its main part stopped.
+  // part stopped and again once its main part stopped; the second drop also
+  // refuses later invokes until the main part's handlers register again.
   dropParked(pluginId: string): void;
   applied: AppliedPlugins;
   slots: { clearOwner(pluginId: string): void };
@@ -209,7 +210,9 @@ export function createPluginSwitch(deps: PluginSwitchDeps): PluginSwitch {
   // Drops the parked invokes of each id `reply` names as stopped. A stop calls
   // it on the page reply and again once the main parts stopped: a straggler
   // invoke of the stopped page part that parks in between would hold a
-  // switch-off forever, or reach the main part that starts next.
+  // switch-off forever, or reach the main part that starts next. The second
+  // call, with no handlers left, also has the channel refuse later stragglers
+  // until the main part registers its handlers again.
   const dropParkedOf = (reply: PluginPartsReply) => {
     for (const id of stoppedOf(reply)) {
       deps.dropParked(id);

@@ -22,7 +22,9 @@ export interface WebContentsLike {
 export interface PluginChannels {
   forPlugin(pluginId: string): MainChannel<ChannelShape>;
   // Empties `pluginId`'s parked invokes, leaving their promises unsettled: the
-  // page part that made them has stopped.
+  // page part that made them has stopped. Called while the plugin's main part
+  // has no handlers, it also refuses the plugin's later invokes until a
+  // handler registers again.
   dropParked(pluginId: string): void;
 }
 
@@ -46,6 +48,10 @@ interface ParkedInvoke {
 //   disposed), and is answered in arrival order once that method registers
 //   again, as a restart does. Undefined would throw in a caller that reads the
 //   typed reply, and a rejection would log a line at every caller.
+// - rejects once `dropParked` ran while the main part had no handlers, until
+//   a handler registers again: only a straggler of the stopped page part
+//   invokes then, and parked it would wait forever after a switch-off, or
+//   reach the main part that starts next.
 // - rejects for a plugin that never registered a handler, or a method missing
 //   while others are registered.
 export function createPluginChannels(
@@ -54,6 +60,8 @@ export function createPluginChannels(
 ): PluginChannels {
   const handlers = new Map<string, Map<string, Handler>>();
   const parked = new Map<string, ParkedInvoke[]>();
+  // Ids whose invokes `dropParked` refuses until a handler registers again.
+  const refused = new Set<string>();
 
   const park = (pluginId: string, method: string, args: unknown[]) =>
     new Promise<unknown>((resolve, reject) => {
@@ -96,6 +104,11 @@ export function createPluginChannels(
     if (isPageGone) {
       return undefined;
     }
+    if (refused.has(pluginId)) {
+      throw new Error(
+        `Plugin "${pluginId}" has stopped; its invoke of "${method}" is refused`,
+      );
+    }
     const hasMainPartStopped = methods !== undefined && methods.size === 0;
     if (hasMainPartStopped) {
       return park(pluginId, method, args);
@@ -115,6 +128,7 @@ export function createPluginChannels(
         const registered = handler as Handler;
         methods.set(method, registered);
         handlers.set(pluginId, methods);
+        refused.delete(pluginId);
         answerParked(pluginId, method, registered);
         return {
           dispose() {
@@ -131,6 +145,9 @@ export function createPluginChannels(
     }),
     dropParked: (pluginId) => {
       parked.delete(pluginId);
+      if (handlers.get(pluginId)?.size === 0) {
+        refused.add(pluginId);
+      }
     },
   };
 }
