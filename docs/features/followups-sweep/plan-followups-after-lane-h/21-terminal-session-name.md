@@ -1,6 +1,6 @@
 # 21 — Terminal session name from its own profile
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · one argument resolved in one function, with a table row
 Wave: 1 · Depends on: none
