@@ -16,7 +16,7 @@ export function planRuns(input: {
   history: readonly RunHistoryEntry[];
   runNow: readonly string[]; // task ids pressed since the last plan
   now: number;
-  // No catch-up window starts before it; null for no floor. 17 passes its start time when history.json
+  // No catch-up window starts before it; null for no floor. The main part passes its start time when history.json
   // failed to load, so a history it could not read fires no catch-up.
   catchUpFloor: number | null;
 }): PlannedRun[] {

@@ -1,5 +1,4 @@
-// Imports nothing a later wave creates: `login-start.ts` is 03's own, and `ScheduledRunRecord` (which needs chat's
-// `AdoptRequest`, 14) lives in 17's `main/run-records.ts`.
+// `ScheduledRunRecord` lives in `main/run-records.ts`: only the main part reads a run record.
 import type { StartTarget } from '../chat/contract';
 import type { LoginStartStatus } from '../../contracts/login-start';
 import type { SessionControl } from '../../contracts/agent';

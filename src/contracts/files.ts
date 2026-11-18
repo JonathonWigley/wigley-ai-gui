@@ -98,8 +98,7 @@ export interface Files {
   // and never its temp file; the Node adapter reports the target also when
   // the OS reports only the temp file's name, once the target exists. Creates
   // `folder` when it is missing. When watching fails the watch disposes
-  // itself, dropping any
-  // change not yet reported, and calls the options' `onError` once; with no
+  // itself, dropping any change not yet reported, and calls the options' `onError` once; with no
   // `onError` it disposes itself silently. A failure to start watching,
   // creating `folder` or starting the watcher, throws from `watch` and never
   // reaches `onError`.

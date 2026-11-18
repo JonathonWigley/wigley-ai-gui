@@ -35,8 +35,7 @@ export interface ProblemStoreDeps {
 // logging a file that does not parse. `writeBuildFile` writes only under
 // `.build/` and resolves the absolute path written. `watch` reports the slug of
 // each change under `problems/`, null when the change names none or the watch
-// may have missed changes; it starts
-// watching, which makes `problems/`, once `startWatching` has been called, and
+// may have missed changes; it starts watching, which makes `problems/`, once `startWatching` has been called, and
 // logs a watch that cannot start.
 export interface ProblemStore {
   folder(): string;

@@ -3,7 +3,7 @@ import type { TaskSchedule } from './contract';
 
 type ScheduleKind = TaskSchedule['kind'];
 
-// Each kind's fields besides `kind`, in the order the task file writes them.
+// Each kind's fields besides `kind`.
 const KIND_FIELDS: Readonly<Record<ScheduleKind, readonly string[]>> = {
   hourly: ['minute'],
   daily: ['time'],

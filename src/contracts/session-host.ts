@@ -66,7 +66,7 @@ export interface HostedSpawn {
   stdin: readonly string[];
   idleRule: IdleRule;
   // Dropped from each stdout line before the host logs or delivers it, so a replay reads what a live subscriber read.
-  // A line holding none of them, or not JSON, passes byte for byte; a key is matched as `JSON.stringify` writes it.
+  // A line holding none of them, or not JSON, passes byte for byte; keys are matched on the parsed line.
   droppedOutKeys: readonly KeyPath[];
 }
 export interface HostedExit {

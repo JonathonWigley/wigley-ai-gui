@@ -228,6 +228,8 @@ export function createSessionHostClient(
 
   const runStarted = (run: HostedRun) => {
     dropPending([run.id]);
+    // A copy, so a listener added during the loop is not told this run.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const listener of [...runStartedListeners]) {
       listener(run);
     }
@@ -341,6 +343,8 @@ export function createSessionHostClient(
       link.send({ type: 'setPending', entries: [...pending] });
     }
     if (isReconnect) {
+      // A copy, so a listener added during the loop is not told this connect.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const listener of [...connectedListeners]) {
         listener();
       }

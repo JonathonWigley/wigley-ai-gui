@@ -208,7 +208,7 @@ tool's contribution declares its answer and whether it replays, through `contrib
 | `collect_last_round`, `open_primer`, `collect_last_primer`, `collect_last_audio_picker` | did not run | no |
 | `permission_prompt` | a deny: the run's permission mode does not allow this tool | no |
 | `show_live_view`, `hide_live_view` | no stream: carry on without it | no |
-| `start_session`, `add_practice_problem`, `read_practice_state` | did not run | no |
+| `start_session`, `add_practice_problem`, `read_practice_state`, `read_backlog_state`, `set_backlog_chunks` | did not run | no |
 | `set_headless` | the session stays headless | no |
 | `set_workflow_step`, `set_workflow_checklist`, `set_workflow_plan` | recorded, applied when the app opens, then `HEADLESS_NOTE` | yes |
 | `set_session_title` | title recorded, applied when the app opens | yes |

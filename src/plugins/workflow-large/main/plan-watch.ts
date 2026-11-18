@@ -36,8 +36,7 @@ import { type LargeState, largeSignal } from '../contract';
 // again, which reopens it. A watch that may have missed changes acts as on a
 // change: a copy's reads, git's and `worktrees`' list again. A missing folder
 // is never watched, since `Files.watch` creates the folder it is given. A
-// read, list,
-// git folder watch or `worktrees` sync that settles after the session's watch
+// read, list, git folder watch or `worktrees` sync that settles after the session's watch
 // moved or closed, or after a newer one of its kind started, is dropped. A
 // watch that fails to open is logged and forgotten, so the next `follow` of
 // its folder tries again. Each failure of an open watch is logged, and a

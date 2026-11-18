@@ -653,7 +653,8 @@ export interface ChatMainExports {
   // process, else resting with its history pending. Resolves to the row's
   // sessionId once the attach settled and, for a resting row, its history was
   // read. When a row already holds the host session id, opens nothing and
-  // resolves to that row's sessionId. Rejects after `detachAll`.
+  // resolves to that row's sessionId. Rejects after `detachAll` and when the
+  // row cannot open.
   adopt(run: AdoptRequest): Promise<string>;
   // The channel's resume for another plugin: resolves to the row's sessionId.
   // A row chat holds for the host id is returned as it is only when its owner

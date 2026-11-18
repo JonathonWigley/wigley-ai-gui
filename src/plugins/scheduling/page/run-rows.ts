@@ -45,7 +45,7 @@ export function startRunRows(
   };
 
   const markUnviewed = (unviewedRows: readonly string[]) => {
-    for (const sessionId of [...marked]) {
+    for (const sessionId of marked) {
       if (!unviewedRows.includes(sessionId)) {
         marked.delete(sessionId);
         sessions.setActivity(sessionId, ACTIVITY_SOURCE, null);

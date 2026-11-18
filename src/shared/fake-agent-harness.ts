@@ -206,6 +206,31 @@ export interface FakePastSessionCall {
   before: number | null;
 }
 
+// One `prepareRun` call of the fake and the spec it returned.
+export interface FakePreparedRun {
+  request: AgentStart;
+  firstMessage: UserMessage;
+  env: Readonly<Record<string, string>>;
+  spawn: HostedSpawn;
+}
+
+// The command of every spec the fake's `prepareRun` returns.
+export const FAKE_AGENT_COMMAND = 'fake-agent';
+
+// A stdout `result` line ends a turn; the stdin `user` line a spec opens with
+// starts one.
+const FAKE_IDLE_RULE: IdleRule = {
+  key: 'type',
+  value: 'result',
+  busyStdoutValues: [],
+  busyStdinValues: ['user'],
+  sideKey: null,
+  messageIdKey: null,
+  messageEnd: null,
+  turnEndIdsKey: null,
+  background: null,
+};
+
 // `processes` holds one record per `start` that did not throw and per `attach`
 // that resolved a process, in call order: the same array for the harness's life,
 // each record changing in place. `attachCalls` lists every `attach` request in
@@ -241,31 +266,6 @@ export interface FakePastSessionCall {
 // `timers` runs the `fake: visual` hold. `askPermissionsWith` sets the ask a
 // `fake: permission` turn calls, replacing any earlier one; with none set, the
 // turn's tool fails.
-// One `prepareRun` call of the fake and the spec it returned.
-export interface FakePreparedRun {
-  request: AgentStart;
-  firstMessage: UserMessage;
-  env: Readonly<Record<string, string>>;
-  spawn: HostedSpawn;
-}
-
-// The command of every spec the fake's `prepareRun` returns.
-export const FAKE_AGENT_COMMAND = 'fake-agent';
-
-// A stdout `result` line ends a turn; the stdin `user` line a spec opens with
-// starts one.
-const FAKE_IDLE_RULE: IdleRule = {
-  key: 'type',
-  value: 'result',
-  busyStdoutValues: [],
-  busyStdinValues: ['user'],
-  sideKey: null,
-  messageIdKey: null,
-  messageEnd: null,
-  turnEndIdsKey: null,
-  background: null,
-};
-
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly preparedRuns: readonly FakePreparedRun[];

@@ -314,11 +314,15 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
     },
     startRun(run) {
       startedRuns.push(run);
+      // A copy, as the real client makes: a listener added during the loop is not told this run.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const listener of [...runStartedListeners]) {
         listener(run);
       }
     },
     connectAgain() {
+      // A copy, as the real client makes: a listener added during the loop is not told this connect.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const listener of [...connectedListeners]) {
         listener();
       }
