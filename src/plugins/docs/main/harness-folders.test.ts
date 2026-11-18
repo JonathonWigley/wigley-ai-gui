@@ -68,10 +68,7 @@ describe('createHarnessFolders', () => {
     {
       given: 'harness unlisted',
       infos: new Map([
-        [
-          FAKE_HARNESS_ID,
-          harnessInfo({ profiles: PROFILES, unlisted: true }),
-        ],
+        [FAKE_HARNESS_ID, harnessInfo({ profiles: PROFILES, unlisted: true })],
       ]),
     },
   ])('roots_ProfilesHarnessNotListable_LeftOut given $given', ({ infos }) => {
