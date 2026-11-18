@@ -265,4 +265,5 @@ Review base: c4cbc082a0f39eaa57c3550b3f50f3513872e0e2
 - Shared lookup is a module-level lookUpPick returning {pick}|{error}; playtestStarted checks both generation and app counter though every generation bump also bumps the counter — matches the plan step 3 — none · group 02 · group 02
 - The 10 s pick wait uses global setTimeout, as chat and docs self-test scripts do, rather than a Timers dep — the plan lists none — a fake-timer test of the script would need the seam · group 03 · group 03
 ### Review rounds
+- Round 1 (head 4aba449f6): NEEDS FIXES, 2 Important + 7 Minor, all fixed in 547240d6d..8c6ef41ae; heredoc finding (open) decided fix now, headless. Fix range risk: Medium — new parser logic (lone &, heredoc body skipping); re-review correctness.
 ### Test gate
