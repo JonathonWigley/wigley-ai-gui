@@ -97,9 +97,10 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
   (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees only pipe
   lines, so a background shell that stays silent past the window ends with its process. An interrupt that stops a
   background subagent prints no `result`, and the process turns idle at the background line that lists none. Under a
-  drain, a process that a background line listing none turned idle ends 2 s after that line rather than at once,
-  since Claude runs a turn of its own right after it to report the subagent's result: a busy line within the 2 s
-  cancels the end, and the process then ends at its next idle. A process ending this way, or through a drain, lists
+  drain, a process that a background line listing none turned idle ends 10 s after that line rather than at once,
+  since Claude runs a turn of its own right after it to report the subagent's result. That turn's `system/init`
+  comes at once, its first busy line only at the API's first token: each main stdout line within the grace starts
+  the 10 s over, and a busy line cancels the end, so the process then ends at its next idle. A process ending this way, or through a drain, lists
   as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the
   session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
@@ -182,9 +183,9 @@ harness.
   process that stays alive does not block the entry.
 - **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
   spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
-  holds `error`. A run with `exit` null that a starting host loads, or imports from the file of an older host that is
-  gone, belonged to a host that took its process with it: the host sets its `exit` to
-  `{ code: null, signal: null, error: null }`, since the run did start.
+  holds `error`. A run with `exit` null that a starting host loads, or imports from an older file, is recorded as
+  ended by its host's death: the host sets its `exit` to `{ code: null, signal: null, error: null }`, since the run
+  did start.
 - **`runStarted`** is pushed to every connected client when the host starts or skips an entry.
 - **`listRuns`** answers every run the host started or skipped that no `forgetRuns` dropped, oldest first, and rejects
   as `list` does. The client asks it only once every older host has served its `drain`.
@@ -258,13 +259,12 @@ A protocol bump drops the old host's pending queue: at `drain` the old host dele
 `setPending` after it. `drain` gets no reply, so the new app follows it with a `list` on the same connection. A host
 reads one connection's lines in order, so the `list` reply, or the connection closing as the old host exits, shows the
 drain was served. Only then does the app send its queue to the new host and read `listRuns`, so no occurrence fires in
-both hosts and every pending run moves to the new host. The old host's run records stay in its frozen runs file, where
-it still records each exit after the drain. The new host imports every older protocol's runs file at its start and
-again before each `setPending` and `listRuns`. It adds by id each run its own record lacks and never held, and fills
-the null exit of each run it holds from the file. While the old host's record names a pid that runs, a run still
-running there stays running and the file stays. Once that host is gone, each of its runs still running gets the
-host-death exit (§ Pending runs) and the file is deleted. So no run the old host fired is lost, nor its outcome, and
-the app adopts it like any other.
+both hosts and every pending run moves to the new host. The old host's run records stay in its frozen runs file, which
+it writes no more after the drain. The new host imports every older protocol's runs file at its start and again
+before each `setPending` and `listRuns`: it adds each run its own record lacks by id, gives each one still running the
+host-death exit (§ Pending runs), saves, and deletes the older file. So no run the old host fired is lost, and the app
+adopts it like any other. A known limit: a run still running in a draining older host is recorded as ended by its
+host, and its later exit is not read.
 
 ## Platforms
 

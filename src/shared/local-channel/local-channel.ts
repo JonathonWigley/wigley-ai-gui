@@ -99,7 +99,7 @@ function readLock(lock: string): LockFile | null {
 
 // The locks this process's servers hold.
 const heldLocks = new Set<string>();
-let releasesHeldLocksAtExit = false;
+let isExitReleaseListening = false;
 
 // `os.uptime` counts from the kernel's boot time, sleep included.
 function bootTimeMs(): number {
@@ -127,17 +127,19 @@ function lockIsHeld(lock: string, held: LockFile): boolean {
   return pid === process.pid ? heldLocks.has(lock) : pidRuns(pid);
 }
 
-// An `exit` listener runs on `process.exit` and on a natural exit, never on a
-// signal's default action.
+// The `exit` listener the first lock taken adds. An `exit` listener runs on
+// `process.exit` and on a natural exit, never on a signal's default action.
+export function releaseHeldLocks() {
+  for (const held of heldLocks) {
+    releaseChannelLock(held);
+  }
+}
+
 function markLockHeld(lock: string) {
   heldLocks.add(lock);
-  if (!releasesHeldLocksAtExit) {
-    releasesHeldLocksAtExit = true;
-    process.on('exit', () => {
-      for (const held of heldLocks) {
-        releaseChannelLock(held);
-      }
-    });
+  if (!isExitReleaseListening) {
+    isExitReleaseListening = true;
+    process.on('exit', releaseHeldLocks);
   }
 }
 

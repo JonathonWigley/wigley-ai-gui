@@ -12,8 +12,9 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HostedExit, IdleRule } from '../contracts/session-host';
+import type { HostedExit } from '../contracts/session-host';
 import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
+import { CLAUDE_IDLE_RULE_COPY } from './claude-idle-rule-copy.test-support';
 import {
   createProcessTable,
   DRAIN_REPORT_GRACE_MS,
@@ -35,29 +36,6 @@ type ManualTime = ReturnType<typeof manualTime>;
 const USER = '{"type":"user"}';
 const RESULT = '{"type":"result"}';
 const SYSTEM = '{"type":"system"}';
-
-// A copy of claude-launch.ts's CLAUDE_IDLE_RULE, which the layer rules keep this file from importing.
-const CLAUDE_IDLE_RULE_COPY: IdleRule = {
-  key: 'type',
-  value: 'result',
-  busyStdoutValues: ['assistant', 'stream_event'],
-  busyStdinValues: ['user'],
-  sideKey: 'parent_tool_use_id',
-  messageIdKey: 'uuid',
-  messageEnd: {
-    value: 'command_lifecycle',
-    idKey: 'command_uuid',
-    stateKey: 'state',
-    endStates: ['completed', 'cancelled', 'discarded', 'refused'],
-  },
-  turnEndIdsKey: 'user_message_uuids',
-  background: {
-    match: { type: 'system', subtype: 'background_tasks_changed' },
-    listKey: 'tasks',
-    kindKey: 'task_type',
-    kinds: ['local_agent'],
-  },
-};
 const userLine = (uuid: string) => JSON.stringify({ type: 'user', uuid });
 const lifecycle = (uuid: string, state: string) =>
   JSON.stringify({ type: 'command_lifecycle', command_uuid: uuid, state });
@@ -829,28 +807,51 @@ describe('process table', () => {
     },
   );
 
-  it.each([
-    {
-      label: 'no report turn',
-      drainsFirst: true,
-      report: [],
-      endsAtTheGrace: true,
-    },
-    {
-      label: 'a report turn started within the grace',
-      drainsFirst: true,
-      report: [INIT, MAIN_ASSISTANT],
-      endsAtTheGrace: false,
-    },
-    {
-      label: 'a drain sent within the grace',
-      drainsFirst: false,
-      report: [],
-      endsAtTheGrace: true,
-    },
-  ])(
+  const DRAIN = 'drain';
+  // Each step at its time after the background line that lists none; `endsAt` null when only the report turn's
+  // `result` ends the process.
+  it.each<{ label: string; steps: [number, string][]; endsAt: number | null }>(
+    [
+      {
+        label: 'no report turn',
+        steps: [],
+        endsAt: DRAIN_REPORT_GRACE_MS,
+      },
+      {
+        label: 'a report turn started within the grace',
+        steps: [
+          [DRAIN_REPORT_GRACE_MS / 2, INIT],
+          [DRAIN_REPORT_GRACE_MS / 2, MAIN_ASSISTANT],
+        ],
+        endsAt: null,
+      },
+      {
+        label: 'a report turn whose first busy line comes 3 s after its init',
+        steps: [
+          [DRAIN_REPORT_GRACE_MS - 1000, INIT],
+          [DRAIN_REPORT_GRACE_MS + 2000, MAIN_ASSISTANT],
+        ],
+        endsAt: null,
+      },
+      {
+        label: 'a main line within the grace, then silence',
+        steps: [[DRAIN_REPORT_GRACE_MS - 1000, INIT]],
+        endsAt: 2 * DRAIN_REPORT_GRACE_MS - 1000,
+      },
+      {
+        label: 'a subagent line within the grace',
+        steps: [[DRAIN_REPORT_GRACE_MS - 1000, SUBAGENT_ASSISTANT]],
+        endsAt: DRAIN_REPORT_GRACE_MS,
+      },
+      {
+        label: 'a drain sent within the grace',
+        steps: [[DRAIN_REPORT_GRACE_MS / 2, DRAIN]],
+        endsAt: DRAIN_REPORT_GRACE_MS,
+      },
+    ],
+  )(
     'drain_BackgroundWorkEnds_EndsAfterTheGraceOrAtTheReportTurnEnd: $label',
-    async ({ drainsFirst, report, endsAtTheGrace }) => {
+    async ({ steps, endsAt }) => {
       const { table, time, children } = setUp();
       table.spawn(
         { ...spawnRequest('a'), idleRule: CLAUDE_IDLE_RULE_COPY },
@@ -864,25 +865,32 @@ describe('process table', () => {
         }
       }
       await streamsDelivered();
-      if (drainsFirst) {
+      const drainsInTheGrace = steps.some(([, step]) => step === DRAIN);
+      if (!drainsInTheGrace) {
         table.drain();
       }
       expect(children[0].stdin.writableEnded).toBe(false);
 
       children[0].stdout.write(`${backgroundTasks()}\n`);
       await streamsDelivered();
-      time.advanceTo(DRAIN_REPORT_GRACE_MS / 2);
-      if (!drainsFirst) {
-        table.drain();
+      for (const [at, step] of steps) {
+        time.advanceTo(at);
+        if (step === DRAIN) {
+          table.drain();
+        } else {
+          children[0].stdout.write(`${step}\n`);
+          await streamsDelivered();
+        }
       }
-      for (const line of report) {
-        children[0].stdout.write(`${line}\n`);
+      if (endsAt !== null) {
+        time.advanceTo(endsAt - 1);
+        expect(children[0].stdin.writableEnded).toBe(false);
+        time.advanceTo(endsAt);
+        expect(children[0].stdin.writableEnded).toBe(true);
+        return;
       }
-      await streamsDelivered();
-      time.advanceTo(DRAIN_REPORT_GRACE_MS - 1);
+      time.advanceTo(3 * DRAIN_REPORT_GRACE_MS);
       expect(children[0].stdin.writableEnded).toBe(false);
-      time.advanceTo(DRAIN_REPORT_GRACE_MS);
-      expect(children[0].stdin.writableEnded).toBe(endsAtTheGrace);
 
       children[0].stdout.write(`${RESULT}\n`);
       await streamsDelivered();

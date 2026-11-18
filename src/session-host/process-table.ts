@@ -19,8 +19,9 @@ import { createPipeLog, type PipeLog } from './pipe-log';
 
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 const MS_PER_MINUTE = 60_000;
-// Claude starts the turn that reports a finished background subagent a few ms after the line that lists none.
-export const DRAIN_REPORT_GRACE_MS = 2000;
+// Claude prints the `system/init` of the turn that reports a finished background subagent a few ms after the line that
+// lists none, and that turn's first busy line only at the API's first token.
+export const DRAIN_REPORT_GRACE_MS = 10_000;
 
 export type HostSpawn = (
   command: string,
@@ -74,7 +75,8 @@ export interface ProcessTable {
   // The keep window runs only while this is false, the state the table starts in.
   setClientConnected(connected: boolean): void;
   // Ends each idle process now and each other when it turns idle; every later spawn is refused. A process the end of
-  // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first.
+  // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first;
+  // each main stdout line in that time starts the grace over.
   drain(): void;
   // Calls `done` once the table is empty, at once when it already is.
   stopAll(done: () => void): void;
@@ -455,15 +457,22 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     );
   }
 
-  // Ends an idle process for the drain: at once, or at the end of the report grace when the end of its background
-  // work turned it idle.
-  function endIdleForDrain(hosted: TableProcess) {
+  function armDrainGraceTimer(hosted: TableProcess, ms: number) {
     cancelDrainGraceTimer(hosted);
+    hosted.drainGraceTimer = timers.set(() => endProcess(hosted), ms);
+  }
+
+  // Ends an idle process for the drain: at once, or at the end of the report grace when the end of its background
+  // work turned it idle. A grace already running stays as it is.
+  function endIdleForDrain(hosted: TableProcess) {
+    if (hosted.drainGraceTimer !== null) {
+      return;
+    }
     const graceLeft = hosted.isIdleFromBackgroundEnd
       ? hosted.idleSince + DRAIN_REPORT_GRACE_MS - clock.now()
       : 0;
     if (graceLeft > 0) {
-      hosted.drainGraceTimer = timers.set(() => endProcess(hosted), graceLeft);
+      armDrainGraceTimer(hosted, graceLeft);
     } else {
       endProcess(hosted);
     }
@@ -504,8 +513,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     // Only stdout reads the idle rule; its line is parsed once.
     const parsed = dir === 'out' ? lineObject(text) : null;
     const hadBackgroundWork = hosted.turnState.backgroundCount > 0;
+    // Both before the drop, which may delete a key the rule reads.
+    const isMainLine =
+      parsed !== null && !isSideLine(parsed, hosted.idleRule.sideKey);
     if (parsed !== null) {
-      // Before the drop, which may delete a key the rule reads.
       readStdoutLine(parsed, hosted.idleRule, hosted.turnState);
     }
     const delivered =
@@ -519,6 +530,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         hosted,
         hadBackgroundWork && hosted.turnState.backgroundCount === 0,
       );
+    }
+    // A busy line cancelled the grace in `settleIdle`; any other main line shows the report turn on its way.
+    if (isMainLine && hosted.drainGraceTimer !== null) {
+      armDrainGraceTimer(hosted, DRAIN_REPORT_GRACE_MS);
     }
   }
 

@@ -22,6 +22,7 @@ import {
   type ChannelHandlers,
   connectToChannel,
   listenOnChannel,
+  releaseHeldLocks,
   settleMovedLock,
 } from './local-channel';
 
@@ -304,6 +305,23 @@ describe('listenOnChannel', () => {
 
     expect(lockText(channel)).toBe(left);
   });
+
+  it.skipIf(channelIsPipe)(
+    'exit_ServerListening_TheExitListenerReleasesItsLock',
+    async () => {
+      const channel = tempChannel();
+      const server = listen(channel);
+      await server.listening;
+      const exitListener = process
+        .listeners('exit')
+        .find((listener) => listener === releaseHeldLocks);
+
+      exitListener?.(0);
+
+      expect(exitListener).toBeDefined();
+      expect(lockText(channel)).toBeNull();
+    },
+  );
 });
 
 // A lock file whose inode and text a take-over judged.

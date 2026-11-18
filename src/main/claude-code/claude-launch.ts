@@ -18,8 +18,10 @@ import { TERMINAL_STATES } from './turn-tracker';
 // without `msg_lifecycle_v1`, every `result` closes them all. Only a background
 // subagent holds the process busy: a background Bash ends with it at the keep
 // window.
-// turn-tracker.ts reads the same lines for the working state and
-// process-table.test.ts holds a copy of this rule: a change here reaches both.
+// turn-tracker.ts reads the same lines for the working state, and
+// src/session-host/claude-idle-rule-copy.test-support.ts holds a copy of this
+// rule that scripts/claude-idle-rule-copies.test.mts ties to it: a change here
+// reaches both.
 export const CLAUDE_IDLE_RULE: IdleRule = {
   key: 'type',
   value: 'result',

@@ -119,6 +119,7 @@ interface HostScript {
   runsAnswered?: boolean;
   heldHello?: Promise<void>; // each `hello` reply waits for it
   heldList?: Promise<void>; // each `list` reply waits for it
+  closesOnDrain?: boolean; // closes the connection that sent `drain`, as an older host exiting on it
   subscribed?(message: SubscribeMessage, host: ScriptedHost): void;
 }
 
@@ -163,7 +164,7 @@ async function startScriptedHost(
   };
   const answer = (socket: Socket, message: ClientMessage) => {
     got.push(message);
-    if (script.silent) {
+    if (script.silent || socket.destroyed) {
       return;
     }
     if (message.type === 'hello') {
@@ -192,6 +193,8 @@ async function startScriptedHost(
       script.subscribed?.(message, host);
     } else if (message.type === 'stopAll' && script.stopAllAnswered !== false) {
       socket.write(jsonLine({ type: 'stopAll', requestId: message.requestId }));
+    } else if (message.type === 'drain' && script.closesOnDrain) {
+      socket.destroy();
     }
   };
   server = listenOnChannel(channel, {
@@ -1345,48 +1348,65 @@ describe('createSessionHostClient', () => {
     await settled;
   });
 
-  it('drain_OlderHostListReplyHeld_HoldsThePendingListAndRunReadsUntilItComes', async () => {
-    const dir = tempFolder();
-    const channel = testChannel(dir, '');
-    const older = testChannel(dir, '-older');
-    let releaseList = () => {};
-    const heldList = new Promise<void>((resolve) => {
-      releaseList = resolve;
-    });
-    const olderHost = await startScriptedHost(older, {
-      protocol: 0,
-      heldList,
-    });
-    const currentHost = await startScriptedHost(channel, {
-      runs: [hostedRun('r1')],
-    });
-    const rig = clientRig(dir, channel);
-    writeRecord(rig.folder, 0, older);
-    const client = rig.create();
-    client.setPending(pendingSpawns('a'));
+  it.each([
+    { name: 'the list reply comes', ack: 'reply' },
+    { name: 'the list reply limit runs out', ack: 'limit' },
+    { name: 'the older host closes on the drain', ack: 'close' },
+  ])(
+    'drain_OlderHostAck_HoldsThePendingListAndRunReadsUntilItEnds: $name',
+    async ({ ack }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const older = testChannel(dir, '-older');
+      let releaseList = () => {};
+      const heldList = new Promise<void>((resolve) => {
+        releaseList = resolve;
+      });
+      const olderHost = await startScriptedHost(older, {
+        protocol: 0,
+        heldList,
+        listAnswered: ack !== 'limit',
+        closesOnDrain: ack === 'close',
+      });
+      const currentHost = await startScriptedHost(channel, {
+        runs: [hostedRun('r1')],
+      });
+      const rig = clientRig(dir, channel);
+      writeRecord(rig.folder, 0, older);
+      const client = rig.create();
+      client.setPending(pendingSpawns('a'));
 
-    const runsRead = client.listRuns();
-    await vi.waitFor(() =>
-      expect(olderHost.got.map((message) => message.type)).toEqual([
-        'hello',
-        'drain',
-        'list',
-      ]),
-    );
-    // A reply on the current link, so whatever was sent on it before has arrived.
-    await client.stopAll();
-    expect(sentOfType(currentHost, 'setPending')).toEqual([]);
-    expect(sentOfType(currentHost, 'listRuns')).toEqual([]);
+      const runsRead = client.listRuns();
+      if (ack !== 'close') {
+        await vi.waitFor(() =>
+          expect(olderHost.got.map((message) => message.type)).toEqual([
+            'hello',
+            'drain',
+            'list',
+          ]),
+        );
+        // A reply on the current link, so whatever was sent on it before has arrived.
+        await client.stopAll();
+        expect(sentOfType(currentHost, 'setPending')).toEqual([]);
+        expect(sentOfType(currentHost, 'listRuns')).toEqual([]);
+        if (ack === 'reply') {
+          releaseList();
+        } else {
+          rig.timers.fire(REPLY_LIMIT_MS);
+        }
+      }
 
-    releaseList();
-
-    await expect(runsRead).resolves.toEqual([hostedRun('r1')]);
-    expect(
-      currentHost.got
-        .filter((message) => ['setPending', 'listRuns'].includes(message.type))
-        .map((message) => message.type),
-    ).toEqual(['setPending', 'listRuns']);
-  });
+      await expect(runsRead).resolves.toEqual([hostedRun('r1')]);
+      expect(sentOfType(olderHost, 'drain')).toHaveLength(1);
+      expect(
+        currentHost.got
+          .filter((message) =>
+            ['setPending', 'listRuns'].includes(message.type),
+          )
+          .map((message) => message.type),
+      ).toEqual(['setPending', 'listRuns']);
+    },
+  );
 
   it.each([
     {

@@ -778,6 +778,7 @@ describe('host lifetime', () => {
     });
     await settled(connection);
     const runsPath = path.join(running.folder, runsFile(SESSION_HOST_PROTOCOL));
+    const runsText = readFileSync(runsPath, 'utf8');
 
     connection.send({ type: 'drain' });
     await settled(connection);
@@ -788,9 +789,7 @@ describe('host lifetime', () => {
 
     running.spawned[0].close();
     await vi.waitFor(() => expect(running.exits).toEqual([0]));
-    expect(JSON.parse(readFileSync(runsPath, 'utf8'))).toEqual([
-      hostedRun('fired'),
-    ]);
+    expect(readFileSync(runsPath, 'utf8')).toBe(runsText);
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: pending entries and no client', async () => {
