@@ -1,6 +1,6 @@
 # 05 — Sessions page model
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · moves a dozen interacting state fields and `apply`'s jobs across a new seam, keeping the view-then-model construction order and `apply`'s microtask and restore tracking exactly as they run now
 Wave: 2 · Depends on: 03 (lists `src/plugins/sessions/page/start.ts`)
@@ -140,3 +140,5 @@ Commit: one commit for the group: "Sessions: the page's state and apply move int
 L551)".
 
 ## Proof
+
+Commit f36d169c3 89a777915 · proof: diff read: createSessionsPageModel and its Deps/View/Model interfaces present, start.ts closure-state grep empty, model has no DOM reads; typecheck and lint clean (oxfmt run as lead) · concerns: view callbacks and keysToFocusedPane reference model before its declaration (safe: the mount calls no callback synchronously); model echo test relies on the fake focus calling panesChanged before paneFocused

@@ -137,9 +137,9 @@ Critical path: 03 → 05 → 10 → 08 → 11 → 24 → 25 → 26. 24 runs afte
 - [x] [Terminal session name from its own profile](21-terminal-session-name.md)
 
 ### Wave 2
-- [ ] [Sessions page model](05-sessions-page-model.md) — after 03
+- [x] [Sessions page model](05-sessions-page-model.md) — after 03
 - [x] [Chat cursor follows tall blocks and hidden tabs](06-chat-cursor.md) — after 07
-- [ ] [Test naming, the rest](14-test-naming-rest.md) — after 01, 02
+- [x] [Test naming, the rest](14-test-naming-rest.md) — after 01, 02
 - [x] [Local commands do not title a row](20-local-command-titles.md) — after 13
 
 ### Wave 3
@@ -182,6 +182,8 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 20 · deep · 59726fbeb · diff read: titleCandidates settled by entry delivery, cleared on drop/beginProcess/clear; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: a test reading a first-message title right after an unawaited send now finds none; relaunch row relies on the silent fake's second process
 - 06 · hard · 12af5da63 · diff read: scrollsToStop also needs the list off its bottom; scrollToFocus settles a following cursor with by='list'; typecheck clean, lint clean but formatting (oxfmt run as lead) · concerns: rebuilds of a shown list now settle the cursor, which may move existing rebuild tests
 - 01 · deep · 7112b86a0 f36b10d57 · diff read: DocsTreePlace per view, sideBarNarrowed told on beside→hidden, rowIdsIn/selectNearestIn reselect after outside rename/trash, askedOpens on every open checked after both waits; typecheck and lint clean (oxfmt run as lead) · concerns: D makes a reload's restored open lose to any open asked before the first index read (its edits toast as not restored); outside-change page test uses two added views; a page-scoped saved place in the old shape is not read back after this change
+- 14 · standard · fc63ebd3e · diff read: title-only renames in main-api, docs-state and tree-view tests; old-form and old-title-in-docs greps print nothing; typecheck and lint clean · concerns: tree-view.test.ts keeps other old-form titles outside the task's two
+- 05 · hard · f36d169c3 89a777915 · diff read: createSessionsPageModel and its Deps/View/Model interfaces present, start.ts closure-state grep empty, model has no DOM reads; typecheck and lint clean (oxfmt run as lead) · concerns: view callbacks and keysToFocusedPane reference model before its declaration (safe: the mount calls no callback synchronously); model echo test relies on the fake focus calling panesChanged before paneFocused
 ### Contract changes
 ### Rulings
 - 02: the raw-JSON site in malformedEntryField passes { source } to ownsRoot rather than widening its parameter · group 02
@@ -194,5 +196,6 @@ Review base: 97ec691cb85c30deb7b7322bf873ec04aaf83aa4
 - 20: setFirstMessageTitle became firstMessageTitleToSet with the same guards; a candidate is recorded only for a message that would title the row; a save follows the delayed title · group 20
 - 06: settleInBand takes the PlaceChange; scrollToFocus's settle reports 'list' so a restored place survives · group 06
 - 01: start.test.ts edited outside Tests: startDocsPage passes fakeFuzzyMatcher and restorePending's saved place takes the new shape · group 01
+- 05: rows.on/selection.on and followRows subscribe after the view mounts (before: ahead of the mount); the view takes neither slot, so listener order is unchanged · group 05
 ### Review rounds
 ### Test gate

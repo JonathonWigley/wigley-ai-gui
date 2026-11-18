@@ -1,6 +1,6 @@
 # 14 — Test naming, the rest
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · renames test titles to the sentence form `typescript-vitest.md` § Naming gives, following the sentence titles already in `src/main/plugins/main-api.test.ts` (`"disposes the plugin's file watches, …"`); no test body changes
 Wave: 2 · Depends on: 01 (both list `src/plugins/docs/page/tree-view.test.ts`), 02 (02's Tests and Done when name `docs-state.test.ts` rows by their old titles)
@@ -86,3 +86,5 @@ Commit: one commit for the group: "Tests: sentence titles in main-api and docs-s
 Lane H edits)".
 
 ## Proof
+
+Commit fc63ebd3e · proof: diff read: title-only renames in main-api, docs-state and tree-view tests; old-form and old-title-in-docs greps print nothing; typecheck and lint clean · concerns: tree-view.test.ts keeps other old-form titles outside the task's two
