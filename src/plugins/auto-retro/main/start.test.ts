@@ -17,6 +17,7 @@ import {
   chatSessionSlot,
   type LaunchRequest,
   type SessionCloseReason,
+  type SessionOrigin,
 } from '../../chat/contract';
 import {
   type SessionRow,
@@ -205,6 +206,36 @@ async function restartWithQueueLost(firstMessage: string) {
     }),
   );
   await part.harness.restart();
+  await settled();
+  return part;
+}
+
+// The part restarted over an unreadable `queue.json`, then row `retro-9` (host
+// `retro-host-9`) opened as chat's restore opens one: the row joins with no
+// titles, takes `firstMessage`, and `sessionOpened` fires with `origin`.
+async function restartThenReopenWithQueueLost(
+  firstMessage: string,
+  origin: SessionOrigin = 'restored',
+) {
+  const part = startPart();
+  await settled();
+  await part.harness.files.write(QUEUE_PATH, '{');
+  await part.harness.restart();
+  await settled();
+  const row = sessionRow('retro-9', { hostSessionId: 'retro-host-9' });
+  part.rows.set('retro-9', row);
+  part.rows.set('retro-9', {
+    ...row,
+    titles: { user: null, agent: null, firstMessage },
+  });
+  part.harness.emit('chat.sessionOpened', {
+    sessionId: 'retro-9',
+    profileDir: '~/.claude-work',
+    hostSessionId: 'retro-host-9',
+    projectDir: '/home/me/wigley-agents',
+    profile: 'work',
+    origin,
+  });
   await settled();
   return part;
 }
@@ -422,29 +453,36 @@ describe('autoRetroMainPart', () => {
     expect(part.closes).toEqual([['retro-9', 'finished']]);
   });
 
-  it('claims a restored retro row the queue lost and closes it once done', async () => {
-    const part = await restartWithQueueLost('/wigley:retro auto h1');
+  // `reopened` opens the row after the start, titles after the row, as chat's restore does.
+  it.each([
+    { arrival: 'present at the start', join: restartWithQueueLost },
+    { arrival: 'reopened by chat', join: restartThenReopenWithQueueLost },
+  ])(
+    'claims a restored retro row the queue lost and closes it once done ($arrival)',
+    async ({ join }) => {
+      const part = await join('/wigley:retro auto h1');
 
-    expect(part.state()?.rows).toEqual(['retro-9']);
+      expect(part.state()?.rows).toEqual(['retro-9']);
 
-    part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
-    part.harness.advance(SETTLE_MS);
+      part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
+      part.harness.advance(SETTLE_MS);
 
-    expect(part.closes).toEqual([['retro-9', 'finished']]);
+      expect(part.closes).toEqual([['retro-9', 'finished']]);
 
-    part.harness.emit('chat.sessionClosed', {
-      ...closedEvent('retro-host-9', 'user'),
-      sessionId: 'retro-9',
-      titles: {
-        user: null,
-        agent: null,
-        firstMessage: '/wigley:retro auto h1',
-      },
-    });
-    await settled();
+      part.harness.emit('chat.sessionClosed', {
+        ...closedEvent('retro-host-9', 'user'),
+        sessionId: 'retro-9',
+        titles: {
+          user: null,
+          agent: null,
+          firstMessage: '/wigley:retro auto h1',
+        },
+      });
+      await settled();
 
-    expect(part.launches).toEqual([]);
-  });
+      expect(part.launches).toEqual([]);
+    },
+  );
 
   // Breaks if a row is claimed by its first message alone, when a resumed or
   // hand-started retro would be closed as finished.
@@ -452,6 +490,11 @@ describe('autoRetroMainPart', () => {
     {
       row: 'a restored row that is not a retro',
       join: async () => restartWithQueueLost('hi'),
+    },
+    {
+      row: 'a resumed retro row',
+      join: async () =>
+        restartThenReopenWithQueueLost('/wigley:retro auto h1', 'resumed'),
     },
     {
       row: 'a retro row added after start',

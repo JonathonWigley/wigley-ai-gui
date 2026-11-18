@@ -152,6 +152,17 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
     };
 
+    // Claims a restored retro row as started, as its retro may have run before the restart.
+    const claimRestored = (rowId: string) => {
+      if (rows.includes(rowId)) {
+        return;
+      }
+      rows.push(rowId);
+      startedRows.add(rowId);
+      publish();
+      checkDone(rowId, sessionSlot.get(rowId));
+    };
+
     const leaveRow = (rowId: string) => {
       startedRows.delete(rowId);
       clearSettle(rowId);
@@ -304,7 +315,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
       // Claims a retro row present at start or restored before chat's restore ends — one `launched` holds, or one
       // the queue lost that opens with the retro command — as started. A row that joins later, a resumed or
-      // hand-started retro included, is left alone; a launch claims its own row in `launched`.
+      // hand-started retro included, is left alone; a launch claims its own row in `launched`. A row chat restores
+      // joins before its titles are set, so its first message is read at its `sessionOpened` instead.
       followRows(rowsSlot, {
         added(row) {
           if (!isRestoring) {
@@ -313,13 +325,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           const isLaunchedRow =
             row.hostSessionId !== null &&
             queue.launched.includes(row.hostSessionId);
-          if (!isLaunchedRow && !opensWithRetroCommand(row.titles)) {
-            return;
+          if (isLaunchedRow || opensWithRetroCommand(row.titles)) {
+            claimRestored(row.sessionId);
           }
-          joinRow(row.sessionId);
-          startedRows.add(row.sessionId);
-          publish();
-          checkDone(row.sessionId, sessionSlot.get(row.sessionId));
         },
         removed: leaveRow,
       });
@@ -335,6 +343,19 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     api.events.on('chat.sessionClosed', (event) => {
       const isSettling = settles.has(event.sessionId);
       serial(() => closed(event, isSettling));
+    });
+    // Chat's restore opens a row, sets its titles, then emits this, so a restored row's first message is known here
+    // and not at its `added`. A resumed or launched row is left to its own path.
+    api.events.on('chat.sessionOpened', ({ sessionId, origin }) => {
+      if (origin !== 'restored') {
+        return;
+      }
+      serial(() => {
+        const row = rowsSlot.get(sessionId);
+        if (row !== undefined && opensWithRetroCommand(row.titles)) {
+          claimRestored(sessionId);
+        }
+      });
     });
     api.events.on('chat.sessionCleared', (event) =>
       serial(() =>
