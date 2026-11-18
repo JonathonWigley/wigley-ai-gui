@@ -7,11 +7,13 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentHarness, AgentHarnessInfo } from '../../../contracts/agent';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { Files } from '../../../contracts/files';
 import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import {
@@ -313,6 +315,7 @@ function startSessionsPart(
       agentHarnesses: harnessRegistryOf(
         agentHarnesses as unknown as AgentHarness[],
       ),
+      demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },

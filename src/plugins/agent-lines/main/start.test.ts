@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { SelfTestScript } from '../../../contracts/plugin';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   noCounts,
   startMainPart,
@@ -23,6 +25,7 @@ describe('agentLinesMainPart', () => {
       services: {
         homeDir: '/home',
         selfTest: { run: (script: SelfTestScript) => scripts.push(script) },
+        demoSteps: createDemoStepRegistry<DemoMainStep>(),
       },
       dependency: () => ({}),
     } as unknown as Parameters<typeof agentLinesMainPart.start>[0];

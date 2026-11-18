@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DemoStep } from '../../../contracts/demo';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   fakeDependency,
   noCounts,
@@ -46,6 +48,7 @@ describe('usageTabLinePagePart', () => {
     const api = {
       services: {
         log: (line: string) => logs.push(line),
+        demoSteps: createDemoStepRegistry<DemoStep>(),
       },
       dependency: (key: { id: string }) =>
         ({

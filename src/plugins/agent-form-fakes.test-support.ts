@@ -91,6 +91,9 @@ export function previewSessions() {
         },
         addCloseGuard: () => consumer.track({ dispose() {} }),
         activate() {},
+        mark() {},
+        label: () => null,
+        release() {},
         connect: (info: SessionInfo): ConnectedSession => ({
           session: { id: 'preview-row', info },
           call: () => Promise.reject(new Error('the preview calls no tool')),

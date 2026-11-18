@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DemoMainStep } from '../../../contracts/demo';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
@@ -80,6 +82,7 @@ function startNotesPart() {
       window: { capture: () => Promise.resolve(CAPTURED) },
       images: { encode: () => Promise.reject(new Error('not reached')) },
       selfTest: { run: () => undefined },
+      demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     dependency: (key: { id: string }) =>
       key.id === 'backlog' ? backlog : key.id === 'chat' ? chat : {},

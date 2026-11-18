@@ -10,6 +10,7 @@ import {
 } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { DemoMainStep } from '../../../contracts/demo';
 import type { Files } from '../../../contracts/files';
 import type { PartStop } from '../../../contracts/plugin';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
@@ -18,6 +19,7 @@ import {
   harnessInfo,
   harnessRegistryOf,
 } from '../../../shared/agent-harness-registry.test-support';
+import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -560,6 +562,7 @@ function startChatPart(
       },
       homeDir: '/home/me',
       selfTest: null,
+      demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     dependency: () => sessions,
     data: options.data ?? {
