@@ -60,10 +60,6 @@ export async function seedChatroomFixture(
     () => rowIds.every((rowId) => rows.get(rowId) !== undefined),
     "the chatroom fixture's rows never reached sessions.rows",
   );
-  const project = rows.get(leadId)?.project;
-  if (project === undefined || rows.get(peerId)?.project !== project) {
-    throw new Error("the chatroom fixture's rows are in two rooms");
-  }
   const titleOf = (rowId: string) => {
     const titles = rows.get(rowId)?.titles;
     return titles === undefined ? '' : editableTitle(titles);
@@ -74,15 +70,28 @@ export async function seedChatroomFixture(
     () => rowIds.every((rowId) => titleOf(rowId) !== ''),
     "the chatroom fixture's rows were never titled",
   );
+  // A row's project can change after it shows, as a folder inside a repo
+  // takes the repo's name, so the room is read again on each poll.
+  const roomOfRows = (): string | null => {
+    const project = rows.get(leadId)?.project;
+    return project !== undefined && rows.get(peerId)?.project === project
+      ? project
+      : null;
+  };
   await waitUntil(
     deps,
     deadline,
     () => {
-      const board = rooms(project)?.board ?? [];
+      const roomName = roomOfRows();
+      const board = roomName === null ? [] : (rooms(roomName)?.board ?? []);
       return rowIds.every((rowId) => board.some((row) => row.rowId === rowId));
     },
-    `room ${project} never held both of the chatroom fixture's board rows`,
+    "no room ever held both of the chatroom fixture's board rows",
   );
+  const project = roomOfRows();
+  if (project === null) {
+    throw new Error("the chatroom fixture's rows are in two rooms");
+  }
   const titles = [titleOf(leadId), titleOf(peerId)] as const;
   const lead = agent(leadId, titles[0]);
   const peer = agent(peerId, titles[1]);

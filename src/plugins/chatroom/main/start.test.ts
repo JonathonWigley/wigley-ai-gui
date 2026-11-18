@@ -246,6 +246,24 @@ describe('chatroomMainPart', () => {
     ]);
   });
 
+  it('start_ClaimFromASubfolderWarnsAPeersEdit', async () => {
+    const { git, hooks, callTool } = startChatroom();
+    git.topLevel = async () => '/r';
+
+    await callTool('rA', 'chatroom_claim', {
+      paths: ['notes/**'],
+      reason: 'notes pass',
+    });
+    const reply = await hooks.get(HOOK_PRE)!(agentSession('rB'), {
+      tool: 'write',
+      paths: ['/r/rA/notes/a.md'],
+      agentId: null,
+      cwd: '/r/rB',
+    });
+
+    expect(reply.text).toContain('is claimed by Lead (notes pass;');
+  });
+
   it('start_SeedsRooms: a stored room shows after a restart with no live session', async () => {
     const { harness, projects, callTool, roomView } = startChatroom();
     projects.rB = 'side';

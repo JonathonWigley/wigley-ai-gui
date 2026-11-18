@@ -170,7 +170,7 @@ username, 2,000-character messages, a gateway bot to read); neither is built, an
 Plugin data, behind a `RoomStore` contract with a JSON-lines adapter and an in-memory adapter for tests:
 `rooms/<room>.jsonl` (messages and entries, append-only), `claims.json`, `threads.json` (resolved threads),
 `cursors.json` (each agent's last read id per room) and `user-cursors.json` (the user's last read id per thread,
-since the user reads one thread at a time). Claim paths are repo-relative, so a pool's clones compare the same file. Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
+since the user reads one thread at a time). Claim paths are stored repo-relative, so a pool's clones compare the same file; an agent's relative path is read from its session folder first. Ids are the store's, never a clock's. Messages are kept for good. Stable and dev apps keep
 separate rooms, since each has its own data folder.
 
 ## Guards

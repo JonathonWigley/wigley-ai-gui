@@ -67,10 +67,6 @@ export type ChatroomViewCommand = Exclude<
   'showMode' | 'preview' | 'openThreadRow' | 'openRowRoom'
 >;
 
-// No panes of its own: every focus move goes on to the core, so Alt+h from
-// the log reaches the side bar.
-const FOCUS_TARGET: FocusTarget = { move: () => false };
-
 export interface ChatroomViewDeps {
   channel: PageChannel<ChatroomChannel>;
   log: PluginLog;
@@ -353,7 +349,7 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
     if (deps.isShown()) {
       deps.setScope(next);
       deps.setResizeTarget(null);
-      deps.setFocusTarget(FOCUS_TARGET);
+      deps.setFocusTarget(focusTarget);
       if (movesFocus) {
         focusElementOf(next).focus();
       }
@@ -373,6 +369,29 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
       case 'composer':
         return composerBox;
     }
+  };
+
+  // The log takes the keys; `picked` closes a narrow window's side bar
+  // overlay, so the keys never sit in the log under it.
+  const focusMain = () => {
+    setFocus('log');
+    deps.picked();
+  };
+
+  // Every base scope change hands the core's keys area back to main, so the
+  // core holds main while the thread list has the keys after the mode shows,
+  // a click in the side bar or Enter on a row, and its own Alt+l would leave
+  // main for the right bar. `right` from the thread list therefore moves to
+  // the log here; every other move goes on to the core, so Alt+h from the log
+  // reaches the side bar.
+  const focusTarget: FocusTarget = {
+    move(direction) {
+      if (focus !== 'threads' || direction !== 'right') {
+        return false;
+      }
+      focusMain();
+      return true;
+    },
   };
 
   // A click or a box's focus hands its pane the keys.
@@ -733,10 +752,7 @@ export function createChatroomView(deps: ChatroomViewDeps): ChatroomView {
     },
     sideBarOpenedOver: () => setFocus('threads'),
     focusSideBar: () => setFocus('threads'),
-    focusMain() {
-      setFocus('log');
-      deps.picked();
-    },
+    focusMain,
     roomChanged(room) {
       const view = deps.rooms().find((held) => held.room === room);
       if (real !== null && real.room === room) {

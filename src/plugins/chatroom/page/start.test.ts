@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
+import type { PagePart } from '../../../contracts/plugin';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import {
@@ -29,6 +31,7 @@ import {
   USER_PARTICIPANT,
   type UserPostResult,
 } from '../contract';
+import type { chatroomManifest } from '../manifest';
 import { threadKey } from './chatroom-state';
 import { chatroomPagePart } from './start';
 
@@ -143,7 +146,24 @@ function startChatroomPage(options: PageOptions = {}) {
   const messages = options.messages ?? {
     [THREAD]: [message(1), message(2), message(3)],
   };
-  const harness = startDrawingPagePart(chatroomPagePart, {
+  // The part as it starts, but keeping the focus target it set last: the
+  // harness's panes drop it.
+  let focusTarget: FocusTarget | null = null;
+  const part: PagePart<typeof chatroomManifest> = {
+    ...chatroomPagePart,
+    start: (api) =>
+      chatroomPagePart.start({
+        ...api,
+        panes: {
+          ...api.panes,
+          setFocusTarget(target) {
+            focusTarget = target;
+            api.panes.setFocusTarget(target);
+          },
+        },
+      }),
+  };
+  const harness = startDrawingPagePart(part, {
     firstModeTaken: true,
     state,
     services: { markdown: PLAIN_MARKDOWN },
@@ -199,7 +219,11 @@ function startChatroomPage(options: PageOptions = {}) {
   const logged = () => harness.logs.map((line) => line.message);
   const open = (thread = THREAD) =>
     commands.openThreadRow({ arg: threadKey(ROOM, thread) });
+  // A press of the core's focus key toward `direction`, as the core asks the
+  // view's focus target first while main holds the keys.
+  const move = (direction: PaneDirection) => focusTarget?.move(direction);
   return {
+    move,
     harness,
     commands,
     rooms,
@@ -347,19 +371,49 @@ describe('chatroomPagePart', () => {
     ]).toEqual([0, [], [THREAD, 'other']]);
   });
 
+  // The core holds main as the keys area after every base scope change, so
+  // Alt+l from the thread list reaches the log only through the view's target.
+  it.each([
+    { from: 'threads', direction: 'right', moved: true, scope: 'log' },
+    { from: 'threads', direction: 'left', moved: false, scope: 'threads' },
+    { from: 'log', direction: 'right', moved: false, scope: 'log' },
+    { from: 'log', direction: 'left', moved: false, scope: 'log' },
+  ] as const)(
+    'focusMove_MainHoldsTheKeysArea_OnlyRightFromThreadsMoves: $direction from $from',
+    async ({ from, direction, moved, scope }) => {
+      const page = startChatroomPage();
+      show(page);
+      page.open();
+      await settle();
+      if (from === 'log') {
+        page.harness.mode(MODE).focusMain();
+      }
+
+      const result = page.move(direction);
+
+      expect([result, page.harness.scope()]).toEqual([
+        moved,
+        `chatroom.${scope}`,
+      ]);
+    },
+  );
+
   it.each([
     { name: 'newest unread thread', newestThread: 'review', opens: 'review' },
     { name: 'no unread', newestThread: null, opens: `session:${ROW}` },
-  ])('openRowRoom_$name_OpensThatThread', async ({ newestThread, opens }) => {
-    const page = startChatroomPage({
-      room: shopRoom({ [THREAD]: 3 }, { unread: 1, newestThread }),
-    });
+  ])(
+    'openRowRoom_RowClicked_OpensThatThread: $name',
+    async ({ newestThread, opens }) => {
+      const page = startChatroomPage({
+        room: shopRoom({ [THREAD]: 3 }, { unread: 1, newestThread }),
+      });
 
-    page.commands.openRowRoom({ arg: ROW });
-    await settle();
+      page.commands.openRowRoom({ arg: ROW });
+      await settle();
 
-    expect(page.callsOf('readThread')).toEqual([[ROOM, opens, 0]]);
-  });
+      expect(page.callsOf('readThread')).toEqual([[ROOM, opens, 0]]);
+    },
+  );
 
   it('send_InPreview_PostsNothingAndSaysSo', async () => {
     const page = startChatroomPage();

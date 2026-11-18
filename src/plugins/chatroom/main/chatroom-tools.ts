@@ -94,7 +94,7 @@ const BOARD_TOOL: ToolDefinition = {
 const CLAIM_TOOL: ToolDefinition = {
   name: 'chatroom_claim',
   description:
-    "Claims repo-relative path globs (`paths`), a `branch` or a named `resource` (selftest, forms-app, vite-build) for `reason`, for `minutes` (the setting `claimMinutes` when left out). Give exactly one of paths, branch and resource. Claims are advisory: another session editing a claimed path is warned to ask you. Claiming the same target again renews it. Returns the claim and any other session's claim it overlaps.",
+    "Claims path globs (`paths`), each relative to your folder or absolute and inside your repo, a `branch` or a named `resource` (selftest, forms-app, vite-build) for `reason`, for `minutes` (the setting `claimMinutes` when left out). Give exactly one of paths, branch and resource. Claims are advisory: another session editing a claimed path is warned to ask you. Claiming the same target again renews it. Returns the claim and any other session's claim it overlaps.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -159,7 +159,7 @@ export interface ChatroomToolsDeps {
   readonly roster: Pick<Roster, 'participant' | 'roomOf'>;
   readonly boardFeed: Pick<BoardFeed, 'refresh' | 'rows'>;
   readonly git: Pick<Git, 'topLevel'>;
-  readonly paths: Pick<Paths, 'isAbsolute' | 'segmentsBelow'>;
+  readonly paths: Pick<Paths, 'isAbsolute' | 'join' | 'segmentsBelow'>;
   // The agent that made the call, as chat's `toolCaller` names it.
   toolCaller(sessionId: string, toolUseId: string): Promise<string | null>;
   // Runs first in every call: joins the session to the roster and its room.
@@ -420,8 +420,9 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
     return roster.participant(session.id, isMainAgent ? null : agentId);
   };
 
-  // An absolute path under the session folder's clone becomes relative to
-  // the clone; every other path is left for the room's check.
+  // A path, absolute or relative to the session folder, under the folder's
+  // clone becomes relative to the clone; a path outside it, and every path of
+  // a folder in no clone, is left for the room's check.
   const repoRelative = async (
     session: AgentSession,
     claimPaths: readonly string[],
@@ -431,11 +432,14 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
       folder === null
         ? null
         : await deps.git.topLevel(folder).catch(() => null);
+    if (folder === null || root === null) {
+      return [...claimPaths];
+    }
     return claimPaths.map((path) => {
-      if (root === null || !deps.paths.isAbsolute(path)) {
-        return path;
-      }
-      return deps.paths.segmentsBelow(path, root)?.join('/') ?? path;
+      const fullPath = deps.paths.isAbsolute(path)
+        ? path
+        : deps.paths.join(folder, path);
+      return deps.paths.segmentsBelow(fullPath, root)?.join('/') ?? fullPath;
     });
   };
 

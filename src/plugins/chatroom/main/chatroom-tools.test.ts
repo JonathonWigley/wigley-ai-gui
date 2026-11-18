@@ -402,6 +402,72 @@ describe('chatroom_board', () => {
 });
 
 describe('chatroom_claim and chatroom_release', () => {
+  // rA's folder is /r/rA; `root` is the clone git names for it.
+  it.each<{ case: string; root: string | null; path: string; sent: string }>([
+    {
+      case: 'relative, from a subfolder',
+      root: '/r',
+      path: 'notes/**',
+      sent: 'rA/notes/**',
+    },
+    {
+      case: 'absolute, from a subfolder',
+      root: '/r',
+      path: '/r/rA/notes/a.md',
+      sent: 'rA/notes/a.md',
+    },
+    {
+      case: 'relative, climbing to a sibling folder',
+      root: '/r',
+      path: '../rB/src/*.ts',
+      sent: 'rB/src/*.ts',
+    },
+    {
+      case: 'relative, climbing out of the clone',
+      root: '/r',
+      path: '../../etc/x',
+      sent: '/etc/x',
+    },
+    {
+      case: 'absolute, outside the clone',
+      root: '/r',
+      path: '/q/a.md',
+      sent: '/q/a.md',
+    },
+    {
+      case: 'relative, from the clone root',
+      root: '/r/rA',
+      path: 'src/**',
+      sent: 'src/**',
+    },
+    {
+      case: 'relative, from a folder in no clone',
+      root: null,
+      path: 'notes/**',
+      sent: 'notes/**',
+    },
+  ])('claim_PathsRelativeToTheClone: $case', async ({ root, path, sent }) => {
+    const room = fakeRoom();
+    vi.mocked(room.claim).mockResolvedValue({ ok: false, reason: 'stub' });
+    const tools = toolsOver({
+      room,
+      git: {
+        topLevel: async () => {
+          if (root === null) {
+            throw new Error('not a git repository');
+          }
+          return root;
+        },
+      },
+    });
+
+    await call(tools, 'chatroom_claim', { paths: [path], reason: 'r' });
+
+    expect(vi.mocked(room.claim).mock.calls[0]?.[0].target).toEqual({
+      paths: [sent],
+    });
+  });
+
   it('claimAndRelease_Replies', async () => {
     const room = fakeRoom();
     const lead = agent('rA', null, 'Lead');
