@@ -55,6 +55,11 @@ goals; a change that closes one off is redesigned, and an existing gap found whi
   chrome — draws through a user-editable layout, so any part of the app's look changes by editing a layout file,
   without a rebuild. A new view or surface ships with its layout contract and its `default` layout
   (`docs/features/layouts/design.md`).
+- **Every feature has a demo step.** Each built-in plugin registers at least one demo step for what it shows the
+  user, through the core `services.demoSteps` registry from its own `page/demo-steps.ts` (and `main/demo-steps.ts`
+  for sample data in main), or declares why it has none in its manifest's `demoSkip`. A new feature or a changed
+  look lands with its step updated; `npm run selftest -- --plugin demo` fails on a plugin with neither
+  (`docs/features/demo/design.md`).
 - **Everything hot reloads.** A changed plugin, layout, theme, keymap or setting applies to the running app without
   a restart and without losing the user's work. So every registration a plugin makes can be undone, and state that
   must outlive a reload is kept where the reload does not reach it. Today settings, keymap, themes and layouts hot
@@ -420,6 +425,14 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  first message, then the session's chat view through chat's `mountChat`; the `scoped-agents.ask`
                  keys), layouts/ (the scoped-agents Layout contract with its `askBox` part and the built-in `default`
                  layout); `docs/features/scoped-agents/design.md`
+  demo/          manifest.ts, contract.ts (the `demo.run` slot: running, step, beat, autoplay), main/ (the run: the
+                 demo harness registered while it runs, the scratch folder, demo sessions through chat's ephemeral
+                 `launch`, the main halves of steps from `services.demoSteps`, off-by-default plugins through the
+                 plugin switch's `runForNow`, one scoped-agents step agent per step, the real-session step, its
+                 self-test script with the coverage check), page/ (the Demo panel in the right bar: the step list over
+                 the step agent's pane; the caption in the status bar; the Demo side-bar section through sessions'
+                 `addSection` and `showOnly`; autoplay; the `Space d` commands), layouts/ (the demo Layout contract and
+                 the built-in `default` layout); `docs/features/demo/design.md`
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, written to the
                  `chat.session`, `chat.entries`, `chat.controls`, `chat.commands`, `chat.queued` and `chat.returned`
                  slots through `chat-slots.ts`, the start_session and set_headless MCP tools, recent folders,
@@ -1251,7 +1264,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker,
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow-large/main/selftest-script.ts` for
-  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  Large, `src/plugins/workflow-spike/main/selftest-script.ts` for Spike, `src/plugins/workflow-small/main/selftest-script.ts` for Small, `src/plugins/workflow-medium/main/selftest-script.ts` for Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/plugins/demo/main/selftest-script.ts` for the demo's keys and its coverage check (every built-in plugin has a demo step or a `demoSkip`), `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
