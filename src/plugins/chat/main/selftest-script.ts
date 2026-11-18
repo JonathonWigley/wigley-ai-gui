@@ -340,10 +340,11 @@ const CLEAR_STEPS: SelfTestStep[] = [
     '[chat] Chat tab shown in chat-second',
     CHAT_STEP_TO_ROW_PRESSES_MAX,
   ),
+  // No index line here: a session's Docs tab first shows, and reads its index
+  // once, as its row opens, so this show reads nothing.
   {
     keys: ['<A-i>'],
     expect: '[docs] Docs tab shown',
-    alsoExpect: [SESSION_INDEX_LINE],
     why: "chat-second's Docs tab shows, so the clear's new host id rebuilds it.",
   },
   { keys: ['<A-o>'], expect: '[chat] Chat tab shown in chat-second' },
@@ -1314,6 +1315,12 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: ['Enter'],
         expect: '[page] Enter ran sessions.pickerChoose',
+        alsoExpect: [/^\[sessions\] pane loaded chat-second$/],
+      },
+      {
+        keys: ['<A-h>'],
+        expect: '[sessions] pane focused chat-images',
+        why: "Alt+h focuses the left pane, chat-images's, whose hub draws no section, so chat-second's pane on the right is the unfocused one with a hub head.",
       },
       {
         click: '.pane-tree-slot:not(.is-focused) .chat-side-section-head',
@@ -1331,7 +1338,7 @@ const GROUPS: SelfTestGroup[] = [
         keys: ['<A-w>'],
         expect: '[sessions] pane closed',
         width: 'start',
-        why: 'The clicks left the left pane focused, so it closes.',
+        why: "The clicks left chat-second's pane focused, so it closes, leaving chat-images's.",
       },
     ],
   },
