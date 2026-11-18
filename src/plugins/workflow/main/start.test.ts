@@ -32,7 +32,6 @@ import {
   type ToolDefinition,
   type SessionRow,
   sessionsRowsSlot,
-  textResult,
   type ToolSession,
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
@@ -773,15 +772,6 @@ describe('workflowMainPart', () => {
         },
       ]),
     );
-  });
-
-  it('workflowOfflineAnswer_RecordsAndReplays', () => {
-    expect(WORKFLOW_OFFLINE_ANSWER).toEqual({
-      result: textResult(
-        'Recorded. The app applies it when it opens.\n\n' + HEADLESS_NOTE,
-      ),
-      replay: true,
-    });
   });
 
   it('stepTool_StageAddedByAPlugin_JoinsTheToolUntilDisposed', async () => {

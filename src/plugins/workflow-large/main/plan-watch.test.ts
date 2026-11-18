@@ -462,11 +462,34 @@ describe('createPlanWatch', () => {
       opened: [PLAN_DIR, GIT_FOLDER, W_PLAN_DIR],
       signals: [changed(PLAN_ONE), changed(PLAN_TWO)],
     },
+    {
+      on: 'worktrees folder',
+      folder: WORKTREES_FOLDER,
+      // The folder exists before the follow, so its watch is open.
+      seeded: `${WORKTREES_FOLDER}/old/gitdir`,
+      act: async (
+        checkouts: string[],
+        _writeAt: ReturnType<typeof clockedFiles>['writeAt'],
+      ) => {
+        checkouts.push('/w');
+      },
+      opened: [PLAN_DIR, GIT_FOLDER, WORKTREES_FOLDER, W_PLAN_DIR],
+      signals: [changed(PLAN_ONE), changed(PLAN_TWO)],
+    },
   ])(
     'onMissed_WriteTheWatchDidNotReport_ReadsAgain ($on)',
-    async ({ folder, act, opened: expectedOpened, signals: expected }) => {
+    async ({
+      folder,
+      seeded,
+      act,
+      opened: expectedOpened,
+      signals: expected,
+    }) => {
       const { files, writeAt } = clockedFiles();
       await files.write(`${GIT_FOLDER}/HEAD`, 'ref: refs/heads/main');
+      if (seeded !== undefined) {
+        await files.write(seeded, '/old/.git');
+      }
       await writeAt(10, PLAN_FILE, PLAN_ONE);
       await writeAt(20, `${W_PLAN_DIR}/plan.md`, PLAN_TWO);
       const opened: string[] = [];
