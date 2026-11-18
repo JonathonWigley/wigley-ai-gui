@@ -15,8 +15,16 @@ import {
   type RoundState,
 } from '../round-model';
 
-// A pane of the forms view.
-export type LayoutPane = 'head' | 'rail' | 'review' | 'notices';
+// A pane of the forms view, its rail's head and foot strips and the pager
+// over its cards included.
+export type LayoutPane =
+  | 'head'
+  | 'rail'
+  | 'railHead'
+  | 'railFoot'
+  | 'pager'
+  | 'review'
+  | 'notices';
 
 // A part of the cancel prompt's dialog.
 export type LayoutDialogPart = 'dialogFrame' | 'confirmBody';
@@ -57,7 +65,15 @@ export interface RoundPicks {
 }
 
 const DEFAULT_NAME = 'default';
-const PANES: readonly LayoutPane[] = ['head', 'rail', 'review', 'notices'];
+const PANES: readonly LayoutPane[] = [
+  'head',
+  'rail',
+  'railHead',
+  'railFoot',
+  'pager',
+  'review',
+  'notices',
+];
 
 // What each pane and dialog part reads from a layout; a layout defines the
 // part when the read is a function.
@@ -66,6 +82,9 @@ const PART_READS: {
 } = {
   head: (layout) => layout.head,
   rail: (layout) => layout.rail,
+  railHead: (layout) => layout.railHead,
+  railFoot: (layout) => layout.railFoot,
+  pager: (layout) => layout.pager,
   review: (layout) => layout.review,
   notices: (layout) => layout.notices,
   dialogFrame: (layout) => layout.dialogFrame,
@@ -223,6 +242,9 @@ export function pickRoundLayouts(
     panes: {
       head: pickPane('head'),
       rail: pickPane('rail'),
+      railHead: pickPane('railHead'),
+      railFoot: pickPane('railFoot'),
+      pager: pickPane('pager'),
       review: pickPane('review'),
       notices: pickPane('notices'),
     },

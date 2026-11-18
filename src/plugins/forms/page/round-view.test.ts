@@ -22,7 +22,9 @@ import { formsManifest } from '../manifest';
 import { BUILT_IN_PAGE_KINDS } from './kinds/formats';
 import { pageKindTable } from './kinds/page-kinds';
 import { poll, pollPageKind } from './kinds/plugin-page-kind.test-support';
+import type { FormsAction, FormsState } from './form-state';
 import { createRoundView } from './round-view';
+import { railHeadInput } from './view-model';
 import {
   apply,
   initialState,
@@ -112,7 +114,7 @@ const bareLayout: Layout = {
 // editor boxes; `main` is the scrolled main column, and `anchors` holds every
 // anchor the keys named, in call order. It draws with `layout` over `default`
 // and renders through `markdown`. The round is `presented` (two questions by
-// default) as `shape` changes it.
+// default) as `shape` changes it; `shown` is the state it was shown in.
 function roundViewSetup(
   layout: Layout = bareLayout,
   markdown: MarkdownRenderer = {
@@ -151,7 +153,7 @@ function roundViewSetup(
   );
   view.update(round, 'forms');
   const [main] = findAll(asFake(view.element), 'ui-split-end');
-  return { boxes, created, round, view, main, anchors };
+  return { boxes, created, round, view, main, anchors, shown };
 }
 
 describe('round view rebuild', () => {
@@ -309,6 +311,102 @@ describe('round view rebuild', () => {
       true,
     );
     expect(anchors.every((anchor) => anchor.isDisposed)).toBe(true);
+  });
+});
+
+// The shown round after `actions`, keeping the kinds `shown` holds, so the
+// view updates rather than rebuilds.
+function roundAfter(shown: FormsState, actions: FormsAction[]): RoundState {
+  return actions.reduce(apply, shown).forms[0];
+}
+
+// Answers question 2 with its first choice, then focuses question 1 again.
+const ANSWER_THE_OTHER_QUESTION: FormsAction[] = [
+  { type: 'focusItem', item: 1 },
+  { type: 'choose', number: 1 },
+  { type: 'focusItem', item: 0 },
+];
+
+// Whether each element of `className` in the view carries `is-no-target`.
+function noTargetMarks(view: { element: HTMLElement }, className: string) {
+  return findAll(asFake(view.element), className).map((edge) =>
+    edge.classList.contains('is-no-target'),
+  );
+}
+
+describe('round view chrome', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      case: 'the rail head with no other untouched item',
+      presented: presentedRound('r1'),
+      actions: ANSWER_THE_OTHER_QUESTION,
+      edge: 'rail-edge',
+      before: [false],
+      after: [true],
+    },
+    {
+      case: 'the pager of a one-stop round',
+      presented: presentedRound('r1', { questions: [question('Alpha')] }),
+      actions: [],
+      edge: 'item-pager-edge',
+      before: [true, true],
+      after: [true, true],
+    },
+  ])(
+    'formsChrome_NoTarget_MarksItsEdges on $case',
+    ({ presented, actions, edge, before, after }) => {
+      const { view, shown } = roundViewSetup(bareLayout, undefined, presented);
+      expect(noTargetMarks(view, edge)).toEqual(before);
+
+      view.update(roundAfter(shown, actions), 'forms');
+
+      expect(noTargetMarks(view, edge)).toEqual(after);
+    },
+  );
+
+  it('railHead_Redraw_LeavesOneRootInItsSlot', () => {
+    const { view, anchors, shown } = roundViewSetup();
+
+    view.update(roundAfter(shown, ANSWER_THE_OTHER_QUESTION), 'forms');
+
+    const [slot] = findAll(asFake(view.element), 'rail-head-slot');
+    expect(slot.children).toHaveLength(1);
+    const unanswered = anchors.filter(
+      (anchor) => anchor.command === 'forms.prevUnanswered',
+    );
+    expect(unanswered.map((anchor) => anchor.isDisposed)).toEqual([
+      true,
+      false,
+    ]);
+    view.dispose();
+    expect(unanswered.every((anchor) => anchor.isDisposed)).toBe(true);
+  });
+
+  it('railHead_InputChanges_DrawsAgain', () => {
+    const texts: string[] = [];
+    const layout: Layout = {
+      ...bareLayout,
+      railHead(parent, input, kit) {
+        texts.push(input.text);
+        return { element: kit.el(parent, 'header', 'mine', input.text) };
+      },
+    };
+    const { view, round, shown } = roundViewSetup(layout);
+    const answered = roundAfter(shown, ANSWER_THE_OTHER_QUESTION);
+
+    view.update(answered, 'forms');
+    view.update(answered, 'forms');
+
+    expect(texts).toEqual([
+      railHeadInput(round).text,
+      railHeadInput(answered).text,
+    ]);
+    expect(texts[0]).not.toBe(texts[1]);
   });
 });
 

@@ -1099,18 +1099,19 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   harness kind joins no activity run.
 - **A forms layout** draws the forms view: the three named cards (`question`, `finding`, `notice`), `cards.kinds` (a
   builder per plugin kind id), `cards.other` (the card of a plugin kind no layout in the chain has a `kinds` builder
-  for), the `head`, `rail`, `review` and `notices` panes, and the cancel prompt's frame and body (`dialogFrame`,
-  `confirmBody`), which the `forms.layout` setting picks, never a round. A finding's card, origin, action and severity are strings,
+  for), the `head`, `rail`, `review` and `notices` panes, the rail's `railHead` and `railFoot` and the `pager` over
+  the cards, and the cancel prompt's frame and body (`dialogFrame`, `confirmBody`), which the `forms.layout` setting
+  picks, never a round. A finding's card, origin, action and severity are strings,
   since a plugin may register more. The `notices` pane is the round's one notices page, after every other rail
   stop, plugin kinds' included: a line per notice that opens to that notice's card. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
-  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, notice line, review row,
+  pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, save status, unanswered and item edges, notice line, review row,
   round note, send and cancel buttons, other plugins' card parts (`contributedParts`), the plain parts `card`, `tag`,
   `kbd`, `button` — a command id with its `arg`, variant and `keys` — and `sectionHeader`, and
   `command(qualifiedId, arg?)` and `keysFor(qualifiedId)`
   for any plugin's command), each of which keeps itself up to date. The app keeps which item is selected, the keys,
-  scrolling, the split width, the cancel prompt's lifecycle, and the rail header's open count and saved state. The built-in `default` layout is
-  `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card, the
-  rail, review and notices panes, and `dialogFrame` and `confirmBody`, and draws the forms look. The user's forms
+  scrolling, the split width, the cancel prompt's lifecycle, and the save state's text, which a layout places through `kit.saveStatus`. The built-in `default` layout is
+  `layouts/default/layout.js`, plain JS that `// @ts-check` types against that contract; it defines every card and
+  every part but the head, and draws the forms look. The user's forms
   layouts are folders in `~/.config/wigley-ai-gui/layouts/forms/`; a user layout defines only the parts it changes.
   - **Which layout draws what:** a card comes from the first layout defining its kind among the item's `layout`,
     the round's `layout`, the `forms.layout` setting and `default` (a plugin kind: the first `cards.kinds[id]`, else

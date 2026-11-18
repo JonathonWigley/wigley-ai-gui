@@ -156,7 +156,7 @@ forms files. A layout
 item draws a button through `kit.button`, which runs a command, and no closure button.
 
 - [x] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
-- [x] Dialog frames and confirms through the opener's layout, then [ ] Forms and primer column chrome through their
+- [x] Dialog frames and confirms through the opener's layout, then [x] Forms and primer column chrome through their
   layouts: both edit the forms and primer views. Each drops its carve-out from AGENTS.md or
   `docs/features/layouts/design.md`.
 - [x] Fixed texts in layout slots

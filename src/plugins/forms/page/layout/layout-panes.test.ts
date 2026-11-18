@@ -25,10 +25,14 @@ import {
   question,
 } from '../test-rounds';
 import { poll, pollPageKind } from '../kinds/plugin-page-kind.test-support';
+import { pagerInput, railFootInput, railHeadInput } from '../view-model';
 import {
   buildNoticesPane,
   buildRailPane,
   buildReviewPane,
+  drawPager,
+  drawRailFoot,
+  drawRailHead,
   type PaneDeps,
 } from './layout-panes';
 import type { LayoutPick } from './layout-resolver';
@@ -745,5 +749,87 @@ describe('notices pane', () => {
     findAll(noticeLines(pane)[1], 'ui-collapsible-head')[0].click();
 
     expect(run.mock.calls).toEqual([['forms.toggleNoticeAt', 2]]);
+  });
+});
+
+type ChromePart = 'railHead' | 'railFoot' | 'pager';
+
+// `part` drawn with `layout` into a fresh parent over openRound's round, with
+// its deps; the rail head places `saveStatus`.
+function drawChrome(
+  part: ChromePart,
+  layout: Layout,
+  saveStatus: FakeElement = new FakeElement('span'),
+) {
+  const round = openRound().forms[0];
+  const { deps, anchor, run } = fakePaneDeps(createFormsContributions());
+  const parent = asHtml(new FakeElement('div'));
+  const pick: LayoutPick = { name: 'test', layout };
+  const drawn =
+    part === 'railHead'
+      ? drawRailHead(
+          pick,
+          parent,
+          railHeadInput(round),
+          asHtml(saveStatus),
+          deps,
+        )
+      : part === 'railFoot'
+        ? drawRailFoot(pick, parent, railFootInput(round), deps)
+        : drawPager(pick, parent, pagerInput(round), deps);
+  return { drawn, anchor, run };
+}
+
+describe('chrome strips', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      part: 'railHead' as const,
+      commands: ['forms.prevUnanswered', 'forms.nextUnanswered'],
+    },
+    { part: 'railFoot' as const, commands: ['forms.openReview'] },
+    { part: 'pager' as const, commands: ['forms.prevItem', 'forms.nextItem'] },
+  ])(
+    'formsChrome_DefaultLayout_AnchorsItsKeysInTheFormsScope $part',
+    ({ part, commands }) => {
+      const { anchor } = drawChrome(part, defaultLayout);
+
+      expect(
+        anchor.mock.calls.map(([, command, options]) => [command, options]),
+      ).toEqual(commands.map((command) => [command, { scope: 'forms.forms' }]));
+    },
+  );
+
+  it('railFoot_ReviewClick_RunsOpenReview', () => {
+    const { drawn, run } = drawChrome('railFoot', defaultLayout);
+
+    findAll(asFake(drawn.built.element), 'ui-button')[0].click();
+
+    expect(run.mock.calls.map(([command]) => command)).toEqual([
+      'forms.openReview',
+    ]);
+  });
+
+  it('railHead_LeavesOutSaveStatus_PlacesItAtItsRootsEnd', () => {
+    const saveStatus = new FakeElement('span');
+    const { drawn } = drawChrome(
+      'railHead',
+      {
+        railHead(parent, input, kit) {
+          const head = kit.el(parent, 'header', 'mine');
+          kit.el(head, 'span', 'mine-text', input.text);
+          return { element: head };
+        },
+      },
+      saveStatus,
+    );
+
+    const root = asFake(drawn.built.element);
+    expect(root.classList.contains('mine')).toBe(true);
+    expect(root.children[root.children.length - 1]).toBe(saveStatus);
   });
 });

@@ -12,6 +12,11 @@ import type {
   FormsScreen,
   ItemKind,
 } from '../contract';
+import type {
+  PagerInput,
+  RailFootInput,
+  RailHeadInput,
+} from '../layouts/layout';
 import { activeForm, formById } from '../../../shared/page/session-forms';
 import type { FormsAction, FormsState } from './form-state';
 import {
@@ -165,11 +170,38 @@ export function hasOtherUnanswered(round: RoundState): boolean {
 
 // The item pager's text: the focused stop's rail label of the rail's stop
 // count; '' with no stop focused.
-export function pagerText(round: RoundState): string {
+function pagerText(round: RoundState): string {
   const focused = focusedItem(round);
   return focused === null
     ? ''
     : `${railEntryLabel(round, focused)} of ${railItems(round).length}`;
+}
+
+// The `railHead` part's input: its text and the round's open and total
+// counts.
+export function railHeadInput(round: RoundState): RailHeadInput {
+  const counts = progress(round);
+  return {
+    text: railHeadText(counts),
+    open: counts.untouched,
+    total: counts.total,
+  };
+}
+
+// The `railFoot` part's input: the round's open and total counts.
+export function railFootInput(round: RoundState): RailFootInput {
+  const counts = progress(round);
+  return { open: counts.untouched, total: counts.total };
+}
+
+// The `pager` part's input: its text, the focused stop's rail position (null
+// with none focused) and the rail's stop count.
+export function pagerInput(round: RoundState): PagerInput {
+  return {
+    text: pagerText(round),
+    index: focusedItem(round) === null ? null : round.focus,
+    total: railItems(round).length,
+  };
 }
 
 // The rail entry's label: an item's number, the notice kind's rail prefix

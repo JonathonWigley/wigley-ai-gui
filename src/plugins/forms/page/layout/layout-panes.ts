@@ -11,8 +11,10 @@ import {
   createMarkdownMount,
   type MarkdownMount,
 } from '../../../../shared/page/markdown-mount';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   drawPart,
+  type DrawnPart,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
@@ -24,6 +26,7 @@ import {
   type CollapsibleCard,
   createCollapsibleCard,
 } from '../../../../shared/page/ui/card';
+import { keyChevron, keyEdge } from '../../../../shared/page/ui/key-anchors';
 import { row as rowPart } from '../../../../shared/page/ui/row';
 import { setDotStatus, statusDot } from '../../../../shared/page/ui/status-dot';
 import { tag } from '../../../../shared/page/ui/tag';
@@ -37,6 +40,11 @@ import type {
   LayoutPane,
   NoticesInput,
   NoticesKit,
+  PagerInput,
+  PagerKit,
+  RailFootInput,
+  RailHeadInput,
+  RailHeadKit,
   RailInput,
   RailKit,
   ReviewInput,
@@ -122,6 +130,13 @@ export interface ReviewPane {
   update(round: RoundState, isNewlyShown: boolean): void;
 }
 
+// A drawn chrome strip and the edges its kit drew, for the app's
+// `is-no-target`.
+export interface DrawnChrome {
+  element: HTMLElement;
+  edges: HTMLElement[];
+}
+
 type Updater = (round: RoundState) => void;
 
 // The round's rail, drawn into `parent` by drawPart with the picked layout's
@@ -203,6 +218,152 @@ export function buildNoticesPane(
     log: deps.log,
     partName: 'notices',
   }).built;
+}
+
+// The rail's head strip, drawn into `parent` by drawPart with the picked
+// layout's `railHead`, or with `default`'s when the pick lacks it or its head
+// throws. Its kit places `saveStatus`, the app's status line, once; a head
+// that leaves it out gets it at the end of its root. `dispose` disposes the
+// anchors it drew and detaches the status line.
+export function drawRailHead(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: RailHeadInput,
+  saveStatus: HTMLElement,
+  deps: PaneDeps,
+): DrawnPart<DrawnChrome> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.railHead,
+    build: (railHead, stripParent, rollback) => {
+      const kitDeps = recordingDeps(deps, rollback);
+      const edges: HTMLElement[] = [];
+      const slot = appSlot(saveStatus, 'saveStatus', rollback);
+      const kit: RailHeadKit = {
+        ...chromeKit(kitDeps),
+        saveStatus: (statusParent) => slot.place(statusParent),
+        unansweredEdge: (edgeParent) =>
+          appendEdge(edgeParent, edges, unansweredEdge(kitDeps)),
+      };
+      const element = requireElementIn(
+        stripParent,
+        (railHead(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'railHead',
+      );
+      slot.placeIfLeftOut(element, 'end');
+      return { element, edges };
+    },
+    log: deps.log,
+    partName: 'railHead',
+  });
+}
+
+// The rail's foot strip, drawn into `parent` as drawRailHead draws the head,
+// with the layout's `railFoot`; its `edges` is always empty.
+export function drawRailFoot(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: RailFootInput,
+  deps: PaneDeps,
+): DrawnPart<DrawnChrome> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.railFoot,
+    build: (railFoot, stripParent, rollback) => {
+      const kit = chromeKit(recordingDeps(deps, rollback));
+      const element = requireElementIn(
+        stripParent,
+        (railFoot(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'railFoot',
+      );
+      return { element, edges: [] };
+    },
+    log: deps.log,
+    partName: 'railFoot',
+  });
+}
+
+// The item pager over the cards, drawn into `parent` as drawRailHead draws
+// the rail's head, with the layout's `pager`.
+export function drawPager(
+  pick: LayoutPick,
+  parent: HTMLElement,
+  input: PagerInput,
+  deps: PaneDeps,
+): DrawnPart<DrawnChrome> {
+  return drawPart({
+    owner: 'forms',
+    parent,
+    pick,
+    defaultLayout,
+    part: (layout) => layout.pager,
+    build: (pager, stripParent, rollback) => {
+      const kitDeps = recordingDeps(deps, rollback);
+      const edges: HTMLElement[] = [];
+      const kit: PagerKit = {
+        ...chromeKit(kitDeps),
+        itemEdge: (edgeParent, side) =>
+          appendEdge(edgeParent, edges, itemEdge(kitDeps, side)),
+      };
+      const element = requireElementIn(
+        stripParent,
+        (pager(stripParent, input, kit) as LayoutPane | undefined)?.element,
+        'pager',
+      );
+      return { element, edges };
+    },
+    log: deps.log,
+    partName: 'pager',
+  });
+}
+
+// A chrome strip's base kit, its keys firing in the forms scope.
+function chromeKit(deps: PaneDeps): FormsBaseKit {
+  return createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms')));
+}
+
+// Appends `edge` to `parent` and keeps it in `edges`.
+function appendEdge(
+  parent: HTMLElement,
+  edges: HTMLElement[],
+  edge: HTMLElement,
+): HTMLElement {
+  parent.append(edge);
+  edges.push(edge);
+  return edge;
+}
+
+// `⌥P ◂ ▸ ⌥N`: the unanswered pair's anchors with their chevrons.
+function unansweredEdge(deps: PaneDeps): HTMLElement {
+  const anchor = scopedAnchor(deps.keys, formsScope('forms'));
+  const previous = element('span');
+  const next = element('span');
+  anchor(previous, formsCommand('prevUnanswered'));
+  anchor(next, formsCommand('nextUnanswered'));
+  return keyEdge('rail-edge', [
+    previous,
+    keyChevron('◂'),
+    keyChevron('▸'),
+    next,
+  ]);
+}
+
+// `⌃H ‹` at the start or `› ⌃L` at the end: an item key with its chevron.
+function itemEdge(deps: PaneDeps, side: 'start' | 'end'): HTMLElement {
+  const anchor = scopedAnchor(deps.keys, formsScope('forms'));
+  const key = element('span');
+  if (side === 'start') {
+    anchor(key, formsCommand('prevItem'));
+    return keyEdge('item-pager-edge', [key, keyChevron('‹')]);
+  }
+  anchor(key, formsCommand('nextItem'));
+  return keyEdge('item-pager-edge', [keyChevron('›'), key]);
 }
 
 // Throws `message` unless `index` is a whole number in [0, `length`).

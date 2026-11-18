@@ -1,10 +1,58 @@
-/* The default Form layout: the rail's list, the round head, an item's status, the review, and the notices lines. */
+/* The default Form layout: the rail's list, head and foot, the item pager, the round head, an item's status, the review, and the notices lines. */
 
 /* Rail */
 :where(.form-tab) .rail-list {
   list-style: none;
   margin: 0;
   padding: var(--wg-space-2);
+}
+
+/* Rail head and foot */
+:where(.form-tab) .rail-head {
+  align-items: baseline;
+  border-bottom: 1px solid var(--wg-border-default);
+  color: var(--wg-fg-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1_5);
+  padding: var(--wg-space-2) var(--wg-space-3);
+  white-space: nowrap;
+}
+
+:where(.form-tab) .rail-head-separator {
+  color: var(--wg-fg-tertiary);
+}
+
+:where(.form-tab) .rail-edge {
+  margin-left: auto;
+}
+
+:where(.form-tab) .rail-foot {
+  border-top: 1px solid var(--wg-border-default);
+  padding: var(--wg-space-2);
+}
+
+/* In a narrow rail the Review button's keys wrap under its label, which
+   stays whole. */
+:where(.form-tab) .rail-foot .ui-button {
+  flex-wrap: wrap;
+  overflow-wrap: normal;
+}
+
+/* Item pager: the focused item's place between the item keys, above the
+   card. */
+:where(.form-tab) .item-pager {
+  align-items: baseline;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+  margin-bottom: var(--wg-space-3);
+}
+
+:where(.form-tab) .item-pager-text {
+  font-family: var(--wg-font-mono);
 }
 
 /* Round head */

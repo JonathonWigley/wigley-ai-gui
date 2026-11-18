@@ -17,6 +17,7 @@
 //   layout leaving out `other` has its plugin kinds' cards drawn by the next
 //   layout in the chain defining it
 // - rail: `entry` (a rail without entries scrolls nothing into view)
+// - railHead: `saveStatus` (placed at the end of the part's root)
 // - notices pane: `line` (each line left out is appended at the end of the
 //   pane)
 // - review: `roundNote` (appended at the end of the pane), and every other
@@ -94,6 +95,29 @@ const layout = {
       kit.entry(list, item.position);
     }
     return { element: nav };
+  },
+  railHead(parent, input, kit) {
+    const head = kit.el(parent, 'header', 'rail-head');
+    kit.el(head, 'span', 'rail-head-text', input.text);
+    kit.el(head, 'span', 'rail-head-separator', '·');
+    kit.saveStatus(head);
+    kit.unansweredEdge(head);
+    return { element: head };
+  },
+  railFoot(parent, _input, kit) {
+    const foot = kit.el(parent, 'footer', 'rail-foot');
+    const review = kit.button(foot, 'Review', 'forms.openReview', {
+      variant: 'secondary',
+    });
+    kit.keyHint(review, 'openReview');
+    return { element: foot };
+  },
+  pager(parent, input, kit) {
+    const pager = kit.el(parent, 'div', 'item-pager');
+    kit.itemEdge(pager, 'start');
+    kit.el(pager, 'span', 'item-pager-text', input.text);
+    kit.itemEdge(pager, 'end');
+    return { element: pager };
   },
   notices(parent, input, kit) {
     const pane = kit.el(parent, 'section', 'notices');

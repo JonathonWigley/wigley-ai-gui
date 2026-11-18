@@ -551,16 +551,6 @@ Duplication and drift with no user-visible defect.
 - **Split subscribes to its width key** — *agent-ready*: `Split` (`src/shared/page/ui/split.ts`) subscribes to its
   ui-state key instead of each owner calling `reloadWidth()` when shown (the shell, docs' session tree, forms' rail,
   the primer's two splits), so a new split owner cannot forget it.
-- **Forms' cancel confirm through the forms layout** — *agent-ready*: the forms cancel confirm passes neither
-  `drawFrame` nor `drawBody` to `createConfirmPrompt` (`src/plugins/forms/page/forms-view.ts`), so its frame and body
-  are drawn in code; the primer, the audio picker, practice and the session stash already draw theirs through
-  `dialogFrame` and `confirmBody`. Add those two parts to the forms layout contract and `default` layout and pass
-  both hooks, as `src/plugins/primer/page/primer-view.ts` does. Then drop "the cancel dialog" from what AGENTS.md
-  § A forms layout says the app keeps.
-- **Forms column chrome through the forms layout** — *agent-ready*: forms' rail head, item pager and rail foot
-  (`src/plugins/forms/page/round-view.ts`), and the status line in it (`createStatusLine`,
-  `src/shared/page/status-line.ts`), are built in code. Add their parts to the forms layout contract and `default`
-  layout, as the primer's column strips (`tasksHead`, `itemsHead`, `tasksFoot`, `cardEdge`, `reviewFooter`) are.
 - **ownsRoot helper** — *agent-ready*: "a `repo` or `features` entry owns its root" is spelled inline in four places;
   one `ownsRoot(entry)` beside `isKnownSource` gives it one home (`src/plugins/docs/tree.ts` `buildTree`,
   `path-guard.ts`, `page/docs-state.ts`, `index-document.ts`).

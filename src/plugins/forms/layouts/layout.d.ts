@@ -280,6 +280,40 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   cancelButton(parent: HTMLElement): HTMLButtonElement;
 }
 
+// `text` is the app's line (`Items · 3 open`); `open` is how many items are untouched, of `total` items (findings
+// and questions).
+export interface RailHeadInput {
+  text: string;
+  open: number;
+  total: number;
+}
+// As `RailHeadInput`'s counts.
+export interface RailFootInput {
+  open: number;
+  total: number;
+}
+// `text` is the app's line (`F1 of 6`), '' with no stop focused; `index` is the focused stop's 0-based rail
+// position (as `RailEntryInput.position`), null with no stop focused; `total` is the rail's stop count.
+export interface PagerInput {
+  text: string;
+  index: number | null;
+  total: number;
+}
+
+export interface RailHeadKit extends FormsBaseKit {
+  // The app's save status (`span.ui-status-line`), which the app keeps current. It places once per draw; a second
+  // call throws. A head that leaves it out gets it at the end of its root.
+  saveStatus(parent: HTMLElement): HTMLElement;
+  // `span.ui-key-edge.rail-edge`: `⌥P ◂ ▸ ⌥N`, the prevUnanswered and nextUnanswered anchors. The app marks it
+  // `is-no-target` while no other untouched item is left to jump to.
+  unansweredEdge(parent: HTMLElement): HTMLElement;
+}
+export interface PagerKit extends FormsBaseKit {
+  // `span.ui-key-edge.item-pager-edge`: `start` is the prevItem anchor then `‹`, `end` is `›` then the nextItem
+  // anchor. The app marks each `is-no-target` while the round holds fewer than two stops.
+  itemEdge(parent: HTMLElement, side: 'start' | 'end'): HTMLElement;
+}
+
 // The notices pane's parts.
 export interface NoticesKit extends FormsBaseKit {
   // Draws the line for notice `index` (its chevron, its open state, its hidden body holding the notice's
@@ -310,8 +344,22 @@ export interface Layout {
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
   // `data-layout-owner="forms"` and `data-layout="<name>"`.
   head?(parent: HTMLElement, round: RoundInfo, kit: FormsBaseKit): void;
-  // The rail beside the cards, under the app's rail header and over its Review button, built once per round.
+  // The rail beside the cards, between the `railHead` and `railFoot` parts, built once per round.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
+  // Over the rail, drawn again when its input changes.
+  railHead?(
+    parent: HTMLElement,
+    input: RailHeadInput,
+    kit: RailHeadKit,
+  ): LayoutPane;
+  // Under the rail, drawn again when its input changes.
+  railFoot?(
+    parent: HTMLElement,
+    input: RailFootInput,
+    kit: FormsBaseKit,
+  ): LayoutPane;
+  // Over the cards, under the head, drawn again when its input changes.
+  pager?(parent: HTMLElement, input: PagerInput, kit: PagerKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.
   review?(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
   // The round's one notices page, the last stop after every other rail stop, plugin kinds' included, shown in place of
@@ -344,6 +392,17 @@ export interface Layout {
 export interface CompleteLayout extends Layout {
   cards: LayoutCards;
   rail(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
+  railHead(
+    parent: HTMLElement,
+    input: RailHeadInput,
+    kit: RailHeadKit,
+  ): LayoutPane;
+  railFoot(
+    parent: HTMLElement,
+    input: RailFootInput,
+    kit: FormsBaseKit,
+  ): LayoutPane;
+  pager(parent: HTMLElement, input: PagerInput, kit: PagerKit): LayoutPane;
   review(parent: HTMLElement, input: ReviewInput, kit: ReviewKit): LayoutPane;
   notices(
     parent: HTMLElement,

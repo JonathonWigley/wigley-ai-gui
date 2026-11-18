@@ -9,6 +9,9 @@ import type { Layout, LayoutCards } from '../../layouts/layout';
 const FUNCTION_PARTS: Record<Exclude<keyof Layout, 'cards'>, true> = {
   head: true,
   rail: true,
+  railHead: true,
+  railFoot: true,
+  pager: true,
   review: true,
   notices: true,
   dialogFrame: true,

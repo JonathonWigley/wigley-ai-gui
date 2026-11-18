@@ -181,6 +181,9 @@ describe('pickRoundLayouts', () => {
       ...allCards(),
       head: () => undefined,
       notices: pane,
+      railHead: pane,
+      railFoot: pane,
+      pager: pane,
     };
     const loaded = new Map([
       ['f', f],
@@ -202,11 +205,23 @@ describe('pickRoundLayouts', () => {
     expect(picks.noticeCards[1].layout).toBe(n);
     expect(picks.panes.head).toEqual({ name: 'u', layout: u });
     expect(picks.panes.notices).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.railHead).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.railFoot).toEqual({ name: 'u', layout: u });
+    expect(picks.panes.pager).toEqual({ name: 'u', layout: u });
   });
 
   it('pickRoundLayouts_PanesSkipTheItemLayout', () => {
     const loaded = new Map<string, Layout>([
-      ['f', { ...allCards(), review: pane }],
+      [
+        'f',
+        {
+          ...allCards(),
+          review: pane,
+          railHead: pane,
+          railFoot: pane,
+          pager: pane,
+        },
+      ],
       ['n', { ...allCards(), notices: pane }],
       ['default', allCards()],
     ]);
@@ -220,6 +235,9 @@ describe('pickRoundLayouts', () => {
     expect(picks.cards[0].name).toBe('f');
     expect(picks.panes.review.name).toBe('default');
     expect(picks.panes.notices.name).toBe('default');
+    expect(picks.panes.railHead.name).toBe('default');
+    expect(picks.panes.railFoot.name).toBe('default');
+    expect(picks.panes.pager.name).toBe('default');
     expect(picks.noticeCards[0].name).toBe('n');
   });
 });
