@@ -478,14 +478,21 @@ export interface DocsEdits {
   baseText: string;
 }
 
-// Where the user was in one docs view, so a page reload puts them back: the
-// open doc, the tree's expanded group ids, selected row and filter, and the
-// open editor's unsaved edits, null with none.
-export interface DocsPlace {
-  openPath: string | null;
+// Where the user was in one tree view of a docs view: its expanded group ids,
+// selected row and filter.
+export interface DocsTreePlace {
   expanded: string[];
   selectedId: string | null;
   filter: string;
+}
+
+// Where the user was in one docs view, so a page reload puts them back: the
+// open doc, each tree view's place, null for a view whose tree never held rows
+// and holds no put-back place, and the open editor's unsaved edits, null with
+// none.
+export interface DocsPlace {
+  openPath: string | null;
+  trees: { wiki: DocsTreePlace | null; all: DocsTreePlace | null };
   edits: DocsEdits | null;
 }
 

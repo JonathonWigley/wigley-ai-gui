@@ -495,10 +495,13 @@ export interface ModeContext {
 // shows: by `toggleSideBar`, `picked`, or the window widening with its
 // overlay open, and after `shown` when the mode shows with its side bar
 // hidden; the plugin moves focus out of the side bar there. A window
-// narrowing hides the side bar without it. `sideBarOpenedOver` runs each time
-// the side bar opens over the content while the mode shows, by
+// narrowing hides the side bar without it. `sideBarNarrowed` runs instead when
+// a window narrowing hides this shown mode's side bar from beside the content;
+// the plugin closes what the side bar held open there, moving no focus, so
+// focus survives a narrow-and-widen round trip. `sideBarOpenedOver` runs each
+// time the side bar opens over the content while the mode shows, by
 // `toggleSideBar` or after `shown`; the plugin moves focus into the side bar
-// there. Neither
+// there. None of the three
 // runs for a hidden mode, a mode without a side bar, or a side bar already
 // in that state.
 // `focusSideBar` runs when the core's Alt+h leaves main's left edge while
@@ -522,6 +525,7 @@ export interface Mode {
   shown(): void;
   hidden(): void;
   sideBarHidden?(): void;
+  sideBarNarrowed?(): void;
   sideBarOpenedOver?(): void;
   focusSideBar?(): void;
   focusMain(): void;

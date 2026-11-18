@@ -8,7 +8,7 @@ import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
-import type { DocsPlace, IndexHeading } from '../contract';
+import type { DocsPlace, DocsTreePlace, IndexHeading } from '../contract';
 import type { TreeRowInput } from '../layouts/layout';
 import type {
   TreeHeadingMatch,
@@ -166,6 +166,16 @@ export interface TreeView {
   selectEntry(entryId: string): void;
   // `selectEntry` in `view` alone.
   selectEntryIn(view: SidebarView, entryId: string): void;
+  // The node ids of the rows `view` shows, shown or not.
+  rowIdsIn(view: SidebarView): string[];
+  // In `view`, selects the first id after `goneId` in `rowIdsBefore` that its
+  // rows show now, else the nearest one before it; nothing when its rows show
+  // none of them.
+  selectNearestIn(
+    view: SidebarView,
+    rowIdsBefore: readonly string[],
+    goneId: string,
+  ): void;
   focus(): void;
   isFilterOpen(): boolean;
   openFilter(): void;
@@ -179,20 +189,20 @@ export interface TreeView {
   // Draws the pane, the line and the rows again when a layout pick changed
   // for one of them, keeping the rows' scroll, the filter's text and focus.
   redraw(): void;
-  // The place a page reload puts back: the expanded ids, selection and filter
-  // of the view a new tree shows first, the wiki with `hasWiki`, else All
-  // pages; while a put-back place waits for that view's first tree with rows,
-  // that place. The other view's start over on a reload.
+  // The place a page reload puts back, per view: its expanded ids, selection
+  // and filter; while a put-back place waits for the view's first tree with
+  // rows, that place; null while its tree has never held rows and no place
+  // waits.
   place(): TreePlace;
-  // Puts back a reloaded page's place, before the first `setTree`: the first
-  // tree with rows in that view takes it in place of its default expansion and
-  // first row. The filter applies with its box closed.
+  // Puts back a reloaded page's place, before the first `setTree`: in each
+  // view with a place, the first tree with rows takes it in place of its
+  // default expansion and first row. The filter applies with its box closed.
   restorePlace(place: TreePlace): void;
   // Disposes the tree's drawn parts.
   dispose(): void;
 }
 
-export type TreePlace = Pick<DocsPlace, 'expanded' | 'selectedId' | 'filter'>;
+export type TreePlace = DocsPlace['trees'];
 
 function isSameLine(a: TreeLine | null, b: TreeLine | null): boolean {
   if (a === null || b === null) {
@@ -242,6 +252,27 @@ function emptySlot(): ViewSlot {
     seenGroups: new Set(),
     restored: null,
   };
+}
+
+// `slot`'s put-back place while it waits, else its state once its tree has
+// held rows; else null.
+function slotPlace(slot: ViewSlot): DocsTreePlace | null {
+  if (!slot.hasRows && slot.restored === null) {
+    return null;
+  }
+  const { expanded, selectedId, filter } = slot.restored ?? slot.state;
+  return { expanded: [...expanded], selectedId, filter };
+}
+
+// Puts `place` back in `slot` for its first tree with rows, the filter at once;
+// nothing for no place.
+function restoreSlot(slot: ViewSlot, place: DocsTreePlace | null): void {
+  if (place === null) {
+    return;
+  }
+  const { expanded, selectedId, filter } = place;
+  slot.restored = { expanded: new Set(expanded), selectedId, filter };
+  slot.state = { ...slot.state, filter };
 }
 
 // The tree holding the rows `slot` shows now.
@@ -297,7 +328,6 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   };
   let shownView: SidebarView = deps.hasWiki ? 'wiki' : 'all';
   const shownSlot = () => slots[shownView];
-  const placeSlot = slots[shownView];
   let pathOf: (entryId: string) => string = () => '';
   let headingsOf: (entryId: string) => readonly IndexHeading[] = () => [];
   let rows: TreeRow[] = [];
@@ -651,6 +681,21 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       selectLeafIn(slots[shown], `entry:${entryId}`);
       draw();
     },
+    rowIdsIn: (shown) => rowsOf(slots[shown]).map((row) => row.node.id),
+    selectNearestIn(shown, rowIdsBefore, goneId) {
+      const slot = slots[shown];
+      const shownIds = new Set(view.rowIdsIn(shown));
+      const goneAt = rowIdsBefore.indexOf(goneId);
+      const isShownNow = (id: string) => shownIds.has(id);
+      const nearest =
+        rowIdsBefore.slice(goneAt + 1).find(isShownNow) ??
+        rowIdsBefore.slice(0, goneAt).findLast(isShownNow);
+      if (nearest === undefined) {
+        return;
+      }
+      slot.state = { ...slot.state, selectedId: nearest };
+      draw();
+    },
     focus() {
       pane.focus();
     },
@@ -720,14 +765,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         }
       });
     },
-    place() {
-      const { expanded, selectedId, filter } =
-        placeSlot.restored ?? placeSlot.state;
-      return { expanded: [...expanded], selectedId, filter };
-    },
-    restorePlace({ expanded, selectedId, filter }) {
-      placeSlot.restored = { expanded: new Set(expanded), selectedId, filter };
-      placeSlot.state = { ...placeSlot.state, filter };
+    place: () => ({ wiki: slotPlace(slots.wiki), all: slotPlace(slots.all) }),
+    restorePlace({ wiki, all }) {
+      restoreSlot(slots.wiki, wiki);
+      restoreSlot(slots.all, all);
     },
     dispose() {
       isDisposed = true;

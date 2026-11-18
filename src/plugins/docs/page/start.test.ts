@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
+import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
   type FakeElement,
   findAll,
+  type FocusFakeElement,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import {
@@ -143,9 +145,7 @@ const placeAt = (
   edits: DocsEdits | null = null,
 ): DocsPlace => ({
   openPath,
-  expanded: [],
-  selectedId: null,
-  filter: '',
+  trees: { wiki: null, all: null },
   edits,
 });
 
@@ -159,6 +159,7 @@ function startDocsPage(
   const harness = startPagePart(docsPagePart, {
     services: {
       picker,
+      fuzzy: fakeFuzzyMatcher,
       editor: documentEditors(),
       markdown: {
         block: (text) => text,
@@ -636,7 +637,10 @@ describe('docs page part lifecycle', () => {
     const { harness } = page;
     const saved = {
       ...placeAt('/p/kept.md', restoredEdits),
-      expanded: ['shelf:x'],
+      trees: {
+        wiki: null,
+        all: { expanded: ['shelf:x'], selectedId: null, filter: '' },
+      },
     };
 
     await reloadWith(page, { [sessionSourceId('s1')]: saved }, ['s1']);
@@ -1145,5 +1149,280 @@ describe('docs view focus', () => {
       docFocusedLogs: view.docFocusedLogs() - logsBefore,
     }).toEqual({ isDocFocused: true, docFocusedLogs: 1 });
     await view.harness.stop();
+  });
+});
+
+const W_DOC = '/p/w.md';
+const X_DOC = '/p/x.md';
+const Y_DOC = '/p/y.md';
+const Z_DOC = '/p/z.md';
+
+// Main's side over an index of w.md, x.md (with a `Gamma` heading on line 3)
+// and z.md, each titled by its base name, which `renameDoc` (to y.md) and
+// `trashDoc` change as the disk would.
+function changingIndex() {
+  let entries = [
+    ownDoc(W_DOC, 'w.md'),
+    {
+      ...ownDoc(X_DOC, 'x.md'),
+      headings: [{ level: 2, text: 'Gamma', line: 3 }],
+    },
+    ownDoc(Z_DOC, 'z.md'),
+  ];
+  return async (method: string, ...args: unknown[]): Promise<unknown> => {
+    switch (method) {
+      case 'loadIndex':
+      case 'rebuildIndex':
+        return {
+          document: {
+            schemaVersion: 5,
+            generatedAt: '2026-11-05T00:00:00Z',
+            entries,
+            contexts: [],
+          },
+          message: null,
+          title: 'index',
+          canRebuild: false,
+        };
+      case 'renameDoc':
+        entries = entries.map((entry) =>
+          entry.path === args[0]
+            ? { ...entry, id: Y_DOC, path: Y_DOC, title: 'y.md' }
+            : entry,
+        );
+        return Y_DOC;
+      case 'trashTargets':
+        return [args[0]];
+      case 'trashDoc':
+        entries = entries.filter((entry) => entry.path !== args[0]);
+        return { trashed: [args[0]], error: null };
+      case 'readDoc':
+        return '# Doc\n\n## Gamma\n';
+      case 'wikiMainPath':
+        return '/p/wiki/Main.md';
+      case 'readDocIfPresent':
+        return null;
+      default:
+        return { clones: [] };
+    }
+  };
+}
+
+// The label of the selected row in the tree under `element`, and whether it is
+// the last row with that label, as a doc's usual row is below its Starred row;
+// null with no row selected.
+function selectedTreeRow(element: HTMLElement) {
+  const rows = findAll(asFake(element), 'docs-rows').flatMap((list) =>
+    findAll(list, 'ui-row'),
+  );
+  const labels = rows.map((row) => findAll(row, 'ui-row-label')[0].textContent);
+  const at = rows.findIndex((row) => row.classList.contains('is-selected'));
+  return at === -1
+    ? null
+    : { label: labels[at], isUsualRow: labels.lastIndexOf(labels[at]) === at };
+}
+
+describe('docs view state', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: the narrowing not closing the box, leaving its scope pushed, or
+  // moving focus as `sideBarHidden` does.
+  it('a narrowing closes the filter box and keeps focus', async () => {
+    const { harness } = startDocsPage(servingIndexOf([], []));
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+    harness.setSideBarShown(true);
+    commands.filter({ arg: undefined });
+    const mode = harness.mode('docs.docs');
+    const [filterFrame] = findAll(
+      asFake(mode.sideBar as HTMLElement),
+      'docs-filter',
+    );
+    const focusedBefore = document.activeElement;
+
+    mode.sideBarNarrowed!();
+
+    const narrowed = {
+      isBoxHidden: filterFrame.hidden,
+      isFocusKept: document.activeElement === focusedBefore,
+    };
+    commands.filter({ arg: undefined });
+    expect({ ...narrowed, isBoxHiddenOnFilter: filterFrame.hidden }).toEqual({
+      isBoxHidden: true,
+      isFocusKept: true,
+      isBoxHiddenOnFilter: false,
+    });
+    await harness.stop();
+  });
+
+  // The change is made in `view:1` while `view:2` shows the selected row
+  // `picked`. Breaks: the other view keeping a selection that names a row gone,
+  // or a rename selecting the Starred row in place of the usual one.
+  it.each([
+    {
+      change: 'rename',
+      action: 'rename',
+      picked: `entry:${X_DOC}`,
+      stars: false,
+      filter: null,
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'rename from Starred',
+      action: 'rename',
+      picked: `owner:starred/entry:${X_DOC}`,
+      stars: true,
+      filter: null,
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'rename from a heading match',
+      action: 'rename',
+      picked: `entry:${X_DOC}/heading:3`,
+      stars: false,
+      filter: 'Gamma',
+      changed: X_DOC,
+      expected: 'y.md',
+    },
+    {
+      change: 'trash with a row after',
+      action: 'trash',
+      picked: `entry:${X_DOC}`,
+      stars: false,
+      filter: null,
+      changed: X_DOC,
+      expected: 'z.md',
+    },
+    {
+      change: 'trash of the last row',
+      action: 'trash',
+      picked: `entry:${Z_DOC}`,
+      stars: false,
+      filter: null,
+      changed: Z_DOC,
+      expected: 'x.md',
+    },
+  ])(
+    'an outside $change reselects the doc in the other view',
+    async ({ action, picked, stars, filter, changed, expected }) => {
+      const { harness, exportsTo } = startDocsPage(changingIndex());
+      const { commands } = harness.started();
+      let activeViewId = '';
+      const addView = (viewId: string) =>
+        exportsTo(createRegistrations()).addView(`source:${viewId}`, {
+          isVisible: () => activeViewId === viewId,
+        });
+      const changing = addView('view:1');
+      const other = addView('view:2');
+      changing.shown();
+      other.shown();
+      const click = (viewId: string, nodeId: string) =>
+        commands.openNode({ arg: { viewId, nodeId } });
+      await vi.waitFor(() =>
+        expect(
+          [changing, other].map((handle) => selectedTreeRow(handle.element)),
+        ).not.toContain(null),
+      );
+      click('view:1', 'global/instructions');
+      click('view:2', 'global/instructions');
+
+      activeViewId = 'view:2';
+      if (stars) {
+        click('view:2', `entry:${X_DOC}`);
+        commands.toggleStar({ arg: undefined });
+      }
+      if (filter !== null) {
+        commands.filter({ arg: undefined });
+        const [box] = findAll(asFake(other.element), 'docs-box');
+        (box as FocusFakeElement).value = filter;
+        box.fire('input');
+        commands.boxAccept({ arg: undefined });
+      }
+      click('view:2', picked);
+      activeViewId = 'view:1';
+      click('view:1', `entry:${changed}`);
+      if (action === 'rename') {
+        commands.rename({ arg: undefined });
+        commands.boxAccept({ arg: undefined });
+      } else {
+        commands.trash({ arg: undefined });
+        await vi.waitFor(() =>
+          expect(
+            harness.logs.some(({ message }) =>
+              message.startsWith('asked to move'),
+            ),
+          ).toBe(true),
+        );
+        commands.confirmYes({ arg: undefined });
+      }
+
+      await vi.waitFor(() =>
+        expect(selectedTreeRow(other.element)).toEqual({
+          label: expected,
+          isUsualRow: true,
+        }),
+      );
+      await harness.stop();
+    },
+  );
+
+  // Breaks: a tree open taking no open number, or the waiting open checking
+  // its number before the rebuild wait ends.
+  it('a tree open while an openDoc waits on the rebuild wins', async () => {
+    const rebuilt = Promise.withResolvers<unknown>();
+    let isRebuildAsked = false;
+    const listing = (paths: readonly string[]) => ({
+      document: {
+        schemaVersion: 5,
+        generatedAt: '2026-11-05T00:00:00Z',
+        entries: paths.map((path) => ownDoc(path, path)),
+        contexts: [],
+      },
+      message: null,
+      title: 'index',
+      canRebuild: true,
+    });
+    const page = startDocsPage(async (method, ...args) => {
+      switch (method) {
+        case 'loadIndex':
+          return listing([PLAIN]);
+        case 'rebuildIndex':
+          isRebuildAsked = true;
+          return rebuilt.promise;
+        case 'wikiMainPath':
+          return '/p/wiki/Main.md';
+        case 'readDocIfPresent':
+          return null;
+        case 'readDoc':
+          return TEXTS[args[0] as string];
+        default:
+          return { clones: [] };
+      }
+    });
+    const { harness } = page;
+    const { commands } = harness.started();
+    openByMessage(page, TARGET);
+    await vi.waitFor(() => expect(isRebuildAsked).toBe(true));
+    commands.switchTreeView({ arg: { viewId: 'machine' } });
+    commands.openNode({
+      arg: { viewId: 'machine', nodeId: 'global/instructions' },
+    });
+
+    commands.openNode({ arg: { viewId: 'machine', nodeId: `entry:${PLAIN}` } });
+    await vi.waitFor(() => expect(openedPaths(page)).toContain(PLAIN));
+    rebuilt.resolve(listing([PLAIN, TARGET]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const opened = openedPaths(page);
+    expect({
+      last: opened.at(-1),
+      hasTarget: opened.includes(TARGET),
+    }).toEqual({ last: PLAIN, hasTarget: false });
+    await harness.stop();
   });
 });

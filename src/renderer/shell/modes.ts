@@ -84,9 +84,10 @@ export interface ModesDeps {
 
 // The core's own view of the registry: `narrowChanged` hears the window cross
 // the 680 px breakpoint, closing every mode's overlay on widening and laying
-// out the shown mode's side bar again. It tells the mode only when widening
-// closes its open overlay onto a side bar the user hid; a narrowing tells
-// nothing. `focusSideBar` calls the shown mode's `focusSideBar` and returns
+// out the shown mode's side bar again. It tells the mode `sideBarHidden` only
+// when widening closes its open overlay onto a side bar the user hid, and
+// `sideBarNarrowed` only when narrowing hides its side bar from beside the
+// content. `focusSideBar` calls the shown mode's `focusSideBar` and returns
 // true when the mode has one and its side bar lies beside or over the
 // content; otherwise it calls nothing and returns false, with no mode shown
 // too. `focusMain` calls the shown mode's `focusMain`, and does nothing with
@@ -303,11 +304,15 @@ export function createModes(deps: ModesDeps): CoreModes {
         entry.sideBar = sideBarAfterResize(entry.sideBar, isNarrow);
       }
       if (shownMode !== null) {
-        deps.layOutSideBar(layoutOf(shownMode));
-        // A narrowing hides the side bar without telling the mode, so focus
-        // stays across a narrow-and-widen round trip.
+        const layout = layoutOf(shownMode);
+        deps.layOutSideBar(layout);
+        // A narrowing tells the shown mode only through `sideBarNarrowed`,
+        // which moves no focus, so focus stays across a narrow-and-widen round
+        // trip.
         if (before === 'over') {
           tellSideBarChanged(shownMode, before);
+        } else if (before === 'beside' && layout === 'hidden') {
+          shownMode.mode.sideBarNarrowed?.();
         }
       }
     },

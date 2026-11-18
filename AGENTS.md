@@ -692,8 +692,9 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   handle sets the title bar's context. In a window too narrow for it the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin
-  moves focus out of or into the side bar there; a window narrowing hides it without telling, so focus survives a
-  narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
+  moves focus out of or into the side bar there. A window narrowing that hides the side bar from beside the content
+  tells the shown mode only through `sideBarNarrowed`, which moves no focus (Docs closes its filter box there), so
+  focus survives a narrow-and-widen round trip. A mode with a side bar gives `focusSideBar`, which sets the side bar's key scope and
   focuses its list, and every mode gives `focusMain`, which gives main's last pane back its scope and focus; the
   core's focus keys reach the side bar and the right bar only through these (A focus target, below). A hidden mode keeps its state,
   so leaving one never loses work in it, but it keeps no keys: each mode, each session tab and each session popup is told when it becomes

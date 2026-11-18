@@ -373,6 +373,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         treeHiddenIn(machineView);
         showTreeEdge(machineView);
       },
+      sideBarNarrowed: () => machineView.dismissFilter(),
       sideBarOpenedOver: () => {
         treeOpenedOverIn(machineView);
         showTreeEdge(machineView);
@@ -383,8 +384,9 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         machineView.focusMain();
       },
     });
-    // A narrowing hides the side bar without telling the mode, so the machine
-    // view's edge prompt follows the window too, once the core has laid out.
+    // A narrowing tells the mode only to close its filter box
+    // (`sideBarNarrowed`), so the machine view's edge prompt follows the window
+    // here, once the core has laid out.
     let pendingResizeFrame: number | null = null;
     const onWindowResize = () => {
       pendingResizeFrame ??= requestAnimationFrame(() => {
