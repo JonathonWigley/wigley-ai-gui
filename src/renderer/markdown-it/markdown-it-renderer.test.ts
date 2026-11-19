@@ -163,20 +163,18 @@ describe('escaping and disabled syntax', () => {
   });
 
   it.each([
-    ['a link', '[shot](/Users/me/a.png)'],
+    ['a link', '[shot](/Users/me/a.png)', '<p>[shot](/Users/me/a.png)</p>\n'],
     [
       'a link inside an image label',
       '![a [b](/c.png)](https://example.com/p.png)',
+      '<p><span class="md-image">a [b](/c.png)</span></p>\n',
     ],
-  ])('keeps %s to a local image as its literal text', (_case, text) => {
-    expect(block(text)).not.toContain('local:');
-  });
-
-  it('keeps a link to a local image as its literal text, path included', () => {
-    expect(block('[shot](/Users/me/a.png)')).toBe(
-      '<p>[shot](/Users/me/a.png)</p>\n',
-    );
-  });
+  ])(
+    'keeps %s to a local image as its literal text, path included',
+    (_case, text, html) => {
+      expect(block(text)).toBe(html);
+    },
+  );
 
   it('escapes the alt text of a local image', () => {
     expect(block('![a "b" <c>](/a.png)')).toContain(
