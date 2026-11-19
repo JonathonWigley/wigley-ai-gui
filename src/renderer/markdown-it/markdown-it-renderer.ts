@@ -11,6 +11,7 @@ import type {
 type Md = InstanceType<typeof MarkdownIt>;
 type BlockRule = Parameters<Md['block']['ruler']['before']>[2];
 type StateBlock = Parameters<BlockRule>[0];
+type InlineRule = Parameters<Md['inline']['ruler']['at']>[1];
 type RenderRule = NonNullable<Md['renderer']['rules']['th_open']>;
 type Token = ReturnType<Md['parse']>[number];
 type EscapeHtml = (text: string) => string;
@@ -75,9 +76,11 @@ export function createMarkdownItRenderer(
   const blocks: Blocks = new Map();
   const md = createWigleyMarkdown(blocks, localImageUrl);
   md.disable(['reference']);
-  // A link or image parses only with a web destination, or an image's local
-  // file; `dropNonWebLinks` then keeps a local destination's link as text.
-  md.validateLink = (url) => isWebLink(url) || localImageUrl(url) !== null;
+  // A link or image parses only with a web destination, or an image with a
+  // local file; a link to a local file stays its literal text, path included.
+  const parsing = installImageFlag(md);
+  md.validateLink = (url) =>
+    isWebLink(url) || (parsing.image && localImageUrl(url) !== null);
   md.core.ruler.after('linkify', 'web_links_only', dropNonWebLinks);
   installBlockRules(md, fences);
   const documentMd = createWigleyMarkdown(blocks, localImageUrl);
@@ -198,6 +201,31 @@ function dropNonWebLinks(state: { tokens: Token[] }): void {
     }
     block.children = kept;
   }
+}
+
+// Wraps markdown-it's inline `image` and `link` rules so the returned flag's
+// `image` is true while an image's own destination is validated: an image sets
+// it, and a link inside an image's label clears it for its own run.
+function installImageFlag(md: Md): { image: boolean } {
+  const parsing = { image: false };
+  const ruler = md.inline.ruler;
+  for (const [name, image] of [
+    ['image', true],
+    ['link', false],
+  ] as const) {
+    const stock = ruler.__rules__[ruler.__find__(name)].fn;
+    const flagged: InlineRule = (state, silent) => {
+      const outer = parsing.image;
+      parsing.image = image;
+      try {
+        return stock(state, silent);
+      } finally {
+        parsing.image = outer;
+      }
+    };
+    ruler.at(name, flagged);
+  }
+  return parsing;
 }
 
 // Wraps markdown-it's fence rule so each fence token's `meta.closed` says

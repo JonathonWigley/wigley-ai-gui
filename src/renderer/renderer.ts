@@ -38,6 +38,7 @@ import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
+import { localImageUrl } from '../shared/visual-url';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { runBound } from '../shared/command-router';
 import { commandLabel, qualify } from '../shared/plugin-manifests';
@@ -105,7 +106,6 @@ import { startPageCoreSlots } from './state/core-slots';
 import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
-import { localImageUrl } from '../shared/visual-url';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';

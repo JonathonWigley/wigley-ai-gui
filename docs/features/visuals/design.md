@@ -51,8 +51,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style, `data:` images and fonts
   and images on its own scheme (Local images, below) and nothing else, and main refuses any frame navigation off the
   scheme, since CSP does not cover navigation. WebRTC is the one route CSP and the sandbox leave open; it stays open
-  because a frame holds nothing but the source the agent already wrote and local images its scripts cannot read
-  (below).
+  because a frame holds nothing but its own source, local images its scripts cannot read, and whether a guessed
+  image path exists (below).
 - **Local images, by absolute path.** Agents show renders and screenshots they wrote to disk, and a `data:` URI
   meant transcribing the file's base64 into the reply by hand: 16k characters for a few renders, which came out
   corrupt and drew black squares. So the visual scheme also serves a local image by its absolute path:
@@ -61,10 +61,14 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   gif, webp, svg); a hash path stays a visual's document. Inside a visual, `<img src="/Users/me/a.png">` resolves
   to that URL against the document's own, so the agent writes the bare path. In markdown, `![alt](/Users/me/a.png)`
   draws an `img.md-picture` on the same URL (`localImageUrl`), handed to the markdown adapter by the composition
-  root, so chat, forms, the primer and the docs browser show images with no change of their own. A relative image
-  stays alt text, since `block` has no folder to resolve it against. The answer carries no CORS header, so a
-  frame's canvas taints on such an image and its scripts cannot read the pixels; an image is no secret from the
-  agent that names it, which can read the file itself.
+  root, so chat, forms, the primer and the docs browser show images with no change of their own. In chat, forms
+  and the primer, a relative image and a link to a local file stay their markdown source, since `block` has no
+  folder to resolve a relative path against and a link's path is worth keeping. The answer carries no CORS header,
+  so a frame's canvas taints on such an image and its scripts cannot read the pixels. A visual's scripts can still
+  learn whether an image file exists and its size, by loading a guessed path; an agent's visual learns nothing it
+  could not read itself, and an html fence in a doc the docs browser renders, the one source the agent did not
+  write, could send that over WebRTC. That leak is accepted: it reveals only image files' existence and size, and
+  closing it would mean each frame carrying where its source came from.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
   inline script. A document served on its own scheme carries its own CSP header.
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload

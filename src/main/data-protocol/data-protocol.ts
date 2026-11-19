@@ -106,7 +106,11 @@ export function serveVisualScheme(): (source: string) => string {
     if (image === null) {
       return documents.response(request.url);
     }
+    // A drive-shaped path is relative off Windows: refuse it there.
     const file = path.normalize(image);
+    if (!path.isAbsolute(file)) {
+      return new Response(null, { status: 404 });
+    }
     const fetched = await fetchFile(file);
     if (fetched === null || !fetched.ok) {
       return new Response(null, { status: 404 });

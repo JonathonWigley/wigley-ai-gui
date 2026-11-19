@@ -162,8 +162,20 @@ describe('escaping and disabled syntax', () => {
     );
   });
 
-  it('keeps a link to a local image as its text', () => {
-    expect(block('[shot](/Users/me/a.png)')).toBe('<p>shot</p>\n');
+  it.each([
+    ['a link', '[shot](/Users/me/a.png)'],
+    [
+      'a link inside an image label',
+      '![a [b](/c.png)](https://example.com/p.png)',
+    ],
+  ])('keeps %s to a local image as its literal text', (_case, text) => {
+    expect(block(text)).not.toContain('local:');
+  });
+
+  it('keeps a link to a local image as its literal text, path included', () => {
+    expect(block('[shot](/Users/me/a.png)')).toBe(
+      '<p>[shot](/Users/me/a.png)</p>\n',
+    );
   });
 
   it('escapes the alt text of a local image', () => {
