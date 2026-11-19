@@ -63,17 +63,24 @@ const FENCE_ALT = ['paragraph', 'reference', 'blockquote', 'list'];
 // The links `block` and `inline` draw: web pages only.
 const WEB_LINK = /^https?:\/\//i;
 
+// The URL that serves a markdown image's local file, from the destination as
+// markdown-it holds it, or null when it names no local image the app serves.
+export type LocalImageUrl = (destination: string) => string | null;
+
 export function createMarkdownItRenderer(
   highlighter: CodeHighlighter,
+  localImageUrl: LocalImageUrl,
 ): MarkdownRenderer {
   const fences: Fences = new Map();
   const blocks: Blocks = new Map();
-  const md = createWigleyMarkdown(blocks);
+  const md = createWigleyMarkdown(blocks, localImageUrl);
   md.disable(['reference']);
-  md.validateLink = isWebLink;
+  // A link or image parses only with a web destination, or an image's local
+  // file; `dropNonWebLinks` then keeps a local destination's link as text.
+  md.validateLink = (url) => isWebLink(url) || localImageUrl(url) !== null;
   md.core.ruler.after('linkify', 'web_links_only', dropNonWebLinks);
   installBlockRules(md, fences);
-  const documentMd = createWigleyMarkdown(blocks);
+  const documentMd = createWigleyMarkdown(blocks, localImageUrl);
   installDocumentRules(documentMd, fences);
   const renderer: MarkdownRenderer = {
     block: (text) => renderBlock(md, text),
@@ -145,7 +152,10 @@ function diffFence(escapeHtml: EscapeHtml): FenceContribution {
 // Raw HTML escaped, bare URLs with a scheme linked, links and images drawn as
 // the views expect, with each block in `blocks` as it holds them at parse time,
 // table alignment classes and the fence's closed flag.
-function createWigleyMarkdown(blocks: Blocks): Md {
+function createWigleyMarkdown(
+  blocks: Blocks,
+  localImageUrl: LocalImageUrl,
+): Md {
   const md = new MarkdownIt({ html: false, linkify: true });
   md.linkify.set({ fuzzyLink: false, fuzzyEmail: false });
   const blockRule: BlockRule = (state, startLine, endLine, silent) =>
@@ -154,7 +164,7 @@ function createWigleyMarkdown(blocks: Blocks): Md {
     alt: FENCE_ALT,
   });
   installClosedFlag(md);
-  installSharedRules(md.renderer.rules, md.utils.escapeHtml);
+  installSharedRules(md.renderer.rules, md.utils.escapeHtml, localImageUrl);
   return md;
 }
 
@@ -585,11 +595,13 @@ function pushInline(state: StateBlock, content: string): void {
   token.children = [];
 }
 
-// A link is an anchor whose click the page handles from its `data-href`, and
-// an image is its alt text.
+// A link is an anchor whose click the page handles from its `data-href`; an
+// image whose source `localImageUrl` serves draws from that URL, and any other
+// image is its alt text.
 function installSharedRules(
   rules: Md['renderer']['rules'],
   escapeHtml: EscapeHtml,
+  localImageUrl: LocalImageUrl,
 ): void {
   rules.link_open = (tokens, idx) => {
     const token = tokens[idx];
@@ -598,11 +610,12 @@ function installSharedRules(
     return `<a class="md-link" href="#" data-href="${escapeHtml(href)}" title="${escapeHtml(title)}">`;
   };
   rules.image = (tokens, idx, options, env, self) => {
-    const alt = self.renderInlineAsText(
-      tokens[idx].children ?? [],
-      options,
-      env,
-    );
+    const token = tokens[idx];
+    const alt = self.renderInlineAsText(token.children ?? [], options, env);
+    const url = localImageUrl(String(token.attrGet('src') ?? ''));
+    if (url !== null) {
+      return `<img class="md-picture" src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" title="${escapeHtml(alt)}">`;
+    }
     return `<span class="md-image">${escapeHtml(alt)}</span>`;
   };
   rules.th_open = alignedCell;

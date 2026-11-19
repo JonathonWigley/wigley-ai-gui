@@ -19,7 +19,7 @@ describe('createVisualDocuments', () => {
     expect(answer.status).toBe(200);
     expect(answer.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
     expect(answer.headers.get('Content-Security-Policy')).toBe(
-      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'",
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: wigley-visual:; font-src data:; form-action 'none'; base-uri 'none'",
     );
     expect(answer.headers.get('Access-Control-Allow-Origin')).toBe(null);
     const body = await answer.text();

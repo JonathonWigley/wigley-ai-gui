@@ -48,10 +48,23 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **An html code block, not a tool.** A fence works with any agent harness and reads as code in a terminal. A tool
   would tie visuals to an MCP server every harness must load.
 - **Scripts run; the network does not.** The frame's sandbox has `allow-scripts` and no `allow-same-origin`, so it
-  has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style and `data:` images and fonts
-  and nothing else, and main refuses any frame navigation off the scheme, since CSP does not cover navigation.
-  WebRTC is the one route CSP and the sandbox leave open; it stays open because a frame holds nothing but the
-  source the agent already wrote.
+  has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style, `data:` images and fonts
+  and images on its own scheme (Local images, below) and nothing else, and main refuses any frame navigation off the
+  scheme, since CSP does not cover navigation. WebRTC is the one route CSP and the sandbox leave open; it stays open
+  because a frame holds nothing but the source the agent already wrote and local images its scripts cannot read
+  (below).
+- **Local images, by absolute path.** Agents show renders and screenshots they wrote to disk, and a `data:` URI
+  meant transcribing the file's base64 into the reply by hand: 16k characters for a few renders, which came out
+  corrupt and drew black squares. So the visual scheme also serves a local image by its absolute path:
+  `wigley-visual://visual/Users/me/a.png` (a drive path as `/C:/me/a.png`), read from disk on each request.
+  `localImagePathOf` in `src/shared/visual-url.ts` reads the path back and serves only image types (png, jpg, jpeg,
+  gif, webp, svg); a hash path stays a visual's document. Inside a visual, `<img src="/Users/me/a.png">` resolves
+  to that URL against the document's own, so the agent writes the bare path. In markdown, `![alt](/Users/me/a.png)`
+  draws an `img.md-picture` on the same URL (`localImageUrl`), handed to the markdown adapter by the composition
+  root, so chat, forms, the primer and the docs browser show images with no change of their own. A relative image
+  stays alt text, since `block` has no folder to resolve it against. The answer carries no CORS header, so a
+  frame's canvas taints on such an image and its scripts cannot read the pixels; an image is no secret from the
+  agent that names it, which can read the file itself.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
   inline script. A document served on its own scheme carries its own CSP header.
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload
@@ -104,6 +117,9 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 
 ## Rejected
 
+- **Inlining local images as `data:` URIs when main serves a visual.** Main would rewrite the source's image
+  references before serving it; the frame's CSP would stay as it was, but markdown images outside a visual would
+  still need a route of their own, so it would make two.
 - **Turning on markdown-it's raw HTML.** The HTML would run in the app's own page, beside the Bridge, and the page's
   CSP would block its scripts anyway.
 - **A chat-only renderer.** It would leave forms, the primer and docs without visuals and add a second fence path

@@ -160,3 +160,16 @@
 .md-image {
   color: var(--wg-fg-tertiary);
 }
+
+/* A local image, shown whole within the column and a phone-render height;
+   images on one line sit side by side. */
+.md-picture {
+  display: inline-block;
+  max-width: 100%;
+  max-height: calc(var(--wg-space-8) * 15);
+  height: auto;
+  vertical-align: top;
+  margin: 0 var(--wg-space-2) var(--wg-space-2) 0;
+  border: 1px solid var(--wg-border-subtle);
+  border-radius: var(--wg-radius-sm);
+}

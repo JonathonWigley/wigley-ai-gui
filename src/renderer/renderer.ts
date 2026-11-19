@@ -105,6 +105,7 @@ import { startPageCoreSlots } from './state/core-slots';
 import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
+import { localImageUrl } from '../shared/visual-url';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
@@ -256,7 +257,10 @@ async function start() {
     keyHints,
   );
   const { areas } = shell;
-  const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
+  const markdown = createMarkdownItRenderer(
+    createCodeMirrorHighlighter(),
+    localImageUrl,
+  );
   const chrome = mountShellChrome({
     areas,
     defaultLayout: defaultChromeLayout,

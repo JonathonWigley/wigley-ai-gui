@@ -15,7 +15,7 @@ const highlighter: CodeHighlighter = {
 
 // The real adapter, whose helper markers and in-place body parse make each
 // block's bytes.
-const markdown = createMarkdownItRenderer(highlighter);
+const markdown = createMarkdownItRenderer(highlighter, () => null);
 markdown.addBlock(changesBlock);
 markdown.addBlock(treeBlock);
 markdown.addBlock(detailsBlock);

@@ -127,7 +127,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   above the rendered body. The editor highlights markdown, JSON, TOML and YAML by file extension. A file dropped or pasted into the open editor
   goes in as a markdown link relative to the doc (`![name](path)` for an image); a pasted screenshot is saved beside the
   doc as `images/<doc name>-<yyyyMMdd-HHmmss>[-<n>].<ext>` (`docs/features/file-drop/design.md`). The rendered view shows
-  `![…]` as its alt text, not the picture.
+  such a relative `![…]` as its alt text, not the picture.
 - **Load states**: one chip per registered harness on each doc, in registration order and named by the adapter's
   label (state; reason on hover); a harness no adapter registered draws no chip. Judged for a folder the user picks
   from the index's contexts (`c`), the home folder by default. A session's Docs tab uses that session's own states.
@@ -165,7 +165,8 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   file changed, and `:w` asks reload-or-overwrite.
 - **Links**: a relative link to a file opens it in the browser, an http or https link opens in the default browser (any other scheme is refused), a
   `#heading` link moves within the doc; the wiki adds section links, `wiki:` and `wigley:` links and the doc's history (`../docs-wiki/design.md` § Links, § Keys). Links are real anchors: Tab moves between them, Enter follows. Forms keep literal links.
-  Images show their alt text.
+  An image by absolute path shows the picture (`../visuals/design.md` § Decisions, Local images); any other image
+  shows its alt text.
 - **Keys** (scopes `docs.tree`, `docs.doc`, `docs.conflict`, `docs.picker`, `docs.box`, `docs.confirm`): tree `j`/`k`
   move; `l` opens a doc, expands a collapsed group or steps into an expanded one; Enter opens a doc and focuses
   it (on the doc already shown it only focuses it, keeping an open editor), or toggles a group, expanding or

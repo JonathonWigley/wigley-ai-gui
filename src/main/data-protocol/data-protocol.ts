@@ -7,7 +7,7 @@ import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
 import { PLUGIN_SCHEME, pluginFilePath } from '../../shared/plugin-url';
-import { VISUAL_SCHEME } from '../../shared/visual-url';
+import { localImagePathOf, VISUAL_SCHEME } from '../../shared/visual-url';
 import { createVisualDocuments } from './visual-documents';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -94,10 +94,30 @@ export function serveLayoutScheme(
 
 // Serves each visual's document on the default session, kept in memory by
 // source hash for the app's life, and returns the call that hands one over
-// and resolves its URL. A URL it does not hold answers 404.
+// and resolves its URL. A local image URL (`localImagePathOf`) answers with
+// that image file, read from disk on each request, to a visual's frame and to
+// markdown in the page alike; with no CORS header, so a frame's canvas cannot
+// read its pixels. A URL it does not hold, or an image it cannot read,
+// answers 404.
 export function serveVisualScheme(): (source: string) => string {
   const documents = createVisualDocuments();
-  protocol.handle(VISUAL_SCHEME, (request) => documents.response(request.url));
+  protocol.handle(VISUAL_SCHEME, async (request) => {
+    const image = localImagePathOf(request.url);
+    if (image === null) {
+      return documents.response(request.url);
+    }
+    const file = path.normalize(image);
+    const fetched = await fetchFile(file);
+    if (fetched === null || !fetched.ok) {
+      return new Response(null, { status: 404 });
+    }
+    return new Response(fetched.body, {
+      headers: {
+        'Content-Type':
+          CONTENT_TYPES[path.extname(file).toLowerCase()] ?? OTHER_CONTENT_TYPE,
+      },
+    });
+  });
   return (source) => documents.serve(source);
 }
 

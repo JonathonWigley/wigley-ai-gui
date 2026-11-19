@@ -3,10 +3,12 @@ import { VISUAL_MESSAGES } from '../../shared/visual-messages';
 import { visualHashOf, visualUrl } from '../../shared/visual-url';
 import { decideHeightReport } from './visual-height';
 
-// Each visual's own CSP: inline script and style and `data:` images and fonts,
-// and no network; `default-src 'none'` covers every fetch directive left out.
+// Each visual's own CSP: inline script and style, `data:` images and fonts,
+// local images on its own scheme (`<img src="/Users/me/a.png">` resolves
+// there), and no network; `default-src 'none'` covers every fetch directive
+// left out.
 const VISUAL_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: wigley-visual:; font-src data:; form-action 'none'; base-uri 'none'";
 
 // Runs in the frame before the visual's own scripts: keeps the root hidden
 // until the page's first theme message and applies each one, measures the

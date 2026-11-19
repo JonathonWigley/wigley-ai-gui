@@ -445,8 +445,10 @@ User-facing features, those other work builds on first.
 - **Theme editor in Settings mode** — *needs a feature plan*: the user's `themes/*.json` token sheets are hand-edited
   today, and the userConfig service writes only `settings.json` and `keymap.json`
   (`docs/features/settings/design.md`).
-- **Images in rendered docs** — *needs a feature plan*: loading local image files into the page needs a safe file
-  protocol of its own; today they show their alt text.
+- **Relative images in rendered docs** — *needs a feature plan*: an image by absolute path draws through the visual
+  scheme's local image route (`docs/features/visuals/design.md`), but a doc's own images are relative to it
+  (`images/<doc>-….png`, as the editor pastes them), and `document` has no folder to resolve them against, so they
+  show their alt text.
 - **Keyboard link hints in rendered docs** — *needs a feature plan*: vimium-style hints, if Tab between links is not
   enough.
 - **Design skills in wigley-ai-marketplace** — *needs a feature plan*: tailor ui-skills' baseline-ui,
