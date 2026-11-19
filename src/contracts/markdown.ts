@@ -4,8 +4,9 @@ import type { Disposable } from './disposable';
 // and a bare URL with a scheme render as an `a.md-link` holding its target in
 // `data-href`, whose click the page handles. An image of a local file by
 // absolute path renders as an `img.md-picture` on the visual scheme's local
-// image route; a web image renders as its alt text, and in `block` and
-// `inline` any other image, and a link to a local file, as its markdown source.
+// image route; a web image renders as its alt text. In `block` and `inline`
+// any other image, and a link to a local file, renders as its markdown source;
+// in `document` any other image renders as its alt text.
 // `block` and `inline` draw only http and https links, any other staying
 // text; `document` draws every link markdown-it allows, and adds
 // heading anchors and highlighted fences. `block` and
