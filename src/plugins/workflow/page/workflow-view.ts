@@ -790,9 +790,9 @@ function checklistOf(
 }
 
 // The checklist's groups in order: each with every item done is finished, the
-// first other is the current group, whose open items show `openItemState`
-// unless an item says it is not running, and the rest are later. Each item
-// keeps its number in the whole list, counted from 1 in the groups' order.
+// first other is the current group, whose running items show `openItemState`
+// (`runningItems`), and the rest are later. Each item keeps its number in the
+// whole list, counted from 1 in the groups' order.
 function partitionedGroups(
   groups: readonly ChecklistGroup[],
   openItemState: MarkState,
@@ -803,8 +803,9 @@ function partitionedGroups(
     firstNumbers.set(group, next);
     next += group.items.length;
   }
+  const running = runningItems(groups);
   const side = (group: ChecklistGroup, state: MarkState) =>
-    sideGroup(group, state, firstNumbers.get(group) ?? 1);
+    sideGroup(group, state, running, firstNumbers.get(group) ?? 1);
   const isFinished = (group: ChecklistGroup) =>
     group.items.every((item) => item.done);
   const [current, ...later] = groups.filter((group) => !isFinished(group));
@@ -817,9 +818,26 @@ function partitionedGroups(
   };
 }
 
+// The open items that run: those marked `running: true`, else the first open
+// item not marked `running: false`, so an unmarked list runs one item at a time.
+function runningItems(
+  groups: readonly ChecklistGroup[],
+): ReadonlySet<ChecklistItem> {
+  const open = groups.flatMap((group) =>
+    group.items.filter((item) => !item.done),
+  );
+  const marked = open.filter((item) => item.running === true);
+  if (marked.length > 0) {
+    return new Set(marked);
+  }
+  const first = open.find((item) => item.running !== false);
+  return new Set(first === undefined ? [] : [first]);
+}
+
 function sideGroup(
   group: ChecklistGroup,
   openItemState: MarkState,
+  running: ReadonlySet<ChecklistItem>,
   firstNumber: number,
 ): SideGroupInput {
   return {
@@ -827,16 +845,20 @@ function sideGroup(
     items: group.items.map((item, index) => ({
       number: firstNumber + index,
       text: item.text,
-      state: itemState(item, openItemState),
+      state: itemState(item, openItemState, running),
     })),
   };
 }
 
-function itemState(item: ChecklistItem, openItemState: MarkState): MarkState {
+function itemState(
+  item: ChecklistItem,
+  openItemState: MarkState,
+  running: ReadonlySet<ChecklistItem>,
+): MarkState {
   if (item.done) {
     return 'done';
   }
-  return item.running === false ? PENDING : openItemState;
+  return running.has(item) ? openItemState : PENDING;
 }
 
 function logOnce(

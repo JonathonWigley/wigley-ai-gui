@@ -271,7 +271,8 @@ export function isChecklistItem(value: unknown): value is ChecklistItem {
   return (
     isJsonObject(value) &&
     typeof value.text === 'string' &&
-    typeof value.done === 'boolean'
+    typeof value.done === 'boolean' &&
+    (value.running === undefined || typeof value.running === 'boolean')
   );
 }
 

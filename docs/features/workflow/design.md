@@ -218,7 +218,7 @@ Main folds these, for owned sessions only:
 | subagent started, finished | `chat.agentEvent` `agentSpawned` of any agent, a subagent's own included, and `agentFinished` | the agent id |
 | cleared | `sessions.hostSessionChanged` | — (the flow is rekeyed to the new host session id) |
 | step reported | the `set_workflow_step` tool | the stage the step names |
-| checklist reported | the `set_workflow_checklist` tool | the whole list of `{ text, done }` items |
+| checklist reported | the `set_workflow_checklist` tool | the whole list of `{ text, done, running? }` items |
 | custom | a workflow plugin's own event, through the engine's `signal` export | the event, which only that workflow reads (Large's plan changed, plan gone, handed off and dismissed) |
 
 `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that
@@ -253,8 +253,10 @@ leaves the flow in its last step.
   `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land`, `done` and `answered`, Medium's `build`,
   `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
-- `set_workflow_checklist`'s one required `items` is an array of `{ text, done }`. Each call replaces the whole list,
-  so a missed call cannot leave the app out of step. Large calls it while it explores and plans; once a plan is read,
+- `set_workflow_checklist`'s one required `items` is an array of `{ text, done, running? }`. Each call replaces the
+  whole list, so a missed call cannot leave the app out of step. The side pane marks an open item running when it says
+  `running: true`; with none marked, only the first open item not marked `running: false`, and every other open item
+  shows not started. Large calls it while it explores and plans; once a plan is read,
   Large's checklist comes from `plan.md`.
 - Only the main agent's call counts. The engine contributes both tools as main-agent-only. Sessions asks its tool-call
   guards before it runs a contributed tool, and chat's guard names the agent behind the call's tool-use id from the

@@ -735,6 +735,55 @@ describe('workflow view over several workflows', () => {
     ]);
   });
 
+  it.each<{ name: string; items: ChecklistItem[]; states: MarkState[] }>([
+    {
+      name: 'an unmarked list runs its first open item',
+      items: [
+        { text: 'a', done: true },
+        { text: 'b', done: false },
+        { text: 'c', done: false },
+      ],
+      states: ['done', 'running', 'pending'],
+    },
+    {
+      name: 'a marked item runs in place of the first open one',
+      items: [
+        { text: 'a', done: false },
+        { text: 'b', done: false, running: true },
+        { text: 'c', done: false },
+      ],
+      states: ['pending', 'running', 'pending'],
+    },
+  ])('SidePane_RunningItem_OneAtATime ($name)', ({ items, states }) => {
+    const { view, workflows, put } = setUp();
+    const small = stubWorkflow(
+      'small',
+      stageOf('build', 'Build', 10, RUNNING_STAGE),
+      {
+        checklist: () => ({
+          title: 'Checklist',
+          checked: 0,
+          total: items.length,
+          groups: [{ title: 'Tasks', items }],
+        }),
+      },
+    );
+    workflows.push(small.workflow);
+    view
+      .sidePartFor(small.workflow)
+      .build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
+
+    put(flowOf('small'));
+
+    const shown = [
+      ...(small.sidePanes.at(-1)?.finishedGroups ?? []),
+      ...(small.sidePanes.at(-1)?.currentGroup === null
+        ? []
+        : [small.sidePanes.at(-1)?.currentGroup]),
+    ].flatMap((group) => group?.items ?? []);
+    expect(shown.map((item) => item.state)).toEqual(states);
+  });
+
   it('HasChecklist_ReadsHasPlan', () => {
     const { view, workflows, put } = setUp();
     const small = stubWorkflow('small', undefined, { hasPlan: () => false });

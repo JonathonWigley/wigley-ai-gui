@@ -43,6 +43,7 @@ describe('set_workflow_checklist', () => {
     { args: { items: [{ text: 1, done: true }] } },
     { args: { items: [{ text: '', done: true }] } },
     { args: { items: [{ text: 'a', done: 'yes' }] } },
+    { args: { items: [{ text: 'a', done: false, running: 'yes' }] } },
     {
       args: {
         items: [
@@ -58,7 +59,7 @@ describe('set_workflow_checklist', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toBe(
-      'items must be an array of { text: string, done: boolean }, with text not empty.',
+      'items must be an array of { text: string, done: boolean, running?: boolean }, with text not empty.',
     );
     expect(reports).toEqual([]);
   });
@@ -69,7 +70,7 @@ describe('set_workflow_checklist', () => {
     const result = await call({
       items: [
         { text: 'a', done: true, extra: 1 },
-        { text: 'b', done: false },
+        { text: 'b', done: false, running: true },
         { text: 'c', done: true },
       ],
     });
@@ -79,7 +80,7 @@ describe('set_workflow_checklist', () => {
         's1',
         [
           { text: 'a', done: true },
-          { text: 'b', done: false },
+          { text: 'b', done: false, running: true },
           { text: 'c', done: true },
         ],
       ],

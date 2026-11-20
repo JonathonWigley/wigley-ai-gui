@@ -181,7 +181,11 @@ function sameChecklist(
     current.length === incoming.length &&
     current.every((item, index) => {
       const other = incoming[index];
-      return item.text === other.text && item.done === other.done;
+      return (
+        item.text === other.text &&
+        item.done === other.done &&
+        item.running === other.running
+      );
     })
   );
 }

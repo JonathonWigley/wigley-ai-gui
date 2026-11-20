@@ -12,13 +12,13 @@ import type { HeadlessLineSession, HeadlessLines } from './headless-line';
 export const SET_WORKFLOW_CHECKLIST_TOOL = 'set_workflow_checklist';
 
 const BAD_ITEMS =
-  'items must be an array of { text: string, done: boolean }, with text not empty.';
+  'items must be an array of { text: string, done: boolean, running?: boolean }, with text not empty.';
 
 export function checklistToolDefinition(): ToolDefinition {
   return {
     name: SET_WORKFLOW_CHECKLIST_TOOL,
     description:
-      "Set this session's checklist, so the app shows it. Send the whole list each time: this call replaces the list before it.",
+      "Set this session's checklist, so the app shows it. Send the whole list each time: this call replaces the list before it. Mark the item being worked on with running: true; with none marked, the app shows the first item not done as running and the rest as not started.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -29,6 +29,7 @@ export function checklistToolDefinition(): ToolDefinition {
             properties: {
               text: { type: 'string' },
               done: { type: 'boolean' },
+              running: { type: 'boolean' },
             },
             required: ['text', 'done'],
           },
@@ -40,7 +41,8 @@ export function checklistToolDefinition(): ToolDefinition {
   };
 }
 
-// The items with only their `text` and `done`, or the error text for a bad shape.
+// The items with only their `text`, `done` and any `running`, or the error text
+// for a bad shape.
 export function parseChecklistItems(
   value: unknown,
 ): readonly ChecklistItem[] | string {
@@ -52,7 +54,11 @@ export function parseChecklistItems(
     if (!isChecklistItem(entry) || entry.text === '') {
       return BAD_ITEMS;
     }
-    items.push({ text: entry.text, done: entry.done });
+    items.push(
+      entry.running === undefined
+        ? { text: entry.text, done: entry.done }
+        : { text: entry.text, done: entry.done, running: entry.running },
+    );
   }
   return items;
 }

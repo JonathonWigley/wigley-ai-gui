@@ -161,6 +161,23 @@ const WORKFLOW_ROWS: {
     expected: UNCHANGED,
   },
   {
+    name: 'a checklist that only moves the running item replaces the list',
+    flow: flowWith({ ...SMALL_AT_BUILD, checklist: CHECKLIST }),
+    signal: {
+      type: 'checklistReported',
+      items: CHECKLIST.map((item, index) => ({
+        ...item,
+        running: index === 0,
+      })),
+    },
+    expected: {
+      checklist: CHECKLIST.map((item, index) => ({
+        ...item,
+        running: index === 0,
+      })),
+    },
+  },
+  {
     name: 'a checklist on a flow with no workflow changes nothing',
     flow: flowWith({}),
     signal: { type: 'checklistReported', items: CHECKLIST },
