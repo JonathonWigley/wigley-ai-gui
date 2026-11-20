@@ -341,6 +341,18 @@ interview on 2026-10-23; this file is the record of both.
     that comes live after it, and one the replay left held when the process closes. The saved record keeps the ids
     returned for its process, so a replay of a drop already returned logs `dropped message <id> already returned` and
     returns nothing.
+  - **Into the running turn**: a third route, `sendIntoTurn`, is for another plugin, not the box: forms writes a
+    submit's `Approved in form: <action>` lines through it (the agent-forms wake's `sendBeforeAnswers`). While the harness
+    reports the turn running, with no compaction running and no hold up, main writes the message plainly at once,
+    never with `now`, which would abort the running tool (the `ask_round` call that is returning the answers), so
+    the turn folds it in after that tool's result (claude-stream.md § Queued messages). Its row shows in
+    `chat.queued`, marked sent, until its entry arrives. The call resolves true once the harness reports the
+    message queued (`AgentProcessEvents.messageQueued`: Claude's `queued` lifecycle line, claude-stream.md
+    § Message lifecycle) or its entry arrives, and false once the agent drops it, the process ends or the row closes;
+    such a message never returns to the box. Outside a running turn, during a compaction or a hold, and when the
+    write throws, it writes and queues nothing and resolves false (logged `message not sent into the turn of
+    <session>: no turn takes it in` for the first three): a message meant for the running turn never runs later as
+    a turn of its own.
   - **Returned messages**: every return (a pull-back, an interrupt, a clear, a process end, a drop) stays with the row
     until the page puts it in the box, since no page or tab may be there to take it, as during a re-attach's replay
     at startup. Main holds each message in the `chat.returned` slot, keyed by session (each with an id of its own),
