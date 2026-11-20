@@ -97,6 +97,10 @@ interface SessionContext<Form, Body, Payload> {
   // Settles once every open call already made has returned; null when none
   // is pending.
   askTurn: Promise<void> | null;
+  // Settles once the message the user's last submit sent ahead of its
+  // answers has reached the session; null when none is on its way. Every call
+  // returns only after it.
+  answersHeld: Promise<void> | null;
   // The relay disconnected; no call opens a form after this.
   ended: boolean;
   // Ids of unreturned saved forms that no longer parse, already reported to
@@ -443,12 +447,41 @@ function formFinishedUnheardText<Form, Body, Payload>(
   return `The user ${kind} the ${type.noun} "${type.heading(form)}" in the forms app. Call ${type.collectTool} for its answers.`;
 }
 
+// The type's message for the user's submit, or null for a cancel, a closing
+// session's cancel, or a submit the type sends nothing for.
+function submitMessageOf<Form, Body, Payload>(
+  type: AgentFormType<Form, Body, Payload>,
+  form: Form,
+  kind: AgentFormEndKind,
+  body: Body,
+  endedBy: 'user' | 'sessionClose',
+): string | null {
+  const isUserSubmit = endedBy === 'user' && kind === 'submitted';
+  return isUserSubmit ? (type.submitMessage?.(form, body) ?? null) : null;
+}
+
+// Holds every call's return until `sending` settles, unless a later submit's
+// send has replaced it.
+function holdAnswersUntil<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  sending: Promise<void>,
+): void {
+  const held = sending.then(() => {
+    if (session.answersHeld === held) {
+      session.answersHeld = null;
+    }
+  });
+  session.answersHeld = held;
+}
+
 // The user's submit or cancel, or a cancel for the closing session: the form
 // ends with `body`, leaves the window and wakes its waiting calls. A form the
 // user finished that no call will return, made under the session's current
 // host id, wakes the session; the closing session's cancel wakes none. The
-// store logs a failed finish write rather than throwing, so the answers still
-// reach the waiting calls.
+// type's submit message goes in that wake, ahead of its text; with a call
+// waiting, it is sent to the session first and every call returns only once
+// it has gone. The store logs a failed finish write rather than throwing, so
+// the answers still reach the waiting calls.
 function endForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -462,11 +495,19 @@ function endForm<Form, Body, Payload>(
   closeInWindow(open, session.presenter);
   const noCallWaits = open.callers === 0 && session.askTurn === null;
   const madeUnderCurrentHost = session.formsHostId === session.info.sessionId;
+  const message = submitMessageOf(session.type, open.form, kind, body, endedBy);
+  if (message !== null && !noCallWaits) {
+    holdAnswersUntil(
+      session,
+      session.wake.sendBeforeAnswers(session.sessionId, message),
+    );
+  }
   wakeWaiters(open);
   if (noCallWaits && madeUnderCurrentHost && endedBy === 'user') {
+    const unheard = formFinishedUnheardText(session.type, open.form, kind);
     session.wake.formFinishedUnheard(
       session.sessionId,
-      formFinishedUnheardText(session.type, open.form, kind),
+      message === null ? unheard : `${message}\n\n${unheard}`,
     );
   }
 }
@@ -1006,6 +1047,17 @@ async function autoAnswerForm<Form, Body, Payload>(
   return autoAnswer.payload(form, body);
 }
 
+// `call`'s answer, returned once the message a submit sent ahead of the
+// answers has gone.
+async function afterHeldAnswers<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  call: Promise<Payload>,
+): Promise<Payload> {
+  const payload = await call;
+  await session.answersHeld;
+  return payload;
+}
+
 // After a detach the open form stays as it is, in the window and on disk.
 function endSession<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
@@ -1064,6 +1116,7 @@ function startSession<Form, Body, Payload>(
     open: null,
     lastFinished: null,
     askTurn: null,
+    answersHeld: null,
     ended: false,
     reportedUnreadable: new Set(),
     shownIds: new Set(),
@@ -1075,13 +1128,16 @@ function startSession<Form, Body, Payload>(
     open: (args, toolUseId, signal) =>
       answerUnlessDetached(detach, () => {
         const { autoAnswer } = session;
-        return autoAnswer?.isOn(session.sessionId)
-          ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
-          : openFormInTurn(session, args, toolUseId, signal);
+        return afterHeldAnswers(
+          session,
+          autoAnswer?.isOn(session.sessionId)
+            ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
+            : openFormInTurn(session, args, toolUseId, signal),
+        );
       }),
     collect: (wait, signal) =>
       answerUnlessDetached(detach, () =>
-        collectLastForm(session, wait, signal),
+        afterHeldAnswers(session, collectLastForm(session, wait, signal)),
       ),
     end: () => endSession(session),
   };
@@ -1089,8 +1145,9 @@ function startSession<Form, Body, Payload>(
 
 // Form logic every form source reaches, for one form type: validation,
 // re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms,
-// the wake for a form no call will return, the optional auto-answer, and the
-// detach at an app quit.
+// the wake for a form no call will return, the type's submit message sent
+// ahead of the answers, the optional auto-answer, and the detach at an app
+// quit.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
 ): AgentFormService<Payload> {

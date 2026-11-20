@@ -29,6 +29,7 @@ export function question(title: string, choiceCount = 3): Question {
     ),
     recommend: 1,
     rationale: `${title} rationale`,
+    approves: [],
     layout: null,
   };
 }

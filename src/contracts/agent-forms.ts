@@ -63,11 +63,16 @@ export interface AgentFormPresenter<Form, Body> {
   close(formId: string): void;
 }
 
-// Tells a session that the user finished one of its forms while no call
-// waited to return it. Must not throw and must return at once: delivery is
-// fire-and-forget.
+// Tells a session what the user did in one of its forms. `formFinishedUnheard`:
+// the user finished a form while no call waited to return it; it must not
+// throw and must return at once, since delivery is fire-and-forget.
+// `sendBeforeAnswers`: sends `text` as the user's own message, written so the
+// agent takes it in ahead of its next step after the answers return; it settles
+// once the harness holds the message, or once the send failed (logged), and
+// never rejects.
 export interface AgentFormWake {
   formFinishedUnheard(sessionId: string, text: string): void;
+  sendBeforeAnswers(sessionId: string, text: string): Promise<void>;
 }
 
 // A form that left the window. `byFinish` is true when the page's `finish`
@@ -114,6 +119,9 @@ export interface AgentFormSession<Payload> {
   // call counts as waiting on it. While the service's auto-answer is on for
   // the session, a call shows no form and waits on no earlier call: it saves
   // and returns the auto-answer's answers at once, and an open form stays.
+  // After a user's submit whose type sends a message ahead of the answers
+  // (`submitMessage`), every call of the session returns only once that
+  // message has gone.
   open(
     args: unknown,
     toolUseId: string | null,
@@ -161,6 +169,10 @@ export interface AgentFormType<Form, Body, Payload> {
   handedBackPayload(form: Form, outcome: AgentFormEndKind, body: Body): Payload;
   noFormPayload(): Payload;
   notShownPayload(form: Form, blockingHeading: string | null): Payload;
+  // The message the user's submit of `form` with `body` sends the session as
+  // the user's own before any call returns the answers; null, or absent, for
+  // none. Never throws.
+  submitMessage?(form: Form, body: Body): string | null;
 }
 
 // How a form type answers a form itself, with no window, while the session is

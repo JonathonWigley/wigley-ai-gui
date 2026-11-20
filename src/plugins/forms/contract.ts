@@ -29,6 +29,13 @@ export type PythonJsonValue =
   | PythonJsonValue[]
   | { [key: string]: PythonJsonValue };
 
+// A choice the agent tagged with the exact action picking it approves.
+export interface QuestionApproval {
+  // 1-based.
+  choice: number;
+  action: string;
+}
+
 export interface Question {
   title: string;
   // The card's headline: what the user is asked to decide, and why now.
@@ -38,6 +45,8 @@ export interface Question {
   // 1-based.
   recommend: number;
   rationale: string;
+  // In the order sent; [] when the agent tagged none.
+  approves: QuestionApproval[];
   // The layout that draws this item's card, over the round's; null for none.
   layout: string | null;
 }
@@ -447,6 +456,10 @@ export interface MainItemKind<
   result(item: Item, entry: Entry): Result;
   // Present exactly when `spec.answerable` is true.
   status?(result: Result): AnswerStatus;
+  // The exact actions answering `item` with `entry` approves, each in the
+  // agent's plain words, which a submit posts as the user's own message;
+  // absent for a kind whose answers approve nothing.
+  approvedActions?(item: Item, entry: Entry): readonly string[];
 }
 
 // An answerable kind's answer, the part forms itself reads and toggles.

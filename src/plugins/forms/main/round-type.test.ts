@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentFormOwnerInfo } from '../../../contracts/agent-forms';
+import type {
+  AgentFormOwnerInfo,
+  AgentFormWake,
+} from '../../../contracts/agent-forms';
 import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import {
@@ -123,13 +126,16 @@ let store: AgentFormStore;
 // The layouts folder's names `withKnownLayouts` reads; a test may set its own.
 let layoutNames: readonly string[];
 
-function startSession(info: Partial<AgentFormOwnerInfo> = {}): FormsSession {
+function startSession(
+  info: Partial<AgentFormOwnerInfo> = {},
+  wake: AgentFormWake = NO_FORM_WAKE,
+): FormsSession {
   return withKnownLayouts(
     createAgentFormService({
       type: roundType,
       presenter,
       store,
-      wake: NO_FORM_WAKE,
+      wake,
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
       timers: globalTimers,
     }),
@@ -324,6 +330,137 @@ describe('open', () => {
 
     await expect(rejection).rejects.toBeInstanceOf(RoundError);
     expect(presenter.shown).toEqual([]);
+  });
+});
+
+// A wake that records each message and each send ahead of the answers, and
+// holds each such send until `release`.
+function recordingWake() {
+  const sentAhead: [string, string][] = [];
+  const unheard: [string, string][] = [];
+  let release = () => {};
+  const wake: AgentFormWake = {
+    formFinishedUnheard: (sessionId, text) => {
+      unheard.push([sessionId, text]);
+    },
+    sendBeforeAnswers: (sessionId, text) => {
+      sentAhead.push([sessionId, text]);
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  };
+  return { wake, sentAhead, unheard, release: () => release() };
+}
+
+const PUSH_ACTION =
+  'push `main` of new-games-prototypes to origin past PR protection';
+
+const APPROVAL_ARGS = {
+  heading: 'Landing',
+  overview: 'Landing the fix. This round: the push.',
+  questions: [
+    question({
+      title: 'Push',
+      choices: ['Push main now', 'Open a PR instead'],
+      approves: [{ choice: 1, action: PUSH_ACTION }],
+    }),
+    question({ title: 'Tag', summary: 'Tag the release?' }),
+  ],
+};
+
+function twoAnswers(first: Partial<AnswerEntry>): FormBody {
+  return {
+    note: '',
+    answers: [answer(first), answer({ index: 2, choice: 1 })],
+    finding_answers: [],
+    notice_comments: [],
+  };
+}
+
+describe('approval message on submit', () => {
+  it("sends the approved action as the user's message, and returns the answers only once it has gone", async () => {
+    const recorded = recordingWake();
+    const pending = startSession({}, recorded.wake).open(
+      APPROVAL_ARGS,
+      null,
+      live(),
+    );
+    const call = watch(pending);
+
+    presenter.submit(presenter.latest().formId, twoAnswers({ choice: 1 }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(recorded.sentAhead).toEqual([
+      ['app-1', `Approved in form: ${PUSH_ACTION}`],
+    ]);
+    expect(call.settled).toBe(false);
+    recorded.release();
+    const payload = await pending;
+    expect(payload.answers[0]).toMatchObject({ status: 'answered', choice: 1 });
+    expect(recorded.unheard).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'an untagged choice',
+      args: APPROVAL_ARGS,
+      body: twoAnswers({ choice: 2 }),
+      end: 'submit',
+    },
+    {
+      case: 'the tagged choice marked not applicable',
+      args: APPROVAL_ARGS,
+      body: twoAnswers({ choice: 1, not_applicable: true }),
+      end: 'submit',
+    },
+    {
+      case: 'a cancel with the tagged choice picked',
+      args: APPROVAL_ARGS,
+      body: twoAnswers({ choice: 1 }),
+      end: 'cancel',
+    },
+    {
+      case: 'a round with no approves',
+      args: NAMING_ARGS,
+      body: oneAnswer({ choice: 1 }),
+      end: 'submit',
+    },
+  ])(
+    'sends nothing and returns at once for $case',
+    async ({ args, body, end }) => {
+      const recorded = recordingWake();
+      const pending = startSession({}, recorded.wake).open(args, null, live());
+      const { formId } = presenter.latest();
+
+      if (end === 'submit') {
+        presenter.submit(formId, body);
+      } else {
+        presenter.cancel(formId, body);
+      }
+      await pending;
+
+      expect(recorded.sentAhead).toEqual([]);
+    },
+  );
+
+  it('puts the approved action ahead of the wake when no call waits on the round', async () => {
+    const recorded = recordingWake();
+    const pending = startSession({}, recorded.wake).open(
+      APPROVAL_ARGS,
+      null,
+      live(),
+    );
+    await expireDeadline();
+    await pending;
+
+    presenter.submit(presenter.latest().formId, twoAnswers({ choice: 1 }));
+
+    expect(recorded.sentAhead).toEqual([]);
+    expect(recorded.unheard).toHaveLength(1);
+    expect(
+      recorded.unheard[0][1].startsWith(`Approved in form: ${PUSH_ACTION}\n\n`),
+    ).toBe(true);
   });
 });
 

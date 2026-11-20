@@ -17,6 +17,7 @@ import {
   textOrEmpty,
 } from './kinds/fields';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
+import { APPROVAL_LINE_PREFIX } from './mcp-wording';
 
 const LAYOUT_PATH: RoundErrorPath = { at: 'field', field: 'layout' };
 
@@ -294,6 +295,31 @@ export function noRoundResult(kinds: readonly MainItemKind[]): RoundResult {
     results: Object.fromEntries(kinds.map((kind) => [kind.spec.id, []])),
     note: '',
   };
+}
+
+// The message a submit of `body` posts as the user's own: one
+// `Approved in form:` line per action an answered item's pick approves, in the
+// kinds' and items' order; null when no pick approves one.
+export function approvalMessage(
+  kinds: readonly MainItemKind[],
+  round: Round,
+  body: FormBody,
+): string | null {
+  const read = readFormBody(kinds, round, body);
+  const actions: string[] = [];
+  for (const kind of kinds) {
+    const { approvedActions } = kind;
+    if (approvedActions === undefined) {
+      continue;
+    }
+    const entries = bodyEntries(read, kind);
+    itemsOf(round, kind).forEach((item, i) =>
+      actions.push(...approvedActions(item, entries[i])),
+    );
+  }
+  return actions.length === 0
+    ? null
+    : actions.map((action) => `${APPROVAL_LINE_PREFIX}${action}`).join('\n');
 }
 
 // Every item on its kind's recommended entry, the note empty: the body a

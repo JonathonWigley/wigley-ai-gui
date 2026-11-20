@@ -1418,6 +1418,20 @@ describe('fingerprint', () => {
     ).not.toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
+  it('changes with the actions a question approves', () => {
+    const tagged = (action: string) =>
+      args({
+        questions: [
+          question({ ...BASE_QUESTION, approves: [{ choice: 1, action }] }),
+        ],
+      });
+    const hash = (raw: unknown) =>
+      fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, raw));
+
+    expect(hash(tagged('push main'))).not.toBe(hash(args()));
+    expect(hash(tagged('push main'))).not.toBe(hash(tagged('push develop')));
+  });
+
   it("hashes a legacy question's `question` as its summary twin", () => {
     const { summary, ...rest } = question(BASE_QUESTION);
     const legacy = args({ questions: [{ ...rest, question: summary }] });

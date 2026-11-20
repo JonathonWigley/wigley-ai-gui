@@ -4,6 +4,7 @@ import {
   MAX_ENTRIES,
   type MainItemKind,
   type Question,
+  type QuestionApproval,
   RoundError,
   type RoundItemPath,
 } from '../../../contract';
@@ -36,9 +37,12 @@ const QUESTION_FIELDS = [
 ];
 // The summary's old name, read so rounds saved before the rename still load.
 const LEGACY_SUMMARY_FIELD = 'question';
+const APPROVES_FIELD = 'approves';
+const APPROVAL_FIELDS = ['choice', 'action'];
 const QUESTION_KNOWN_FIELDS = [
   ...QUESTION_FIELDS,
   LEGACY_SUMMARY_FIELD,
+  APPROVES_FIELD,
   'layout',
 ];
 
@@ -62,6 +66,79 @@ const QUESTION_CONTEXT_DESCRIPTION =
   'for a few changes, or a `:::tree` block when they span several places. ' +
   'Close each block with a line holding only `:::`. Markdown. Wording: ' +
   '~/wigley-agents/forms.md § Questions.';
+
+const APPROVES_DESCRIPTION =
+  'Optional. Tag each choice that approves an action auto mode gates — a ' +
+  'push past PR protection, releasing or taking a pool hold, an edit to ' +
+  'your settings or hooks, start_session in another project — with that ' +
+  'exact action in plain words, such as "push `main` of ' +
+  'new-games-prototypes to origin past PR protection". When the user ' +
+  'submits the round with a tagged choice picked, the app first posts ' +
+  '"Approved in form: <action>" in the chat as the user\'s own message, one ' +
+  'line per action, then returns the answers; that message is the yes, so ' +
+  'ask for no separate chat yes. A headless round, and a session the app ' +
+  'did not start, posts nothing: ask for the yes in chat there.';
+
+function parseApproval(
+  raw: unknown,
+  number: number,
+  choiceCount: number,
+  at: RoundItemPath,
+): QuestionApproval {
+  const name = `${APPROVES_FIELD}[${number}]`;
+  if (!isJsonObject(raw)) {
+    throw new RoundError({
+      path: at,
+      problem: `${name} must be an object with choice and action.`,
+    });
+  }
+  const missing = fieldsMissing(raw, APPROVAL_FIELDS);
+  const extra = fieldsOutside(raw, APPROVAL_FIELDS);
+  if (missing.length > 0 || extra.length > 0) {
+    throw new RoundError({
+      path: at,
+      problem: `${name} takes exactly choice and action.`,
+    });
+  }
+  const { choice } = raw;
+  const isChoiceNumber =
+    typeof choice === 'number' &&
+    Number.isInteger(choice) &&
+    choice >= 1 &&
+    choice <= choiceCount;
+  if (!isChoiceNumber) {
+    throw new RoundError({
+      path: at,
+      problem:
+        `${name}.choice must be the 1-based number of a choice; the ` +
+        `question has ${choiceCount} choices, and it was ${JSON.stringify(choice)}.`,
+      detail: `Use a number from 1 to ${choiceCount}.`,
+    });
+  }
+  const action = requireText(raw.action, `${name}.action`, at);
+  return { choice, action };
+}
+
+// [] when the question sends no `approves`.
+function parseApproves(
+  item: Readonly<Record<string, unknown>>,
+  choiceCount: number,
+  at: RoundItemPath,
+): QuestionApproval[] {
+  if (!Object.hasOwn(item, APPROVES_FIELD)) {
+    return [];
+  }
+  const raw = item[APPROVES_FIELD];
+  if (!Array.isArray(raw)) {
+    throw new RoundError({
+      path: at,
+      problem: `${APPROVES_FIELD} must be a list of objects.`,
+    });
+  }
+  return raw.map((approval, i) =>
+    parseApproval(approval, i + 1, choiceCount, at),
+  );
+}
 
 function parseChoices(raw: unknown, at: RoundItemPath): string[] {
   if (!Array.isArray(raw)) {
@@ -145,8 +222,33 @@ function parseQuestion(item: unknown, at: RoundItemPath): Question {
     'choice',
     at,
   );
+  const approves = parseApproves(item, choices.length, at);
   const layout = parseLayoutField(item, at);
-  return { title, summary, context, choices, recommend, rationale, layout };
+  return {
+    title,
+    summary,
+    context,
+    choices,
+    recommend,
+    rationale,
+    approves,
+    layout,
+  };
+}
+
+// The actions the question's tagged choice approves, when the entry answers
+// it with that choice.
+function questionApprovedActions(
+  question: Question,
+  entry: AnswerEntry,
+): string[] {
+  const result = answerResult(questionAnswerSubject(question), entry);
+  if (result.status !== 'answered') {
+    return [];
+  }
+  return question.approves
+    .filter((approval) => approval.choice === result.choice)
+    .map((approval) => approval.action);
 }
 
 // What the answer result reads of a question.
@@ -204,6 +306,28 @@ export const questionKind: MainItemKind<Question, AnswerEntry, AnswerResult> = {
             'under that choice with no label, so it reads on from the ' +
             'choice and does not repeat it.',
         },
+        approves: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: [...APPROVAL_FIELDS],
+            properties: {
+              choice: {
+                type: 'integer',
+                minimum: 1,
+                description: 'The 1-based number of the tagged choice.',
+              },
+              action: {
+                type: 'string',
+                description:
+                  'The exact action picking that choice approves, in plain ' +
+                  'words.',
+              },
+            },
+          },
+          description: APPROVES_DESCRIPTION,
+        },
         layout: ITEM_LAYOUT_SCHEMA,
       },
     },
@@ -211,6 +335,8 @@ export const questionKind: MainItemKind<Question, AnswerEntry, AnswerResult> = {
   }),
   parse: parseQuestion,
   layout: (question) => question.layout,
+  // `approves` joins only when sent, so a question without it hashes as it
+  // did before the field existed.
   fingerprintContent: (question) => ({
     title: question.title,
     summary: question.summary,
@@ -218,6 +344,14 @@ export const questionKind: MainItemKind<Question, AnswerEntry, AnswerResult> = {
     choices: question.choices,
     recommend: question.recommend,
     rationale: question.rationale,
+    ...(question.approves.length === 0
+      ? {}
+      : {
+          approves: question.approves.map((approval) => ({
+            choice: approval.choice,
+            action: approval.action,
+          })),
+        }),
   }),
   readEntry: readAnswerEntry,
   recommendedEntry: (question, index) =>
@@ -226,4 +360,5 @@ export const questionKind: MainItemKind<Question, AnswerEntry, AnswerResult> = {
   result: (question, entry) =>
     answerResult(questionAnswerSubject(question), entry),
   status: (result) => result.status,
+  approvedActions: questionApprovedActions,
 };

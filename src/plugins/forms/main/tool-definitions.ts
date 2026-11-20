@@ -41,7 +41,15 @@ function askRoundDescription(): string {
     "the recommended action's header when it has no choices, is badged; the " +
     'user takes it with Accept or picks any other entry. A choice never opens ' +
     "with an action's label. Use 'questions' for any " +
-    "other open decision. Pass 'notices' for anything already fixed, " +
+    'other open decision. When a choice approves an action auto mode gates ' +
+    "(a push past PR protection, a pool hold's release or take, an edit to " +
+    'your own settings or hooks, start_session in another project), tag it ' +
+    "in that question's 'approves' with the exact action in plain words: on " +
+    'submit with that choice picked, the app posts "Approved in form: ' +
+    "<action>\" in the session's chat as the user's own message before it " +
+    'returns the answers, so ask for no separate chat yes. A headless round, ' +
+    'and a session the app did not start, posts nothing: ask in chat there. ' +
+    "Pass 'notices' for anything already fixed, " +
     'dispatched, decided by you alone, or otherwise settled before this round ' +
     "opened: each one draws as one line on the round's notices page, after " +
     "every other item, badged 'Applied', 'Dispatched' or 'Decided', " +

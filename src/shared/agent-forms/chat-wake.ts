@@ -9,10 +9,12 @@ export interface ChatFormWakeTarget {
   // Null for a session chat does not own.
   profileOf(sessionId: string): string | null;
   send(sessionId: string, message: UserMessage): Promise<void>;
+  sendIntoTurn(sessionId: string, message: UserMessage): Promise<void>;
 }
 
-// Sends the wake as a user message to a session chat owns; any other session
-// gets nothing. A send that rejects is logged.
+// Sends each message as a user message to a session chat owns; any other
+// session gets nothing. A send that rejects is logged. A message sent before
+// the answers goes into the running turn, so the agent takes it in with them.
 export function createChatFormWake(
   chat: ChatFormWakeTarget,
   log: PluginLog,
@@ -26,10 +28,21 @@ export function createChatFormWake(
         log(`form wake not sent to ${sessionId}: ${errorText(error)}`);
       });
     },
+    sendBeforeAnswers: async (sessionId, text) => {
+      if (chat.profileOf(sessionId) === null) {
+        return;
+      }
+      try {
+        await chat.sendIntoTurn(sessionId, { text, images: [] });
+      } catch (error) {
+        log(`form message not sent to ${sessionId}: ${errorText(error)}`);
+      }
+    },
   };
 }
 
 // A wake that tells no one, for the layout previews and tests.
 export const NO_FORM_WAKE: AgentFormWake = {
   formFinishedUnheard: () => {},
+  sendBeforeAnswers: () => Promise.resolve(),
 };

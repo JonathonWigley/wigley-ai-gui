@@ -15,6 +15,7 @@ import {
 } from './mcp-wording';
 import {
   answersResult,
+  approvalMessage,
   bodyEntries,
   fingerprint,
   handedBackResult,
@@ -85,6 +86,7 @@ export function createRoundType(
     noFormPayload: () => roundPayload(kinds(), noRoundResult(kinds())),
     notShownPayload: (round, blockingHeading) =>
       roundPayload(kinds(), notShownResult(kinds(), round, blockingHeading)),
+    submitMessage: (round, body) => approvalMessage(kinds(), round, body),
   };
 }
 

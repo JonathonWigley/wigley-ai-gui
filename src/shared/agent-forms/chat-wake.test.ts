@@ -3,19 +3,30 @@ import type { UserMessage } from '../../contracts/agent';
 import { type ChatFormWakeTarget, createChatFormWake } from './chat-wake';
 
 const TEXT = 'The user submitted the round "Naming" in the forms app.';
+const APPROVAL = 'Approved in form: push main past PR protection';
 
 // A chat whose `profileOf` answers `profile` for every session, recording
-// each send and settling it with `sendResult`.
+// each send and settling it with `sendResult`; `sent` holds plain sends and
+// `sentIntoTurn` the sends into a running turn.
 function fakeChat(
   profile: string | null,
   sendResult: () => Promise<void> = () => Promise.resolve(),
-): ChatFormWakeTarget & { sent: [string, UserMessage][] } {
+): ChatFormWakeTarget & {
+  sent: [string, UserMessage][];
+  sentIntoTurn: [string, UserMessage][];
+} {
   const sent: [string, UserMessage][] = [];
+  const sentIntoTurn: [string, UserMessage][] = [];
   return {
     sent,
+    sentIntoTurn,
     profileOf: () => profile,
     send: (sessionId, message) => {
       sent.push([sessionId, message]);
+      return sendResult();
+    },
+    sendIntoTurn: (sessionId, message) => {
+      sentIntoTurn.push([sessionId, message]);
       return sendResult();
     },
   };
@@ -52,6 +63,42 @@ describe('createChatFormWake', () => {
 
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('s1');
+    expect(logged[0]).toContain('process gone');
+  });
+
+  it.each([
+    {
+      session: 'owned by chat',
+      profile: 'claude',
+      expected: [['s1', { text: APPROVAL, images: [] }]],
+    },
+    { session: 'chat does not own', profile: null, expected: [] },
+  ])(
+    'sends a message ahead of the answers into the turn of a session $session',
+    async ({ profile, expected }) => {
+      const chat = fakeChat(profile);
+
+      await createChatFormWake(chat, () => {}).sendBeforeAnswers(
+        's1',
+        APPROVAL,
+      );
+
+      expect(chat.sentIntoTurn).toEqual(expected);
+      expect(chat.sent).toEqual([]);
+    },
+  );
+
+  it('settles a message ahead of the answers whose send rejects, logging it', async () => {
+    const chat = fakeChat('claude', () =>
+      Promise.reject(new Error('process gone')),
+    );
+    const logged: string[] = [];
+
+    await createChatFormWake(chat, (message: string) =>
+      logged.push(message),
+    ).sendBeforeAnswers('s1', APPROVAL);
+
+    expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('process gone');
   });
 });

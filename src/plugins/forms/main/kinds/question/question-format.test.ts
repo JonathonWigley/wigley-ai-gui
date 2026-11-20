@@ -147,6 +147,109 @@ describe('questionKind.parse', () => {
 
     expect(message).toContain('float');
   });
+
+  it('reads approves in the order sent, and [] when left out', () => {
+    const approves = [
+      { choice: 2, action: 'push main past PR protection' },
+      { choice: 1, action: 'release the pool hold' },
+    ];
+
+    expect(
+      questionKind.parse(question({ approves }), QUESTION_1).approves,
+    ).toEqual(approves);
+    expect(questionKind.parse(question(), QUESTION_1).approves).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'a choice past the last',
+      approves: [{ choice: 3, action: 'x' }],
+      names: 'approves[1].choice',
+    },
+    {
+      case: 'choice 0',
+      approves: [{ choice: 0, action: 'x' }],
+      names: 'approves[1].choice',
+    },
+    {
+      case: 'a fractional choice',
+      approves: [{ choice: 1.5, action: 'x' }],
+      names: 'approves[1].choice',
+    },
+    {
+      case: 'a blank action',
+      approves: [{ choice: 1, action: ' ' }],
+      names: 'approves[1].action',
+    },
+    {
+      case: 'a missing action',
+      approves: [{ choice: 1 }],
+      names: 'approves[1]',
+    },
+    {
+      case: 'an extra field',
+      approves: [{ choice: 1, action: 'x', note: 'n' }],
+      names: 'approves[1]',
+    },
+    { case: 'a string entry', approves: ['push'], names: 'approves[1]' },
+    {
+      case: 'an object, not a list',
+      approves: { choice: 1, action: 'x' },
+      names: 'approves',
+    },
+    {
+      case: 'a bad second entry',
+      approves: [
+        { choice: 1, action: 'x' },
+        { choice: 9, action: 'y' },
+      ],
+      names: 'approves[2].choice',
+    },
+  ])('refuses approves with $case, naming the entry', ({ approves, names }) => {
+    expect(parseError(question({ approves }))).toContain(names);
+  });
+});
+
+describe('questionKind.approvedActions', () => {
+  const approves = [
+    { choice: 2, action: 'push main past PR protection' },
+    { choice: 2, action: 'delete the remote branch' },
+    { choice: 3, action: 'release the pool hold' },
+  ];
+  const parsed = questionKind.parse(
+    question({ choices: ['a', 'b', 'c'], approves }),
+    QUESTION_1,
+  );
+  const entry = (choice: number, notApplicable = false) => ({
+    index: 1,
+    choice,
+    not_applicable: notApplicable,
+    notes: '',
+    dont_ask: false,
+    dont_ask_reason: '',
+  });
+
+  it.each([
+    {
+      case: 'a choice tagged twice',
+      entry: entry(2),
+      actions: ['push main past PR protection', 'delete the remote branch'],
+    },
+    {
+      case: 'a choice tagged once',
+      entry: entry(3),
+      actions: ['release the pool hold'],
+    },
+    { case: 'an untagged choice', entry: entry(1), actions: [] },
+    {
+      case: 'a tagged choice marked not applicable',
+      entry: entry(2, true),
+      actions: [],
+    },
+    { case: 'no pick', entry: entry(0), actions: [] },
+  ])('gives the actions of $case', ({ entry: picked, actions }) => {
+    expect(questionKind.approvedActions?.(parsed, picked)).toEqual(actions);
+  });
 });
 
 describe('questionKind.answerSubject', () => {

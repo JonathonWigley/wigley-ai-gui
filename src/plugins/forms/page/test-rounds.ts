@@ -26,6 +26,7 @@ export function question(
     choices: ['first', 'second', 'third'],
     recommend: 2,
     rationale: `${title} rationale`,
+    approves: [],
     layout: null,
     ...overrides,
   };

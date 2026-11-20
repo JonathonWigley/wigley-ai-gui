@@ -70,6 +70,7 @@ const wake: AgentFormWake = {
   formFinishedUnheard: (sessionId, text) => {
     wakes.push([sessionId, text]);
   },
+  sendBeforeAnswers: () => Promise.resolve(),
 };
 
 function newService(timers: Timers = globalTimers) {
