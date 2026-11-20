@@ -257,7 +257,7 @@ src/main/        core main process; main.ts is its composition root
                  scheme serving the layouts folder, the `wigley-plugin:` scheme serving each user plugin's revision copy, and the `wigley-visual:` scheme serving each visual the page hands
                  over (`visual-documents.ts`: kept in memory by source hash, with its bootstrap script and a no-network
                  CSP header), and each local image or video file a visual or markdown names by absolute path, a
-                 video's byte ranges through `byte-range.ts`; `window.ts` refuses
+                 video's byte ranges through `local-media.ts`; `window.ts` refuses
                  any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import

@@ -1,8 +1,6 @@
 import { net, protocol } from 'electron';
-import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import type { LayoutOwner } from '../../contracts/layouts';
 import type { Paths } from '../../contracts/paths';
@@ -10,7 +8,7 @@ import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
 import { PLUGIN_SCHEME, pluginFilePath } from '../../shared/plugin-url';
 import { localMediaPathOf, VISUAL_SCHEME } from '../../shared/visual-url';
-import { byteRangeOf } from './byte-range';
+import { serveLocalMedia } from './local-media';
 import { createVisualDocuments } from './visual-documents';
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -24,8 +22,6 @@ const CONTENT_TYPES: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
@@ -103,8 +99,8 @@ export function serveLayoutScheme(
 // that image or video file, read from disk on each request, to a visual's
 // frame and to markdown in the page alike; with no CORS header, so a frame's
 // canvas cannot read its pixels. A `Range` request, which a video sends to
-// load and seek, answers 206 with those bytes (`byteRangeOf`). A URL it does
-// not hold, or a file it cannot read, answers 404.
+// load and seek, answers 206 with those bytes (`serveLocalMedia`). A URL it
+// does not hold, or a file it cannot read, answers 404.
 export function serveVisualScheme(): (source: string) => string {
   const documents = createVisualDocuments();
   protocol.handle(VISUAL_SCHEME, async (request) => {
@@ -120,59 +116,6 @@ export function serveVisualScheme(): (source: string) => string {
     return serveLocalMedia(file, request.headers.get('Range'));
   });
   return (source) => documents.serve(source);
-}
-
-// The local media file `file`, typed by its extension: the bytes `range`
-// asks for with 206, 416 when it asks for none the file holds, else the whole
-// file. 404 when it is not a readable file.
-async function serveLocalMedia(
-  file: string,
-  range: string | null,
-): Promise<Response> {
-  const size = await fileSize(file);
-  if (size === null) {
-    return new Response(null, { status: 404 });
-  }
-  const headers = {
-    'Content-Type':
-      CONTENT_TYPES[path.extname(file).toLowerCase()] ?? OTHER_CONTENT_TYPE,
-    'Accept-Ranges': 'bytes',
-  };
-  const bytes = byteRangeOf(range, size);
-  if (bytes === 'unsatisfiable') {
-    return new Response(null, {
-      status: 416,
-      headers: { ...headers, 'Content-Range': `bytes */${size}` },
-    });
-  }
-  if (bytes !== null) {
-    const stream = createReadStream(file, bytes);
-    return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
-      status: 206,
-      headers: {
-        ...headers,
-        'Content-Range': `bytes ${bytes.start}-${bytes.end}/${size}`,
-        'Content-Length': String(bytes.end - bytes.start + 1),
-      },
-    });
-  }
-  const fetched = await fetchFile(file);
-  if (fetched === null || !fetched.ok) {
-    return new Response(null, { status: 404 });
-  }
-  return new Response(fetched.body, {
-    headers: { ...headers, 'Content-Length': String(size) },
-  });
-}
-
-// The size of `file` in bytes; null when it is not a file or cannot be read.
-async function fileSize(file: string): Promise<number | null> {
-  try {
-    const stats = await stat(file);
-    return stats.isFile() ? stats.size : null;
-  } catch {
-    return null;
-  }
 }
 
 // Serves `scheme` on the default session, open to any origin: the file

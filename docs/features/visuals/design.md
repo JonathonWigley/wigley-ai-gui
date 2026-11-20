@@ -73,11 +73,13 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **Local videos play like a GIF.** Agents sent a flow as a row of stills in order, and the user wanted the motion
   itself. `![alt](/Users/me/flow.mp4)` draws a `video.md-picture` that plays muted on a loop with its controls, at
   an image's size cap; the alt text is its title and label. A video loads and seeks by byte range, so the local
-  route answers a `Range` request with 206 and those bytes (`byteRangeOf` in
-  `src/main/data-protocol/byte-range.ts`), 416 for a range past the end, and the whole file otherwise; the page's and
-  each frame's CSP allow `media-src wigley-visual:`. Only mp4 and webm are served, the types Chromium plays: a `.mov`
-  often holds a codec it cannot. Known limit: a chat entry that redraws while its reply streams starts its video
-  again.
+  route answers a `Range` request with 206 and those bytes (`serveLocalMedia` in
+  `src/main/data-protocol/local-media.ts`, over `byteRangeOf`), 416 for a range past the end, and the whole file
+  otherwise, opening the file before it answers so an unreadable one is a 404; the page's and each frame's CSP allow
+  `media-src wigley-visual:`. The scheme needs no `stream` privilege: a drive run played and seeked a clip without it.
+  Only mp4 and webm are served, the types Chromium plays: a `.mov` often holds a codec it cannot. The markdown mount
+  carries a shown video into the next draw in place of the new one of the same source, so a streaming reply's
+  redraws do not start a playing clip over.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
   inline script. A document served on its own scheme carries its own CSP header.
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload

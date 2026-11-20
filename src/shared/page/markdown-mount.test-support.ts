@@ -34,15 +34,21 @@ export function fencePlaceholder(
   );
 }
 
+// A local video as `block` emits it, standing in for one by the `src` and
+// `title` it is drawn with.
+export function localVideo(src: string, title: string): string {
+  return `<video src="${src}" title="${title}"></video>`;
+}
+
 const PLACEHOLDER =
-  /<div class="md-fence" data-fence-language="([^"]*)" data-fence-closed="(true|false)"><pre><code class="language-[^"]*">([^<]*)<\/code><\/pre><\/div>\n/g;
+  /<div class="md-fence" data-fence-language="([^"]*)" data-fence-closed="(true|false)"><pre><code class="language-[^"]*">([^<]*)<\/code><\/pre><\/div>\n|<video src="([^"]*)" title="([^"]*)"><\/video>/g;
 
 // Each `moveBefore` that ran: the node moved and the element it moved into.
 type Moves = { element: unknown; to: unknown }[];
 
 // A FakeElement whose `innerHTML` builds each `fencePlaceholder` it is set
-// to as a `div.md-fence` holding `pre > code`, and the text between as text
-// nodes; `moveBefore` moves a node between connected elements, as Chromium's
+// to as a `div.md-fence` holding `pre > code`, each `localVideo` as a `video`
+// with its `src` and `title`, and the text between as text nodes; `moveBefore` moves a node between connected elements, as Chromium's
 // does, recording it in `moves`.
 class MarkdownFakeElement extends FakeElement {
   constructor(
@@ -78,13 +84,24 @@ function parseFences(html: string, moves: Moves): (FakeElement | string)[] {
     if (match.index > end) {
       nodes.push(html.slice(end, match.index));
     }
-    nodes.push(placeholderElement(match[1], match[2], match[3], moves));
+    nodes.push(
+      match[4] === undefined
+        ? placeholderElement(match[1], match[2], match[3], moves)
+        : videoElement(match[4], match[5], moves),
+    );
     end = match.index + match[0].length;
   }
   if (end < html.length) {
     nodes.push(html.slice(end));
   }
   return nodes;
+}
+
+function videoElement(src: string, title: string, moves: Moves): FakeElement {
+  const video = new MarkdownFakeElement('video', moves);
+  video.setAttribute('src', src);
+  video.setAttribute('title', title);
+  return video;
 }
 
 function placeholderElement(

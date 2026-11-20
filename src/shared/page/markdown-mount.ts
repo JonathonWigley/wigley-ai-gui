@@ -22,7 +22,9 @@ export interface MarkdownDrawOptions {
 // before the task's microtasks run. Once they run, a view no draw took, or
 // whose target was removed from its parent, is disposed; a target moved to
 // another parent keeps its views. A target drawn with no parent is never
-// swept as removed. `dispose` disposes every view it holds.
+// swept as removed. A video the last draw left in the target stays, playing,
+// in place of the new draw's video of the same source. `dispose` disposes
+// every view it holds.
 export interface MarkdownMount extends Disposable {
   draw(target: HTMLElement, html: string, options?: MarkdownDrawOptions): void;
 }
@@ -271,27 +273,35 @@ export function createMarkdownMount(
     }
   };
 
+  const drawMarkdown = (
+    target: HTMLElement,
+    html: string,
+    options: MarkdownDrawOptions,
+  ): void => {
+    const liveFences = options.liveFences ?? true;
+    const candidates = isDisposed ? [] : candidatesFor(target);
+    if (candidates.length > 0) {
+      drawStaged(target, html, liveFences, candidates);
+      queueSweep();
+      return;
+    }
+    target.innerHTML = html;
+    if (isDisposed) {
+      return;
+    }
+    supersedeUntaken(target, new Set());
+    for (const fence of fencesIn(target)) {
+      const contribution = contributionFor(fence, liveFences);
+      if (contribution !== undefined) {
+        mountNew(fence, contribution, target);
+      }
+    }
+    queueSweep();
+  };
+
   return {
     draw(target, html, options = {}) {
-      const liveFences = options.liveFences ?? true;
-      const candidates = isDisposed ? [] : candidatesFor(target);
-      if (candidates.length > 0) {
-        drawStaged(target, html, liveFences, candidates);
-        queueSweep();
-        return;
-      }
-      target.innerHTML = html;
-      if (isDisposed) {
-        return;
-      }
-      supersedeUntaken(target, new Set());
-      for (const fence of fencesIn(target)) {
-        const contribution = contributionFor(fence, liveFences);
-        if (contribution !== undefined) {
-          mountNew(fence, contribution, target);
-        }
-      }
-      queueSweep();
+      keepVideos(target, () => drawMarkdown(target, html, options));
     },
     dispose() {
       if (isDisposed) {
@@ -331,6 +341,33 @@ function hasKeyOf(record: ViewRecord, fence: Fence): boolean {
 // removed from it, rather than moved to another.
 function isRemoved(record: ViewRecord): boolean {
   return record.host !== null && record.target.parentNode === null;
+}
+
+// Runs `draw` over `target`, then puts each video the last draw left there
+// back in place of the new draw's video of the same source, in order, taking
+// the new one's title and label: a redraw, such as each chunk of a streaming
+// reply, keeps a playing clip where it is instead of starting it over. The old
+// video goes back within the same task, so it never pauses.
+function keepVideos(target: HTMLElement, draw: () => void): void {
+  const shown = new Map<string, HTMLElement[]>();
+  for (const video of target.querySelectorAll('video')) {
+    const src = video.getAttribute('src') ?? '';
+    shown.set(src, [...(shown.get(src) ?? []), video]);
+  }
+  draw();
+  if (shown.size === 0) {
+    return;
+  }
+  for (const video of target.querySelectorAll('video')) {
+    const kept = shown.get(video.getAttribute('src') ?? '')?.shift();
+    if (kept === undefined || kept === video) {
+      continue;
+    }
+    for (const name of ['title', 'aria-label']) {
+      kept.setAttribute(name, video.getAttribute(name) ?? '');
+    }
+    video.replaceWith(kept);
+  }
 }
 
 // Puts `element`, which sits in another placeholder, alone in `placeholder`.

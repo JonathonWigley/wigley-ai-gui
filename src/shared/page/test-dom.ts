@@ -164,6 +164,10 @@ export class FakeElement {
     return current === this;
   }
 
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
   }

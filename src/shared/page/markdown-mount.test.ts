@@ -4,6 +4,7 @@ import { createMarkdownMount, type MarkdownMount } from './markdown-mount';
 import {
   fencePlaceholder,
   installMarkdownDom,
+  localVideo,
 } from './markdown-mount.test-support';
 import { asFake, type FakeElement } from './test-dom';
 
@@ -121,6 +122,32 @@ describe('createMarkdownMount', () => {
     expect(viewsIn(target, fake.views)).toEqual([0, 1, -1]);
     expect(placeholdersIn(target)[2].children[0].tagName).toBe('PRE');
   });
+
+  it.each([
+    { name: 'no fence', fence: '' },
+    { name: 'a kept fence view', fence: html('a') },
+  ])(
+    'keeps a shown video of the same source across a redraw, with $name',
+    ({ fence }) => {
+      const videos = () => asFake(target).querySelectorAll('video');
+      mount.draw(
+        target,
+        `${fence}${localVideo('/a.mp4', 'old')}${localVideo('/b.mp4', 'b')}`,
+      );
+      const [shownA, shownB] = videos();
+
+      mount.draw(
+        target,
+        `${fence}<p>more</p>${localVideo('/a.mp4', 'new')}${localVideo('/c.mp4', 'c')}`,
+      );
+
+      const [keptA, drawnC] = videos();
+      expect(keptA).toBe(shownA);
+      expect(keptA.getAttribute('title')).toBe('new');
+      expect(drawnC).not.toBe(shownB);
+      expect(drawnC.getAttribute('src')).toBe('/c.mp4');
+    },
+  );
 
   it.each([
     { language: 'html', liveFences: true, result: 'mounted', mounts: 1 },

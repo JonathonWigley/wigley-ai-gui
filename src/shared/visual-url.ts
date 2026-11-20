@@ -1,3 +1,4 @@
+import type { LocalMedia } from '../contracts/markdown';
 import { decodedSegment, parsedSchemeUrl } from './file-url';
 
 // The scheme that serves the page each visual's document, by its source's
@@ -22,13 +23,6 @@ const VIDEO_EXTENSIONS: readonly string[] = ['mp4', 'webm'];
 // A Windows drive: a local media path's first segment, or the start of a path.
 const DRIVE_SEGMENT = /^[A-Za-z]:$/;
 const DRIVE_PATH = /^[A-Za-z]:[\\/]/;
-
-// A local file the visual host serves: its URL, and whether it draws as an
-// image or a video.
-export interface LocalMedia {
-  url: string;
-  kind: 'image' | 'video';
-}
 
 // The local media at `path` — an absolute path in URL form, as a markdown
 // image's destination holds it (`/Users/me/a.png`, `C:/me/a.mp4`, its

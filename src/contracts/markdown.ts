@@ -18,6 +18,13 @@ import type { Disposable } from './disposable';
 // bare `:::` close line, or to the end of the text when none closes it. `block`
 // also marks each top-level block and top-level list item with
 // `data-md-lines="<start>,<end>"`: zero-based source lines, `end` exclusive.
+// A local file the visual scheme serves to markdown and visuals: its URL, and
+// whether it draws as an image or a video.
+export interface LocalMedia {
+  url: string;
+  kind: 'image' | 'video';
+}
+
 export interface MarkdownRenderer {
   block(text: string): string;
   inline(text: string): string;

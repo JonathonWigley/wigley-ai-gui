@@ -5,6 +5,7 @@ import type {
   BlockContribution,
   BlockHelpers,
   FenceContribution,
+  LocalMedia,
   MarkdownRenderer,
 } from '../../contracts/markdown';
 
@@ -67,9 +68,7 @@ const WEB_LINK = /^https?:\/\//i;
 // The URL that serves a markdown image's local file and whether it is an image
 // or a video, from the destination as markdown-it holds it, or null when it
 // names no local file the app serves.
-export type LocalMediaOf = (
-  destination: string,
-) => { url: string; kind: 'image' | 'video' } | null;
+export type LocalMediaOf = (destination: string) => LocalMedia | null;
 
 export function createMarkdownItRenderer(
   highlighter: CodeHighlighter,
