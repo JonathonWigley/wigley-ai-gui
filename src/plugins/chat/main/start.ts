@@ -699,6 +699,10 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         requireHeld(sessionId);
         return chat.send(sessionId, message);
       },
+      sendIntoTurn: async (sessionId, message) => {
+        requireHeld(sessionId);
+        return chat.sendIntoTurn(sessionId, message);
+      },
       clear: async (sessionId) => {
         requireHeld(sessionId);
         chat.clear(sessionId);

@@ -8103,6 +8103,50 @@ describe('createChatSessions send gate and hold', () => {
     },
   );
 
+  // The fake runs a turn for each write, so a row queued in the running turn
+  // goes out once the approval's turn ends.
+  it.each([
+    {
+      given: 'a running turn, ahead of the row queued in it',
+      working: true,
+      compacting: false,
+      written: [
+        ['approved', false],
+        ['a', false],
+      ],
+    },
+    {
+      given: 'a compaction running, queued behind the row',
+      working: true,
+      compacting: true,
+      written: [],
+    },
+    {
+      given: 'an idle session, as send does',
+      working: false,
+      compacting: false,
+      written: [
+        ['a', false],
+        ['approved', false],
+      ],
+    },
+  ])('sendIntoTurn_WritesPlainly: $given', async (row) => {
+    const test = await started();
+    if (row.working) {
+      test.activity('working');
+      test.chat.send(ROW_ID, { text: 'a', images: [] });
+    } else {
+      await test.chat.send(ROW_ID, { text: 'a', images: [] });
+    }
+    if (row.compacting) {
+      test.process.events.agentEvent(compactionStartedEvent('harness'));
+    }
+
+    await test.chat.sendIntoTurn(ROW_ID, { text: 'approved', images: [] });
+
+    expect(writtenWithNow(test)).toEqual(row.written);
+  });
+
   it('sendNow_PlainWriteNotTakenIn_WritesWithoutNow', async () => {
     const test = await started();
     queueTwo(test);

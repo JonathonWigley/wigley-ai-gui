@@ -317,6 +317,14 @@ export interface ChatSessions {
   // row waiting on its harness rejects with
   // `<label> is not loaded. Send again once it is.` before anything queues.
   send(sessionId: string, message: UserMessage): Promise<void>;
+  // While the harness reports the turn running, with no compaction running and
+  // no hold up, writes `message` to the agent at once and plainly, never asking
+  // it to take the message in now, so the running turn takes it in after its
+  // running tool returns: a `now` write would end that tool. Its row shows in
+  // `chat.queued`, marked with the entry id, until the agent takes it in; a
+  // write that throws leaves the row unsent and queued. Otherwise sends as
+  // `send` does, `send`'s refusal included.
+  sendIntoTurn(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries, as harness entries travel.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message not sent now, then interrupts the process;
@@ -1373,19 +1381,25 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Writes the row's message and marks it with the entry id the write
   // returned; false when the write throws, which leaves it unsent. While a
-  // turn runs it asks the agent to take the message in now. It writes plainly
+  // turn runs it asks the agent to take the message in now, unless
+  // `asksNow` is false. It writes plainly
   // during a compaction, so the compaction is not cut short; for slash text,
   // which may start one (`/compact`); behind a plainly written message the
   // agent has not taken in, which a `now` message would run ahead of
   // (claude-stream.md § Send now); and on a harness that does not declare
   // `midTurnSend`, or is not registered, where the message waits for the turn's
   // end.
-  function writeRowNow(session: HeldSession, row: QueuedMessage): boolean {
+  function writeRowNow(
+    session: HeldSession,
+    row: QueuedMessage,
+    asksNow = true,
+  ): boolean {
     const info = session.slots.info();
     const takesMidTurnSend =
       deps.harnesses.get(info.harness)?.info().capabilities.midTurnSend ===
       true;
     const isNow =
+      asksNow &&
       isTurnRunning(session) &&
       info.compaction === null &&
       !row.text.trimStart().startsWith('/') &&
@@ -3365,6 +3379,32 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
+  async function sendIntoTurn(sessionId: string, message: UserMessage) {
+    await afterAttach(held.get(sessionId), () =>
+      sendIntoTurnSettled(sessionId, message),
+    );
+  }
+
+  async function sendIntoTurnSettled(sessionId: string, message: UserMessage) {
+    const session = held.get(sessionId);
+    if (session === undefined) {
+      log(`sendIntoTurn for unknown session ${sessionId} ignored`);
+      return;
+    }
+    refuseWhileWaiting(session);
+    const writesIntoTurn =
+      isTurnRunning(session) &&
+      session.slots.info().compaction === null &&
+      !isHoldUp(session);
+    if (!writesIntoTurn) {
+      await sendSettled(sessionId, message);
+      return;
+    }
+    const row = appendQueued(session, message);
+    writeRowNow(session, row, false);
+    save();
+  }
+
   function queue(session: HeldSession, message: UserMessage) {
     appendQueued(session, message);
     save();
@@ -4457,6 +4497,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     resume,
     send: sendMessage,
+    sendIntoTurn,
     notice(sessionId, text, tone) {
       const session = held.get(sessionId);
       if (session === undefined) {

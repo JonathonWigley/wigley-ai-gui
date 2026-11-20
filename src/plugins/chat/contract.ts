@@ -762,6 +762,14 @@ export interface ChatMainExports {
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
   send(sessionId: string, message: UserMessage): Promise<void>;
+  // While the session's turn runs, writes `message` to the agent at once, so
+  // the running turn takes it in after its running tool returns, before the
+  // agent's next step; it shows in `chat.queued` until the agent takes it in.
+  // With no turn running, or while a compaction runs or a hold is up, sends as
+  // `send` does. Resolves once the harness holds the message, or once it
+  // queued in chat when the write failed (logged). Rejects for a session chat
+  // does not hold.
+  sendIntoTurn(sessionId: string, message: UserMessage): Promise<void>;
   // The `/clear` command's clear: resolves once the fresh process started and
   // reported its host session id; rejects when it cannot start, or for a
   // session chat does not hold.
