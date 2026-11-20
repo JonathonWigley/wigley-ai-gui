@@ -27,7 +27,7 @@ const config: ForgeConfig = {
     // Without this key macOS refuses Apple Events from the app's sessions with -1743 and never prompts.
     extendInfo: {
       NSAppleEventsUsageDescription:
-        'Agent sessions in Auri run tools that control other apps, such as reading and pressing a Unity editor\'s dialogs through System Events.',
+        "Agent sessions in Auri run tools that control other apps, such as reading and pressing a Unity editor's dialogs through System Events.",
     },
     // The plugin contract types `generateAssets` emits, copied under the same
     // name to `<Resources>/.plugin-types` outside the asar for the app to write
