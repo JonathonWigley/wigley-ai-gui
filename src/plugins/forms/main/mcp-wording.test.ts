@@ -687,7 +687,8 @@ interface PayloadRow {
 const PAYLOAD_ROWS: PayloadRow[] = [
   {
     name: 'a submitted round',
-    payload: () => roundType.payload(sampleRound(), 'submitted', ANSWERED),
+    payload: () =>
+      roundType.payload(sampleRound(), 'submitted', ANSWERED, false),
     expected: {
       outcome: 'submitted',
       summary: ANSWERED_SUMMARY,
@@ -697,7 +698,8 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   },
   {
     name: 'a cancelled round',
-    payload: () => roundType.payload(sampleRound(), 'cancelled', ANSWERED),
+    payload: () =>
+      roundType.payload(sampleRound(), 'cancelled', ANSWERED, false),
     expected: {
       outcome: 'cancelled',
       summary: ANSWERED_SUMMARY,
@@ -712,6 +714,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
         sampleRound(),
         'draft',
         readFormBody(BUILT_IN_KINDS, sampleRound(), {}),
+        false,
       ),
     expected: {
       outcome: 'draft',
@@ -726,7 +729,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
   {
     name: "an earlier round's answers",
     payload: () =>
-      roundType.handedBackPayload(sampleRound(), 'submitted', ANSWERED),
+      roundType.handedBackPayload(sampleRound(), 'submitted', ANSWERED, false),
     expected: {
       outcome: 'submitted',
       summary: ANSWERED_SUMMARY,
@@ -839,6 +842,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
         NOTICES_ROUND,
         'submitted',
         readFormBody(BUILT_IN_KINDS, NOTICES_ROUND, {}),
+        false,
       ),
     expected: {
       outcome: 'submitted',

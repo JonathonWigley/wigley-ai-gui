@@ -79,10 +79,16 @@ export function createRoundType(
     readBody: (round, raw) => readFormBody(kinds(), round, raw),
     prefill: (_round, saved, finished) =>
       prefillDraft(kinds(), saved, finished),
-    payload: (round, outcome, body) =>
-      roundPayload(kinds(), answersResult(kinds(), round, outcome, body)),
-    handedBackPayload: (round, outcome, body) =>
-      roundPayload(kinds(), handedBackResult(kinds(), round, outcome, body)),
+    payload: (round, outcome, body, messagePosted) =>
+      roundPayload(
+        kinds(),
+        answersResult(kinds(), round, outcome, body, messagePosted),
+      ),
+    handedBackPayload: (round, outcome, body, messagePosted) =>
+      roundPayload(
+        kinds(),
+        handedBackResult(kinds(), round, outcome, body, messagePosted),
+      ),
     noFormPayload: () => roundPayload(kinds(), noRoundResult(kinds())),
     notShownPayload: (round, blockingHeading) =>
       roundPayload(kinds(), notShownResult(kinds(), round, blockingHeading)),
@@ -98,7 +104,7 @@ export function autoAnsweredPayload(
 ): AnswersPayload {
   return roundPayload(
     kinds,
-    answersResult(kinds, round, 'auto_answered', body),
+    answersResult(kinds, round, 'auto_answered', body, false),
   );
 }
 

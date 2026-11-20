@@ -25,9 +25,10 @@ function fakeChat(
       sent.push([sessionId, message]);
       return sendResult();
     },
-    sendIntoTurn: (sessionId, message) => {
+    sendIntoTurn: async (sessionId, message) => {
       sentIntoTurn.push([sessionId, message]);
-      return sendResult();
+      await sendResult();
+      return true;
     },
   };
 }
@@ -71,18 +72,25 @@ describe('createChatFormWake', () => {
       session: 'owned by chat',
       profile: 'claude',
       expected: [['s1', { text: APPROVAL, images: [] }]],
+      isQueued: true,
     },
-    { session: 'chat does not own', profile: null, expected: [] },
+    {
+      session: 'chat does not own',
+      profile: null,
+      expected: [],
+      isQueued: false,
+    },
   ])(
     'sends a message ahead of the answers into the turn of a session $session',
-    async ({ profile, expected }) => {
+    async ({ profile, expected, isQueued }) => {
       const chat = fakeChat(profile);
 
-      await createChatFormWake(chat, () => {}).sendBeforeAnswers(
+      const queued = await createChatFormWake(chat, () => {}).sendBeforeAnswers(
         's1',
         APPROVAL,
       );
 
+      expect(queued).toBe(isQueued);
       expect(chat.sentIntoTurn).toEqual(expected);
       expect(chat.sent).toEqual([]);
     },
@@ -94,10 +102,11 @@ describe('createChatFormWake', () => {
     );
     const logged: string[] = [];
 
-    await createChatFormWake(chat, (message: string) =>
+    const queued = await createChatFormWake(chat, (message: string) =>
       logged.push(message),
     ).sendBeforeAnswers('s1', APPROVAL);
 
+    expect(queued).toBe(false);
     expect(logged).toHaveLength(1);
     expect(logged[0]).toContain('process gone');
   });

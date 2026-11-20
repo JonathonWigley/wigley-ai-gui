@@ -66,13 +66,14 @@ export interface AgentFormPresenter<Form, Body> {
 // Tells a session what the user did in one of its forms. `formFinishedUnheard`:
 // the user finished a form while no call waited to return it; it must not
 // throw and must return at once, since delivery is fire-and-forget.
-// `sendBeforeAnswers`: sends `text` as the user's own message, written so the
-// agent takes it in ahead of its next step after the answers return; it settles
-// once the harness holds the message, or once the send failed (logged), and
-// never rejects.
+// `sendBeforeAnswers`: sends `text` as the user's own message into the
+// session's running turn, so the agent takes it in ahead of its next step
+// after the answers return; true once the agent queued it, false when it
+// could not join the running turn and was not sent, or the send failed
+// (logged). It never rejects.
 export interface AgentFormWake {
   formFinishedUnheard(sessionId: string, text: string): void;
-  sendBeforeAnswers(sessionId: string, text: string): Promise<void>;
+  sendBeforeAnswers(sessionId: string, text: string): Promise<boolean>;
 }
 
 // A form that left the window. `byFinish` is true when the page's `finish`
@@ -120,8 +121,8 @@ export interface AgentFormSession<Payload> {
   // the session, a call shows no form and waits on no earlier call: it saves
   // and returns the auto-answer's answers at once, and an open form stays.
   // After a user's submit whose type sends a message ahead of the answers
-  // (`submitMessage`), every call of the session returns only once that
-  // message has gone.
+  // (`submitMessage`), every call of the session starts and returns only once
+  // the agent queued that message or the send gave up.
   open(
     args: unknown,
     toolUseId: string | null,
@@ -165,13 +166,25 @@ export interface AgentFormType<Form, Body, Payload> {
   readBody(form: Form, raw: unknown): Body;
   // A new form's draft from the newest saved body with its fingerprint; `finished` is true when that save finished.
   prefill(form: Form, saved: Body, finished: boolean): Body;
-  payload(form: Form, outcome: AgentFormEndKind | 'draft', body: Body): Payload;
-  handedBackPayload(form: Form, outcome: AgentFormEndKind, body: Body): Payload;
+  // `messagePosted`: the agent queued the form's `submitMessage` in its
+  // running turn; false for a form that sent none.
+  payload(
+    form: Form,
+    outcome: AgentFormEndKind | 'draft',
+    body: Body,
+    messagePosted: boolean,
+  ): Payload;
+  handedBackPayload(
+    form: Form,
+    outcome: AgentFormEndKind,
+    body: Body,
+    messagePosted: boolean,
+  ): Payload;
   noFormPayload(): Payload;
   notShownPayload(form: Form, blockingHeading: string | null): Payload;
-  // The message the user's submit of `form` with `body` sends the session as
-  // the user's own before any call returns the answers; null, or absent, for
-  // none. Never throws.
+  // The message the user's submit of `form` with `body` sends into the
+  // session's running turn as the user's own before any call returns the
+  // answers; null, or absent, for none. Never throws.
   submitMessage?(form: Form, body: Body): string | null;
 }
 

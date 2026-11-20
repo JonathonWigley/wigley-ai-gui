@@ -701,6 +701,7 @@ describe('readFormBody', () => {
         round,
         'submitted',
         readFormBody(BUILT_IN_KINDS, round, saved),
+        false,
       ),
     };
 
@@ -713,6 +714,7 @@ describe('readFormBody', () => {
         round,
         'submitted',
         readFormBody(BUILT_IN_KINDS, round, saved),
+        false,
       ),
     ).toEqual(before.payload);
   });
@@ -764,6 +766,7 @@ describe('roundType.payload', () => {
         }),
         answer({ index: 3 }),
       ]),
+      false,
     );
 
     expect(payload).toEqual({
@@ -808,6 +811,7 @@ describe('roundType.payload', () => {
       roundOf(3),
       'submitted',
       body([answer({ choice: 1 })]),
+      false,
     );
 
     expect(
@@ -824,6 +828,7 @@ describe('roundType.payload', () => {
       roundOf(1),
       'submitted',
       body([answer({ not_applicable: true })]),
+      false,
     );
 
     expect(payload.answers[0].status).toBe('not_applicable');
@@ -836,6 +841,7 @@ describe('roundType.payload', () => {
       round,
       'submitted',
       body([answer({ choice: 2, not_applicable: true })]),
+      false,
     );
 
     expect(payload.answers[0]).toMatchObject({
@@ -853,6 +859,7 @@ describe('roundType.payload', () => {
       round,
       'submitted',
       body([answer({ choice: 2 }), answer({ index: 2 })]),
+      false,
     );
 
     expect(payload.answers.map((each) => each.choice_text)).toEqual([
@@ -868,6 +875,7 @@ describe('roundType.payload', () => {
       round,
       'submitted',
       body([answer({ choice: 1 }), answer({ index: 2, choice: 2 })]),
+      false,
     );
 
     expect(payload.answers.map((each) => each.took_recommendation)).toEqual([
@@ -877,7 +885,7 @@ describe('roundType.payload', () => {
   });
 
   it('tells a draft caller to keep waiting', () => {
-    const payload = roundType.payload(roundOf(1), 'draft', body([]));
+    const payload = roundType.payload(roundOf(1), 'draft', body([]), false);
 
     expect(payload.next).toContain('collect_last_round');
   });
@@ -889,6 +897,7 @@ describe('roundType.payload', () => {
       round,
       'submitted',
       body([answer({ choice: 99 }), answer({ index: 2, choice: 1 })]),
+      false,
     );
 
     expect(payload.answers[0]).toMatchObject({
@@ -913,6 +922,7 @@ describe('roundType.payload', () => {
       body([], {
         finding_answers: [findingAnswer({ notes: 'my own fix' })],
       }),
+      false,
     );
 
     expect(payload.findings[0]).toMatchObject({
@@ -930,6 +940,7 @@ describe('roundType.payload', () => {
       roundOf(1),
       'submitted',
       body([answer({ notes: 'neither name' })]),
+      false,
     );
 
     expect(payload.answers[0]).toMatchObject({
@@ -941,7 +952,7 @@ describe('roundType.payload', () => {
 
   it('carries no earlier_heading on an ordinary payload', () => {
     expect(
-      roundType.payload(roundOf(1), 'submitted', body([])),
+      roundType.payload(roundOf(1), 'submitted', body([]), false),
     ).not.toHaveProperty('earlier_heading');
   });
 });
@@ -980,6 +991,7 @@ describe('roundType.payload findings', () => {
           findingAnswer({ index: 2, not_applicable: true }),
         ],
       }),
+      false,
     );
 
     expect(payload.findings).toEqual([
@@ -1028,6 +1040,7 @@ describe('roundType.payload findings', () => {
           }),
         ],
       }),
+      false,
     );
 
     expect(payload.findings[0]).toMatchObject({
@@ -1094,6 +1107,7 @@ describe('roundType.payload findings', () => {
         parseRound(BUILT_IN_KINDS, args),
         outcome,
         body([...answers], { finding_answers: [...findingAnswers] }),
+        false,
       );
 
       expect(payload.summary).toBe(summary);
@@ -1123,6 +1137,7 @@ describe('roundType.payload finding actions', () => {
       round,
       'submitted',
       body([], { finding_answers: [findingAnswer(entry)] }),
+      false,
     );
     return payload.findings[0];
   }
@@ -1254,6 +1269,7 @@ describe('roundType.payload notices', () => {
       roundWithNotices(2),
       'submitted',
       body([]),
+      false,
     );
 
     expect(payload.notices).toEqual([
@@ -1272,6 +1288,7 @@ describe('roundType.payload notices', () => {
           { index: 2, comment: 'please double check this one' },
         ],
       }),
+      false,
     );
 
     expect(payload.notices.map((each) => each.comment)).toEqual([
@@ -1286,9 +1303,9 @@ describe('roundType.payload notices', () => {
       notices: [notice({ title: 'Kept it in config', badge: 'Decided' })],
     });
 
-    expect(roundType.payload(round, 'submitted', body([])).notices).toEqual([
-      { index: 1, title: 'Kept it in config', badge: 'Decided' },
-    ]);
+    expect(
+      roundType.payload(round, 'submitted', body([]), false).notices,
+    ).toEqual([{ index: 1, title: 'Kept it in config', badge: 'Decided' }]);
   });
 
   it('never counts a notice in the answers or the summary', () => {
@@ -1298,6 +1315,7 @@ describe('roundType.payload notices', () => {
       body([answer({ choice: 1 })], {
         notice_comments: [{ index: 1, comment: 'a comment' }],
       }),
+      false,
     );
 
     expect(payload.answers).toHaveLength(1);
@@ -1312,7 +1330,7 @@ describe('roundType.payload notices', () => {
       notices: [notice()],
     });
 
-    const payload = roundType.payload(round, 'submitted', body([]));
+    const payload = roundType.payload(round, 'submitted', body([]), false);
 
     expect(payload.outcome).toBe('submitted');
     expect(payload.answers).toEqual([]);
@@ -1322,8 +1340,12 @@ describe('roundType.payload notices', () => {
 
 describe('roundType.payload free text', () => {
   function entryFor(entry: Partial<AnswerEntry>) {
-    return roundType.payload(roundOf(1), 'submitted', body([answer(entry)]))
-      .answers[0];
+    return roundType.payload(
+      roundOf(1),
+      'submitted',
+      body([answer(entry)]),
+      false,
+    ).answers[0];
   }
 
   it('leaves out empty notes', () => {
@@ -1339,11 +1361,12 @@ describe('roundType.payload free text', () => {
   it('leaves out an empty note and carries a written one', () => {
     const round = roundOf(1);
 
-    expect(roundType.payload(round, 'submitted', body([]))).not.toHaveProperty(
-      'note',
-    );
     expect(
-      roundType.payload(round, 'submitted', body([], { note: 'hello' })).note,
+      roundType.payload(round, 'submitted', body([]), false),
+    ).not.toHaveProperty('note');
+    expect(
+      roundType.payload(round, 'submitted', body([], { note: 'hello' }), false)
+        .note,
     ).toBe('hello');
   });
 
@@ -1441,14 +1464,28 @@ describe('fingerprint', () => {
     ).toBe(fingerprint(BUILT_IN_KINDS, parseRound(BUILT_IN_KINDS, args())));
   });
 
-  it('hashes a round with no findings with no findings key', () => {
-    expect(
-      fingerprint(
-        BUILT_IN_KINDS,
-        parseRound(BUILT_IN_KINDS, args({ notices: [] })),
-      ),
-    ).toBe('56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb');
-  });
+  it.each([
+    { given: 'no approves', approves: undefined },
+    { given: 'an empty approves', approves: [] },
+  ])(
+    'hashes a round with no findings, its question with $given, as before approves existed',
+    ({ approves }) => {
+      const tagged =
+        approves === undefined ? BASE_QUESTION : { ...BASE_QUESTION, approves };
+
+      expect(
+        fingerprint(
+          BUILT_IN_KINDS,
+          parseRound(
+            BUILT_IN_KINDS,
+            args({ questions: [question(tagged)], notices: [] }),
+          ),
+        ),
+      ).toBe(
+        '56624f6db3c22a5e6fb81207c85d247e1ec9e920364a03263f46d2d6afc00ffb',
+      );
+    },
+  );
 
   it('hashes a finding with no choice actions or action_reasons as it did before they existed', () => {
     expect(
@@ -1764,11 +1801,16 @@ describe('roundType.handedBackPayload', () => {
     });
     const saved = body([answer({ choice: 2 })]);
 
-    const payload = roundType.handedBackPayload(round, 'submitted', saved);
+    const payload = roundType.handedBackPayload(
+      round,
+      'submitted',
+      saved,
+      false,
+    );
 
     expect(payload.earlier_heading).toBe('Earlier round');
     expect(payload.answers).toEqual(
-      roundType.payload(round, 'submitted', saved).answers,
+      roundType.payload(round, 'submitted', saved, false).answers,
     );
     expect(payload.next).toContain('ask_round');
   });
@@ -1784,28 +1826,31 @@ describe('round results', () => {
   it.each([
     {
       name: 'draft',
-      result: () => answersResult(BUILT_IN_KINDS, round, 'draft', blank),
+      result: () => answersResult(BUILT_IN_KINDS, round, 'draft', blank, false),
       reason: { kind: 'stillOpen' },
     },
     {
       name: 'submitted',
-      result: () => answersResult(BUILT_IN_KINDS, round, 'submitted', blank),
+      result: () =>
+        answersResult(BUILT_IN_KINDS, round, 'submitted', blank, false),
       reason: { kind: 'finished' },
     },
     {
       name: 'cancelled',
-      result: () => answersResult(BUILT_IN_KINDS, round, 'cancelled', blank),
+      result: () =>
+        answersResult(BUILT_IN_KINDS, round, 'cancelled', blank, false),
       reason: { kind: 'finished' },
     },
     {
       name: 'auto_answered',
       result: () =>
-        answersResult(BUILT_IN_KINDS, round, 'auto_answered', blank),
+        answersResult(BUILT_IN_KINDS, round, 'auto_answered', blank, false),
       reason: { kind: 'autoAnswered' },
     },
     {
       name: 'handed-back',
-      result: () => handedBackResult(BUILT_IN_KINDS, round, 'submitted', blank),
+      result: () =>
+        handedBackResult(BUILT_IN_KINDS, round, 'submitted', blank, false),
       reason: { kind: 'handedBack', heading: 'H' },
     },
     {
@@ -1884,6 +1929,7 @@ describe('a registered kind', () => {
       round,
       'submitted',
       recommendedBody(kinds, round),
+      false,
     );
 
     expect(Object.keys(roundPayload(kinds, result))).toEqual([
@@ -1904,6 +1950,7 @@ describe('a registered kind', () => {
       round,
       'submitted',
       recommendedBody(kinds, round),
+      false,
     );
 
     expect(result.results.poll).toEqual([
@@ -1918,6 +1965,7 @@ describe('a registered kind', () => {
       round,
       'submitted',
       recommendedBody(kinds, round),
+      false,
     );
 
     expect(roundPayload(kinds, result).summary).toBe(
@@ -1932,6 +1980,7 @@ describe('a registered kind', () => {
       round,
       'submitted',
       readFormBody(kinds, round, {}),
+      false,
     );
 
     expect(readFormBody(kinds, round, {}).poll_answers).toEqual([]);
@@ -1966,6 +2015,7 @@ describe('a registered kind', () => {
       round,
       'submitted',
       readFormBody(BUILT_IN_KINDS, round, {}),
+      false,
     );
 
     expect(readFormBody(BUILT_IN_KINDS, round, {})).not.toHaveProperty(

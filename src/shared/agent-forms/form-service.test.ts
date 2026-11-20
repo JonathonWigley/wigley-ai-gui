@@ -70,7 +70,7 @@ const wake: AgentFormWake = {
   formFinishedUnheard: (sessionId, text) => {
     wakes.push([sessionId, text]);
   },
-  sendBeforeAnswers: () => Promise.resolve(),
+  sendBeforeAnswers: () => Promise.resolve(false),
 };
 
 function newService(timers: Timers = globalTimers) {
@@ -175,7 +175,12 @@ describe('open', () => {
     presenter.submit(presenter.latest().formId, body('choice 1'));
 
     expect(await pending).toEqual(
-      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('choice 1')),
+      TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('choice 1'),
+        false,
+      ),
     );
   });
 
@@ -217,7 +222,12 @@ describe('open', () => {
 
     presenter.submit(naming.formId, body('choice 1'));
     expect(await first).toEqual(
-      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('choice 1')),
+      TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('choice 1'),
+        false,
+      ),
     );
     await vi.advanceTimersByTimeAsync(0);
 
@@ -1705,7 +1715,12 @@ describe('auto-answer', () => {
       heading: 'Naming decisions',
     });
     expect(afterSubmit).toEqual(
-      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('mine')),
+      TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+        false,
+      ),
     );
   });
 
@@ -1728,6 +1743,7 @@ describe('auto-answer', () => {
         parse(NAMING_ARGS),
         'submitted',
         body('mine'),
+        false,
       ),
     },
     {
@@ -1738,6 +1754,7 @@ describe('auto-answer', () => {
         parse(NAMING_ARGS),
         'submitted',
         body('mine'),
+        false,
       ),
     },
     {
@@ -1755,6 +1772,7 @@ describe('auto-answer', () => {
         parse(NAMING_ARGS),
         'submitted',
         body('mine'),
+        false,
       ),
     },
     {
@@ -1767,6 +1785,7 @@ describe('auto-answer', () => {
         parse(NAMING_ARGS),
         'submitted',
         HALF_BODY,
+        false,
       ),
     },
     {
@@ -1779,6 +1798,7 @@ describe('auto-answer', () => {
         parse(NAMING_ARGS),
         'cancelled',
         HALF_BODY,
+        false,
       ),
     },
   ])(
@@ -1825,7 +1845,12 @@ describe('auto-answer', () => {
 
     expect(settledBeforeSubmit).toBe(false);
     expect(await resent).toEqual(
-      TEST_FORM_TYPE.payload(parse(NAMING_ARGS), 'submitted', body('mine')),
+      TEST_FORM_TYPE.payload(
+        parse(NAMING_ARGS),
+        'submitted',
+        body('mine'),
+        false,
+      ),
     );
     expect(presenter.shown).toHaveLength(1);
     expect(closedBeforeSubmit).toEqual([]);

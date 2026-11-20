@@ -4,7 +4,10 @@ import type {
   AgentFormWake,
 } from '../../../contracts/agent-forms';
 import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
-import { createAgentFormService } from '../../../shared/agent-forms/form-service';
+import {
+  createAgentFormService,
+  MESSAGE_QUEUE_TIMEOUT_MS,
+} from '../../../shared/agent-forms/form-service';
 import {
   type AgentFormStore,
   createFolderFormStore,
@@ -334,11 +337,11 @@ describe('open', () => {
 });
 
 // A wake that records each message and each send ahead of the answers, and
-// holds each such send until `release`.
+// holds each such send until `release` says whether the agent queued it.
 function recordingWake() {
   const sentAhead: [string, string][] = [];
   const unheard: [string, string][] = [];
-  let release = () => {};
+  let release = (_isQueued: boolean) => {};
   const wake: AgentFormWake = {
     formFinishedUnheard: (sessionId, text) => {
       unheard.push([sessionId, text]);
@@ -350,7 +353,12 @@ function recordingWake() {
       });
     },
   };
-  return { wake, sentAhead, unheard, release: () => release() };
+  return {
+    wake,
+    sentAhead,
+    unheard,
+    release: (isQueued: boolean) => release(isQueued),
+  };
 }
 
 const PUSH_ACTION =
@@ -379,7 +387,40 @@ function twoAnswers(first: Partial<AnswerEntry>): FormBody {
 }
 
 describe('approval message on submit', () => {
-  it("sends the approved action as the user's message, and returns the answers only once it has gone", async () => {
+  it.each([
+    { given: 'the agent queues it', isQueued: true },
+    { given: 'it could not join the turn', isQueued: false },
+  ])(
+    "sends the approved action as the user's message and returns the answers once $given, saying so",
+    async ({ isQueued }) => {
+      const recorded = recordingWake();
+      const pending = startSession({}, recorded.wake).open(
+        APPROVAL_ARGS,
+        null,
+        live(),
+      );
+      const call = watch(pending);
+
+      presenter.submit(presenter.latest().formId, twoAnswers({ choice: 1 }));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(recorded.sentAhead).toEqual([
+        ['app-1', `Approved in form: ${PUSH_ACTION}`],
+      ]);
+      expect(call.settled).toBe(false);
+      recorded.release(isQueued);
+      const payload = await pending;
+      expect(payload.answers[0]).toMatchObject({
+        status: 'answered',
+        choice: 1,
+        approval_posted: isQueued,
+      });
+      expect(payload.answers[1]).not.toHaveProperty('approval_posted');
+      expect(recorded.unheard).toEqual([]);
+    },
+  );
+
+  it('returns the answers with approval_posted false once the queue wait times out', async () => {
     const recorded = recordingWake();
     const pending = startSession({}, recorded.wake).open(
       APPROVAL_ARGS,
@@ -389,16 +430,13 @@ describe('approval message on submit', () => {
     const call = watch(pending);
 
     presenter.submit(presenter.latest().formId, twoAnswers({ choice: 1 }));
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(recorded.sentAhead).toEqual([
-      ['app-1', `Approved in form: ${PUSH_ACTION}`],
-    ]);
+    await vi.advanceTimersByTimeAsync(MESSAGE_QUEUE_TIMEOUT_MS - 1);
     expect(call.settled).toBe(false);
-    recorded.release();
-    const payload = await pending;
-    expect(payload.answers[0]).toMatchObject({ status: 'answered', choice: 1 });
-    expect(recorded.unheard).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect((await pending).answers[0]).toMatchObject({
+      approval_posted: false,
+    });
   });
 
   it.each([
@@ -444,23 +482,20 @@ describe('approval message on submit', () => {
     },
   );
 
-  it('puts the approved action ahead of the wake when no call waits on the round', async () => {
+  it('sends no approval when no call waits on the round, and its collect says none was posted', async () => {
     const recorded = recordingWake();
-    const pending = startSession({}, recorded.wake).open(
-      APPROVAL_ARGS,
-      null,
-      live(),
-    );
+    const session = startSession({}, recorded.wake);
+    const pending = session.open(APPROVAL_ARGS, null, live());
     await expireDeadline();
     await pending;
 
     presenter.submit(presenter.latest().formId, twoAnswers({ choice: 1 }));
+    const collected = await session.collect(false, live());
 
     expect(recorded.sentAhead).toEqual([]);
     expect(recorded.unheard).toHaveLength(1);
-    expect(
-      recorded.unheard[0][1].startsWith(`Approved in form: ${PUSH_ACTION}\n\n`),
-    ).toBe(true);
+    expect(recorded.unheard[0][1]).not.toContain('Approved in form');
+    expect(collected.answers[0]).toMatchObject({ approval_posted: false });
   });
 });
 

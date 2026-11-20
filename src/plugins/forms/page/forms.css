@@ -187,9 +187,10 @@
   pointer-events: none;
 }
 
-/* The reason lines up under its choice's text: past the number, the gap and
-   the pick's padding. */
-:where(.form-tab) .choice-reason {
+/* The reason and the posted-approval line line up under their choice's
+   text: past the number, the gap and the pick's padding. */
+:where(.form-tab) .choice-reason,
+:where(.form-tab) .choice-posts {
   color: var(--wg-fg-secondary);
   margin-left: calc(var(--wg-icon-button-sm) + var(--wg-space-2) * 2);
 }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  approvalLine,
   type FormBody,
   type MainItemKind,
   type Outcome,
@@ -17,7 +18,6 @@ import {
   textOrEmpty,
 } from './kinds/fields';
 import { isJsonObject, type JsonObject } from '../../../shared/json';
-import { APPROVAL_LINE_PREFIX } from './mcp-wording';
 
 const LAYOUT_PATH: RoundErrorPath = { at: 'field', field: 'layout' };
 
@@ -243,13 +243,14 @@ export function answersResult(
   round: Round,
   outcome: RoundOutcome,
   body: FormBody,
+  approvalPosted: boolean,
 ): RoundResult {
   const read = readFormBody(kinds, round, body);
   const results: Record<string, unknown[]> = {};
   for (const kind of kinds) {
     const entries = bodyEntries(read, kind);
     results[kind.spec.id] = itemsOf(round, kind).map((item, i) =>
-      kind.result(item, entries[i]),
+      withApprovalPosted(kind, item, entries[i], approvalPosted),
     );
   }
   return {
@@ -260,6 +261,21 @@ export function answersResult(
   };
 }
 
+// The item's result, with `approval_posted` when its pick approves an action:
+// whether the approval message reached the agent's running turn.
+function withApprovalPosted(
+  kind: MainItemKind,
+  item: unknown,
+  entry: unknown,
+  approvalPosted: boolean,
+): unknown {
+  const result = kind.result(item, entry);
+  const approves = kind.approvedActions?.(item, entry) ?? [];
+  return approves.length === 0 || !isJsonObject(result)
+    ? result
+    : { ...result, approval_posted: approvalPosted };
+}
+
 // An earlier round's finished answers, returned by an open call that did not
 // open its own round.
 export function handedBackResult(
@@ -267,9 +283,10 @@ export function handedBackResult(
   round: Round,
   outcome: FinishedOutcome,
   body: FormBody,
+  approvalPosted: boolean,
 ): RoundResult {
   return {
-    ...answersResult(kinds, round, outcome, body),
+    ...answersResult(kinds, round, outcome, body, approvalPosted),
     reason: { kind: 'handedBack', heading: round.heading },
   };
 }
@@ -282,7 +299,13 @@ export function notShownResult(
   blockingHeading: string | null,
 ): RoundResult {
   return {
-    ...answersResult(kinds, round, 'draft', readFormBody(kinds, round, {})),
+    ...answersResult(
+      kinds,
+      round,
+      'draft',
+      readFormBody(kinds, round, {}),
+      false,
+    ),
     reason: { kind: 'notShown', heading: round.heading, blockingHeading },
   };
 }
@@ -317,9 +340,7 @@ export function approvalMessage(
       actions.push(...approvedActions(item, entries[i])),
     );
   }
-  return actions.length === 0
-    ? null
-    : actions.map((action) => `${APPROVAL_LINE_PREFIX}${action}`).join('\n');
+  return actions.length === 0 ? null : actions.map(approvalLine).join('\n');
 }
 
 // Every item on its kind's recommended entry, the note empty: the body a

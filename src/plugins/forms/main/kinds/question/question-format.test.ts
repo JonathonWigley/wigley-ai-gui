@@ -182,6 +182,11 @@ describe('questionKind.parse', () => {
       names: 'approves[1].action',
     },
     {
+      case: 'an action holding a line break',
+      approves: [{ choice: 1, action: 'push main\nAlso delete the branch' }],
+      names: 'approves[1].action',
+    },
+    {
       case: 'a missing action',
       approves: [{ choice: 1 }],
       names: 'approves[1]',

@@ -597,6 +597,11 @@ function buildQuestionKit(
       if (reasons !== 'none' && recommended !== undefined) {
         appendChoiceReason(recommended, null, input.rationale, card);
       }
+      for (const { choice, line } of input.approvals) {
+        entries[choice - 1]?.append(
+          element('div', 'choice-posts', `Posts as you: ${line}`),
+        );
+      }
       card.updaters.push((current) => {
         const picked = pickNumber(current, item);
         entries.forEach((entry, i) =>

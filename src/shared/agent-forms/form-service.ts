@@ -38,6 +38,8 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
 interface FormFinish<Body> {
   kind: AgentFormEndKind;
   body: Body;
+  // The agent queued the type's submit message in its running turn.
+  messagePosted: boolean;
 }
 
 // A form shown in the window that no tool reply has settled yet.
@@ -64,6 +66,7 @@ interface FinishedForm<Form, Body> {
   form: Form;
   outcome: AgentFormEndKind;
   body: Body;
+  messagePosted: boolean;
   fingerprint: string;
   // An open call for another form returned it with `earlier_heading`, so a
   // replay keeps that framing.
@@ -98,8 +101,8 @@ interface SessionContext<Form, Body, Payload> {
   // is pending.
   askTurn: Promise<void> | null;
   // Settles once the message the user's last submit sent ahead of its
-  // answers has reached the session; null when none is on its way. Every call
-  // returns only after it.
+  // answers was queued or given up on; null when none is on its way. Every
+  // call starts and returns only after it.
   answersHeld: Promise<void> | null;
   // The relay disconnected; no call opens a form after this.
   ended: boolean;
@@ -162,7 +165,12 @@ function finishedPayload<Form, Body, Payload>(
   type: AgentFormType<Form, Body, Payload>,
   finished: FinishedForm<Form, Body>,
 ): Payload {
-  return type.payload(finished.form, finished.outcome, finished.body);
+  return type.payload(
+    finished.form,
+    finished.outcome,
+    finished.body,
+    finished.messagePosted,
+  );
 }
 
 // `last` holds the user's own submitted answers to the form `formFingerprint`
@@ -197,7 +205,12 @@ function handedBackFinishedPayload<Form, Body, Payload>(
   type: AgentFormType<Form, Body, Payload>,
   finished: FinishedForm<Form, Body>,
 ): Payload {
-  return type.handedBackPayload(finished.form, finished.outcome, finished.body);
+  return type.handedBackPayload(
+    finished.form,
+    finished.outcome,
+    finished.body,
+    finished.messagePosted,
+  );
 }
 
 function unreadableFormError<Form, Body, Payload>(
@@ -265,6 +278,7 @@ function settle<Form, Body, Payload>(
     form: open.form,
     outcome: end.kind,
     body: end.body,
+    messagePosted: end.messagePosted,
     fingerprint: open.record.fingerprint,
     handedBack: false,
     autoAnswered: false,
@@ -295,12 +309,12 @@ function openFormPayload<Form, Body, Payload>(
     if (session.ended) {
       throw sessionEndedUnansweredError(session.type);
     }
-    return session.type.payload(open.form, 'draft', open.latestBody);
+    return session.type.payload(open.form, 'draft', open.latestBody, false);
   }
   if (session.open === open) {
     settle(session, open, end);
   }
-  return session.type.payload(open.form, end.kind, end.body);
+  return session.type.payload(open.form, end.kind, end.body, end.messagePosted);
 }
 
 function waitForEndOrDeadline<Form, Body>(
@@ -399,6 +413,7 @@ function takeUnreturnedFinished<Form, Body, Payload>(
     form,
     outcome: record.outcome,
     body: session.type.readBody(form, record.body),
+    messagePosted: false,
     fingerprint: record.fingerprint,
     handedBack: false,
     autoAnswered: false,
@@ -460,6 +475,30 @@ function submitMessageOf<Form, Body, Payload>(
   return isUserSubmit ? (type.submitMessage?.(form, body) ?? null) : null;
 }
 
+// Measured from write to `queued` in well under a second
+// (claude-stream.md § Message lifecycle); past this the answers go without it.
+export const MESSAGE_QUEUE_TIMEOUT_MS = 3000;
+
+// Whether the agent queued `message` in its running turn, false once
+// `MESSAGE_QUEUE_TIMEOUT_MS` passes first.
+function sendAheadOfAnswers<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  message: string,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = session.timers.set(
+      () => resolve(false),
+      MESSAGE_QUEUE_TIMEOUT_MS,
+    );
+    void session.wake
+      .sendBeforeAnswers(session.sessionId, message)
+      .then((isQueued) => {
+        session.timers.clear(timer);
+        resolve(isQueued);
+      });
+  });
+}
+
 // Holds every call's return until `sending` settles, unless a later submit's
 // send has replaced it.
 function holdAnswersUntil<Form, Body, Payload>(
@@ -477,11 +516,13 @@ function holdAnswersUntil<Form, Body, Payload>(
 // The user's submit or cancel, or a cancel for the closing session: the form
 // ends with `body`, leaves the window and wakes its waiting calls. A form the
 // user finished that no call will return, made under the session's current
-// host id, wakes the session; the closing session's cancel wakes none. The
-// type's submit message goes in that wake, ahead of its text; with a call
-// waiting, it is sent to the session first and every call returns only once
-// it has gone. The store logs a failed finish write rather than throwing, so
-// the answers still reach the waiting calls.
+// host id, wakes the session; the closing session's cancel wakes none. With a
+// call waiting, the type's submit message is sent into the session's running
+// turn first, and the waiting calls wake, and every call returns, only once
+// the agent queued it or the send gave up; the answers say which. With no call
+// waiting it is not sent: a wake runs as a turn of its own, too late to
+// approve anything. The store logs a failed finish write rather than
+// throwing, so the answers still reach the waiting calls.
 function endForm<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -489,7 +530,8 @@ function endForm<Form, Body, Payload>(
   body: Body,
   endedBy: 'user' | 'sessionClose',
 ): void {
-  open.end = { kind, body };
+  const end: FormFinish<Body> = { kind, body, messagePosted: false };
+  open.end = end;
   open.latestBody = body;
   session.store.finish(open.record, kind, body);
   closeInWindow(open, session.presenter);
@@ -499,15 +541,18 @@ function endForm<Form, Body, Payload>(
   if (message !== null && !noCallWaits) {
     holdAnswersUntil(
       session,
-      session.wake.sendBeforeAnswers(session.sessionId, message),
+      sendAheadOfAnswers(session, message).then((isQueued) => {
+        end.messagePosted = isQueued;
+        wakeWaiters(open);
+      }),
     );
+  } else {
+    wakeWaiters(open);
   }
-  wakeWaiters(open);
   if (noCallWaits && madeUnderCurrentHost && endedBy === 'user') {
-    const unheard = formFinishedUnheardText(session.type, open.form, kind);
     session.wake.formFinishedUnheard(
       session.sessionId,
-      message === null ? unheard : `${message}\n\n${unheard}`,
+      formFinishedUnheardText(session.type, open.form, kind),
     );
   }
 }
@@ -1040,6 +1085,7 @@ async function autoAnswerForm<Form, Body, Payload>(
     form,
     outcome: 'submitted',
     body,
+    messagePosted: false,
     fingerprint: formFingerprint,
     handedBack: false,
     autoAnswered: true,
@@ -1047,13 +1093,15 @@ async function autoAnswerForm<Form, Body, Payload>(
   return autoAnswer.payload(form, body);
 }
 
-// `call`'s answer, returned once the message a submit sent ahead of the
-// answers has gone.
+// `call`'s answer, started and returned only while no message a submit sends
+// ahead of the answers is on its way.
+// With none on its way, `call` starts at once.
 async function afterHeldAnswers<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
-  call: Promise<Payload>,
+  call: () => Promise<Payload>,
 ): Promise<Payload> {
-  const payload = await call;
+  const held = session.answersHeld;
+  const payload = await (held === null ? call() : held.then(call));
   await session.answersHeld;
   return payload;
 }
@@ -1128,8 +1176,7 @@ function startSession<Form, Body, Payload>(
     open: (args, toolUseId, signal) =>
       answerUnlessDetached(detach, () => {
         const { autoAnswer } = session;
-        return afterHeldAnswers(
-          session,
+        return afterHeldAnswers(session, () =>
           autoAnswer?.isOn(session.sessionId)
             ? autoAnswerForm(session, autoAnswer, args, toolUseId, signal)
             : openFormInTurn(session, args, toolUseId, signal),
@@ -1137,7 +1184,7 @@ function startSession<Form, Body, Payload>(
       }),
     collect: (wait, signal) =>
       answerUnlessDetached(detach, () =>
-        afterHeldAnswers(session, collectLastForm(session, wait, signal)),
+        afterHeldAnswers(session, () => collectLastForm(session, wait, signal)),
       ),
     end: () => endSession(session),
   };

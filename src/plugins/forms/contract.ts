@@ -36,6 +36,12 @@ export interface QuestionApproval {
   action: string;
 }
 
+// The line a submit posts as the user's own message for an approved action;
+// the question card shows the same line under the choice.
+export function approvalLine(action: string): string {
+  return `Approved in form: ${action}`;
+}
+
 export interface Question {
   title: string;
   // The card's headline: what the user is asked to decide, and why now.

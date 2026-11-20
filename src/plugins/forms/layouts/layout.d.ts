@@ -23,6 +23,9 @@ export interface QuestionCard {
   choices: string[];
   recommend: number;
   rationale: string;
+  // Each choice the agent tagged as approving an action, with the exact line the app posts as the user's own message
+  // when the user submits that choice; `choiceList` draws it under the choice. In the order sent.
+  approvals: { choice: number; line: string }[];
   round: RoundInfo;
 }
 // The body of the notice's line on the notices pane. It draws under the line's head, so it need not draw the badge or
@@ -131,7 +134,8 @@ export interface AnswerKit extends Kit {
 export interface QuestionKit extends AnswerKit {
   // `div.answer` holding the Clear button row and `ol.choices`, with no label; returns the `div.answer`, which
   // `answerControls` may be appended to. 'recommended' and 'all': the rationale under the recommended choice, with no
-  // label; 'none': no reason. A blank rationale draws nothing.
+  // label; 'none': no reason. A blank rationale draws nothing. In every mode, each of `approvals` draws under its
+  // choice as `div.choice-posts`: `Posts as you: ` and the line.
   choiceList(
     parent: HTMLElement,
     reasons: 'recommended' | 'all' | 'none',

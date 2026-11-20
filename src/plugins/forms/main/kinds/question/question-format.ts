@@ -74,10 +74,11 @@ const APPROVES_DESCRIPTION =
   'exact action in plain words, such as "push `main` of ' +
   'new-games-prototypes to origin past PR protection". When the user ' +
   'submits the round with a tagged choice picked, the app first posts ' +
-  '"Approved in form: <action>" in the chat as the user\'s own message, one ' +
-  'line per action, then returns the answers; that message is the yes, so ' +
-  'ask for no separate chat yes. A headless round, and a session the app ' +
-  'did not start, posts nothing: ask for the yes in chat there.';
+  '"Approved in form: <action>" into the running turn as the user\'s own ' +
+  'message, one line per action, then returns the answers, each tagged ' +
+  'pick with approval_posted. True: that message is the yes, so ask for no ' +
+  'separate chat yes. False: nothing was posted, so ask for the yes in a ' +
+  'one-line chat message before the gated call. One line per action.';
 
 function parseApproval(
   raw: unknown,
@@ -116,6 +117,13 @@ function parseApproval(
     });
   }
   const action = requireText(raw.action, `${name}.action`, at);
+  if (/[\r\n]/.test(action)) {
+    throw new RoundError({
+      path: at,
+      problem: `${name}.action must be one line; it holds a line break.`,
+      detail: 'Name the action in one line of plain words.',
+    });
+  }
   return { choice, action };
 }
 

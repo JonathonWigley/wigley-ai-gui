@@ -249,10 +249,17 @@ function laterFindingKit(deps: CardDeps) {
 }
 
 // The kit of a round's second item, a question of two choices recommending
-// choice `recommend`, after one finding, at rail position 1.
-function questionKit(deps: CardDeps, recommend = 1) {
+// choice `recommend` and tagged with `approves`, after one finding, at rail
+// position 1.
+function questionKit(
+  deps: CardDeps,
+  recommend = 1,
+  approves: { choice: number; action: string }[] = [],
+) {
   const presented = presentedRound('r1', {
-    questions: [question('Alpha', { choices: ['one', 'two'], recommend })],
+    questions: [
+      question('Alpha', { choices: ['one', 'two'], recommend, approves }),
+    ],
     findings: [finding('Delta')],
   });
   const round = apply(initialState([], presented.sessionId), {
@@ -503,6 +510,27 @@ describe('card kit', () => {
       { scope: 'forms.forms' },
     );
   });
+
+  it.each(['none', 'recommended', 'all'] as const)(
+    'choiceList_TaggedChoice_DrawsThePostedLineUnderIt: reasons %s',
+    (reasons) => {
+      const { deps } = fakeCardDeps(createFormsContributions());
+      const { kit } = questionKit(deps, 1, [
+        { choice: 2, action: 'push `main` past PR protection' },
+      ]);
+
+      const answer = asFake(kit.choiceList(div(), reasons));
+
+      expect(
+        findAll(answer, 'choice').map((entry) =>
+          findAll(entry, 'choice-posts').map((line) => line.textContent),
+        ),
+      ).toEqual([
+        [],
+        ['Posts as you: Approved in form: push `main` past PR protection'],
+      ]);
+    },
+  );
 
   it('choiceList_AnchorsEachChoice', () => {
     const { deps, anchor } = fakeCardDeps(createFormsContributions());

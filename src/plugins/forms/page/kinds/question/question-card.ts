@@ -1,8 +1,9 @@
-import type {
-  AnswerEntry,
-  ItemAnswer,
-  PageKind,
-  Question,
+import {
+  type AnswerEntry,
+  approvalLine,
+  type ItemAnswer,
+  type PageKind,
+  type Question,
 } from '../../../contract';
 import { BUILT_IN_KIND_SPECS } from '../../../item-kinds';
 import { labelFor, roundInfo } from '../card-parts';
@@ -77,6 +78,10 @@ export const questionPageKind: PageKind<
         choices: [...question.choices],
         recommend: question.recommend,
         rationale: question.rationale,
+        approvals: question.approves.map(({ choice, action }) => ({
+          choice,
+          line: approvalLine(action),
+        })),
         round: roundInfo(round),
       };
     },

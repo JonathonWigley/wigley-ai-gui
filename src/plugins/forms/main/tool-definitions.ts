@@ -46,9 +46,13 @@ function askRoundDescription(): string {
     'your own settings or hooks, start_session in another project), tag it ' +
     "in that question's 'approves' with the exact action in plain words: on " +
     'submit with that choice picked, the app posts "Approved in form: ' +
-    "<action>\" in the session's chat as the user's own message before it " +
-    'returns the answers, so ask for no separate chat yes. A headless round, ' +
-    'and a session the app did not start, posts nothing: ask in chat there. ' +
+    "<action>\" into the session's running turn as the user's own message " +
+    'before it returns the answers, and the answer carries ' +
+    "'approval_posted'. When it is true, ask for no separate chat yes. When " +
+    'it is false (a headless round, a session the app did not start, a ' +
+    'compaction, or a message the turn could not take in), nothing was ' +
+    'posted: ask for the yes in a one-line chat message before the gated ' +
+    'call. ' +
     "Pass 'notices' for anything already fixed, " +
     'dispatched, decided by you alone, or otherwise settled before this round ' +
     "opened: each one draws as one line on the round's notices page, after " +

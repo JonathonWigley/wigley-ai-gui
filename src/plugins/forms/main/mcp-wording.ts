@@ -14,10 +14,6 @@ import { capitalised } from '../../../shared/capitalised';
 export const ROUND_OPEN_TOOL = 'ask_round';
 export const ROUND_COLLECT_TOOL = 'collect_last_round';
 
-// What each line of the message a submit posts for an approved action opens
-// with, the action following.
-export const APPROVAL_LINE_PREFIX = 'Approved in form: ';
-
 const NEXT_ON_DRAFT =
   `The user has not submitted yet. Call ${ROUND_COLLECT_TOOL} to keep ` +
   'waiting. Do not re-ask these questions and do not open a second round.';

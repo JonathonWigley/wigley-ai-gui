@@ -9,7 +9,7 @@ export interface ChatFormWakeTarget {
   // Null for a session chat does not own.
   profileOf(sessionId: string): string | null;
   send(sessionId: string, message: UserMessage): Promise<void>;
-  sendIntoTurn(sessionId: string, message: UserMessage): Promise<void>;
+  sendIntoTurn(sessionId: string, message: UserMessage): Promise<boolean>;
 }
 
 // Sends each message as a user message to a session chat owns; any other
@@ -30,12 +30,13 @@ export function createChatFormWake(
     },
     sendBeforeAnswers: async (sessionId, text) => {
       if (chat.profileOf(sessionId) === null) {
-        return;
+        return false;
       }
       try {
-        await chat.sendIntoTurn(sessionId, { text, images: [] });
+        return await chat.sendIntoTurn(sessionId, { text, images: [] });
       } catch (error) {
         log(`form message not sent to ${sessionId}: ${errorText(error)}`);
+        return false;
       }
     },
   };
@@ -44,5 +45,5 @@ export function createChatFormWake(
 // A wake that tells no one, for the layout previews and tests.
 export const NO_FORM_WAKE: AgentFormWake = {
   formFinishedUnheard: () => {},
-  sendBeforeAnswers: () => Promise.resolve(),
+  sendBeforeAnswers: () => Promise.resolve(false),
 };
