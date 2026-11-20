@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { HarnessFolders, HarnessPlugin } from './harness-folders';
-import { locateScript, WIGLEY_PLUGIN_KEY } from './script-locator';
+import type {
+  HarnessFolders,
+  HarnessPlugin,
+} from '../../../shared/harness-folders';
+import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
+import { locateScript } from './script-locator';
 
 const HOME = '/Users/u';
 const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';

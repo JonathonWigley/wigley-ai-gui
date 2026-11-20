@@ -3,13 +3,10 @@ import type {
   AgentHarnessRegistry,
   HarnessConfigRoots,
   InstalledPlugin,
-} from '../../../contracts/agent';
-import type { PluginLog } from '../../../contracts/log';
-import { errorText } from '../../../shared/error-text';
-import {
-  listedHarnesses,
-  registeredProfiles,
-} from '../../../shared/harness-profiles';
+} from '../contracts/agent';
+import type { PluginLog } from '../contracts/log';
+import { errorText } from './error-text';
+import { listedHarnesses, registeredProfiles } from './harness-profiles';
 
 // One registered profile's folders, as its harness declares them; `~` is left
 // for the reader to expand.

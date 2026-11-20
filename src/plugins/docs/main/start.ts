@@ -49,7 +49,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { docsManifest } from '../manifest';
 import { registerDemoSteps } from './demo-steps';
 import { createDocFiles, type DocFiles } from './doc-files';
-import { createHarnessFolders } from './harness-folders';
+import { createHarnessFolders } from '../../../shared/harness-folders';
 import {
   createIndexSourceRegistry,
   createMachineSource,

@@ -33,6 +33,7 @@ const NOT_FOUND_MESSAGES: Record<ProgramName, string> = {
   python: 'Python was not found on PATH; set programs.python',
   claude:
     'claude was not found on PATH or in ~/.local/bin; set claude-code.command',
+  unity: 'unity was not found on PATH or in ~/.unity/bin',
 };
 
 // The value of `name` in `env`. Windows' names ignore case, which a copied

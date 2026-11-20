@@ -23,7 +23,7 @@ import {
   WIGLEY_AGENTS_FOLDER,
 } from '../kinds';
 import { changeRefusal, type GuardFolders } from '../path-guard';
-import type { HarnessFolders } from './harness-folders';
+import type { HarnessFolders } from '../../../shared/harness-folders';
 
 export interface DocFilesDeps {
   files: Files;

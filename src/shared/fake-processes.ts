@@ -83,7 +83,7 @@ type ScriptedResult = ProcessResult | Error | Promise<ProcessResult>;
 // resolves, or rejects with the error `failDetachedStarts` set. A spawn is
 // recorded as a `FakeSpawn` the test drives; nothing is scripted for it.
 // `resolveProgram` answers what `scriptProgram` set; unscripted, `python` is
-// `python3` and `claude` is `claude`, each with no args.
+// `python3`, `claude` is `claude` and `unity` is `unity`, each with no args.
 export class FakeProcesses implements ProcessRunner {
   // Every run, in call order.
   readonly runs: FakeRun[] = [];
@@ -96,6 +96,7 @@ export class FakeProcesses implements ProcessRunner {
   private readonly programs = new Map<ProgramName, ProgramCandidate | null>([
     ['python', { command: 'python3', args: [] }],
     ['claude', { command: 'claude', args: [] }],
+    ['unity', { command: 'unity', args: [] }],
   ]);
 
   // What each later `resolveProgram(name)` answers; null finds none.

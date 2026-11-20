@@ -10,7 +10,7 @@ import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import type { CreatePlace, IndexEntry } from '../contract';
 import { createDocFiles } from './doc-files';
-import type { HarnessFolders } from './harness-folders';
+import type { HarnessFolders } from '../../../shared/harness-folders';
 
 const HOME = '/Users/u';
 const ROOT = '/Users/u/dev/r';

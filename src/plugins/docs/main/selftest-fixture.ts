@@ -8,7 +8,7 @@ import type {
   IndexEntry,
   LoadStateRecord,
 } from '../contract';
-import { WIGLEY_PLUGIN_KEY } from './script-locator';
+import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';

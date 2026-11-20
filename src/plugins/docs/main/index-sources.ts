@@ -15,7 +15,7 @@ import {
   sessionSourceId,
 } from '../contract';
 import { parseIndexDocument } from '../index-document';
-import type { HarnessFolders } from './harness-folders';
+import type { HarnessFolders } from '../../../shared/harness-folders';
 import { locateScript } from './script-locator';
 
 // The machine index `docs_index.py build` writes, under the home folder.

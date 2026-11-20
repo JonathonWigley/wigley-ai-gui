@@ -1,18 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  AgentHarnessInfo,
-  InstalledPlugin,
-} from '../../../contracts/agent';
+import type { AgentHarnessInfo, InstalledPlugin } from '../contracts/agent';
 import {
   harnessInfo,
   harnessRegistryOf,
-} from '../../../shared/agent-harness-registry.test-support';
+} from './agent-harness-registry.test-support';
 import {
   createFakeAgentHarness,
   FAKE_HARNESS_ID,
   FAKE_MICROTASK_TIMERS,
-} from '../../../shared/fake-agent-harness';
-import { createMemoryFiles } from '../../../shared/memory-files';
+} from './fake-agent-harness';
+import { createMemoryFiles } from './memory-files';
 import { createHarnessFolders } from './harness-folders';
 
 const PROFILES = [

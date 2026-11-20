@@ -49,6 +49,10 @@ describe('platformFor', () => {
       { command: 'claude', args: [] },
       { command: '~/.local/bin/claude', args: [] },
     ],
+    unity: [
+      { command: 'unity', args: [] },
+      { command: '~/.unity/bin/unity', args: [] },
+    ],
   };
 
   // The order decides which Python runs.
@@ -65,6 +69,10 @@ describe('platformFor', () => {
         claude: [
           { command: 'claude.exe', args: [] },
           { command: '~/.local/bin/claude.exe', args: [] },
+        ],
+        unity: [
+          { command: 'unity', args: [] },
+          { command: '~/.unity/bin/unity', args: [] },
         ],
       },
     },

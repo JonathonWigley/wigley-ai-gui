@@ -27,6 +27,10 @@ const WINDOWS_PROGRAMS: PlatformPrograms = {
     { command: 'claude.exe', args: [] },
     { command: '~/.local/bin/claude.exe', args: [] },
   ],
+  unity: [
+    { command: 'unity', args: [] },
+    { command: '~/.unity/bin/unity', args: [] },
+  ],
 };
 
 const POSIX_PROGRAMS: PlatformPrograms = {
@@ -37,6 +41,10 @@ const POSIX_PROGRAMS: PlatformPrograms = {
   claude: [
     { command: 'claude', args: [] },
     { command: '~/.local/bin/claude', args: [] },
+  ],
+  unity: [
+    { command: 'unity', args: [] },
+    { command: '~/.unity/bin/unity', args: [] },
   ],
 };
 

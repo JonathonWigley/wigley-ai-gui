@@ -27,6 +27,7 @@ export interface ProgramCandidate {
 export interface PlatformPrograms {
   readonly python: readonly ProgramCandidate[];
   readonly claude: readonly ProgramCandidate[];
+  readonly unity: readonly ProgramCandidate[];
 }
 
 export type ProgramName = keyof PlatformPrograms;

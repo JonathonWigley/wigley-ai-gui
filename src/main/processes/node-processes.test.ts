@@ -426,7 +426,7 @@ describe('resolveProgram', () => {
       const runner = hostNodeProcesses({
         paths: posixPaths,
         homeDir: '/h',
-        programs: { python, claude: [] },
+        programs: { python, claude: [], unity: [] },
         programSetting: (name) => (name === 'python' ? setting : ''),
       });
 

@@ -1,8 +1,7 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
-import type { HarnessFolders } from './harness-folders';
-
-export const WIGLEY_PLUGIN_KEY = 'wigley@wigley-ai-marketplace';
+import type { HarnessFolders } from '../../../shared/harness-folders';
+import { locateWigleyFile } from '../../../shared/wigley-install';
 
 const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
 
@@ -19,15 +18,5 @@ export async function locateScript(
   if (scriptPath !== '') {
     return paths.expandTilde(scriptPath, homeDir);
   }
-  for (const { plugin } of await folders.installedPlugins()) {
-    if (plugin.key !== WIGLEY_PLUGIN_KEY) {
-      continue;
-    }
-    const candidate = paths.join(plugin.installDir, SCRIPT_IN_INSTALL);
-    const found = await files.stat(candidate);
-    if (found !== null && !found.isFolder) {
-      return candidate;
-    }
-  }
-  return null;
+  return locateWigleyFile(files, folders, paths, SCRIPT_IN_INSTALL);
 }
