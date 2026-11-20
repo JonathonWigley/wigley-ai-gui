@@ -254,9 +254,9 @@ leaves the flow in its last step.
   `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done, running? }`. Each call replaces the
-  whole list, so a missed call cannot leave the app out of step. The side pane marks an open item running when it says
-  `running: true`; with none marked, only the first open item not marked `running: false`, and every other open item
-  shows not started. Large calls it while it explores and plans; once a plan is read,
+  whole list, so a missed call cannot leave the app out of step. In the side pane's current group, an open item marked
+  `running: true` takes the stage's state (running, paused, or pending in a stage that runs no tasks); with none
+  marked, the first open item not marked `running: false` takes it. Every other open item shows pending. Large calls it while it explores and plans; once a plan is read,
   Large's checklist comes from `plan.md`.
 - Only the main agent's call counts. The engine contributes both tools as main-agent-only. Sessions asks its tool-call
   guards before it runs a contributed tool, and chat's guard names the agent behind the call's tool-use id from the

@@ -754,7 +754,25 @@ describe('workflow view over several workflows', () => {
       ],
       states: ['pending', 'running', 'pending'],
     },
-  ])('SidePane_RunningItem_OneAtATime ($name)', ({ items, states }) => {
+    {
+      name: 'with none marked, an item marked not running is skipped',
+      items: [
+        { text: 'a', done: false, running: false },
+        { text: 'b', done: false },
+        { text: 'c', done: false },
+      ],
+      states: ['pending', 'running', 'pending'],
+    },
+    {
+      name: 'every marked item runs',
+      items: [
+        { text: 'a', done: false, running: true },
+        { text: 'b', done: false },
+        { text: 'c', done: false, running: true },
+      ],
+      states: ['running', 'pending', 'running'],
+    },
+  ])('SidePane_RunningItems_FollowTheMarks ($name)', ({ items, states }) => {
     const { view, workflows, put } = setUp();
     const small = stubWorkflow(
       'small',

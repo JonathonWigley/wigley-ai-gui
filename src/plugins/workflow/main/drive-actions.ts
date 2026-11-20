@@ -34,7 +34,7 @@ export function addDriveActions(
   drive.add('reportChecklist', {
     description:
       'Reports a whole checklist for a session as set_workflow_checklist does. `accepted` is false for a session with no workflow.',
-    args: '{ "sessionId": string, "items": { "text": string, "done": boolean }[] }',
+    args: '{ "sessionId": string, "items": { "text": string, "done": boolean, "running"?: boolean }[] }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
       const sessionId = requiredString(args, 'sessionId');
