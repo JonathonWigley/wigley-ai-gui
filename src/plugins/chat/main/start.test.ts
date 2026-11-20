@@ -142,6 +142,7 @@ function heldFake() {
       commands: ignore,
       planUsage: ignore,
       agentEvent: ignore,
+      messageQueued: ignore,
       messageDropped: ignore,
       permission: (request) => requests.push(request),
       ended: ignore,

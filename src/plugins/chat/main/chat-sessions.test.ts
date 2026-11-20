@@ -8114,21 +8114,21 @@ describe('createChatSessions send gate and hold', () => {
         ['approved', false],
         ['a', false],
       ],
+      isQueued: true,
     },
     {
-      given: 'a compaction running, queued behind the row',
+      given: 'a compaction running: writes nothing and queues nothing',
       working: true,
       compacting: true,
       written: [],
+      isQueued: false,
     },
     {
-      given: 'an idle session, as send does',
+      given: 'an idle session: writes nothing and queues nothing',
       working: false,
       compacting: false,
-      written: [
-        ['a', false],
-        ['approved', false],
-      ],
+      written: [['a', false]],
+      isQueued: false,
     },
   ])('sendIntoTurn_WritesPlainly: $given', async (row) => {
     const test = await started();
@@ -8142,9 +8142,75 @@ describe('createChatSessions send gate and hold', () => {
       test.process.events.agentEvent(compactionStartedEvent('harness'));
     }
 
-    await test.chat.sendIntoTurn(ROW_ID, { text: 'approved', images: [] });
+    const queued = await test.chat.sendIntoTurn(ROW_ID, {
+      text: 'approved',
+      images: [],
+    });
+    await flush();
 
+    expect(queued).toBe(row.isQueued);
     expect(writtenWithNow(test)).toEqual(row.written);
+    expect(
+      test.chat.sessions()[0].queued.map((queuedRow) => queuedRow.text),
+    ).not.toContain('approved');
+  });
+
+  const APPROVED: UserMessage = { text: 'approved', images: [] };
+
+  it.each([
+    {
+      given: 'the agent queues it',
+      answer: (events: AgentProcessEvents) => events.messageQueued('user-1'),
+      isQueued: true,
+    },
+    {
+      given: 'the agent takes it in',
+      answer: (events: AgentProcessEvents) =>
+        events.entry(userEntry('user-1', 'approved', 'sent')),
+      isQueued: true,
+    },
+    {
+      given: 'the agent drops it, returning nothing to the box',
+      answer: (events: AgentProcessEvents) =>
+        events.messageDropped('user-1', APPROVED),
+      isQueued: false,
+    },
+    {
+      given: 'the process ends',
+      answer: (events: AgentProcessEvents) =>
+        events.ended({ code: 0, error: null }),
+      isQueued: false,
+    },
+  ])(
+    'sendIntoTurn_SettlesOnTheAgentsAnswer: $given',
+    async ({ answer, isQueued }) => {
+      const test = await startedSilent();
+      const [process] = test.processes;
+      process.events.activity('working');
+      const settled = test.chat.sendIntoTurn(ROW_ID, APPROVED);
+      await flush();
+      expect(test.chat.sessions()[0].queued).toMatchObject([
+        { text: 'approved', sentEntryId: 'user-1' },
+      ]);
+
+      answer(process.events);
+
+      expect(await settled).toBe(isQueued);
+      expect(test.chat.sessions()[0].returned).toEqual([]);
+    },
+  );
+
+  it('sendIntoTurn_WriteThrows_QueuesNothingAndResolvesFalse', async () => {
+    const test = await startedRefusing();
+    test.activity('working');
+
+    const queued = await test.chat.sendIntoTurn(ROW_ID, {
+      text: REFUSED_TEXT,
+      images: [],
+    });
+
+    expect(queued).toBe(false);
+    expect(test.chat.sessions()[0].queued).toEqual([]);
   });
 
   it('sendNow_PlainWriteNotTakenIn_WritesWithoutNow', async () => {

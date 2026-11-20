@@ -229,6 +229,9 @@ function reportEffect(events: AgentProcessEvents, effect: FoldEffect) {
     case 'planUsage':
       events.planUsage(effect.update);
       break;
+    case 'messageQueued':
+      events.messageQueued(effect.entryId);
+      break;
     case 'messageDropped':
       events.messageDropped(effect.entryId, effect.message);
       break;

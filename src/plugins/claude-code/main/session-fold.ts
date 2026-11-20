@@ -224,6 +224,7 @@ export type FoldEffect =
   | { kind: 'activity'; activity: ProcessActivity }
   | { kind: 'commands'; commands: AgentCommand[] }
   | { kind: 'planUsage'; update: PlanRowUpdate }
+  | { kind: 'messageQueued'; entryId: string }
   | { kind: 'messageDropped'; entryId: string; message: UserMessage }
   | { kind: 'requestContextUsage' }
   | { kind: 'requestAppliedSettings' }
@@ -924,8 +925,8 @@ function foldInLine(
   }
 }
 
-// Gives a held message's entry on its `started` line, and reports one that
-// ended without starting as dropped.
+// Reports a held message queued on its `queued` line, gives its entry on its
+// `started` line, and reports one that ended without starting as dropped.
 function releaseHeldMessage(
   state: SessionFoldState,
   lifecycle: NonNullable<DecodedLine['lifecycle']>,
@@ -936,7 +937,9 @@ function releaseHeldMessage(
   if (held === undefined) {
     return;
   }
-  if (lifecycle.state === 'started') {
+  if (lifecycle.state === 'queued') {
+    effects.push({ kind: 'messageQueued', entryId: held.draft.id });
+  } else if (lifecycle.state === 'started') {
     state.heldMessages.delete(lifecycle.uuid);
     const draft: HeldMessage['draft'] = { ...held.draft, delivery: 'sent' };
     pushUserMessage(state, { ...held, draft }, at, effects);

@@ -105,6 +105,7 @@ function recordingEvents() {
       timeline.push(['agentEvent', event]);
       firstEvents.push('agentEvent');
     },
+    messageQueued: (entryId) => hear('messageQueued', entryId),
     messageDropped: (entryId) => hear('messageDropped', entryId),
     permission: (permissionRequest) => hear('permission', permissionRequest),
     ended: (end) => hear('ended', end),

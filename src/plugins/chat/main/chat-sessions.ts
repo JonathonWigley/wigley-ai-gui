@@ -321,10 +321,12 @@ export interface ChatSessions {
   // no hold up, writes `message` to the agent at once and plainly, never asking
   // it to take the message in now, so the running turn takes it in after its
   // running tool returns: a `now` write would end that tool. Its row shows in
-  // `chat.queued`, marked with the entry id, until the agent takes it in; a
-  // write that throws leaves the row unsent and queued. Otherwise sends as
-  // `send` does, `send`'s refusal included.
-  sendIntoTurn(sessionId: string, message: UserMessage): Promise<void>;
+  // `chat.queued`, marked with the entry id, until the agent takes it in, and
+  // never returns to the box. Resolves true at the harness's `messageQueued`
+  // or the message's entry, false at its `messageDropped`, the process's end
+  // or the row's close. Otherwise, and when the write throws, it writes and
+  // queues nothing and resolves false; `send`'s refusal still rejects.
+  sendIntoTurn(sessionId: string, message: UserMessage): Promise<boolean>;
   // Adds an app notice to the session's entries, as harness entries travel.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message not sent now, then interrupts the process;
@@ -554,6 +556,12 @@ interface HeldSession {
   // Harness entry ids of the queued rows sent `now` in this process; a sent row
   // whose id is missing here was written plainly.
   sentNowIds: Set<string>;
+  // Harness entry id → the settle of each `sendIntoTurn` message written in
+  // this row, until the agent queues, takes in or drops it, or its process
+  // ends.
+  intoTurnWaiters: Map<string, (isQueued: boolean) => void>;
+  // Ids of the queued rows `sendIntoTurn` wrote; none returns to the box.
+  intoTurnRowIds: Set<string>;
   // Processes started in this row, the one running included.
   processStarts: number;
   // Control id → the value the user picked in this row that a report confirmed,
@@ -1313,10 +1321,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const queued = session.slots.queued();
     const held: WrittenMessage[] = [
       ...session.writtenMessages.values(),
-      ...queued.map((row) => ({
-        message: userMessageOf(row),
-        order: rowOrderOf(session, row),
-      })),
+      ...queued
+        .filter((row) => !isIntoTurnRow(session, row))
+        .map((row) => ({
+          message: userMessageOf(row),
+          order: rowOrderOf(session, row),
+        })),
     ];
     const messages = held
       .sort((a, b) => a.order - b.order)
@@ -1325,6 +1335,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (queued.length > 0) {
       for (const row of queued) {
         session.rowOrders.delete(row.id);
+        session.intoTurnRowIds.delete(row.id);
       }
       session.slots.setQueued([]);
       save();
@@ -1548,7 +1559,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // leaves the queue, and a written message is held no longer.
   function takeIn(session: HeldSession, entryId: string) {
     session.writtenMessages.delete(entryId);
+    settleIntoTurn(session, entryId, true);
     dropSentRow(session, entryId);
+  }
+
+  // Settles the `sendIntoTurn` call waiting on `entryId`, if any.
+  function settleIntoTurn(
+    session: HeldSession,
+    entryId: string,
+    isQueued: boolean,
+  ) {
+    const settle = session.intoTurnWaiters.get(entryId);
+    if (settle !== undefined) {
+      session.intoTurnWaiters.delete(entryId);
+      settle(isQueued);
+    }
+  }
+
+  // Settles every `sendIntoTurn` call still waiting as not queued.
+  function settleEveryIntoTurn(session: HeldSession) {
+    const settles = [...session.intoTurnWaiters.values()];
+    session.intoTurnWaiters.clear();
+    for (const settle of settles) {
+      settle(false);
+    }
+  }
+
+  function isIntoTurnRow(session: HeldSession, row: QueuedMessage): boolean {
+    return session.intoTurnRowIds.has(row.id);
   }
 
   // The row sent now under `entryId`, if any, leaves the queue for good.
@@ -1563,13 +1601,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The agent dropped `message`, written under `entryId`, without taking it in:
-  // its sent row leaves the queue, and it goes back to the page once per process.
-  // A message written before a relaunch has no row and no written record here.
+  // its sent row leaves the queue, and it goes back to the page once per process,
+  // unless `sendIntoTurn` wrote it. A message written before a relaunch has no
+  // row and no written record here.
   function returnDropped(
     session: HeldSession,
     entryId: string,
     message: UserMessage,
   ) {
+    const intoTurnRow = session.slots
+      .queued()
+      .find(
+        (row) => row.sentEntryId === entryId && isIntoTurnRow(session, row),
+      );
+    settleIntoTurn(session, entryId, false);
+    if (intoTurnRow !== undefined) {
+      session.intoTurnRowIds.delete(intoTurnRow.id);
+      dropSentRow(session, entryId);
+      log(`message ${entryId} sent into the turn dropped: never taken in`);
+      return;
+    }
     if (session.returnedDrops.has(entryId)) {
       log(`dropped message ${entryId} already returned`);
       return;
@@ -1588,6 +1639,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.slots.close();
     held.delete(session.sessionId);
     session.pending.clear();
+    settleEveryIntoTurn(session);
     rejectHostIdWaiters(
       session,
       `session ${session.sessionId} closed before its harness reported a session id`,
@@ -1797,6 +1849,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           compactionEnded(session, event.outcome, replay.isReplaying);
         }
       },
+      // The agent queued a written message: a `sendIntoTurn` call waiting on
+      // it settles.
+      messageQueued(entryId) {
+        if (isLive(session, processStart)) {
+          settleIntoTurn(session, entryId, true);
+        }
+      },
       // Returns a written message the agent let go without taking it in.
       messageDropped(entryId, message) {
         if (isLive(session, processStart)) {
@@ -1824,6 +1883,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         // The harness ended any running compaction before `sessionEnded`.
         session.slots.setInfo({ running: false, pid: null });
         session.process = null;
+        settleEveryIntoTurn(session);
         forgetCompaction(session);
         // The process sent each waiting card's cancelled entry before `ended`.
         session.pending.clear();
@@ -1994,6 +2054,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       writtenMessages: new Map(),
       titleCandidates: new Map(),
       sentNowIds: new Set(),
+      intoTurnWaiters: new Map(),
+      intoTurnRowIds: new Set(),
       processStarts: 0,
       confirmedPicks: new Map(Object.entries(opening.confirmedPicks)),
       pendingPicks: new Map(),
@@ -3379,30 +3441,58 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  async function sendIntoTurn(sessionId: string, message: UserMessage) {
-    await afterAttach(held.get(sessionId), () =>
+  async function sendIntoTurn(
+    sessionId: string,
+    message: UserMessage,
+  ): Promise<boolean> {
+    return afterAttach(held.get(sessionId), () =>
       sendIntoTurnSettled(sessionId, message),
     );
   }
 
-  async function sendIntoTurnSettled(sessionId: string, message: UserMessage) {
+  function sendIntoTurnSettled(
+    sessionId: string,
+    message: UserMessage,
+  ): Promise<boolean> {
     const session = held.get(sessionId);
     if (session === undefined) {
       log(`sendIntoTurn for unknown session ${sessionId} ignored`);
-      return;
+      return Promise.resolve(false);
     }
     refuseWhileWaiting(session);
-    const writesIntoTurn =
+    const isTurnTakingMessages =
       isTurnRunning(session) &&
       session.slots.info().compaction === null &&
       !isHoldUp(session);
-    if (!writesIntoTurn) {
-      await sendSettled(sessionId, message);
-      return;
+    if (!isTurnTakingMessages) {
+      log(
+        `message not sent into the turn of ${sessionId}: no turn takes it in`,
+      );
+      return Promise.resolve(false);
     }
     const row = appendQueued(session, message);
-    writeRowNow(session, row, false);
+    session.intoTurnRowIds.add(row.id);
+    const entryId = writeRowNow(session, row, false)
+      ? sentEntryIdOf(session, row.id)
+      : null;
+    if (entryId === null) {
+      session.intoTurnRowIds.delete(row.id);
+      session.rowOrders.delete(row.id);
+      session.slots.setQueued(
+        session.slots.queued().filter((queued) => queued.id !== row.id),
+      );
+      save();
+      return Promise.resolve(false);
+    }
     save();
+    return new Promise((resolve) => {
+      session.intoTurnWaiters.set(entryId, resolve);
+    });
+  }
+
+  function sentEntryIdOf(session: HeldSession, rowId: string): string | null {
+    const row = session.slots.queued().find((queued) => queued.id === rowId);
+    return row?.sentEntryId ?? null;
   }
 
   function queue(session: HeldSession, message: UserMessage) {

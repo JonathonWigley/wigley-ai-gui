@@ -435,6 +435,11 @@ export interface AgentProcessEvents {
   // Plan rows the session saw between polls.
   planUsage(update: PlanRowUpdate): void;
   agentEvent(event: AgentEvent): void;
+  // The agent queued `message`, which `send` returned `entryId` for, to take in
+  // at its running turn's next step (Claude: the message's `queued` lifecycle
+  // line). A harness that reports no such step never calls it; the message's
+  // entry or `messageDropped` still settles it.
+  messageQueued(entryId: string): void;
   // The agent let `message`, which `send` returned `entryId` for, go without
   // taking it in; no entry with that id follows. An attach's replay fires it for
   // every such message in the process's log, including one the caller heard

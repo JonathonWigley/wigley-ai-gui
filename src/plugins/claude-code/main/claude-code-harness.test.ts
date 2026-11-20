@@ -290,6 +290,7 @@ function recordingEvents() {
       timeline.push(['agentEvent', event]);
       sequence.push(['agentEvent', event]);
     },
+    messageQueued: (entryId) => hear('messageQueued', entryId),
     messageDropped: (entryId, message) =>
       hear('messageDropped', { entryId, message }),
     permission: (permissionRequest) => hear('permission', permissionRequest),
@@ -774,7 +775,11 @@ describe('createClaudeCodeHarness', () => {
       if (name === 'agentEvent' && event.type === 'skillStarted') {
         return [['skillStarted', event.skill, event.at]];
       }
-      if (name === 'messageDropped' || name === 'activity') {
+      if (
+        name === 'messageQueued' ||
+        name === 'messageDropped' ||
+        name === 'activity'
+      ) {
         return [[name, payload]];
       }
       return [];
@@ -801,6 +806,7 @@ describe('createClaudeCodeHarness', () => {
       after: [lifecycle('uuid-1', 'queued'), lifecycle('uuid-1', 'started')],
       atWrite: [],
       expected: [
+        ['messageQueued', 'user-1'],
         ['entry', 'user-1', 2000],
         ['userMessage', 2000],
       ],
@@ -828,6 +834,7 @@ describe('createClaudeCodeHarness', () => {
       ],
       atWrite: [],
       expected: [
+        ['messageQueued', 'user-1'],
         [
           'messageDropped',
           { entryId: 'user-1', message: { text: 'hi', images: [] } },
