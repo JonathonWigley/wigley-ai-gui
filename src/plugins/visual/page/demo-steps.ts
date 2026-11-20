@@ -9,7 +9,7 @@ export interface VisualDemoPageDeps {
 }
 
 // The visuals step: a session whose agent wrote visuals inline, then one
-// showing a render on disk by its absolute path.
+// showing a render on disk by its absolute path, then one playing a clip.
 export function registerDemoSteps(
   services: PageServices,
   deps: VisualDemoPageDeps,
@@ -23,7 +23,7 @@ export function registerDemoSteps(
       order: 110,
       title: 'Visuals',
       caption:
-        'HTML an agent writes draws as a live visual, with a full-size view, and an image on disk shows by its path.',
+        'HTML an agent writes draws as a live visual, with a full-size view, and an image or video on disk shows by its path.',
       files: [
         'src/plugins/visual/page/html-fence.ts',
         'src/plugins/visual/page/visual-overlay.ts',
@@ -34,6 +34,7 @@ export function registerDemoSteps(
         beats: [
           { name: 'visuals', show: () => activate(sessions.visual) },
           { name: 'image', show: () => activate(sessions.image) },
+          { name: 'video', show: () => activate(sessions.video) },
         ],
         dispose() {},
       }),

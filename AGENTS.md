@@ -125,8 +125,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   state/         `slot-store.ts`: the slot store main's holder, the page mirror and the plugin harness share
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
-  visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash, and a local image by
-                 its absolute path (`localImageUrl`, `localImagePathOf`)
+  visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash, and a local image or
+                 video by its absolute path (`localMediaOf`, `localMediaPathOf`)
   visual-messages.ts the messages between a visual's frame and the page: theme in, height and `Esc` out
   sample-visuals.ts the sample UI mockup and flowchart the fake harness's `fake: visual` reply and the chat layout
                  preview draw
@@ -256,7 +256,8 @@ src/main/        core main process; main.ts is its composition root
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, the `wigley-layout:`
                  scheme serving the layouts folder, the `wigley-plugin:` scheme serving each user plugin's revision copy, and the `wigley-visual:` scheme serving each visual the page hands
                  over (`visual-documents.ts`: kept in memory by source hash, with its bootstrap script and a no-network
-                 CSP header), and each local image file a visual or markdown names by absolute path; `window.ts` refuses
+                 CSP header), and each local image or video file a visual or markdown names by absolute path, a
+                 video's byte ranges through `byte-range.ts`; `window.ts` refuses
                  any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import

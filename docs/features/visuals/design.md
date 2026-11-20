@@ -57,11 +57,12 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   meant transcribing the file's base64 into the reply by hand: 16k characters for a few renders, which came out
   corrupt and drew black squares. So the visual scheme also serves a local image by its absolute path:
   `wigley-visual://visual/Users/me/a.png` (a drive path as `/C:/me/a.png`), read from disk on each request.
-  `localImagePathOf` in `src/shared/visual-url.ts` reads the path back and serves only image types (png, jpg, jpeg,
-  gif, webp, svg); a hash path stays a visual's document. Inside a visual, `<img src="/Users/me/a.png">` resolves
-  to that URL against the document's own, so the agent writes the bare path. In markdown, `![alt](/Users/me/a.png)`
-  draws an `img.md-picture` on the same URL (`localImageUrl`), handed to the markdown adapter by the composition
-  root, so chat, forms, the primer and the docs browser show images with no change of their own. In chat, forms
+  `localMediaPathOf` in `src/shared/visual-url.ts` reads the path back and serves only image types (png, jpg, jpeg,
+  gif, webp, svg) and video types (mp4, webm); a hash path stays a visual's document. Inside a visual,
+  `<img src="/Users/me/a.png">` or `<video src="/Users/me/a.mp4">` resolves to that URL against the document's own,
+  so the agent writes the bare path. In markdown, `![alt](/Users/me/a.png)` draws an `img.md-picture` on the same
+  URL (`localMediaOf`, which also says whether the file is an image or a video), handed to the markdown adapter by
+  the composition root, so chat, forms, the primer and the docs browser show images with no change of their own. In chat, forms
   and the primer, a relative image and a link to a local file stay their markdown source, since `block` has no
   folder to resolve a relative path against and a link's path is worth keeping. The answer carries no CORS header,
   so a frame's canvas taints on such an image and its scripts cannot read the pixels. A visual's scripts can still
@@ -69,6 +70,14 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   could not read itself, and an html fence in a doc the docs browser renders, the one source the agent did not
   write, could send that over WebRTC. That leak is accepted: it reveals only image files' existence and size, and
   closing it would mean each frame carrying where its source came from.
+- **Local videos play like a GIF.** Agents sent a flow as a row of stills in order, and the user wanted the motion
+  itself. `![alt](/Users/me/flow.mp4)` draws a `video.md-picture` that plays muted on a loop with its controls, at
+  an image's size cap; the alt text is its title and label. A video loads and seeks by byte range, so the local
+  route answers a `Range` request with 206 and those bytes (`byteRangeOf` in
+  `src/main/data-protocol/byte-range.ts`), 416 for a range past the end, and the whole file otherwise; the page's and
+  each frame's CSP allow `media-src wigley-visual:`. Only mp4 and webm are served, the types Chromium plays: a `.mov`
+  often holds a codec it cannot. Known limit: a chat entry that redraws while its reply streams starts its video
+  again.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
   inline script. A document served on its own scheme carries its own CSP header.
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload
