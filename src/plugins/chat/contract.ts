@@ -765,12 +765,14 @@ export interface ChatMainExports {
   // While the session's turn runs, writes `message` to the agent at once, so
   // the running turn takes it in after its running tool returns, before the
   // agent's next step; it shows in `chat.queued` until the agent takes it in.
-  // Resolves true once the agent has queued or taken in the message, false
-  // once it drops it or its process ends. With no turn running, while a
-  // compaction runs or a hold is up, or when the write fails (logged), it
-  // writes and queues nothing and resolves false: a message that cannot join
-  // the running turn is never sent later as a turn of its own. Rejects for a
-  // session chat does not hold.
+  // Resolves true once the agent confirms it queued or took in the message,
+  // false once it drops it, its process ends, or its harness reports no
+  // lifecycle to confirm it. With no turn running, while a compaction runs or a
+  // hold is up, or when the write fails (logged), it writes and queues nothing
+  // and resolves false: chat never writes the message late. A line the agent
+  // already holds may still fold into the turn after a caller's timeout, or run
+  // as a turn of its own after an interrupt. Rejects for a session chat does
+  // not hold.
   sendIntoTurn(sessionId: string, message: UserMessage): Promise<boolean>;
   // The `/clear` command's clear: resolves once the fresh process started and
   // reported its host session id; rejects when it cannot start, or for a

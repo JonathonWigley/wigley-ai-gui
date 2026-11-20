@@ -323,9 +323,12 @@ export interface ChatSessions {
   // running tool returns: a `now` write would end that tool. Its row shows in
   // `chat.queued`, marked with the entry id, until the agent takes it in, and
   // never returns to the box. Resolves true at the harness's `messageQueued`
-  // or the message's entry, false at its `messageDropped`, the process's end
-  // or the row's close. Otherwise, and when the write throws, it writes and
-  // queues nothing and resolves false; `send`'s refusal still rejects.
+  // or the message's entry with a delivery, false at an entry with none (no
+  // lifecycle confirms it), its `messageDropped`, the process's end or the
+  // row's close. Otherwise, and when the write throws, it writes and queues
+  // nothing and resolves false; `send`'s refusal still rejects. A line already
+  // written may still fold into the turn after the caller gave up on it, or run
+  // as a turn of its own after an interrupt.
   sendIntoTurn(sessionId: string, message: UserMessage): Promise<boolean>;
   // Adds an app notice to the session's entries, as harness entries travel.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
@@ -1556,11 +1559,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The agent took in the message written under `entryId`: a sent row for it
-  // leaves the queue, and a written message is held no longer.
-  function takeIn(session: HeldSession, entryId: string) {
-    session.writtenMessages.delete(entryId);
-    settleIntoTurn(session, entryId, true);
-    dropSentRow(session, entryId);
+  // leaves the queue, and a written message is held no longer. A `sendIntoTurn`
+  // call waiting on it settles true only for `entry` carrying a delivery: a
+  // harness reporting no lifecycle gives the entry at the write, which confirms
+  // nothing.
+  function takeIn(session: HeldSession, entry: ChatEntry) {
+    session.writtenMessages.delete(entry.id);
+    const isConfirmed = entry.kind === 'user' && entry.delivery !== null;
+    settleIntoTurn(session, entry.id, isConfirmed);
+    dropSentRow(session, entry.id);
   }
 
   // Settles the `sendIntoTurn` call waiting on `entryId`, if any.
@@ -1595,6 +1602,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const sent = queued.find((row) => row.sentEntryId === entryId);
     if (sent !== undefined) {
       session.rowOrders.delete(sent.id);
+      session.intoTurnRowIds.delete(sent.id);
       session.slots.setQueued(queued.filter((row) => row.id !== sent.id));
       save();
     }
@@ -1724,7 +1732,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
         const rowEntry = rowEntryOf(entry, processStart);
         session.slots.putEntry(rowEntry);
-        takeIn(session, entry.id);
+        takeIn(session, entry);
         if (entry.kind === 'user') {
           settleTitleCandidate(session, entry.id, entry.delivery);
         }

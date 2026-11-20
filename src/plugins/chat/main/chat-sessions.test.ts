@@ -8107,14 +8107,15 @@ describe('createChatSessions send gate and hold', () => {
   // goes out once the approval's turn ends.
   it.each([
     {
-      given: 'a running turn, ahead of the row queued in it',
+      given:
+        'a running turn, ahead of the row queued in it, unconfirmed by a fake with no lifecycle',
       working: true,
       compacting: false,
       written: [
         ['approved', false],
         ['a', false],
       ],
-      isQueued: true,
+      isQueued: false,
     },
     {
       given: 'a compaction running: writes nothing and queues nothing',
@@ -8168,6 +8169,12 @@ describe('createChatSessions send gate and hold', () => {
       answer: (events: AgentProcessEvents) =>
         events.entry(userEntry('user-1', 'approved', 'sent')),
       isQueued: true,
+    },
+    {
+      given: 'its entry comes with no delivery, as with no lifecycle',
+      answer: (events: AgentProcessEvents) =>
+        events.entry(userEntry('user-1', 'approved', null)),
+      isQueued: false,
     },
     {
       given: 'the agent drops it, returning nothing to the box',

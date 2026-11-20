@@ -348,11 +348,13 @@ interview on 2026-10-23; this file is the record of both.
     the turn folds it in after that tool's result (claude-stream.md § Queued messages). Its row shows in
     `chat.queued`, marked sent, until its entry arrives. The call resolves true once the harness reports the
     message queued (`AgentProcessEvents.messageQueued`: Claude's `queued` lifecycle line, claude-stream.md
-    § Message lifecycle) or its entry arrives, and false once the agent drops it, the process ends or the row closes;
-    such a message never returns to the box. Outside a running turn, during a compaction or a hold, and when the
-    write throws, it writes and queues nothing and resolves false (logged `message not sent into the turn of
-    <session>: no turn takes it in` for the first three): a message meant for the running turn never runs later as
-    a turn of its own.
+    § Message lifecycle) or its entry arrives with a delivery, and false once the agent drops it, the process ends,
+    the row closes, or an entry arrives with no delivery (a CLI with no lifecycle gives it at the write, which
+    confirms nothing); such a message never returns to the box. Outside a running turn, during a compaction or a
+    hold, and when the write throws, it writes and queues nothing and resolves false (logged `message not sent into
+    the turn of <session>: no turn takes it in` for the first three): chat never writes it late. A line the CLI
+    already holds can still fold into the turn after the caller's timeout, or run as a turn of its own after an
+    interrupt; cancelling it would take the interrupt's cancel-queued request, not used here.
   - **Returned messages**: every return (a pull-back, an interrupt, a clear, a process end, a drop) stays with the row
     until the page puts it in the box, since no page or tab may be there to take it, as during a re-attach's replay
     at startup. Main holds each message in the `chat.returned` slot, keyed by session (each with an id of its own),
