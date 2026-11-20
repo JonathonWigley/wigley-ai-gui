@@ -101,14 +101,16 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   Plan's action buttons stick to the section's bottom over a task list of at least two rows, or its own height when it
   holds less, so a short list leaves no blank. With a long plan and three
   buttons in the 264 px hub, all three show down to a window about 390 px high, about 490 px during a running turn. Below
-  that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
-  it has none. A section whose part draws nothing hides.
+  that the hub's scroll reaches them. A section whose part draws nothing hides.
   A part marked `shrinksLast` (Live) changes the order of giving up height: while it shows, the sections that share
   the column give up height first, each down to its head and a few lines (a shorter body leaves blank down to that
-  floor), and the `shrinksLast` section takes what is left, up to its content's height.
-  A part marked `keepsHeight` (the workflow's Checklist or Plan) goes ahead of that: while it shows, every other
-  section, Live included, gives up height first down to its head and that floor, and the `keepsHeight` section
-  scrolls in its own body only once they have, so the task list shows in full whenever the column can hold it.
+  floor), and the `shrinksLast` section takes what is left, up to its content's height, and gives up its own only
+  down to a larger floor (`chat.side-shrinks-last-floor`, 160 px of body).
+  A part marked `keepsHeight` (the workflow's Checklist or Plan) never gives up height: every other section, Live
+  included, gives up height first down to its floor, so the task list always shows in full.
+  The sections sit in one scroller: once each is down to its floor, the whole hub scrolls rather than squeezing any
+  section further. The hub's cursor scrolls the head it lands on into view, and its scroll keys scroll the whole hub
+  when the section's own body cannot move.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space b h` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the workflow's side pane.

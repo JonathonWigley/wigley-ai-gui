@@ -898,9 +898,9 @@ export interface ChatSideSection {
 // layout may frame one part its own way: the default draws `chat.session` as the
 // hub's header, with no head, which the hub's cursor then passes over. A part
 // marked `shrinksLast` keeps its height while the other sections give theirs up,
-// down to a few lines each. A part marked `keepsHeight` keeps its height ahead of
-// every other section, a `shrinksLast` one included, and scrolls in its body only
-// once each other section is down to a few lines.
+// down to a few lines each, and gives up its own only down to a larger floor. A
+// part marked `keepsHeight` never gives up height. Once every section is down to
+// its floor, the whole hub scrolls.
 export interface ChatSidePart {
   id: string;
   title: string;

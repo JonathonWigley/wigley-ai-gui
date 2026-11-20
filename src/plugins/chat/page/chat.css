@@ -24,11 +24,15 @@
    collapsed, the other sections give up height first, each down to its head and
    the floor (`--wg-chat-side-section-floor`) of body, a shorter body leaving
    blank to it; the `shrinksLast` section takes what is left, up to its content's
-   height, and past that shrinks down to its head.
+   height, and past that shrinks down to its own floor
+   (`--wg-chat-side-shrinks-last-floor`) of body.
    While a `keepsHeight` section (`data-keeps-height`) draws a body and is not
-   collapsed, every other section, a `shrinksLast` one included, gives up height
-   first the same way, and the `keepsHeight` section scrolls in its body only once
-   they are down to that floor.
+   collapsed, every other section gives up height first the same way, a
+   `shrinksLast` one down to its own floor, and the `keepsHeight` section never
+   gives up any.
+   The sections sit in `.chat-side-scroll`, which scrolls the whole hub once
+   every section is down to its floor, so no section is squeezed further; the
+   width handle stays outside it, at the hub's full height.
    A section whose part draws nothing takes no space, and the hub with none left
    takes none either. Its width is the user's (`--chat-side-width`), and always
    leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
@@ -71,6 +75,15 @@
   display: none;
 }
 
+.chat-side-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .chat-side-part {
   box-sizing: content-box;
   display: flex;
@@ -81,14 +94,28 @@
 }
 
 .chat-side-part[data-part='chat.session'],
-.chat-side-part[data-part='chat.mainAgent'] {
+.chat-side-part[data-part='chat.mainAgent'],
+.chat-side-part[data-keeps-height] {
   flex: none;
+}
+
+/* A `shrinksLast` section's floor, which the shared floor rule below reads too. */
+.chat-side-part[data-shrinks-last] {
+  --chat-side-floor: var(--wg-chat-side-shrinks-last-floor);
+}
+
+.chat-side-part[data-shrinks-last]:has(
+    .chat-side-section:not(.is-collapsed)
+      .chat-side-section-body
+      > :not([hidden])
+  ) {
+  min-height: calc(var(--chat-side-head-height) + var(--chat-side-floor));
 }
 
 /* `:has()` is invalid inside `:has()`, so the condition is one path. This
    selector outranks the `flex: none` rule above, so it leaves out Session and
    Main agent by name; a collapsed section keeps its head alone. */
-.chat-side-parts:has(
+.chat-side-scroll:has(
     > .chat-side-part[data-shrinks-last]
       .chat-side-section:not(.is-collapsed)
       .chat-side-section-body
@@ -101,7 +128,7 @@
     [data-part='chat.mainAgent'],
     :has(.chat-side-section.is-collapsed)
   ),
-.chat-side-parts:has(
+.chat-side-scroll:has(
     > .chat-side-part[data-keeps-height]
       .chat-side-section:not(.is-collapsed)
       .chat-side-section-body
@@ -115,7 +142,8 @@
   ) {
   flex-shrink: 1000;
   min-height: calc(
-    var(--chat-side-head-height) + var(--wg-chat-side-section-floor)
+    var(--chat-side-head-height) +
+      var(--chat-side-floor, var(--wg-chat-side-section-floor))
   );
 }
 

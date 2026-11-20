@@ -51,6 +51,8 @@ const HUB_WIDTH: SplitLimits = { initial: 264, min: 200, endMin: 320 };
 
 const WIDTH_HANDLE_CLASSES = 'ui-split-handle chat-side-handle';
 
+const SIDE_SCROLL_CLASS = 'chat-side-scroll';
+
 const SIDE_PARTS: ContributedPartsPlace = {
   noun: 'side part',
   holderClass: 'chat-side-parts',
@@ -79,9 +81,10 @@ export interface SideSectionsDeps {
 // that holds it. `move` steps
 // one head, stopping at either end, and `toEdge` goes to the first or last.
 // `toggle` folds or unfolds the cursor's section, as a click on its head does,
-// and `scrollBy` scrolls its body. Each returns the cursor section's title, or
-// null, changing nothing, when no head shows. The cursor's head carries
-// `is-cursor`, a redrawn head included.
+// and `scrollBy` scrolls its body, or the whole hub when the body cannot move
+// that way. Each returns the cursor section's title, or null, changing nothing,
+// when no head shows. The cursor's head carries `is-cursor`, a redrawn head
+// included, and is scrolled into the hub's view.
 export interface SectionCursor {
   isReachable(): boolean;
   enter(): string | null;
@@ -334,6 +337,9 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
       const holder = appended(root, element('div', SIDE_PARTS.holderClass));
       root.classList.toggle('is-side-hidden', isHubHidden());
       holder.style.setProperty('--chat-side-end-min', String(HUB_WIDTH.endMin));
+      // The sections scroll together in `scroll`; the handle stays outside it,
+      // so it spans the hub's height at any scroll.
+      const scroll = appended(holder, element('div', SIDE_SCROLL_CLASS));
       const widthDivider = createSplitDivider({
         ...HUB_WIDTH,
         uiState: sharedWidthState,
@@ -362,7 +368,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
       const buildPart = (part: ChatSidePart): SideBuild => {
         const disposes: (() => void)[] = [];
         const wrapper = placeContributedPart(
-          holder,
+          scroll,
           sessionId,
           framedPart(part, opened),
           SIDE_PARTS,
@@ -399,7 +405,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
             builds.set(part.id, buildPart(part));
           }
         }
-        moveNewWrappersIntoOrder(holder, parts, builds);
+        moveNewWrappersIntoOrder(scroll, parts, builds);
       };
       const disposeBuilds = () => {
         for (const build of builds.values()) {
@@ -409,7 +415,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
       };
       return {
         divider: widthDivider,
-        cursor: sectionCursor(opened, holder, {
+        cursor: sectionCursor(opened, holder, scroll, {
           parts: deps.parts,
           isHubHidden,
           toggleCollapsed,
@@ -475,6 +481,7 @@ function shownFrames(tab: OpenTab, parts: readonly ChatSidePart[]): Frame[] {
 function sectionCursor(
   tab: OpenTab,
   holder: HTMLElement,
+  hubScroll: HTMLElement,
   deps: {
     parts: Pick<PartStore<ChatSidePart>, 'parts'>;
     isHubHidden(): boolean;
@@ -489,6 +496,7 @@ function sectionCursor(
     }
     tab.cursor = frame.part.id;
     frame.head?.classList.add('is-cursor');
+    frame.head?.scrollIntoView({ block: 'nearest' });
     return frame.part.title;
   };
   // The shown frames and the cursor's index among them, -1 when its section
@@ -560,13 +568,14 @@ function sectionCursor(
       if (frame === null) {
         return null;
       }
+      // A body that cannot move that way (its section takes its whole height)
+      // hands the scroll to the hub.
       const { body } = frame;
-      const scroll = scrollContent(
-        body,
-        step,
-        direction,
-        textLineHeightPx(body),
-      );
+      const lineHeightPx = textLineHeightPx(body);
+      const inBody = scrollContent(body, step, direction, lineHeightPx);
+      const scroll = inBody.moved
+        ? inBody
+        : scrollContent(hubScroll, step, direction, lineHeightPx);
       return { title: frame.part.title, scroll };
     },
   };
@@ -583,9 +592,9 @@ function inOrder(parts: readonly ChatSidePart[]): ChatSidePart[] {
   return [...parts].sort((a, b) => a.order - b.order);
 }
 
-// The holder's built wrappers keep their order, so only a wrapper just appended
-// differs from its sorted place; a built one never moves, and its scroll stays.
-// The width handle ends up after every wrapper.
+// The hub scroll's built wrappers keep their order, so only a wrapper just
+// appended differs from its sorted place; a built one never moves, and its
+// scroll stays.
 function moveNewWrappersIntoOrder(
   holder: HTMLElement,
   parts: readonly ChatSidePart[],

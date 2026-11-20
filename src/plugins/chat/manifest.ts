@@ -331,5 +331,6 @@ export const chatManifest = definePlugin({
   },
   themeTokens: {
     'side-section-floor': { kind: 'length', default: '64px' },
+    'side-shrinks-last-floor': { kind: 'length', default: '160px' },
   },
 });

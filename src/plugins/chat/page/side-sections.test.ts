@@ -200,8 +200,8 @@ describe('createSideSections', () => {
       parts.add(ten.part);
       parts.add(thirty.part);
       const { root, side } = openTab();
-      const holder = root.children[0];
-      const insertBefore = vi.spyOn(holder, 'insertBefore');
+      const scroll = findAll(root, 'chat-side-scroll')[0];
+      const insertBefore = vi.spyOn(scroll, 'insertBefore');
 
       parts.add(recordingPart('added', order).part);
       side.sync();
@@ -374,7 +374,7 @@ describe('createSideSections', () => {
     },
   );
 
-  it('a part added to a tab sits before the hub handle', () => {
+  it('a part added to a tab goes into the hub scroller, and the handle stays outside it', () => {
     const { parts, openTab } = setUp();
     parts.add(recordingPart('first').part);
     const { root, side } = openTab();
@@ -383,8 +383,15 @@ describe('createSideSections', () => {
     side.sync();
 
     const classes = holderOf(root).children.map((child) => child.className);
-    expect(classes.at(-1)).toContain('chat-side-handle');
-    expect(sectionOrder(root)).toEqual(['first', 'second']);
+    expect(classes).toEqual([
+      'chat-side-scroll',
+      expect.stringContaining('chat-side-handle'),
+    ]);
+    const scroll = findAll(root, 'chat-side-scroll')[0];
+    expect(scroll.children.map((child) => child.dataset.part)).toEqual([
+      'first',
+      'second',
+    ]);
   });
 
   it.each([
@@ -945,6 +952,42 @@ describe('the section cursor', () => {
       scroll: { moved: true, atEnd: false },
     });
     expect(body.scrollTop).toBe(18);
+  });
+
+  it('sectionCursor_ScrollByOnABodyThatCannotMove_ScrollsTheHub', () => {
+    vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '18px' }));
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('a', 10).part);
+    const { root, side } = openTab();
+    showHeads(root, ['a']);
+    const body = findAll(root, 'chat-side-section-body')[0];
+    Object.defineProperty(body, 'scrollTop', { get: () => 0, set: () => {} });
+    const scroll = findAll(root, 'chat-side-scroll')[0];
+    Object.assign(scroll, { scrollHeight: 500, clientHeight: 100 });
+    side.cursor.enter();
+
+    const scrolled = side.cursor.scrollBy('line', 1);
+
+    expect(scrolled).toEqual({
+      title: 'Title a',
+      scroll: { moved: true, atEnd: false },
+    });
+    expect(scroll.scrollTop).toBe(18);
+  });
+
+  it('sectionCursor_Move_ScrollsTheLandedHeadIntoView', () => {
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('a', 10).part);
+    parts.add(recordingPart('b', 20).part);
+    const { root, side } = openTab();
+    showHeads(root, ['a', 'b']);
+    const head = findAll(root, 'chat-side-section-head')[1];
+    const scrolled = vi.spyOn(head, 'scrollIntoView');
+    side.cursor.enter();
+
+    side.cursor.move(1);
+
+    expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
   });
 
   it('hubDivider_NudgeLeftThenRight_Widens24pxAndReturnsTo264', () => {
