@@ -13,10 +13,13 @@ const ENTRY = 'Wigley.WigleyCapture.Run';
 const PROBE_ARGS = JSON.stringify([JSON.stringify({ action: 'probe' })]);
 const PIPELINE_PACKAGE = 'com.unity.pipeline';
 const SCRIPT_TIMEOUT_S = 8;
-// The run's own timeout past the script's, as capture.py gives its client.
-const RUN_SLACK_S = 5;
-// An old pin's run_script takes its own timeout in ms and the CLI's in s.
+// An old pin's run_script takes its own timeout in ms and the CLI's in s, the
+// CLI's this far past the script's, as capture.py passes it.
 const LEGACY_CLI_SLACK_S = 15;
+// How long past the CLI's `--timeout` the app lets a run go before killing it,
+// as capture.py's `client_timeout_s` gives its client: 23 s on a grouped pin,
+// 38 s on an old one.
+const CLIENT_SLACK_S = 15;
 // How deep a reply may nest its script's reply under `result` keys.
 const MAX_REPLY_DEPTH = 6;
 
@@ -27,7 +30,7 @@ type ProbeResult = { rect: GameRectTuple } | { error: string };
 
 export interface GameViewProbeDeps {
   processes: Pick<ProcessRunner, 'run' | 'resolveProgram'>;
-  files: Pick<Files, 'read'>;
+  files: Pick<Files, 'read' | 'realPath'>;
   paths: Pick<Paths, 'join'>;
   // The WigleyCapture.cs to run, or null when no wigley install holds it.
   locateScript(): Promise<string | null>;
@@ -60,10 +63,14 @@ export async function probeGameRect(
     if (unity === null) {
       return { error: programNotFoundMessage('unity') };
     }
-    const args = [
-      ...unity.args,
-      ...(await probeArgs(deps, projectPath, script)),
-    ];
+    // The CLI is handed the resolved folder, as capture.py hands it.
+    const call = await probeCall(
+      deps,
+      await deps.files.realPath(projectPath),
+      script,
+    );
+    const args = [...unity.args, ...call.args];
+    const timeoutMs = (call.cliTimeoutS + CLIENT_SLACK_S) * 1000;
     let lastError = '';
     for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
       if (attempt > 1) {
@@ -72,7 +79,7 @@ export async function probeGameRect(
       if (isCancelled()) {
         return { error: 'the playtest show was interrupted' };
       }
-      const reply = await probeOnce(deps, unity.command, args);
+      const reply = await probeOnce(deps, unity.command, args, timeoutMs);
       if ('error' in reply) {
         lastError = reply.error;
         continue;
@@ -93,12 +100,13 @@ export async function probeGameRect(
 }
 
 // The CLI args of one probe call of `script` in the editor of `projectPath`,
-// by the names its com.unity.pipeline pin takes.
-async function probeArgs(
+// by the names its com.unity.pipeline pin takes, and the `--timeout` they
+// pass the CLI.
+async function probeCall(
   deps: Pick<GameViewProbeDeps, 'files' | 'paths'>,
   projectPath: string,
   script: string,
-): Promise<string[]> {
+): Promise<{ args: string[]; cliTimeoutS: number }> {
   const manifest = await readIfPresent(
     deps.files,
     deps.paths.join(projectPath, 'Packages', 'manifest.json'),
@@ -106,26 +114,33 @@ async function probeArgs(
   const call = ['--file', script, '--entry', ENTRY, '--args', PROBE_ARGS];
   const tail = ['--json', '--project-path', projectPath];
   if (usesGroupedNames(manifest)) {
-    return [
-      'command',
-      'script',
-      'run',
-      ...call,
-      '--timeout',
-      String(SCRIPT_TIMEOUT_S),
-      ...tail,
-    ];
+    return {
+      args: [
+        'command',
+        'script',
+        'run',
+        ...call,
+        '--timeout',
+        String(SCRIPT_TIMEOUT_S),
+        ...tail,
+      ],
+      cliTimeoutS: SCRIPT_TIMEOUT_S,
+    };
   }
-  return [
-    'command',
-    'run_script',
-    ...call,
-    '--timeout_ms',
-    String(SCRIPT_TIMEOUT_S * 1000),
-    '--timeout',
-    String(SCRIPT_TIMEOUT_S + LEGACY_CLI_SLACK_S),
-    ...tail,
-  ];
+  const cliTimeoutS = SCRIPT_TIMEOUT_S + LEGACY_CLI_SLACK_S;
+  return {
+    args: [
+      'command',
+      'run_script',
+      ...call,
+      '--timeout_ms',
+      String(SCRIPT_TIMEOUT_S * 1000),
+      '--timeout',
+      String(cliTimeoutS),
+      ...tail,
+    ],
+    cliTimeoutS,
+  };
 }
 
 // Whether a project's `Packages/manifest.json` text pins com.unity.pipeline at
@@ -157,10 +172,9 @@ async function probeOnce(
   deps: Pick<GameViewProbeDeps, 'processes'>,
   command: string,
   args: string[],
+  timeoutMs: number,
 ): Promise<ProbeReply | { error: string }> {
-  const result = await deps.processes.run(command, args, {
-    timeoutMs: (SCRIPT_TIMEOUT_S + RUN_SLACK_S) * 1000,
-  });
+  const result = await deps.processes.run(command, args, { timeoutMs });
   if (result.timedOut) {
     return { error: 'unity script run timed out' };
   }
@@ -214,14 +228,54 @@ function scriptReplyOf(
   };
 }
 
-// The reason a failed reply gives: its error, else its first error's message.
+// The reason a failed reply gives, as capture.py's `script_result` and
+// `failure_text` and `mark_reply_failure` read it: its `error`, `errorDetails`,
+// `failureReason` and `message`, its `errors[].message`, and the error-severity
+// compile `diagnostics` it, its `data` or its `data.result` carries, as
+// `line:column message`, joined with '; '.
 function failureText(record: Record<string, unknown>): string {
-  if (typeof record.error === 'string') {
-    return record.error;
+  const parts: string[] = [];
+  for (const key of ['error', 'errorDetails', 'failureReason', 'message']) {
+    const text = record[key];
+    if (typeof text === 'string' && text !== '' && !parts.includes(text)) {
+      parts.push(text);
+    }
   }
   const errors = Array.isArray(record.errors) ? record.errors : [];
-  const message = recordOf(errors[0])?.message;
-  return typeof message === 'string' ? message : 'no error message';
+  for (const item of errors) {
+    const message = recordOf(item)?.message;
+    if (typeof message === 'string' && message !== '') {
+      parts.push(message);
+    }
+  }
+  const data = recordOf(record.data);
+  for (const holder of [record, data, recordOf(data?.result)]) {
+    parts.push(...diagnosticLines(holder));
+  }
+  return parts.length === 0 ? 'no error message' : parts.join('; ');
+}
+
+// A reply's error-severity compile diagnostics, as capture.py's
+// `_diagnostic_lines` prints them: `line:column message`.
+function diagnosticLines(holder: Record<string, unknown> | null): string[] {
+  const diagnostics = Array.isArray(holder?.diagnostics)
+    ? holder.diagnostics
+    : [];
+  const lines: string[] = [];
+  for (const item of diagnostics) {
+    const diagnostic = recordOf(item);
+    if (diagnostic === null || (diagnostic.severity ?? 'error') !== 'error') {
+      continue;
+    }
+    const where = ['line', 'column']
+      .filter((key) => key in diagnostic)
+      .map((key) => String(diagnostic[key]))
+      .join(':');
+    const message =
+      typeof diagnostic.message === 'string' ? diagnostic.message : '';
+    lines.push(`${where} ${message}`.trim());
+  }
+  return lines;
 }
 
 function recordOf(value: unknown): Record<string, unknown> | null {

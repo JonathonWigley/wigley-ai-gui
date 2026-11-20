@@ -160,6 +160,7 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
     start: (session: AgentSession) => ToolSession;
     options: ContributeToolsOptions | undefined;
   }[] = [];
+  const probe = probeServices(probeReply);
   const capture = {
     list: (): Promise<WindowList> => GRANTED.listWindows(),
     openAccessSettings: vi.fn((): Promise<void> => Promise.resolve()),
@@ -187,7 +188,7 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
           }) as unknown as SessionsMainExports,
       ),
     ],
-    services: { screenCapture, ...probeServices(probeReply) },
+    services: { screenCapture, ...probe.services },
   });
   await harness.files.write(
     EDITOR_FILE,
@@ -250,16 +251,20 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
     putEntry,
     runCall,
     liveViewLogs,
+    probeRuns: probe.runs,
   };
 }
 
 const WIGLEY_PROFILE = { name: 'work', configDir: '/home/.claude' };
+const PLAYING_GAME_VIEW = { ok: true, playing: true, window: FAKE_GAME_RECT };
 
 // A fake harness whose profile lists the wigley install, and processes whose
-// every run prints `probeReply` as `script run` does; none without a reply.
+// every run prints `probeReply` as `script run` does, its args recorded in
+// `runs`; none without a reply.
 function probeServices(probeReply: object | undefined) {
+  const runs: string[][] = [];
   if (probeReply === undefined) {
-    return {};
+    return { services: {}, runs };
   }
   const agentHarness = createFakeAgentHarness(
     { now: () => 0 },
@@ -275,14 +280,22 @@ function probeServices(probeReply: object | undefined) {
     },
   ]);
   const processes = new FakeProcesses();
-  processes.run = () =>
-    Promise.resolve({
+  processes.run = (_command, args) => {
+    runs.push(args);
+    return Promise.resolve({
       code: 0,
       stdout: JSON.stringify({ result: JSON.stringify(probeReply) }),
       stderr: '',
       timedOut: false,
     });
-  return { agentHarnesses: harnessRegistryOf([agentHarness]), processes };
+  };
+  return {
+    services: {
+      agentHarnesses: harnessRegistryOf([agentHarness]),
+      processes,
+    },
+    runs,
+  };
 }
 
 type Parts = Awaited<ReturnType<typeof startPart>>;
@@ -557,6 +570,8 @@ describe('liveViewMainPart', () => {
     given: string;
     run: (parts: Parts) => unknown;
     list?: () => Promise<WindowList>;
+    // A probe reply on hand, so a guard that let the probe run would show.
+    probeReply?: object;
     pick?: LivePick;
     logs: string[];
   }>([
@@ -641,11 +656,18 @@ describe('liveViewMainPart', () => {
     },
     {
       given: 'no editor in the folder',
-      run: (parts) =>
+      run: async (parts) => {
+        // The folder exists, so only the editor check keeps the probe off.
+        await parts.harness.files.write(
+          '/home/Other/ProjectSettings/ProjectVersion.txt',
+          '',
+        );
         parts.runCall(
           1,
           'unity command editor_play --project-path /home/Other',
-        ),
+        );
+      },
+      probeReply: PLAYING_GAME_VIEW,
       logs: [
         'row-1 opened no Live view for a playtest: No Unity editor has Other open: /home/Other/Library/EditorInstance.json is missing or has no process_id.',
       ],
@@ -654,6 +676,7 @@ describe('liveViewMainPart', () => {
       given: 'a relative path',
       run: (parts) =>
         parts.runCall(1, 'unity command editor_play --project-path Game'),
+      probeReply: PLAYING_GAME_VIEW,
       logs: [
         'row-1 opened no Live view for a playtest: projectPath must be the absolute path of a Unity project folder.',
       ],
@@ -674,8 +697,8 @@ describe('liveViewMainPart', () => {
     },
   ])(
     'playtestCommand_WritesNoPick_given $given',
-    async ({ run, list, pick, logs }) => {
-      const parts = await startPart();
+    async ({ run, list, probeReply, pick, logs }) => {
+      const parts = await startPart({ probeReply });
       if (list !== undefined) {
         parts.capture.list = list;
       }
@@ -685,6 +708,7 @@ describe('liveViewMainPart', () => {
 
       expect(parts.pickOf(SESSION)).toEqual(pick);
       expect(parts.liveViewLogs()).toEqual(logs);
+      expect(parts.probeRuns).toEqual([]);
     },
   );
 

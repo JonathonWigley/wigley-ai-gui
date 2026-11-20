@@ -68,6 +68,8 @@ async function setUp({
   unity?: boolean;
 } = {}) {
   const files = createMemoryFiles();
+  // The project folder, which the probe resolves to its real path.
+  await files.write(`${PROJECT}/ProjectSettings/ProjectVersion.txt`, '');
   if (manifest !== null) {
     await files.write(`${PROJECT}/Packages/manifest.json`, manifest);
   }
@@ -77,8 +79,10 @@ async function setUp({
     unity ? { command: '/bin/unity', args: [] } : null,
   );
   const runs: string[][] = [];
-  processes.run = (_command, args) => {
+  const timeouts: (number | undefined)[] = [];
+  processes.run = (_command, args, options) => {
     runs.push(args);
+    timeouts.push(options?.timeoutMs);
     const result = results[Math.min(runs.length, results.length) - 1]!;
     return result instanceof Error
       ? Promise.reject(result)
@@ -95,40 +99,65 @@ async function setUp({
       return Promise.resolve();
     },
   };
-  return { deps, runs, waits };
+  return { deps, runs, timeouts, waits };
 }
 
 describe('probeGameRect', () => {
-  it.each<{ given: string; manifest: string | null; args: string[] }>([
-    { given: 'no manifest', manifest: null, args: GROUPED_ARGS },
+  // The kill timeouts are capture.py's `client_timeout_s`: the CLI's
+  // `--timeout` plus 15 s.
+  it.each<{
+    given: string;
+    manifest: string | null;
+    projectPath?: string;
+    args: string[];
+    timeoutMs: number;
+  }>([
+    {
+      given: 'no manifest',
+      manifest: null,
+      args: GROUPED_ARGS,
+      timeoutMs: 23_000,
+    },
     {
       given: 'a 0.9 pin',
       manifest: '{"dependencies":{"com.unity.pipeline":"0.9.1"}}',
       args: GROUPED_ARGS,
+      timeoutMs: 23_000,
     },
     {
       given: 'a 1.2 pin',
       manifest: '{"dependencies":{"com.unity.pipeline":"1.2.0"}}',
       args: GROUPED_ARGS,
+      timeoutMs: 23_000,
     },
     {
       given: 'a 0.8 pin',
       manifest: '{"dependencies":{"com.unity.pipeline":"0.8.0-exp.1"}}',
       args: LEGACY_ARGS,
+      timeoutMs: 38_000,
     },
     {
       given: 'a manifest that does not parse',
       manifest: 'not json',
       args: GROUPED_ARGS,
+      timeoutMs: 23_000,
+    },
+    {
+      given: 'a project path with a trailing slash',
+      manifest: '{"dependencies":{"com.unity.pipeline":"0.8.0"}}',
+      projectPath: `${PROJECT}/`,
+      args: LEGACY_ARGS,
+      timeoutMs: 38_000,
     },
   ])(
     'calls the probe by the names the pipeline pin takes, given $given',
-    async ({ manifest, args }) => {
-      const { deps, runs } = await setUp({ manifest });
+    async ({ manifest, projectPath = PROJECT, args, timeoutMs }) => {
+      const { deps, runs, timeouts } = await setUp({ manifest });
 
-      await probeGameRect(deps, PROJECT, () => false);
+      await probeGameRect(deps, projectPath, () => false);
 
       expect(runs).toEqual([args]);
+      expect(timeouts).toEqual([timeoutMs]);
     },
   );
 
@@ -165,6 +194,40 @@ describe('probeGameRect', () => {
         JSON.stringify({ result: { success: false, error: 'CS0246' } }),
       ),
       expected: { error: 'the probe failed: CS0246' },
+    },
+    {
+      given: 'a compile failure with details and diagnostics',
+      result: ran(
+        JSON.stringify({
+          result: {
+            success: false,
+            error: 'Compilation failed',
+            errorDetails: 'WigleyCapture.cs',
+            diagnostics: [
+              { line: 12, column: 5, message: 'CS0246: Recorder' },
+              { line: 3, severity: 'warning', message: 'CS0168' },
+            ],
+          },
+        }),
+      ),
+      expected: {
+        error:
+          'the probe failed: Compilation failed; WigleyCapture.cs; 12:5 CS0246: Recorder',
+      },
+    },
+    {
+      given: "a failed envelope's failureReason and its reply's diagnostics",
+      result: ran(
+        JSON.stringify({
+          success: false,
+          failureReason: 'script failed',
+          errors: [{ message: 'compile error' }],
+          data: { result: { diagnostics: [{ line: 7, message: 'CS1002' }] } },
+        }),
+      ),
+      expected: {
+        error: 'the probe failed: script failed; compile error; 7 CS1002',
+      },
     },
     {
       given: 'a non-zero exit',

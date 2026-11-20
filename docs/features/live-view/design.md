@@ -63,7 +63,8 @@ drives, and knows nothing of a particular project.
   expand from plain assignments (`P=<dir>`, `export P=<dir>`) and `cd <dir>` (as `$PWD`) in earlier segments of the
   same command, since agents hold the folder in a variable; a variable the line never assigns, an assignment in the
   same segment, and a command substitution read as no path. A trigger command with no project folder, a relative path, a folder with no editor (no
-  `Library/EditorInstance.json` with a `process_id`), or no editor window writes no pick, only a log line.
+  `Library/EditorInstance.json` with a `process_id`), or no editor window writes no pick, only a log line; all but
+  the last are checked before the probe below, so they run no `unity` call.
 - **What streams:** the Game View, `Game View · <project folder>`, cut out as for an agent's `gameRect` (§ Finding
   the window). The app finds the rect itself, by running the `probe` action of the `wigley:unity-playtest` skill's
   `WigleyCapture.cs` in that editor (§ The Game View probe). When the probe finds no rect, or the rect lies in none
@@ -96,7 +97,9 @@ top-left global screen points.
 - **The call:** `unity command script run --file <script> --entry Wigley.WigleyCapture.Run --args '["{\"action\":\"probe\"}"]'
   --timeout 8 --json --project-path <dir>`; on a com.unity.pipeline pin below 0.9 (the project's
   `Packages/manifest.json`, read as `capture.py` reads it) `unity command run_script` with `--timeout_ms 8000
-  --timeout 23`. The run is killed after 13 seconds. The reply is the first value holding `ok`, under `result` keys
+  --timeout 23`. The run is killed 15 seconds past the CLI's `--timeout`, as
+  `capture.py`'s `client_timeout_s` does: 23 seconds grouped, 38 legacy. The CLI gets the folder's real path, as
+  `capture.py` passes it. The reply is the first value holding `ok`, under `result` keys
   and JSON strings, whatever the pin prints.
 - **Retries:** `probe` reads the Game View whether or not the editor plays, and Play Mode's own layout change (a
   maximized Game View) lands after the start command returns. So the app probes up to 3 times, a second apart:

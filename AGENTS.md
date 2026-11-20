@@ -231,8 +231,8 @@ src/main/        core main process; main.ts is its composition root
   processes/     runs a program to its end, killed past an optional timeout, and returns its exit code and output;
                  spawns one with its stdin, stdout and stderr as text, its exit and its kill; or starts one detached,
                  its output appended to a log file when one is given, so it outlives the app's quit, behind
-                 ProcessRunner; `resolveProgram` finds a program (`python`, `claude`, `unity`) from the core
-                 `programs.python` setting or the Platform record's per-OS candidates; on Windows a bare name is looked up over PATH × PATHEXT and a
+                 ProcessRunner; `resolveProgram` finds a program (`python`, `claude`, `unity`) from the Platform
+                 record's per-OS candidates, `python` from the core `programs.python` setting first; on Windows a bare name is looked up over PATH × PATHEXT and a
                  `.cmd` or `.bat` starts through `cmd.exe /d /s /c` (`src/shared/program-lookup.ts`);
                  `limitRuns` caps how many of a runner's runs go at once (git's runner: 4), not its spawns;
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot

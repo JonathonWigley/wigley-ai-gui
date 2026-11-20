@@ -171,24 +171,22 @@ function editorProcessId(text: string | null): number | null {
   return isProcessId ? (processId as number) : null;
 }
 
-// The pick for the editor that has `projectPath` open, or the error text a
-// `show_live_view` reply carries. Never rejects.
-async function lookUpPick(
-  {
-    files,
-    paths,
-    screenCapture,
-  }: Pick<LiveToolsDeps, 'files' | 'paths' | 'screenCapture'>,
+interface EditorFound {
+  processId: number;
+  folder: string;
+}
+
+// The editor that has `projectPath` open, by its `EditorInstance.json`, or the
+// error text a `show_live_view` reply carries. Never rejects.
+async function findEditor(
+  { files, paths }: Pick<LiveToolsDeps, 'files' | 'paths'>,
   projectPath: string,
-  gameRect: GameRectTuple | null,
-): Promise<{ pick: LivePick } | { error: string }> {
+): Promise<EditorFound | { error: string }> {
   const folder = paths.base(projectPath);
   if (!paths.isAbsolute(projectPath) || folder === '') {
     return { error: PROJECT_PATH_NOT_ABSOLUTE };
   }
   try {
-    // Read before the window list, so with no editor the no-editor error
-    // wins and no blocked pick is written.
     const editorFile = paths.join(
       projectPath,
       'Library',
@@ -200,22 +198,51 @@ async function lookUpPick(
         error: `No Unity editor has ${folder} open: ${editorFile} is missing or has no process_id.`,
       };
     }
+    return { processId, folder };
+  } catch (error) {
+    return { error: errorText(error) };
+  }
+}
+
+// The pick for `editor`'s window, cut to `gameRect` when given. Never rejects.
+async function pickEditorWindow(
+  { screenCapture }: Pick<LiveToolsDeps, 'screenCapture'>,
+  editor: EditorFound,
+  gameRect: GameRectTuple | null,
+): Promise<{ pick: LivePick } | { error: string }> {
+  try {
     return pickOf(
       await screenCapture.listWindows(),
-      processId,
+      editor.processId,
       gameRect === null ? null : rectOfTuple(gameRect),
-      folder,
+      editor.folder,
     );
   } catch (error) {
     return { error: errorText(error) };
   }
 }
 
-// The playtest's pick: the probed Game View's, else the whole editor's, with
-// why the Game View was not picked (null when it was).
-async function lookUpPlaytestPick(
+// The pick for the editor that has `projectPath` open, or the error text a
+// `show_live_view` reply carries. The editor file is read before the window
+// list, so with no editor the no-editor error wins and no blocked pick is
+// written. Never rejects.
+async function lookUpPick(
   deps: Pick<LiveToolsDeps, 'files' | 'paths' | 'screenCapture'>,
   projectPath: string,
+  gameRect: GameRectTuple | null,
+): Promise<{ pick: LivePick } | { error: string }> {
+  const editor = await findEditor(deps, projectPath);
+  if ('error' in editor) {
+    return editor;
+  }
+  return pickEditorWindow(deps, editor, gameRect);
+}
+
+// The playtest's pick of `editor`: the probed Game View's, else the whole
+// editor's, with why the Game View was not picked (null when it was).
+async function lookUpPlaytestPick(
+  deps: Pick<LiveToolsDeps, 'screenCapture'>,
+  editor: EditorFound,
   probed: { rect: GameRectTuple } | { error: string },
 ): Promise<{
   result: { pick: LivePick } | { error: string };
@@ -223,16 +250,16 @@ async function lookUpPlaytestPick(
 }> {
   if ('error' in probed) {
     return {
-      result: await lookUpPick(deps, projectPath, null),
+      result: await pickEditorWindow(deps, editor, null),
       noCropReason: probed.error,
     };
   }
-  const cropped = await lookUpPick(deps, projectPath, probed.rect);
+  const cropped = await pickEditorWindow(deps, editor, probed.rect);
   if ('pick' in cropped) {
     return { result: cropped, noCropReason: null };
   }
   return {
-    result: await lookUpPick(deps, projectPath, null),
+    result: await pickEditorWindow(deps, editor, null),
     noCropReason: cropped.error,
   };
 }
@@ -324,10 +351,20 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
       generationOf(sessionId) !== generationBefore ||
       appCounterOf(sessionId) !== appCounterBefore ||
       picks.get(sessionId) !== undefined;
+    // The editor checks run first, so a trigger that cannot pick runs no
+    // probe.
+    const editor = await findEditor(deps, projectPath);
+    if (isInterrupted()) {
+      return;
+    }
+    if ('error' in editor) {
+      log(`${sessionId} opened no Live view for a playtest: ${editor.error}`);
+      return;
+    }
     const probed = await deps.probeGameRect(projectPath, isInterrupted);
     const { result, noCropReason } = await lookUpPlaytestPick(
       deps,
-      projectPath,
+      editor,
       probed,
     );
     if (isInterrupted()) {
