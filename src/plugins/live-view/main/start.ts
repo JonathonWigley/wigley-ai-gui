@@ -48,9 +48,9 @@ type LiveViewApi = MainApi<
 // entries and agent events, cropping an opened pick to the Game View that
 // WigleyCapture.cs's probe, from the wigley plugin install, finds; deletes the
 // pick on `sessions.ended`; writes chat's layout preview row a sample pick,
-// the real pick and crop over the fake ScreenCapture's windows; registers the Live view demo step's main
-// half, which picks the Unity editor or the app's own window; and hands the
-// self-test its script.
+// the real pick and crop over the fake ScreenCapture's windows; registers the
+// Live view demo step's main half, which picks the Unity editor or the app's
+// own window; and hands the self-test its script.
 export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
