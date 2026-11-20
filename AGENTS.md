@@ -108,6 +108,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
                  `bash-command.ts`: `bashCommandOf`, a Bash call input's command, which chat and live-view read,
+                 `harness-folders.ts`: each registered profile's harness folders and plugin installs, and
+                 `wigley-install.ts`: `locateWigleyFile`, a file in the first wigley plugin install, both read by docs
+                 and live-view,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,
@@ -228,8 +231,8 @@ src/main/        core main process; main.ts is its composition root
   processes/     runs a program to its end, killed past an optional timeout, and returns its exit code and output;
                  spawns one with its stdin, stdout and stderr as text, its exit and its kill; or starts one detached,
                  its output appended to a log file when one is given, so it outlives the app's quit, behind
-                 ProcessRunner; `resolveProgram` finds a program from the core `programs.python` setting or the
-                 Platform record's per-OS candidates; on Windows a bare name is looked up over PATH × PATHEXT and a
+                 ProcessRunner; `resolveProgram` finds a program (`python`, `claude`, `unity`) from the core
+                 `programs.python` setting or the Platform record's per-OS candidates; on Windows a bare name is looked up over PATH × PATHEXT and a
                  `.cmd` or `.bat` starts through `cmd.exe /d /s /c` (`src/shared/program-lookup.ts`);
                  `limitRuns` caps how many of a runner's runs go at once (git's runner: 4), not its spawns;
                  `requiredStdout` runs a program and returns its stdout, rejecting naming the program when it cannot
@@ -326,8 +329,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  command's playtest signal, a pure function), main/ (the `show_live_view` and `hide_live_view` tools,
                  the window list through `services.screenCapture`, the playtest watch: opens a session's Live view when
                  a live `editor.playmode start` / `editor_play` / `capture.py start` Bash call succeeds, read through
-                 chat's entries, and closes the view it opened on `editor.playmode stop` / `editor_stop` for the same
-                 project; the preview sample, its self-test script),
+                 chat's entries, cropped to the Game View that `game-view-probe.ts` reads by running the wigley
+                 install's `WigleyCapture.cs` probe through the `unity` CLI, else the whole editor, and closes the view
+                 it opened on `editor.playmode stop` / `editor_stop` for the same project; the preview sample, its
+                 self-test script),
                  page/ (live-section.ts, the session hub's Live section through chat's `addSidePart` with `shrinksLast`,
                  streaming only while on screen; stream-source.ts, the capture or `sample:` stream; layout/, the layout
                  reader), layouts/ (its Layout contract and `default` layout); `docs/features/live-view/design.md`

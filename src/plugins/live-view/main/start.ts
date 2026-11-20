@@ -1,3 +1,4 @@
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ChannelShape,
   MainApi,
@@ -10,6 +11,8 @@ import {
   FAKE_EDITOR_PROCESS_ID,
   FAKE_GAME_RECT,
 } from '../../../shared/fake-screen-capture';
+import { createHarnessFolders } from '../../../shared/harness-folders';
+import { locateWigleyFile } from '../../../shared/wigley-install';
 import {
   CHAT_PREVIEW_HOST_ID,
   type ChatMainEvents,
@@ -25,6 +28,7 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
 import { pickOf, rectOfTuple } from '../window-pick';
 import { registerDemoSteps } from './demo-steps';
+import { CAPTURE_SCRIPT_IN_INSTALL, probeGameRect } from './game-view-probe';
 import { createLiveTools, LIVE_VIEW_OFFLINE } from './live-tools';
 import { createPlaytestWatch } from './playtest-watch';
 import { liveViewSelfTestScript } from './selftest-script';
@@ -41,7 +45,8 @@ type LiveViewApi = MainApi<
 // `hide_live_view` to every session, subagents included, which write the
 // session's pick to `live-view.picks`; runs the playtest watch, which opens and
 // closes a session's pick on its live playtest Bash calls, read from chat's
-// entries and agent events; deletes the pick on `sessions.ended`; writes
+// entries and agent events, cropping an opened pick to the Game View that
+// WigleyCapture.cs's probe, from the wigley plugin install, finds; deletes the pick on `sessions.ended`; writes
 // chat's layout preview row a sample pick, the real pick and crop over the
 // fake ScreenCapture's windows; registers the Live view demo step's main
 // half, which picks the Unity editor or the app's own window; and hands the
@@ -52,12 +57,36 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     api.layouts.register({ layoutTypes });
     const { services } = api;
     const picks = api.state.publish(livePicksSlot);
+    const harnessInfos = api.state.read(coreAgentHarnessesSlot);
+    const folders = createHarnessFolders({
+      harnesses: services.agentHarnesses,
+      infos: () => harnessInfos.all(),
+      log: services.log,
+    });
+    const probeDeps = {
+      processes: services.processes,
+      files: services.files,
+      paths: services.paths,
+      locateScript: () =>
+        locateWigleyFile(
+          services.files,
+          folders,
+          services.paths,
+          CAPTURE_SCRIPT_IN_INSTALL,
+        ),
+      wait: (ms: number) =>
+        new Promise<void>((resolve) => {
+          services.timers.set(resolve, ms);
+        }),
+    };
     const liveTools = createLiveTools({
       files: services.files,
       paths: services.paths,
       screenCapture: services.screenCapture,
       picks,
       log: services.log,
+      probeGameRect: (projectPath, isCancelled) =>
+        probeGameRect(probeDeps, projectPath, isCancelled),
     });
     const sessions = api.dependency(sessionsMainKey);
     sessions.contributeTools(

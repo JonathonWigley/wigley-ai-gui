@@ -1,9 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../contracts/agent';
+import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ScreenCapture,
   WindowList,
 } from '../../../contracts/screen-capture';
+import {
+  harnessInfo,
+  harnessRegistryOf,
+} from '../../../shared/agent-harness-registry.test-support';
+import {
+  createFakeAgentHarness,
+  FAKE_HARNESS_ID,
+  FAKE_MICROTASK_TIMERS,
+} from '../../../shared/fake-agent-harness';
+import { FakeProcesses } from '../../../shared/fake-processes';
+import { createMemoryFiles } from '../../../shared/memory-files';
+import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
 import {
   createFakeScreenCapture,
   FAKE_EDITOR_PROCESS_ID,
@@ -29,6 +42,7 @@ import {
   type ToolSession,
 } from '../../sessions/contract';
 import { type LivePick, livePicksSlot } from '../contract';
+import { PROBE_ATTEMPTS } from './game-view-probe';
 import { liveViewMainPart } from './start';
 
 const SESSION = 'row-1';
@@ -62,6 +76,12 @@ const SAMPLE_PICK: LivePick = {
   ...GAME_VIEW_PICK,
   summary: 'Game View · sample',
 };
+
+// The playtest's whole-editor line where no wigley install holds the probe.
+const NO_INSTALL_PLAYTEST_LINE =
+  'row-1 shows Editor · Game for a playtest (no Game View: no wigley install holds WigleyCapture.cs)';
+const WIGLEY_INSTALL = '/home/.claude/plugins/cache/wigley/1.0.0';
+const CAPTURE_SCRIPT = `${WIGLEY_INSTALL}/skills/unity-playtest/unity/WigleyCapture.cs`;
 
 // The `--project-path` of PROJECT, as a playtest command names it.
 const G = `--project-path ${PROJECT}`;
@@ -129,10 +149,12 @@ function toolStarted(
 }
 
 // `listWindows` answers through `capture.list`, which a test swaps; the editor
-// file of PROJECT names the fake editor's pid. `entries` is chat's entries
+// file of PROJECT names the fake editor's pid. With `probeReply`, a profile's
+// wigley install holds WigleyCapture.cs and every `unity` run prints that
+// script reply; without, no install holds it. `entries` is chat's entries
 // slot; `runCall` runs Bash call n as chat writes a live one: its entry, its
 // `toolStarted`, its completion.
-async function startPart() {
+async function startPart({ probeReply }: { probeReply?: object } = {}) {
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -165,12 +187,18 @@ async function startPart() {
           }) as unknown as SessionsMainExports,
       ),
     ],
-    services: { screenCapture },
+    services: { screenCapture, ...probeServices(probeReply) },
   });
   await harness.files.write(
     EDITOR_FILE,
     JSON.stringify({ process_id: FAKE_EDITOR_PROCESS_ID }),
   );
+  if (probeReply !== undefined) {
+    await harness.files.write(CAPTURE_SCRIPT, '// WigleyCapture');
+    harness.state
+      .publish(coreAgentHarnessesSlot)
+      .set(FAKE_HARNESS_ID, harnessInfo({ profiles: [WIGLEY_PROFILE] }));
+  }
   const toolSession = contributions[0]!.start({
     id: SESSION,
     info: {
@@ -223,6 +251,38 @@ async function startPart() {
     runCall,
     liveViewLogs,
   };
+}
+
+const WIGLEY_PROFILE = { name: 'work', configDir: '/home/.claude' };
+
+// A fake harness whose profile lists the wigley install, and processes whose
+// every run prints `probeReply` as `script run` does; none without a reply.
+function probeServices(probeReply: object | undefined) {
+  if (probeReply === undefined) {
+    return {};
+  }
+  const agentHarness = createFakeAgentHarness(
+    { now: () => 0 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+  agentHarness.setInstalledPlugins(WIGLEY_PROFILE.configDir, [
+    {
+      key: WIGLEY_PLUGIN_KEY,
+      installDir: WIGLEY_INSTALL,
+      version: '1.0.0',
+      listedAt: null,
+    },
+  ]);
+  const processes = new FakeProcesses();
+  processes.run = () =>
+    Promise.resolve({
+      code: 0,
+      stdout: JSON.stringify({ result: JSON.stringify(probeReply) }),
+      stderr: '',
+      timedOut: false,
+    });
+  return { agentHarnesses: harnessRegistryOf([agentHarness]), processes };
 }
 
 type Parts = Awaited<ReturnType<typeof startPart>>;
@@ -548,10 +608,7 @@ describe('liveViewMainPart', () => {
         await parts.call('hide_live_view', {});
         parts.emitStarted(1);
       },
-      logs: [
-        'row-1 shows Editor · Game for a playtest',
-        'row-1 hid its Live section',
-      ],
+      logs: [NO_INSTALL_PLAYTEST_LINE, 'row-1 hid its Live section'],
     },
     {
       given: 'a denied or failed call',
@@ -631,6 +688,46 @@ describe('liveViewMainPart', () => {
     },
   );
 
+  it.each<{ given: string; window: unknown; pick: LivePick; log: string }>([
+    {
+      given: 'a Game View inside the editor window',
+      window: FAKE_GAME_RECT,
+      pick: GAME_VIEW_PICK,
+      log: 'row-1 shows Game View · Game for a playtest',
+    },
+    {
+      given: 'a Game View outside every editor window',
+      window: [5000, 5000, 100, 100],
+      pick: EDITOR_PICK,
+      log: 'row-1 shows Editor · Game for a playtest (no Game View: The Game View rect [5000, 5000, 100, 100] is not inside any window of Game',
+    },
+    {
+      given: 'no Game View',
+      window: null,
+      pick: EDITOR_PICK,
+      log: 'row-1 shows Editor · Game for a playtest (no Game View: the editor has no Game View open)',
+    },
+  ])(
+    'playtestStart_CropsToTheProbedGameView_given $given',
+    async ({ window, pick, log }) => {
+      const parts = await startPart({
+        probeReply: { ok: true, playing: true, window },
+      });
+
+      parts.runCall(1, PLAY);
+      for (let attempt = 1; attempt < PROBE_ATTEMPTS; attempt += 1) {
+        await settle();
+        parts.harness.advance(1000);
+      }
+      await settle();
+
+      expect(parts.pickOf(SESSION)).toEqual(pick);
+      expect(
+        parts.liveViewLogs().map((line) => line.slice(0, log.length)),
+      ).toEqual([log]);
+    },
+  );
+
   it('playtestStart_LeavesTheAgentsPick', async () => {
     const parts = await startPart();
     await showByAgent(parts);
@@ -640,7 +737,7 @@ describe('liveViewMainPart', () => {
 
     expect(parts.pickOf(SESSION)).toEqual(GAME_VIEW_PICK);
     expect(
-      parts.liveViewLogs().filter((line) => line.endsWith('for a playtest')),
+      parts.liveViewLogs().filter((line) => line.includes('for a playtest')),
     ).toEqual([]);
   });
 
@@ -796,7 +893,7 @@ describe('liveViewMainPart', () => {
       given: 'a second live start',
       event: async (parts) => parts.runCall(2, PLAY),
       pick: EDITOR_PICK,
-      logs: ['row-1 shows Editor · Game for a playtest'],
+      logs: [NO_INSTALL_PLAYTEST_LINE],
     },
   ])(
     'playtestShow_InterruptedWhileTheWindowsList_given $given',

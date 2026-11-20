@@ -89,6 +89,12 @@ export interface LiveToolsDeps {
   screenCapture: ScreenCapture;
   picks: KeyedSlotWriter<LivePick>;
   log: PluginLog;
+  // The Game View rect of the editor that has `projectPath` open, or why there
+  // is none; it stops trying once `isCancelled` reads true. Never rejects.
+  probeGameRect(
+    projectPath: string,
+    isCancelled: () => boolean,
+  ): Promise<{ rect: GameRectTuple } | { error: string }>;
 }
 
 export interface LiveTools {
@@ -105,10 +111,11 @@ export interface LiveTools {
     args: ShowArgs,
     signal?: AbortSignal,
   ): Promise<ToolResult>;
-  // The app's show for a session's playtest: the whole editor of
-  // `projectPath`, only while the session has no pick, marked as opened for
-  // `projectPath`. A failed lookup logs a line and writes no pick. Writes
-  // nothing when a pick, a hide, a stop, the session's end or a later
+  // The app's show for a session's playtest, only while the session has no
+  // pick, marked as opened for `projectPath`: the Game View `probeGameRect`
+  // finds in the editor of `projectPath`, else that editor's whole window,
+  // whose log line names why. A failed lookup logs a line and writes no pick.
+  // Writes nothing when a pick, a hide, a stop, the session's end or a later
   // `playtestStarted` came while it waited. Never rejects.
   playtestStarted(sessionId: string, projectPath: string): Promise<void>;
   // Deletes the pick the app opened for `projectPath` (one trailing `/`
@@ -132,20 +139,19 @@ function parseShowArgs(args: unknown): { args: ShowArgs } | { error: string } {
   if (gameRect === undefined || gameRect === null) {
     return { args: { projectPath, gameRect: null } };
   }
-  const hasArea =
-    isFourFiniteNumbers(gameRect) && gameRect[2] > 0 && gameRect[3] > 0;
-  if (!hasArea) {
+  if (!isGameRectWithArea(gameRect)) {
     return { error: GAME_RECT_INVALID };
   }
   return { args: { projectPath, gameRect } };
 }
 
-function isFourFiniteNumbers(value: unknown): value is GameRectTuple {
-  return (
+// Whether `value` is four finite numbers whose width and height are positive.
+export function isGameRectWithArea(value: unknown): value is GameRectTuple {
+  const isFourFiniteNumbers =
     Array.isArray(value) &&
     value.length === 4 &&
-    value.every((item) => typeof item === 'number' && Number.isFinite(item))
-  );
+    value.every((item) => typeof item === 'number' && Number.isFinite(item));
+  return isFourFiniteNumbers && value[2] > 0 && value[3] > 0;
 }
 
 // The `process_id` of a Unity editor's `EditorInstance.json`, or null when the
@@ -168,7 +174,11 @@ function editorProcessId(text: string | null): number | null {
 // The pick for the editor that has `projectPath` open, or the error text a
 // `show_live_view` reply carries. Never rejects.
 async function lookUpPick(
-  { files, paths, screenCapture }: Omit<LiveToolsDeps, 'picks' | 'log'>,
+  {
+    files,
+    paths,
+    screenCapture,
+  }: Pick<LiveToolsDeps, 'files' | 'paths' | 'screenCapture'>,
   projectPath: string,
   gameRect: GameRectTuple | null,
 ): Promise<{ pick: LivePick } | { error: string }> {
@@ -199,6 +209,32 @@ async function lookUpPick(
   } catch (error) {
     return { error: errorText(error) };
   }
+}
+
+// The playtest's pick: the probed Game View's, else the whole editor's, with
+// why the Game View was not picked (null when it was).
+async function lookUpPlaytestPick(
+  deps: Pick<LiveToolsDeps, 'files' | 'paths' | 'screenCapture'>,
+  projectPath: string,
+  probed: { rect: GameRectTuple } | { error: string },
+): Promise<{
+  result: { pick: LivePick } | { error: string };
+  noCropReason: string | null;
+}> {
+  if ('error' in probed) {
+    return {
+      result: await lookUpPick(deps, projectPath, null),
+      noCropReason: probed.error,
+    };
+  }
+  const cropped = await lookUpPick(deps, projectPath, probed.rect);
+  if ('pick' in cropped) {
+    return { result: cropped, noCropReason: null };
+  }
+  return {
+    result: await lookUpPick(deps, projectPath, null),
+    noCropReason: cropped.error,
+  };
 }
 
 // What a pick's log line names.
@@ -284,12 +320,17 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
     bumpAppCounter(sessionId);
     const generationBefore = generationOf(sessionId);
     const appCounterBefore = appCounterOf(sessionId);
-    const result = await lookUpPick(deps, projectPath, null);
-    const isInterrupted =
+    const isInterrupted = () =>
       generationOf(sessionId) !== generationBefore ||
       appCounterOf(sessionId) !== appCounterBefore ||
       picks.get(sessionId) !== undefined;
-    if (isInterrupted) {
+    const probed = await deps.probeGameRect(projectPath, isInterrupted);
+    const { result, noCropReason } = await lookUpPlaytestPick(
+      deps,
+      projectPath,
+      probed,
+    );
+    if (isInterrupted()) {
       return;
     }
     if ('error' in result) {
@@ -298,7 +339,8 @@ export function createLiveTools(deps: LiveToolsDeps): LiveTools {
     }
     picks.set(sessionId, result.pick);
     appOpened.set(sessionId, projectPath);
-    log(`${sessionId} shows ${pickText(result.pick)} for a playtest`);
+    const why = noCropReason === null ? '' : ` (no Game View: ${noCropReason})`;
+    log(`${sessionId} shows ${pickText(result.pick)} for a playtest${why}`);
   };
 
   const playtestStopped = (

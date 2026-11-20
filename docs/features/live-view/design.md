@@ -5,6 +5,7 @@
 - **What it is** — the hub's Live section and who drives it.
 - **The agent's tools** — `show_live_view` and `hide_live_view`, their arguments and replies.
 - **The playtest watch** — the app opening and closing Live on a session's Unity playtest commands.
+- **The Game View probe** — how the app's opening finds the Game View: the script, the CLI, the call, retries.
 - **Finding the window** — the editor's process, the window that holds the Game View, the crop.
 - **The ScreenCapture service** — the core service, its per-OS adapters, and Screen Recording access.
 - **The section** — what it shows, its height, when it streams, its lines.
@@ -63,18 +64,47 @@ drives, and knows nothing of a particular project.
   same command, since agents hold the folder in a variable; a variable the line never assigns, an assignment in the
   same segment, and a command substitution read as no path. A trigger command with no project folder, a relative path, a folder with no editor (no
   `Library/EditorInstance.json` with a `process_id`), or no editor window writes no pick, only a log line.
-- **What streams:** the whole editor window, `Editor · <project folder>`, as `show_live_view` with no `gameRect`
-  does. The agent's later `show_live_view` with the Game View rect crops it, as the `wigley:unity-playtest` skill
-  already calls it. With Screen Recording off, the section shows that line and its button, as for the agent's call.
+- **What streams:** the Game View, `Game View · <project folder>`, cut out as for an agent's `gameRect` (§ Finding
+  the window). The app finds the rect itself, by running the `probe` action of the `wigley:unity-playtest` skill's
+  `WigleyCapture.cs` in that editor (§ The Game View probe). When the probe finds no rect, or the rect lies in none
+  of the editor's windows, the whole editor window streams, `Editor · <project folder>`, as `show_live_view` with no
+  `gameRect` does, and the log line names why. The agent's later `show_live_view` replaces either, as the skill
+  calls it after `capture.py start`. With Screen Recording off, the section shows that line and its button, as for
+  the agent's call.
 - **Close:** a Bash call running `unity command editor.playmode stop` or `editor_stop` that succeeds closes a view the
   app opened, when its project folder, read as for an opening, names the project the app opened the view for (one
   trailing `/` ignored); a stop with no folder closes nothing. The agent's `hide_live_view` and the session ending
   close any view.
 - **The agent's pick wins:** the app opens the view only when the session has no pick. The agent's `show_live_view`
   replaces an app-opened pick and makes the pick the agent's, so a later stop leaves it. An app opening
-  still waiting on the window list writes nothing when a pick, a hide, a stop, a later app opening, the
-  agent's `show_live_view` or the session's end came first.
+  still waiting on the probe or the window list writes nothing when a pick, a hide, a stop, a later app opening,
+  the agent's `show_live_view` or the session's end came first, and its probe makes no further call.
 - No setting turns it off.
+
+## The Game View probe
+
+The app's opening reads the editor's Game View rect with the same script the `wigley:unity-playtest` skill's
+`capture.py` runs, so both read one rect: `WigleyCapture.cs`'s `probe` reply's `window`, `[x, y, width, height]` in
+top-left global screen points.
+
+- **The script:** `skills/unity-playtest/unity/WigleyCapture.cs` in the first wigley plugin install among the
+  registered profiles' installs (`locateWigleyFile`, `src/shared/wigley-install.ts`, which also finds docs'
+  `docs_index.py`). The file runs as it is: its Recorder code compiles only under a define `capture.py` adds, and
+  the probe needs none.
+- **The CLI:** `services.processes.resolveProgram('unity')`, `unity` on the PATH main swaps in from the login
+  shell, else `~/.unity/bin/unity`, as `capture.py` looks it up.
+- **The call:** `unity command script run --file <script> --entry Wigley.WigleyCapture.Run --args '["{\"action\":\"probe\"}"]'
+  --timeout 8 --json --project-path <dir>`; on a com.unity.pipeline pin below 0.9 (the project's
+  `Packages/manifest.json`, read as `capture.py` reads it) `unity command run_script` with `--timeout_ms 8000
+  --timeout 23`. The run is killed after 13 seconds. The reply is the first value holding `ok`, under `result` keys
+  and JSON strings, whatever the pin prints.
+- **Retries:** `probe` reads the Game View whether or not the editor plays, and Play Mode's own layout change (a
+  maximized Game View) lands after the start command returns. So the app probes up to 3 times, a second apart:
+  a failed call, a reply with no window, or one from an editor not yet playing tries again, and the third takes
+  a window either way. A missing script or CLI runs no call. The opening runs beside the watch, which never waits
+  on it.
+- **No probe:** with no wigley install holding the script, as in the self-test, the opening streams the whole
+  editor.
 
 ## Finding the window
 
@@ -148,7 +178,8 @@ card the page draws on a canvas, at a portrait Game View's shape. A source id st
 stream in place of a desktop capture, so the preview and the self-test (which uses the fake ScreenCapture) show the
 section with no Unity editor and no Screen Recording grant. The self-test launches its session with the fake agent's
 playtest text, a Bash call running `unity command editor_play` on the self-test's project folder, checks that the
-watch opened the whole-editor pick `Editor · <project folder>`, then shows the Game View as the agent would.
+watch opened the whole-editor pick `Editor · <project folder>` (its fixture installs hold no `WigleyCapture.cs`, so
+no probe runs), then shows the Game View as the agent would.
 
 ## Rejected
 
