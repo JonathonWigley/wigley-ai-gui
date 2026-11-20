@@ -6,10 +6,10 @@
          fetches of its own files.
          wigley-plugin: carries a user plugin's page.js and the files it imports.
          frame-src carries wigley-visual: for the visual frames, and img-src
-         for the local images markdown draws on it. -->
+         and media-src for the local images and videos markdown draws on it. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' wigley-data: wigley-layout: wigley-plugin:; style-src 'self' 'unsafe-inline' wigley-data: wigley-layout: wigley-plugin:; font-src 'self' data: wigley-layout: wigley-plugin:; img-src 'self' data: wigley-layout: wigley-plugin: wigley-visual:; connect-src 'self' wigley-layout: wigley-plugin: ws://localhost:*; frame-src wigley-visual:"
+      content="default-src 'self'; script-src 'self' wigley-data: wigley-layout: wigley-plugin:; style-src 'self' 'unsafe-inline' wigley-data: wigley-layout: wigley-plugin:; font-src 'self' data: wigley-layout: wigley-plugin:; img-src 'self' data: wigley-layout: wigley-plugin: wigley-visual:; media-src wigley-visual:; connect-src 'self' wigley-layout: wigley-plugin: ws://localhost:*; frame-src wigley-visual:"
     />
     <title>Auri</title>
   </head>

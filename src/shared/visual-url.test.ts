@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  localImagePathOf,
-  localImageUrl,
+  localMediaPathOf,
+  localMediaOf,
   refusesFrameNavigation,
   visualHashOf,
   visualUrl,
@@ -9,35 +9,55 @@ import {
 
 const H = 'ab'.repeat(32);
 
-describe('localImageUrl', () => {
+describe('localMediaOf', () => {
   it.each([
     [
       'a POSIX path',
       '/Users/me/a.png',
       'wigley-visual://visual/Users/me/a.png',
+      'image',
     ],
-    ['a drive path', 'C:/me/a.webp', 'wigley-visual://visual/C:/me/a.webp'],
+    [
+      'a drive path',
+      'C:/me/a.webp',
+      'wigley-visual://visual/C:/me/a.webp',
+      'image',
+    ],
     [
       'a backslashed drive path',
       'C:\\me\\a.gif',
       'wigley-visual://visual/C:/me/a.gif',
+      'image',
     ],
-  ])('localImageUrl serves %s on the visual host', (_case, path, url) => {
-    expect(localImageUrl(path)).toBe(url);
+    [
+      'an mp4',
+      '/Users/me/flow.mp4',
+      'wigley-visual://visual/Users/me/flow.mp4',
+      'video',
+    ],
+    [
+      'an upper-case webm',
+      '/Users/me/flow.WEBM',
+      'wigley-visual://visual/Users/me/flow.WEBM',
+      'video',
+    ],
+  ])('localMediaOf serves %s on the visual host', (_case, path, url, kind) => {
+    expect(localMediaOf(path)).toEqual({ url, kind });
   });
 
   it.each([
     ['a relative path', 'me/a.png'],
-    ['no image type', '/Users/me/a.html'],
+    ['no media type', '/Users/me/a.html'],
+    ['a video type Chromium does not play', '/Users/me/a.mov'],
     ['no extension', '/Users/me/a'],
     ['a web URL', 'https://example.com/a.png'],
     ['an empty segment', '/Users//a.png'],
-  ])('localImageUrl refuses %s', (_case, path) => {
-    expect(localImageUrl(path)).toBe(null);
+  ])('localMediaOf refuses %s', (_case, path) => {
+    expect(localMediaOf(path)).toBe(null);
   });
 });
 
-describe('localImagePathOf', () => {
+describe('localMediaPathOf', () => {
   it.each([
     ['its own URL', 'wigley-visual://visual/Users/me/a.png', '/Users/me/a.png'],
     [
@@ -48,8 +68,9 @@ describe('localImagePathOf', () => {
     ['a fragment', 'wigley-visual://visual/a/b.svg#x', '/a/b.svg'],
     ['a folded climb', 'wigley-visual://visual/a/../b.jpeg', '/b.jpeg'],
     ['a drive', 'wigley-visual://visual/C:/me/a.png', 'C:/me/a.png'],
-  ])('localImagePathOf reads back the path of %s', (_case, url, path) => {
-    expect(localImagePathOf(url)).toBe(path);
+    ['a video', 'wigley-visual://visual/Users/me/a.mp4', '/Users/me/a.mp4'],
+  ])('localMediaPathOf reads back the path of %s', (_case, url, path) => {
+    expect(localMediaPathOf(url)).toBe(path);
   });
 
   it.each([
@@ -58,9 +79,9 @@ describe('localImagePathOf', () => {
     ['other scheme', 'wigley-layout://visual/Users/me/a.png'],
     ['an encoded slash', 'wigley-visual://visual/a%2Fb/c.png'],
     ['an encoded backslash', 'wigley-visual://visual/a%5Cb/c.png'],
-    ['no image type', 'wigley-visual://visual/etc/hosts'],
-  ])('localImagePathOf refuses %s', (_case, url) => {
-    expect(localImagePathOf(url)).toBe(null);
+    ['no media type', 'wigley-visual://visual/etc/hosts'],
+  ])('localMediaPathOf refuses %s', (_case, url) => {
+    expect(localMediaPathOf(url)).toBe(null);
   });
 });
 

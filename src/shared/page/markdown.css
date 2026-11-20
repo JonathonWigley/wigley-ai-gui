@@ -161,8 +161,8 @@
   color: var(--wg-fg-tertiary);
 }
 
-/* A local image, shown whole within the column and a phone-render height;
-   images on one line sit side by side. */
+/* A local image or video, shown whole within the column and a phone-render
+   height; images and videos on one line sit side by side. */
 .md-picture {
   display: inline-block;
   max-width: 100%;

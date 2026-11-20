@@ -1,14 +1,15 @@
 import { decodedSegment, parsedSchemeUrl } from './file-url';
 
 // The scheme that serves the page each visual's document, by its source's
-// hash, and each local image a visual or markdown names, by its absolute path.
+// hash, and each local image or video a visual or markdown names, by its
+// absolute path.
 export const VISUAL_SCHEME = 'wigley-visual';
 
 // A visual URL's path: `/` and a lowercase hex SHA-256.
 const HASH_PATH = /^\/([0-9a-f]{64})$/;
 
-// The file types the local image route serves, by lowercase extension.
-const LOCAL_IMAGE_EXTENSIONS: readonly string[] = [
+// The file types the local media route serves, by lowercase extension.
+const IMAGE_EXTENSIONS: readonly string[] = [
   'png',
   'jpg',
   'jpeg',
@@ -16,32 +17,48 @@ const LOCAL_IMAGE_EXTENSIONS: readonly string[] = [
   'webp',
   'svg',
 ];
+const VIDEO_EXTENSIONS: readonly string[] = ['mp4', 'webm'];
 
-// A Windows drive: a local image path's first segment, or the start of a path.
+// A Windows drive: a local media path's first segment, or the start of a path.
 const DRIVE_SEGMENT = /^[A-Za-z]:$/;
 const DRIVE_PATH = /^[A-Za-z]:[\\/]/;
 
-// The URL that serves the local image at `path` — an absolute path in URL
-// form, as a markdown image's destination holds it (`/Users/me/a.png`,
-// `C:/me/a.png`, its segments percent-encoded) — on the visual host, so a
-// visual's own `<img src="/Users/me/a.png">` resolves to the same URL. Null
-// when `path` is not absolute or `localImagePathOf` refuses the URL.
-export function localImageUrl(path: string): string | null {
+// A local file the visual host serves: its URL, and whether it draws as an
+// image or a video.
+export interface LocalMedia {
+  url: string;
+  kind: 'image' | 'video';
+}
+
+// The local media at `path` — an absolute path in URL form, as a markdown
+// image's destination holds it (`/Users/me/a.png`, `C:/me/a.mp4`, its
+// segments percent-encoded) — served on the visual host, so a visual's own
+// `<img src="/Users/me/a.png">` or `<video src="/Users/me/a.mp4">` resolves to
+// the same URL. Null when `path` is not absolute or `localMediaPathOf` refuses
+// the URL.
+export function localMediaOf(path: string): LocalMedia | null {
   const isDrive = DRIVE_PATH.test(path);
   if (!isDrive && !path.startsWith('/')) {
     return null;
   }
   const slashed = path.replaceAll('\\', '/');
   const url = `${VISUAL_SCHEME}://visual${isDrive ? '/' : ''}${slashed}`;
-  return localImagePathOf(url) === null ? null : url;
+  const file = localMediaPathOf(url);
+  if (file === null) {
+    return null;
+  }
+  return {
+    url,
+    kind: VIDEO_EXTENSIONS.includes(extensionOf(file)) ? 'video' : 'image',
+  };
 }
 
-// The absolute path a local image URL names, `/`-separated (`C:/me/a.png` for
+// The absolute path a local media URL names, `/`-separated (`C:/me/a.png` for
 // a drive), its search and fragment ignored; null for a visual's hash URL, a
 // URL off the visual host, an empty segment or one holding an encoded `/` or
-// `\`, and a file type outside `LOCAL_IMAGE_EXTENSIONS`. The URL parser folds
-// `.` and `..` segments before this reads them.
-export function localImagePathOf(url: string): string | null {
+// `\`, and a file type outside `IMAGE_EXTENSIONS` and `VIDEO_EXTENSIONS`. The
+// URL parser folds `.` and `..` segments before this reads them.
+export function localMediaPathOf(url: string): string | null {
   const parsed = parsedSchemeUrl(url, VISUAL_SCHEME);
   if (
     parsed === null ||
@@ -58,14 +75,21 @@ export function localImagePathOf(url: string): string | null {
     }
     segments.push(segment);
   }
-  const name = segments.at(-1) ?? '';
-  const dot = name.lastIndexOf('.');
-  const extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
-  if (!LOCAL_IMAGE_EXTENSIONS.includes(extension)) {
+  const extension = extensionOf(segments.at(-1) ?? '');
+  if (
+    !IMAGE_EXTENSIONS.includes(extension) &&
+    !VIDEO_EXTENSIONS.includes(extension)
+  ) {
     return null;
   }
   const joined = segments.join('/');
   return DRIVE_SEGMENT.test(segments[0]) ? joined : `/${joined}`;
+}
+
+// A file name's or path's extension, lowercased; '' with none.
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
 }
 
 // `wigley-visual://visual/<hash>`: the host is always `visual`, and the hash

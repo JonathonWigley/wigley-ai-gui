@@ -4,7 +4,10 @@ import type {
   BlockContribution,
   FenceContribution,
 } from '../../contracts/markdown';
-import { createMarkdownItRenderer } from './markdown-it-renderer';
+import {
+  createMarkdownItRenderer,
+  type LocalMediaOf,
+} from './markdown-it-renderer';
 
 // A live `html` contribution that is never mounted here.
 const htmlFence: FenceContribution = {
@@ -60,14 +63,20 @@ const brokenBlock: BlockContribution = {
   },
 };
 
-// Serves an absolute `.png` path as `local:<path>`, standing in for the visual
-// scheme's local image route.
-const localImageUrl = (destination: string): string | null =>
-  destination.startsWith('/') && destination.endsWith('.png')
-    ? `local:${destination}`
-    : null;
+// Serves an absolute `.png` path as an image and an `.mp4` path as a video,
+// each at `local:<path>`, standing in for the visual scheme's local media route.
+const localMediaOf: LocalMediaOf = (destination) => {
+  if (!destination.startsWith('/')) {
+    return null;
+  }
+  const url = `local:${destination}`;
+  if (destination.endsWith('.png')) {
+    return { url, kind: 'image' };
+  }
+  return destination.endsWith('.mp4') ? { url, kind: 'video' } : null;
+};
 
-const markdown = createMarkdownItRenderer(highlighter, localImageUrl);
+const markdown = createMarkdownItRenderer(highlighter, localMediaOf);
 for (const contribution of [
   noteBlock,
   linesBlock,
@@ -159,6 +168,12 @@ describe('escaping and disabled syntax', () => {
   ])('draws a local image by %s', (_case, text, src) => {
     expect(block(text)).toBe(
       `<p><img class="md-picture" src="${src}" alt="Sign in" title="Sign in"></p>\n`,
+    );
+  });
+
+  it('draws a local video as a muted looping clip with its controls', () => {
+    expect(block('![Save flow](/Users/me/flow.mp4)')).toBe(
+      '<p><video class="md-picture" src="local:/Users/me/flow.mp4" title="Save flow" aria-label="Save flow" autoplay muted loop playsinline controls preload="metadata"></video></p>\n',
     );
   });
 
@@ -345,7 +360,7 @@ describe('fences', () => {
 });
 
 describe('fence contributions', () => {
-  const withHtml = createMarkdownItRenderer(highlighter, localImageUrl);
+  const withHtml = createMarkdownItRenderer(highlighter, localMediaOf);
   withHtml.addFence(htmlFence);
   const placeholder = (closed: boolean, code: string, attrs = '') =>
     `<div class="md-fence" data-fence-language="html" data-fence-closed="${closed}"${attrs}>` +
@@ -408,7 +423,7 @@ describe('fence contributions', () => {
   });
 
   it('registers, refuses a second and unregisters a fence', () => {
-    const renderer = createMarkdownItRenderer(highlighter, localImageUrl);
+    const renderer = createMarkdownItRenderer(highlighter, localMediaOf);
     const first = renderer.addFence(htmlFence);
 
     expect(renderer.fence('html')).toBe(htmlFence);
@@ -536,7 +551,7 @@ describe('block contributions', () => {
   });
 
   it('addBlock_SecondOfAName_Throws_DisposeUnregisters', () => {
-    const renderer = createMarkdownItRenderer(highlighter, localImageUrl);
+    const renderer = createMarkdownItRenderer(highlighter, localMediaOf);
     const bold: BlockContribution = { name: 'x', render: () => '<b>x</b>\n' };
     const first = renderer.addBlock(bold);
 
@@ -642,7 +657,7 @@ describe('document()', () => {
             ? Promise.reject(new Error('import failed'))
             : highlighter.highlight(code, language),
       },
-      localImageUrl,
+      localMediaOf,
     );
     expect(
       await failing.document('```broken\nx < y\n```\n\n```ts\nconst\n```'),
@@ -659,7 +674,7 @@ describe('document()', () => {
   });
 
   it('highlights a live contributed fence inside its placeholder, and no diff', async () => {
-    const withTs = createMarkdownItRenderer(highlighter, localImageUrl);
+    const withTs = createMarkdownItRenderer(highlighter, localMediaOf);
     withTs.addFence({ ...htmlFence, language: 'ts' });
 
     const html = await withTs.document(

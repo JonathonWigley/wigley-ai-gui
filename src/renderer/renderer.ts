@@ -38,7 +38,7 @@ import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
-import { localImageUrl } from '../shared/visual-url';
+import { localMediaOf } from '../shared/visual-url';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { runBound } from '../shared/command-router';
 import { commandLabel, qualify } from '../shared/plugin-manifests';
@@ -259,7 +259,7 @@ async function start() {
   const { areas } = shell;
   const markdown = createMarkdownItRenderer(
     createCodeMirrorHighlighter(),
-    localImageUrl,
+    localMediaOf,
   );
   const chrome = mountShellChrome({
     areas,
