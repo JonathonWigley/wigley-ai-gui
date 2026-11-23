@@ -45,25 +45,26 @@ import { typedSkill } from './typed-skill';
 // carry fixed times one second apart. Every turn that ends with a result reports
 // a `usage` agent event and a plan row update after that result, except that no
 // `usage` goes out between a done compaction and the next main reply, and
-// `planUsage` answers every profile with `fakePlanUsage`. The process emits the agent events
-// Claude would for what it simulates, each at the clock's time: `sessionStarted`
-// first, `userMessage` after each user entry, then `skillStarted` for a typed
-// `/<skill>` message and `turnStarted` for every send that runs a turn, tool
-// and subagent events (`agentReplied` included) beside their entries,
-// `taskStarted` and `taskFinished`
-// for background tasks, `contextBreakdown` after `FAKE_CONTEXT_TEXT`'s turn's
-// `usage`, `compactionStarted` and one `compactionEnded` for each
-// compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
-// turn or a compaction closes or is interrupted, and
-// `sessionEnded` just before each `ended`. A started process reports its
-// session id (`FakeAgentProcessRecord.sessionId`) before every other event, and
-// `FAKE_AGENT_PID` through `pid` right after `sessionStarted`. A process `attach`
-// resolves reports the request's session id, then the test's replay, and opens
-// with none of `start`'s emissions, its pid included: the replay stands for
-// them. An `attach` with a null session id rejects. Once a process
-// has detached, it emits nothing. The workflow
-// sends (`FAKE_WORKFLOW_FEATURE_TEXT`, the sample plugin's
-// `/<plugin>:make <plan folder>`, `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
+// `planUsage` answers every profile with `fakePlanUsage`. The process emits
+// the agent events Claude would for what it simulates, each at the clock's
+// time: `sessionStarted` first, `userMessage` after each user entry, then
+// `skillStarted` for a typed `/<skill>` message and `turnStarted` for every
+// send that runs a turn, tool and subagent events (`agentReplied` included)
+// beside their entries, `taskStarted` and `taskFinished` for background tasks,
+// `contextBreakdown` after `FAKE_CONTEXT_TEXT`'s turn's `usage`,
+// `compactionStarted` and one `compactionEnded` for each compaction
+// (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a turn or a
+// compaction closes or is interrupted, and `sessionEnded` just before each
+// `ended`. A started process reports its session id
+// (`FakeAgentProcessRecord.sessionId`) before every other event, and
+// `FAKE_AGENT_PID` through `pid` right after `sessionStarted`. A process
+// `attach` resolves reports the request's session id, then the test's replay,
+// and opens with none of `start`'s emissions, its pid included: the replay
+// stands for them. An `attach` with a null session id rejects. Once a process
+// has detached, it emits nothing. The workflow sends
+// (`FAKE_WORKFLOW_FEATURE_TEXT`, the sample plugin's
+// `/<plugin>:make <plan folder>`, `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan
+// through the injected `files`.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';

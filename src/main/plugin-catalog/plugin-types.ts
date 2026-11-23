@@ -31,7 +31,8 @@ const EMITTED_FOLDER = '.plugin-types';
 // JS can type itself with `// @ts-check`: every `.d.ts` the build emitted, at
 // its path relative to `emittedFolder`, plus `plugin.d.ts`,
 // `manifest.schema.json` and `auri.schema.json` (an agent plugin's
-// `auri.json`, `src/contracts/contributions.ts`). From `plugins/<id>/main.js` or `page.js`:
+// `auri.json`, `src/contracts/contributions.ts`). From `plugins/<id>/main.js`
+// or `page.js`:
 //   /** @import { UserMainApi, UserMainStart } from '../_types/plugin' */
 //   /** @import { ChatMainExports } from '../_types/plugins/chat/contract' */
 //   /** @import { PluginManifest } from '../_types/contracts/plugin' */

@@ -34,8 +34,9 @@ interface RowCalls {
 
 // Opens and closes a session's Live view on its live Bash calls that succeed:
 // a playtest start or stop as `parsePlaytestCommand` reads it against the
-// installed patterns, on the project folder it names. A call is live when chat's `toolStarted` for its `toolUseId` came with `replayed`
-// false; a restored or replayed entry never acts, and each call acts once.
+// installed patterns, on the project folder it names. A call is live when
+// chat's `toolStarted` for its `toolUseId` came with `replayed` false; a
+// restored or replayed entry never acts, and each call acts once.
 // Chat's preview row is left out; a subagent's call acts for its lead's row.
 export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch {
   const { entries, liveTools, log, patterns } = deps;

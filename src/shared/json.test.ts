@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { isJsonObject, isSameJson } from './json';
+import { isJsonObject, isNonEmptyString, isSameJson } from './json';
+
+describe('isNonEmptyString', () => {
+  it('isNonEmptyString_AnyText_True', () => {
+    expect(isNonEmptyString('x')).toBe(true);
+    expect(isNonEmptyString(' ')).toBe(true);
+  });
+
+  it('isNonEmptyString_EmptyAndNonStrings_False', () => {
+    for (const value of ['', null, undefined, 1, [], {}]) {
+      expect(isNonEmptyString(value)).toBe(false);
+    }
+  });
+});
 
 describe('isJsonObject', () => {
   it('isJsonObject_PlainObjects_True', () => {

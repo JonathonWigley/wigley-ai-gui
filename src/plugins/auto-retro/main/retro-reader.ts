@@ -1,15 +1,11 @@
 import type { RetroContribution } from '../../../contracts/contributions';
-import { isJsonObject } from '../../../shared/json';
+import { isJsonObject, isNonEmptyString } from '../../../shared/json';
 import type { FeatureReader } from '../../contributions/contract';
 import { SESSIONS_PLACEHOLDER } from './retro-queue';
 
 type RetroTrigger = RetroContribution['on'][number];
 
 const TRIGGERS: readonly RetroTrigger[] = ['close', 'clear'];
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value !== '';
-}
 
 function commandReasons(command: unknown): string[] {
   if (!isNonEmptyString(command)) {

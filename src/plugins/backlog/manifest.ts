@@ -9,9 +9,10 @@ import type { RepoFolderSetting } from './contract';
 // layout Backlog draws with. `launchBrief` is what a chunk's session reads
 // first; `repoFolders` gives the folder of each repo whose features home lies
 // outside it; `strategy` names the backlog strategy whose homes, follow-up
-// file and assistant text Backlog uses, `''` picking the only one installed. `selectRow` and `selectChunk` are the clicks on a table row and
-// a chunk card, each naming its row or chunk, so neither has a key. The page
-// runs sessions' `selectRow` by key to open a started chunk's session.
+// file and assistant text Backlog uses, `''` picking the only one installed.
+// `selectRow` and `selectChunk` are the clicks on a table row and a chunk card,
+// each naming its row or chunk, so neither has a key. The page runs sessions'
+// `selectRow` by key to open a started chunk's session.
 export const backlogManifest = definePlugin({
   id: 'backlog',
   label: 'Backlog',

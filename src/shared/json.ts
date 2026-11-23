@@ -53,6 +53,11 @@ export function userValue(
   return { isSet: true, value: parent[last] };
 }
 
+// Whether `value` is a string with at least one character.
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value !== '';
+}
+
 // Whether `value` is an array holding only strings.
 export function isStringArray(value: unknown): value is string[] {
   return (

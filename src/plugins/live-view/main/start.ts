@@ -17,10 +17,7 @@ import {
   chatEntriesSlot,
   chatMainKey,
 } from '../../chat/contract';
-import {
-  contributionsMainKey,
-  type Strategy,
-} from '../../contributions/contract';
+import { contributionsMainKey } from '../../contributions/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
@@ -70,23 +67,17 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     let patterns: PlaytestPatterns = { open: [], close: [] };
     let probe: ProbeScript | null = null;
     let isMissingProbeLogged = false;
-    const applyStrategies = (
-      strategies: readonly Strategy<LiveViewContribution>[],
-    ) => {
+    const contributions = api.dependency(contributionsMainKey);
+    const applyStrategies = () => {
+      const strategies =
+        contributions.strategies<LiveViewContribution>('liveView');
       patterns = playtestPatternsOf(strategies);
       probe = probeScriptOf(strategies, services.paths);
       isMissingProbeLogged = false;
     };
-    const contributions = api.dependency(contributionsMainKey);
     contributions.registerFeature('liveView', liveViewReader);
-    contributions.onChanged('liveView', (strategies) =>
-      applyStrategies(strategies as readonly Strategy<LiveViewContribution>[]),
-    );
-    void contributions.ready.then(() =>
-      applyStrategies(
-        contributions.strategies<LiveViewContribution>('liveView'),
-      ),
-    );
+    contributions.onChanged('liveView', applyStrategies);
+    void contributions.ready.then(applyStrategies);
     // The probe whose file exists; a missing file is logged once per change
     // of the strategies.
     const locateScript = async (): Promise<ProbeScript | null> => {
