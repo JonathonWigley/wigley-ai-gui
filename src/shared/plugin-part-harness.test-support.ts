@@ -28,6 +28,7 @@ import { blockNameProblem } from '../contracts/markdown';
 import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
 import type { OuterPanes } from '../contracts/panes';
+import type { PullRequests } from '../contracts/pull-requests';
 import type {
   AreaName,
   ChannelShape,
@@ -1041,6 +1042,7 @@ function fakeMainApi(
       },
       openExternal: gateExternalLinks(async () => undefined),
       git: notFaked<Git>('git'),
+      pullRequests: notFaked<PullRequests>('pullRequests'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
       systemStats: notFaked<SystemStats>('systemStats'),

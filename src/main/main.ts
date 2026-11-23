@@ -177,6 +177,7 @@ import { addPluginSwitchActions } from './plugins/plugin-switch-drive';
 import { nativeImageEncoder } from './images/native-image-encoder';
 import { limitRuns } from './processes/limited-processes';
 import { createNodeProcesses } from './processes/node-processes';
+import { createGhPullRequests } from './pull-requests/gh-pull-requests';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
 import {
@@ -482,10 +483,15 @@ const processes = createNodeProcesses({
 // Git runs at most this many at once, so a burst of reads cannot pile up
 // exited children faster than main's event loop reaps them.
 const MAX_GIT_RUNS = 4;
+// gh has a limit of its own, so a slow gh run never holds one of git's slots.
+const MAX_GH_RUNS = 4;
 const git = createProcessGit({
   processes: limitRuns(processes, MAX_GIT_RUNS),
   files,
   paths,
+});
+const pullRequests = createGhPullRequests({
+  processes: limitRuns(processes, MAX_GH_RUNS),
 });
 
 let mainWindow: BrowserWindow | null = null;
@@ -1274,6 +1280,7 @@ function createWindow(
       files,
       processes,
       git,
+      pullRequests,
       log,
       clock,
       timers,

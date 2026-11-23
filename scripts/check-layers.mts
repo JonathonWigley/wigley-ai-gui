@@ -764,6 +764,10 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: ['node:'],
   },
+  'src/main/pull-requests': { layers: ['src/contracts', 'src/shared'] },
+  'src/main/pull-requests/gh-pull-requests.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/main/pull-requests'],
+  },
   'src/main/data-protocol': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
@@ -836,6 +840,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/processes',
       'src/main/processes/node-processes.ts',
       'src/main/git',
+      'src/main/pull-requests',
       'src/main/data-protocol',
       'src/main/drive',
       // Starts the session host client.
