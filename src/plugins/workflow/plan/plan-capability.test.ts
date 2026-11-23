@@ -47,9 +47,11 @@ const PLAN_TICKED =
   '# Plan A — plan\n\n## Tasks\n\n- [x] one\n- [x] two\n- [ ] three\n';
 // The plan folder's copy in a worktree, outside the clone the test git finds.
 const W_PLAN_DIR = '/w/docs/features/x/plan-a';
-// s1's plan report file, in the endpoint folder of the home `/home` and the
-// app instance `app`.
-const S1_PLAN_RUN_FILE = `/home/.agents/app/${PLAN_RUNS_FOLDER}/s1.json`;
+// The endpoint folder of the home `/home` and the app instance `APP_ID`, and
+// s1's plan report file in it.
+const APP_ID = 'wigley-ai-gui-dev';
+const ENDPOINT_DIR = `/home/.agents/${APP_ID}`;
+const S1_PLAN_RUN_FILE = `${ENDPOINT_DIR}/${PLAN_RUNS_FOLDER}/s1.json`;
 
 const NO_CALL_CONTEXT: ToolCallContext = {
   toolUseId: null,
@@ -136,7 +138,7 @@ function startCapability(
     signals.push([signal, origin]);
     const after = foldFlow(before, signal, engineWorkflows());
     flows.set(sessionId, after);
-    for (const observer of [...observers]) {
+    for (const observer of observers) {
       observer.folded({
         sessionId,
         before,
@@ -185,7 +187,7 @@ function startCapability(
     paths: posixPaths,
     log: (line) => logs.push(line),
     homeDir: '/home',
-    appInstance: { id: 'app' },
+    appInstance: { id: APP_ID },
     sessions: {
       contributeTools: (tools, start, contributeOptions) => {
         const contribution = { tools, start, options: contributeOptions };
@@ -241,7 +243,7 @@ function startCapability(
     open: async () => {
       const flow = newFlow('s1', '/r');
       flows.set('s1', flow);
-      for (const observer of [...observers]) {
+      for (const observer of observers) {
         observer.opened(flow);
       }
       await settled();
@@ -347,7 +349,7 @@ describe('startPlanCapability', () => {
     await settled();
 
     expect(subject.contributions).toEqual([]);
-    expect(await subject.project.stat('/home/.agents/app')).toBeNull();
+    expect(await subject.project.stat(ENDPOINT_DIR)).toBeNull();
   });
 
   it('PlanTool_PlanWorkflowSwitchedOn_Contributed', () => {
