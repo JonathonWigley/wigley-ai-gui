@@ -9,7 +9,8 @@ import type {
 // `[data-layout-owner="work-board"][data-layout="<name>"]`.
 //
 // Slots. A slot member places an element the app owns or fills:
-// - `status` → `div.work-board-status-slot`; the app draws the `status` part into it.
+// - `status` → `div.work-board-status-slot`; the app draws the `status` part into it, then the `problem` part while
+//   `work.json` was not read at start.
 // - `columns` → `div.work-board-columns`; the app replaces its children on each render that changes them: one
 //   `column` per shown column, in `work.columns` order, then Other while a card sits there; or the `empty` part when
 //   the board holds no card.
@@ -32,6 +33,11 @@ export interface BoardStatusInput {
   text: string;
   tone: DotStatus;
   hasRow: boolean;
+}
+
+// Why `work.json` was not read at start, so nothing saves this run.
+export interface BoardProblemInput {
+  text: string;
 }
 
 // One column head: `count` is the column's cards; `isDropTarget` is false for Other.
@@ -100,13 +106,18 @@ export interface ColumnKit extends BoardKit {
 }
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `board` pane is drawn into the
-// app-owned sheet once per layout set; `status`, `column`, `card` and `empty` on every render that changes what they
-// show, one call per column or card. Every part draws in `work-board.board`.
+// app-owned sheet once per layout set; `status`, `problem`, `column`, `card` and `empty` on every render that changes
+// what they show, one call per column or card. Every part draws in `work-board.board`.
 export interface BoardLayout {
   board?(parent: HTMLElement, kit: BoardPaneKit): BoardPane;
   status?(
     parent: HTMLElement,
     input: BoardStatusInput,
+    kit: BoardKit,
+  ): HTMLElement;
+  problem?(
+    parent: HTMLElement,
+    input: BoardProblemInput,
     kit: BoardKit,
   ): HTMLElement;
   column?(parent: HTMLElement, input: ColumnInput, kit: ColumnKit): HTMLElement;

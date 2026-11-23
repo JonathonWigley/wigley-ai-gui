@@ -23,6 +23,7 @@ import {
   localCard,
   workItem,
 } from '../../work/contract.test-support';
+import type { WorkBoardPlace } from '../contract';
 import { workBoardManifest } from '../manifest';
 import type { BoardCardAction } from './board-state';
 import { type BoardView, createBoardView } from './board-view';
@@ -104,12 +105,14 @@ const CARD_PRESSES: Record<string, BoardCardAction> = {
 interface SetupOptions {
   // The rejection text of each command id whose run fails.
   rejects?: Record<string, string>;
+  savedPlace?: WorkBoardPlace;
 }
 
-// A Board view over `state`, shown. `runs` holds each reporting run as `[id, arg]`, `opened` each `core.openLink`
-// run, `calls` each `showMode`, and `logs` and `toasts` what the view wrote.
-function boardSetup(state: WorkState, options: SetupOptions = {}) {
+// A Board view over `state` (none landed yet when undefined), shown. `runs` holds each reporting run as `[id, arg]`,
+// `opened` each `core.openLink` run, `calls` each `showMode`, and `logs`, `toasts` and `places` what the view wrote.
+function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
+  const places: WorkBoardPlace[] = [];
   const opened: unknown[] = [];
   const calls: string[] = [];
   const logs: string[] = [];
@@ -179,8 +182,8 @@ function boardSetup(state: WorkState, options: SetupOptions = {}) {
       }
       return undefined as never;
     },
-    savedPlace: null,
-    placeChanged: () => undefined,
+    savedPlace: options.savedPlace ?? null,
+    placeChanged: (place) => places.push(place),
     holdPlace: () => ({ dispose: () => undefined }),
   });
   view.stateChanged(state);
@@ -194,6 +197,7 @@ function boardSetup(state: WorkState, options: SetupOptions = {}) {
     calls,
     logs,
     toasts,
+    places,
   };
 }
 
@@ -249,7 +253,7 @@ const BOARD = board([TODO_CARD, LOCAL_TASK], {
 
 describe('createBoardView', () => {
   let setup: Setup | null = null;
-  const started = (state: WorkState, options?: SetupOptions) => {
+  const started = (state: WorkState | undefined, options?: SetupOptions) => {
     setup = boardSetup(state, options);
     return setup;
   };
@@ -487,17 +491,71 @@ describe('createBoardView', () => {
     expect(each.calls).toEqual([]);
   });
 
-  it('openThreads toasts when the inbox command rejects', async () => {
-    const each = started(BOARD, {
-      rejects: { 'work-inbox.filterTicket': 'Unknown command' },
-    });
+  it.each([
+    {
+      case: 'no plugin declares it',
+      reason: 'Unknown command work-inbox.filterTicket',
+      toast: 'Inbox is off: switch on work-inbox in Settings',
+    },
+    {
+      case: 'no started page handles it',
+      reason: 'work-inbox.filterTicket has no handler',
+      toast: 'Inbox is off: switch on work-inbox in Settings',
+    },
+    {
+      case: 'the Inbox failed to filter',
+      reason: 'layout failed',
+      toast: 'layout failed',
+    },
+  ])(
+    'openThreads toasts when the inbox command rejects: $case',
+    async ({ reason, toast }) => {
+      const each = started(BOARD, {
+        rejects: { 'work-inbox.filterTicket': reason },
+      });
 
-    each.view.openThreads('ABC-1');
-    await settle();
+      each.view.openThreads('ABC-1');
+      await settle();
 
-    expect(each.toasts).toEqual([
-      ['Inbox is off: switch on work-inbox in Settings', 'error'],
-    ]);
+      expect(each.toasts).toEqual([[toast, 'error']]);
+    },
+  );
+
+  it.each([
+    {
+      case: 'the cursor card leaves the real work',
+      first: board([inColumn('B-1', 'Backlog'), inColumn('T-1', 'Todo')]),
+      savedPlace: undefined,
+    },
+    {
+      case: 'the first state lands, with a saved place',
+      first: undefined,
+      savedPlace: { cursorCardId: 'T-1' },
+    },
+  ])(
+    "a sample's end puts the cursor back over the real work: $case",
+    ({ first, savedPlace }) => {
+      const each = started(first, { savedPlace });
+      const shown = each.view.showSample(board([inColumn('S-1', 'Todo')]));
+
+      each.view.stateChanged(
+        board([inColumn('T-1', 'Todo'), inColumn('Q-1', 'In QA')]),
+      );
+      shown.dispose();
+
+      expect(
+        cardTitled(each, 'Ticket T-1').classList.contains('is-cursor'),
+      ).toBe(true);
+      expect(each.places.at(-1)).toEqual({ cursorCardId: 'T-1' });
+    },
+  );
+
+  it('a load problem draws under the status line', () => {
+    const each = started(board([], { problem: 'work.json is not valid JSON' }));
+
+    expect(
+      findAll(each.sheet, 'work-board-problem').map((line) => line.textContent),
+    ).toEqual(['work.json is not valid JSON']);
   });
 
   it('a card in Other is no drag item', () => {

@@ -1,7 +1,7 @@
 // @ts-check
 
 // The built-in Inbox look. The side bar's root is `div.work-inbox-side-pane`, the sheet's `div.work-inbox-pane`: a
-// head (title, the status line, the filter chip, the sweep hint), then the cards, which scroll.
+// head (title, the filter chip, the sweep hint, then the status line), then the cards, which scroll.
 
 /** @type {Record<import('../layout').InboxCardAction, string>} */
 const ACTION_LABELS = {

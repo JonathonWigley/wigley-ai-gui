@@ -112,9 +112,9 @@ interface SetupOptions {
   rejects?: Record<string, string>;
 }
 
-// An Inbox view over `state`, shown unless `isShown` is false. `runs` holds each reporting run as `[id, arg]`,
+// An Inbox view over `state` (none landed yet when undefined), shown unless `isShown` is false. `runs` holds each reporting run as `[id, arg]`,
 // `scopes` each scope set, `logs`, `toasts` and `places` what the view wrote, `boxes` each vim box made.
-function inboxSetup(state: WorkState, options: SetupOptions = {}) {
+function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
   const scopes: string[] = [];
   const logs: string[] = [];
@@ -232,19 +232,46 @@ describe('createInboxView', () => {
     vi.unstubAllGlobals();
   });
 
-  it('send runs work.send with the edited text and drops the edit', () => {
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker text' })]));
-    setup.view.commands.editDraft();
-    setup.boxes[0].type('my text');
+  it.each<{
+    case: string;
+    rejects: Record<string, string>;
+    drafts: Record<string, string>;
+    boxText: string;
+  }>([
+    {
+      case: 'main takes the text: the edit is dropped',
+      rejects: {},
+      drafts: {},
+      boxText: 'worker text',
+    },
+    {
+      case: 'main refuses: the edit is kept',
+      rejects: { 'work.send': 'a is sending' },
+      drafts: { a: 'my text' },
+      boxText: 'my text',
+    },
+  ])(
+    'send runs work.send with the edited text: $case',
+    async ({ rejects, drafts, boxText }) => {
+      const setup = inboxSetup(
+        work([workItem('a', { draft: 'worker text' })]),
+        {
+          rejects,
+        },
+      );
+      setup.view.commands.editDraft();
+      setup.boxes[0].type('my text');
 
-    setup.view.commands.send();
+      setup.view.commands.send();
+      await settle();
 
-    expect(setup.runs).toEqual([
-      ['work.send', { itemId: 'a', text: 'my text' }],
-    ]);
-    expect(setup.places.at(-1)?.drafts).toEqual({});
-    expect(setup.boxes[0].text).toBe('worker text');
-  });
+      expect(setup.runs).toEqual([
+        ['work.send', { itemId: 'a', text: 'my text' }],
+      ]);
+      expect(setup.places.at(-1)?.drafts).toEqual(drafts);
+      expect(setup.boxes[0].text).toBe(boxText);
+    },
+  );
 
   it('blank send toasts and runs nothing', () => {
     const setup = inboxSetup(work([workItem('a')]));
@@ -295,6 +322,33 @@ describe('createInboxView', () => {
       isDestroyed: false,
     });
   });
+
+  it.each([
+    {
+      case: 'send from the box turns the card to sending',
+      next: work([workItem('a', { draft: 'worker text', sending: 'my text' })]),
+    },
+    {
+      case: 'the cursor item leaves',
+      next: work([workItem('b')]),
+    },
+  ])(
+    'a redraw that drops the focused draft box hands the keys to the list: $case',
+    async ({ next }) => {
+      const setup = inboxSetup(work([workItem('a', { draft: 'worker text' })]));
+      setup.view.commands.editDraft();
+      setup.boxes[0].type('my text');
+      setup.view.commands.send();
+      await settle();
+
+      setup.view.stateChanged(next);
+
+      expect(setup.scopes.at(-1)).toBe('list');
+      expect(
+        setup.logs.filter((line) => line.endsWith(' focused')).at(-1),
+      ).toBe('list focused');
+    },
+  );
 
   it.each([
     {
@@ -386,17 +440,55 @@ describe('createInboxView', () => {
     expect(setup.runs).toEqual([['work-board.showTicket', 'ABC-1']]);
   });
 
-  it('openTicket toasts when the board command rejects', async () => {
-    const setup = inboxSetup(work([workItem('a')]), {
-      rejects: { 'work-board.showTicket': 'no command work-board.showTicket' },
-    });
+  it.each([
+    {
+      case: 'no plugin declares it',
+      reason: 'Unknown command work-board.showTicket',
+      toast: 'Board is off: switch on work-board in Settings',
+    },
+    {
+      case: 'no started page handles it',
+      reason: 'work-board.showTicket has no handler',
+      toast: 'Board is off: switch on work-board in Settings',
+    },
+    {
+      case: 'the Board failed to show it',
+      reason: 'layout failed',
+      toast: 'layout failed',
+    },
+  ])(
+    'openTicket toasts when the board command rejects: $case',
+    async ({ reason, toast }) => {
+      const setup = inboxSetup(work([workItem('a')]), {
+        rejects: { 'work-board.showTicket': reason },
+      });
 
-    setup.view.openTicket('ABC-1');
-    await settle();
+      setup.view.openTicket('ABC-1');
+      await settle();
 
-    expect(setup.toasts).toEqual([
-      ['Board is off: switch on work-board in Settings', 'error'],
-    ]);
+      expect(setup.toasts).toEqual([[toast, 'error']]);
+    },
+  );
+
+  it('a first state landing while a sample shows puts back the saved place when the sample ends', () => {
+    const saved: WorkInboxPlace = {
+      section: 'waiting',
+      ticketFilter: null,
+      cursorId: 'older',
+      drafts: {},
+    };
+    const setup = inboxSetup(undefined, { savedPlace: saved });
+    const shown = setup.view.showSample(work([workItem('sample')]));
+
+    setup.view.stateChanged(
+      work([
+        workItem('newer', { at: '2026-11-23T11:00:00.000Z' }),
+        workItem('older', { section: 'waiting' }),
+      ]),
+    );
+    shown.dispose();
+
+    expect(setup.places.at(-1)).toEqual(saved);
   });
 
   it.each([

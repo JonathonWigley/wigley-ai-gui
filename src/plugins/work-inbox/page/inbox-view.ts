@@ -110,6 +110,13 @@ const EMPTY_WORK: WorkState = {
 
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
+// Whether `reason` is the command router's refusal of command `id` that no started plugin declares or handles.
+function isCommandMissing(id: CommandId, reason: string): boolean {
+  return (
+    reason === `Unknown command ${id}` || reason === `${id} has no handler`
+  );
+}
+
 // Every no-arg page command but `showMode`, which the page part runs itself.
 export type InboxCommand = Exclude<
   CommandsRunIn<typeof workInboxManifest, 'page'>,
@@ -489,7 +496,9 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     return drawn;
   };
 
-  const drawCards = (state: InboxViewState, work: WorkState) => {
+  // Draws the cards; true when the redraw dropped the focused draft box without placing it again.
+  const drawCards = (state: InboxViewState, work: WorkState): boolean => {
+    let isBoxDropped = false;
     const items = shownItems(work, state);
     const now = deps.now();
     const inputs = items.map((item) => cardInput(item, state, now));
@@ -505,6 +514,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     ]);
     if (key !== drawnCardsKey) {
       drawnCardsKey = key;
+      const wasBoxFocused = boxes.active() !== null;
       isRedrawingCards = true;
       try {
         keepFocusedBox(boxes, DRAFT_FORM, () => {
@@ -533,6 +543,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       } finally {
         isRedrawingCards = false;
       }
+      isBoxDropped = wasBoxFocused && boxes.active() === null;
     }
     inputs.forEach((input, index) => {
       const root = cardDraws[index]?.built.element;
@@ -551,6 +562,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
         .querySelector('.work-inbox-draft')
         ?.classList.toggle('is-empty', text === '');
     }
+    return isBoxDropped;
   };
 
   // Logs each change of what the list shows, the cursor, the section cursor and the focus while the mode shows, and
@@ -611,6 +623,19 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     });
   };
 
+  // Puts back the saved place once the first state lands; true when it did, false too when none was saved.
+  const restoreFirstPlace = (): boolean => {
+    if (isPlaceRestored || realWork === undefined) {
+      return false;
+    }
+    isPlaceRestored = true;
+    if (deps.savedPlace === null) {
+      return false;
+    }
+    dispatch({ type: 'placed', place: deps.savedPlace, work: realWork });
+    return true;
+  };
+
   // Sets the scope and drops the targets, when the focus changed or `always`: the sheet has no split.
   const syncTargets = (state: InboxViewState, always: boolean) => {
     if (!deps.isShown() || (!always && state.focus === shownScope)) {
@@ -652,7 +677,11 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     drawSections(state, work);
     drawStatus(work);
     drawFilter(state);
-    drawCards(state, work);
+    if (drawCards(state, work) && state.focus === 'box') {
+      // The keys go back to the list, which renders again through the store.
+      changeFocus('list', true);
+      return;
+    }
     noteChanges(state, work);
     writePlace(state);
     syncTargets(state, always);
@@ -701,17 +730,27 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   });
 
   // ── Work commands ────────────────────────────────────────────────────────
-  // Runs another plugin's command as a reporting run; a refusal logs `<id> failed: <reason>` and toasts `failText`,
-  // else the reason, in the error tone. Never throws, and nothing awaits it.
-  const runWork = (id: CommandId, arg?: unknown, failText?: string) => {
-    deps.runFor(id, arg, {}).catch((error: unknown) => {
-      if (isDisposed) {
-        return;
-      }
-      log(`${id} failed: ${errorText(error)}`);
-      deps.toast(failText ?? errorText(error), 'error');
-    });
-  };
+  // Runs another plugin's command as a reporting run; a refusal logs `<id> failed: <reason>` and toasts the reason in
+  // the error tone, or `offText` when no started plugin has the command. Never rejects: resolves true once the run
+  // succeeds, false on a refusal.
+  const runWork = (
+    id: CommandId,
+    arg?: unknown,
+    offText?: string,
+  ): Promise<boolean> =>
+    deps.runFor(id, arg, {}).then(
+      () => true,
+      (error: unknown) => {
+        if (isDisposed) {
+          return false;
+        }
+        const reason = errorText(error);
+        log(`${id} failed: ${reason}`);
+        const isOff = offText !== undefined && isCommandMissing(id, reason);
+        deps.toast(isOff ? offText : reason, 'error');
+        return false;
+      },
+    );
 
   const itemNamed = (id: string): WorkItem | null =>
     shownWork().items.find((item) => item.id === id) ?? null;
@@ -729,8 +768,14 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       deps.toast('Nothing to send', 'info');
       return;
     }
-    runWork(workSendCommand.id, { itemId: item.id, text });
-    dispatch({ type: 'draftDropped', id: item.id });
+    // The edit is kept until main takes the text, so a refused send loses nothing.
+    void runWork(workSendCommand.id, { itemId: item.id, text }).then(
+      (isSent) => {
+        if (isSent && !isDisposed) {
+          dispatch({ type: 'draftDropped', id: item.id });
+        }
+      },
+    );
   };
 
   const pressItem = (action: InboxCardAction, id: string) => {
@@ -744,11 +789,12 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       return;
     }
     const arg = action === 'startSession' ? { source: 'item', id } : id;
-    runWork(WORK_COMMANDS[action], arg);
+    void runWork(WORK_COMMANDS[action], arg);
   };
 
-  const openTicket = (key: string) =>
-    runWork(BOARD_SHOW_TICKET, key, BOARD_OFF);
+  const openTicket = (key: string) => {
+    void runWork(BOARD_SHOW_TICKET, key, BOARD_OFF);
+  };
 
   // Runs `act` on the cursor card; logs `no card` with none.
   const onCursor = (act: (item: WorkItem) => void) => () => {
@@ -825,8 +871,8 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       }
       dispatch({ type: 'clearFilter', work: shownWork() });
     },
-    sweep: () => runWork('work.sweep'),
-    showJobRow: () => runWork('work.openJobRow'),
+    sweep: () => void runWork('work.sweep'),
+    showJobRow: () => void runWork('work.openJobRow'),
   };
 
   return {
@@ -853,16 +899,9 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       if (sample !== null) {
         return;
       }
-      const after = shownWork();
-      if (!isPlaceRestored && value !== undefined) {
-        isPlaceRestored = true;
-        if (deps.savedPlace !== null) {
-          dispatch({ type: 'placed', place: deps.savedPlace, work: after });
-          render();
-          return;
-        }
+      if (!restoreFirstPlace()) {
+        dispatch({ type: 'workChanged', before, after: shownWork() });
       }
-      dispatch({ type: 'workChanged', before, after });
       render();
     },
     setLayouts(next) {
@@ -895,7 +934,10 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
           isEnded = true;
           sample = null;
           dispatch({ type: 'reset', state: viewBefore });
-          dispatch({ type: 'workChanged', before, after: shownWork() });
+          // The real work may have changed, or first landed, while the sample showed.
+          if (!restoreFirstPlace()) {
+            dispatch({ type: 'workChanged', before, after: shownWork() });
+          }
           render(true);
           hold.dispose();
         },

@@ -1,7 +1,7 @@
 // @ts-check
 
-// The built-in Board look. The pane's root is `div.work-board-pane`: a head (title, the status line, the sweep hint),
-// then one row of columns that scrolls sideways, each column scrolling its own cards.
+// The built-in Board look. The pane's root is `div.work-board-pane`: a head (title, the status line and any load
+// problem, the sweep hint), then one row of columns that scrolls sideways, each column scrolling its own cards.
 
 /**
  * The cursor card's key hint for `command`, inside `parent`, when the card's prompt holds it.
@@ -132,6 +132,9 @@ const layout = {
       });
     }
     return line;
+  },
+  problem(parent, input, kit) {
+    return kit.el(parent, 'p', 'work-board-problem', input.text);
   },
   column(parent, input, kit) {
     const root = kit.el(parent, 'section', 'work-board-column');

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
 import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import { type WorkState, workStateSlot } from '../../work/contract';
 import { workItem } from '../../work/contract.test-support';
@@ -31,6 +32,7 @@ function startInboxPage() {
   return startDrawingPagePart(workInboxPagePart, {
     firstModeTaken: true,
     state: store,
+    services: { editor: countingEditors().host },
   });
 }
 

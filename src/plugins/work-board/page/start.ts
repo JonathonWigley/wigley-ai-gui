@@ -1,3 +1,4 @@
+import './board.css';
 import type {
   ChannelShape,
   ModeHandle,

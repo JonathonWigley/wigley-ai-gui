@@ -76,6 +76,7 @@ import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
 import { uiStateOver } from './fake-ui-state.test-support';
 import { createListeners, type Listeners } from './listeners';
+import { coreCommands } from '../config/keymap';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
@@ -497,7 +498,7 @@ function createWorld(
   const store = state ?? createSlotStore(log);
   const commandRuns: HarnessCommandRun[] = [];
   const registry = new CommandRegistry<any>(log);
-  const declared = commandInfos({}, manifests);
+  const declared = commandInfos(coreCommands, manifests);
   const [ownKey, otherKey] =
     process === 'main'
       ? [coreRuntimeMainSlot, coreRuntimePageSlot]

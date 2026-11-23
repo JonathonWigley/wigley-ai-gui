@@ -114,6 +114,13 @@ const EMPTY_WORK: WorkState = {
 
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
 
+// Whether `reason` is the command router's refusal of command `id` that no started plugin declares or handles.
+function isCommandMissing(id: CommandId, reason: string): boolean {
+  return (
+    reason === `Unknown command ${id}` || reason === `${id} has no handler`
+  );
+}
+
 // Every no-arg page command but `showMode`, which the page part runs itself.
 export type BoardCommand = Exclude<
   CommandsRunIn<typeof workBoardManifest, 'page'>,
@@ -268,7 +275,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
 
   const drawStatus = (work: WorkState) => {
     const line = statusLine(work.job, deps.now());
-    const key = JSON.stringify(line);
+    const key = JSON.stringify([line, work.problem]);
     if (key === drawnStatusKey) {
       return;
     }
@@ -286,6 +293,18 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
         ),
       })),
     );
+    const { problem } = work;
+    if (problem !== null) {
+      statusDraws.push(
+        parts.draw('problem', statusSlot, (problemPart, into, rollback) => ({
+          element: requireElementIn(
+            into,
+            problemPart(into, { text: problem }, kitFor(rollback)),
+            'problem',
+          ),
+        })),
+      );
+    }
   };
 
   const promptOf = (
@@ -457,6 +476,19 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     deps.placeChanged({ cursorCardId: state.cursorCardId });
   };
 
+  // Puts back the saved cursor once the first state lands, or the first card with none; true when it did.
+  const restoreFirstPlace = (): boolean => {
+    if (isPlaceRestored || realWork === undefined) {
+      return false;
+    }
+    isPlaceRestored = true;
+    dispatch({
+      type: 'restore',
+      cursorCardId: deps.savedPlace?.cursorCardId ?? null,
+    });
+    return true;
+  };
+
   // Sets the scope and drops the targets once per show: the sheet has no split.
   const syncTargets = (always: boolean) => {
     if (!deps.isShown() || (!always && isScopeShown)) {
@@ -506,15 +538,17 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   };
 
   // ── Work commands ────────────────────────────────────────────────────────
-  // Runs another plugin's command as a reporting run; a refusal logs `<id> failed: <reason>` and toasts `failText`,
-  // else the reason, in the error tone. Never throws, and nothing awaits it.
-  const runWork = (id: CommandId, arg?: unknown, failText?: string) => {
+  // Runs another plugin's command as a reporting run; a refusal logs `<id> failed: <reason>` and toasts the reason in
+  // the error tone, or `offText` when no started plugin has the command. Never throws, and nothing awaits it.
+  const runWork = (id: CommandId, arg?: unknown, offText?: string) => {
     deps.runFor(id, arg, {}).catch((error: unknown) => {
       if (isDisposed) {
         return;
       }
-      log(`${id} failed: ${errorText(error)}`);
-      deps.toast(failText ?? errorText(error), 'error');
+      const reason = errorText(error);
+      log(`${id} failed: ${reason}`);
+      const isOff = offText !== undefined && isCommandMissing(id, reason);
+      deps.toast(isOff ? offText : reason, 'error');
     });
   };
 
@@ -605,16 +639,9 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       if (sample !== null) {
         return;
       }
-      if (!isPlaceRestored && value !== undefined) {
-        isPlaceRestored = true;
-        dispatch({
-          type: 'restore',
-          cursorCardId: deps.savedPlace?.cursorCardId ?? null,
-        });
-        render();
-        return;
+      if (!restoreFirstPlace()) {
+        dispatch({ type: 'stateChanged', previous });
       }
-      dispatch({ type: 'stateChanged', previous });
       render();
     },
     setLayouts(next) {
@@ -641,6 +668,10 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
           isEnded = true;
           sample = null;
           dispatch({ type: 'reset', state: viewBefore });
+          // The real work may have changed, or first landed, while the sample showed.
+          if (!restoreFirstPlace()) {
+            dispatch({ type: 'stateChanged', previous });
+          }
           render(true);
           hold.dispose();
         },

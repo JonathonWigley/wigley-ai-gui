@@ -5,6 +5,7 @@ import type { BoardLayout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof BoardLayout, true> = {
   board: true,
   status: true,
+  problem: true,
   column: true,
   card: true,
   empty: true,

@@ -6,7 +6,8 @@
 // `contract.test-support.ts` (fixtures of its records) belongs to that
 // contract's layer; imports inside a file's own layer are always allowed, and a
 // test file (`.test.ts`, a `.test-d.ts` type test or a `.test-support.ts` module
-// of shared test cases) may also import the test packages. An import is allowed when the imported file's own layer is listed
+// of shared test cases) may also import the test packages, and the layers
+// TEST_FILE_IMPORTS lists for it. An import is allowed when the imported file's own layer is listed
 // exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails
 // when `src/plugins/main.ts`, `page.ts` or `manifests.ts` misses a plugin
 // folder's part or manifest, lists one twice, or lists anything else.
@@ -1081,6 +1082,10 @@ const CORE_LAYERS: Record<string, LayerRule> = {
 };
 
 const TEST_PACKAGES = ['vitest'];
+// The harness serves the core commands, as the served config does.
+const TEST_FILE_IMPORTS: Record<string, string[]> = {
+  'src/shared/plugin-part-harness.test-support.ts': ['src/config'],
+};
 const TEST_FILE_SUFFIXES = ['.test.ts', '.test-d.ts', '.test-support.ts'];
 
 type Layers = Record<string, LayerRule>;
@@ -1132,8 +1137,13 @@ function importViolations(file: string, layers: Layers): string[] {
     }
     const target = path.posix.join(path.posix.dirname(file), specifier);
     const targetLayer = layerOfImport(target, layers);
+    const isTestImport =
+      isTestFile &&
+      targetLayer !== undefined &&
+      (TEST_FILE_IMPORTS[file]?.includes(targetLayer) ?? false);
     const isAllowed =
       targetLayer === layer ||
+      isTestImport ||
       (targetLayer !== undefined && rule.layers.includes(targetLayer));
     if (!isAllowed) {
       violations.push(
