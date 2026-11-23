@@ -7,7 +7,7 @@ export const buildsLocalManifest = definePlugin({
   label: 'Local builds',
   description:
     'Adds the local backend kind to Builds: a command per build kind, run in a clone.',
-  demoSkip: 'It adds a backend kind to Builds and draws nothing of its own.',
+  demoSkip: 'Its builds show in the Builds steps, which draw sample data.',
   dependsOn: { main: ['builds'], page: [] },
   reads: { main: [], page: [] },
   commands: {},
