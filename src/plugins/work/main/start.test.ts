@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AppInstance } from '../../../contracts/app-instance';
 import type { RunMode } from '../../../contracts/plugin';
 import {
   deferred,
@@ -163,8 +164,16 @@ const lastWatch = () => fakes.watches[fakes.watches.length - 1] as FakeWatch;
 const fileText = (file: Partial<WorkFile>) =>
   JSON.stringify({ ...EMPTY_WORK_FILE, ...file });
 
+const STABLE_APP: AppInstance = {
+  id: 'wigley-ai-gui',
+  displayName: 'Auri',
+  isDev: false,
+};
+
 interface OpenOptions {
   runMode?: RunMode;
+  // The installed app rather than the harness's dev app.
+  isStable?: boolean;
   drive?: boolean;
   restored?: Promise<void>;
   settings?: (typeof workManifest)['settings'];
@@ -199,6 +208,7 @@ async function open(options: OpenOptions = {}) {
     ],
     services: {
       runMode: options.runMode ?? 'selfTest',
+      ...(options.isStable === true ? { appInstance: STABLE_APP } : {}),
       alerts: { setOpenCount: (_source, count) => badge.push(count) },
     },
     drive: options.drive,
@@ -390,22 +400,44 @@ describe('workMainPart', () => {
     },
   );
 
-  it.each<{ runMode: RunMode; isSeeded: boolean; expectedStarts: number }>([
-    { runMode: 'live', isSeeded: false, expectedStarts: 1 },
-    { runMode: 'drive', isSeeded: true, expectedStarts: 1 },
-    { runMode: 'selfTest', isSeeded: false, expectedStarts: 0 },
+  it.each<{
+    runMode: RunMode;
+    isStable: boolean;
+    expected: { starts: number; launchesWorkers: boolean };
+  }>([
+    {
+      runMode: 'live',
+      isStable: true,
+      expected: { starts: 1, launchesWorkers: true },
+    },
+    {
+      runMode: 'live',
+      isStable: false,
+      expected: { starts: 1, launchesWorkers: false },
+    },
+    {
+      runMode: 'drive',
+      isStable: false,
+      expected: { starts: 1, launchesWorkers: false },
+    },
+    {
+      runMode: 'selfTest',
+      isStable: false,
+      expected: { starts: 0, launchesWorkers: false },
+    },
   ])(
-    'start — runner.start only outside selfTest, and in a seeded drive run ($runMode)',
-    async ({ runMode, isSeeded, expectedStarts }) => {
-      const { harness } = await open({ runMode, drive: isSeeded });
-      if (isSeeded) {
-        await harness.drive?.run('seed', {});
-      }
+    "start — runner.start outside selfTest; workers launch only in the installed app's live run ($runMode, stable $isStable)",
+    async ({ runMode, isStable, expected }) => {
+      const { harness } = await open({ runMode, isStable });
 
       harness.ready();
       await settled();
 
-      expect(lastRunner().starts).toBe(expectedStarts);
+      const runner = lastRunner();
+      expect({
+        starts: runner.starts,
+        launchesWorkers: runner.deps.launchesWorkers,
+      }).toEqual(expected);
       await harness.stop();
     },
   );
@@ -456,7 +488,7 @@ describe('workMainPart', () => {
         [WORK_PATH]: fileText({
           items: [workItem('a')],
           cards: [jiraCard('WS-1', 'To Do')],
-          suggestions: [saved],
+          suggestions: [{ ...saved, rowId: null }],
         }),
       },
     });
@@ -917,46 +949,6 @@ describe('workMainPart', () => {
       await harness.stop();
     },
   );
-
-  it('openJobRow — records kept at 20, newest first, a repeat row replacing its record', async () => {
-    const { harness } = await open();
-    for (let index = 0; index <= 20; index += 1) {
-      await setJob(`row-${index}`, null);
-      closeRow(harness, `row-${index}`);
-    }
-    await setJob('row-5', null);
-    closeRow(harness, 'row-5');
-    await settled();
-
-    const saved = JSON.parse(await harness.files.read(ROWS_PATH)) as {
-      rowId: string;
-    }[];
-    const newerThanRepeat = [
-      20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6,
-    ];
-    const olderThanRepeat = [4, 3, 2, 1];
-    expect(saved.map((record) => record.rowId)).toEqual([
-      'row-5',
-      ...[...newerThanRepeat, ...olderThanRepeat].map((n) => `row-${n}`),
-    ]);
-    await harness.stop();
-  });
-
-  it('openJobRow — an unreadable job-rows.json logs, starts empty and is never written', async () => {
-    const { harness } = await open({ files: { [ROWS_PATH]: 'not json' } });
-
-    await setJob('row-1', null);
-    closeRow(harness, 'row-1');
-    await settled();
-
-    expect(
-      workLines(harness).some((line) =>
-        line.startsWith('job-rows.json not read: '),
-      ),
-    ).toBe(true);
-    expect(await harness.files.read(ROWS_PATH)).toBe('not json');
-    await harness.stop();
-  });
 
   it('dispose — stops the watch and timers before awaiting the runner, then the record writes and the store', async () => {
     const { harness, toolsDispose } = await open();

@@ -22,6 +22,7 @@ import type { WorkJob, WorkJobStatus, WorkState } from '../contract';
 import type { JobQueue, JobResult } from './job-queue';
 import {
   createJobRunner,
+  HOST_WAIT_MS,
   isJobDone,
   JOB_QUEUE_FILE,
   JOB_TIMEOUT_MS,
@@ -52,6 +53,8 @@ const TIMEOUT_NOTE = 'The job ran past 20 minutes and was stopped.';
 const RESTORE_MISSED_NOTE = 'Its session did not come back after the restart.';
 const NO_REPORT_NOTE = 'The worker ended without reporting a result.';
 const CLOSED_BEFORE_NOTE = 'Its session closed before it reported.';
+const ROW_GONE_NOTE = 'Its session was gone at launch.';
+const HOST_MISSED_NOTE = 'Its session never reported its id, so it was closed.';
 
 // The first message the fake `message` gives each job.
 function jobText(job: WorkJob): string {
@@ -179,7 +182,7 @@ function eventBus() {
     return { dispose: () => set.delete(listener) };
   };
   const emit = (event: string, data: unknown) => {
-    for (const listener of [...(listeners.get(event) ?? [])]) {
+    for (const listener of listeners.get(event) ?? []) {
       listener(data);
     }
   };
@@ -201,6 +204,7 @@ async function runnerOver(
     savedQueue?: JobQueue | string;
     workFile?: WorkFile;
     rows?: SessionRow[];
+    launchesWorkers?: boolean;
   } = {},
 ) {
   const time = manualTime(NOW);
@@ -301,6 +305,7 @@ async function runnerOver(
     timers: time.timers,
     log,
     homeDir: '/home/me',
+    launchesWorkers: options.launchesWorkers ?? true,
     profile: () => knobs.profile,
     instructions: () => ['work text'],
     message: (job) => knobs.message(job),
@@ -353,6 +358,16 @@ async function runnerOver(
     },
     async closed(rowId: string, host: string, reason: SessionCloseReason) {
       bus.emit('chat.sessionClosed', closedEvent(rowId, host, reason));
+      await flush();
+    },
+    async processEnded(rowId: string, host: string) {
+      bus.emit('chat.processEnded', {
+        sessionId: rowId,
+        hostSessionId: host,
+        reason: 'crash',
+        code: 1,
+        error: null,
+      });
       await flush();
     },
   });
@@ -516,6 +531,94 @@ describe('createJobRunner', () => {
     expect(part.runner.pending()).toEqual([SWEEP]);
   });
 
+  it.each<{
+    case: string;
+    // What happens to the launched row, which has no host id, before the wait ends.
+    act(part: Awaited<ReturnType<typeof runnerOver>>): void;
+    closes: [string, SessionCloseReason][];
+    last: Partial<WorkJobStatus> | null;
+  }>([
+    {
+      case: 'host arrives → the job runs',
+      act: (part) => part.rows.set('row-1', workRow('row-1', 'host-1')),
+      closes: [],
+      last: null,
+    },
+    {
+      case: 'row leaves → fails gone',
+      act: (part) => part.rows.delete('row-1'),
+      closes: [],
+      last: lastOf('send', 'failed', null, ROW_GONE_NOTE),
+    },
+    {
+      case: 'no host within the wait → row closed, job fails',
+      act: () => undefined,
+      closes: [['row-1', 'finished']],
+      last: lastOf('send', 'failed', null, HOST_MISSED_NOTE),
+    },
+  ])('launch_hostLate: $case', async ({ act, closes, last }) => {
+    const part = await runnerOver();
+    part.answerLaunch = () => {
+      const n = part.launches.length;
+      part.rows.set(
+        `row-${n}`,
+        sessionRow(`row-${n}`, { hostSessionId: null, owner: 'work' }),
+      );
+      return Promise.resolve(`row-${n}`);
+    };
+    await part.start();
+    await part.enqueue(SEND_A);
+    await part.enqueue(SWEEP);
+    part.advance(HOST_WAIT_MS - 1);
+    await flush();
+
+    act(part);
+    await flush();
+    part.advance(1);
+    await flush();
+
+    expect(part.closes).toEqual(closes);
+    expect(part.last()).toEqual(
+      last === null ? null : expect.objectContaining(last),
+    );
+    expect(part.texts()).toEqual(
+      last === null ? ['send A'] : ['send A', 'sweep'],
+    );
+    expect(part.titles.map(([rowId]) => rowId)).toEqual(
+      last === null ? ['row-1'] : [],
+    );
+  });
+
+  it('launch_notLaunchingWorkers_headWaitsQueued', async () => {
+    const part = await runnerOver({ launchesWorkers: false });
+    await part.start();
+
+    await part.enqueue(SWEEP);
+    await part.enqueue(SEND_A);
+
+    expect(part.launches).toEqual([]);
+    expect(part.store.file().job.running).toMatchObject({
+      kind: 'sweep',
+      state: 'queued',
+    });
+    expect(part.runner.pending()).toEqual([SWEEP, SEND_A]);
+    expect(part.logs).toEqual([
+      'work sweep job not launched: this run launches no worker',
+    ]);
+  });
+
+  it('enqueue_stepThrows_rejects', async () => {
+    const part = await runnerOver();
+    part.message = () => {
+      throw new Error('bad item');
+    };
+    await part.start();
+
+    await expect(part.runner.enqueue(SWEEP)).rejects.toThrow('bad item');
+
+    expect(part.logs).toContain('work job step failed: bad item');
+  });
+
   it('done_settlesThenCloses', async () => {
     const part = await runnerOver();
     await part.start();
@@ -542,6 +645,8 @@ describe('createJobRunner', () => {
     case: string;
     result: JobResult | null;
     reason: SessionCloseReason;
+    // The host id the close carries: a `/clear` moved the row off its launch host.
+    closedHost?: string;
     state: 'done' | 'failed';
     note: string | null;
   }>([
@@ -549,6 +654,14 @@ describe('createJobRunner', () => {
       case: 'reported ok',
       result: { ok: true, note: null },
       reason: 'finished',
+      state: 'done',
+      note: null,
+    },
+    {
+      case: 'reported ok, closed after a clear',
+      result: { ok: true, note: null },
+      reason: 'finished',
+      closedHost: 'host-cleared',
       state: 'done',
       note: null,
     },
@@ -575,7 +688,55 @@ describe('createJobRunner', () => {
     },
   ])(
     'outcome_table: $case → $state',
-    async ({ result, reason, state, note }) => {
+    async ({ result, reason, closedHost, state, note }) => {
+      const part = await runnerOver();
+      await part.start();
+      await part.enqueue(SWEEP);
+      await part.enqueue(SEND_A);
+      if (result !== null) {
+        await part.report('row-1', result);
+      }
+
+      await part.closed('row-1', closedHost ?? 'host-1', reason);
+
+      expect(part.last()).toEqual(
+        expect.objectContaining(lastOf('sweep', state, 'row-1', note)),
+      );
+      expect(part.texts()).toEqual(['sweep', 'send A']);
+    },
+  );
+
+  it.each<{
+    case: string;
+    rowId: string;
+    result: JobResult | null;
+    closes: [string, SessionCloseReason][];
+    last: Partial<WorkJobStatus> | null;
+  }>([
+    {
+      case: 'its row, before its first turn',
+      rowId: 'row-1',
+      result: null,
+      closes: [['row-1', 'finished']],
+      last: lastOf('sweep', 'failed', 'row-1', NO_REPORT_NOTE),
+    },
+    {
+      case: 'its row, after its report',
+      rowId: 'row-1',
+      result: { ok: true, note: 'swept' },
+      closes: [['row-1', 'finished']],
+      last: lastOf('sweep', 'done', 'row-1', 'swept'),
+    },
+    {
+      case: 'another row',
+      rowId: 'row-7',
+      result: null,
+      closes: [],
+      last: null,
+    },
+  ])(
+    'processEnded_runningRow_closesAtOnce: $case',
+    async ({ rowId, result, closes, last }) => {
       const part = await runnerOver();
       await part.start();
       await part.enqueue(SWEEP);
@@ -583,10 +744,11 @@ describe('createJobRunner', () => {
         await part.report('row-1', result);
       }
 
-      await part.closed('row-1', 'host-1', reason);
+      await part.processEnded(rowId, `host-${rowId}`);
 
+      expect(part.closes).toEqual(closes);
       expect(part.last()).toEqual(
-        expect.objectContaining(lastOf('sweep', state, 'row-1', note)),
+        last === null ? null : expect.objectContaining(last),
       );
     },
   );
