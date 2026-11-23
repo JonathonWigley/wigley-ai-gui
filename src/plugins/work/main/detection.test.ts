@@ -12,7 +12,7 @@ import {
   type SeenSignal,
   signalKeys,
 } from './detection';
-import type { WorkNotYet } from './store';
+import type { SavedSuggestion, WorkNotYet } from './store';
 
 const COLUMNS: WorkColumnSetting[] = [
   { name: 'Backlog', jiraStatuses: ['Backlog'] },
@@ -96,7 +96,7 @@ function entry(
   signal: SeenSignal,
   column: string,
   state: WorkSuggestion['state'] = 'suggested',
-): WorkSuggestion {
+): SavedSuggestion {
   return {
     cardId,
     signal: signal.signal,
@@ -104,6 +104,7 @@ function entry(
     reason: signal.reason,
     at: signal.at,
     state,
+    rowId: signal.rowId,
   };
 }
 
@@ -126,7 +127,7 @@ interface Row {
   seen: SeenSignal[];
   signals?: Partial<WorkSignalSetting>;
   notYet?: WorkNotYet[];
-  expected: WorkSuggestion[];
+  expected: SavedSuggestion[];
 }
 
 const ROWS: Row[] = [
@@ -272,36 +273,43 @@ const ROWS: Row[] = [
     case: "mark with at equal to the signal's",
     cards: [todo],
     seen: [fixBranch],
-    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T1 }],
+    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T1, rowId: null }],
     expected: [],
   },
   {
     case: "mark with at after the signal's",
     cards: [todo],
     seen: [fixBranch],
-    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T2 }],
+    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T2, rowId: null }],
     expected: [],
   },
   {
     case: 'mark older than a newer signal',
     cards: [todo],
     seen: [fixBranch, openAtT2],
-    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T1 }],
+    notYet: [{ cardId: 'ABC-12', signal: 'branch', at: T1, rowId: null }],
     expected: [entry('ABC-12', openAtT2, 'In QA')],
   },
   {
     case: 'mark of another card',
     cards: [todo],
     seen: [fixBranch],
-    notYet: [{ cardId: 'ABC-99', signal: 'branch', at: T2 }],
+    notYet: [{ cardId: 'ABC-99', signal: 'branch', at: T2, rowId: null }],
     expected: [entry('ABC-12', fixBranch, 'In Progress')],
   },
   {
     case: 'session mark, session signal re-stamped later',
     cards: [linkedTask],
     seen: [session('S', null, T3)],
-    notYet: [{ cardId: 'local-1', signal: 'session', at: T1 }],
+    notYet: [{ cardId: 'local-1', signal: 'session', at: T1, rowId: 'S' }],
     expected: [],
+  },
+  {
+    case: 'session mark, a later session of another row',
+    cards: [localCard('local-1', 'Todo', { linkedSessionIds: ['S', 'R'] })],
+    seen: [session('R', null, T3)],
+    notYet: [{ cardId: 'local-1', signal: 'session', at: T1, rowId: 'S' }],
+    expected: [entry('local-1', session('R', null, T3), 'In Progress')],
   },
   {
     case: 'local task, session link by row id',

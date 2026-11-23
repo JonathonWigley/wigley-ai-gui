@@ -1,7 +1,4 @@
-import type { WorkCard, WorkItem } from './contract';
-
-type JiraCard = Extract<WorkCard, { kind: 'jira' }>;
-type LocalCard = Extract<WorkCard, { kind: 'local' }>;
+import type { WorkItem, WorkJiraCard, WorkLocalCard } from './contract';
 
 // An open Needs you item `id`, with `overrides` laid over it.
 export function workItem(
@@ -36,8 +33,8 @@ export function workItem(
 export function jiraCard(
   key: string,
   jiraStatus: string,
-  overrides: Partial<JiraCard> = {},
-): JiraCard {
+  overrides: Partial<WorkJiraCard> = {},
+): WorkJiraCard {
   return {
     kind: 'jira',
     id: key,
@@ -60,8 +57,8 @@ export function jiraCard(
 export function localCard(
   id: string,
   column: string,
-  overrides: Partial<LocalCard> = {},
-): LocalCard {
+  overrides: Partial<WorkLocalCard> = {},
+): WorkLocalCard {
   return {
     kind: 'local',
     id,

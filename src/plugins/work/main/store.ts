@@ -8,7 +8,7 @@ import {
   type JsonObject,
 } from '../../../shared/json';
 import {
-  columnForStatus,
+  cardColumn,
   OTHER_COLUMN,
   WORK_SECTIONS,
   WORK_SIGNALS,
@@ -25,18 +25,25 @@ import {
 
 export const WORK_FILE = 'work.json';
 
-// A suggestion Not yet hid: `at` is the signal time it hid, so only a newer signal suggests again.
+// A suggestion as `work.json` holds it: `rowId` is the session a `session` signal came from, null for every other.
+export interface SavedSuggestion extends WorkSuggestion {
+  rowId: string | null;
+}
+
+// A suggestion Not yet hid: `at` is the signal time it hid, so only a newer signal suggests again; `rowId` is the
+// hidden session's, null for every other signal.
 export interface WorkNotYet {
   cardId: string;
   signal: WorkSignal;
   at: string;
+  rowId: string | null;
 }
 
 // What `work.json` holds.
 export interface WorkFile {
   items: WorkItem[];
   cards: WorkCard[];
-  suggestions: WorkSuggestion[];
+  suggestions: SavedSuggestion[];
   notYet: WorkNotYet[];
   job: WorkState['job'];
   lastSweepAt: string | null;
@@ -80,6 +87,21 @@ const areStrings = (record: JsonObject, keys: string[]) =>
 
 const areNullableStrings = (record: JsonObject, keys: string[]) =>
   keys.every((key) => isNullableString(record[key]));
+
+// A record saved before it had `rowId` may leave it out.
+type MaybeWithoutRowId<T extends { rowId: string | null }> = Omit<
+  T,
+  'rowId'
+> & {
+  rowId?: string | null;
+};
+
+const isRowIdOrAbsent = (record: JsonObject) =>
+  record.rowId === undefined || isNullableString(record.rowId);
+
+const withRowId = <T extends { rowId: string | null }>(
+  record: MaybeWithoutRowId<T>,
+): T => ({ ...record, rowId: record.rowId ?? null }) as T;
 
 function isWorkItem(value: unknown): value is WorkItem {
   return (
@@ -134,20 +156,24 @@ function isWorkCard(value: unknown): value is WorkCard {
   }
 }
 
-function isWorkSuggestion(value: unknown): value is WorkSuggestion {
+function isSavedSuggestion(
+  value: unknown,
+): value is MaybeWithoutRowId<SavedSuggestion> {
   return (
     isJsonObject(value) &&
     areStrings(value, ['cardId', 'column', 'reason', 'at']) &&
     isOneOf(WORK_SIGNALS, value.signal) &&
-    isOneOf(SUGGESTION_STATES, value.state)
+    isOneOf(SUGGESTION_STATES, value.state) &&
+    isRowIdOrAbsent(value)
   );
 }
 
-function isWorkNotYet(value: unknown): value is WorkNotYet {
+function isWorkNotYet(value: unknown): value is MaybeWithoutRowId<WorkNotYet> {
   return (
     isJsonObject(value) &&
     areStrings(value, ['cardId', 'at']) &&
-    isOneOf(WORK_SIGNALS, value.signal)
+    isOneOf(WORK_SIGNALS, value.signal) &&
+    isRowIdOrAbsent(value)
   );
 }
 
@@ -164,14 +190,19 @@ function isJobStatusOrNull(value: unknown): value is WorkJobStatus | null {
   );
 }
 
-function isWorkFile(value: unknown): value is WorkFile {
+type SavedWorkFile = Omit<WorkFile, 'suggestions' | 'notYet'> & {
+  suggestions: MaybeWithoutRowId<SavedSuggestion>[];
+  notYet: MaybeWithoutRowId<WorkNotYet>[];
+};
+
+function isWorkFile(value: unknown): value is SavedWorkFile {
   const isListOf = (list: unknown, isEntry: (entry: unknown) => boolean) =>
     Array.isArray(list) && list.every(isEntry);
   return (
     isJsonObject(value) &&
     isListOf(value.items, isWorkItem) &&
     isListOf(value.cards, isWorkCard) &&
-    isListOf(value.suggestions, isWorkSuggestion) &&
+    isListOf(value.suggestions, isSavedSuggestion) &&
     isListOf(value.notYet, isWorkNotYet) &&
     isJsonObject(value.job) &&
     isJobStatusOrNull(value.job.running) &&
@@ -180,8 +211,9 @@ function isWorkFile(value: unknown): value is WorkFile {
   );
 }
 
-// The work `work.json` holds, without the top-level keys it does not read; throws `work.json is not a work file` for
-// text that is not JSON, or any key or element whose fields are not of their kinds.
+// The work `work.json` holds, without the top-level keys it does not read, a suggestion or mark saved with no `rowId`
+// given a null one; throws `work.json is not a work file` for text that is not JSON, or any key or element whose
+// fields are not of their kinds.
 export function parseWorkFile(text: string): WorkFile {
   const notAWorkFile = new Error('work.json is not a work file');
   let parsed: unknown;
@@ -197,33 +229,34 @@ export function parseWorkFile(text: string): WorkFile {
   return {
     items,
     cards,
-    suggestions,
-    notYet,
+    suggestions: suggestions.map((entry) => withRowId<SavedSuggestion>(entry)),
+    notYet: notYet.map((mark) => withRowId<WorkNotYet>(mark)),
     job: { running: job.running, last: job.last },
     lastSweepAt,
   };
 }
 
-// The slot's value for `file`: a Jira card on `columnForStatus` of its status, a local task on its stored column
-// when `columns` names it and on `OTHER_COLUMN` otherwise (its stored column left as it is), and `columns`' names
+// The suggestion the slot shows, without the `rowId` only main reads.
+function shownSuggestion(saved: SavedSuggestion): WorkSuggestion {
+  const { cardId, signal, column, reason, at, state } = saved;
+  return { cardId, signal, column, reason, at, state };
+}
+
+// The slot's value for `file`: each card on its `cardColumn` (a stored column left as it is), and `columns`' names
 // then `OTHER_COLUMN`.
 export function buildWorkState(
   file: WorkFile,
   columns: readonly WorkColumnSetting[],
   problem: string | null,
 ): WorkState {
-  const names = columns.map((column) => column.name);
-  const shownColumn = (card: WorkCard) => {
-    if (card.kind === 'jira') {
-      return columnForStatus(card.jiraStatus, columns);
-    }
-    return names.includes(card.column) ? card.column : OTHER_COLUMN;
-  };
   return {
     items: file.items,
-    cards: file.cards.map((card) => ({ ...card, column: shownColumn(card) })),
-    suggestions: file.suggestions,
-    columns: [...names, OTHER_COLUMN],
+    cards: file.cards.map((card) => ({
+      ...card,
+      column: cardColumn(card, columns),
+    })),
+    suggestions: file.suggestions.map(shownSuggestion),
+    columns: [...columns.map((column) => column.name), OTHER_COLUMN],
     job: file.job,
     problem,
   };

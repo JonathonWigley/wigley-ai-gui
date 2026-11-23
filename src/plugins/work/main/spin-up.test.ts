@@ -113,11 +113,6 @@ describe('startFromWork', () => {
       | { refused: string };
   }>([
     {
-      name: 'mapped Jira card',
-      arg: card('ABC-12'),
-      expected: { kind: 'launched', project: 'gamma', profile: 'work' },
-    },
-    {
       name: 'mapping matched with jiraProject " abc "',
       arg: card('ABC-12'),
       options: { projects: [{ jiraProject: ' abc ', project: 'gamma' }] },

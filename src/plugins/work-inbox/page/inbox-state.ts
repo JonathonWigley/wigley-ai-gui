@@ -1,6 +1,7 @@
 import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
+  ageText,
   WORK_SECTIONS,
   type WorkItem,
   type WorkState,
@@ -334,19 +335,9 @@ export function listTitle(view: InboxViewState): string {
   return view.ticketFilter ?? SECTION_TITLES[view.section];
 }
 
-const MINUTE_MS = 60_000;
-
-// A card's age against `now` (epoch ms): `now` under a minute, then `<n>m`, `<n>h` under 48 hours, else `<n>d`.
+// A card's age against `now` (epoch ms): work's `ageText`, `now` under a minute.
 export function cardAge(at: string, now: number): string {
-  const minutes = Math.floor((now - Date.parse(at)) / MINUTE_MS);
-  if (minutes < 1) {
-    return 'now';
-  }
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
+  return ageText(now - Date.parse(at)) ?? 'now';
 }
 
 const MONTHS = [

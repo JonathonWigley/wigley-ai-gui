@@ -1,14 +1,14 @@
 import {
-  columnForStatus,
-  OTHER_COLUMN,
+  cardColumn,
+  comparableName,
+  namedColumn,
   ticketKeysIn,
   type WorkCard,
   type WorkColumnSetting,
   type WorkSignal,
   type WorkSignalSetting,
-  type WorkSuggestion,
 } from '../contract';
-import type { WorkNotYet } from './store';
+import type { SavedSuggestion, WorkNotYet } from './store';
 
 // One piece of work the signal watch saw, matched to cards by `keys`, `rowId` and `branch`.
 export interface SeenSignal {
@@ -48,35 +48,17 @@ export function compareIso(a: string, b: string): number {
   return Date.parse(a) - Date.parse(b);
 }
 
-const comparable = (name: string) => name.trim().toLowerCase();
-
-// The `columns` entry's own name that `signals[signal]` names, compared case-insensitively after trimming; null when
-// the signal is off or names no entry.
+// The `columns` entry's own name that `signals[signal]` names, compared as `namedColumn` compares; null when the
+// signal is off or names no entry.
 export function signalColumn(
   signal: WorkSignal,
   signals: Readonly<WorkSignalSetting>,
   columns: readonly WorkColumnSetting[],
 ): string | null {
-  const wanted = comparable(signals[signal]);
-  if (wanted === 'off') {
+  if (comparableName(signals[signal]) === 'off') {
     return null;
   }
-  return (
-    columns.find((column) => comparable(column.name) === wanted)?.name ?? null
-  );
-}
-
-// The column a card sits in: a Jira card's is `columnForStatus` of its status, a local task's its own when `columns`
-// names it; else `OTHER_COLUMN`.
-export function cardColumn(
-  card: WorkCard,
-  columns: readonly WorkColumnSetting[],
-): string {
-  if (card.kind === 'jira') {
-    return columnForStatus(card.jiraStatus, columns);
-  }
-  const isNamed = columns.some((column) => column.name === card.column);
-  return isNamed ? card.column : OTHER_COLUMN;
+  return namedColumn(signals[signal], columns)?.name ?? null;
 }
 
 // The position of the column `name` in `columns`; -1 for `OTHER_COLUMN` and any name no entry has.
@@ -171,8 +153,8 @@ function chosenSignal(card: WorkCard, input: DetectionInput): Candidate | null {
   return chosen;
 }
 
-// True when a Not yet mark of `card` hides `signal`: the signal is no newer than the mark, or both are session
-// signals, whose `at` a restart re-stamps.
+// True when a Not yet mark of `card` hides `signal`: the signal is no newer than the mark, or both are signals of the
+// same session, whose `at` a restart re-stamps.
 function isHiddenByMark(
   card: WorkCard,
   signal: SeenSignal,
@@ -183,9 +165,11 @@ function isHiddenByMark(
       return false;
     }
     const isNoNewer = compareIso(signal.at, mark.at) <= 0;
-    const isSessionOverSession =
-      mark.signal === 'session' && signal.signal === 'session';
-    return isNoNewer || isSessionOverSession;
+    const isSameSession =
+      mark.signal === 'session' &&
+      signal.signal === 'session' &&
+      mark.rowId === signal.rowId;
+    return isNoNewer || isSameSession;
   });
 }
 
@@ -194,7 +178,7 @@ function isHiddenByMark(
 function entryFor(
   card: WorkCard,
   input: DetectionInput,
-): WorkSuggestion | null {
+): SavedSuggestion | null {
   const cardIndex = columnIndex(cardColumn(card, input.columns), input.columns);
   if (cardIndex === -1 || card.movingTo !== null) {
     return null;
@@ -210,6 +194,7 @@ function entryFor(
     column,
     reason: signal.reason,
     at: signal.at,
+    rowId: signal.rowId,
   };
   if (index > cardIndex) {
     return { ...entry, state: 'suggested' };
@@ -224,8 +209,8 @@ function entryFor(
 
 // At most one entry per card, in card order: the move the card's work suggests, or the move Jira already made in
 // answer to it. A card in `OTHER_COLUMN` or with a move under way gets none.
-export function detectSuggestions(input: DetectionInput): WorkSuggestion[] {
-  const entries: WorkSuggestion[] = [];
+export function detectSuggestions(input: DetectionInput): SavedSuggestion[] {
+  const entries: SavedSuggestion[] = [];
   for (const card of input.cards) {
     const entry = entryFor(card, input);
     if (entry !== null) {

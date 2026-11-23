@@ -18,6 +18,7 @@ import {
   type WorkCard,
   type WorkColumnSetting,
   type WorkItem,
+  type WorkJiraCard,
   type WorkJob,
   type WorkSection,
 } from '../contract';
@@ -36,7 +37,7 @@ const TITLE_FROM_SUMMARY_LENGTH = 60;
 export const READ_WORK_STATE_TOOL: ToolDefinition = {
   name: 'read_work_state',
   description:
-    "Read what the app's Inbox and Board hold now: the running job, the last sweep's time, the Board columns with their Jira statuses, every inbox item's id, section, state, title and time, and every card. Only the running work job's session may call it.",
+    "Read what the app's Inbox and Board hold now: the running job, the last sweep's time, the Board columns with their Jira statuses, each inbox item's id, section, state, title and time (cleared and dismissed items only from the last 7 days), and every card. Only the running work job's session may call it.",
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 };
 
@@ -223,8 +224,6 @@ export interface RecordedTicket {
   reachableStatuses: string[] | null;
 }
 
-type JiraCard = Extract<WorkCard, { kind: 'jira' }>;
-
 interface ItemMerge {
   file: WorkFile;
   added: number;
@@ -344,10 +343,10 @@ export function mergeRecordedItems(
 }
 
 function mergedCard(
-  stored: JiraCard | undefined,
+  stored: WorkJiraCard | undefined,
   ticket: RecordedTicket,
   now: string,
-): JiraCard {
+): WorkJiraCard {
   const recordedFields = {
     kind: 'jira' as const,
     id: ticket.key,

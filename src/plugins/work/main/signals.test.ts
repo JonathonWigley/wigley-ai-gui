@@ -73,7 +73,7 @@ function keyedSlot<V>() {
     } else {
       values.set(key, value);
     }
-    for (const listener of [...listeners]) {
+    for (const listener of listeners) {
       listener(key, value);
     }
   };
@@ -893,6 +893,28 @@ describe('watch', () => {
     expect(atByRow(w.reports[1])).toEqual([
       ['S', NOW_ISO],
       ['T', new Date(NOW + 60 * 60 * 1000).toISOString()],
+    ]);
+    watch.dispose();
+  });
+
+  it('a session that left and came back is sighted anew', async () => {
+    const w = world();
+    w.openSession('S', null);
+    const watch = createSignalWatch(w.deps);
+    const back = NOW + 2 * 60 * 60 * 1000;
+
+    watch.refresh();
+    await settled();
+    w.chatSessions.set('S', undefined);
+    watch.refresh();
+    await settled();
+    w.time.now = back;
+    w.openSession('S', null);
+    watch.refresh();
+    await settled();
+
+    expect(w.reports.at(-1)?.map((signal) => signal.at)).toEqual([
+      new Date(back).toISOString(),
     ]);
     watch.dispose();
   });

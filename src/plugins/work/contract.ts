@@ -99,6 +99,9 @@ export type WorkCard =
     })
   | (WorkCardBase & { kind: 'local'; sourceItemId: string | null });
 
+export type WorkJiraCard = Extract<WorkCard, { kind: 'jira' }>;
+export type WorkLocalCard = Extract<WorkCard, { kind: 'local' }>;
+
 export interface WorkSuggestion {
   cardId: string;
   signal: WorkSignal;
@@ -136,7 +139,8 @@ export interface WorkState {
 // The Board's last column, holding every card no `work.columns` entry takes.
 export const OTHER_COLUMN = 'Other';
 
-const comparable = (status: string) => status.trim().toLowerCase();
+// A status or column name as the work rules compare it: trimmed, case-insensitive.
+export const comparableName = (name: string) => name.trim().toLowerCase();
 
 // The first column whose `jiraStatuses` holds `status`, compared case-insensitively after trimming; else
 // `OTHER_COLUMN`. The one rule that places a Jira card.
@@ -144,10 +148,32 @@ export function columnForStatus(
   status: string,
   columns: readonly WorkColumnSetting[],
 ): string {
-  const wanted = comparable(status);
+  const wanted = comparableName(status);
   const holdsStatus = (column: WorkColumnSetting) =>
-    column.jiraStatuses.some((listed) => comparable(listed) === wanted);
+    column.jiraStatuses.some((listed) => comparableName(listed) === wanted);
   return columns.find(holdsStatus)?.name ?? OTHER_COLUMN;
+}
+
+// The `columns` entry `name` names, compared case-insensitively after trimming; undefined for none.
+export function namedColumn(
+  name: string,
+  columns: readonly WorkColumnSetting[],
+): WorkColumnSetting | undefined {
+  const wanted = comparableName(name);
+  return columns.find((column) => comparableName(column.name) === wanted);
+}
+
+// The column a card sits in: a Jira card's is `columnForStatus` of its status, a local task's its stored column when
+// `columns` names it exactly; else `OTHER_COLUMN`. The one rule that places a card.
+export function cardColumn(
+  card: WorkCard,
+  columns: readonly WorkColumnSetting[],
+): string {
+  if (card.kind === 'jira') {
+    return columnForStatus(card.jiraStatus, columns);
+  }
+  const isNamed = columns.some((column) => column.name === card.column);
+  return isNamed ? card.column : OTHER_COLUMN;
 }
 
 const TICKET_KEY = /\b[A-Z][A-Z0-9]+-\d+\b/g;
@@ -231,20 +257,18 @@ const TONES: Record<WorkJobStatus['state'], WorkStatusLine['tone']> = {
 
 const MINUTE_MS = 60_000;
 
-// `just now` under a minute, `<n>m ago` under an hour, `<n>h ago` under 48 hours, else `<n>d ago`.
-function agoText(elapsedMs: number): string {
+// An age of `elapsedMs`: `<n>m` under an hour, `<n>h` under 48 hours, else `<n>d`; null under a minute. The one
+// age rule both views show.
+export function ageText(elapsedMs: number): string | null {
   const minutes = Math.floor(elapsedMs / MINUTE_MS);
   if (minutes < 1) {
-    return 'just now';
+    return null;
   }
   if (minutes < 60) {
-    return `${minutes}m ago`;
+    return `${minutes}m`;
   }
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) {
-    return `${hours}h ago`;
-  }
-  return `${Math.floor(hours / 24)}d ago`;
+  return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
 }
 
 // The status line both views draw: it describes `job.running`, else `job.last`, aged against `now` (epoch ms).
@@ -255,7 +279,8 @@ export function statusLine(job: WorkState['job'], now: number): WorkStatusLine {
     return { text: 'No job yet', tone: 'idle', hasRow };
   }
   const word = KIND_WORDS[shown.kind];
-  const ago = agoText(now - Date.parse(shown.at));
+  const age = ageText(now - Date.parse(shown.at));
+  const ago = age === null ? 'just now' : `${age} ago`;
   const forms: Record<WorkJobStatus['state'], string> = {
     queued: `${word} queued`,
     running: `${word} running · started ${ago}`,

@@ -191,10 +191,16 @@ describe('createWorkStore', () => {
           reason: 'PR #4 merged',
           at: '2026-11-23T11:00:00.000Z',
           state: 'suggested',
+          rowId: null,
         },
       ],
       notYet: [
-        { cardId: 'WS-1', signal: 'branch', at: '2026-11-23T09:00:00.000Z' },
+        {
+          cardId: 'WS-1',
+          signal: 'session',
+          at: '2026-11-23T09:00:00.000Z',
+          rowId: 'row-1',
+        },
       ],
       job: {
         running: {
@@ -219,6 +225,32 @@ describe('createWorkStore', () => {
 
     expect(parseWorkFile(await memory.read(WORK_FILE))).toEqual(full);
   });
+
+  it('parse_savedWithoutRowIds_readsNullRowIds', () => {
+    const entry = {
+      cardId: 'WS-1',
+      signal: 'branch',
+      column: 'Review',
+      reason: 'Branch ws-1',
+      at: '2026-11-23T11:00:00.000Z',
+      state: 'suggested',
+    } as const;
+    const mark = {
+      cardId: 'WS-2',
+      signal: 'session',
+      at: '2026-11-23T09:00:00.000Z',
+    } as const;
+    const text = JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      suggestions: [entry],
+      notYet: [mark],
+    });
+
+    const parsed = parseWorkFile(text);
+
+    expect(parsed.suggestions).toEqual([{ ...entry, rowId: null }]);
+    expect(parsed.notYet).toEqual([{ ...mark, rowId: null }]);
+  });
 });
 
 describe('buildWorkState', () => {
@@ -240,10 +272,34 @@ describe('buildWorkState', () => {
       },
     },
     {
-      case: 'a local task keeps its column',
-      file: { ...EMPTY_WORK_FILE, cards: [localCard('local-1', 'Todo')] },
+      case: 'a suggestion shows without its row id',
+      file: {
+        ...EMPTY_WORK_FILE,
+        suggestions: [
+          {
+            cardId: 'local-1',
+            signal: 'session',
+            column: 'Review',
+            reason: 'Session "Fix"',
+            at: '2026-11-23T11:00:00.000Z',
+            state: 'suggested',
+            rowId: 'row-1',
+          },
+        ],
+      },
       problem: null,
-      expected: { cards: [localCard('local-1', 'Todo')] },
+      expected: {
+        suggestions: [
+          {
+            cardId: 'local-1',
+            signal: 'session',
+            column: 'Review',
+            reason: 'Session "Fix"',
+            at: '2026-11-23T11:00:00.000Z',
+            state: 'suggested',
+          },
+        ],
+      },
     },
     {
       case: 'a local task in a column work.columns lacks shows in Other',

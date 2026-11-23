@@ -4,14 +4,14 @@ import type { ChatMainExports } from '../../chat/contract';
 import type {
   WorkCard,
   WorkItem,
+  WorkJiraCard,
   WorkLinkArg,
+  WorkLocalCard,
   WorkProjectSetting,
   WorkStartArg,
 } from '../contract';
 import type { Refusal } from './actions';
 import type { WorkFile } from './store';
-
-type JiraCard = Extract<WorkCard, { kind: 'jira' }>;
 
 // `launched`: chat started row `rowId` visibly, and the page toasts `toast`. `prompt`: no project fits, so the page
 // opens chat's new-session prompt with `message` waiting in the box. Either way the session links to `cardIds`.
@@ -73,7 +73,7 @@ function threadMessage(item: WorkItem): string {
 }
 
 function localTaskMessage(
-  task: Extract<WorkCard, { kind: 'local' }>,
+  task: WorkLocalCard,
   items: readonly WorkItem[],
 ): string {
   const lines = [`Work on: ${task.title}`];
@@ -124,7 +124,7 @@ export function spinUpMessage(
     return threadMessage(target);
   }
   const card = cards.find(
-    (candidate): candidate is JiraCard =>
+    (candidate): candidate is WorkJiraCard =>
       candidate.kind === 'jira' &&
       candidate.key.toUpperCase() === key.toUpperCase(),
   );

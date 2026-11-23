@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { jiraCard, localCard } from './contract.test-support';
 import {
+  ageText,
+  cardColumn,
   columnForStatus,
+  namedColumn,
   readColumns,
   readProjects,
   statusLine,
@@ -42,6 +46,72 @@ describe('columnForStatus', () => {
     { status: 'Done', columns: [], expected: 'Other' },
   ])('places "$status" in $expected', ({ status, columns, expected }) => {
     expect(columnForStatus(status, columns)).toBe(expected);
+  });
+});
+
+describe('namedColumn', () => {
+  const columns: WorkColumnSetting[] = [
+    { name: 'Todo', jiraStatuses: ['To Do'] },
+    { name: 'In QA', jiraStatuses: ['In Review'] },
+  ];
+
+  it.each<{ name: string; expected: string | undefined }>([
+    { name: 'In QA', expected: 'In QA' },
+    { name: ' in qa ', expected: 'In QA' },
+    { name: 'Other', expected: undefined },
+    { name: 'Review', expected: undefined },
+  ])('finds "$name" as $expected', ({ name, expected }) => {
+    expect(namedColumn(name, columns)?.name).toBe(expected);
+  });
+});
+
+describe('cardColumn', () => {
+  const columns: WorkColumnSetting[] = [
+    { name: 'Todo', jiraStatuses: ['To Do'] },
+    { name: 'In QA', jiraStatuses: ['In Review'] },
+  ];
+
+  it.each([
+    {
+      case: 'a Jira card by its status, not its stored column',
+      card: jiraCard('WS-1', 'in review', { column: 'Todo' }),
+      expected: 'In QA',
+    },
+    {
+      case: 'a Jira card with an unmapped status',
+      card: jiraCard('WS-1', 'Blocked', { column: 'Todo' }),
+      expected: 'Other',
+    },
+    {
+      case: 'a local task in a listed column',
+      card: localCard('local-1', 'In QA'),
+      expected: 'In QA',
+    },
+    {
+      case: 'a local task in a column no entry names',
+      card: localCard('local-1', 'Gone'),
+      expected: 'Other',
+    },
+    {
+      case: 'a local task whose column differs in case',
+      card: localCard('local-1', 'in qa'),
+      expected: 'Other',
+    },
+  ])('places $case', ({ card, expected }) => {
+    expect(cardColumn(card, columns)).toBe(expected);
+  });
+});
+
+describe('ageText', () => {
+  it.each<{ elapsedMs: number; expected: string | null }>([
+    { elapsedMs: MINUTE - 1, expected: null },
+    { elapsedMs: MINUTE, expected: '1m' },
+    { elapsedMs: HOUR - 1, expected: '59m' },
+    { elapsedMs: HOUR, expected: '1h' },
+    { elapsedMs: 48 * HOUR - 1, expected: '47h' },
+    { elapsedMs: 48 * HOUR, expected: '2d' },
+  ])('gives $elapsedMs ms as $expected', ({ elapsedMs, expected }) => {
+    expect(ageText(elapsedMs)).toBe(expected);
   });
 });
 
@@ -190,30 +260,6 @@ describe('statusLine', () => {
       running: null,
       last: job('sweep', 'done', MINUTE - 1),
       expected: { text: 'Sweep done just now', tone: 'success', hasRow: false },
-    },
-    {
-      case: 'one minute',
-      running: null,
-      last: job('sweep', 'done', MINUTE),
-      expected: { text: 'Sweep done 1m ago', tone: 'success', hasRow: false },
-    },
-    {
-      case: 'just under an hour',
-      running: null,
-      last: job('sweep', 'done', HOUR - 1),
-      expected: { text: 'Sweep done 59m ago', tone: 'success', hasRow: false },
-    },
-    {
-      case: 'just under 48 hours',
-      running: null,
-      last: job('sweep', 'done', 48 * HOUR - 1),
-      expected: { text: 'Sweep done 47h ago', tone: 'success', hasRow: false },
-    },
-    {
-      case: '48 hours',
-      running: null,
-      last: job('sweep', 'done', 48 * HOUR),
-      expected: { text: 'Sweep done 2d ago', tone: 'success', hasRow: false },
     },
   ])('describes $case', ({ running, last, expected }) => {
     expect(statusLine({ running, last }, NOW)).toEqual(expected);

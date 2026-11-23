@@ -1,17 +1,17 @@
 import {
-  columnForStatus,
+  cardColumn,
+  comparableName,
+  namedColumn,
   OTHER_COLUMN,
   type WorkCard,
   type WorkColumnSetting,
   type WorkItem,
+  type WorkJiraCard,
   type WorkJob,
   type WorkMoveArg,
   type WorkSendArg,
-  type WorkSuggestion,
 } from '../contract';
-import type { WorkFile } from './store';
-
-type JiraCard = Extract<WorkCard, { kind: 'jira' }>;
+import type { SavedSuggestion, WorkFile } from './store';
 
 // A press the store applies: the new file, the job it queues (null for none) and the line logged under `[work]`.
 export interface ActionResult {
@@ -48,9 +48,6 @@ const done = (
   log: string,
 ): ActionResult => ({ file, job, log });
 
-// Names compared as `columnForStatus` compares statuses: trimmed, case-insensitive.
-const comparable = (name: string) => name.trim().toLowerCase();
-
 const isoAt = (epochMs: number) => new Date(epochMs).toISOString();
 
 function withItem(file: WorkFile, changed: WorkItem): WorkFile {
@@ -72,25 +69,6 @@ function withoutSuggestionsOf(file: WorkFile, cardId: string): WorkFile {
     ...file,
     suggestions: file.suggestions.filter((entry) => entry.cardId !== cardId),
   };
-}
-
-// The `columns` entry `name` names, matched trimmed and case-insensitively; undefined for none.
-function namedColumn(
-  name: string,
-  columns: readonly WorkColumnSetting[],
-): WorkColumnSetting | undefined {
-  const wanted = comparable(name);
-  return columns.find((column) => comparable(column.name) === wanted);
-}
-
-// The column a card sits in: `columnForStatus` of a Jira card's status, a local task's own.
-function columnOf(
-  card: WorkCard,
-  columns: readonly WorkColumnSetting[],
-): string {
-  return card.kind === 'jira'
-    ? columnForStatus(card.jiraStatus, columns)
-    : card.column;
 }
 
 // The item `itemId`, or the refusal for it: unknown, or sending (`dismiss`, `snooze` and `send` take no press on a
@@ -235,7 +213,7 @@ export function addToBoard(
   }
   const keys = new Set(item.ticketKeys.map((key) => key.toUpperCase()));
   const jiraCard = file.cards.find(
-    (card): card is JiraCard =>
+    (card): card is WorkJiraCard =>
       card.kind === 'jira' && keys.has(card.key.toUpperCase()),
   );
   if (jiraCard !== undefined) {
@@ -272,11 +250,11 @@ export function addToBoard(
 
 // The refusal of a Jira card's move to `column`, by the first rule it breaks; else the column it moves to.
 function jiraMoveTarget(
-  card: JiraCard,
+  card: WorkJiraCard,
   column: string,
   columns: readonly WorkColumnSetting[],
 ): WorkColumnSetting | Refusal {
-  if (comparable(column) === comparable(OTHER_COLUMN)) {
+  if (comparableName(column) === comparableName(OTHER_COLUMN)) {
     return refuse(`${OTHER_COLUMN} has no Jira status`);
   }
   const target = namedColumn(column, columns);
@@ -289,7 +267,7 @@ function jiraMoveTarget(
   if (card.movingTo !== null) {
     return refuse(`Already moving to ${card.movingTo}`);
   }
-  if (columnOf(card, columns) === target.name) {
+  if (cardColumn(card, columns) === target.name) {
     return refuse(`Already in ${target.name}`);
   }
   return target;
@@ -321,7 +299,7 @@ export function moveCard(
   if (target === undefined) {
     return refuse(`No column ${arg.column}`);
   }
-  if (comparable(card.column) === comparable(target.name)) {
+  if (comparableName(card.column) === comparableName(target.name)) {
     return refuse(`Already in ${target.name}`);
   }
   return done(
@@ -335,7 +313,7 @@ export function moveCard(
 function actionableSuggestion(
   file: WorkFile,
   cardId: string,
-): WorkSuggestion | Refusal {
+): SavedSuggestion | Refusal {
   const entry = file.suggestions.find(
     (candidate) => candidate.cardId === cardId,
   );
@@ -366,7 +344,8 @@ export function acceptSuggestion(
   return { ...moved, file: withoutSuggestionsOf(moved.file, cardId) };
 }
 
-// Hides the card's suggestion until a newer signal, replacing any earlier mark of the card.
+// Hides the card's suggestion until a newer signal, or for a session's suggestion until a newer signal of another
+// session, replacing any earlier mark of the card.
 export function notYet(file: WorkFile, cardId: string): ActionResult | Refusal {
   const entry = actionableSuggestion(file, cardId);
   if ('refused' in entry) {
@@ -376,7 +355,7 @@ export function notYet(file: WorkFile, cardId: string): ActionResult | Refusal {
     ...file,
     notYet: [
       ...file.notYet.filter((mark) => mark.cardId !== cardId),
-      { cardId, signal: entry.signal, at: entry.at },
+      { cardId, signal: entry.signal, at: entry.at, rowId: entry.rowId },
     ],
   };
   return done(withoutSuggestionsOf(marked, cardId), null, `not yet ${cardId}`);
@@ -417,7 +396,7 @@ function sendEnded(file: WorkFile, itemId: string, end: JobEnd): WorkFile {
 
 function moveEnded(file: WorkFile, key: string, end: JobEnd): WorkFile {
   const card = file.cards.find(
-    (candidate): candidate is JiraCard =>
+    (candidate): candidate is WorkJiraCard =>
       candidate.kind === 'jira' && candidate.key === key,
   );
   if (card === undefined) {

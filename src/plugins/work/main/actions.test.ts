@@ -4,7 +4,6 @@ import type {
   WorkColumnSetting,
   WorkItem,
   WorkJob,
-  WorkSuggestion,
 } from '../contract';
 import { jiraCard, localCard, workItem } from '../contract.test-support';
 import {
@@ -26,7 +25,7 @@ import {
   send,
   snooze,
 } from './actions';
-import { EMPTY_WORK_FILE, type WorkFile } from './store';
+import { EMPTY_WORK_FILE, type SavedSuggestion, type WorkFile } from './store';
 
 const NOW = Date.parse('2026-11-23T12:00:00.123Z');
 const NOW_ISO = '2026-11-23T12:00:00.123Z';
@@ -55,8 +54,8 @@ const refused = (text: string): Refusal => ({ refused: text });
 
 function suggestion(
   cardId: string,
-  overrides: Partial<WorkSuggestion> = {},
-): WorkSuggestion {
+  overrides: Partial<SavedSuggestion> = {},
+): SavedSuggestion {
   return {
     cardId,
     signal: 'branch',
@@ -64,6 +63,7 @@ function suggestion(
     reason: `Branch ${cardId.toLowerCase()}-fix in repo`,
     at: '2026-11-23T09:00:00.000Z',
     state: 'suggested',
+    rowId: null,
     ...overrides,
   };
 }
@@ -518,7 +518,7 @@ describe('acceptSuggestion', () => {
   it.each<{
     name: string;
     card: WorkCard;
-    suggestions: WorkSuggestion[];
+    suggestions: SavedSuggestion[];
     expected: ActionResult | Refusal;
   }>([
     {
@@ -537,7 +537,10 @@ describe('acceptSuggestion', () => {
     {
       name: 'a local task moves at once',
       card: localCard('ABC-12', 'Todo'),
-      suggestions: [kept, suggestion('ABC-12', { signal: 'session' })],
+      suggestions: [
+        kept,
+        suggestion('ABC-12', { signal: 'session', rowId: 'row-3' }),
+      ],
       expected: result(
         fileWith({
           cards: [localCard('ABC-12', 'In Progress', { movedAt: NOW_ISO })],
@@ -577,12 +580,13 @@ describe('notYet', () => {
     cardId: 'XYZ-1',
     signal: 'commit' as const,
     at: '2026-11-22T08:00:00.000Z',
+    rowId: null,
   };
   const kept = suggestion('XYZ-1');
 
   it.each<{
     name: string;
-    suggestions: WorkSuggestion[];
+    suggestions: SavedSuggestion[];
     expected: ActionResult | Refusal;
   }>([
     {
@@ -604,6 +608,29 @@ describe('notYet', () => {
               cardId: 'ABC-12',
               signal: 'pr_opened',
               at: '2026-11-23T10:30:00.000Z',
+              rowId: null,
+            },
+          ],
+        }),
+        null,
+        'not yet ABC-12',
+      ),
+    },
+    {
+      name: "a session's mark records its row",
+      suggestions: [
+        suggestion('ABC-12', { signal: 'session', rowId: 'row-3' }),
+      ],
+      expected: result(
+        fileWith({
+          cards: [card],
+          notYet: [
+            otherMark,
+            {
+              cardId: 'ABC-12',
+              signal: 'session',
+              at: '2026-11-23T09:00:00.000Z',
+              rowId: 'row-3',
             },
           ],
         }),
@@ -626,7 +653,12 @@ describe('notYet', () => {
       cards: [card],
       suggestions,
       notYet: [
-        { cardId: 'ABC-12', signal: 'branch', at: '2026-11-21T08:00:00.000Z' },
+        {
+          cardId: 'ABC-12',
+          signal: 'branch',
+          at: '2026-11-21T08:00:00.000Z',
+          rowId: null,
+        },
         otherMark,
       ],
     });
@@ -641,6 +673,7 @@ describe('deleteTask', () => {
     cardId: 'XYZ-1',
     signal: 'branch' as const,
     at: '2026-11-22T08:00:00.000Z',
+    rowId: null,
   };
 
   it.each<{
@@ -682,6 +715,7 @@ describe('deleteTask', () => {
           cardId: 'local-1',
           signal: 'session',
           at: '2026-11-22T09:00:00.000Z',
+          rowId: 'row-1',
         },
         otherMark,
       ],
@@ -878,7 +912,9 @@ describe('actions', () => {
           localCard('local-1', 'Todo'),
         ],
         suggestions: [suggestion('XYZ-2'), suggestion('local-1')],
-        notYet: [{ cardId: 'local-1', signal: 'branch', at: NOW_ISO }],
+        notYet: [
+          { cardId: 'local-1', signal: 'branch', at: NOW_ISO, rowId: null },
+        ],
         job: { running: null, last: null },
       });
     const file = deepFreeze(build());

@@ -12,13 +12,14 @@ import { errorText } from '../../../shared/error-text';
 import type { ChatMainExports, ChatSessionInfo } from '../../chat/contract';
 import { editableTitle, type SessionRow } from '../../sessions/contract';
 import type { PoolSnapshot } from '../../unity-pool/contract';
-import type {
-  WorkCard,
-  WorkColumnSetting,
-  WorkSignalSetting,
-} from '../contract';
 import {
   cardColumn,
+  type WorkCard,
+  type WorkColumnSetting,
+  type WorkJiraCard,
+  type WorkSignalSetting,
+} from '../contract';
+import {
   commitKeyPattern,
   type SeenSignal,
   signalColumn,
@@ -172,7 +173,7 @@ async function branchSignals(
 
 // A Jira card a commit could move, with the pattern its commits match.
 interface CommitSearch {
-  card: Extract<WorkCard, { kind: 'jira' }>;
+  card: WorkJiraCard;
   pattern: string;
 }
 
@@ -294,14 +295,21 @@ async function pullRequestSignals(
   return signals;
 }
 
-// One signal per unowned session, in `chat.session` key order, its `at` the first sighting `sightings` holds.
+// One signal per unowned session, in `chat.session` key order, its `at` the first sighting `sightings` holds. Drops
+// the sighting of each row chat no longer holds.
 function sessionSignals(
   deps: SignalDeps,
   sightings: Map<string, string>,
 ): SeenSignal[] {
   const now = new Date(deps.clock.now()).toISOString();
+  const sessions = deps.chatSessions.all();
+  for (const rowId of sightings.keys()) {
+    if (!sessions.has(rowId)) {
+      sightings.delete(rowId);
+    }
+  }
   const signals: SeenSignal[] = [];
-  for (const [rowId, info] of deps.chatSessions.all()) {
+  for (const [rowId, info] of sessions) {
     const row = deps.sessionRows.get(rowId);
     if (row === undefined || row.owner !== null) {
       continue;
