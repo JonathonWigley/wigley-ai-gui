@@ -91,4 +91,10 @@ Commit: one commit per repo for the group.
 
 ## Proof
 
+Docs on the list (deduplicated):
+- `wigley-agents/`: `AGENTS.md`, `AgentsStandardMapping.md`, `ClaudeCode.md`, `Terminal.md`, `WigleyRepos.md`, `decisions.md`, `forms.md`, `workflows.md`, `wiki/Main.md`, `tools/wigley-land/README.md`, `tools/workflow-gate/README.md`
+- `wigley-ai-gui/`: `AGENTS.md`, `CHANGELOG.md`, `LICENSE`, `README.md`, `agent-plugin/scripts/docs-index/README.md`, `agent-plugin/scripts/relay/README.md`, `agent-plugin/skills/{audio-picker,backlog-format,chatroom,forms,live-view,primer,visuals,workflows-and-checklist,writing-auri-json}/SKILL.md`
+- `wigley-ai-marketplace/`: `AGENTS.md`, `README.md`, `plugins/wigley/auri.json`, `plugins/wigley/skills/{chatroom,clean-up-branches,debug,explore,feature-export-quickview,feature-primer,feature,make,medium,retro,review,small,spike,tech-spec,unity-playtest,unity-ux-flow,visuals}/SKILL.md`, `feature-primer/audit.md`, `review/triage.md`
+- Personal, never committed: `~/.agents/AGENTS.local.md`
+
 Commit 924dfd766 · proof: Five lanes (reports/16-agents-1, 16-readmes-1, 16-skills-1, 16-ai-1, 16-design-1): app AGENTS.md, READMEs and CHANGELOG, every agent-plugin and .agents skill, keymap, DESIGN.md, and 14 feature designs read and checked against landed src; the ai side's 40-odd skills and agent docs hunk-checked plus a stale-name grep, its six core docs read in full. Lead diff read. npm run lint passes; readme-coverage test passes; the planned-mark grep leaves only README.md:21 (the repo split, task 17). check_pointers.py fails only in wigley-agents/learning/candidates (wigley:visuals, wigley:chatroom names, three § headings), which the retro owns. · concerns: Path references to the app inside ai left for 17's sweep. builds-marked lines (README auri:builds row, keymap km/m, agent-plugin/skills/builds) wait on the Builds run. followups' isStringOrNull copy list may be stale. learning/ candidates name retired wigley:visuals/chatroom skills; the retro owns them. The 1.1.0 release commit was undone and is re-cut after the Builds land.

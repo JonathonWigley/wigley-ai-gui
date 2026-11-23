@@ -172,7 +172,7 @@ A workflow is one entry of the `workflows` array in an agent plugin's `auri.json
 actions and templates. The schema, and every field a stage takes, are in `docs/features/feature-contributions/design.md`
 § Section: workflows. The stage tables above are the wigley plugin's own entries, in
 `wigley-ai-marketplace/plugins/wigley/auri.json`. The app also holds a sample copy of the four, as self-test and demo fixtures, in
-`src/plugins/workflow/declared/sample-auri.json`.
+`src/plugins/workflow/declared/fixtures/sample-auri.json`.
 
 The engine reads the enabled declared workflows and builds two halves from each, through `src/plugins/workflow/declared/`:
 
