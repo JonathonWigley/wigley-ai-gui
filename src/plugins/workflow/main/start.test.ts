@@ -63,12 +63,14 @@ import {
   WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
 import {
-  DESIGN_MEDIUM,
-  DESIGN_PLUGIN,
-  DESIGN_SMALL,
-  designDeclared,
+  SAMPLE_MEDIUM,
+  SAMPLE_SMALL,
   strategyOf,
-} from '../declared/fixtures.test-support';
+} from '../declared/sample-fixtures.test-support';
+import {
+  SAMPLE_PLUGIN_NAME,
+  sampleDeclared,
+} from '../declared/sample-workflows';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
@@ -94,6 +96,13 @@ type WorkflowHeard = QualifiedEvents<'chat', ChatMainEvents> &
 const FLOWS_PATH = `/data/workflow/${FLOWS_FILE}`;
 
 const settled = () => new Promise((settle) => setImmediate(settle));
+
+// Git that finds every folder outside a clone, so each plan has one copy.
+const NO_CLONE_GIT = {
+  topLevel: async () => null,
+  worktrees: async () => [],
+  commonDir: async () => '/r/.git',
+};
 
 // Timers and a clock the test moves by hand: `advance` moves the clock and
 // runs each timer that came due, in due order.
@@ -145,6 +154,10 @@ function session(id: string, hostSessionId: string): AgentSession {
 // as the last run left it; `selfTest` starts the part with the self-test on, so its
 // hooks are exported.
 // `setActiveTime` sets the clock chat's fake reports for every session.
+// `project` is the project files the plan capability reads, under git that
+// finds every folder outside a clone; `chatCalls` holds each send and clear
+// chat's fake took; `autoStart` is the starting `workflow.autoStart`, and
+// `sessionLabel` s1's side-bar label.
 // `contributionsFake` is the contributions fake, ready at once unless the test
 // passes its own; `contributions` holds each tool contribution; `pushSettings` replaces the settings and tells the part;
 // `hooks` holds each relay hook handler and `invokeHandlers` each channel
@@ -154,6 +167,9 @@ function startWorkflowPart(
     data?: MemoryFiles;
     selfTest?: boolean;
     contributions?: ReturnType<typeof fakeContributions>;
+    project?: MemoryFiles;
+    autoStart?: (typeof workflowManifest.settings)['autoStart'];
+    sessionLabel?: string;
   } = {},
 ) {
   const contributionsFake = options.contributions ?? fakeContributions();
@@ -164,7 +180,7 @@ function startWorkflowPart(
   const invokeHandlers = new Map<string, (arg: never) => unknown>();
   let settings: typeof workflowManifest.settings = {
     off: [],
-    autoStart: [],
+    autoStart: options.autoStart ?? [],
     layout: 'default',
   };
   const settingsListeners: ((next: typeof settings) => void)[] = [];
@@ -184,11 +200,28 @@ function startWorkflowPart(
   let activeTime: ActiveTime | null = null;
   let headless = false;
   let launchedHeadless = false;
+  const project = options.project ?? createMemoryFiles();
+  const chatCalls: unknown[][] = [];
   const chat: Pick<
     ChatMainExports,
-    'activeTime' | 'addInstructions' | 'isHeadless' | 'launchedHeadless'
+    | 'activeTime'
+    | 'addInstructions'
+    | 'isHeadless'
+    | 'launchedHeadless'
+    | 'send'
+    | 'clear'
+    | 'launch'
+    | 'profileOf'
   > = {
     activeTime: () => activeTime,
+    send: async (sessionId, message) => {
+      chatCalls.push(['send', sessionId, message.text]);
+    },
+    clear: async (sessionId) => {
+      chatCalls.push(['clear', sessionId]);
+    },
+    launch: async () => 's2',
+    profileOf: () => 'personal',
     isHeadless: () => headless,
     launchedHeadless: () => launchedHeadless,
     addInstructions: (text) => {
@@ -205,7 +238,8 @@ function startWorkflowPart(
     SessionsMainExports,
     'contributeTools' | 'addHookHandler' | 'label'
   > = {
-    label: () => null,
+    label: (sessionId) =>
+      sessionId === 's1' ? (options.sessionLabel ?? null) : null,
     addHookHandler: (name, handler) => {
       hooks.set(name, handler);
       return { dispose: () => hooks.delete(name) };
@@ -249,11 +283,16 @@ function startWorkflowPart(
       return { dispose: () => undefined };
     },
     services: {
-      files: createMemoryFiles(),
+      files: project,
+      git: NO_CLONE_GIT,
       log: (line: string) => logged.push(line),
       clock: time.clock,
       timers: time.timers,
       paths: posixPaths,
+      // The self-test's sample Large script names its plan-run folder from
+      // these.
+      homeDir: '/home',
+      appInstance: { id: 'app', isDev: false },
       selfTest: options.selfTest === true ? { run: () => undefined } : null,
       demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
@@ -337,6 +376,8 @@ function startWorkflowPart(
   };
   return {
     data,
+    project,
+    chatCalls,
     time,
     store,
     logged,
@@ -1517,41 +1558,6 @@ describe('workflowMainPart', () => {
     expect(opened).toEqual([]);
   });
 
-  it('Exports_SetState_KeepsSavedAtAndSends', async () => {
-    const workflow = startWorkflowPart();
-    const folded: FoldEvent[] = [];
-    workflow.exported().observe({
-      folded: (fold) => folded.push(fold),
-      opened: () => undefined,
-      closed: () => undefined,
-      replaying: () => undefined,
-    });
-    await workflow.openS1();
-    workflow.exported().signal('s1', { type: 'turnStarted' }, 'live');
-    const savedBefore = await workflow.savedAt();
-    folded.length = 0;
-    const sentBefore = workflow.sent.length;
-    workflow.time.advance(5);
-
-    workflow.exported().setState('s1', { n: 1 });
-
-    expect(workflow.exported().flowOf('s1')?.state).toEqual({ n: 1 });
-    expect(await workflow.savedAt()).toBe(savedBefore);
-    expect(workflow.sent).toHaveLength(sentBefore + 1);
-    expect(folded).toEqual([]);
-  });
-
-  it('Exports_SetState_NoFlowOrUndefined', async () => {
-    const workflow = startWorkflowPart();
-    await workflow.openS1();
-
-    workflow.exported().setState('s-none', { n: 1 });
-    workflow.exported().setState('s1', undefined);
-
-    expect(workflow.exported().flowOf('s-none')).toBeNull();
-    expect(workflow.exported().flowOf('s1')?.state).toBeNull();
-  });
-
   it.each<{ origin: 'live' | 'observed'; stamped: boolean }>([
     { origin: 'observed', stamped: false },
     { origin: 'live', stamped: true },
@@ -1771,13 +1777,13 @@ function addDeclared(
 // its `ready` still pending.
 function startWithContributed(decls: readonly WorkflowDecl[]) {
   const contributions = fakeContributions();
-  contributions.set('workflows', [strategyOf(DESIGN_PLUGIN, decls)]);
+  contributions.set('workflows', [strategyOf(SAMPLE_PLUGIN_NAME, decls)]);
   return startWorkflowPart({ contributions });
 }
 
 describe('workflowMainPart › declared workflows', () => {
   it('Contributed_ADeclaredWorkflow_OffersItsStepsInTheStepTool', async () => {
-    const workflow = startWithContributed([DESIGN_SMALL]);
+    const workflow = startWithContributed([SAMPLE_SMALL]);
 
     workflow.contributionsFake.resolveReady();
     await settled();
@@ -1793,7 +1799,7 @@ describe('workflowMainPart › declared workflows', () => {
   });
 
   it('Off_ADeclaredWorkflow_LeavesTheSlotAndTheStepsOnlyItDeclares', async () => {
-    const workflow = startWithContributed([DESIGN_SMALL, DESIGN_MEDIUM]);
+    const workflow = startWithContributed([SAMPLE_SMALL, SAMPLE_MEDIUM]);
     workflow.contributionsFake.resolveReady();
     await settled();
     const stepsBefore = stepsOffered(workflow);
@@ -1821,7 +1827,7 @@ describe('workflowMainPart › declared workflows', () => {
       layout: 'default',
     });
 
-    const added = addDeclared(workflow, designDeclared('small'));
+    const added = addDeclared(workflow, sampleDeclared('small'));
     const whileAdded = declaredIds(workflow);
     const stepsWhileAdded = stepsOffered(workflow);
     added.dispose();
@@ -1833,7 +1839,7 @@ describe('workflowMainPart › declared workflows', () => {
   });
 
   it('SkillStartedBeforeContributionsReady_FoldsAfter_AndClaims', async () => {
-    const workflow = startWithContributed([DESIGN_SMALL]);
+    const workflow = startWithContributed([SAMPLE_SMALL]);
     await workflow.openS1();
     await workflow.agentEvent(skill('wigley:small', ''));
     const flowBeforeReady = workflow.lastFlow();
@@ -1850,7 +1856,7 @@ describe('workflowMainPart › declared workflows', () => {
 
   it('ClaimFromTheChecklistFlow_MetersTheRunFromTheClaim', async () => {
     const workflow = startWorkflowPart({ selfTest: true });
-    addDeclared(workflow, designDeclared('small'));
+    addDeclared(workflow, sampleDeclared('small'));
     await workflow.openS1();
     await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
     workflow.setActiveTime(activeFor(3000));
@@ -1884,6 +1890,295 @@ describe('workflowMainPart › declared workflows', () => {
         { text: 'a', done: true },
         { text: 'b', done: false },
       ],
+    });
+  });
+});
+
+const PLAN_DIR = '/r/docs/features/x/plan-a';
+const PLAN_FILE = `${PLAN_DIR}/plan.md`;
+const PLAN =
+  '# Plan A — plan\n\n## Tasks\n\n- [x] one\n- [ ] two\n- [ ] three\n';
+const PLAN_WITH_TWO_ROUNDS = `${PLAN}\n## Run log\n\n### Review rounds\n- one\n- two\n`;
+const LARGE_ID = 'wigley:large';
+const AUTO_START = [{ workflow: LARGE_ID, seconds: 10 }];
+
+// The part with the sample Large added through the self-test hooks.
+function startWithLarge(
+  options: Omit<
+    NonNullable<Parameters<typeof startWorkflowPart>[0]>,
+    'selfTest'
+  > = {},
+) {
+  const workflow = startWorkflowPart({ ...options, selfTest: true });
+  addDeclared(workflow, sampleDeclared('large'));
+  return workflow;
+}
+
+// A wigley:feature turn's events, in log order, each stamped `at`.
+function featureTurnEvents(at: number): AgentEvent[] {
+  return [
+    { ...skill('wigley:feature', ''), at },
+    { type: 'turnStarted', at },
+    { type: 'fileWritten', at, agentId: 'main', path: PLAN_FILE },
+    { type: 'turnEnded', at },
+  ];
+}
+
+// Opens s1 and runs a wigley:feature turn that writes the plan and ends, its
+// events flagged `replayed` as given.
+async function runFeatureTurn(
+  workflow: ReturnType<typeof startWorkflowPart>,
+  replayed = false,
+): Promise<void> {
+  await workflow.openS1();
+  await workflow.agentEvent(skill('wigley:feature', ''), 'h1', replayed);
+  await workflow.agentEvent({ type: 'turnStarted', at: 1 }, 'h1', replayed);
+  await workflow.project.write(PLAN_FILE, PLAN);
+  await workflow.agentEvent(
+    { type: 'fileWritten', at: 1, agentId: 'main', path: PLAN_FILE },
+    'h1',
+    replayed,
+  );
+  await workflow.agentEvent({ type: 'turnEnded', at: 1 }, 'h1', replayed);
+}
+
+// The fields of s1's flow the Large rows read.
+function largeFieldsOf(flow: SessionFlow | undefined) {
+  return {
+    stage: flow?.stage,
+    planDir: flow?.plan?.dir ?? null,
+    total: flow?.plan?.progress?.total ?? null,
+    countdownEndsAt: flow?.countdownEndsAt ?? null,
+  };
+}
+
+describe('workflowMainPart › the sample Large', () => {
+  it.each([
+    { name: 'its side-bar label', sessionLabel: 'r 2', ranIn: 'r 2' },
+    { name: 'its folder with no label', sessionLabel: undefined, ranIn: 'r' },
+  ])(
+    'featureTurnWritingAPlan_ReachesPlanReady_AndAutoStartsClearAndMake_LoggingTheSessionBy_$name',
+    async ({ sessionLabel, ranIn }) => {
+      const workflow = startWithLarge({ autoStart: AUTO_START, sessionLabel });
+
+      await runFeatureTurn(workflow);
+
+      const ready = workflow.lastFlow();
+      expect(largeFieldsOf(ready)).toEqual({
+        stage: 'planReady',
+        planDir: PLAN_DIR,
+        total: 3,
+        countdownEndsAt: START + 10_000,
+      });
+      await settled();
+      const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
+        flows: { hostSessionId: string; flow: SessionFlow; savedAt: number }[];
+      };
+      expect(saved.flows).toEqual([
+        { hostSessionId: 'h1', flow: ready, savedAt: START },
+      ]);
+
+      workflow.time.advance(9_999);
+      expect(workflow.chatCalls).toEqual([]);
+      workflow.time.advance(1);
+      await settled();
+      expect(workflow.chatCalls).toEqual([
+        ['clear', 's1'],
+        ['send', 's1', `/wigley:make ${PLAN_DIR}`],
+      ]);
+      expect(workflow.logged).toContainEqual(
+        `ran wigley-large-clearAndMake in ${ranIn}`,
+      );
+    },
+  );
+
+  it('replayedFeatureTurn_ReachesPlanReady_StartsNoCountdown', async () => {
+    const workflow = startWithLarge({ autoStart: AUTO_START });
+
+    await runFeatureTurn(workflow, true);
+
+    expect(largeFieldsOf(workflow.lastFlow())).toMatchObject({
+      stage: 'planReady',
+      planDir: PLAN_DIR,
+      countdownEndsAt: null,
+    });
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it('replayBurstOfAFeatureTurn_ItsPlanReadStartsNoCountdown', async () => {
+    const workflow = startWithLarge({ autoStart: AUTO_START });
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    await workflow.replayBurst(featureTurnEvents(1));
+    await settled();
+
+    expect(largeFieldsOf(workflow.lastFlow())).toEqual({
+      stage: 'planReady',
+      planDir: PLAN_DIR,
+      total: 3,
+      countdownEndsAt: null,
+    });
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it('StepTool_Large', async () => {
+    const workflow = startWithLarge();
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    workflow.time.advance(5);
+
+    const result = await workflow.callStepTool('s1', 'cold_read');
+
+    expect(workflow.lastFlow()?.stage).toBe('coldRead');
+    expect(result.content[0].text).toBe('Step set to cold_read.');
+    await settled();
+    const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
+      flows: { flow: SessionFlow; savedAt: number }[];
+    };
+    expect(saved.flows[0]).toMatchObject({
+      flow: { stage: 'coldRead' },
+      savedAt: START + 5,
+    });
+  });
+
+  it('Open_SavedCountdown_RunsNone', async () => {
+    const data = await savedFlowData({
+      workflow: LARGE_ID,
+      stage: 'planReady',
+      countdownEndsAt: 9000,
+    });
+    const workflow = startWithLarge({ data, autoStart: AUTO_START });
+
+    await workflow.openS1();
+
+    expect(workflow.lastFlow()?.countdownEndsAt).toBeNull();
+    expect(await workflow.savedAt()).toBe(SAVED_AT);
+    expect(workflow.time.liveTimers()).toBe(0);
+  });
+
+  it('Countdown_CancelStopsTheTimer', async () => {
+    const workflow = startWithLarge({ autoStart: AUTO_START });
+    await runFeatureTurn(workflow);
+    const timersWhileCounting = workflow.time.liveTimers();
+
+    await workflow.invokeHandlers.get('runAction')?.({
+      sessionId: 's1',
+      action: 'cancelCountdown',
+    } as never);
+    await settled();
+
+    expect(workflow.time.liveTimers()).toBe(timersWhileCounting - 1);
+    expect(workflow.lastFlow()?.countdownEndsAt).toBeNull();
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it("Countdown_CancelOnAnotherWorkflow'sFlow_LeavesIt", async () => {
+    const workflow = startWithLarge({ autoStart: AUTO_START });
+    workflow.exported().addWorkflow(stubWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    const before = workflow.exported().flowOf('s1');
+
+    await workflow.invokeHandlers.get('runAction')?.({
+      sessionId: 's1',
+      action: 'cancelCountdown',
+    } as never);
+    await settled();
+
+    expect(workflow.exported().flowOf('s1')).toBe(before);
+  });
+
+  it('RunLog_LargeClosed', async () => {
+    const workflow = startWithLarge();
+    await workflow.project.write(PLAN_FILE, PLAN_WITH_TWO_ROUNDS);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+    workflow.setActiveTime(activeFor(4000));
+    await workflow.agentEvent(spent(1.25));
+    workflow.setActiveTime(activeFor(0));
+    await workflow.emit('sessions.hostSessionChanged', session('s1', 'h2'));
+    workflow.setActiveTime(activeFor(1500));
+    await workflow.agentEvent(spent(2.5), 'h2');
+    workflow.time.advance(90_000);
+
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+
+    expect(workflow.lastFlow()?.stage).toBe('closed');
+    expect(await runLogLines(workflow)).toEqual([
+      {
+        at: START + 90_000,
+        sessionId: 's1',
+        projectDir: '/r',
+        workflow: LARGE_ID,
+        movedUpFrom: null,
+        activeMs: 5500,
+        costUsd: 3.75,
+        fixCycles: 2,
+      },
+    ]);
+  });
+
+  it('RunLog_MovedUp', async () => {
+    const workflow = startWithLarge();
+    workflow.exported().addWorkflow(
+      stubWorkflow({
+        id: 'small',
+        claims: (signal) => startsSkill(signal, 'x:small'),
+        firstStage: 'build',
+      }),
+    );
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:small', ''));
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+
+    expect(await runLogLines(workflow)).toMatchObject([
+      { workflow: LARGE_ID, movedUpFrom: 'small' },
+    ]);
+  });
+
+  it('RunLog_OnlyOnEntry', async () => {
+    const workflow = startWithLarge();
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+    expect(workflow.lastFlow()?.stage).toBe('closed');
+
+    workflow.exported().signal('s1', { type: 'planGone' }, 'live');
+
+    expect(await runLines(workflow)).toHaveLength(1);
+  });
+
+  it('MissedLevel_ClaimedInTurn_StaysFalse', async () => {
+    const workflow = startWithLarge();
+    await workflow.openS1();
+
+    for (const event of [
+      { type: 'turnStarted', at: 1 },
+      skill('wigley:feature', ''),
+      USAGE,
+      { type: 'turnEnded', at: 1 },
+    ] satisfies AgentEvent[]) {
+      await workflow.agentEvent(event);
+    }
+
+    expect(workflow.lastFlow()).toMatchObject({
+      missedLevel: false,
+      workflow: LARGE_ID,
     });
   });
 });

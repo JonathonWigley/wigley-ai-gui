@@ -7,13 +7,10 @@ import {
 } from '../contract';
 import { newFlow } from '../flow';
 import { CANCEL_COUNTDOWN_ACTION, createDeclaredActions } from './actions';
-import {
-  designDeclared,
-  SAMPLE_PLAN_DIR,
-  samplePlan,
-} from './fixtures.test-support';
+import { SAMPLE_PLAN_DIR, samplePlan } from './sample-fixtures.test-support';
+import { sampleDeclared } from './sample-workflows';
 
-const LARGE = designDeclared('large');
+const LARGE = sampleDeclared('large');
 
 const PLANNED: SessionFlow = {
   ...newFlow('s1', '/r'),
@@ -67,7 +64,7 @@ function startActions(
       isHeadless: (sessionId) => options.headless?.includes(sessionId) ?? false,
     },
     log: (line) => logs.push(line),
-    workflows: () => [designDeclared('small'), LARGE],
+    workflows: () => [sampleDeclared('small'), LARGE],
     flowOf: () => flow,
     signal: (_sessionId, signal) => signals.push(signal),
     cancelCountdown: (sessionId) => calls.push(['cancelCountdown', sessionId]),

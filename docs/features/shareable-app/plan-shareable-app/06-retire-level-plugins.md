@@ -1,6 +1,6 @@
 # 06 — Retire the four level plugins onto sample declarations
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · many parts: four plugins' behaviour moves onto declarations, and a wrong label or trigger changes what the user sees
 Wave: 5 · Depends on: 04, 05

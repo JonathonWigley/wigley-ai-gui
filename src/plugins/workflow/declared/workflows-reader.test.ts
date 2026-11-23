@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkflowDecl } from '../../../contracts/contributions';
 import {
-  DESIGN_LARGE,
-  DESIGN_MEDIUM,
-  DESIGN_PLAN_FORMAT,
-  DESIGN_SMALL,
-  DESIGN_SOURCE,
-  DESIGN_WORKFLOWS,
+  SAMPLE_LARGE,
+  SAMPLE_MEDIUM,
+  SAMPLE_PLAN_FORMAT,
+  SAMPLE_SMALL,
+  SAMPLE_SOURCE,
+  SAMPLE_WORKFLOWS,
   strategyOf,
-} from './fixtures.test-support';
+} from './sample-fixtures.test-support';
 import { declaredWorkflows, workflowsReader } from './workflows-reader';
 
 // The Large example's stage indexes the refusal rows name.
@@ -20,7 +20,7 @@ const REVIEW = 8;
 
 // A section holding the Large example after `change`.
 function largeWith(change: (decl: WorkflowDecl) => void): WorkflowDecl[] {
-  const decl = structuredClone(DESIGN_LARGE);
+  const decl = structuredClone(SAMPLE_LARGE);
   change(decl);
   return [decl];
 }
@@ -30,10 +30,10 @@ function stage(decl: WorkflowDecl, index: number) {
 }
 
 describe('workflowsReader', () => {
-  it('Read_TheFourDesignExamples_Pass', () => {
-    expect(workflowsReader.read(DESIGN_WORKFLOWS, DESIGN_SOURCE)).toEqual({
+  it('Read_TheFourSamples_Pass', () => {
+    expect(workflowsReader.read(SAMPLE_WORKFLOWS, SAMPLE_SOURCE)).toEqual({
       ok: true,
-      value: DESIGN_WORKFLOWS,
+      value: SAMPLE_WORKFLOWS,
     });
   });
 
@@ -150,16 +150,16 @@ describe('workflowsReader', () => {
     },
     {
       name: 'an id declared twice',
-      section: [DESIGN_SMALL, DESIGN_SMALL],
+      section: [SAMPLE_SMALL, SAMPLE_SMALL],
       reason: '[1].id: small is already declared at [0]',
     },
     {
       name: 'a section that is not an array',
-      section: DESIGN_SMALL,
+      section: SAMPLE_SMALL,
       reason: 'not an array of workflow declarations',
     },
   ])('Read_$name_IsRefusedWithItsPath', ({ section, reason }) => {
-    expect(workflowsReader.read(section, DESIGN_SOURCE)).toEqual({
+    expect(workflowsReader.read(section, SAMPLE_SOURCE)).toEqual({
       ok: false,
       reasons: [reason],
     });
@@ -170,10 +170,10 @@ describe('declaredWorkflows', () => {
   it('DeclaredWorkflows_QualifiesJoinsPlanFormatAndLeavesOutOff', () => {
     const declared = declaredWorkflows(
       [
-        strategyOf('wigley', [DESIGN_SMALL, DESIGN_LARGE]),
-        strategyOf('acme', [DESIGN_MEDIUM]),
+        strategyOf('wigley', [SAMPLE_SMALL, SAMPLE_LARGE]),
+        strategyOf('acme', [SAMPLE_MEDIUM]),
       ],
-      [strategyOf('wigley', DESIGN_PLAN_FORMAT)],
+      [strategyOf('wigley', SAMPLE_PLAN_FORMAT)],
       ['wigley:small'],
     );
 
@@ -181,13 +181,13 @@ describe('declaredWorkflows', () => {
       {
         id: 'wigley:large',
         pluginName: 'wigley',
-        decl: DESIGN_LARGE,
-        planFormat: DESIGN_PLAN_FORMAT,
+        decl: SAMPLE_LARGE,
+        planFormat: SAMPLE_PLAN_FORMAT,
       },
       {
         id: 'acme:medium',
         pluginName: 'acme',
-        decl: DESIGN_MEDIUM,
+        decl: SAMPLE_MEDIUM,
         planFormat: null,
       },
     ]);

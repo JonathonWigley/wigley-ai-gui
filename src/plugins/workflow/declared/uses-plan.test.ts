@@ -5,7 +5,7 @@ import type {
   TriggerDecl,
   WorkflowDecl,
 } from '../../../contracts/contributions';
-import { DESIGN_LARGE, DESIGN_SMALL } from './fixtures.test-support';
+import { SAMPLE_LARGE, SAMPLE_SMALL } from './sample-fixtures.test-support';
 import { usesPlan } from './uses-plan';
 
 const START: StageDecl = {
@@ -101,13 +101,13 @@ describe('usesPlan', () => {
       name: 'a plan predicate in when',
       decl: withTrigger({ step: 's', when: [{ counterRose: 'rounds' }] }),
     },
-    { name: 'the Large example', decl: DESIGN_LARGE },
+    { name: 'the Large example', decl: SAMPLE_LARGE },
   ])('$name uses the plan', ({ decl }) => {
     expect(usesPlan(decl)).toBe(true);
   });
 
   it.each([
-    { name: 'the Small example', decl: DESIGN_SMALL },
+    { name: 'the Small example', decl: SAMPLE_SMALL },
     {
       name: 'only idle and busy predicates',
       decl: withAction({ ...SEND, enabled: ['idle', 'busy'] }),

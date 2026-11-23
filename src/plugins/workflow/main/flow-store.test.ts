@@ -17,7 +17,6 @@ const SAVED_H1: SessionFlow = {
   movedUpFrom: null,
   stage: 'build',
   checklist: [{ text: 'a', done: true }],
-  state: { n: 1 },
   turnRunning: true,
   runningSubagents: ['a1'],
 };
@@ -104,10 +103,6 @@ describe('createFlowStore', () => {
       flow: { ...SAVED_H1, missedLevel: 'x' },
     },
     {
-      name: 'no state',
-      flow: (({ state: _state, ...rest }) => rest)(SAVED_H1),
-    },
-    {
       name: 'the old shape',
       flow: {
         sessionId: 's-old',
@@ -130,7 +125,7 @@ describe('createFlowStore', () => {
   });
 
   it.each<{ name: string; flow: SessionFlow }>([
-    { name: 'a workflow, its state and its checklist', flow: SAVED_H1 },
+    { name: 'a workflow and its checklist', flow: SAVED_H1 },
     {
       name: 'the declared-workflow fields',
       flow: {
@@ -140,10 +135,6 @@ describe('createFlowStore', () => {
         enteredFrom: 'review',
         countdownEndsAt: 9_000,
       },
-    },
-    {
-      name: 'a state the store does not check',
-      flow: { ...SAVED_H1, state: { planDir: 3 } },
     },
     {
       name: 'a field an older app saved',
@@ -201,6 +192,25 @@ describe('createFlowStore', () => {
     );
 
     expect(store.open('s9', 'h1', '/r')).toMatchObject(expected);
+    expect(logs).toEqual([]);
+  });
+
+  it('Load_SavedState_LoadsWithoutIt', async () => {
+    const { store, logs } = await loadStore(
+      flowsFile([
+        {
+          hostSessionId: 'h1',
+          flow: { ...SAVED_H1, state: { planDir: '/p' } } as SessionFlow,
+        },
+      ]),
+    );
+
+    expect(store.open('s9', 'h1', '/r')).toStrictEqual({
+      ...SAVED_H1,
+      sessionId: 's9',
+      turnRunning: false,
+      runningSubagents: [],
+    });
     expect(logs).toEqual([]);
   });
 

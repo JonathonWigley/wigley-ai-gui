@@ -228,11 +228,15 @@ export function createFlowStore(deps: {
 }
 
 // A saved flow with the new flow's value for each field a file written before
-// that field lacks, and a flow saved with no workflow on the Checklist flow.
+// that field lacks, without the `state` field a file written before its removal
+// holds, and a flow saved with no workflow on the Checklist flow.
 function loadedFlow(saved: SessionFlow): SessionFlow {
+  const { state: _removed, ...fields } = saved as SessionFlow & {
+    state?: unknown;
+  };
   const flow: SessionFlow = {
     ...newFlow(saved.sessionId, saved.projectDir),
-    ...saved,
+    ...fields,
   };
   return flow.workflow === null
     ? { ...flow, workflow: CHECKLIST_WORKFLOW_ID, stage: CHECKLIST_STAGE }
@@ -276,7 +280,6 @@ function isSessionFlow(value: unknown): value is SessionFlow {
     isStringOrNull(value.workflow) &&
     isStringOrNull(value.movedUpFrom) &&
     (value.checklist === null || isChecklist(value.checklist)) &&
-    'state' in value &&
     typeof value.missedLevel === 'boolean' &&
     typeof value.turnRunning === 'boolean' &&
     isStringArray(value.runningSubagents) &&

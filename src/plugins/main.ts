@@ -36,10 +36,6 @@ import { usageTabLineMainPart } from './usage-tab-line/main/start';
 import { visualMainPart } from './visual/main/start';
 import { windowMainPart } from './window/main/start';
 import { workflowMainPart } from './workflow/main/start';
-import { workflowLargeMainPart } from './workflow-large/main/start';
-import { workflowMediumMainPart } from './workflow-medium/main/start';
-import { workflowSmallMainPart } from './workflow-small/main/start';
-import { workflowSpikeMainPart } from './workflow-spike/main/start';
 
 // Every built-in plugin's main part. `builtInManifests`' order, not this
 // list's, sets the start order where no dependency says otherwise.
@@ -75,10 +71,6 @@ export const mainParts: readonly MainPart[] = [
   usageMainPart,
   usageTabLineMainPart,
   workflowMainPart,
-  workflowLargeMainPart,
-  workflowSpikeMainPart,
-  workflowSmallMainPart,
-  workflowMediumMainPart,
   unityPoolMainPart,
   systemStatsMainPart,
   visualMainPart,

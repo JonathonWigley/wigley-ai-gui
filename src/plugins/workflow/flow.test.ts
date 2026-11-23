@@ -81,14 +81,14 @@ const WORKFLOW_ROWS: {
     flow: flowWith({
       ...SMALL_AT_BUILD,
       checklist: [{ text: 'a', done: true }],
-      state: { n: 1 },
+      counters: { n: 1 },
     }),
     signal: skill('wigley:medium'),
     expected: {
       workflow: 'medium',
       stage: 'interview',
       movedUpFrom: 'small',
-      state: null,
+      counters: {},
       checklist: null,
     },
   },
@@ -104,14 +104,14 @@ const WORKFLOW_ROWS: {
       ...SMALL_AT_BUILD,
       movedUpFrom: 'medium',
       checklist: CHECKLIST,
-      state: { n: 1 },
+      counters: { n: 1 },
     }),
     signal: skill('wigley:small'),
     expected: {
       workflow: 'small',
       stage: 'build',
       movedUpFrom: 'medium',
-      state: { n: 1 },
+      counters: { n: 1 },
       checklist: null,
     },
   },
@@ -215,13 +215,17 @@ const WORKFLOW_ROWS: {
     expected: { stage: 'build', checklist: CHECKLIST, checklistReported: true },
   },
   {
-    name: 'cleared clears missedLevel and keeps the workflow, stage and state',
-    flow: flowWith({ ...SMALL_AT_BUILD, missedLevel: true, state: { n: 1 } }),
+    name: 'cleared clears missedLevel and keeps the workflow, stage and counters',
+    flow: flowWith({
+      ...SMALL_AT_BUILD,
+      missedLevel: true,
+      counters: { n: 1 },
+    }),
     signal: { type: 'cleared' },
     expected: {
       workflow: 'small',
       stage: 'build',
-      state: { n: 1 },
+      counters: { n: 1 },
       missedLevel: false,
     },
   },
@@ -348,92 +352,6 @@ describe('foldFlow', () => {
     } else {
       expect(folded).toMatchObject(expected);
     }
-  });
-});
-
-describe('foldFlow_FoldState', () => {
-  const claimsStub = (signal: WorkflowSignal) => startsSkill(signal, 'x:stub');
-
-  it('runs before the stage rules', () => {
-    const stub: MainWorkflow = {
-      id: 'stub',
-      order: 10,
-      claims: claimsStub,
-      firstStage: 'a',
-      foldState: () => ({ n: 2 }),
-      stages: [
-        {
-          id: 'b',
-          order: 10,
-          enter: (flow) => ((flow.state as { n: number }).n === 2 ? 'b' : null),
-        },
-      ],
-    };
-
-    const folded = foldFlow(
-      flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } }),
-      { type: 'turnEnded' },
-      [stub],
-    );
-
-    expect(folded).toMatchObject({ stage: 'b', state: { n: 2 } });
-  });
-
-  it('on a new claim sees the first stage and a null state', () => {
-    const foldState = vi.fn((flow: SessionFlow) => flow.state);
-    const stub: MainWorkflow = {
-      id: 'stub',
-      order: 10,
-      claims: claimsStub,
-      firstStage: 'a',
-      foldState,
-      stages: [],
-    };
-
-    foldFlow(
-      flowWith({ workflow: 'old', stage: 'z', state: { n: 1 } }),
-      skill('x:stub'),
-      [stub],
-    );
-
-    expect(foldState.mock.calls[0][0]).toMatchObject({
-      stage: 'a',
-      state: null,
-    });
-  });
-
-  it('a sameState answering true gives the same flow', () => {
-    const stub: MainWorkflow = {
-      id: 'stub',
-      order: 10,
-      claims: claimsStub,
-      firstStage: 'a',
-      foldState: () => ({ n: 2 }),
-      sameState: () => true,
-      stages: [],
-    };
-    const flow = flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } });
-
-    expect(foldFlow(flow, { type: 'turnEnded' }, [stub])).toBe(flow);
-  });
-
-  it('a foldState returning undefined gives a null state', () => {
-    const stub: MainWorkflow = {
-      id: 'stub',
-      order: 10,
-      claims: claimsStub,
-      firstStage: 'a',
-      foldState: () => undefined,
-      stages: [],
-    };
-
-    const folded = foldFlow(
-      flowWith({ workflow: 'stub', stage: 'a', state: { n: 1 } }),
-      { type: 'turnEnded' },
-      [stub],
-    );
-
-    expect(folded.state).toBeNull();
   });
 });
 

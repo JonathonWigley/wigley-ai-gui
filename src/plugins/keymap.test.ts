@@ -38,17 +38,10 @@ describe('defaultKeymap', () => {
     expect(globalCommands(served)).not.toContain('window.summon');
   });
 
-  it.each([
-    { keys: '<Leader>wn', command: 'workflow-large.makeInNewSession' },
-    { keys: '<Leader>wr', command: 'workflow-large.resumeMake' },
-    { keys: '<Leader>wo', command: 'workflow-large.openPlan' },
-    { keys: '<Leader>wt', command: 'workflow-large.retro' },
-    { keys: '<Leader>wd', command: 'workflow-large.dismiss' },
-    { keys: '<Leader>ww', command: 'workflow.mainAction' },
-  ])('workflowLargeCommands_KeepTheirChords $keys', ({ keys, command }) => {
+  it('workflowMainAction_KeepsItsChord', () => {
     expect(
-      defaultKeymap.binds.find((bind) => bind.keys === keys)?.command,
-    ).toBe(command);
+      defaultKeymap.binds.find((bind) => bind.keys === '<Leader>ww')?.command,
+    ).toBe('workflow.mainAction');
   });
 
   // Breaks when a plugin takes the list-picker commands but its picker scope

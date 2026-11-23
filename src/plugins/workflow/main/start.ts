@@ -7,6 +7,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { activeMsAt } from '../../../shared/active-time';
+import { appEndpointDir } from '../../../shared/app-endpoint-dir';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { registeredProfiles } from '../../../shared/harness-profiles';
@@ -55,6 +56,7 @@ import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
 import { startPlanCapability } from '../plan/plan-capability';
 import { createPlanFold } from '../plan/plan-fold';
+import { PLAN_RUNS_FOLDER } from '../plan/plan-reports';
 import { createStageList } from '../stage-list';
 import { signalOf } from './agent-signals';
 import {
@@ -68,6 +70,8 @@ import { createFlowStore } from './flow-store';
 import { createHeadlessLines } from './headless-line';
 import { createRunLog } from './run-log';
 import { createRunMeter } from './run-meter';
+import { sampleLargeSelfTestScript } from './sample-large-selftest-script';
+import { sampleLevelSelfTestScripts } from './sample-selftest-scripts';
 import { SESSION_NOTE } from './session-note';
 import {
   reportedSteps,
@@ -98,8 +102,11 @@ type WorkflowApi = MainApi<
 // when a fold enters a stage that finishes its workflow, writes each open session's
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
 // actions. A demo session (an ephemeral open, or a row on the demo harness) opens
-// no flow, so nothing of it reaches `flows.json`; registers the `workflow.engine` demo step's main half. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
-// `stageFinishes` for whether a flow sits in a stage that finishes its run.
+// no flow, so nothing of it reaches `flows.json`; registers the main halves of
+// the `workflow.engine` demo step and the four sample workflows' steps. Exports
+// `addWorkflow`, `signal`, `observe`, and `stageFinishes` for whether a flow
+// sits in a stage that finishes its run. Under the self-test, hands the four
+// sample workflows' scripts, each adding its sample declaration.
 // Registers the `workflows` and `planFormat` readers with contributions, runs
 // the built-in Checklist flow and every declared workflow `workflow.off` leaves
 // on (published in `workflow.declared`), answers the `workflow.checklist`
@@ -712,6 +719,34 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         };
       },
     };
+    if (services.selfTest !== null) {
+      const selfTest = services.selfTest;
+      const deps = {
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        chat,
+        sessions,
+        harnesses: services.agentHarnesses,
+        hooks: selfTestHooks,
+      };
+      selfTest.run(
+        sampleLargeSelfTestScript({
+          ...deps,
+          planRunsFolder: services.paths.join(
+            appEndpointDir(
+              services.paths,
+              services.homeDir,
+              services.appInstance.id,
+            ),
+            PLAN_RUNS_FOLDER,
+          ),
+        }),
+      );
+      for (const script of sampleLevelSelfTestScripts(deps)) {
+        selfTest.run(script);
+      }
+    }
     return {
       commands: {},
       ready() {
@@ -728,8 +763,6 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         flowOf: (sessionId) => store.get(sessionId),
         flows: () => store.all(),
         stageFinishes,
-        setState: (sessionId, state) =>
-          setFlowFields(sessionId, { state: state ?? null }),
         ready,
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         observe: (observer) => consumer.track(observe(observer)),

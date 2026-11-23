@@ -11,11 +11,11 @@ import {
 import { newFlow } from '../flow';
 import { buildPageWorkflow } from './build-page';
 import {
-  designDeclared,
   SAMPLE_PLAN_DIR,
   samplePlan,
   taskLine,
-} from './fixtures.test-support';
+} from './sample-fixtures.test-support';
+import { sampleDeclared } from './sample-workflows';
 import type { PlanPane } from './plan-pane';
 import { PREVIEW_PROJECT_DIR } from './preview';
 
@@ -57,8 +57,8 @@ function stageOf(page: PageWorkflow, id: string) {
   return stage;
 }
 
-const SMALL = designDeclared('small');
-const LARGE = designDeclared('large');
+const SMALL = sampleDeclared('small');
+const LARGE = sampleDeclared('large');
 
 const largeFlow = (fields: Partial<SessionFlow> = {}): SessionFlow => ({
   ...newFlow('s1', '/r'),
@@ -286,7 +286,7 @@ describe('buildPageWorkflow › runAction', () => {
   });
 
   it('runAction_OpenPlanWithNoPlanFile_OpensPlanMd', async () => {
-    const workflow = { ...designDeclared('large'), planFormat: null };
+    const workflow = { ...sampleDeclared('large'), planFormat: null };
     const { page, opened } = buildPage(workflow);
 
     await page.runAction?.('s1', 'wigley-large-openPlan', largeFlow());

@@ -6,10 +6,9 @@ import type { AutoStartSetting } from './contract';
 // workflow that claimed it, on its session row, in a strip above the Chat composer
 // and in a side pane beside the transcript, with the main action on `<Leader>ww`.
 // Main folds the agent events and the steps `set_workflow_step` reports into each
-// session's flow. A workflow is a declaration an agent plugin's `auri.json`
-// contributes, or, until they go, one of the level plugins, which names its
-// stages, its layouts and its commands. Every flow starts on the built-in
-// Checklist flow. `cancelCountdown` stops the auto-start countdown of the
+// session's flow. Each workflow is a declaration an agent plugin's `auri.json`
+// contributes (`declared/`), with the built-in Checklist flow, and the plan
+// capability in `plan/`. Every flow starts on the Checklist flow. `cancelCountdown` stops the auto-start countdown of the
 // session it targets. `toggleHeadless` turns the headless flag of the
 // session Sessions mode shows on or off, as the strip's Headless chip does. `stageAction` runs
 // a stage action for the session and action its arg names; every stage button,

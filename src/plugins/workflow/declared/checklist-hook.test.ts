@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionFlow } from '../contract';
 import { newFlow } from '../flow';
 import { checklistHookHandler, checklistHookReply } from './checklist-hook';
-import { samplePlan, taskLine } from './fixtures.test-support';
+import { samplePlan, taskLine } from './sample-fixtures.test-support';
 
 function flowWith(fields: Partial<SessionFlow>): SessionFlow {
   return { ...newFlow('s1', '/r'), ...fields };

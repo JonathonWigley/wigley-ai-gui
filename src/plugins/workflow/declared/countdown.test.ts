@@ -14,7 +14,8 @@ import {
   createAutoStart,
   createCountdown,
 } from './countdown';
-import { designDeclared, samplePlan, taskLine } from './fixtures.test-support';
+import { samplePlan, taskLine } from './sample-fixtures.test-support';
+import { sampleDeclared } from './sample-workflows';
 
 const NOW = 50_000;
 
@@ -102,7 +103,7 @@ describe('createCountdown', () => {
   });
 });
 
-const LARGE = designDeclared('large');
+const LARGE = sampleDeclared('large');
 const CLEAR_AND_MAKE = 'wigley-large-clearAndMake';
 const TURN_ENDED: WorkflowSignal = { type: 'turnEnded' };
 

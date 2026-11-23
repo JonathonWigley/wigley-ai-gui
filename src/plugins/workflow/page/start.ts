@@ -49,6 +49,7 @@ import {
   type WorkflowDrawDeps,
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
+import { registerSampleDemoSteps } from './sample-demo-steps';
 import { createWorkflowView } from './workflow-view';
 import {
   keyRunner,
@@ -80,7 +81,8 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // Sessions mode shows no session. `openPreview` steps chat's preview session
 // through every workflow's samples (`createPreview`). `showSample` draws a demo
 // step's sample flow on its session in place of the stored flow, and like the
-// preview runs no action; registers the `workflow.engine` demo step. Holds the
+// preview runs no action; registers the `workflow.engine` demo step and the
+// four sample workflows' steps, each adding a `demo:<id>` page half. Holds the
 // built-in Checklist flow's page half, and one page half per entry of
 // `workflow.declared`, built again when its entry changes and disposed when it
 // leaves: each declared action is a runtime command `workflow.<short id>`,
@@ -210,13 +212,16 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       badgeColor: entry.decl.badgeColor ?? DEFAULT_BADGE_COLOR,
     });
     const planPane = createPlanPane();
+    const runAction: PageBuildDeps['runAction'] = (sessionId, action) =>
+      api.channel.invoke('runAction', { sessionId, action });
+    // Docs is read at the call: a part started with no Docs page still draws.
+    const openDoc: PageBuildDeps['openDoc'] = (path) =>
+      api.dependency(docsPageKey).openDoc(path);
     const buildDeps = (draw: PageBuildDeps['draw']): PageBuildDeps => ({
       draw,
       planPane,
-      runAction: (sessionId, action) =>
-        api.channel.invoke('runAction', { sessionId, action }),
-      // Docs is read at the call: a part started with no Docs page still draws.
-      openDoc: (path) => api.dependency(docsPageKey).openDoc(path),
+      runAction,
+      openDoc,
       paths: services.paths,
     });
     // Registers each action of `entry` as `workflow.<short id>` and binds its
@@ -371,6 +376,15 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       };
     };
     registerDemoSteps(services, { showSample });
+    registerSampleDemoSteps(services, {
+      showSample,
+      addWorkflow,
+      createDraw: (entry) =>
+        createWorkflowDrawShow(drawDeps, api, drawOptions(entry)),
+      planPane,
+      runAction,
+      openDoc,
+    });
 
     const runKey = keyRunner(api.commands, log);
     // Acts on the run's target when it names one; else on the session

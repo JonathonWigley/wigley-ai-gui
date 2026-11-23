@@ -8,7 +8,8 @@ import type {
 } from '../contract';
 import { foldFlow, newFlow } from '../flow';
 import { buildMainWorkflow } from './build-main';
-import { designDeclared, samplePlan, taskLine } from './fixtures.test-support';
+import { samplePlan, taskLine } from './sample-fixtures.test-support';
+import { sampleDeclared } from './sample-workflows';
 import type { PlanFold } from './plan-fold';
 import { renderTemplate } from './templates';
 import { holds } from './triggers';
@@ -55,7 +56,7 @@ function folds(
   );
 }
 
-const LARGE = designDeclared('large');
+const LARGE = sampleDeclared('large');
 
 // A Large flow in `stage` with a read plan of two open tasks.
 function largeIn(stage: string, fields: Partial<SessionFlow> = {}) {
@@ -71,7 +72,7 @@ function largeIn(stage: string, fields: Partial<SessionFlow> = {}) {
 // The Large example with `interview` also entered on the explore step, so one
 // signal matches a trigger of the current stage and one of a later stage.
 function largeWithSecondExploreTrigger(): DeclaredWorkflow {
-  const workflow = designDeclared('large');
+  const workflow = sampleDeclared('large');
   const interview = workflow.decl.stages.find(({ id }) => id === 'interview');
   interview?.enter.push({ step: 'explore', from: ['featureRun'] });
   return workflow;
@@ -238,7 +239,7 @@ describe('buildMainWorkflow › trigger rules', () => {
 
 describe('buildMainWorkflow › counters', () => {
   it('TwoFixesFromReview_CountTwo_AndANewClaimResets', () => {
-    const medium = designDeclared('medium');
+    const medium = sampleDeclared('medium');
     const inReview: SessionFlow = {
       ...newFlow('s1', '/r'),
       workflow: medium.id,

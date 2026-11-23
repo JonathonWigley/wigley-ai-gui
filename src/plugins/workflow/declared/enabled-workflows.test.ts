@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CHECKLIST_WORKFLOW_ID, type DeclaredWorkflow } from '../contract';
 import { newFlow } from '../flow';
 import { createEnabledWorkflows } from './enabled-workflows';
-import { designDeclared } from './fixtures.test-support';
+import { sampleDeclared } from './sample-workflows';
 
 function onWorkflow(workflow: string) {
   return { ...newFlow('s1', '/r'), workflow };
@@ -11,7 +11,7 @@ function onWorkflow(workflow: string) {
 describe('createEnabledWorkflows', () => {
   it('Set_GivesTheListInOrder', () => {
     const enabled = createEnabledWorkflows();
-    const list = [designDeclared('medium'), designDeclared('small')];
+    const list = [sampleDeclared('medium'), sampleDeclared('small')];
 
     enabled.set(list);
 
@@ -28,9 +28,9 @@ describe('createEnabledWorkflows', () => {
       heard.push(workflows.map(({ id }) => id)),
     );
 
-    enabled.set([designDeclared('small')]);
-    enabled.set([designDeclared('small')]);
-    enabled.set([designDeclared('small'), designDeclared('large')]);
+    enabled.set([sampleDeclared('small')]);
+    enabled.set([sampleDeclared('small')]);
+    enabled.set([sampleDeclared('small'), sampleDeclared('large')]);
 
     expect(heard).toEqual([['wigley:small'], ['wigley:small', 'wigley:large']]);
   });
@@ -40,7 +40,7 @@ describe('createEnabledWorkflows', () => {
     const heard: (readonly DeclaredWorkflow[])[] = [];
     enabled.onWorkflowsChanged((workflows) => heard.push(workflows)).dispose();
 
-    enabled.set([designDeclared('small')]);
+    enabled.set([sampleDeclared('small')]);
 
     expect(heard).toEqual([]);
   });
@@ -51,7 +51,7 @@ describe('createEnabledWorkflows', () => {
     { workflow: 'other:large', found: null },
   ])('WorkflowOf_$workflow_Gives$found', ({ workflow, found }) => {
     const enabled = createEnabledWorkflows();
-    enabled.set([designDeclared('small'), designDeclared('large')]);
+    enabled.set([sampleDeclared('small'), sampleDeclared('large')]);
 
     expect(enabled.workflowOf(onWorkflow(workflow))?.id ?? null).toBe(found);
   });

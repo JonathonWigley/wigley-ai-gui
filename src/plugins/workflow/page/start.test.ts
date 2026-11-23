@@ -48,7 +48,7 @@ import {
   type WorkflowPageExports,
   workflowStageActionCommand,
 } from '../contract';
-import { designDeclared } from '../declared/fixtures.test-support';
+import { sampleDeclared } from '../declared/sample-workflows';
 import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
 import type { createWorkflowView } from './workflow-view';
@@ -687,7 +687,7 @@ describe('workflow page part › declared workflows', () => {
 
   // The Small example holding one more action, `go`, on the key `key`.
   function smallWithKey(key: string): DeclaredWorkflow {
-    const small = designDeclared('small');
+    const small = sampleDeclared('small');
     small.decl.actions = {
       go: { kind: 'send', label: 'Go', text: '/go', key },
     };
@@ -699,7 +699,7 @@ describe('workflow page part › declared workflows', () => {
     harness.ready();
     const declared = harness.state.publish(workflowDeclaredSlot);
 
-    declared.set('wigley:large', designDeclared('large'));
+    declared.set('wigley:large', sampleDeclared('large'));
     const whileDeclared = runtimeOf(harness);
     declared.delete('wigley:large');
 
@@ -714,7 +714,7 @@ describe('workflow page part › declared workflows', () => {
     harness.ready();
     const declared = harness.state.publish(workflowDeclaredSlot);
 
-    declared.set('wigley:large', designDeclared('large'));
+    declared.set('wigley:large', sampleDeclared('large'));
     declared.set('wigley:small', smallWithKey('<Leader>wt'));
 
     expect(workflowLines(harness, / not bound: /)).toEqual([
@@ -747,7 +747,7 @@ describe('workflow page part › declared workflows', () => {
 
     harness.state
       .publish(workflowDeclaredSlot)
-      .set('wigley:large', designDeclared('large'));
+      .set('wigley:large', sampleDeclared('large'));
 
     expect(workflowLines(harness, / not registered: /)).toEqual([
       expect.stringMatching(

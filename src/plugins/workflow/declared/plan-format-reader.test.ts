@@ -1,22 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { DESIGN_PLAN_FORMAT, DESIGN_SOURCE } from './fixtures.test-support';
+import {
+  SAMPLE_PLAN_FORMAT,
+  SAMPLE_SOURCE,
+} from './sample-fixtures.test-support';
 import { planFormatReader } from './plan-format-reader';
 
 // The design's `planFormat` with `fields` over it.
 function withFields(fields: Record<string, unknown>): unknown {
-  return { ...structuredClone(DESIGN_PLAN_FORMAT), ...fields };
+  return { ...structuredClone(SAMPLE_PLAN_FORMAT), ...fields };
 }
 
 describe('planFormatReader', () => {
   it('Read_TheDesignPlanFormat_Passes', () => {
-    expect(planFormatReader.read(DESIGN_PLAN_FORMAT, DESIGN_SOURCE)).toEqual({
+    expect(planFormatReader.read(SAMPLE_PLAN_FORMAT, SAMPLE_SOURCE)).toEqual({
       ok: true,
-      value: DESIGN_PLAN_FORMAT,
+      value: SAMPLE_PLAN_FORMAT,
     });
   });
 
   it('Read_AnEmptySection_PassesForTheDefaults', () => {
-    expect(planFormatReader.read({}, DESIGN_SOURCE)).toEqual({
+    expect(planFormatReader.read({}, SAMPLE_SOURCE)).toEqual({
       ok: true,
       value: {},
     });
@@ -37,19 +40,19 @@ describe('planFormatReader', () => {
     {
       name: 'a link that is not bareMd',
       section: withFields({
-        taskDocs: { ...DESIGN_PLAN_FORMAT.taskDocs, link: 'wiki' },
+        taskDocs: { ...SAMPLE_PLAN_FORMAT.taskDocs, link: 'wiki' },
       }),
       reason: /^\.taskDocs\.link: not bareMd$/,
     },
     {
       name: 'a fractional statusLines',
       section: withFields({
-        taskDocs: { ...DESIGN_PLAN_FORMAT.taskDocs, statusLines: 1.5 },
+        taskDocs: { ...SAMPLE_PLAN_FORMAT.taskDocs, statusLines: 1.5 },
       }),
       reason: /^\.taskDocs\.statusLines: not a positive whole number$/,
     },
   ])('Read_$name_IsRefused', ({ section, reason }) => {
-    const result = planFormatReader.read(section, DESIGN_SOURCE);
+    const result = planFormatReader.read(section, SAMPLE_SOURCE);
 
     expect(result.ok).toBe(false);
     expect(result.ok ? [] : result.reasons).toEqual([

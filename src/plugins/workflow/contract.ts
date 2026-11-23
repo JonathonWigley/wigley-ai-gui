@@ -152,8 +152,6 @@ export interface SessionFlow {
   checklist: readonly ChecklistItem[] | null;
   // True once a `checklistReported` folded; no claim resets it.
   checklistReported: boolean;
-  // The current workflow's own; null on a new claim.
-  state: unknown;
   // The plan capability's; null on another workflow's claim.
   plan: PlanState | null;
   // The declared workflow's counters by name.
@@ -200,9 +198,7 @@ export type WorkflowSignal =
   // A plan report through `set_workflow_plan` or a plan-run file.
   | { type: 'planReported'; planDir: string }
   // A declared event: an `event` action's, or a `launch` action's `then`.
-  | { type: 'event'; event: string }
-  // A workflow's own event, which the engine does not read.
-  | { type: 'custom'; event: unknown };
+  | { type: 'event'; event: string };
 
 export interface MainStage {
   id: StageId;
@@ -210,7 +206,7 @@ export interface MainStage {
   order: number;
   // The stage this signal moves the flow to, or null to leave the decision to
   // the next stage. Pure. `flow` is the flow after the fold's running state and
-  // the workflow's `foldState` for this signal (see foldFlow).
+  // the workflow's `foldFields` for this signal (see foldFlow).
   enter(flow: SessionFlow, signal: WorkflowSignal): StageId | null;
   // The value `set_workflow_step` names this stage by; left out, no report can
   // name it. The stage's own `enter` rule answers the `stepReported` signal.
@@ -227,11 +223,6 @@ export interface MainWorkflow {
   claims(signal: WorkflowSignal): boolean;
   firstStage: StageId;
   stages: readonly MainStage[];
-  // The workflow's own bookkeeping; returns the new state, or `flow.state` for
-  // no change.
-  foldState?(flow: SessionFlow, signal: WorkflowSignal): unknown;
-  // Compares states for the fold's same-flow check. Left out: by reference.
-  sameState?(a: unknown, b: unknown): boolean;
   // The flow's other fields for this signal, after the checklist and before
   // the stage rules; returns `flow` itself for no change.
   foldFields?(flow: SessionFlow, signal: WorkflowSignal): SessionFlow;
@@ -261,7 +252,6 @@ export function sampleFlow(
     stage: CHECKLIST_STAGE,
     checklist: null,
     checklistReported: false,
-    state: null,
     plan: null,
     counters: {},
     enteredFrom: null,
@@ -520,8 +510,6 @@ export interface WorkflowMainExports {
   // True when the flow's stage is one with `finishes` in the registered
   // workflow holding the flow; false for a flow with no such workflow.
   stageFinishes(flow: SessionFlow): boolean;
-  // Replaces the current workflow's state with no fold, keeping the save time.
-  setState(sessionId: string, state: unknown): void;
   observe(observer: WorkflowObserver): Disposable;
   // The engine's layout.d.ts, raw.
   layoutTypes: string;

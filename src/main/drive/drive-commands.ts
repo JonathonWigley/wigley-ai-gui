@@ -242,7 +242,7 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     setting: {
       args: '{ name: string, value: unknown }',
       description:
-        "writes the setting at a dotted path (`transparency`, `window.width`, a plugin's `workflow-large.autoStartSeconds`) to the home's settings.json",
+        "writes the setting at a dotted path (`transparency`, `window.width`, a plugin's `workflow.layout`) to the home's settings.json",
       run: async (args) => {
         const settingPath = settingPathOf(requiredString(args, 'name'));
         const mark = await markLog(window);
@@ -531,7 +531,7 @@ function settingPathOf(name: string): string[] {
 // Sets `value` at `settingPath` in the home's settings.json, the objects on
 // the way kept and missing ones made, and writes the file back whole; a
 // missing file starts as `{}`. A plugin's settings sit under its id, so
-// `['workflow-large', 'autoStartSeconds']` is the workflow-large plugin's setting.
+// `['workflow', 'layout']` is the workflow plugin's setting.
 async function writeSetting(
   homeFiles: Files,
   settingPath: string[],
