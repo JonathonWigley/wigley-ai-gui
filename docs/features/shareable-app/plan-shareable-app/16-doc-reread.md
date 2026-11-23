@@ -1,0 +1,85 @@
+# 16 — Doc re-read against the built code
+
+Status: not started
+Type: Task
+Rung: standard · doc-only: prose checked against settled, landed code
+Wave: 9 · Depends on: 01–15 (it reads every landed task's code against the docs), 17 (it runs in the new clone 17 makes, after 17's sweep has fixed the paths)
+Plan: [plan.md](plan.md)
+
+## Files
+
+Files (wigley-ai-gui), in `~/Documents/wigley-ai-gui`:
+- modify, where a line is stale: `README.md`, `CHANGELOG.md`, `AGENTS.md`, `DESIGN.md`, `docs/keymap.md`,
+  `docs/features/feature-contributions/design.md`, every `agent-plugin/skills/*/SKILL.md`,
+  `agent-plugin/scripts/relay/README.md`, `agent-plugin/scripts/docs-index/README.md`, `.agents/skills/*/SKILL.md`
+
+Files (ai), in an `ai` worktree:
+- modify, where a line is stale: `wigley-ai-marketplace/AGENTS.md`, `wigley-ai-marketplace/README.md`, every
+  `wigley-ai-marketplace/plugins/wigley/skills/**/*.md` the plan changed, every `wigley-agents/*.md` and `wigley-agents/tools/*/README.md` the plan changed
+
+Files (personal, edited in place, never committed):
+- `~/.agents/AGENTS.local.md` · `~/.claude/hooks/*` comments and deny texts · `~/.codex/AGENTS.md`
+
+## Consumes
+
+- The "Docs written ahead" commit named in `plan.md` (filled by the plan's docs commit).
+- Every task's landed code (01–15) and 17's move.
+
+## Decisions
+
+- **The list of docs to read** is the union of:
+  1. the files the docs-written-ahead commit touched: `git -C ~/Documents/ai show --name-only --format= <docs commit>`.
+     That commit stays in `ai`'s history; its `wigley-ai-gui/<path>` entries are read at `<path>` in the new clone
+     (the split rewrote the app's shas, not its paths);
+  2. each doc a task added or changed after that commit: in `ai`,
+     `git -C ~/Documents/ai log --name-only --format= <docs commit>..<split base> -- '*.md' 'wigley-ai-marketplace/plugins/wigley/auri.json'`,
+     and in the new clone `git -C ~/Documents/wigley-ai-gui log --name-only --format= -- '*.md'` over the commits since
+     the split (17 records `<split base>` in its Proof);
+  3. the personal files above, which no commit holds.
+  Write the deduplicated list into this doc's Proof section before reading, so the review sees what was covered.
+- **Line by line.** Each claim a doc makes about code — a path, a tool or setting name, a default, a key, a hook
+  event, a command and its flags, an empty state, a contribution field — is checked against the landed source with a
+  grep or a read, batched per doc. A claim that is wrong is fixed in place; a claim the code does not support at all
+  and no task built is a gap, reported to the lead rather than written into the doc or the code.
+- **Planned marks.** Every mark `wigley:feature` step 1 wrote — the phrase "planned in `shareable-app`, not built yet"
+  and any variant ("planned in shareable-app") — is found with
+  `command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git`.
+  Each is dropped when its code has landed, with the sentence reworded to stand without it. A mark whose code has
+  not landed stays, and the report names it with the task it waits on. Done when the grep prints only those.
+- **Names from File Structure.** Wherever a doc names a shared name — `mcp__plugin_auri_auri__*`, `auri.json`,
+  `strategy:<feature>`, `workflow.off`, `workflow.autoStart`, `unity-pool.scriptPath`, `CHECKLIST_WORKFLOW_ID`,
+  `WIGLEY_SESSION_ROW` — it matches `plan.md` § File Structure and the code; any old name
+  (`mcp__plugin_wigley_wigley-forms__`, `wigley-forms` as the server name, `auto-retro.folder`,
+  `workflow-large.autoClearAndMake`, `workflow-large.autoStartSeconds`, `workflow-<level>.layout`) left in a doc is
+  stale. Check with
+  `command grep -rIn -e 'mcp__plugin_wigley_wigley-forms__' -e 'auto-retro.folder' -e 'autoClearAndMake' -e 'autoStartSeconds' -e 'workflow-small\|workflow-medium\|workflow-large\|workflow-spike' <each doc>`;
+  a hit inside `docs/features/` that records history, or the changelog, stays and is listed.
+- **What the README covers** is task 15's coverage test's job; this task reads the README's prose for truth, not
+  for completeness.
+- `wigley:writing-for-agents` governs every edit to a doc an agent reads.
+- `learning/` stays untouched (the retro owns it).
+
+## Tests
+
+None added: the README coverage test, changelog lint and boundary lint (task 15) and `check_pointers.py` run in 18.
+
+## Verification
+
+```
+command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git
+(cd ~/Documents/ai/wigley-ai-marketplace && python3 scripts/check_pointers.py)
+(cd ~/Documents/wigley-ai-gui && npm run lint)
+```
+
+## Done when
+
+- Every doc on the list was read through its last line, each claim checked, every stale line fixed.
+- The planned-mark grep prints only marks whose code has not landed, each in the report with the task it waits on.
+- `check_pointers.py` passes.
+- The fixes are committed: one landing in the new clone, one in `ai`; personal files edited in place.
+- The report lists each doc read, each line fixed, and each gap found.
+
+Commit: one commit per repo for the group.
+
+## Proof
+
