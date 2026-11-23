@@ -1,6 +1,6 @@
 # 12 — The `auri` hooks: checklist edit gate, turn-end and compaction reminders, AskUserQuestion to forms
 
-Status: not started
+Status: done
 Type: Batch
 Rung: hard · crosses the Claude Code hook contract and the app's relay hook protocol, and adds a shared hook client the chatroom hook moves onto
 Wave: 4 · Depends on: 01 (`agent-plugin/hooks/hooks.json` and `scripts/relay/` exist only after 01), 04 (`CHECKLIST_HOOK` and its reply)
@@ -222,3 +222,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 3e205f034 · proof: diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item

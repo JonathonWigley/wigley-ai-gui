@@ -328,10 +328,10 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [x] [Live view](10-live-view.md) — after 03
 
 ### Wave 4
-- [ ] [Plan capability](05-plan-capability.md) — after 04
-- [ ] [Backlog](08-backlog.md) — after 03, 09
-- [ ] [App notes and tool wording](11-app-notes.md) — after 01, 02, 04
-- [ ] [The auri hooks](12-auri-hooks.md) — after 01, 04
+- [x] [Plan capability](05-plan-capability.md) — after 04
+- [x] [Backlog](08-backlog.md) — after 03, 09
+- [x] [App notes and tool wording](11-app-notes.md) — after 01, 02, 04
+- [x] [The auri hooks](12-auri-hooks.md) — after 01, 04
 
 ### Wave 5
 - [ ] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
@@ -365,6 +365,10 @@ Review base: 35f62ddac
 - 07 · deep · 0e5e7039c · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 347-351 and docs/features/auto-retro/design.md still name /wigley:retro auto and the folder setting; tsconfig is not strict, so StrategyPick narrowing is checked loosely
 - 09 · deep · 05e68a119 6883c8d0b · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: AGENTS.md line 116 still says docs reads wigley-install.ts; marketplace followups.md holds docs-index follow-ups now owned by the app
 - 04 · deep · 2ec509037 ef5ca1ea4 · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: level page tests may trip on the Checklist flow's page half; strategyOf now lives in declared/fixtures.test-support.ts, which 06 replaces
+- 05 · deep · ebbcb3765 2545d311d · diff read: startPlanCapability, createPlanFold, createPlanPane present and wired in main/page start.ts; wave 4 typecheck + lint pass after one test fix (AppInstance id literal, two spreads) · concerns: capability test builds the engine from foldFlow/buildMainWorkflow, so main/start.ts wiring is unexercised until 06/18; stage expectations rest on 04's engine rules, unrun
+- 08 · hard · e01c387f6 · diff read: backlogReader, strategy setting, contributions dependency, setFeaturesHomes call, assistantInstructions present; wave 4 typecheck + lint pass · concerns: fixtureStrategy throws if DOCS_FIXTURE_BINDING.features is null; pickProblemText ?? '' only for the type
+- 11 · hard · 83b612921 · diff read: notes and tool descriptions name auri: skills (folders checked in agent-plugin/skills/); AUTO_ANSWER_GATE_CLAUSE shared; unity-pool in default plugins.disabled; resolveScriptPath gone; one quoting break in the primer description fixed before commit; wave 4 typecheck + lint pass · concerns: stale docs outside the task: docs/features/unity-pool/design.md:123-125 and docs/features/followups.md:350 describe the removed scriptPath fallbacks (to task 16)
+- 12 · hard · 3e205f034 · diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
@@ -382,5 +386,13 @@ Review base: 35f62ddac
 - check_pointers.py imports a copy of the parser at wigley-ai-marketplace/scripts/pointer_parser/ · group 09
 - PageBuildDeps gains openDoc(path) and paths (consumers 05, 06): declared/ is the root layer · group 04
 - counters reset on any claim; a countdown starts only on a stage change into an auto stage; addDeclared ignores workflow.off and an already enabled id wins · group 04
+- 05: FollowedPlan is {dir, reported, unreportedDir, format}; a format change reopens the watch · group 05
+- 05: PlanCopyDeps gains format and drops files.list (changedAt from linked task docs); PlanReporterDeps is {workflow, workflowOf}, planWorkflowOf exported; PlanToolDeps gains planWorkflowOf · group 05
+- 05: set_workflow_plan answers Ignored before it stats the plan file; counter snapshots fill only in a stage that records them; the plan endpoint folder is computed only while a plan workflow is enabled · group 05
+- 08: the pick is held as a BacklogBinding in start.ts; a pick change with the same binding does not redraw; setFeaturesHomes is called when the registry first answers, then only when homes change · group 08
+- 08: with no pick the load reads no machine index; check-layers lets backlog main import docs features-homes.ts and docs' selftest-fixture.ts (its own sublayer); repo-folder.ts exports climbFolder and endsWithParts · group 08
+- 11: user settings.json gained plugins.disabled (without unity-pool, so it stays on for the user) and unity-pool.scriptPath ~/.local/bin/unity-pool; backup in the scratchpad · group 11
+- 11: an empty scriptPath answers no-cli 'No unity-pool script is set' with no stat; the start-test harness defaults to a set script path · group 11
+- 12: the fake hook app is shared as relay/tests/fake_hook_app.py; over the 10,000-char cap the compaction list ends on the … line without the footer; is_gated runs before the app is contacted · group 12
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 11 — App notes and tool descriptions point at `auri` skills, and unity-pool is off by default
 
-Status: not started
+Status: done
 Type: Batch
 Rung: hard · changes a plugin's default enablement and the user's saved settings
 Wave: 4 · Depends on: 01 (the `auri` skills the pointers name ship in the plugin), 02 (the `auri:` skill names and "the auri server's tools" are true only once `--plugin-dir` and the server rename land), 04 (the workflow note describes 04's Checklist flow)
@@ -165,3 +165,4 @@ Commit: one commit for the group (the user's `settings.json` is outside the repo
 
 ## Proof
 
+Commit 83b612921 · proof: diff read: notes and tool descriptions name auri: skills (folders checked in agent-plugin/skills/); AUTO_ANSWER_GATE_CLAUSE shared; unity-pool in default plugins.disabled; resolveScriptPath gone; one quoting break in the primer description fixed before commit; wave 4 typecheck + lint pass · concerns: stale docs outside the task: docs/features/unity-pool/design.md:123-125 and docs/features/followups.md:350 describe the removed scriptPath fallbacks (to task 16)
