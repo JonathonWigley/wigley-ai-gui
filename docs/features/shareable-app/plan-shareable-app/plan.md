@@ -317,15 +317,15 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [x] [The auri agent plugin scaffold](01-auri-agent-plugin.md)
 
 ### Wave 2
-- [ ] [Contributions registry](03-contributions-registry.md) — after 01
-- [ ] [wigley-land lands the app repo](19-wigley-land-app-repo.md) — after 01
+- [x] [Contributions registry](03-contributions-registry.md) — after 01
+- [x] [wigley-land lands the app repo](19-wigley-land-app-repo.md) — after 01
 
 ### Wave 3
-- [ ] [Launch wiring](02-launch-wiring.md) — after 01, 03
-- [ ] [Declarative workflow engine and Checklist flow](04-workflow-engine.md) — after 03
-- [ ] [Retro](07-retro.md) — after 03
-- [ ] [Docs and the docs index](09-docs.md) — after 01, 03
-- [ ] [Live view](10-live-view.md) — after 03
+- [x] [Launch wiring](02-launch-wiring.md) — after 01, 03
+- [x] [Declarative workflow engine and Checklist flow](04-workflow-engine.md) — after 03
+- [x] [Retro](07-retro.md) — after 03
+- [x] [Docs and the docs index](09-docs.md) — after 01, 03
+- [x] [Live view](10-live-view.md) — after 03
 
 ### Wave 4
 - [ ] [Plan capability](05-plan-capability.md) — after 04
@@ -358,9 +358,29 @@ Review base: 35f62ddac
 
 ### Groups
 - 01 · hard · 8f40515f6 b64e14f07 · diff read: every Produces present (agent-plugin.ts names, appFolder, MainServices.appDir, manifests, hooks, marketplace, moves, wigley 3.0.0); typecheck, lint, check_manifests, claude plugin validate x3 pass; Python and npm tests wait for the test gate · concerns: check-layers had no entry for agent-plugin.test.ts (fixed in b64e14f07, same rung); oxfmt also flagged 5 pre-existing Markdown files from main, formatted; check_pointers fails only on 4 pre-existing ~/wigley-agents/learning/candidates headings, outside this diff; retro ledger files and forms.md line 14 still name old paths (task 14)
+- 03 · deep · 9125a450a 95fe3eef5 · diff read: every Produces present in contracts/contributions.ts, contributions/contract.ts, plugin.ts, agent.ts, config-store, plugin-types; wave 2 typecheck and lint pass after the fix commit; tests wait for the test gate · concerns: TS2589 on the slot publish fixed with a local cast key (values unknown) in main/start.ts; start.test.ts debounce rows rest on harness timer assumptions, never run; page/start.ts slot sync untested; tell now iterates the live listener set; no-thenable warning on ActionDecl then left
+- 19 · hard · 87f2f1e05 · diff read: repo_kind, APP_REPO, scan_secrets, auri update with installed-only skip, README modes present; both files parse; suite waits for the test gate · concerns: a landing with no pull scans main..branch but pushes origin/main..main, so earlier unpushed main commits go unscanned; betterleaks --redact/--exit-code unchecked against the binary (task 17); skip-betterleaks test PATH assumption
+- 02 · standard · bda3396a9 · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: liveStart test asserts on the fake session host's spawn (the ProcessRunner route the plan named is never reached)
+- 10 · hard · 9fec618a4 6883c8d0b · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 339-341 still describe capture.py; oxfmt fixes rode in task 09's fix commit
+- 07 · deep · 0e5e7039c · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 347-351 and docs/features/auto-retro/design.md still name /wigley:retro auto and the folder setting; tsconfig is not strict, so StrategyPick narrowing is checked loosely
+- 09 · deep · 05e68a119 6883c8d0b · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: AGENTS.md line 116 still says docs reads wigley-install.ts; marketplace followups.md holds docs-index follow-ups now owned by the app
+- 04 · deep · 2ec509037 ef5ca1ea4 · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: level page tests may trip on the Checklist flow's page half; strategyOf now lives in declared/fixtures.test-support.ts, which 06 replaces
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
 - relay README 'Registering the server' describes the built state, including task 02's --plugin-dir launch · group 01
+- registerFeature<V>(key, reader: FeatureReader<V> & JsonSlot<V>) replaces V extends JsonValue: interface values cannot extend the recursive JsonValue (consumers 04 07 08 09 10, call sites unchanged) · group 03
+- JsonValue defined in contracts/contributions.ts (no app-wide type existed) · group 03
+- userValue moved from settings setting-rows.ts to shared/json.ts so the workflow-list control kind can use it · group 03
+- several reasons from one refused section make one problem, lines joined by newline · group 03
+- RepoKind namedtuple (AI_REPO, APP_REPO) chosen once by repo_kind replaces require_ai_clone · group 19
+- secrets stage is a sub-item of README step 4 so steps keep their numbers · group 19
+- the row 'unity --project-path P command editor_play' now expects start(P), the planned widening · group 10
+- PlaytestWatchDeps gains patterns(); live-view-reader exports playtestPatternsOf and probeScriptOf · group 10
+- with no pick, one 'retro not queued' line per distinct pick JSON; a strategies or settings change re-commits the queue · group 07
+- createTarget, placesFor, buildTree, buildWikiTree, locateScript take the docs binding or pluginDir (contract changes inside docs only) · group 09
+- check_pointers.py imports a copy of the parser at wigley-ai-marketplace/scripts/pointer_parser/ · group 09
+- PageBuildDeps gains openDoc(path) and paths (consumers 05, 06): declared/ is the root layer · group 04
+- counters reset on any claim; a countdown starts only on a stage change into an auto stage; addDeclared ignores workflow.off and an already enabled id wins · group 04
 ### Review rounds
 ### Test gate

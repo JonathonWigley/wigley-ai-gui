@@ -1,6 +1,6 @@
 # 04 — Declarative workflow engine and the built-in Checklist flow
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses the flow fold, saved flows, the countdown timers, runtime commands and keys, and the relay hook protocol
 Wave: 3 · Depends on: 03
@@ -484,3 +484,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 2ec509037 ef5ca1ea4 · proof: diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: level page tests may trip on the Checklist flow's page half; strategyOf now lives in declared/fixtures.test-support.ts, which 06 replaces

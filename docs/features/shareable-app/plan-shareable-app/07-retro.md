@@ -1,6 +1,6 @@
 # 07 — Auto-retro reads its command, folder and triggers from the picked retro strategy
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · it changes the queue's launch, restore-claim and wake lifecycle across the serial chain, and reads the persisted `queue.json`
 Wave: 3 · Depends on: 03
@@ -115,4 +115,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 0e5e7039c · proof: diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 347-351 and docs/features/auto-retro/design.md still name /wigley:retro auto and the folder setting; tsconfig is not strict, so StrategyPick narrowing is checked loosely
