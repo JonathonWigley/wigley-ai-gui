@@ -361,6 +361,7 @@ describe('workflow page part', () => {
   it('AddWorkflow_AfterItsFlowArrived_LogsItsLevelAndTrail', () => {
     const { harness, exportsFor } = startWorkflow();
     harness.state.publish(sessionsRowsSlot).set('s1', row('s1'));
+    harness.ready();
     harness.state.publish(workflowFlowsSlot).set('s1', flowOfSmall('build'));
     const { workflow } = stubSmall();
 

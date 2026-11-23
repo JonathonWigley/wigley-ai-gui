@@ -48,6 +48,7 @@ import {
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
   CHECKLIST_HOOK,
+  CHECKLIST_STAGE,
   CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
   type DeclaredWorkflow,
@@ -700,7 +701,7 @@ describe('workflowMainPart', () => {
       opens: true,
       step: 'build',
       text: 'Ignored build: this session is not at a place in the workflow that takes it.',
-      stage: 'idle',
+      stage: CHECKLIST_STAGE,
     },
     {
       name: 'no flow',

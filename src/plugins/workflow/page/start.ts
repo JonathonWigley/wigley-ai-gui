@@ -104,6 +104,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const workflows = new Map<WorkflowId, PageWorkflow>();
     // The demo sample each session shows (`showSample`), over its stored flow.
     const samples = new Map<string, SessionFlow>();
+    // Set once `ready` has drawn every flow the slot holds.
+    let isReady = false;
 
     const nameOf = (sessionId: string) =>
       rows.get(sessionId)?.label ?? sessionId;
@@ -166,9 +168,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       redraw: () => view.redraw(),
     };
 
-    // Holds a copy whose stages are in stage order, and draws again each flow of it,
-    // which arrived before its page half; its dispose does nothing once the copy is
-    // gone.
+    // Holds a copy whose stages are in stage order and, once `ready` ran, draws
+    // again each flow of it, which arrived before its page half; before then
+    // `ready` draws every flow. Its dispose does nothing once the copy is gone.
     const addWorkflow = (workflow: PageWorkflow): Disposable => {
       if (workflows.has(workflow.id)) {
         throw new Error(`${workflow.id} is already added`);
@@ -181,7 +183,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       const sidePart = chat.addSidePart(view.sidePartFor(added));
       view.redraw();
       for (const flow of flows.all().values()) {
-        if (flow.workflow === added.id) {
+        if (isReady && flow.workflow === added.id) {
           drawFlow(flow);
         }
       }
@@ -464,6 +466,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         for (const flow of flows.all().values()) {
           drawFlow(flow);
         }
+        isReady = true;
       },
     };
   },

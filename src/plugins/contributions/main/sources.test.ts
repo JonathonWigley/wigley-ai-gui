@@ -156,9 +156,12 @@ describe('scanSources', () => {
 
   // Catches an unreadable file that vanishes with no problem shown.
   it('keeps a source whose auri.json read fails, carrying the error', async () => {
-    const { files, scan } = await setUp([]);
-    await files.makeFolder('/p/odd/auri.json');
-    const error = await files.read('/p/odd/auri.json').catch(errorText);
+    const { files, scan } = await setUp(['/p/odd']);
+    const denied = new Error('EACCES: permission denied');
+    const read = files.read;
+    files.read = (path) =>
+      path === '/p/odd/auri.json' ? Promise.reject(denied) : read(path);
+    const error = errorText(denied);
 
     const sources = await scan([install('odd@m', '/p/odd', '1.0.0')]);
 

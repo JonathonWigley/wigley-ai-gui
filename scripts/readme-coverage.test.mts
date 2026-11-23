@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { settingInfo } from '../src/config/settings.ts';
 import { builtInManifests } from '../src/plugins/manifests.ts';
+import { pluginSettingInfo } from '../src/shared/plugin-manifests.ts';
 
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PLUGINS_DIR = path.join(APP_ROOT, 'src/plugins');
@@ -18,7 +19,7 @@ const README = readFileSync(path.join(APP_ROOT, 'README.md'), 'utf8');
 
 // The contributed tools at the last count; a scan that silently finds fewer
 // fails here. Update it with the README's MCP tools table.
-const TOOL_COUNT = 31;
+const TOOL_COUNT = 35;
 
 function expectInReadme(name: string, section: string): void {
   expect(
@@ -106,9 +107,9 @@ function scanToolNames(): { names: string[]; unresolved: string[] } {
 
 const TOOLS = scanToolNames();
 
-const PLUGIN_SETTINGS = builtInManifests.flatMap((manifest) =>
-  Object.keys(manifest.settings).map((key) => `${manifest.id}.${key}`),
-);
+// Each leaf setting's qualified path, as Settings mode and `settings.json`
+// name it: `work.signals.branch`, not `work.signals`.
+const PLUGIN_SETTINGS = Object.keys(pluginSettingInfo(builtInManifests));
 
 const SKILL_NAMES = readdirSync(path.join(AGENT_PLUGIN_DIR, 'skills'), {
   withFileTypes: true,

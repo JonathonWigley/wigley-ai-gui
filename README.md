@@ -308,6 +308,7 @@ The `auri` plugin's skills, in `agent-plugin/skills/<name>/`:
 | `auri:audio-picker`            | Opening an audio picker and reading the picks.                                        |
 | `auri:live-view`               | Streaming a Unity Game View, the `liveView` command patterns, and the probe.          |
 | `auri:writing-auri-json`       | Writing a plugin's `auri.json`.                                                       |
+| `auri:builds`                  | Queueing and tracking builds. Planned in `builds`, not built yet.                     |
 
 ## Hooks
 

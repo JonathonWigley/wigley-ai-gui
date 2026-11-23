@@ -102,6 +102,45 @@ function startWatch(files: WatchDeps['files'], git = NO_CLONE) {
   return { watch, signals, logs };
 }
 
+// `files` whose reads, once `hold` ran, wait in call order until `settle`
+// settles one with a text, then each read that read leads to with the same
+// text, until none waits.
+function heldReads(files: MemoryFiles) {
+  let isHolding = false;
+  const waiting: ((text: string) => void)[] = [];
+  const held: WatchDeps['files'] = {
+    ...files,
+    read: (path) =>
+      isHolding
+        ? new Promise<string>((resolve) => {
+            waiting.push(resolve);
+          })
+        : files.read(path),
+  };
+  const settle = async (index: number, text: string) => {
+    let next = waiting.length;
+    waiting[index](text);
+    await settled();
+    while (next < waiting.length) {
+      const led = waiting.slice(next);
+      next = waiting.length;
+      for (const resolve of led) {
+        resolve(text);
+      }
+      await settled();
+    }
+  };
+  return {
+    files: held,
+    hold: () => {
+      isHolding = true;
+    },
+    settle,
+  };
+}
+
+type HeldReads = ReturnType<typeof heldReads>;
+
 // `files` whose open watches `openFolders` lists, one entry per watch;
 // `fail` ends each open watch on a folder as a failing watcher does, disposing
 // it and then calling its `onError`. While `holdStats` is on, a stat of git's
@@ -260,46 +299,41 @@ describe('createPlanWatch', () => {
     expect(await files.stat(PLAN_DIR)).toBeNull();
   });
 
+  // A changed report reads again on the open watch.
   it.each([
     {
       name: 'the watch moved',
-      act: async (
-        watch: PlanWatch,
-        resolveReads: ((text: string) => void)[],
-      ) => {
+      act: async (watch: PlanWatch, reads: HeldReads) => {
+        watch.follow('s1', followed(PLAN_DIR, true));
+        await settled();
         watch.follow('s1', followed(null));
-        resolveReads[0](PLAN);
+        await reads.settle(0, PLAN);
       },
       signals: [],
     },
     {
       name: 'a newer read started',
-      act: async (
-        watch: PlanWatch,
-        resolveReads: ((text: string) => void)[],
-      ) => {
-        watch.check('s1');
+      act: async (watch: PlanWatch, reads: HeldReads) => {
+        watch.follow('s1', followed(PLAN_DIR, true));
         await settled();
-        resolveReads[1](PLAN_TICKED);
-        resolveReads[0](PLAN);
+        watch.follow('s1', followed(PLAN_DIR));
+        await settled();
+        await reads.settle(1, PLAN_TICKED);
+        await reads.settle(0, PLAN);
       },
       signals: [changed(PLAN_TICKED)],
     },
   ])('read_SettlingLate_IsDropped ($name)', async ({ act, signals }) => {
     const files = createMemoryFiles();
     await files.write(PLAN_FILE, PLAN);
-    const resolveReads: ((text: string) => void)[] = [];
-    const subject = startWatch({
-      ...files,
-      read: () =>
-        new Promise<string>((resolve) => {
-          resolveReads.push(resolve);
-        }),
-    });
+    const reads = heldReads(files);
+    const subject = startWatch(reads.files);
     subject.watch.follow('s1', followed(PLAN_DIR));
     await settled();
+    reads.hold();
+    subject.signals.length = 0;
 
-    await act(subject.watch, resolveReads);
+    await act(subject.watch, reads);
     await settled();
 
     expect(subject.signals).toEqual(signals);

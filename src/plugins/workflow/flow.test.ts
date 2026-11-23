@@ -176,7 +176,11 @@ const WORKFLOW_ROWS: {
   },
   {
     name: 'an equal checklist keeps the flow',
-    flow: flowWith({ ...SMALL_AT_BUILD, checklist: CHECKLIST }),
+    flow: flowWith({
+      ...SMALL_AT_BUILD,
+      checklist: CHECKLIST,
+      checklistReported: true,
+    }),
     signal: { type: 'checklistReported', items: structuredClone(CHECKLIST) },
     expected: UNCHANGED,
   },
