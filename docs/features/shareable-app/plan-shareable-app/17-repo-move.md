@@ -15,7 +15,8 @@ Every count and line number below was measured at plan time; re-verify each with
 ## Files
 
 Files (ai):
-- modify `wigley-agents/WigleyRepos.md` — § Repos, § Syncing, § Landing, § Root agent files
+- modify `wigley-agents/WigleyRepos.md` — § Repos, § Syncing, § Landing, § Root agent files, § Agent files
+- modify `wigley-agents/tools/unity-pool/README.md` — the stale `unity-pool.pythonCommand` setting (step 9)
 - modify `wigley-agents/AgentsStandardMapping.md` — § Setting up a machine, § Plugins
 - modify `wigley-agents/MacMachine.md` — § Environment
 - modify `wigley-agents/WindowsMachine.md` — § Environment
@@ -28,12 +29,16 @@ Files (wigley-ai-gui), in the new clone `~/Documents/wigley-ai-gui`:
 - modify `AGENTS.md` — § Running and testing (the `install-app` bullet's "in the `ai` repo, its `wigley-ai-gui` folder", the `start_app.py` bullet's "in the `ai` clone")
 - modify `.agents/skills/install/SKILL.md`, `.agents/skills/drive/SKILL.md` where the sweep finds the old path
 - modify `agent-plugin/scripts/relay/README.md` — its `wigley-ai-gui/docs/features/…` paths become repo-relative `docs/features/…` (measured at plan time: lines 40 and 43 of the marketplace copy, re-verify in the moved copy)
-- modify `CHANGELOG.md` — the move under the new version heading
+- modify `CHANGELOG.md` — the move, as a `### Changed` line under `## Unreleased`, which `changelog:release` then puts
+  under the second version heading (step 11; step 3 made the first)
 - modify each further file the sweep classifies
 
 Files (personal, edited in place, never committed):
 - `~/.aliases` · `~/.agents/AGENTS.local.md` · `~/.config/wigley-ai-gui/settings.json` ·
-  `~/.config/wigley-ai-gui/scheduled-tasks.json` · `~/.claude/settings.json` · `~/.codex/config.toml`
+  `~/.config/wigley-ai-gui/scheduled-tasks.json` · `~/.claude/settings.json` · `~/.codex/config.toml` ·
+  `~/.agents/wigley-docs/config.json`
+- `~/.claude/plugins/known_marketplaces.json` and `installed_plugins.json`, written only by `claude plugin` commands
+  (step 8), never by hand
 
 Bookkeeping: none.
 
@@ -54,6 +59,8 @@ Bookkeeping: none.
 - `ai` without its `wigley-ai-gui/` folder.
 - The installed `/Applications/wigley-ai-gui.app` built from the new clone, so its baked `WIGLEY_CLONE_DIR` is
   `~/Documents/wigley-ai-gui`.
+- `auri@auri` installed for terminal Claude Code from the marketplace at `~/Documents/wigley-ai-gui`: one install,
+  which both profiles see because `~/.claude-personal/plugins` links to `~/.claude/plugins`.
 - The plan folder at `~/Documents/wigley-ai-gui/docs/features/shareable-app/plan-shareable-app/`, re-reported with
   `set_workflow_plan`.
 
@@ -91,11 +98,19 @@ Settled while drafting (Decided notices for the run):
   not third-party code, so the agent mirrors it into `old.git` and scans it with both tools: a live secret there was
   already pushed and needs rotating even though the force push replaces it. The force push then removes it from the
   repo's refs; `old.git` is deleted after, keeping no copy.
-- **Branches with unlanded app work.** Measured at plan time: `spike/live-window-view` holds 6 commits and
-  `spike/work-inbox` 3 commits under `wigley-ai-gui` that `main` lacks (re-verify:
+- **Branches with unlanded app work.** Measured at plan time: `spike/live-window-view` holds 6 commits,
+  `spike/work-inbox` 3 and `work-inbox` 1 under `wigley-ai-gui` that `main` lacks; `shareable-app` (2) is this run's
+  own branch and lands in step 3 (re-verify:
   `for b in $(git -C ~/Documents/ai for-each-ref --format='%(refname:short)' refs/heads); do echo "$b $(git -C ~/Documents/ai rev-list --count main..$b -- wigley-ai-gui)"; done`).
-  This is a question for the user in the findings round, recommending: split each such branch too, rewrite it with
-  `main`, and keep it as a local branch in the new clone, unpushed; `ai`'s branches stay until the user deletes them.
+  This is one question per branch for the user in the findings round, recommending: split the branch too, rewrite it
+  with `main`, and keep it as a local branch in the new clone, unpushed; `ai`'s branches stay until the user deletes
+  them.
+- **Peer sessions' work.** Measured at plan time: the Work Inbox session holds the worktrees
+  `~/Documents/.worktrees/ai-work-inbox` (`spike/work-inbox`) and `~/Documents/.worktrees/ai-work-inbox-plan`
+  (`work-inbox`); re-verify with `git -C ~/Documents/ai worktree list` and the chatroom board. Before the split, post a
+  `heads-up` to each owning session, by its session title, naming the split, the freeze and the removal of `ai`'s
+  `wigley-ai-gui/`, and asking for any unpushed app work. Its answer goes into the findings round's question for that
+  branch. This task never removes, resets or commits in another session's worktree.
 - **The app repo's landing.** `WigleyRepos.md` § Landing gains the app repo: the standing yes for the merge into
   `main` and the push of `main` covers `JonathonWigley/wigley-ai-gui` too (plan Design Overview, rounds 2 and 3).
   Worktrees go at `~/Documents/.worktrees/wigley-ai-gui-<slug>`, made with
@@ -154,8 +169,11 @@ Settled while drafting (Decided notices for the run):
    empty; the branch count above.
 2. **Installs (per-run ask).** A forms round, one question per tool, asking the user to run its `brew install` and
    recommending yes. Then `command -v trufflehog betterleaks git-filter-repo` prints three paths.
-3. **Land and freeze.** `wigley-land <run worktree>`; re-report the plan folder; chatroom `heads-up` freezing `ai`'s
-   `wigley-ai-gui/`. Record `ai`'s `main` sha as `<split base>`.
+3. **Land and freeze.** In the run worktree's `wigley-ai-gui/`, run `npm run changelog:release` and commit
+   `CHANGELOG.md`, `package.json` and both `auri` manifests (the first heading, `1.1.0`; task 15). Then
+   `wigley-land <run worktree>`; re-report the plan folder; chatroom `heads-up` freezing `ai`'s `wigley-ai-gui/`, to the
+   thread and to each peer session named in Decisions › Peer sessions' work. Record `ai`'s `main` sha as
+   `<split base>`.
 4. **Split.** `git -C ~/Documents/ai subtree split --prefix=wigley-ai-gui main -b split/main` (the page's synopsis:
    `git subtree -P <prefix> split [<local-commit>]`; `-b` makes a branch that must not exist). For each branch the
    user chose to carry: `git -C ~/Documents/ai subtree split --prefix=wigley-ai-gui <branch> -b split/<branch>`. Then
@@ -176,8 +194,11 @@ Settled while drafting (Decided notices for the run):
    verified, never the secret's full value (show its first four characters); per finding the choices Rewrite out
    (recommended for any credential), Rotate and rewrite (recommended for a verified one, rotation being the user's),
    or False positive. Plus the work-email rewrite (recommended: replace with the noreply address), the carried
-   branches question, and a notice that `old.git`'s findings are already on GitHub. No rewrite runs before this round
-   is answered.
+   branches questions (one per branch, with the peer's answer), and a notice that `old.git`'s findings are already on
+   GitHub. Two more items, recommending keep: the work email literal sits in this plan's own task documents (this
+   file's steps 5 and 7), so the email rule also rewrites that text in the split's copy of the plan; and the home
+   path `/Users/jonathonwigley` sits in three `src/plugins/notes/*.test.ts` files and in the plan documents. Each is
+   cosmetic; the user picks scrub or keep. No rewrite runs before this round is answered.
 7. **Rewrite.** Write `<scratch>/replace.txt` from the answers: `17443783+JonathonWigley@users.noreply.github.com==>17443783+JonathonWigley@users.noreply.github.com`
    and one line per finding to remove (literal by default, `regex:` for a pattern; a line with no `==>` becomes
    `***REMOVED***`). `git clone --mirror --no-local <scratch>/split.git <scratch>/rewrite.git`, then in it
@@ -201,17 +222,28 @@ Settled while drafting (Decided notices for the run):
      `codesign -d -r- /Applications/wigley-ai-gui.app` names `certificate leaf`, and
      `strings /Applications/wigley-ai-gui.app/Contents/Resources/app.asar | command grep -a 'Documents/wigley-ai-gui' | head -1`
      prints the new path while `command grep -ac 'Documents/ai/wigley-ai-gui'` over the same output prints 0.
+   - Install `auri` for terminal sessions (task 14 left this here): `claude plugin marketplace add
+     ~/Documents/wigley-ai-gui`, then `claude plugin install auri@auri`. Run each once: `~/.claude-personal/plugins` is
+     a symlink to `~/.claude/plugins`, so the one install serves both profiles. This is the user's own plugin from the
+     user's own clone, not third-party code. The commands write `~/.claude/plugins/known_marketplaces.json` and
+     `installed_plugins.json`; when the auto-mode classifier gates them, ask in a one-line chat message. For Codex,
+     the commands task 01 checked against the Codex plugin docs. Check: `claude plugin list` and
+     `CLAUDE_CONFIG_DIR=~/.claude-personal claude plugin list` both show `auri@auri`, and `known_marketplaces.json`'s
+     `auri` entry has `path` `/Users/jonathonwigley/Documents/wigley-ai-gui`.
 9. **Sweep.** Every machine reference to the app's old path or repo. Classify each hit as *path or repo* (edit) or
    *name only* (leave: the app is still called wigley-ai-gui). Measured members to start from, each re-verified:
    - `ai`: `WigleyRepos.md` § Repos (four folders → three, plus the app's own repo and its clone), § Syncing, § Landing
      (the app repo's worktree, link, standing yes and Betterleaks step), § Root agent files (unchanged wording, the
-     app's `AGENTS.md` still over 100k); `AgentsStandardMapping.md` § Setting up a machine (clone the app at
+     app's `AGENTS.md` still over 100k), § Agent files ("All four folders follow the open AGENTS.md standard" at line
+     99: three folders now, and the app repo too); `AgentsStandardMapping.md` § Setting up a machine (clone the app at
      `~/Documents/wigley-ai-gui`, `D:\wigley-ai-gui\` on Windows) and § Plugins (auri's marketplace);
      `MacMachine.md` and `WindowsMachine.md` § Environment; `wigley-land`'s `ai`-repo `NODE_MODULES_LINK`
      (`wigley-ai-gui/node_modules`), its README lines on that link and the tests that seed it, dead once `ai` holds no
      app folder: drop them (19 added the app repo's root link and keeps it); `wigley-repo-files`; the `wigley` chatroom skill's
      "`wigley-ai-gui/docs/features/chatroom/design.md` in the `ai` clone" (if task 13 or 01 left the skill in the
-     marketplace); `wigley-agents/tools/unity-pool/README.md` line 905's setting name, if task 11 renamed it.
+     marketplace); `wigley-agents/tools/unity-pool/README.md` line 905, which names a `unity-pool.pythonCommand`
+     setting the app never had (stale today, not renamed by 11): it names the settings the landed unity-pool manifest
+     and `programs.python` hold.
    - The new clone: `AGENTS.md`, `.agents/skills/install/SKILL.md`, `.agents/skills/drive/SKILL.md`,
      `agent-plugin/scripts/relay/README.md` and `start_app.py`, every doc outside `docs/features/` naming
      `wigley-ai-gui/` as a folder of another repo. Test fixtures with `ai-dev` or `wigley-ai-gui/` paths are data and
@@ -222,6 +254,13 @@ Settled while drafting (Decided notices for the run):
      force push still blocked; any `extraKnownMarketplaces` entry for auri at the old path); `~/.codex/config.toml`
      (add `[projects."/Users/jonathonwigley/Documents/wigley-ai-gui"]` with `trust_level = "trusted"`, and re-point
      any auri marketplace source); `~/.claude/hooks/`.
+   - Personal, found by the plan's cold read: `~/.agents/wigley-docs/config.json` (its `roots` hold `~/Documents/dev`
+     and `~/Documents/ai`, so the new clone falls outside both: add `~/Documents/wigley-ai-gui` to `roots` and
+     `~/Documents/wigley-ai-gui/.drive/*` and `~/Documents/wigley-ai-gui/.selftest/*` to `ignore`, beside the
+     `~/Documents/ai/*/` ones). Regenerated, listed and not edited: `~/.agents/wigley-docs/index.json` (rebuilt by the
+     docs index) and `~/.agents/wigley-ai-gui-dev/endpoint.json` (its `launch.cwd` names the old folder until the next
+     `npm start` in the new clone rewrites it). `~/.claude/plugins/known_marketplaces.json` gets `auri` only through
+     step 8's commands.
    - Checked and empty at plan time, re-checked: `~/.local/bin` symlinks into the app
      (`find ~/.local/bin -type l -exec readlink {} \; | command grep -a wigley-ai-gui`), `~/Library/LaunchAgents`
      (`command grep -rl 'wigley-ai-gui' ~/Library/LaunchAgents`), `ai`'s root files and git hooks
@@ -233,8 +272,17 @@ Settled while drafting (Decided notices for the run):
     and commit with the sweep's `ai` edits ("Move wigley-ai-gui to its own repo, JonathonWigley/wigley-ai-gui, …");
     `wigley-land` it. Then delete what is left of `~/Documents/ai/wigley-ai-gui/` (the regenerated folders), and
     report it. Post a chatroom `result` lifting the freeze and naming the new clone.
-11. **Land in the new clone.** Commit the app-side sweep and `CHANGELOG.md` there, through a worktree per the new
-    § Landing, and land with `wigley-land` (19's app-repo mode), which runs Betterleaks on the range. Check its output
+11. **Land in the new clone.** Before the first app-repo landing, confirm the `auri` marketplace from the new clone
+    is added (step 8; `known_marketplaces.json`'s `auri` `path` is `/Users/jonathonwigley/Documents/wigley-ai-gui`), and
+    run task 19's pinned argv by hand once in the new clone:
+    `betterleaks git ~/Documents/wigley-ai-gui --revision=HEAD~1..HEAD --include=merges --redact --no-banner --exit-code=10; echo $?`.
+    `--exit-code` and `--redact` come from a README mirror, not the official docs (19 § Decisions). Exit 0 confirms
+    the argv. Any other exit code (126 for an unknown flag, 1 for an error, 10 for a leak in that commit) stops this
+    task with a report naming the code and the last stderr line; 19's argv is fixed before any app-repo
+    `wigley-land`.
+    Then commit the app-side sweep and the `CHANGELOG.md` `### Changed` line there, through a
+    worktree per the new § Landing. Run `npm run changelog:release` in that worktree and commit its files (the second
+    heading). Land with `wigley-land` (19's app-repo mode), which runs Betterleaks on the range. Check its output
     names the `secrets` stage as run, not skipped. Delete `<scratch>`'s
     repos, reports and `replace.txt`.
 
@@ -273,7 +321,10 @@ command grep -rIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=le
   ~/Documents/ai ~/Documents/wigley-ai-gui/AGENTS.md ~/Documents/wigley-ai-gui/README.md \
   ~/Documents/wigley-ai-gui/.agents ~/Documents/wigley-ai-gui/agent-plugin \
   ~/.agents/AGENTS.local.md ~/.aliases ~/.config/wigley-ai-gui ~/.claude/settings.json ~/.claude/hooks \
+  ~/.claude/plugins/known_marketplaces.json ~/.claude/plugins/installed_plugins.json \
+  ~/.agents/wigley-docs/config.json ~/Documents/.wigley-ai-gui-build/AGENTS.md ~/Documents/.wigley-ai-gui-build/.agents \
   ~/.codex/config.toml ~/.codex/AGENTS.md
+command grep -n 'Documents/ai/wigley-ai-gui' ~/.agents/wigley-ai-gui-dev/endpoint.json   # regenerated: may print until the next npm start
 find ~/.local/bin -type l -exec readlink {} \; | command grep -a 'ai/wigley-ai-gui'
 command grep -rl 'ai/wigley-ai-gui' ~/Library/LaunchAgents
 ```
@@ -289,7 +340,9 @@ listed in the report with why it stays, never silently filtered.
   re-reported.
 - `ai` holds no `wigley-ai-gui/` and its landing is pushed.
 - The installed app bakes the new clone path.
-- Both test suites pass; the stale-reference proof prints nothing.
+- Both test suites pass; the stale-reference proof prints nothing (the `endpoint.json` line excepted, listed as
+  regenerated).
+- `claude plugin list` shows `auri@auri` in both profiles, its marketplace path being the new clone.
 - The report lists every sweep member added beyond the measured list, every file classified name-only, each moved or
   deleted folder, and the scan results by tool and repo.
 - The wrap-up's Still open names: GitHub secret scanning and push protection, which the user turns on under the repo's

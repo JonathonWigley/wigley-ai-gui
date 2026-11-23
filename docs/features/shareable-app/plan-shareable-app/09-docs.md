@@ -49,7 +49,7 @@ Files (wigley-ai-gui):
 - test `wigley-ai-gui/src/plugins/docs/kinds.test.ts`
 - test `wigley-ai-gui/src/plugins/docs/tree.test.ts`
 - test `wigley-ai-gui/src/plugins/docs/wiki-main.test.ts`
-- modify `wigley-ai-gui/AGENTS.md` (the Docs line at line 33, measured at plan time, re-verify)
+- modify `wigley-ai-gui/AGENTS.md` (the docs-index sentence at lines 35–36, measured at plan time, re-verify)
 
 Files (wigley-ai-marketplace):
 - create `wigley-ai-marketplace/scripts/pointer_parser/section_refs.py` and `wigley-ai-marketplace/scripts/pointer_parser/markdown.py`
@@ -61,7 +61,7 @@ Consumes:
 - `agentPluginDir(appDir, paths)` and `AGENT_PLUGIN_FOLDER` from `wigley-ai-gui/src/shared/agent-plugin.ts` ← 01
 - `DocsContribution`, `BacklogContribution` from `wigley-ai-gui/src/contracts/contributions.ts` ← 03
 - `contributionsMainKey`, `ContributionsMainExports.registerFeature`, `.strategies`, `.onChanged`, `.ready`, `FeatureReader`, `Strategy` from `wigley-ai-gui/src/plugins/contributions/contract.ts` ← 03
-- the app's folder in main, for `agentPluginDir` (see § Open questions: File Structure names no services field for it)
+- `MainServices.appDir: string`, for `agentPluginDir` ← 01
 
 Produces:
 - `export type FeaturesHomes = { homes: string[]; file: string; areaFolder: string | null }` in `wigley-ai-gui/src/plugins/docs/contract.ts`
@@ -107,7 +107,7 @@ Docs runs `docs_index.py` from the wigley plugin's install (`script-locator.ts:2
   - `wikiMain`: the first strategy that names one.
   - `linkPrefixes`: the first strategy to map a prefix keeps it. A clash is logged: `docs: link prefix <prefix> from <plugin> dropped: <first plugin> maps it`.
 - `setFeaturesHomes(homes)` replaces `features`. A call whose value equals the current one (compared as JSON) writes nothing and runs nothing.
-- Run modes other than `live`: the docs fixture's stand-in `docs_index.py` prints a fixed index, so the contributions file does not change what it lists. In those modes the binding is `DOCS_FIXTURE_BINDING`, exported from `selftest-fixture.ts`: the fixture home's `wigley-agents` folder as the one global folder (`referenceFiles: ['decisions.md']`, `subfolders: ['learning', 'wiki']`, `skip: []`), `wikiMain` at `WIKI_MAIN_FILE` under the fixture home, `linkPrefixes: { 'wigley:': 'wigley@vendor-market' }` and features `{ homes: ['{repo}/docs/features', '~/wigley-features/{name}'], file: 'followups.md', areaFolder: 'followups' }`. Fixture text is exempt from the boundary rule.
+- Run modes other than `live`: the docs fixture's stand-in `docs_index.py` prints a fixed index, so the contributions file does not change what it lists. In those modes the binding is `DOCS_FIXTURE_BINDING`, exported from `selftest-fixture.ts`: the fixture home's `wigley-agents` folder as the one global folder (`referenceFiles: ['decisions.md']`, `subfolders: ['learning', 'wiki']`, `skip: []`), `wikiMain` at `WIKI_MAIN_FILE` under the fixture home, `linkPrefixes: { 'wigley:': 'wigley@vendor-market' }` and features `{ homes: ['{repo}/docs/features', '~/wigley-features/{name}'], file: 'followups.md', areaFolder: 'followups' }`. Fixture text is exempt from the boundary rule. Outside `live`, `setFeaturesHomes` changes nothing: the binding keeps the fixture's `features`, and no file is written. Task 08's `BACKLOG_FIXTURE_STRATEGY` copies this `features` value, so Backlog's fixture pick and the docs fixture agree.
 
 ### The reader
 
@@ -134,12 +134,21 @@ Its value fills each optional array with `[]` and each optional field with its e
 - **`discover.py` global walk.** `_walk_global` keeps the harness folders (each Claude config folder, `~/.codex`, `~/.agents/skills`). In place of the `wigley-agents` block, for each global folder in order: every top-level `*.md` is `instructions`, except a name in `reference_files`, which is `reference`. Each of `subfolders` is walked in full with `_markdown_below`. A subfolder whose last part is `learning` takes kind `learning`; every other subfolder takes `reference`. This keeps today's kinds for `learning` and `wiki` (see § Open questions). `skipped_folders` is the real path of `<path>/<skip>` for each global folder's `skip`, in place of `SKIPPED_WIGLEY_AGENTS_FOLDERS`.
 - **`discover.py` features homes.** `IN_REPO_FEATURES_HOME` gives way to `features.in_repo_parts`. `_features_home_parts` checks each part list in order, at the root and at a project folder directly under the root that holds `AGENTS.md`, as it does today for `docs/features`. `discover` walks each child folder of each `out_of_repo_folders` entry with `_walk_feature_home`. `discover_folder` walks `<folder>/<repo name>` for each. `_feature_file_kind` reads `features.file` in place of `followups.md`, and `(features.area_folder,)` in place of `("followups",)`. With `features` None there is no features home: no in-repo home is registered, and no folder is walked as one. The repo-level `docs/followups/<topic>.md` rule in `_repo_file_kind` stays as it is (see § Open questions).
 - **The docstring** at the top of `discover.py` names the global folders and the features homes as the contributions file gives them. It does not name `~/wigley-agents`.
-- **Link prefixes.** `doc_fields.py` drops `SKILL_SCHEME` and `WIGLEY_PLUGIN_PREFIX`. A link `<prefix><name>` resolves to the skill titled `<name>` whose entry's `plugin` equals `link_prefixes[prefix]`, exactly. Today's rule is `startswith("wigley@")`. `section_refs.py` replaces the `SECTION_POINTER` constant with `section_pointer(prefixes: Iterable[str]) -> re.Pattern[str]`. It builds the same pattern with one `(?:<escaped prefix>)(?P<skill>…)` branch per prefix, and with no skill branch for no prefixes. The group names `skill` and `file` stay.
+- **Link prefixes.** `doc_fields.py` drops `SKILL_SCHEME` and `WIGLEY_PLUGIN_PREFIX`. A link `<prefix><name>` resolves to the skill titled `<name>` whose entry's `plugin` equals `link_prefixes[prefix]`, exactly. Today's rule is `startswith("wigley@")` (`doc_fields.py:116`).
+  - **Skill map.** `_Listing.skills` becomes `dict[str, dict[str, str]]`: plugin key, then skill name, then the real path of its `SKILL.md`. `_wigley_skills(entries)` becomes `_plugin_skills(entries, plugin_keys)`, built for each value of `link_prefixes`, with today's rule per key: the first by path in a clone, else the first by path in an install.
+  - **Pointers.** `section_refs.py` replaces the `SECTION_POINTER` constant with `section_pointer(prefixes: Iterable[str]) -> re.Pattern[str]`. Python's `re` refuses a group name used twice, so the skill branch is one alternation: `(?P<prefix><p1>|<p2>|…)(?P<skill>[a-z0-9][a-z0-9-]*)`, each prefix `re.escape`d, longest first. With no prefixes the branch is `(?P<prefix>(?!))(?P<skill>…)`, which never matches, so the groups `prefix`, `skill` and `file` exist in every pattern. Every other part of today's pattern stays. `_pointer_target` (`doc_fields.py:198`) looks up `listing.skills.get(link_prefixes[match["prefix"]], {}).get(match["skill"])`.
+  - **Markdown links.** The link check at `doc_fields.py:245` takes the longest `link_prefixes` key the href starts with, and looks the rest (before `#`) up under that key's plugin, the same way.
+  - Line numbers measured at plan time, re-verify.
 - **README.** `agent-plugin/scripts/docs-index/README.md` documents `--contributions` and the file's schema above, drops `featuresHome`, and drops every `~/wigley-agents` rule in favour of the global folders. Its schema version of the index document does not change: no index field changes.
 
 ### The marketplace's pointer check
 
-`scripts/check_pointers.py` imports `read_exact_text` from `markdown.py`, and `EMPHASIS`, `SECTION_POINTER`, `Heading`, `ProseText`, `prose_lines`, `read_headings` and `resolve` from `section_refs.py`, both from the docs index's folder (`check_pointers.py:37-41`). After task 17 the app leaves the `ai` repo, so the check cannot import from it. Decided: before the move edits them, copy `section_refs.py` and `markdown.py`, as the marketplace holds them now, to `wigley-ai-marketplace/scripts/pointer_parser/`. Point `DOCS_INDEX` in `check_pointers.py` at that folder, and rename it `POINTER_PARSER`. Copy `tests/test_section_refs.py` to `wigley-ai-marketplace/scripts/tests/test_section_refs.py`, which loads the module from `scripts/pointer_parser/` by path, as `test_check_pointers.py` loads its script. Each copied module's docstring opens with one line: `A copy of the wigley-ai-gui docs index's parser, kept for check_pointers.py; the two copies change separately.` The copy keeps the `wigley:` constant, which this repo's check needs. Update `wigley-ai-marketplace/AGENTS.md`: the `check_pointers.py` line at line 22 names `scripts/pointer_parser/`, and the docs-index test command at line 105 goes (both line numbers measured at plan time, re-verify).
+`scripts/check_pointers.py` imports `read_exact_text` from `markdown.py`, and `EMPHASIS`, `SECTION_POINTER`, `Heading`, `ProseText`, `prose_lines`, `read_headings` and `resolve` from `section_refs.py`, both from the docs index's folder (`check_pointers.py:37-41`). After task 17 the app leaves the `ai` repo, so the check cannot import from it. Decided: before the move edits them, copy `section_refs.py` and `markdown.py`, as the marketplace holds them now, to `wigley-ai-marketplace/scripts/pointer_parser/`. Point `DOCS_INDEX` in `check_pointers.py` at that folder, and rename it `POINTER_PARSER`. Copy `tests/test_section_refs.py` to `wigley-ai-marketplace/scripts/tests/test_section_refs.py`, which loads the module from `scripts/pointer_parser/` by path, as `test_check_pointers.py` loads its script. Each copied module's docstring opens with one line: `A copy of the wigley-ai-gui docs index's parser, kept for check_pointers.py; the two copies change separately.` The copy keeps the `wigley:` constant, which this repo's check needs. Update `wigley-ai-marketplace/AGENTS.md` (line numbers measured at plan time, re-verify):
+- line 19, the layout tree's `scripts/` row: drop "the docs index the app's docs browser reads", since the index leaves the plugin.
+- line 22, the `check_pointers.py` row: it imports its parser from `scripts/pointer_parser/section_refs.py`.
+- line 24, the `scripts/tests/` row: it also holds the tests for `scripts/pointer_parser/`.
+- line 105, the docs-index test command: it goes.
+- Then grep the file for `docs-index` and `docs index`; no line still says the plugin ships it.
 
 ### The TypeScript plugin
 
@@ -150,8 +159,8 @@ Its value fills each optional array with `[]` and each optional field with its e
 - **Wiki page.** `wikiMainPath()` resolves to `string | null`: the real path of `binding.wikiMain` expanded, else null. `wiki-main-source.ts` already draws a null path (`wiki-main-source.ts:135`); the Main page then shows its missing-page state.
 - **Link prefixes.** `parseWikiTarget(text, linkPrefixes)` and `parseWikiMain(text, linkPrefixes)` take the prefixes. A skill target is `{ type: 'skill'; prefix: string; name: string }`, for text `<prefix><name>` where `<name>` holds no `/`. `findSkillEntry(name, pluginKey, entries)` matches `entry.plugin === pluginKey`. `pageEntry` and `docs-view.ts:1235` pass `binding.linkPrefixes[target.prefix]`. The page reads `docsBindingSlot` for the binding. Comments that say "a `wigley:` link" say "a skill link".
 - **Fixture.** `selftest-fixture.ts` drops its `WIGLEY_PLUGIN_KEY` import and uses a local `const FIXTURE_WIGLEY_KEY = 'wigley@wigley-ai-marketplace'`.
-- **`src/shared/wigley-install.ts`** stays until task 10 removes its last caller. See § Open questions for who deletes it.
-- **AGENTS.md.** The Docs line names `agent-plugin/scripts/docs-index/` in place of the marketplace path.
+- **`src/shared/wigley-install.ts`** stays: this task removes the docs caller, task 10 the live-view caller, and task 15 deletes the file.
+- **AGENTS.md.** The docs-index sentence (lines 35–36) names `agent-plugin/scripts/docs-index/` in place of `plugins/wigley/scripts/docs-index/ in wigley-ai-marketplace`, and its README as the one that states the index schema.
 
 ## Behaviour
 
@@ -166,8 +175,8 @@ Python, in `agent-plugin/scripts/docs-index/tests/`:
 - `test_contributions.py` (new): `test_none_path_gives_empty`, `test_missing_file_gives_empty_with_one_stderr_line`, `test_templates_split_into_in_repo_parts_and_out_of_repo_folders`, `test_bad_template_dropped_with_stderr_line`, `test_tilde_paths_expand_against_env_home`.
 - `test_discover.py`: today's tests that build `~/wigley-agents`, `docs/features` or `~/wigley-features` trees pass a `Contributions` equal to the user's (the file shape above), and keep their expectations. Add `test_no_contributions_lists_no_features_home`, `test_reference_files_index_as_reference`, `test_learning_subfolder_takes_learning_kind`, `test_skip_folder_is_not_walked`, `test_custom_in_repo_template_is_a_home` (`{repo}/notes/todo`), `test_custom_file_and_area_folder` (`todo.md`, `areas/`). Each catches a leftover literal.
 - `test_config.py`: the `featuresHome` cases go. Add `test_features_home_key_is_ignored`.
-- `test_doc_fields.py`: the `wigley:` link cases pass `link_prefixes={'wigley:': 'wigley@wigley-ai-marketplace'}`. Add `test_prefix_matches_the_exact_plugin_key`: a skill under `wigley@other` does not resolve.
-- `test_section_refs.py`: `section_pointer(['wigley:'])` matches today's pointer cases. Add `section_pointer([])` matching a file pointer and no skill pointer.
+- `test_doc_fields.py`: the `wigley:` link cases pass `link_prefixes={'wigley:': 'wigley@wigley-ai-marketplace'}`. Add `test_prefix_matches_the_exact_plugin_key`: a skill under `wigley@other` does not resolve. Add `test_two_prefixes_resolve_to_their_own_plugins`: `{'a:': 'a@m', 'b:': 'b@m'}`, a skill `x` under each, and `a:x` and `b:x` (as a § pointer and as a markdown link) resolve to their own plugin's path.
+- `test_section_refs.py`: `section_pointer(['wigley:'])` matches today's pointer cases. Add `section_pointer([])` matching a file pointer and no skill pointer, with `match['skill']` None. Add `section_pointer(['a:', 'b:'])` compiling and giving `prefix` `b:` for `b:x § Part`.
 - `test_docs_index.py`: add `test_contributions_option_reaches_discover`.
 
 TypeScript:
@@ -176,7 +185,7 @@ TypeScript:
 - `contributions-file.test.ts` (new): `contributionsFileText` of the user's binding equals the pinned JSON above, and of a binding with `features: null` holds `"features": null`.
 - `script-locator.test.ts`: the wigley-install rows give way to `pluginDir` rows: a set `scriptPath` wins; an empty one gives the agent plugin's copy; a missing copy gives null.
 - `index-sources.test.ts`: the run's args hold `--contributions <file>` before the command, and no run starts before the file write settles.
-- `start.test.ts`: `setFeaturesHomes_SameValueTwice_RunsOnce`; `docsStrategyChanged_RewritesTheFileAndRebuilds`.
+- `start.test.ts`: `setFeaturesHomes_SameValueTwice_RunsOnce`; `docsStrategyChanged_RewritesTheFileAndRebuilds`; `setFeaturesHomes_SelfTestMode_KeepsTheFixtureFeatures`.
 - `kinds.test.ts`: the `wigley-agents` rows take a binding with that folder. Add `placesFor_GlobalFolderNotNamedWigleyAgents_IsAPlace` and `placesFor_NoFeatures_NoFollowupPlace`. The new-follow-ups-file row names the file after `place.repo`.
 - `doc-files.test.ts`: the `wikiMainPath` and guard rows read the binding. Add `wikiMainPath_NoWikiMain_Null`.
 - `tree.test.ts` and `wiki-main.test.ts`: skill rows pass prefixes and the key. Add `findSkillEntry_OtherKeySameName_NotFound` and `featureSlug_CustomAreaFolder_NoSlug`.
@@ -209,10 +218,8 @@ Commit: one commit for the group, covering both repos' paths.
 
 ## Open questions
 
-- **The app's folder in main.** `agentPluginDir(appDir, paths)` needs `appDir`, and `MainServices` (`src/contracts/plugin.ts:1171`) has no such field. Measured at plan time, re-verify: `main.ts:1638` passes `appPath` and `resourcesPath` only to the plugin catalog. Tasks 02 and 03 need the same value. The lead names one field in File Structure (for example `services.appDir`), and this task reads it.
 - **Subfolder kinds.** design.md's `globalFolders[].subfolders` is a list of names with no kind. This task gives `learning` its kind by name and every other subfolder `reference`, which keeps today's index. A `{ path, kind }` entry would say it outright: that is a contract change for the lead.
 - **`docs/followups/<topic>.md`.** The index reads a repo's own `docs/followups/` folder as follow-up items (`discover.py:871`). No contribution names it, and Backlog leaves it out (`homes.test.ts` `groupHomes_RepoDocsFollowups_Excluded`). This task keeps it. It is not a boundary name, but it is a wigley convention.
-- **Deleting `src/shared/wigley-install.ts`.** After 09 and 10 land, the file has no caller. Both tasks run in wave 2, so neither can delete it. Recommended: task 15, which runs the boundary grep, deletes it.
 
 ## Proof
 

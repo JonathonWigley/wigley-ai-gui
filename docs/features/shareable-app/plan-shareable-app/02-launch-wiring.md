@@ -32,6 +32,19 @@ Produces:
 
 ## Decisions
 
+- **Probe first, before any code.** Every tool name in this task rests on Claude Code naming an inline plugin's MCP
+  tool `mcp__plugin_<plugin>_<server>__<tool>`. Prove it with the user's own `claude` (no install; it spends one
+  model call):
+  1. In the session scratchpad, write a minimal plugin folder `probe-plugin/`: `.claude-plugin/plugin.json` with
+     `"name": "probe"` and `mcpServers.probe` running `python3 "${CLAUDE_PLUGIN_ROOT}/server.py"`, and `server.py`, a
+     standard-library stdio MCP server that answers `initialize` and `tools/list` with one tool `ping`, and replies
+     to `tools/call` with a text result.
+  2. Run `claude -p --plugin-dir <scratchpad>/probe-plugin --output-format stream-json --verbose "Reply with the word ok."`
+     and read the first `{"type":"system","subtype":"init"}` line: its `tools` array must hold
+     `mcp__plugin_probe_probe__ping`, and its `mcp_servers` entry for the server must be `connected`.
+  3. Record the init line's tool name and server status in the task's Proof.
+  If the tool name has any other form, or the server does not connect, stop here and report it to the lead with the
+  init line: plan.md's tool names, `CLAUDE_PERMISSION_TOOL` and every renamed reference rest on this form.
 - **The flag.** `claudeLaunch` adds `'--plugin-dir', pluginDir` right after the `--permission-prompt-tool` pair, on
   every launch, a resumed one included. `claude --help` on this machine prints
   `--plugin-dir <path>  Load a plugin from a directory or .zip` (plan.md § Preconditions).
@@ -80,6 +93,10 @@ GIVEN any platform WHEN `platformFor` runs THEN `relay.serverName` is `auri`.
 - `claude-code-harness.test.ts`: every deps fake gains `agentPluginDir: '/app/agent-plugin'`; the prepared-run test
   that asserts `CLAUDE_PERMISSION_TOOL` in the args (near line 3617) also asserts the `--plugin-dir` pair. Catches
   `prepareClaudeRun` losing the folder.
+- `claude-code-harness.test.ts`: `liveStart_SpawnsWithPluginDir` starts a session through the harness with the
+  recording `ProcessRunner` (the `spawned` list near line 155, measured at plan time, re-verify) and asserts the
+  first spawn's `args` hold `'--plugin-dir', '/app/agent-plugin'` right after the permission tool pair. Catches the
+  live launch (near line 916) building its spawn without `deps.agentPluginDir`.
 - `platform.test.ts`: the `serverName` row expects `'auri'`. Catches a server name that drifts from the manifests'
   key, which would make the permission tool name wrong.
 - Task 01's `agentPluginManifests_NameTheConstants` already ties `AGENT_SERVER_NAME` to the manifest
@@ -101,6 +118,7 @@ server is checked in task 18.
 
 ## Done when
 
+- The probe's init line shows `mcp__plugin_probe_probe__ping` with the server connected, recorded in Proof.
 - The commands above pass, and the grep prints only the four files named.
 - `RELAY_SERVER_NAME` and `CLAUDE_PERMISSION_TOOL` hold no string literal of a plugin or server name.
 

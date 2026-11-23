@@ -85,14 +85,31 @@ Task 13 copies these into the wigley plugin's `auri.json`. `<unity flags>` is `[
 | close | `unity` | `["command", "editor.playmode", "stop"]` | `<unity flags>` | `--project-path` | `UNITY_PROJECT_PATH` |
 | close | `unity` | `["command", "editor_stop"]` | `<unity flags>` | `--project-path` | `UNITY_PROJECT_PATH` |
 
-The probe: `{ "file": "skills/unity-playtest/unity/WigleyCapture.cs", "entry": "Wigley.WigleyCapture.Run", "runner": "unityScript" }`. design.md's `liveView` example differs from this table. It writes the unity patterns without `command` (`"words": ["editor_play"]`), and its close patterns lack the value flags and the variable (see § Open questions). Today's `capture.py stop` signals nothing (`kindOf` gives `capture` only `start`), so the table has no close row for it.
+The probe: `{ "file": "skills/unity-playtest/unity/WigleyCapture.cs", "entry": "Wigley.WigleyCapture.Run", "runner": "unityScript" }`. This table is the one source for the user's `liveView` value: design.md § Section: liveView's example is brought in line with it at plan time, and when the two differ this table wins. Today's `capture.py stop` signals nothing (`kindOf` gives `capture` only `start`), so the table has no close row for it.
+
+The same value as JSON, which task 13 copies verbatim and `playtest-command.test.ts`'s `WIGLEY_PATTERNS` equals (as `{ open, close }`, the probe aside):
+
+```json
+{
+  "open": [
+    { "program": "unity", "words": ["command", "editor.playmode", "start"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "unity", "words": ["command", "editor_play"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "capture.py", "words": ["start"], "valueFlags": ["--fps", "--backend"], "projectPathFlag": "--project-path" }
+  ],
+  "close": [
+    { "program": "unity", "words": ["command", "editor.playmode", "stop"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "unity", "words": ["command", "editor_stop"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" }
+  ],
+  "probe": { "file": "skills/unity-playtest/unity/WigleyCapture.cs", "entry": "Wigley.WigleyCapture.Run", "runner": "unityScript" }
+}
+```
 
 ### The probe
 
 - `runner: 'unityScript'` is the only runner. It is today's call: `unity command script run --file <file> --entry <entry> --args [<{"action":"probe"}>] --timeout 8 --json --project-path <folder>`, or `run_script` below com.unity.pipeline 0.9 (`probeCall`, unchanged). `ENTRY` gives way to `ProbeScript.entry`. `PROBE_ARGS`, the reply shape (`{ ok, playing, window: [x, y, w, h] | null }`, under `result` up to `MAX_REPLY_DEPTH` levels), `PROBE_ATTEMPTS` and the retry stay as they are. The `auri:live-view` skill documents this protocol (drafter B5).
 - `locateScript` returns null when no strategy has a probe. It also returns null when the probe's file is not a file (`files.realPath` fails). In that case it logs once per strategy change: `live view: <pluginName>'s probe file <path> is missing`.
 - The null error text becomes `no installed plugin gives a Game View probe`. The view then streams the whole editor, as it does today with no wigley install.
-- `CAPTURE_SCRIPT_IN_INSTALL` goes, and `start.ts` no longer imports `wigley-install.ts`. Task 09 removes that file's other caller. See 09 § Open questions for who deletes the file.
+- `CAPTURE_SCRIPT_IN_INSTALL` goes, and `start.ts` no longer imports `wigley-install.ts`. Task 09 removes that file's other caller, and task 15 deletes the file.
 
 ### Wording
 
@@ -152,7 +169,6 @@ Commit: one commit for the group.
 
 ## Open questions
 
-- **design.md's liveView example.** It gives the unity patterns as `"words": ["editor_play"]`, without `command`, and close patterns without `valueFlags` or `projectPathVariable`. Copied as written, those patterns would match no command the user runs. This task's table is the one task 13 copies. The lead may want design.md's example brought in line.
 - **The PWD fallback.** `CommandPattern` has no field for "the CLI reads its working folder". This task ties the fallback to `projectPathVariable`. A separate `projectPathFromCwd: boolean` would say it outright: that is a contract change for the lead.
 - **`capture.py stop`.** Today it does not close the view, and this task keeps that. Adding a close row for it is the user's call.
 

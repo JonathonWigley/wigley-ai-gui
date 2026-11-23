@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · it changes the pure queue's signature and adds a reader and a pick that the queue's start, restore and launch paths all read
+Rung: deep · it changes the queue's launch, restore-claim and wake lifecycle across the serial chain, and reads the persisted `queue.json`
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
 
@@ -18,7 +18,7 @@ Files:
 Consumes:
 - `RetroContribution` from `wigley-ai-gui/src/contracts/contributions.ts` ← 03
 - `contributionsMainKey`, `ContributionsMainExports.registerFeature`, `.strategies`, `.onChanged`, `.ready`, `FeatureReader`, `ReadResult`, `Strategy`, `pickStrategy`, `StrategyPick`, `strategyControlKind` from `wigley-ai-gui/src/plugins/contributions/contract.ts` ← 03
-- `pickProblemText(featureLabel, pick)` ← 03 (see Open questions: File Structure lacks this name)
+- `pickProblemText(featureLabel, pick)` ← 03
 
 Produces:
 - `export const retroReader: FeatureReader<RetroContribution>` in `wigley-ai-gui/src/plugins/auto-retro/main/retro-reader.ts`
@@ -30,7 +30,7 @@ Produces:
 
 ## Why
 
-`retro-queue.ts:22` hard-codes `RETRO_COMMAND = '/wigley:retro auto'`, and the manifest's `folder` setting defaults to `~/wigley-agents` (`manifest.ts:17`). A user with no wigley plugin gets a failed background row for every ended conversation (`gui-coupling.md` § 4 item 5). After this task the command, the folder and the triggers come from the picked `retro` strategy, and with no pick auto-retro queues nothing.
+`retro-queue.ts:22` hard-codes `RETRO_COMMAND = '/wigley:retro auto'`, and the manifest's `folder` setting defaults to `~/wigley-agents` (`manifest.ts:17`). A user with no wigley plugin gets a failed background row for every ended conversation. After this task the command, the folder and the triggers come from the picked `retro` strategy, and with no pick auto-retro queues nothing.
 
 ## Decisions
 
@@ -51,10 +51,13 @@ Produces:
   - `closed`: a host in `launched` is handled as today. Otherwise a retro queues only when `policy.on` includes `close`, the close is a user close, the conversation sent a message, and `opensWithRetroCommand(titles, policy.prefixes)` is false.
   - `cleared`: a host in `launched` is handled as today. Otherwise a retro queues only when `policy.on` includes `clear`, the conversation sent a message, and the row does not open with a prefix.
   - Every other event ignores the policy.
+  - Unbound closes and clears are dropped, not queued: with `on` `[]` nothing queues. A queued item exists while unbound only when it was queued under a `picked` pick that then went `choose`, `missing` or `none`.
+- **Retro rows at the other call sites.** `opensWithRetroCommand` is also called at `start.ts:352` (`followRows.added`) and `start.ts:395` (`chat.sessionOpened`) (line numbers measured at plan time, re-verify). Both pass `prefixes` from **every** installed retro strategy, read at call time, never the pick's alone, for the same reason as `policy.prefixes`.
 - **Pick.** `start.ts` registers `retroReader` under `'retro'` with `contributions.registerFeature` before the self-test early return, so the Settings control lists the strategies in every run mode. It disposes the registration in the part's `dispose`. The pick is `pickStrategy(contributions.strategies('retro'), api.settings().strategy)`, read at each event and at each launch.
 - **Start waits for the registry.** `begin` (the start that loads `queue.json`) awaits `contributions.ready` before the `started` event, so the restore claim reads every installed prefix.
-- **Launch.** `launch(item)` reads the pick. On `picked`, it launches with `projectDir: services.paths.expandTilde(strategy.value.folder, services.homeDir)` and the message text `retroCommandText(strategy.value.command, item.hostIds)`. On any other pick, it launches nothing, and the item stays at the head of the queue. The queue does not store the command: an item queued under one pick runs under the pick in force when it launches.
-- **Wake on a pick.** `start.ts` listens to `contributions.onChanged('retro', …)` and `api.onSettingsChanged(…)`. When the pick becomes `picked` and a retro is queued with none running, it starts the next launch through the same serial chain the other events use.
+- **Launch gate.** Today `commit(next)` applies `{ kind: 'launching' }` first, which moves the queue's head into `running` before `launch` runs (`start.ts:224`, measured at plan time, re-verify). After this task `commit` reads the pick first, and applies `launching` and calls `launch` only when the pick is `picked`. On any other pick it saves and publishes `next` as it is, so the item stays in `queued` at the head and `running` stays null. A `running` item never exists without a pick, so nothing sticks in `running` and later retros are not blocked.
+- **Launch.** `launch(item)` takes the `picked` strategy that `commit` read, and launches with `projectDir: services.paths.expandTilde(strategy.value.folder, services.homeDir)` and the message text `retroCommandText(strategy.value.command, item.hostIds)`. The queue does not store the command: an item queued under one pick runs under the pick in force when it launches.
+- **Wake on a pick.** `start.ts` listens to `contributions.onChanged('retro', …)` and `api.onSettingsChanged(…)`. Each, through the same serial chain the other events use, calls `commit(queue)`: when the pick is now `picked` and a retro is queued with none running, the gate above starts its launch; otherwise it changes nothing.
 - **Empty state.** When a close or a clear would have queued a retro but the pick is not `picked`, `start.ts` logs `retro not queued: <pickProblemText('Retro', pick)>` once per pick change, not once per event.
 - **Data.** `queue.json` keeps its shape and path. A queue that a user wrote before this change loads unchanged.
 - **User settings.** Measured at plan time: `~/.config/wigley-ai-gui/settings.json` holds no `auto-retro` key, so no edit is needed. Re-verify with `grep -n 'auto-retro' ~/.config/wigley-ai-gui/settings.json`. If a `folder` key is there, remove only that key.
@@ -65,7 +68,7 @@ Produces:
 - GIVEN the same strategy WHEN a `/clear` ends a sent conversation THEN no retro queues, because `on` lacks `clear`.
 - GIVEN no installed retro strategy WHEN the user closes a sent session THEN nothing launches and the log holds one `retro not queued:` line.
 - GIVEN two installed strategies and `strategy` `''` WHEN the user closes a sent session THEN nothing queues (pick `choose`).
-- GIVEN a retro queued while unbound WHEN a strategy becomes installed THEN the queued retro launches.
+- GIVEN a retro queued under a picked strategy whose pick then goes `choose` (a second strategy installs) before it launches WHEN the pick becomes `picked` again THEN the queued retro launches; while the pick was not `picked` the item stayed in `queued` and `running` stayed null.
 - GIVEN a restored row whose first message starts with an installed strategy's prefix, though another strategy is picked WHEN the app starts THEN the row is claimed as a retro row and closing it queues nothing.
 
 ## Tests
@@ -81,8 +84,10 @@ Produces:
   - `sessionClosed_NoStrategy_LaunchesNothingAndLogsOnce` — two closes, zero launches, one `retro not queued:` line.
   - `sessionClosed_TwoStrategiesAutomatic_LaunchesNothing`.
   - `sessionClosed_PickedStrategy_LaunchesItsCommandInItsFolder` — strategy `/acme:retro {sessions}` in `~/retros`, `strategy: 'acme'`, asserts `projectDir` `/home/me/retros` and the text `/acme:retro h1`.
-  - `queuedWhileUnbound_StrategyInstalled_Launches` — fire `onChanged('retro')` after installing a strategy.
+  - `queuedThenUnbound_StaysQueuedNotRunning` — queue an item under a picked strategy while a retro runs, add a second strategy and fire `onChanged('retro')` (pick `choose`), then end the running retro: assert `queue.queued` still holds the item, `running` is null and no launch happened. Catches a `launching` applied without a pick.
+  - `queuedThenUnbound_PickRestored_Launches` — continue the row above: set `strategy` to one of the two and fire `onSettingsChanged`; the item launches once.
   - `start_RegistersTheRetroReaderInSelfTestMode` — catches a registration placed after the self-test return.
+  - `restoredSessionOpened_OtherStrategysPrefix_ClaimedAsRetroRow` — two strategies, one picked, a row restored at start whose first message opens with the unpicked one's prefix, its titles set at `chat.sessionOpened` (the `start.ts:395` path): it is claimed as started, and closing it queues nothing. Catches a call site that passes the pick's prefix alone.
 
 ## Verification
 

@@ -11,6 +11,7 @@ Files:
 - modify `wigley-ai-gui/src/plugins/backlog/main/start.ts`
 - modify `wigley-ai-gui/src/plugins/backlog/main/assistant.ts`
 - modify `wigley-ai-gui/src/plugins/backlog/main/repo-folder.ts`
+- modify `wigley-ai-gui/src/plugins/backlog/main/selftest-fixture.ts` (adds `BACKLOG_FIXTURE_STRATEGY`)
 - modify `wigley-ai-gui/src/shared/followups/followup-file.ts` (its header comment only)
 - create `wigley-ai-gui/src/plugins/backlog/main/backlog-reader.ts`
 - test `wigley-ai-gui/src/plugins/backlog/main/backlog-reader.test.ts` (create)
@@ -21,7 +22,8 @@ Files:
 Consumes:
 - `BacklogContribution` from `wigley-ai-gui/src/contracts/contributions.ts` ← 03
 - `contributionsMainKey`, `ContributionsMainExports.registerFeature`, `.strategies`, `.onChanged`, `.ready`, `FeatureReader`, `pickStrategy`, `StrategyPick`, `strategyControlKind` from `wigley-ai-gui/src/plugins/contributions/contract.ts` ← 03
-- `pickProblemText(featureLabel, pick)` ← 03, or from `wigley-ai-gui/src/plugins/auto-retro/main/retro-reader.ts` ← 07 (see 07 § Open questions)
+- `pickProblemText(featureLabel, pick)` ← 03
+- `DOCS_FIXTURE_BINDING` from `wigley-ai-gui/src/plugins/docs/main/selftest-fixture.ts` ← 09 (its `features` value, for the fixture strategy)
 - `DocsMainExports.setFeaturesHomes(homes: FeaturesHomes | null): void` and `type FeaturesHomes` in `wigley-ai-gui/src/plugins/docs/contract.ts` ← 09
 - `templateProblem(template: string): string | null` and `inRepoHomeParts(homes: readonly string[]): string[][]` in `wigley-ai-gui/src/plugins/docs/features-homes.ts` ← 09
 - the skill `auri:backlog-format` (`wigley-ai-gui/agent-plugin/skills/backlog-format/SKILL.md`), which documents the follow-up file format ← drafter B5's task (the app-feature skills)
@@ -29,6 +31,7 @@ Consumes:
 Produces:
 - `export const backlogReader: FeatureReader<BacklogContribution>` in `wigley-ai-gui/src/plugins/backlog/main/backlog-reader.ts`
 - `export function assistantInstructions(extra: string | null): string` in `wigley-ai-gui/src/plugins/backlog/main/assistant.ts`, in place of `ASSISTANT_INSTRUCTIONS`
+- `export const BACKLOG_FIXTURE_STRATEGY: BacklogContribution` in `wigley-ai-gui/src/plugins/backlog/main/selftest-fixture.ts`
 
 ## Why
 
@@ -50,9 +53,12 @@ Backlog finds its homes through the docs index, which hard-codes the in-repo `do
   - on `picked`: `{ homes, file, areaFolder: areaFolder ?? null }` from the strategy's value
   - on any other pick: `null`
   The docs plugin writes these into its contributions file and rebuilds the index (task 09). Backlog's load then reads the new homes as it does today, through `docs.machineIndex()`.
+- **Redraw on every pick change.** Some pick changes leave the `setFeaturesHomes` value as it was (`none` to `choose`, `picked` to `missing`), so docs writes and runs nothing and no machine-index event comes. On every pick change, whether or not the docs value changed, `start.ts` also sends the channel's `changed` with `{ homeRoot: null }`, as the `reload` hook does today (`start.ts:1064`, measured at plan time, re-verify), so `readHomes` re-runs with the new pick's message.
+- **First load.** The channel's load awaits `contributions.ready` before it reads the pick, so the first load never shows `none` for a strategy the registry has not listed yet.
+- **Run modes other than `live`** (`selfTest` and `drive`, demo steps included): no contributions plugin is installed there, yet the self-test and the notes self-test file into the fixture repo's homes. In those modes the pick is always `picked`, its value `BACKLOG_FIXTURE_STRATEGY`, exported from `selftest-fixture.ts`, whatever the registry and the `strategy` setting hold. Its value is `{ label: 'Fixture', homes, file, areaFolder }` copied from `DOCS_FIXTURE_BINDING.features` (09), so both plugins read one value: `{ homes: ['{repo}/docs/features', '~/wigley-features/{name}'], file: 'followups.md', areaFolder: 'followups' }`. Backlog still calls `setFeaturesHomes` with it; 09 keeps the fixture binding's `features` in those modes, so the call changes nothing there. Fixture text is exempt from the boundary rule.
 - **Empty state.** While the pick is not `picked`, `readHomes` returns `{ homes: [], message: pickProblemText('Backlog', pick) }` and reads no index entry. The table status draws `message`, as it draws a load message today (`backlog-view.ts:469`). While the pick is `picked` and the index lists no home, the status stays `No features homes found`.
 - **File name.** `CREATE_TARGET_FILE` goes. The create target's file is the picked strategy's `file`. `followupPathsOf`, and the two create paths at `start.ts:554` and `start.ts:579` (line numbers measured at plan time, re-verify), take it from the pick.
-- **In-repo homes.** `FEATURES_FOLDER` goes. `clonesFeaturesFolders(paths, topLevel, root, homeParts)` gives, for each part list of `inRepoHomeParts(strategy.homes)`, the clone's own `<topLevel>/<parts>` and the project folder's `<topLevel>/<project>/<parts>`, as it does today for `docs/features`. `repoFolderOf(home, isInClone, settings, paths, homeDir, homeParts)` reads a home as in-repo when its root ends with one of the part lists. The project folder rule (a folder directly under the root that holds `AGENTS.md`) stays as it is today: it is the index's rule too (task 09).
+- **In-repo homes.** `FEATURES_FOLDER` goes. `clonesFeaturesFolders(paths, topLevel, root, homeParts)` gives, for each part list of `inRepoHomeParts(strategy.homes)`, the clone's own `<topLevel>/<parts>` and the project folder's `<topLevel>/<project>/<parts>`, as it does today for `docs/features`. The project folder is `paths.parent` applied `parts.length` times to `root` (today's `paths.parent(paths.parent(root))` is the two-part case, `start.ts:165`), and is skipped for a part list `root` does not end with. `repoFolderOf(home, isInClone, settings, paths, homeDir, homeParts)` reads a home as in-repo when its root ends with one of the part lists, compared part by part from the end, and then returns `paths.parent` applied that list's `parts.length` times to the root. The first matching list in order wins. The project folder rule (a folder directly under the root that holds `AGENTS.md`) stays as it is today: it is the index's rule too (task 09).
 - **Create target.** `markCreateTargets` keeps its rule: the first home in git by root order, else the first home. design.md § Section: backlog says "The first that exists is the home". This task keeps today's rule, in which every existing home lists. See § Open questions.
 - **Assistant.** `assistantInstructions(extra)` returns today's text with its third paragraph's first sentence changed to: `Edit a follow-up file directly, in the shape it already has: the auri:backlog-format skill gives the format.` The first sentence stays `You are the Backlog assistant in wigley-ai-gui.` until task 17's rename pass, as the app name is not a boundary name. When `extra` is a string, the result is the text, a blank line, then `extra`. `start.ts:961` passes `instructions: () => Promise.resolve(assistantInstructions(<picked strategy's assistant?.instructions ?? null>))`, read at each call. With no pick, the assistant gets `assistantInstructions(null)`.
 - **Follow-up parser comment.** `followup-file.ts:4` names `wigley-ai-marketplace`. The comment then names the `auri:backlog-format` skill as the format's one description. The parser code does not change: the format stays as it is, and drafter B5's skill documents it.
@@ -68,13 +74,16 @@ Backlog finds its homes through the docs index, which hard-codes the in-repo `do
 ## Tests
 
 - `backlog-reader.test.ts` (new) — one table over `backlogReader.read`: the user's section reads ok and its value equals the section. Then one row per reason, each asserting the exact text. Template rows: `{repo}/docs/features` and `~/wigley-features/{name}` are accepted. `docs/features`, `{repo}/../x`, `{repo}/{name}`, `wigley-features/{name}` and `~/x/{name}/y` are each refused.
-- `repo-folder.test.ts` — the existing rows pass `[['docs', 'features']]`. Add `repoFolderOf_CustomInRepoParts_ReadsTheCloneFolder`: parts `[['notes', 'todo']]` and root `/r/notes/todo` in a clone give `/r`. Add `repoFolderOf_DocsFeaturesWithOtherParts_IsNotInRepo`: parts `[['notes', 'todo']]` and root `/r/docs/features` give the settings fallback. Each catches a leftover `docs/features` literal.
+- `repo-folder.test.ts` — the existing rows pass `[['docs', 'features']]`. Add `repoFolderOf_CustomInRepoParts_ReadsTheCloneFolder`: parts `[['notes', 'todo']]` and root `/r/notes/todo` in a clone give `/r`. Add `repoFolderOf_DocsFeaturesWithOtherParts_IsNotInRepo`: parts `[['notes', 'todo']]` and root `/r/docs/features` give the settings fallback. Each catches a leftover `docs/features` literal. Add `repoFolderOf_OneAndThreePartLists_ClimbThatManyLevels`: parts `[['features']]` and root `/r/features` give `/r`; parts `[['a', 'b', 'c']]` and root `/r/a/b/c` give `/r`. Catches a fixed two-level climb. `start.test.ts` gets the matching `clonesFeaturesFolders` rows through a load with a one-part template.
 - `assistant.test.ts` — `assistantInstructions_NoExtra_NamesTheFormatSkill`: the text holds `auri:backlog-format` and not `triage.md`. `assistantInstructions_Extra_AppendedAfterABlankLine`.
 - `start.test.ts` — the harness's docs fake records `setFeaturesHomes` calls, and a contributions fake holds the backlog strategies. Today's tests run with the user's strategy, and their expectations stay. Add:
   - `load_NoStrategy_EmptyStateMessageAndNoHomes` — also asserts `setFeaturesHomes(null)`.
   - `load_TwoStrategiesAutomatic_ChooseMessage` — status `Several plugins bind Backlog: pick one in Settings.`
   - `pickChanged_SendsTheNewHomesToDocs` — fire `onChanged('backlog')` with a second strategy picked by setting, and assert the recorded call.
   - `fileNote_StrategyFile_CreatesThatFile` — `file: 'todo.md'`.
+  - `pickChanged_NoneToChoose_StatusRedraws` — start with no strategy, install two and fire `onChanged('backlog')`: the docs fake records no second call (the value stays `null`), yet a `changed` is sent and the next load's status reads `Several plugins bind Backlog: pick one in Settings.` Catches a redraw tied to the docs value.
+  - `load_BeforeReady_WaitsForTheRegistry` — `ready` settles after the first load starts: the load shows the strategy's homes, never the `none` message.
+  - `selfTestMode_FixtureStrategyPicked` — `runMode: 'selfTest'` with an empty registry: the pick is `BACKLOG_FIXTURE_STRATEGY` and the fixture home lists.
 
 ## Verification
 

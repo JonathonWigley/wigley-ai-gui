@@ -15,12 +15,12 @@ Every task defers its runtime and live checks here by name.
 ### Static, in `~/Documents/wigley-ai-gui`
 
 The app's `AGENTS.md` has no `## Done` section (measured at plan time: `grep -n '^## ' AGENTS.md` lists Intent,
-Architecture, Review, Running and testing, Dev quirks). Its checks are the `package.json` scripts and § Running and
+Architecture, Review, README, changelog and boundary, Running and testing, Dev quirks). Its checks are the `package.json` scripts and § Running and
 testing:
 
 ```
 source ~/.nvm/nvm.sh && nvm use
-npm run lint            # check-layers, check-styles, oxlint, oxfmt --check
+npm run lint            # check-layers, check-styles, check-changelog, check-boundary, oxlint, oxfmt --check
 npm run typecheck
 npm test                # Vitest, the type tests, and task 15's README coverage test
 ```
@@ -93,12 +93,22 @@ Low-confidence where marked: these cross the app, Claude Code's plugin loading a
    and starting another session leaves it on the Checklist flow. Expected.
 4. **Permission prompt.** A tool call needing permission in an app session shows the app's permission popup, routed
    through `mcp__plugin_auri_auri__permission_prompt`. Expected.
-5. **Update check.** The installed app's update button reports no update (installed commit equals the new clone's
-   `origin/main`), proving its baked clone dir and the fetch work. Expected.
+5. **Update check.** Run it after the last landing of the run (16's landing in the new clone). First reinstall: the
+   app's `install` skill from the new clone's final `main`, because 17 step 8 installed an earlier commit and 17 step
+   11 and 16 landed after it. Then the installed app's update button reports no update (installed commit equals the
+   new clone's `origin/main`), proving its baked clone dir and the fetch work. Expected.
+6. **workflow-gate, live.** It reads the declared workflows after 17 landed the run and the `wigley` plugin update
+   brought in its `auri.json`. In a fresh app session, an Edit before any level skill loads is denied with
+   workflow-gate's `DENIAL`; after the agent loads `wigley:small` the same Edit passes workflow-gate (the auri
+   checklist gate still needs its `set_workflow_checklist` call). After a compaction (`/compact`) the session shows
+   the level skill's `## Reporting` reminder and no checklist lines from workflow-gate. `WIGLEY_SESSION_ROW` reaches the
+   hook process: with it set (the app session) the compact reminder shows, and in a terminal `claude -p` session with
+   it unset none shows, while the level gate still denies an Edit before a level skill there. Low-confidence: the
+   gate reads the installed plugins list, which only the landed install holds.
 
 ### Terminal session with the marketplace-installed auri
 
-6. With auri installed from the app repo's marketplace (`claude plugin list` shows `auri@<app marketplace>`), run
+7. With auri installed from the app repo's marketplace (`claude plugin list` shows `auri@auri`, in both profiles), run
    `claude -p` in `~/Documents/wigley-ai-gui` asking for the names of its tools that start with `mcp__plugin_auri_auri__`.
    It lists the app tools, and with the app running an `ask_round` call reaches it. The checklist gate does not deny
    its edits (no `WIGLEY_SESSION_ROW`). Low-confidence: a terminal session's relay finds the stable app's endpoint

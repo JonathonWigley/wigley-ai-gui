@@ -21,6 +21,7 @@ Files (wigley-ai-gui):
 - create `wigley-ai-gui/src/shared/agent-plugin.ts` · test `wigley-ai-gui/src/shared/agent-plugin.test.ts`
 - modify `wigley-ai-gui/src/contracts/plugin.ts` (`MainServices`)
 - modify `wigley-ai-gui/src/main/main.ts` (the main services record)
+- modify `wigley-ai-gui/src/main/plugin-catalog/plugin-types.ts` (`appFolder`) · test `wigley-ai-gui/src/main/plugin-catalog/plugin-types.test.ts`
 - modify `wigley-ai-gui/src/shared/plugin-part-harness.test-support.ts` (the `MainServices` fake)
 - modify `wigley-ai-gui/forge.config.mts` (`packagerConfig.extraResource`)
 - modify `wigley-ai-gui/src/plugins/sessions/main/relay/connect-hold.ts` (comment only)
@@ -35,7 +36,8 @@ Files (wigley-ai-marketplace):
 - modify `wigley-ai-marketplace/AGENTS.md`, `wigley-ai-marketplace/README.md`
 - modify `wigley-ai-marketplace/plugins/wigley/scripts/retro/answers.py`, `digest.py` (docstrings only)
 - modify `wigley-ai-marketplace/plugins/wigley/scripts/retro/tests/test_record_fields.py`
-- modify `wigley-ai-marketplace/plugins/wigley/skills/feature-primer/SKILL.md`, `skills/review/triage.md`
+- modify `wigley-ai-marketplace/plugins/wigley/skills/feature-primer/SKILL.md`, `skills/review/triage.md`,
+  `skills/feature/SKILL.md`, `skills/retro/SKILL.md` (the relay README pointers only; task 14 renames their tool names)
 
 Consumes: nothing.
 
@@ -66,8 +68,11 @@ Produces:
 
 - `appDir` is the folder that holds the app's own files outside the asar: `process.resourcesPath` when
   `app.isPackaged`, else `app.getAppPath()`. This is the rule `emittedTypesFolder`
-  (`src/main/plugin-catalog/plugin-types.ts`) already uses for `.plugin-types`. Reuse that rule: extract one helper
-  in `plugin-types.ts` or `main.ts` that both call, so the rule is written once.
+  (`src/main/plugin-catalog/plugin-types.ts`) already uses for `.plugin-types`. Write the rule once: export
+  `appFolder(app: { isPackaged: boolean; appPath: string; resourcesPath: string }): string` from `plugin-types.ts`,
+  make `emittedTypesFolder` call it, and have `main.ts` set `appDir: appFolder({ isPackaged: app.isPackaged, appPath:
+  app.getAppPath(), resourcesPath: process.resourcesPath })`, the same object `main.ts` already builds for
+  `emittedTypesFolder`.
 - `main.ts` sets it in the main services record beside `cloneDir: inputs.repoDir`. The doc comment above
   `MainServices` gets one sentence: "`appDir` is the folder that holds the app's files outside the asar (the
   resources folder when packaged, the repo folder in dev); `agentPluginDir` resolves the `auri` plugin under it."
@@ -186,10 +191,14 @@ other line of code:
 
 Each pointer to the old paths changes in this task, since the move breaks it.
 
-- `M/skills/feature-primer/SKILL.md` (2 lines) and `M/skills/review/triage.md` (4 lines; counts measured at plan
-  time, re-verify): each `../../scripts/forms/README.md` pointer becomes prose naming "the `auri` plugin's relay
-  README (`scripts/relay/README.md`)" with the same § name. A relative link cannot cross from one plugin's install to
-  another's.
+- `M/skills/feature-primer/SKILL.md` (lines 21, 67), `M/skills/review/triage.md` (lines 96, 159, 163, 206),
+  `M/skills/feature/SKILL.md` (line 87) and `M/skills/retro/SKILL.md` (line 110) (line numbers measured at plan
+  time, re-verify with `git grep -n 'scripts/forms' -- wigley-ai-marketplace/plugins/wigley/skills`): each
+  `../../scripts/forms/README.md` pointer, a link or plain text, becomes prose naming "the `auri` plugin's relay
+  README (`scripts/relay/README.md`)" with the same § name (`§ Outcomes` for the two SKILL.md links). A relative link
+  cannot cross from one plugin's install to another's.
+- `wigley-agents/forms.md` line 14 also names `scripts/forms/README.md`; it is task 14's file (14 rewrites
+  `forms.md`), so this task leaves it.
 - `M/scripts/retro/answers.py` and `digest.py` docstrings: `scripts/forms/README.md` becomes "the auri plugin's
   scripts/relay/README.md".
 - `M/scripts/retro/tests/test_record_fields.py`: read the README at
@@ -209,13 +218,22 @@ Each pointer to the old paths changes in this task, since the move breaks it.
 
 ### Docs
 
-`wigley-ai-gui/AGENTS.md`: line 30 ("the only client of the `wigley-forms` tools") names the `auri` tools; the
-paragraph at line 551 says each session runs the `auri` plugin's `relay.py` (`agent-plugin/scripts/relay/`, whose
-README states the tool contract and the saved-round format), and drops "the `retro` skill" for "readers of the saved
-files"; line 1261 runs `agent-plugin/scripts/relay/start_app.py`. Add `agent-plugin/` to the Architecture layout with
-one line: the `auri` agent plugin, passed to Claude Code with `--plugin-dir` and listed in
-`.claude-plugin/marketplace.json`. Line numbers measured at plan time, re-verify by grep. The `docs_index.py` mention
-on line 33 is task 09's.
+`wigley-ai-gui/AGENTS.md` (line numbers measured at plan time, re-verify with
+`grep -n 'wigley-forms\|scripts/forms\|start_app' wigley-ai-gui/AGENTS.md`):
+
+- Line 32 ("the only client of the `wigley-forms` tools") names the `auri` tools.
+- The paragraph at lines 553–556 says each session runs the `auri` plugin's `relay.py` (`agent-plugin/scripts/relay/`,
+  whose README states the tool contract and the saved-round format), and drops "the `retro` skill" for "readers of
+  the saved files". Its sentence "A change to either contract lands in both folders together" becomes "The README
+  and the app's side of each contract change in the same commit": both now sit in this repo.
+- Line 1207 ("sends no `wigley-forms` round") becomes "sends no forms round".
+- Lines 1292–1293 run the `auri` plugin's `start_app.py` (`agent-plugin/scripts/relay/` in this repo) in place of the
+  marketplace's.
+- Add `agent-plugin/` to the Architecture layout with one line: the `auri` agent plugin, passed to Claude Code with
+  `--plugin-dir` and listed in `.claude-plugin/marketplace.json`.
+
+After the edits, that grep prints no `wigley-forms` tool or server name and no `scripts/forms` path. The
+`docs_index.py` mention on line 33 is task 09's.
 
 ## Behaviour
 
@@ -230,10 +248,26 @@ GIVEN the moved relay WHEN a host starts `relay.py` from `A/scripts/relay/` THEN
   (rows: `auri/auri/permission_prompt`, `wigley/wigley-forms/ask_round` → `mcp__plugin_wigley_wigley-forms__ask_round`),
   `agentPluginDir_JoinsTheFolderName` (posix and windows `Paths`). Catches a wrong separator or prefix in the one
   place every tool name is built.
+- `src/main/plugin-catalog/plugin-types.test.ts`: `appFolder` rows, packaged → `resourcesPath`, dev → `appPath`;
+  the existing `emittedTypesFolder` rows pass unchanged. Catches `MainServices.appDir` and `.plugin-types` drifting
+  apart.
 - `src/shared/agent-plugin.test.ts`: `agentPluginManifests_NameTheConstants` reads
   `agent-plugin/.claude-plugin/plugin.json` and `agent-plugin/.codex-plugin/plugin.json` from the repo with `node:fs`
   and asserts `name === AGENT_PLUGIN_NAME` in both and the one `mcpServers` key `=== AGENT_SERVER_NAME` in both.
-  Catches a server key that drifts from the name the app builds tool names from. The version check is task 15's.
+  It also asserts the Codex manifest's `"skills": "./skills/"`, `mcpServers.auri.cwd === '.'`,
+  `tool_timeout_sec === 330` and `args` `['./scripts/relay/relay.py']`, the Claude manifest's `args`
+  `['${CLAUDE_PLUGIN_ROOT}/scripts/relay/relay.py']`, and that `agent-plugin/scripts/relay/relay.py` exists. Catches
+  a server key that drifts from the name the app builds tool names from, and a manifest that points at a script the
+  move left behind. The version check is task 15's.
+- `src/shared/agent-plugin.test.ts`: `agentPluginHooks_CommandsNameExistingScripts`, one table test over
+  `agent-plugin/hooks/hooks.json`. Each row is `{ event, matcher, script, mode, timeout }`; this task writes the two
+  chatroom rows (`PreToolUse`, `Edit|Write|MultiEdit|NotebookEdit|Bash`, `scripts/chatroom/hook.py`, `pre`, 5) and
+  (`PostToolUse`, `Edit|Write|MultiEdit|NotebookEdit`, `scripts/chatroom/hook.py`, `post`, 5). The test asserts
+  each row's entry exists with that matcher and timeout, that its command is exactly
+  `python3 "${CLAUDE_PLUGIN_ROOT}/<script>" <mode>` (no trailing mode when `mode` is empty), that
+  `agent-plugin/<script>` exists, and that the file holds no entry the table lacks. Task 12 adds its four rows.
+  Catches a hook path the move broke, which `claude plugin validate` does not check and which silently disables the
+  hook.
 - `A/scripts/relay/tests/test_relay.py`: the changed `serverInfo` row. `A/scripts/chatroom/tests/`: unchanged; they
   pass only when the new import path resolves.
 

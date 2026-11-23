@@ -22,7 +22,7 @@ Planned in `shareable-app`, not built yet: the `auri` agent plugin (`agent-plugi
 marketplace file `.claude-plugin/marketplace.json`, the `--plugin-dir` launch, the `auri` server name, `auri.json`
 contributions and the `contributions` plugin, the settings `auto-retro.strategy`, `backlog.strategy`, `workflow.off`,
 `workflow.autoStart` and `workflow.layout`, Unity pool off by default, the removal of the four `workflow-*` level
-plugins, and the `lint:changelog` and `lint:boundary` scripts. Until they land, the app's MCP server is `wigley-forms`, registered by another agent plugin.
+plugins, the `lint:changelog` and `lint:boundary` scripts, and the app's own repo at the clone URL below. Until they land, the app's MCP server is `wigley-forms`, registered by another agent plugin.
 
 ## What Auri is
 
@@ -50,15 +50,26 @@ The app shows as Auri. Its executable, bundle and every path keep the name `wigl
 
 ## Install the app
 
-From a clone of this repo:
+1. Clone the repo and work from its root:
 
-1. `nvm use`, then `npm ci` to install the build dependencies.
-2. On a Mac, once per machine: `npm run create-signing-identity`. It makes a self-signed certificate in a keychain of
+   ```
+   git clone git@github.com:JonathonWigley/wigley-ai-gui.git
+   cd wigley-ai-gui
+   ```
+
+   The repo may be private: a clone then needs read access from its owner.
+2. Select the Node.js version in `.nvmrc`, then run `npm ci` to install the build dependencies. On macOS and Linux,
+   `nvm use` reads `.nvmrc`. On Windows, nvm-windows does not read it: run `nvm install <version>` and
+   `nvm use <version>` with the version the file holds.
+3. On a Mac, once per machine: `npm run create-signing-identity`. It makes a self-signed certificate in a keychain of
    its own, so macOS keeps the app's privacy grants across rebuilds. When macOS asks for Documents access on the first
    start, answer Allow: a denied grant makes every session under `~/Documents` exit with `EPERM`.
-3. `npm run install-app`. It builds `main` (`-- --ref <ref>` builds another committed ref) in a build-only worktree,
+4. `npm run install-app`. It builds `main` (`-- --ref <ref>` builds another committed ref) in a build-only worktree,
    installs it as `/Applications/wigley-ai-gui.app` on macOS or under `%LOCALAPPDATA%\Programs\wigley-ai-gui\` on
    Windows, and restarts the app when it was running. Running sessions keep going.
+5. Check that it works. Start Auri, start a session in any project folder, and ask its agent to send a forms round
+   with one notice: the round opens as a popup over the session and returns when submitted. Settings lists each
+   feature an `auri.json` can bind, and each shows its empty state until an installed plugin binds it.
 
 `npm start` runs the dev app beside the stable one, shown as Auri Dev, with its own user data and relay endpoint
 (`~/.agents/wigley-ai-gui-dev/`). Both share the user config folder.
@@ -81,7 +92,9 @@ Checks: `npm run typecheck`, `npm run lint` (which runs `npm run lint:changelog`
   `marketplace add` reads `.claude-plugin/marketplace.json` at the clone's root: the marketplace `auri`, which lists
   the plugin `auri` at `./agent-plugin`. The plugin's version, in both its manifests, is the app's `package.json`
   version. A terminal session reaches the stable app through the relay, which starts the app when it is not
-  running. Rounds work; the checklist gate does not apply outside the app.
+  running. Rounds work; the checklist gate does not apply outside the app. The install goes into the profile
+  `CLAUDE_CONFIG_DIR` names (default `~/.claude`): run both commands once more with `CLAUDE_CONFIG_DIR` set for each
+  other profile, unless that profile's `plugins` folder links to one that already has it.
 - **Codex** reads the plugin's Codex manifest, `agent-plugin/.codex-plugin/plugin.json`. Install it from the same
   marketplace with Codex's plugin commands: add the marketplace, then `codex plugin add auri@auri`. Planned in `shareable-app`, not built yet: the Codex steps are checked
   against the Codex plugin docs when the manifest lands.

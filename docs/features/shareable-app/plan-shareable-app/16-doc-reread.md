@@ -22,17 +22,17 @@ Files (personal, edited in place, never committed):
 
 ## Consumes
 
-- The "Docs written ahead" commit named in `plan.md` (filled by the plan's docs commit).
+- The "Docs written ahead" commit `18112bbb1` (`plan.md` § Docs written ahead).
 - Every task's landed code (01–15) and 17's move.
 
 ## Decisions
 
 - **The list of docs to read** is the union of:
-  1. the files the docs-written-ahead commit touched: `git -C ~/Documents/ai show --name-only --format= <docs commit>`.
+  1. the files the docs-written-ahead commit touched: `git -C ~/Documents/ai show --name-only --format= 18112bbb1`.
      That commit stays in `ai`'s history; its `wigley-ai-gui/<path>` entries are read at `<path>` in the new clone
      (the split rewrote the app's shas, not its paths);
   2. each doc a task added or changed after that commit: in `ai`,
-     `git -C ~/Documents/ai log --name-only --format= <docs commit>..<split base> -- '*.md' 'wigley-ai-marketplace/plugins/wigley/auri.json'`,
+     `git -C ~/Documents/ai log --name-only --format= 18112bbb1..<split base> -- '*.md' 'wigley-ai-marketplace/plugins/wigley/auri.json'`,
      and in the new clone `git -C ~/Documents/wigley-ai-gui log --name-only --format= -- '*.md'` over the commits since
      the split (17 records `<split base>` in its Proof);
   3. the personal files above, which no commit holds.
@@ -41,11 +41,19 @@ Files (personal, edited in place, never committed):
   event, a command and its flags, an empty state, a contribution field — is checked against the landed source with a
   grep or a read, batched per doc. A claim that is wrong is fixed in place; a claim the code does not support at all
   and no task built is a gap, reported to the lead rather than written into the doc or the code.
+- The line-by-line check is the only check for the nine `agent-plugin/skills/*/SKILL.md` and
+  `docs/features/feature-contributions/design.md`: they were written ahead in the built state and carry no planned
+  marks (`plan.md` § Docs written ahead), so the mark grep below says nothing about them.
 - **Planned marks.** Every mark `wigley:feature` step 1 wrote — the phrase "planned in `shareable-app`, not built yet"
   and any variant ("planned in shareable-app") — is found with
-  `command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git`.
-  Each is dropped when its code has landed, with the sentence reworded to stand without it. A mark whose code has
-  not landed stays, and the report names it with the task it waits on. Done when the grep prints only those.
+  `command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=plan-shareable-app`.
+  The plan folder is excluded: its own text names the phrase. At plan time (measured, re-verify) the marks were
+  `README.md:21` (the Status paragraph), `README.md:86` (the Codex steps) and `AGENTS.md:1216` (§ README, changelog and
+  boundary), and task 15 drops the README Status checks and the `AGENTS.md` banner as its scripts land. Each mark is
+  dropped when its code has landed, with the sentence reworded to stand without it; the README's Status section goes
+  when nothing is left in it, with its Contents line. A mark whose code has not landed stays, and the report names it
+  with the task it waits on. Done when the grep prints only those. A hit under `docs/features/` outside the plan
+  folder is design text: it is listed, not fixed.
 - **Names from File Structure.** Wherever a doc names a shared name — `mcp__plugin_auri_auri__*`, `auri.json`,
   `strategy:<feature>`, `workflow.off`, `workflow.autoStart`, `unity-pool.scriptPath`, `CHECKLIST_WORKFLOW_ID`,
   `WIGLEY_SESSION_ROW` — it matches `plan.md` § File Structure and the code; any old name
@@ -66,7 +74,7 @@ None added: the README coverage test, changelog lint and boundary lint (task 15)
 ## Verification
 
 ```
-command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git
+command grep -rIn -i 'planned in .\?shareable-app' ~/Documents/wigley-ai-gui ~/Documents/ai ~/.agents ~/.claude/hooks ~/.codex --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=plan-shareable-app
 (cd ~/Documents/ai/wigley-ai-marketplace && python3 scripts/check_pointers.py)
 (cd ~/Documents/wigley-ai-gui && npm run lint)
 ```

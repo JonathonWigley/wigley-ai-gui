@@ -28,6 +28,7 @@ Files:
 - modify `src/plugins/workflow/page/layout/workflow-draw.ts`
 - modify `src/plugins/workflow/page/layout/workflow-kit.ts`
 - create `src/plugins/workflow/declared/workflows-reader.ts`
+- create `src/plugins/workflow/declared/enabled-workflows.ts`
 - create `src/plugins/workflow/declared/plan-format-reader.ts`
 - create `src/plugins/workflow/declared/build-main.ts`
 - create `src/plugins/workflow/declared/build-page.ts`
@@ -43,13 +44,17 @@ Files:
 - create `src/plugins/workflow/declared/checklist-hook.ts`
 - create `src/plugins/workflow/layouts/default/layout.js` and `layout.css` (copied from `src/plugins/workflow-large/layouts/default/`)
 - test `src/plugins/workflow/layouts/default/layout.test.ts` (ported from `src/plugins/workflow-large/layouts/default/layout.test.ts`)
+- create `src/plugins/workflow/declared/fixtures.test-support.ts` (the four design examples, `designDeclared(id)`)
 - test `src/plugins/workflow/declared/workflows-reader.test.ts`
+- test `src/plugins/workflow/declared/enabled-workflows.test.ts`
+- test `src/plugins/workflow/declared/uses-plan.test.ts`
 - test `src/plugins/workflow/declared/plan-format-reader.test.ts`
 - test `src/plugins/workflow/declared/build-main.test.ts`
 - test `src/plugins/workflow/declared/build-page.test.ts`
 - test `src/plugins/workflow/declared/templates.test.ts`
 - test `src/plugins/workflow/declared/actions.test.ts`
-- test `src/plugins/workflow/declared/countdown.test.ts`
+- test `src/plugins/workflow/declared/countdown.test.ts` (the timer rows ported from `src/plugins/workflow-large/main/countdown.test.ts`)
+- test `src/plugins/workflow/declared/countdown-text.test.ts` (ported from `src/plugins/workflow-large/page/countdown.test.ts`)
 - test `src/plugins/workflow/declared/checklist-hook.test.ts`
 - test `src/plugins/workflow/contract.test.ts`, `flow.test.ts`, `main/start.test.ts`, `main/step-tool.test.ts`,
   `main/checklist-tool.test.ts`, `main/flow-store.test.ts`, `page/start.test.ts`, `page/workflow-view.test.ts`,
@@ -96,7 +101,14 @@ Produces (05 and 06 consume these by these exact names):
   `flow.plan`).
 - `src/plugins/workflow/declared/plan-pane.ts`: `interface PlanPane { checklist(flow: SessionFlow, format: PlanFormat |
   null): ChecklistView | null }` and `NO_PLAN_PANE: PlanPane` (returns `defaultChecklist(flow)`).
-- `src/plugins/workflow/declared/uses-plan.ts`: `usesPlan(decl: WorkflowDecl): boolean`.
+- `src/plugins/workflow/declared/uses-plan.ts`: `usesPlan(decl: WorkflowDecl): boolean`, by the rule in § Uses plan.
+- `src/plugins/workflow/declared/enabled-workflows.ts`: `interface EnabledWorkflows { enabledWorkflows(): readonly
+  DeclaredWorkflow[]; onWorkflowsChanged(listener: (workflows: readonly DeclaredWorkflow[]) => void): Disposable;
+  workflowOf(flow: SessionFlow): DeclaredWorkflow | null }` and `createEnabledWorkflows(): EnabledWorkflows & { set(workflows:
+  readonly DeclaredWorkflow[]): void }`. `enabledWorkflows()` gives exactly the entries `workflowDeclaredSlot` holds
+  (the enabled set plus every `addDeclared` entry), in slot order. `onWorkflowsChanged` fires after each `set` whose
+  list differs (by `JSON.stringify`). `workflowOf(flow)` looks `flow.workflow` up by qualified id; the Checklist flow and
+  an unknown id give null. `main/start.ts` owns one instance and hands its three members to 05's `startPlanCapability`.
 - `src/plugins/workflow/declared/build-main.ts`: `buildMainWorkflow(workflow: DeclaredWorkflow, planFold: PlanFold):
   MainWorkflow`.
 - `src/plugins/workflow/declared/build-page.ts`: `buildPageWorkflow(workflow: DeclaredWorkflow, deps: PageBuildDeps):
@@ -113,8 +125,9 @@ Decisions:
 
 **Readers and the enabled set**
 - The workflow main part adds `contributions` to `dependsOn.main`, and registers `workflowsReader` under `workflows`
-  (label `Workflows`) and `planFormatReader` under `planFormat` (label `Plan format`). The page part adds `docs` and
-  `settings` to `dependsOn.page` (docs lists no `workflow` dependency, so no cycle).
+  (label `Workflows`) and `planFormatReader` under `planFormat` (label `Plan format`). The page part adds `docs` to
+  `dependsOn.page` for `openPlan` (docs lists no `workflow` dependency, so no cycle). It adds no `settings` dependency:
+  the part reads only its own settings, and the `strategy-list:workflows` control kind is 03's.
 - `workflowsReader.read(section)` refuses anything but an array of declarations, each checked to design.md § Workflow
   fields and § Stage fields, and refuses the whole section on any reason. Each reason starts with the path in the
   section (`[2].stages[4].enter[0]: …`). The checks:
@@ -122,7 +135,9 @@ Decisions:
   - `id`s are unique in the section; stage ids are unique in a workflow.
   - `order` is a number below 1000 (the Checklist flow's order is 1000).
   - `badgeColor`, when present, is a non-empty string.
-  - Every skill in `claims` appears in exactly one stage's `skill` trigger.
+  - Every skill in `claims` appears in exactly one stage's `skill` trigger, and that trigger carries no `from` and no
+    `when`: a claim always enters that stage (see `firstStage` below).
+  - An action's `key`, when present, is a non-empty string.
   - A group name equal to a stage id is refused; every group member names a stage.
   - Every `from` entry names a stage or a group; every `actions` entry and every `auto` names an action of the
     workflow; `auto` also names an action of kind `send`, `clearAndSend`, `launch` or `event` (main runs it).
@@ -142,9 +157,16 @@ Decisions:
   `planFormat` the value of the `planFormat` strategy with the same id, else `null`. A qualified id in `off` is left out.
 - Main computes the enabled set after `contributions.ready`, and again on `onChanged('workflows')`,
   `onChanged('planFormat')` and `onSettingsChanged` (the `off` list). It publishes the set in `workflowDeclaredSlot`,
-  plus every `addDeclared` entry (which ignores `off`). For each changed entry (by `JSON.stringify`) it disposes the old
-  `addWorkflow` registration and adds `buildMainWorkflow(entry, NO_PLAN_FOLD)`; a removed entry is disposed. 05 passes
-  its fold where this task passes `NO_PLAN_FOLD`.
+  plus every `addDeclared` entry (which ignores `off`), and passes the same list to its `EnabledWorkflows.set`. For each
+  changed entry (by `JSON.stringify`) it disposes the old `addWorkflow` registration and adds
+  `buildMainWorkflow(entry, NO_PLAN_FOLD)`; a removed entry is disposed. 05 passes its fold where this task passes
+  `NO_PLAN_FOLD`.
+- **Order at start.** The engine's `ready` (today only `store.load()`, `main/start.ts:103`) also waits for
+  `contributions.ready` and the first enabled-set registration, so `whenReady` holds every live and replayed signal
+  until the declared workflows are registered, as today's level plugins were registered before any fold. A rejected
+  `contributions.ready` is logged (`contributions not read: <errorText>; no declared workflows`) and `ready` resolves
+  with the Checklist flow alone. Reason: a `skillStarted wigley:make` folded before the set exists claims nothing, and
+  the run is never claimed.
 - The page part builds one `PageWorkflow` per key of `workflowDeclaredSlot`, from `buildPageWorkflow(entry, { draw,
   planPane: NO_PLAN_PANE, runAction })`, and disposes it when the key leaves.
 
@@ -159,6 +181,17 @@ Decisions:
 - `applyClaim`: a claim from the Checklist flow leaves `movedUpFrom` null. A claim by another workflow also sets
   `plan: null`, `counters: {}`, `enteredFrom: null`, `countdownEndsAt: null`.
 - `applyChecklist`: a `checklistReported` signal sets `checklistReported: true`. No claim and no `cleared` resets it.
+- **The checklist never waits on a registered workflow** (lead ruling). `foldFlow` runs `applyChecklist` for every flow,
+  whatever its workflow id: today it runs only when `current` exists (`flow.ts:41`). `foldFields`, the stage rules and
+  `afterStage` still run only with `current`. A flow on an id that is not registered (a saved `workflow-large` flow
+  after 06, a workflow switched off through `workflow.off`, an uninstalled plugin) keeps its saved fields, takes every
+  checklist report, and folds through its workflow again from the first signal after that id registers. Reason: the
+  `auri` edit gate (12) denies edits until `checklistReported`, so the gate must never stick shut.
+- **The run meter.** `main/start.ts:181` starts the meter with `before.workflow === null && after.workflow !== null`.
+  Every flow now starts on `checklist`, so the condition becomes `(before.workflow === null || before.workflow ===
+  CHECKLIST_WORKFLOW_ID) && after.workflow !== null && after.workflow !== CHECKLIST_WORKFLOW_ID`. Reason: otherwise
+  every run's `activeMs` and `costUsd` include the time before the claim. `logFinishedRun` is unchanged: the Checklist
+  flow's `work` stage does not finish, and a claim from it leaves `movedUpFrom` null.
 - `markMissedLevel(flow, hasOtherWorkflow: boolean)`: sets `missedLevel` when `flow.workflow === CHECKLIST_WORKFLOW_ID`
   and `hasOtherWorkflow` (any registered workflow but the Checklist flow, the level plugins included until 06). The
   view's two `flow.workflow === null` tests for the missed level (`workflow-view.ts`, the chip and `logMissedLevel`)
@@ -169,7 +202,8 @@ Decisions:
   CHECKLIST_WORKFLOW_ID`.
 - `flow-store.ts` load: a saved flow that lacks a new field takes the `newFlow` value for it; a saved flow with
   `workflow: null` loads as `workflow: 'checklist'`, `stage: 'work'`. A saved level-plugin flow keeps its `state`.
-- `checklist-tool.ts`: `reportChecklist` resolves false only for a session with no flow. The text for that case becomes
+- `checklist-tool.ts`: `reportChecklist` resolves false only for a session with no flow (today it also resolves false
+  while `heldWorkflowOf` is undefined, `main/start.ts:265`; that test goes). The text for that case becomes
   `Ignored the checklist: the app holds no flow for this session.` The tool stays contributed to every session, main
   agent only, with its offline answer.
 
@@ -187,7 +221,10 @@ Decisions:
 **Trigger fold** (`declared/triggers.ts`, `declared/build-main.ts`)
 - `buildMainWorkflow` gives `claims(signal)`: true when `startsSkill(signal, skill)` for a skill in `decl.claims`;
   `firstStage`: the first stage holding a `skill` trigger (the Checklist flow: `work`); `stages`: one `MainStage` per
-  `StageDecl`, `order` its index, `reportedAs` its `step`, `finishes` its `finishes`.
+  `StageDecl`, `order` its index, `reportedAs` its `step`, `finishes` its `finishes`. `firstStage` is transient:
+  `applyClaim` sets it, and the stage rules in the same fold then enter the stage whose `skill` trigger names the
+  claimed skill, which the reader guarantees carries no `from` or `when`. For the sample Large (06) `firstStage` is
+  `primer`, where today's is `explore`; every claim still ends in today's stage.
 - One pure `matchTrigger(flow, signal, workflow): { stage: StageDecl; trigger: TriggerDecl | 'reopen' } | null` decides
   the stage. It runs first the reopen rule, then stages in array order and each stage's triggers in order; the first
   match wins. Each `MainStage.enter` answers from it, so `foldFlow`'s loop takes the same answer.
@@ -201,7 +238,10 @@ Decisions:
   - `from`: the flow's stage is one listed, or a member of a listed group. `when`: every predicate holds.
 - Predicates, read from the flow after `foldFields`: `idle` `!isBusy`; `busy` `isBusy`; `planRead` `plan?.progress
   != null`; `planHasTasks` `progress.total > 0`; `planOpen` `progress.checked < progress.total`; `{ counterRose: n }`
-  `progress.counters[n] > plan.snapshots[n]` (false when either is missing).
+  `progress.counters[n] > plan.snapshots[n]` (false when either is missing). Every plan predicate (`planRead`,
+  `planHasTasks`, `planOpen`, `counterRose`) is false while `flow.plan?.progress` is null; only `idle` and `busy` hold
+  without a read plan. Reason: today's Resume make shows only with a read plan (`progress !== null && checked <
+  total`).
 - `foldFields(flow, signal)`:
   - `plan: planFold.fold(flow, signal, workflow, planFromArgs)`, where `planFromArgs` is true when the signal is a
     `skillStarted` that a `planFromArgs` trigger of this workflow names;
@@ -222,11 +262,24 @@ Decisions:
 - `fixCycles(flow)`: `{ counter: n }` → `flow.counters[n] ?? 0`; `{ planCounter: n }` →
   `flow.plan?.progress?.counters[n] ?? 0`; left out → 0.
 
+**Uses plan** (`declared/uses-plan.ts`, from design.md § The plan capability, pinned here): `usesPlan(decl)` is true
+when any of these appears in the declaration, else false:
+- `sidePane.kind === 'plan'`;
+- a trigger with `clearsPlan` or `planFromArgs`, or an `event` trigger on `planChanged` or `planGone`;
+- a predicate `planRead`, `planHasTasks`, `planOpen` or `{ counterRose }`, in any trigger's `when` or any action's
+  `available` or `enabled`;
+- a stage with `records`; `fixCycles.planCounter`; an action of kind `openPlan`;
+- a template (`progress`, `chipProgress`, a `detail` part, an action's `text`) holding `{plan` (`{plan}` or
+  `{plan.…}`).
+The capability's reach (05's fold, watch, tool and reports) follows this one boolean.
+
 **Templates** (`declared/templates.ts`): `renderTemplate(template, flow, workflow): string` fills design.md § Templates:
 `{plan}` `plan.dir`; `{plan.title}`; `{plan.checked}`, `{plan.total}`; `{plan.build}` `<checked>/<total>` over the
 tasks with `verification: false`; `{plan.wave}`; `{plan.counter.<n>}`; `{counter.<n>}`; `{checklist}`
-`checklistCount(flow)`. A template whose every variable is empty, null or 0 renders `''`; a template with no variable
-renders as written. A `detail` part that renders `''` is left out, and the parts join with `detailLine`.
+`checklistCount(flow)`. Every `{plan.…}` variable is empty while `flow.plan?.progress` is null, and `{plan}` while
+`plan.dir` is null. `{checklist}` is empty while `flow.checklist` is null; a `0/0` checklist count (or `{plan.build}`)
+counts as empty for the next rule. A template whose every variable is empty, null or 0 renders `''`; a template with no
+variable renders as written. A `detail` part that renders `''` is left out, and the parts join with `detailLine`.
 
 **Page half** (`declared/build-page.ts`)
 - `PageWorkflow.id` the qualified id (the Checklist flow: `checklist`), `label`, `badge`, `stages` from the `StageDecl`s:
@@ -269,6 +322,12 @@ renders as written. A `detail` part that renders `''` is left out, and the parts
   and logs `no shown session for <short id>` when both are null, as `runOnSelected` does.
 - An action with `key` also gets `api.keys.bind({ keys: key, scope: 'any', command: 'workflow.<short id>' })`. Both
   handles go with the workflow's page half.
+- `commands.register` throws on a duplicate id and `keys.bind` on a bad key or a layer clash
+  (`src/shared/runtime-commands.ts:143`, `:168–175`). The page half wraps each call. A failed `register` logs `workflow
+  <id>: command <short id> not registered: <errorText>` and skips that action's command and key; a failed `bind` logs
+  `workflow <id>: key <key> not bound: <errorText>` and keeps the command, so the action still runs as a button and
+  from the palette. Every other action and every other workflow's page half still builds. Reason: one bad contributed
+  file costs one key, not every workflow.
 - The kit's key hint for an action names `workflow.<short id>`; where the kit reads only `manifest.commands`, it also
   looks the qualified id up through `kit.keys`.
 - The manifest gains `cancelCountdown: { label: 'cancel the auto-start', group: 'workflow', runsIn: 'page', targets:
@@ -293,7 +352,15 @@ from `workflow-large/main/actions.ts`:
   `countdownEndsAt = clock.now() + Math.max(1, seconds) * 1000`.
 - When it fires, it sets `countdownEndsAt: null` and runs the stage's `auto` action through `createDeclaredActions`,
   logging `ran <short id> in <session name>`, or `auto-start failed: <errorText>`.
-- A replay of the session, a settings change that drops the workflow from `autoStart`, and a part stop cancel it.
+- A replay of the session, a settings change that drops the workflow from `autoStart`, a flow that leaves the
+  workflow or closes, and a part stop cancel it (the timer is cleared).
+- The timer is `createCountdown` from `workflow-large/main/countdown.ts`, moved with its tests.
+- **Settings line.** On every `onSettingsChanged`, after `ready` and unless the part stopped, main logs one line for
+  `workflow.autoStart`: `settings: autoStart <workflow> <seconds>s` per entry, joined by `, `, in list order, with
+  `seconds` as `Math.max(1, seconds)` (`settings: autoStart wigley:large 30s`), or `settings: autoStart none` for an
+  empty list. The plugin's log prefix makes it `[workflow] settings: autoStart wigley:large 30s`. It replaces
+  `workflow-large`'s `settings: autoClearAndMake …, autoStartSeconds …` line (`workflow-large/main/start.ts:287`); 06's
+  Large self-test expects these two texts.
 - Flow writes go through one new internal store call, `setFlowFields(sessionId, patch)`, which keeps the save time as
   `setState` does today.
 
@@ -330,13 +397,21 @@ GIVEN `workflow.off: ['wigley:small']` WHEN the setting changes THEN `wigley:sma
 `set_workflow_step`'s enum drops the steps only it declares, and its runtime commands and keys are disposed.
 
 Tests (each names the break it catches; fixtures are the design's Small, Medium, Spike and Large examples as test data,
-which the boundary rule allows):
+which the boundary rule allows). design.md § Example writes all four in full and equals 06's sample table. Write them
+once in `src/plugins/workflow/declared/fixtures.test-support.ts` (`designDeclared(id)`); 06 replaces that file with
+`sampleDeclared` and deletes it:
 - `contract.test.ts` › `actionCommandShortId` and `qualifiedWorkflowId` — `('wigley:large', 'clearAndMake')` →
   `wigley-large-clearAndMake`; `('wigley', 'large')` → `wigley:large`.
 - `workflows-reader.test.ts` › refusals — one table, one bad field per row, each asserting the exact reason with its
   path: a claim in no `skill` trigger; a claim in two; a group named like a stage; a `from` naming nothing; an `auto`
   naming an `openPlan` action; `reopens` without `finishes`; `send` with no `text`; an unknown template variable; an
-  id with `-`; `order: 1000`. Catches a reader that accepts a declaration the engine cannot run.
+  id with `-`; `order: 1000`; a claimed skill's trigger with `from`; an empty `key`. Catches a reader that accepts a
+  declaration the engine cannot run.
+- `enabled-workflows.test.ts` › `set` then `enabledWorkflows()` gives the list; `onWorkflowsChanged` fires once per
+  differing `set` and not for an equal one; `workflowOf` finds a qualified id and gives null for `checklist` and an
+  unknown id.
+- `uses-plan.test.ts` › one row per member of § Uses plan (each a minimal declaration holding only that member, true),
+  and the Small example (false). Catches a plan workflow that gets no watch or tool.
 - `workflows-reader.test.ts` › the four design examples pass, and `declaredWorkflows` qualifies ids, joins the same
   plugin's `planFormat`, and leaves out an `off` id.
 - `plan-format-reader.test.ts` › the design's `planFormat` passes; a `groupHeading.pattern` that does not compile is
@@ -349,25 +424,46 @@ which the boundary rule allows):
 - `build-main.test.ts` › counters — the Medium GIVEN.
 - `flow.test.ts` › add rows: a new flow is on `checklist`/`work`; a claim from the Checklist flow leaves `movedUpFrom`
   null; `checklistReported` survives a claim; `markMissedLevel` marks only with another workflow registered.
+- `flow.test.ts` › add rows: a `checklistReported` signal on a flow whose workflow id is not registered sets
+  `checklistReported` and `checklist`; the same flow folds its stage rules once the id is in `workflows`.
+- `build-main.test.ts` › predicates with `plan.progress` null: `planRead`, `planHasTasks`, `planOpen` and `counterRose`
+  are false, `idle` and `busy` hold.
 - `templates.test.ts` › one table over every variable, the all-empty rule, and `{plan.build}` leaving out the
-  verification task.
+  verification task; rows for a null `flow.plan` (every `{plan…}` empty), a null checklist (`{checklist}` gives `''`),
+  and a `0/0` checklist counting as empty.
 - `build-page.test.ts` › status, progress, detail, activities and actions of the Small and Large examples; an
   `openPlan` action is hidden while `plan.dir` is null; `progressText` gives `3/8 wave 2 review 1` for the plan pane and
-  `1/3` for the checklist pane; previews give one sample per stage.
+  `1/3` for the checklist pane; previews give one sample per stage. `runAction` rows ported from
+  `workflow-large/page/start.test.ts`: `runAction_OpenPlan_OpensThePlanFile` (opens `paths.join(plan.dir,
+  planFormat?.file ?? 'plan.md')`), `runAction_OpenPlanWithNoPlan_Rejects` (`the session has no plan`),
+  `runAction_OtherCommand_RunsInMain`; and `previewFlows_EverySample_RunsTheCountdownSetting` (a stage with `auto`
+  samples a countdown).
+- `countdown-text.test.ts` › the `countdownText` rows of `workflow-large/page/countdown.test.ts`, unchanged (`10s`,
+  `0s`, the ceiling).
 - `actions.test.ts` › ported from `workflow-large/main/actions.test.ts`: each kind's chat calls, the `then` event, the
   `enabled` refusal, `no plan to make`, and the stopped part.
-- `countdown.test.ts` › the Large GIVEN with fake timers; a replayed turn end starts none; a workflow not in
-  `autoStart` starts none; `turnStarted` cancels.
-- `checklist-hook.test.ts` › the two hook GIVENs, a session with no flow, and a checklist that wins over a reported
-  plan.
+- `countdown.test.ts` › the `createCountdown` rows of `workflow-large/main/countdown.test.ts`, unchanged
+  (`sync_CountingDown_ArmsOneTimerForTheTimeLeft`, the `it.each` table, `fire_CallsFireOnce_AndTheNextCountdownArmsAgain`);
+  the Large GIVEN with fake timers; a replayed turn end starts none; a workflow not in `autoStart` starts none;
+  `turnStarted` cancels; a flow that leaves the workflow, a closed flow and a part stop each clear the timer (the
+  countdown half of `FlowLeavingLarge_StopsItsWatchAndCountdown`); the settings line, one row each for a list of two
+  entries, a `seconds: 0` entry (`1s`) and an empty list (`none`).
+- `checklist-hook.test.ts` › the two hook GIVENs, a session with no flow, a checklist that wins over a reported
+  plan, and a flow on an unregistered workflow id that sent a checklist (`reported: true`).
 - `main/start.test.ts` › add rows: the `workflow.off` GIVEN; `addDeclared` publishes into `workflow.declared` and
-  ignores `off`; a declared workflow from the contributions fake draws a step tool enum holding its steps.
+  ignores `off`; a declared workflow from the contributions fake draws a step tool enum holding its steps; a
+  `skillStarted` signalled before `contributions.ready` resolves folds after the declared workflows register and claims
+  the flow; a claim from the Checklist flow starts the run meter, so the run log's `activeMs` counts from the claim, and
+  `movedUpFrom` is null.
 - `step-tool.test.ts` › the description names no plugin.
-- `checklist-tool.test.ts` › a fresh flow's report succeeds; a session with no flow gets the new ignore text.
+- `checklist-tool.test.ts` › a fresh flow's report succeeds; a flow on an unregistered workflow id reports and succeeds;
+  a session with no flow gets the new ignore text.
 - `flow-store.test.ts` › add rows: a saved flow with no new fields loads with their defaults; a saved `workflow: null`
   loads on the Checklist flow.
 - `page/start.test.ts` › add rows: a declared action registers `workflow.<short id>` and its key, and a dispose of the
-  workflow removes both.
+  workflow removes both; two workflows declaring one key log one `not bound` line, keep both commands, and both page
+  halves build; an action whose command is already registered logs one `not registered` line and the rest of its
+  workflow builds.
 - `workflow-view.test.ts` › add rows: the chip draws no stage on the Checklist flow until a checklist arrives; the
   missed-level tag shows on the Checklist flow.
 - `workflow-kit.test.ts` › add a row: `badgeColor` sets `--workflow-badge-color`.

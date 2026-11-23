@@ -3,7 +3,7 @@
 Status: not started
 Type: Batch
 Rung: hard · rewrites workflow-gate's level source and app-session test, and moves rule text between personal files and plugin skills, where a wrong cut drops a rule
-Wave: 7 · Depends on: 01 (the `auri` tool names and the `auri@auri` install), 12 (the `auri` hooks replace workflow-gate's checklist halves and the AskUserQuestion hook this task removes), 13 (workflow-gate's live check reads the `wigley` plugin's `auri.json`)
+Wave: 7 · Depends on: 01 (the `auri` tool names and skills), 12 (the `auri` hooks replace workflow-gate's checklist halves and the AskUserQuestion hook this task removes), 13 (workflow-gate's live check reads the `wigley` plugin's `auri.json`)
 Plan: [plan.md](plan.md)
 
 Mandatory reads for this task: `~/wigley-agents/WigleyRepos.md`, `~/wigley-agents/AgentsStandardMapping.md`,
@@ -11,8 +11,7 @@ Mandatory reads for this task: `~/wigley-agents/WigleyRepos.md`, `~/wigley-agent
 `wigley-ai-gui/agent-plugin/skills/` (`forms`, `visuals`, `chatroom`, `workflows-and-checklist`).
 
 Files (ai):
-- modify `wigley-agents/AGENTS.md` · `wigley-agents/forms.md` · `wigley-agents/workflows.md` · `wigley-agents/decisions.md` · `wigley-agents/Terminal.md` · `wigley-agents/AgentsStandardMapping.md` · `wigley-agents/wiki/Main.md` · `wigley-agents/docs/features/followups.md`
-- modify `wigley-agents/learning/candidates/make-workflow-step-names.md` · `wigley-agents/learning/candidates/forms-read-latest-state-on-close.md` · `wigley-agents/learning/candidates/forms-validation-lists-every-violation.md` · `wigley-agents/learning/candidates/launched-stash-records-removed.md` · `wigley-agents/learning/candidates/notice-only-round-sent.md`
+- modify `wigley-agents/AGENTS.md` · `wigley-agents/forms.md` · `wigley-agents/workflows.md` · `wigley-agents/decisions.md` · `wigley-agents/Terminal.md` · `wigley-agents/ClaudeCode.md` · `wigley-agents/AgentsStandardMapping.md` · `wigley-agents/wiki/Main.md` · `wigley-agents/docs/features/followups.md`
 - modify `wigley-agents/tools/workflow-gate/workflow-gate` · `wigley-agents/tools/workflow-gate/README.md` · test `wigley-agents/tools/workflow-gate/tests/test_workflow_gate.py`
 - modify `wigley-ai-marketplace/plugins/wigley/skills/small/SKILL.md` · `.../skills/medium/SKILL.md` · `.../skills/spike/SKILL.md` · `.../skills/feature/SKILL.md` · `.../skills/make/SKILL.md` · `.../skills/feature-primer/SKILL.md` · `.../skills/feature-primer/audit.md` · `.../skills/review/SKILL.md` · `.../skills/review/triage.md` · `.../skills/retro/SKILL.md` · `.../skills/tech-spec/SKILL.md` · `.../skills/explore/SKILL.md` · `.../skills/clean-up-branches/SKILL.md` · `.../skills/debug/SKILL.md` · `.../skills/unity-playtest/SKILL.md` · `.../skills/unity-ux-flow/SKILL.md` · `.../skills/feature-export-quickview/SKILL.md`
 - delete `wigley-ai-marketplace/plugins/wigley/skills/visuals/SKILL.md` · `wigley-ai-marketplace/plugins/wigley/skills/chatroom/SKILL.md`
@@ -39,14 +38,13 @@ The checklist half of it moved into the `auri` plugin's hooks (task 12).
   (`wigley-ai-gui/agent-plugin/skills/`), shipped by 01.
 - The `auri` plugin's checklist edit gate, Stop reminder, compact reminder and AskUserQuestion hook ← 12.
 - `wigley-ai-marketplace/plugins/wigley/auri.json` with its `workflows[].claims` ← 13.
-- `.claude-plugin/marketplace.json` named `auri`, listing `auri` at `./agent-plugin` ← 01.
 - The tool name form `mcp__plugin_auri_auri__<tool>` (Claude Code) and `mcp__auri__<tool>` (Codex): plan.md § Shared
   names.
 
 ## Produces
 
-- `workflow-gate`: `def declared_level_skills(config_dir: str, settings_path: str) -> set[str] | None` — the
-  qualified and bare claim names of every enabled declared workflow, `None` when no declared workflow is found.
+- `workflow-gate`: `def declared_level_skills(config_dir: str) -> set[str] | None` — the
+  qualified and bare claim names of every declared workflow, on or off in the app, `None` when no declared workflow is found.
 - `workflow-gate`: `def is_app_session(environ: Mapping[str, str]) -> bool` — true when `WIGLEY_SESSION_ROW` is
   set and not empty.
 
@@ -54,21 +52,25 @@ The checklist half of it moved into the `auri` plugin's hooks (task 12).
 
 Re-run before the first edit and work from its output:
 
+Run these from the run worktree root (`~/Documents/.worktrees/ai-shareable-app`), where this task's edits go:
+
 ```
-cd ~/Documents/ai
 command grep -rnI -E 'wigley-forms|wigley_forms' wigley-agents wigley-ai-marketplace/plugins/wigley \
-  --exclude-dir=archive --exclude-dir=node_modules | grep -v '\.agents/wigley-forms'
+  --exclude-dir=archive --exclude-dir=node_modules --exclude-dir=learning | grep -v '\.agents/wigley-forms'
 command grep -rnI -E 'wigley:(visuals|chatroom)' wigley-agents wigley-ai-marketplace/plugins/wigley \
+  --exclude-dir=archive --exclude-dir=learning
+command grep -rnI -E 'forms\.md`? § ' wigley-agents wigley-ai-marketplace/plugins/wigley \
   --exclude-dir=archive --exclude-dir=learning
 command grep -nE 'wigley-forms|wigley_forms|ask-user-question' ~/.claude/settings.json ~/.agents/AGENTS.local.md
 ```
 
-At plan time the first grep listed 47 lines in 37 files, the second 21 lines in 10 files. These are outside this
-task and are left alone: `wigley-ai-marketplace/plugins/wigley/scripts/forms/` (moved by 01),
-`.../scripts/docs-index/` (moved by 09), both plugin manifests, the marketplace's root `AGENTS.md` and `README.md`
-(task 13), `wigley-agents/learning/archive/` and the promoted rows of `wigley-agents/learning/INDEX.md` (records of
-past sessions, which keep the names those sessions used), `wigley-ai-marketplace/archive/`, and every
-`~/.agents/wigley-forms/` path (data folders keep their paths, plan.md § Boundary rules). A file the re-run lists
+At plan time the first grep listed 60 lines in 32 files (71 lines in 38 files with `learning/` included), the second
+21 lines in 10 files, and the third 8 lines in 7 files. These are outside this task and are left alone:
+`wigley-ai-marketplace/plugins/wigley/scripts/forms/` (moved by 01), `.../scripts/docs-index/` (moved by 09), both
+plugin manifests, the marketplace's root `AGENTS.md` and `README.md` (task 13), all of `wigley-agents/learning/`
+(the retro alone edits it, `AgentsStandardMapping.md` § Plugins, and its lines record past sessions under the names
+those sessions used), `wigley-ai-marketplace/archive/`, and every `~/.agents/wigley-forms/` path (data folders keep
+their paths, plan.md § Boundary rules). A file the re-run lists
 that is in neither list is renamed by the rules below and reported in the task's Proof.
 
 ## Decisions
@@ -101,7 +103,18 @@ that is in neither list is renamed by the rules below and reported in the task's
   - Notices: a Decided notice follows `decisions.md` § Decided notices.
 
   Every other line of today's `forms.md` is cut. Before cutting a line, find its meaning in `auri:forms`; a line with
-  no home there is kept and listed in the Proof.
+  no home there is kept and listed in the Proof. The intro's pointer to the forms README (line 14 at plan time:
+  "`scripts/forms/README.md` in the wigley plugin") goes with the cut: that README moved to
+  `agent-plugin/scripts/relay/README.md` in the `auri` plugin (01), and `auri:forms` names it. If any kept line still
+  names the README, it names the `auri` plugin's `scripts/relay/README.md`.
+- **Pointers into `forms.md`.** A file that cites a `forms.md` section for the wording or shape of a round item now
+  cites `auri:forms` § <the same heading>: `auri:forms` has Every item, Questions, Findings, Notices, Headless and
+  Written fallback. A pointer stays on `forms.md` only where it means the user's own addition kept above. The third
+  inventory grep lists them; at plan time: `ClaudeCode.md:33` (§ Questions, for `approves`: becomes `auri:forms`
+  § Questions), `feature/SKILL.md:77` (§ Questions), `make/SKILL.md:76` (§ Findings), `feature-primer/audit.md:24`
+  (§ Findings), `review/triage.md:51` (§ Notices), `:92` (§ Findings) and `:292` (§ Written fallback), and
+  `visuals/SKILL.md:129` (deleted with the skill). A pointer to a section this task cuts from `forms.md` (Every item,
+  Written fallback) cannot stay on `forms.md`.
 - `workflows.md` § Headless keeps its heading and two personal lines: a headless session keeps its level's steps
   and gates; an auto-answered pick never approves a hard-gated action (`AGENTS.md` § Hard gates) or a push. The
   rest of the section is replaced by a pointer to `auri:forms` § Headless. The pointers to `workflows.md` §
@@ -123,14 +136,22 @@ that is in neither list is renamed by the rules below and reported in the task's
   gate stays. The `SessionStart` compact reminder keeps only the level skill's `## Reporting` section and its
   closing line; the step and checklist part goes, since the `auri` compact hook shows them.
 - The level skills come from `declared_level_skills`: it reads `<config dir>/plugins/installed_plugins.json`
-  (`<config dir>` is `$CLAUDE_CONFIG_DIR`, else `~/.claude`), takes each install's `installPath`, reads
-  `<installPath>/auri.json`, and collects every `workflows[].claims` entry of a workflow whose qualified id
-  (`<plugin name>:<id>`, the plugin name being the install key before `@`) is not in `workflow.off` of
-  `~/.config/wigley-ai-gui/settings.json` (`{ "workflow": { "off": [...] } }`). Each claim adds its qualified name
-  and its bare name (after the `:`), as `LEVEL_SKILLS` holds both today. `LEVEL_SKILLS` is removed.
-- No declared workflow found (no list, no `auri.json`, unreadable JSON) fails open: no `permissionDecision`, with the
-  reason in the hook's log line as the other fail-open paths give it.
-- `is_app_session` reads `WIGLEY_SESSION_ROW` from the hook's environment. It replaces `FORMS_TOOL_PREFIXES` and the
+  (`<config dir>` is `$CLAUDE_CONFIG_DIR`, else `~/.claude`), reads `<installPath>/auri.json` for each install, and
+  collects every `workflows[].claims` entry of every declared workflow, whatever the app's `workflow.off` list holds.
+  Each claim adds its qualified name (`<plugin name>:<skill>`, the plugin name being the install key before `@`) and
+  its bare name (after the `:`), as `LEVEL_SKILLS` holds both today. `LEVEL_SKILLS` is removed.
+- Decided, keeping today's behaviour: the gate ignores `workflow.off`. That list only hides a workflow from the app's
+  menus, so turning one off must not deny edits to a session that loaded its skill. The gate reads no app settings
+  file.
+- `installed_plugins.json` is version 2: `plugins.<key>` is a list of installs, each with `scope`, an optional
+  `projectPath` and a versioned `installPath` (at plan time `wigley@wigley-ai-marketplace` held a user entry and a
+  project entry). The reader takes the union over every entry of every key, whatever its scope or version. It skips
+  an entry whose `installPath` folder or `auri.json` is missing or unreadable.
+- The gate runs on macOS and Linux only (its README; `install` stops on Windows), so no Windows path is added.
+- No declared workflow found (no list, no `auri.json` in any entry, unreadable JSON) returns `None` and fails open: no
+  `permissionDecision`, with the reason in the hook's log line as the other fail-open paths give it.
+- `is_app_session(environ)` reads `WIGLEY_SESSION_ROW`. `decide` passes `os.environ` to `decide_session_start`,
+  whose signature becomes `(event, environ)`, so the tests pass a plain dict. It replaces `FORMS_TOOL_PREFIXES` and the
   transcript scan for a forms tool; `REMINDER_LINE_MARKERS` keeps only `Base directory for this skill`. The compact
   reminder runs only in an app session, as today.
 - `DENIAL` and `REMINDER_INSTRUCTION` keep their `~/wigley-agents/workflows.md` pointers: the gate is personal.
@@ -146,13 +167,15 @@ that is in neither list is renamed by the rules below and reported in the task's
   Add `"mcp__plugin_auri_auri__*"` under `permissions.allow` only when a `mcp__plugin_wigley_wigley-forms__*` entry
   was there (none at plan time).
 - Delete `~/.claude/hooks/ask-user-question-to-forms`.
-- Install the `auri` plugin for terminal sessions, since task 13 removed the forms server from `wigley`:
-  `claude plugin marketplace add ~/Documents/ai/wigley-ai-gui`, then `claude plugin install auri@auri`, once per
-  profile (`~/.claude`, and with `CLAUDE_CONFIG_DIR=~/.claude-personal`); for Codex, the commands task 01 checked.
-  This is the user's own plugin from the user's own clone, not third-party code. Task 17 points the marketplace at
-  the new clone path.
+- This task installs no plugin. The terminal install of `auri@auri` is task 17's, from the new clone
+  `~/Documents/wigley-ai-gui`, after the clone exists: before the run lands, no clone holds
+  `.claude-plugin/marketplace.json` at a path that stays valid.
+- The gap this leaves, Decided: from this task's settings edit until 17 installs `auri@auri` and the app from the
+  new clone, the AskUserQuestion backstop and the old turn-end checklist reminder are off. `AskUserQuestion` stays in
+  the deny list, so a call is still refused. From 17's landing (step 3) until its install, terminal sessions have no
+  forms tools, because the landed `wigley` plugin drops its MCP entry.
 - `AgentsStandardMapping.md`: the source-of-truth table gains a row for `wigley-ai-gui` (plugin `auri`) with the two
-  install commands; § Plugins names it.
+  install commands, naming the clone `~/Documents/wigley-ai-gui` that task 17 makes; § Plugins names it.
 - `~/.agents/AGENTS.local.md`: line 199's `wigley-forms` round becomes a forms round (`auri:forms`); the
   AskUserQuestion bullet (lines 240–242 at plan time) says the `auri` plugin's hook denies the call; the
   `workflow-gate` bullet says it denies an edit until a declared workflow's claimed skill loads, and that the
@@ -168,36 +191,53 @@ its bare-name suffix already, so old transcripts and new ones both read; the cod
   - a declared claim `acme:small` passes an edit after a `Skill` call of `acme:small` — catches a gate still
     reading a fixed list
   - the bare name `small` typed as `/small` passes — catches a reader that drops bare names
-  - a workflow listed in `workflow.off` does not pass its claim — catches a reader that ignores the off list
+  - a claim of a workflow listed in the app's `workflow.off` still passes its edit — catches a gate that denies a
+    session for a menu choice
   - no `installed_plugins.json` passes the edit with no decision — catches a fail-closed gate
 - `test_workflow_gate.py`: the checklist-gate and Stop tests are deleted with the code they test. The compact
   reminder test asserts the reminder holds the `## Reporting` text and no checklist line, with `WIGLEY_SESSION_ROW`
   set; and asserts no reminder with it unset — catches app-session detection still keyed on the tool prefix.
-- `test_recall.py` and `test_search.py`: a row whose transcript names `mcp__plugin_auri_auri__ask_round` reads as a
-  forms result — catches a suffix match bound to the old prefix. The old-name rows stay.
+- `test_recall.py`: a row whose transcript names `mcp__plugin_auri_auri__ask_round` reads as a forms result.
+  `test_search.py`: a row whose transcript names `mcp__plugin_auri_auri__set_session_title` gives the session's title
+  (`search.py` matches the title tool, not `ask_round`). Both are characterisation rows: they pass before and after
+  this task, since `transcript.py` and `search.py` match by suffix today, and they catch a later change that binds the
+  match to one server's prefix. The old-name rows stay.
 
 ## Verification
 
+From the run worktree root (`~/Documents/.worktrees/ai-shareable-app`):
+
 ```
-cd ~/Documents/ai
 command grep -rnI -E 'wigley-forms|wigley_forms|wigley:(visuals|chatroom)' wigley-agents wigley-ai-marketplace/plugins/wigley \
-  --exclude-dir=archive --exclude-dir=node_modules --exclude-dir=forms --exclude-dir=docs-index \
-  | grep -v '\.agents/wigley-forms' | grep -v 'learning/INDEX.md' | grep -v 'scripts/retro/tests/'
+  --exclude-dir=archive --exclude-dir=node_modules --exclude-dir=learning --exclude-dir=forms --exclude-dir=docs-index \
+  | grep -v '\.agents/wigley-forms' | grep -v 'scripts/retro/tests/'
+command grep -rnI -E 'forms\.md`? § (Every item|Written fallback)' wigley-agents wigley-ai-marketplace/plugins/wigley \
+  --exclude-dir=archive --exclude-dir=learning
 python3 -m unittest discover -s wigley-agents/tools/workflow-gate/tests
 python3 -m unittest discover -s wigley-ai-marketplace/plugins/wigley/scripts/retro/tests
 python3 wigley-ai-marketplace/scripts/check_manifests.py
+python3 wigley-ai-marketplace/scripts/check_pointers.py
 command grep -nE 'wigley-forms|ask-user-question' ~/.claude/settings.json; test ! -e ~/.claude/hooks/ask-user-question-to-forms
-claude plugin list | grep 'auri@auri'
 ```
+
+The gate against the real `auri.json`, with no install: make `<scratch>/cfg/plugins/installed_plugins.json` (version
+2) holding one entry `wigley@wigley-ai-marketplace` whose `installPath` is the worktree's
+`wigley-ai-marketplace/plugins/wigley`. Pipe a `PreToolUse` Edit event into the worktree's
+`wigley-agents/tools/workflow-gate/workflow-gate hook` with `CLAUDE_CONFIG_DIR=<scratch>/cfg`, once with a transcript
+that loaded no skill and once with one whose `Skill` call loaded `wigley:small`.
+
+The auri skills the new pointers name, with no install:
+`claude -p --plugin-dir ~/Documents/.worktrees/ai-shareable-app/wigley-ai-gui/agent-plugin` asked to list its skills
+whose names start with `auri:`.
 
 Done when:
 
-- the first grep prints nothing
-- both test suites pass and `check_manifests.py` exits 0
+- both greps print nothing
+- both test suites pass, and `check_manifests.py` and `check_pointers.py` exit 0
 - the settings grep prints nothing and the hook file is gone
-- `claude plugin list` shows `auri@auri` in each profile
-- an edit in a terminal session with no level skill loaded is denied by workflow-gate with `DENIAL`; the final
-  verification task checks the live gate in an app session
+- the piped gate run denies the first event with `DENIAL` and passes the second with no decision
+- the `--plugin-dir` run lists `auri:forms`, `auri:visuals`, `auri:chatroom` and `auri:workflows-and-checklist`
+- the live gate in an app and a terminal session is task 18's check (after 17 lands the run and installs `auri@auri`)
 
 Commit: one commit in `ai` for the repo files (machine files are not committed).
 

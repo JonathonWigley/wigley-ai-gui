@@ -51,7 +51,7 @@ Each was verified on 2026-11-23. `wigley:make` re-runs each command before the f
 
 ## Docs written ahead
 
-Commit: `18112bbb1` — README.md, CHANGELOG.md, LICENSE, the nine `agent-plugin/skills/`, `docs/features/feature-contributions/design.md`, and `AGENTS.md` § README, changelog and boundary. Each marks what the code lacks yet as planned in shareable-app; task 16 drops those marks.
+Commit: `18112bbb1` — README.md, CHANGELOG.md, LICENSE, the nine `agent-plugin/skills/`, `docs/features/feature-contributions/design.md`, and `AGENTS.md` § README, changelog and boundary. README.md and AGENTS.md mark what the code lacks yet as planned in shareable-app, and task 16 drops those marks. The skills and design.md describe the built state and carry no marks: no session loads them until the `auri` plugin ships in task 01.
 
 ## Mandatory Reads
 
@@ -260,16 +260,22 @@ values of every enabled declared workflow. `set_workflow_checklist` is contribut
 Names the drafting added (each with the task that produces it):
 
 - `MainServices.appDir: string` (`app.isPackaged ? process.resourcesPath : app.getAppPath()`) and `agent-plugin` in
-  `forge.config.mts` `extraResource` ← 01. `src/shared/agent-plugin.ts` itself ← 01.
+  `forge.config.mts` `extraResource` ← 01. `src/shared/agent-plugin.ts` itself, and the `appFolder()` helper in
+  `plugin-types.ts` ← 01.
 - `claudeLaunch(…, pluginDir: string)` and `ClaudeSpawnInput.pluginDir` ← 02.
 - `HarnessConfigRoots.installedPluginsFile`, `ConfigStore.setServiceProblems`, `FEATURE_KEYS`,
   `src/shared/contributions-schema.ts` (`auriFileSchema`), and `pickProblemText(featureLabel, pick)` ← 03.
   `qualifiedWorkflowId` is defined in `src/contracts/contributions.ts` (← 03) and re-exported from
-  `workflow/contract.ts`.
+  `workflow/contract.ts`. The `ActivityTone` and `RowEmphasis` unions move into `src/contracts/contributions.ts`
+  (← 03), since the layer check refuses the import the other way, and `sessions/contract.ts` re-exports them.
 - `workflowDeclaredSlot` (`workflow.declared`), `WorkflowChannel`, `AutoStartSetting`, `MainWorkflow.foldFields` and
   `afterStage`, the new `WorkflowSignal` variants, `WorkflowSelfTestHooks.addDeclared`, `WorkflowDrawOptions.badgeColor`,
   and the `declared/` seams `PlanFold`/`NO_PLAN_FOLD`, `PlanPane`/`NO_PLAN_PANE`, `usesPlan`, `buildMainWorkflow`,
-  `buildPageWorkflow` ← 04. `createPlanFold()` and `createPlanPane` replace the two `NO_*` values ← 05.
+  `buildPageWorkflow` ← 04. `EnabledWorkflows` (`enabledWorkflows()`, `onWorkflowsChanged()`, `workflowOf()`) and
+  `createEnabledWorkflows()` in `declared/enabled-workflows.ts`, and the test-only `designDeclared` in
+  `declared/fixtures.test-support.ts` ← 04. `createPlanFold()` and `createPlanPane` replace the two `NO_*` values ← 05.
+- `registerSampleDemoSteps(services, deps)` in `page/sample-demo-steps.ts` ← 06.
+- `AUTO_ANSWER_GATE_CLAUSE` in `chat/contract.ts` ← 11.
 - `CHECKLIST_HOOK = 'workflow.checklist'` ← 04. Request: any line. Reply: `{ reported: boolean, open: number, items:
   { text, done, running? }[] }`. `reported` is true once a checklist or a plan (`set_workflow_plan`) was reported; with
   only a plan, `open` and `items` come from the plan's task lines. No flow → `{ reported: false, open: 0, items: [] }`.
@@ -324,7 +330,7 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 ### Wave 4
 - [ ] [Plan capability](05-plan-capability.md) — after 04
 - [ ] [Backlog](08-backlog.md) — after 03, 09
-- [ ] [App notes and tool wording](11-app-notes.md) — after 04
+- [ ] [App notes and tool wording](11-app-notes.md) — after 01, 02, 04
 - [ ] [The auri hooks](12-auri-hooks.md) — after 01, 04
 
 ### Wave 5

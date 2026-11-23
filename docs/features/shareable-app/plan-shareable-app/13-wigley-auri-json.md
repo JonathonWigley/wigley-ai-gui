@@ -17,7 +17,7 @@ Consumes:
 - the user's `retro` section as `retro-reader.test.ts` pins it ← 07
 - the user's `backlog` section as 08's reader test pins it ← 08
 - the user's `docs` section as 09's reader test pins it ← 09
-- the user's `liveView` section as 10's reader test pins it ← 10
+- the user's `liveView` value: the JSON block in `10-live-view.md` § The patterns that keep today's behaviour, which `WIGLEY_PATTERNS` in `playtest-command.test.ts` equals ← 10
 - `CONTRIBUTIONS_VERSION = 1` in `wigley-ai-gui/src/shared/agent-plugin.ts` ← 01
 
 Produces:
@@ -38,7 +38,24 @@ Key order: `version`, `workflows`, `planFormat`, `retro`, `backlog`, `docs`, `li
 - `retro`: `{ "command": "/wigley:retro auto {sessions}", "folder": "~/wigley-agents", "on": ["close", "clear"] }`, as 07's `retro-reader.test.ts` pins it.
 - `backlog`: `{ "homes": ["{repo}/docs/features", "~/wigley-features/{name}"], "file": "followups.md", "areaFolder": "followups" }` (design.md § Section: backlog). Use the value 08's reader test pins when it differs, and add `assistant.instructions` only when 08 moves wigley-specific assistant text into it.
 - `docs`: design.md § Section: docs, verbatim, unless 09's reader test pins another value.
-- `liveView`: the value 10's reader test pins for the user's section. design.md § Section: liveView is the shape; 10 re-reads `playtest-command.ts` for the exact flag sets. `probe.file` is `skills/unity-playtest/unity/WigleyCapture.cs`, which exists, and `probe.entry` `Wigley.WigleyCapture.Run` matches its `namespace Wigley`, `static class WigleyCapture` and `static async Task<string> Run(string requestJson)` (measured at plan time, re-verify).
+- `liveView`: copy this value verbatim (it is task 10's table, `10-live-view.md` § The patterns that keep today's behaviour; if 10 landed a different `WIGLEY_PATTERNS`, that landed constant wins):
+
+  ```json
+  {
+    "open": [
+      { "program": "unity", "words": ["command", "editor.playmode", "start"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+      { "program": "unity", "words": ["command", "editor_play"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+      { "program": "capture.py", "words": ["start"], "valueFlags": ["--fps", "--backend"], "projectPathFlag": "--project-path" }
+    ],
+    "close": [
+      { "program": "unity", "words": ["command", "editor.playmode", "stop"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+      { "program": "unity", "words": ["command", "editor_stop"], "valueFlags": ["--timeout", "--port", "--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"], "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" }
+    ],
+    "probe": { "file": "skills/unity-playtest/unity/WigleyCapture.cs", "entry": "Wigley.WigleyCapture.Run", "runner": "unityScript" }
+  }
+  ```
+
+  There is no `capture.py stop` close row: today it closes nothing. Do not take design.md's example over this value. `probe.file` is `skills/unity-playtest/unity/WigleyCapture.cs`, which exists, and `probe.entry` `Wigley.WigleyCapture.Run` matches its `namespace Wigley`, `static class WigleyCapture` and `static async Task<string> Run(string requestJson)` (measured at plan time, re-verify).
 
 When a reader test and design.md disagree, the reader test wins: it is the landed contract.
 
@@ -68,6 +85,7 @@ Run from `~/Documents/ai`:
 
 - `python3 -c "import json;a=json.load(open('wigley-ai-marketplace/plugins/wigley/auri.json'));s=json.load(open('wigley-ai-gui/src/plugins/workflow/declared/sample-auri.json'));print(a['version']==1, a['workflows']==s['workflows'], a['planFormat']==s['planFormat'], list(a))"` prints `True True True ['version', 'workflows', 'planFormat', 'retro', 'backlog', 'docs', 'liveView']`.
 - `python3 -c "import json,os;a=json.load(open('wigley-ai-marketplace/plugins/wigley/auri.json'));print(os.path.isfile(os.path.join('wigley-ai-marketplace/plugins/wigley', a['liveView']['probe']['file'])))"` prints `True`.
+- The `liveView` value equals task 10's: save the JSON block from `10-live-view.md` § The patterns that keep today's behaviour to `<scratchpad>/liveview-expected.json`, then `python3 -c "import json,sys;a=json.load(open('wigley-ai-marketplace/plugins/wigley/auri.json'))['liveView'];e=json.load(open(sys.argv[1]));print(a==e)" <scratchpad>/liveview-expected.json` prints `True`. Then read `WIGLEY_PATTERNS` in `wigley-ai-gui/src/plugins/live-view/playtest-command.test.ts` and confirm its `open` and `close` hold the same five patterns, in order; a difference there means 10 landed another value, which wins, and the block is updated to it.
 - `python3 wigley-ai-marketplace/scripts/check_manifests.py` and `python3 wigley-ai-marketplace/scripts/check_manifests.py --against origin/main` pass.
 - `python3 wigley-ai-marketplace/scripts/check_pointers.py` passes.
 - `claude plugin validate wigley-ai-marketplace` passes (`wigley-ai-marketplace/AGENTS.md` § Done runs it as `claude plugin validate .` from that folder).

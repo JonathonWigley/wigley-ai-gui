@@ -25,8 +25,8 @@ Consumes:
 - `SessionFlow.plan`, `PlanState`, `PlanProgress`, `PlanTaskLine`, `DeclaredWorkflow`, and the `WorkflowSignal` variants `{ type: 'planChanged'; progress: PlanProgress }`, `{ type: 'planGone' }`, `{ type: 'planReported'; planDir: string }` in `src/plugins/workflow/contract.ts` ← 04
 - `PlanFold`, `NO_PLAN_FOLD` in `src/plugins/workflow/declared/plan-fold.ts` ← 04
 - `PlanPane`, `NO_PLAN_PANE` in `src/plugins/workflow/declared/plan-pane.ts` ← 04
-- `usesPlan(decl: WorkflowDecl): boolean` in `src/plugins/workflow/declared/uses-plan.ts` ← 04
-- `enabledWorkflows(): readonly DeclaredWorkflow[]` and `onWorkflowsChanged(listener): Disposable` in `src/plugins/workflow/declared/workflows-reader.ts` ← 04
+- `usesPlan(decl: WorkflowDecl): boolean` in `src/plugins/workflow/declared/uses-plan.ts` ← 04 (its rule is 04 § Uses plan; this task does not restate or change it)
+- `EnabledWorkflows` (`enabledWorkflows(): readonly DeclaredWorkflow[]`, `onWorkflowsChanged(listener): Disposable`, `workflowOf(flow): DeclaredWorkflow | null`) in `src/plugins/workflow/declared/enabled-workflows.ts` ← 04. `main/start.ts` owns the instance. Its `enabledWorkflows()` holds the enabled set plus every `addDeclared` entry, so 06's self-tests, which add through `addDeclared`, count as enabled here.
 - `PlanFormat` in `src/contracts/contributions.ts` ← 03
 
 Produces:
@@ -57,7 +57,7 @@ Start from `src/shared/plan-progress.ts`. Every format-specific constant becomes
 | `groupHeading` | Inside the counted region, a heading exactly one level below the tasks section heading sets the current group: capture 1 of `new RegExp(pattern)` as a number, or `null` when the heading does not match. Deeper headings leave the group unchanged. With no `tasksSection`, a `##` heading sets the group. | Every task has `group: null`. |
 | `titleSuffix` | Dropped from the end of the first `# ` heading. | The heading text, trimmed. |
 | `counters` | Each counter counts the lines that start with `itemPrefix` after the heading whose `trimEnd()` text equals `heading`, until the next heading of the same level or higher. With `section`, the heading counts only inside that section (bounded as `tasksSection` is). | `counters: {}`. |
-| `taskDocs` | A task's `file` is its first link target when that target ends in `.md` and holds none of `/ \ : #`. Its `status` is the value of the first line matching `^(\*\*)?<statusField>:(\*\*)?\s*(.+)$` in the first `statusLines` lines outside fences, kept only when it is one of `statuses`, else null. | `file: null`, `status: null`. |
+| `taskDocs` | A task's `file` is its first link target when that target ends in `.md` and holds none of `/ \ : #`. Its `status` is the value of the first line matching `^(\*\*)?<statusField>:(\*\*)?\s*(.+)$` among the document's first `statusLines` raw lines once fenced lines are dropped from them: slice first, then drop fences, as `readTaskStatus` does today (`plan-progress.ts:151`), so fenced lines count toward the window. Kept only when it is one of `statuses`, else null. | `file: null`, `status: null`. |
 | `verificationTask` | The last task whose document was read and holds no line matching `^<lastTaskDocLacking>(?: \([^)\n]*\))?:` outside fences gets `verification: true`. | No task is the verification task. |
 
 `PlanProgress.wave` is the `group` of the first open task whose group is not null, else null. `checked` and `total` count every task. Escape `statusField` and `lastTaskDocLacking` before they go into a regular expression.
@@ -75,7 +75,9 @@ Start from `src/shared/plan-copies.ts`. `PlanCopyDeps` gains `format: PlanFormat
 - `plan.md` becomes `planFileName(format)` in `copyAt`, `readPlanCopy` and `newestChange`.
 - `readPlanProgress` becomes `readPlan(..., format ?? {})`.
 - `STATUS_RANK` becomes each status's index in `format.taskDocs.statuses`. A status outside that list, or no `taskDocs`, is never behind.
-- `newestChange` drops `TASK_DOCUMENT` (`^\d{2}-.+\.md$`). It takes the newest modified time of the plan file and each task document the read plan links (`tasks[].file`) that exists. Reason: the `NN-` file name is the `wigley:feature` convention, and the links are what `taskDocs` already reads. For the user's plans the set of files is the same.
+- `newestChange` drops `TASK_DOCUMENT` (`^\d{2}-.+\.md$`). It takes the newest modified time of the plan file and each task document the plan links (`tasks[].file`) that exists. Reason: the `NN-` file name is the `wigley:feature` convention, and the links are what `taskDocs` already reads. For the user's plans the set of files is the same.
+  - How it gets the links: after the plan file's stat, `newestChange` reads the plan file with `readIfPresent` and takes the links from `readPlan(text, new Map(), format ?? {})` (no task document is read for this). A plan file gone between the stat and the read gives `null`, so the copy is absent, as today's "plan.md is gone". It replaces the folder listing, so the cost is one plan read per copy per `check`; `readPlanCopy` keeps its own read, unchanged, since reusing the text would change the exported `PlanCopy` shape.
+  - With no `taskDocs` in the format, no task has a `file`, and the plan file's own time is `changedAt`.
 
 `isMovedFromMain` and `newestRead` stay as they are.
 
@@ -120,11 +122,12 @@ Move `plan-tool.ts`, `plan-report.ts` and `plan-reports.ts` from `workflow-large
 - The reporter signals `{ type: 'planReported', planDir }` live when the session's flow's workflow `usesPlan`, and resolves false otherwise.
 - The tool checks for `planFileName(format)` of the session's flow's workflow, not `plan.md`. A session whose workflow keeps no plan gets `textResult('Ignored: this session's workflow keeps no plan.')`. The unknown-tool error reads `no workflow tool "<name>"`.
 - The tool description stays word for word, except "the folder holding plan.md" becomes "the folder holding the plan file".
+- The header comments of `plan-report.ts` (line 1) and `plan-reports.ts` (line 8) name `plan.py`; each says "a plan report file" in its place, so the Done-when grep passes.
 - `normalPlanDir(paths, folder)` keeps its rule: the folder with no trailing separator, symlinks kept.
 
 ### Wiring (`plan-capability.ts`)
 
-`startPlanCapability(deps)` ports the plan half of `workflow-large/main/start.ts`. `PlanCapabilityDeps` holds `git`, `files`, `paths`, `log`, `homeDir`, `appInstance`, `sessions` (for `contributeTools`), the engine's `signal`, `flowOf`, `flows`, `observe`, `ready`, and `enabledWorkflows`, `onWorkflowsChanged`, `workflowOf(flow)` (the flow's `DeclaredWorkflow` or null). It returns one `Disposable`.
+`startPlanCapability(deps)` ports the plan half of `workflow-large/main/start.ts`. `PlanCapabilityDeps` holds `git`, `files`, `paths`, `log`, `homeDir`, `appInstance`, `sessions` (for `contributeTools`), the engine's `signal`, `flowOf`, `flows`, `observe`, `ready`, and `enabledWorkflows`, `onWorkflowsChanged`, `workflowOf(flow)` (the flow's `DeclaredWorkflow` or null), the three members of 04's `EnabledWorkflows` instance. It returns one `Disposable`.
 
 - **Watch.** One `createPlanWatch`, signalling through `signal(sessionId, s, 'observed')`. Only flows whose workflow `usesPlan` are watched.
 - **Observer**, for such a flow, on a `whole` fold:
@@ -154,10 +157,15 @@ Move each old test file next to its new source, rename its imports and fields (`
   - `readPlan_CounterOutsideItsSection_NotCounted` — `- ` lines under `### Review rounds` outside `## Run log` give 0.
   - `readPlan_StatusOutsideStatuses_ReadsNull`.
   - `readPlan_VerificationField_FromFormat` — with `lastTaskDocLacking: 'Tier'`, the last doc with no `Tier:` is the verification task.
-- `plan-copies.test.ts` (rows of `src/shared/plan-copies.test.ts`), add:
+  - `readPlan_StatusLinesWindow_CountsFencedLines` — a task document whose fenced block fills lines 1–14 and whose `Status:` line is line 16 reads status null with `statusLines: 15`.
+  - The `isPlanFile` rows of `workflow-large/large-state.test.ts` (line 755) move here as `isPlanFilePath` rows over `USER_PLAN_FORMAT`, and gain: either separator; `file: 'tasks.md'` (a `plan.md` path is false); no `folder` knob (always false).
+  - `planFileName_` rows: `null` and `{}` give `plan.md`; `{ file: 'tasks.md' }` gives `tasks.md`.
+  - `planDirOfArgs_` rows: a plan file path gives its folder; a folder path gives itself, with or without a trailing separator, either separator; a path whose folder does not match gives null; no `folder` knob gives null; a null argument gives null.
+- `plan-copies.test.ts` (every row of `src/shared/plan-copies.test.ts`: the `planCopies`, `readMovedCopy`, `readCopyAt` and `readPlanCopy` describes, the worktree-listing rejection rows included), add:
   - `readMovedCopy_StatusRank_FromFormat` — with `statuses: ['a', 'b']`, a worktree copy at `a` is behind main's `b`.
   - `planCopies_ChangedAt_TakesLinkedTaskDocs` — an unlinked `.md` file in the folder modified later does not move `changedAt`.
   - `planCopies_PlanFileName_FromFormat` — with `file: 'tasks.md'`, a folder holding only `plan.md` lists no copy.
+  - `planCopies_PlanVanishesBetweenStatAndRead_ListsNoCopy` — the files fake removes the plan file after its stat; the copy is absent and nothing rejects.
 - `plan-watch.test.ts` (rows of `workflow-large/main/plan-watch.test.ts`), add `follow_FormatChanged_OpensAgain`.
 - `plan-fold.test.ts` (plan rows of `workflow-large/large-state.test.ts` `foldLargeState` and `sameLargeState`), add:
   - `fold_NoFolderKnob_WritesAndArgsSetNothing`.
@@ -166,7 +174,7 @@ Move each old test file next to its new source, rename its imports and fields (`
   - `fold_SameProgress_KeepsThePlanByReference`.
 - `plan-pane.test.ts` (rows of `workflow-large/page/checklist.test.ts`), add `checklist_GroupTitle_FromFormat` and `checklist_NoTaskDocs_NothingRuns`.
 - `plan-tool.test.ts`, `plan-report.test.ts`, `plan-reports.test.ts`: the old rows, with `Ignored: this session's workflow keeps no plan.`.
-- `plan-capability.test.ts`, ported from the plan rows of `src/plugins/workflow-large-main.test.ts` over `planWorkflowFixture()`: `turnEndedChangingNoField_StillChecksThePlan`, `planFileWrittenAfterPlanGone_ReadsThePlanAgain`, `planFolderBackReadIdle_NextTurnStartReopens`, `PlanTool_ContributedForTheMainAgentOnly`, `restartOverAReportedFolderGone_ReadsTheUnreportedMainCopy`, `startWithFlowsHeld_FollowsTheirPlans`, `subagentPlanWrite_NamesThePlanAndWatchesIt`, `checklistWorkflowFlow_IsNotWatched` (from `flowOfAnotherWorkflow_IsNotWatched`), `FlowLeavingAPlanWorkflow_StopsItsWatch`. Add:
+- `plan-capability.test.ts`, ported from the plan rows of `src/plugins/workflow-large-main.test.ts` over `planWorkflowFixture()`: `turnEndedChangingNoField_StillChecksThePlan`, `planFileWrittenAfterPlanGone_ReadsThePlanAgain`, `planFolderBackReadIdle_NextTurnStartReopens`, `PlanTool_ContributedForTheMainAgentOnly`, `restartOverAReportedFolderGone_ReadsTheUnreportedMainCopy`, `startWithFlowsHeld_FollowsTheirPlans`, `subagentPlanWrite_NamesThePlanAndWatchesIt`, `checklistWorkflowFlow_IsNotWatched` (from `flowOfAnotherWorkflow_IsNotWatched`), `FlowLeavingAPlanWorkflow_StopsItsWatch` (the watch half of `FlowLeavingLarge_StopsItsWatchAndCountdown`; its countdown half is 04's `countdown.test.ts`). Add:
   - `PlanTool_NoEnabledPlanWorkflow_NotContributed`.
   - `PlanTool_PlanWorkflowSwitchedOn_Contributed` — after `onWorkflowsChanged` names one, the tool is contributed once.
 

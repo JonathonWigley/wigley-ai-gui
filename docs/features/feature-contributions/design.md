@@ -195,7 +195,7 @@ Every installed declared workflow is on unless the user switches it off. The `wo
 | `actions` | object | Actions by action id (Actions). |
 | `stages` | array | Stage declarations in stage order (Stage fields). |
 
-Every skill in `claims` appears in exactly one stage's `skill` trigger: that trigger is where the claim enters. A group name equal to a stage id is refused.
+Every skill in `claims` appears in exactly one stage's `skill` trigger: that trigger is where the claim enters, so it carries no `from` and no `when`. A group name equal to a stage id is refused.
 
 ### Stage fields
 
@@ -265,6 +265,8 @@ Predicates:
 | `planOpen` | the read plan has an open box |
 | `{ "counterRose": "<plan counter>" }` | the plan counter is above its snapshot from the last stage that `records` it |
 
+Every plan predicate is false until the plan is read; only `idle` and `busy` hold without one.
+
 ### Counters
 
 `counters` maps a name to `{ "counts": "<stage id>", "resetOn": "claim" }`. The counter adds one each time the flow enters the stage from another stage, and goes to 0 when the workflow's own skill claims the flow. Medium's fix cycles are `{ "fix": { "counts": "fix", "resetOn": "claim" } }`.
@@ -304,11 +306,13 @@ A template is a string with `{variable}` slots:
 | `{counter.<name>}` | a workflow counter |
 | `{checklist}` | `<checked>/<total>` of the agent's checklist |
 
-A template whose every variable is empty, null or 0 renders `''`. A `detail` part that renders `''` is left out. A command `text` with an empty `{plan}` does not run, and the engine logs `no plan to make`.
+Every `{plan.…}` variable is empty until the plan is read, and `{checklist}` until a checklist arrives; a `0/0` count is empty. A template whose every variable is empty, null or 0 renders `''`. A `detail` part that renders `''` is left out. A command `text` with an empty `{plan}` does not run, and the engine logs `no plan to make`.
 
 ### Example: the user's workflows
 
-Small, Medium and Spike follow one shape. Small:
+These four declarations are the user's workflows as today's level plugins run them, read from their stage files. They
+equal the app's sample, `src/plugins/workflow/declared/sample-auri.json` (task 06 of shareable-app), which the `wigley`
+plugin's `auri.json` copies. Small, Medium and Spike follow one shape. Small:
 
 ```json
 {
@@ -317,7 +321,7 @@ Small, Medium and Spike follow one shape. Small:
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
     { "id": "scope", "label": "Scope", "status": "busy", "enter": [{ "skill": "wigley:small" }] },
-    { "id": "build", "label": "Build", "step": "build", "status": "busy", "progress": " {checklist}",
+    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
       "enter": [{ "step": "build" }] },
     { "id": "check", "label": "Check", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
     { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
@@ -334,19 +338,44 @@ Medium adds its counter, and its fix stage shows it:
 
 ```json
 {
-  "id": "medium", "label": "Medium", "badge": "M", "order": 20, "claims": ["wigley:medium"],
+  "id": "medium", "label": "Medium", "badge": "M", "badgeColor": "var(--wg-accent)", "order": 20,
+  "claims": ["wigley:medium"],
   "counters": { "fix": { "counts": "fix", "resetOn": "claim" } },
   "fixCycles": { "counter": "fix" },
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
     { "id": "interview", "label": "Interview", "status": "busy", "enter": [{ "skill": "wigley:medium" }] },
+    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+      "enter": [{ "step": "build" }] },
+    { "id": "review", "label": "Review", "step": "review", "status": "busy", "enter": [{ "step": "review" }] },
     { "id": "fix", "label": "Fix", "step": "fix", "status": "busy", "progress": " · cycle {counter.fix}",
-      "enter": [{ "step": "fix" }] }
+      "enter": [{ "step": "fix" }] },
+    { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "done", "label": "Land", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
+      "enter": [{ "step": "done" }] }
   ]
 }
 ```
 
-(The example leaves out Medium's build, review, land and done stages, which follow Small's.) Spike's interview takes both triggers, so a new ask returns the flow to it: `"enter": [{ "skill": "wigley:spike" }, { "step": "interview" }]`, with `"step": "interview"`.
+Spike's interview takes both triggers, so a new ask returns the flow to it:
+
+```json
+{
+  "id": "spike", "label": "Spike", "badge": "X", "badgeColor": "var(--wg-fg-secondary)", "order": 40,
+  "claims": ["wigley:spike"],
+  "sidePane": { "kind": "checklist", "title": "Checklist" },
+  "stages": [
+    { "id": "interview", "label": "Interview", "step": "interview", "status": "busy",
+      "enter": [{ "skill": "wigley:spike" }, { "step": "interview" }] },
+    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+      "enter": [{ "step": "build" }] },
+    { "id": "check", "label": "Check", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
+    { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "done", "label": "Land", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
+      "enter": [{ "step": "done" }] }
+  ]
+}
+```
 
 Large uses every part of the schema:
 
@@ -363,8 +392,9 @@ Large uses every part of the schema:
     "makeInNewSession": { "kind": "launch", "label": "Make in new session", "text": "/wigley:make {plan}",
                           "then": "handedOff", "key": "<Leader>wn" },
     "resumeMake": { "kind": "clearAndSend", "label": "Resume make", "text": "/wigley:make {plan}",
-                    "risky": true, "available": ["planOpen"], "enabled": ["idle"], "key": "<Leader>wr" },
-    "openPlan": { "kind": "openPlan", "label": "Open plan", "key": "<Leader>wo" },
+                    "risky": true, "keyOnly": true, "available": ["idle", "planOpen"], "enabled": ["idle"],
+                    "key": "<Leader>wr" },
+    "openPlan": { "kind": "openPlan", "label": "Open plan", "keyOnly": true, "key": "<Leader>wo" },
     "retro": { "kind": "send", "label": "Retro", "text": "/wigley:retro", "enabled": ["idle"], "key": "<Leader>wt" },
     "dismiss": { "kind": "event", "label": "Dismiss", "event": "dismissed", "keyOnly": true, "key": "<Leader>wd" }
   },
@@ -375,17 +405,21 @@ Large uses every part of the schema:
     { "id": "primer", "label": "Primer", "slot": "start", "status": "busy",
       "enter": [{ "skill": "wigley:feature-primer", "clearsPlan": true }] },
     { "id": "explore", "label": "Explore", "step": "explore", "slot": "start", "status": "busy",
+      "detail": ["{plan.title}"], "actions": ["openPlan"],
       "enter": [{ "skill": "wigley:feature", "clearsPlan": true }, { "step": "explore", "from": ["featureRun"] }] },
     { "id": "interview", "label": "Interview", "step": "interview", "status": "busy",
+      "detail": ["{plan.title}"], "actions": ["openPlan"],
       "enter": [{ "step": "interview", "from": ["featureRun"] }] },
     { "id": "plan", "label": "Plan", "step": "plan", "status": "busy",
+      "detail": ["{plan.title}"], "actions": ["openPlan"],
       "enter": [{ "step": "plan", "from": ["featureRun"] }] },
     { "id": "coldRead", "label": "Cold read", "step": "cold_read", "status": "busy",
+      "detail": ["{plan.title}"], "actions": ["openPlan"],
       "enter": [{ "step": "cold_read", "from": ["featureRun"] }] },
     { "id": "planReady", "label": "Make", "slot": "make", "status": "ready",
       "detail": ["{plan.title}", "{plan.total} tasks"],
       "rowActivity": { "word": "ready to make", "tone": "attention", "emphasis": "raised" },
-      "actions": ["clearAndMake", "makeInNewSession"], "auto": "clearAndMake",
+      "actions": ["clearAndMake", "makeInNewSession", "openPlan"], "auto": "clearAndMake",
       "enter": [{ "event": "turnEnded", "from": ["featureRun"], "when": ["idle", "planHasTasks"] },
                 { "event": "planChanged", "from": ["featureRun"], "when": ["idle", "planHasTasks"] }] },
     { "id": "make", "label": "Make", "slot": "make", "runsTasks": true, "status": "busy",
@@ -393,6 +427,7 @@ Large uses every part of the schema:
       "detail": ["{plan.build}", "wave {plan.wave}", "{plan.title}"], "actions": ["resumeMake", "openPlan"],
       "enter": [{ "skill": "wigley:make", "planFromArgs": true }] },
     { "id": "review", "label": "Review", "status": "busy", "progress": " · round {plan.counter.reviewRounds}",
+      "detail": ["round {plan.counter.reviewRounds}", "{plan.checked}/{plan.total}", "{plan.title}"],
       "actions": ["resumeMake", "openPlan"],
       "enter": [{ "skill": "wigley:review", "from": ["make", "fix"] },
                 { "event": "planChanged", "from": ["make"], "when": [{ "counterRose": "reviewRounds" }] }] },
@@ -402,17 +437,22 @@ Large uses every part of the schema:
     { "id": "closed", "label": "Close", "status": "finishing", "finishes": true, "reopens": true,
       "progress": " · {plan.checked}/{plan.total}", "detail": ["{plan.title} · done"],
       "rowActivity": { "word": "closed", "tone": "success", "emphasis": "raised" },
-      "actions": ["retro", "dismiss", "openPlan"],
+      "actions": ["retro", "dismiss"],
       "enter": [{ "event": "planGone", "from": ["make", "review", "fix"], "when": ["planRead"] }] }
   ]
 }
 ```
 
-The port of each level re-reads its stage files for the exact text of every label, detail and action list. The example above is the shape, and the port's fixture tests pin the text.
+`openPlan` is `keyOnly`, so a stage that lists it draws no button for it; its key opens the plan in every listed
+stage. The closed stage leaves it out, as today. The sample's fixture tests pin every label, detail and action list;
+a change to one changes the sample, this example and the `wigley` plugin's `auri.json` together.
 
 ### The plan capability
 
-A workflow whose `sidePane.kind` is `plan`, or whose triggers or templates name the plan, gets the plan capability. It lives in the `workflow` plugin, in `src/plugins/workflow/plan/`. It is generic code, and its only parameter is the workflow's `planFormat`. It owns:
+A workflow gets the plan capability (`usesPlan`) when any of these appears in its declaration: `sidePane.kind` `plan`;
+a trigger with `clearsPlan` or `planFromArgs`, or an `event` trigger on `planChanged` or `planGone`; a plan predicate
+(`planRead`, `planHasTasks`, `planOpen`, `counterRose`) in any `when`, `available` or `enabled`; a stage with
+`records`; `fixCycles.planCounter`; an `openPlan` action; a template holding `{plan}` or `{plan.…}`. It lives in the `workflow` plugin, in `src/plugins/workflow/plan/`. It is generic code, and its only parameter is the workflow's `planFormat`. It owns:
 
 - the plan folder: from a write of a plan file (`planFormat.folder` + `planFormat.file`), from a `planFromArgs` skill argument, and from reports through `set_workflow_plan` and `<endpoint dir>/plan-runs/<row id>.json`; cleared by `clearsPlan`;
 - the plan watch over every git-worktree copy of the folder, moved unchanged from `workflow-large` (`plan-watch.ts`, `src/shared/plan-copies.ts`);
@@ -525,25 +565,34 @@ A command pattern is `{ "program", "words", "valueFlags"?, "projectPathFlag"?, "
 
 `runner: "unityScript"` runs the file with `unity command script run` (`run_script` below com.unity.pipeline 0.9), as `game-view-probe.ts` does. A missing probe file reads as no probe, and the view streams the whole editor window. The first strategy with a probe wins.
 
-```json
+The user's, as today's `playtest-command.ts` reads the commands. `<unity flags>` stands for `["--timeout", "--port",
+"--pid", "--instance", "--runtime", "--runtime-path", "--detail", "--query", "--tag"]`, written out in full in the
+file (so the block below is not literal JSON):
+
+```
 "liveView": {
   "open": [
-    { "program": "unity", "words": ["command", "editor.playmode", "start"], "projectPathFlag": "--project-path",
-      "projectPathVariable": "UNITY_PROJECT_PATH", "valueFlags": ["--timeout", "--port", "--pid", "--instance",
-      "--runtime", "--runtime-path", "--detail", "--query", "--tag"] },
-    { "program": "unity", "words": ["editor_play"], "projectPathFlag": "--project-path" },
-    { "program": "capture.py", "words": ["start"], "projectPathFlag": "--project-path", "valueFlags": ["--fps", "--backend"] }
+    { "program": "unity", "words": ["command", "editor.playmode", "start"], "valueFlags": <unity flags>,
+      "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "unity", "words": ["command", "editor_play"], "valueFlags": <unity flags>,
+      "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "capture.py", "words": ["start"], "valueFlags": ["--fps", "--backend"],
+      "projectPathFlag": "--project-path" }
   ],
   "close": [
-    { "program": "unity", "words": ["command", "editor.playmode", "stop"], "projectPathFlag": "--project-path" },
-    { "program": "capture.py", "words": ["stop"], "projectPathFlag": "--project-path" }
+    { "program": "unity", "words": ["command", "editor.playmode", "stop"], "valueFlags": <unity flags>,
+      "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" },
+    { "program": "unity", "words": ["command", "editor_stop"], "valueFlags": <unity flags>,
+      "projectPathFlag": "--project-path", "projectPathVariable": "UNITY_PROJECT_PATH" }
   ],
   "probe": { "file": "skills/unity-playtest/unity/WigleyCapture.cs", "entry": "Wigley.WigleyCapture.Run",
              "runner": "unityScript" }
 }
 ```
 
-The port re-reads `playtest-command.ts` for the exact command forms and flag sets; the example is the shape.
+`capture.py stop` has no close row: today it does not close the view. The project folder falls back to the line's
+`cd` folder only for a pattern with `projectPathVariable`. Task 10 of shareable-app holds the same table, and its
+tests pin it.
 
 ## The Checklist flow
 
@@ -555,7 +604,7 @@ Every app session keeps a task list. The engine ships one built-in workflow, `CH
 
 `newFlow` starts every flow on it. A declared workflow's claimed skill replaces it as any other claim does; `movedUpFrom` stays null for a move up from the Checklist flow. `missedLevel` now means: a live turn with agent work ended while the flow was on the Checklist flow and at least one declared workflow is on.
 
-The agent sends its list with `set_workflow_checklist`, which the engine contributes to every session at all times. The `auri` plugin's checklist hook asks the app, over the relay's hook protocol, whether the session's row ever reported a checklist: the engine answers from the flow's `checklistReported` field, which the first `checklistReported` signal sets and no claim resets. The hook denies an edit until then, reminds the agent at a turn end while items are open, and shows the list again after a compaction. It recognises an app session by `WIGLEY_SESSION_ROW`.
+The agent sends its list with `set_workflow_checklist`, which the engine contributes to every session at all times. The `auri` plugin's checklist hook asks the app, over the relay's hook protocol, whether the session's row ever reported a checklist: the engine answers from the flow's `checklistReported` field, which the first `checklistReported` signal sets and no claim resets. A checklist report folds whatever the flow's workflow id, a workflow not registered (switched off, uninstalled, not loaded yet) included, so the gate never sticks shut. The hook denies an edit until then, reminds the agent at a turn end while items are open, and shows the list again after a compaction. It recognises an app session by `WIGLEY_SESSION_ROW`.
 
 `set_workflow_step` lists the union of the `step` values of every enabled declared workflow, each once, in workflow order then stage order. The Checklist flow adds none. With no enabled workflow declaring a step, no step tool is contributed. The engine contributes the tool again whenever a workflow is added, removed, switched on or switched off. A step the flow's own workflow does not declare succeeds with text saying so, as today. The tool's description names no plugin: "Set this session's step in its workflow, so the app shows it."
 

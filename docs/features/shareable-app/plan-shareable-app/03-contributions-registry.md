@@ -41,6 +41,7 @@ Files:
 - test `src/main/plugin-catalog/plugin-types.test.ts` (add the file to the listed files)
 - modify `src/shared/plugin-part-harness.test-support.ts` (a fake `configProblems`)
 - modify `src/plugins/manifests.ts`, `src/plugins/main.ts`, `src/plugins/page.ts` (register the plugin)
+- modify `src/plugins/sessions/contract.ts` (re-export `ActivityTone` and `RowEmphasis` from `src/contracts/contributions.ts`)
 
 Consumes:
 - `AGENT_PLUGIN_NAME`, `APP_PLUGIN_KEY`, `CONTRIBUTIONS_FILE`, `CONTRIBUTIONS_VERSION`, `agentPluginDir(appDir, paths)` in
@@ -55,9 +56,12 @@ Produces:
   `DocsContribution`, `CommandPattern`, `LiveViewContribution`, each exactly as design.md § Names and types › The file
   writes it. Also `FEATURE_KEYS: readonly FeatureKey[]` (`['workflows', 'planFormat', 'retro', 'backlog', 'docs',
   'liveView']`) and `qualifiedWorkflowId(pluginName: string, id: string): string` (returns `<pluginName>:<id>`).
-  `ActivityDecl` imports `ActivityTone` and `RowEmphasis` as types from `src/plugins/sessions/contract.ts`; check that
-  `scripts/check-layers.mts` allows a `contracts/` file to import a plugin contract's types, and if it refuses, declare
-  the two unions in `contracts/contributions.ts` with the same members.
+  `ActivityTone` and `RowEmphasis` move here: `scripts/check-layers.mts` gives `src/contracts`
+  `{ layers: [], packages: [] }` (line 605, measured at plan time), so a `contracts/` file cannot import a plugin
+  contract. Declare both unions in `contracts/contributions.ts` with the members `src/plugins/sessions/contract.ts`
+  holds today (lines 611 and 631), delete them there, and have `sessions/contract.ts` re-export them
+  (`export type { ActivityTone, RowEmphasis } from '../../contracts/contributions'`), so every existing importer
+  compiles unchanged and the unions have one home.
 - `src/shared/contributions-schema.ts`: `auriFileSchema: JsonValue`, the JSON schema of `AuriFile` (draft 2020-12), with
   `version` as `const: 1` and every section's fields as design.md lists them.
 - `src/plugins/contributions/contract.ts`: `ContributionSource`, `ReadResult<V>`, `FeatureReader<V>`, `Strategy<V>`,
@@ -88,8 +92,13 @@ Decisions:
   2. Each `HarnessPlugin` from `createHarnessFolders({ harnesses: services.agentHarnesses, infos, log })
      .installedPlugins()`, in the order it returns them: root `plugin.installDir`, key `plugin.key`, plugin name the key
      up to its first `@` (the whole key when it has none), version `plugin.version`, `harnessId`.
-  A candidate whose root `files.realPath` rejects is dropped with no log. A candidate whose `<root>/auri.json` is absent
-  (`readIfPresent` gives null) is not a source. `ContributionSource.root` is the real path.
+  A candidate whose root `files.realPath` rejects is dropped with no log. `sources.ts` reads each candidate's
+  `<root>/auri.json` once, with `files.read`: a read that rejects with a missing file (`isMissingFile`) means the
+  candidate is not a source; any other rejection (EACCES, a folder named `auri.json`) keeps the candidate as a source
+  carrying `{ error: errorText }`, and a read that succeeds carries `{ text }`. `ContributionSource.root` is the real
+  path. `sources.ts` returns `{ source: ContributionSource; file: { text: string } | { error: string } }[]`;
+  `registry.ts` parses from `file` and never reads, so a scan reads each file once and an unreadable file still
+  shows its problem.
 - **Dedupe**, after the file check, in candidate order:
   - Two candidates with the same real root are one source: the first is kept.
   - Two candidates with the same plugin name and different roots keep one. The app's own plugin (`pluginKey ===
@@ -98,8 +107,8 @@ Decisions:
   - Each dropped candidate logs `dropped <key> at <root>: <reason>`, with reason `same folder as <kept key>` or
     `<kept key> at <kept root> wins`.
   - The kept sources stay in candidate order: the app's own plugin first, then installs in profile order.
-- **The file** (`main/registry.ts`). `JSON.parse` the text. One **file problem** and no section loads when the read
-  rejects (`<plugin name>: auri.json not read: <errorText>`), the text is not JSON (`<plugin name>: auri.json is not
+- **The file** (`main/registry.ts`). `JSON.parse` the source's `file.text`. One **file problem** and no section loads
+  when the source carries `file.error` (`<plugin name>: auri.json not read: <errorText>`), the text is not JSON (`<plugin name>: auri.json is not
   JSON: <errorText>`), the value is not an object (`<plugin name>: auri.json is not an object`), or `version !==
   CONTRIBUTIONS_VERSION` (`<plugin name>: auri.json version is <JSON of the value>, not 1`). `$schema` is ignored. A top
   key that is not `version`, `$schema` or a registered feature key logs `<plugin name>: auri.json key <key> is read by
@@ -130,9 +139,14 @@ Decisions:
   - the `core.agentHarnesses` slot (`coreAgentHarnessesSlot`): any change.
   A folder that `files.stat` reports absent is not watched (a watch creates a missing folder); each scan recomputes the
   watched folders, disposing watches it no longer needs and starting new ones. Every trigger restarts one 300 ms timer
-  (`services.timers`); the scan runs when it fires. A scan that starts while one runs is queued once. A watch's
-  `onError` logs `watch of <folder> failed: <errorText>`, and the next scan starts it again. `onMissedChanges`, when the
-  options offer it, triggers a rescan.
+  (`services.timers`); the scan runs when it fires. A scan that starts while one runs is queued once. Each watch
+  passes `WatchOptions` (`src/contracts/files.ts`) with:
+  - `onError`: logs `watch of <folder> failed: <errorText>` and forgets the watch (it has disposed itself), so the
+    next scan starts it again;
+  - `onMissed`: restarts the 300 ms timer, like a change.
+  `files.watch` throws when it cannot start (`files.ts`: a start failure never reaches `onError`). The part catches
+  that throw, logs the same `watch of <folder> failed: <errorText>` line, records no watch, and the next scan tries
+  again.
 - **`installedPluginsFile`.** The registry names no harness file. Claude Code's `configRoots` returns
   `paths.join(configDir, 'plugins', 'installed_plugins.json')`, the file `installed-plugins.ts` reads. The fake harness
   returns `<configDir>/plugins/installed_plugins.json` too. A harness with no such file returns `null`, and only its
@@ -189,7 +203,21 @@ part harness gives):
   app's wins). Each row asserts the kept keys in order and the logged drop line. Catches string version compare and a
   lost source order.
 - `sources.test.ts` › candidate with no `auri.json` and candidate whose root does not exist — neither is a source, and
-  nothing is logged.
+  nothing is logged. A candidate whose `auri.json` read rejects with a non-missing error is a source carrying
+  `{ error }`. Catches an unreadable file that vanishes with no problem shown.
+- `registry.test.ts` › problem order — two sources, the first with a section problem under `retro` and the second
+  with a file problem, plus a section problem under `workflows` in the first: `configProblems.set` receives the file
+  problem first, then the first source's `workflows` problem, then its `retro` problem (`FEATURE_KEYS` order).
+  Catches problems served in registration order.
+- `registry.test.ts` › strategy label — one table over a section's `label`: `'Wigley levels'` → that label; `''`,
+  `5`, absent, and a section that is an array → the plugin name. Catches an empty or non-string label shown in
+  Settings.
+- `registry.test.ts` › late reader — a reader registered after the first scan runs at once over the stored parsed
+  files (no new read: the memory `Files` read count is unchanged) and its strategies are in the slot.
+- `start.test.ts` › watch failures — one table: an `onError` call logs `watch of <folder> failed: <text>` and the
+  next scan starts a new watch on that folder; a `watch` that throws at start logs the same line and the next scan
+  retries it; an `onMissed` call triggers one scan 300 ms later. A folder `files.stat` reports absent gets no watch.
+  Catches a reload that dies after one watcher error, or a watch that creates a missing folder.
 - `registry.test.ts` › file problems — one table: unreadable, not JSON, an array, `version: 2`. Each gives one problem
   with the exact message above and loads no section. Catches a bad file that leaks a section.
 - `registry.test.ts` › section problem keeps the other sections — the GIVEN above. Catches one bad section dropping the

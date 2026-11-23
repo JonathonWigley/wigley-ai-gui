@@ -20,7 +20,7 @@ Files:
 - modify `A/scripts/chatroom/hook.py`
 - create `A/scripts/checklist/hook.py` · create `A/scripts/checklist/tests/__init__.py` · test `A/scripts/checklist/tests/test_hook.py`
 - create `A/scripts/ask-user-question/hook.py` · create `A/scripts/ask-user-question/tests/__init__.py` · test `A/scripts/ask-user-question/tests/test_hook.py`
-- modify `A/hooks/hooks.json`
+- modify `A/hooks/hooks.json` · test `wigley-ai-gui/src/shared/agent-plugin.test.ts` (four rows in `agentPluginHooks_CommandsNameExistingScripts`)
 - modify `A/scripts/relay/README.md` (§ The relay, the hook clients)
 
 Consumes:
@@ -32,6 +32,7 @@ Consumes:
 - `endpoint.open_channel`, `endpoint.channel_path`, `endpoint.HOOK_PROTOCOL`, `start_app.endpoint_dir` in
   `A/scripts/relay/` ← 01.
 - `A/hooks/hooks.json` with the two chatroom entries ← 01.
+- `agentPluginHooks_CommandsNameExistingScripts` in `src/shared/agent-plugin.test.ts`, the hooks.json row table ← 01.
 
 Produces:
 - `A/scripts/relay/hook_client.py`:
@@ -65,6 +66,14 @@ Produces:
   hello, request, deadline) -> str | None` as a wrapper that calls `ask_app_reply` and returns the reply's non-empty
   `text`, and `_hook_output` calls `hook_client.session_hello(HOOK_NAMES[event], hook_input, env)`. Its tests then
   pass unchanged; that is the proof the move kept the wire.
+- What `chatroom/tests/test_hook.py` reaches stays a name of `chatroom/hook.py`: `ask_app`, `main`, `output_for`,
+  `request_from_input`, `commit_paths`, `git_runner`, `GIT_TIMEOUT_SECONDS`, `subprocess` and
+  `HOOK_DEADLINE_SECONDS`. The test patches `hook.HOOK_DEADLINE_SECONDS` (`mock.patch.object(hook,
+  "HOOK_DEADLINE_SECONDS", …)`, test_hook.py line 280 at plan time), so `chatroom/hook.py` does
+  `from hook_client import HOOK_DEADLINE_SECONDS` and `main` reads that module global as it does today
+  (`deadline = time.monotonic() + HOOK_DEADLINE_SECONDS`). Never read it as `hook_client.HOOK_DEADLINE_SECONDS`
+  inside `main`: the patch would then miss and the drip row would wait the full 3 s. `checklist/hook.py` imports and
+  reads the constant the same way.
 - `checklist/hook.py` imports `hook_client` with the same `sys.path` insert of `../relay` that `chatroom/hook.py` uses.
 
 ### The checklist hook
@@ -95,6 +104,10 @@ An exception prints to stderr only. The steps, in order:
 
 - The `stop` row follows design.md: the reminder fires while items are open. A session that never sent a list is not
   sent back at turn end (workflow-gate did that); the edit gate still stops its first edit.
+- The hello's `hook` is `CHECKLIST_HOOK = "workflow.checklist"` (a module constant in `checklist/hook.py`, equal to
+  04's) for all three modes: `session_hello("workflow.checklist", hook_input, env)`. 04 registers one handler under
+  that one name; a per-mode name (`checklist.edit`, the way chatroom has `chatroom.pre|post`) gets `ok: false`, and
+  the gate then fails open in silence.
 - The request line is `{"mode": "<mode>"}`. 04's handler does not read it; it is there for the app's log.
 - Output shapes, the ones workflow-gate prints today:
   `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": <text>}}`,
@@ -170,8 +183,17 @@ GIVEN a compaction WHEN SessionStart fires with `source` `compact` THEN the outp
   texts verbatim. Catches a gate that blocks a terminal session, a subagent or a session whose app is down.
 - `checklist/tests/test_hook.py`: `test_compact_list_cut_at_cap` (900 items of 20 characters; the text is at most
   10,000 characters and ends on the `…` line); `test_main_exits_zero` (bad stdin, an exception in `decide`) with
-  stdout empty; one end-to-end row through `main` with a fake app answering `{ reported: false, … }` that prints the
-  deny line.
+  stdout empty; one end-to-end table through `main` with a fake app, one row per mode (`edit`, `stop`, `compact`):
+  each asserts the fake app received a hello with `hello["hook"] == "workflow.checklist"` and the request
+  `{"mode": "<mode>"}`, and the `edit` row, answered `{ reported: false, … }`, prints the deny line. Catches a wrong
+  hook name, which the fail-open path would otherwise hide.
+- `src/shared/agent-plugin.test.ts` › `agentPluginHooks_CommandsNameExistingScripts`: add the four rows
+  (`PreToolUse`, `Edit|Write|MultiEdit|NotebookEdit`, `scripts/checklist/hook.py`, `edit`, 5),
+  (`PreToolUse`, `AskUserQuestion`, `scripts/ask-user-question/hook.py`, no mode, 5),
+  (`Stop`, no matcher, `scripts/checklist/hook.py`, `stop`, 5) and
+  (`SessionStart`, `compact`, `scripts/checklist/hook.py`, `compact`, 5). Catches a typo'd script path, a lost
+  `compact` matcher or a missing mode argument, none of which `claude plugin validate` reports and each of which
+  disables the gate.
 - `ask-user-question/tests/test_hook.py`: row set → the deny line with the pinned reason; row unset → nothing; exit 0
   on both.
 
@@ -185,6 +207,7 @@ cd /Users/jonathonwigley/Documents/.worktrees/ai-shareable-app/wigley-ai-gui/age
 (cd scripts/ask-user-question && python3 -m unittest discover)
 claude plugin validate /Users/jonathonwigley/Documents/.worktrees/ai-shareable-app/wigley-ai-gui/agent-plugin
 python3 -c "import json;print(sorted(json.load(open('hooks/hooks.json'))['hooks']))"
+(cd .. && npm test -- src/shared/agent-plugin.test.ts)
 ```
 
 The last line prints `['PostToolUse', 'PreToolUse', 'SessionStart', 'Stop']`. The live checks (an app session denied
