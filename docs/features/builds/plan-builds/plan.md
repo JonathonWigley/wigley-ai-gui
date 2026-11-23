@@ -363,4 +363,7 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - 07: the hold-ending check for a gone offer runs on every changed(), not only on buildsSessionsSlot changes · group 07
 - 07: builds-view.ts BuildsViewCommand also excludes SessionPartsCommand (edit outside Files) · group 07
 - lead: 08's rebase onto main ran as a merge of origin/main (3f6abfa3d) in 42c412c23, since replaying 01 conflicted commit by commit with work-inbox's Git additions; the review diff is `git diff 3f6abfa3d HEAD` (the run's changes alone), not 4e46c96b2..HEAD
+- Lead (review 14): task 10 check 10 reads a local build's detail for its step text, and the builds.mode demo sample's sky-105 detail (show Sky Hop, j, Enter) for links and Open in the backend; there Open and the links log `demo: openLink does nothing` and `o` logs `demo: openWeb does nothing`. No surface the drive reaches has real TeamCity jobs or links.
+### Review rounds
+- Round 1 (review at fb4efc252): NEEDS FIXES, 45 findings + 1 pre-existing (report review-fb4efc252…md). Lead-applied 39653d0c0 (log fixtures). Worker fixes 31106cf70, 61817589d, 89834882c, b06e8e32e; format 8160f76c8. Tier: High (concurrency in the poller and local runs.json chain, the links and TeamCity cache data formats, a shared contract: GameState, BuildsFold, LinkStore.prune, BuildDetailInput) → correctness re-review of 39653d0c0..b06e8e32e. Every open finding took its recommendation (repo rule: no forms round); 46 to follow-ups.
 
