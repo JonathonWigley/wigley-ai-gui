@@ -96,14 +96,14 @@ describe('set_workflow_checklist', () => {
     expect(result.content[0].text).toBe('Checklist set: 0 of 0 done.');
   });
 
-  it('call_ReportFalse_SucceedsSayingIgnored', async () => {
+  it('call_ReportFalse_NoFlow_SucceedsSayingIgnored', async () => {
     const { call } = toolWith(false);
 
     const result = await call({ items: [{ text: 'a', done: false }] });
 
     expect(result.isError).not.toBe(true);
     expect(result.content[0].text).toBe(
-      'Ignored the checklist: this session has no workflow yet.',
+      'Ignored the checklist: the app holds no flow for this session.',
     );
   });
 

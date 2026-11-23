@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { createSlotStore } from '../../../shared/state/slot-store';
-import { type SessionFlow, workflowFlowsSlot } from '../contract';
+import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
+  type SessionFlow,
+  workflowFlowsSlot,
+} from '../contract';
 import { newFlow } from '../flow';
 import { createFlowStore, FLOWS_FILE, type FlowStore } from './flow-store';
 
@@ -127,8 +132,14 @@ describe('createFlowStore', () => {
   it.each<{ name: string; flow: SessionFlow }>([
     { name: 'a workflow, its state and its checklist', flow: SAVED_H1 },
     {
-      name: 'no workflow',
-      flow: { ...SAVED_H1, workflow: null, checklist: null, state: null },
+      name: 'the declared-workflow fields',
+      flow: {
+        ...SAVED_H1,
+        checklistReported: true,
+        counters: { fix: 2 },
+        enteredFrom: 'review',
+        countdownEndsAt: 9_000,
+      },
     },
     {
       name: 'a state the store does not check',
@@ -152,6 +163,45 @@ describe('createFlowStore', () => {
     expect(store.hostIdOf('s9')).toBe('h1');
     store.rekey('s9', 'h2');
     expect(store.hostIdOf('s9')).toBe('h2');
+  });
+
+  it.each<{
+    name: string;
+    flow: Record<string, unknown>;
+    expected: Partial<SessionFlow>;
+  }>([
+    {
+      name: 'a saved flow with no declared-workflow fields takes their defaults',
+      flow: (({
+        checklistReported: _reported,
+        plan: _plan,
+        counters: _counters,
+        enteredFrom: _enteredFrom,
+        countdownEndsAt: _endsAt,
+        ...rest
+      }) => rest)(SAVED_H1),
+      expected: {
+        workflow: 'small',
+        stage: 'build',
+        checklistReported: false,
+        plan: null,
+        counters: {},
+        enteredFrom: null,
+        countdownEndsAt: null,
+      },
+    },
+    {
+      name: 'a saved workflow null loads on the Checklist flow',
+      flow: { ...SAVED_H1, workflow: null, stage: 'build' },
+      expected: { workflow: CHECKLIST_WORKFLOW_ID, stage: CHECKLIST_STAGE },
+    },
+  ])('Load_OlderFlow_Upgrades ($name)', async ({ flow, expected }) => {
+    const { store, logs } = await loadStore(
+      JSON.stringify({ flows: [{ hostSessionId: 'h1', flow }] }),
+    );
+
+    expect(store.open('s9', 'h1', '/r')).toMatchObject(expected);
+    expect(logs).toEqual([]);
   });
 
   it('putRekeyDrop_EachWritesTheEntries_KeepingUnopenedOnes', async () => {

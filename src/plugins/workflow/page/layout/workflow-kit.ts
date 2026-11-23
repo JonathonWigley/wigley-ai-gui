@@ -1,5 +1,6 @@
 import type { Clock } from '../../../../contracts/ambient';
 import {
+  commandNamedIn,
   createBaseKit,
   type OwnerKitServices,
   ownerBaseKitDeps,
@@ -75,17 +76,29 @@ export function stageTagElement(
 // action's, the fold's and the Headless chip's key hints name the engine's
 // commands, every other action's its plugin's. Each anchor it
 // names is recorded in `rollback`. Each status mark, stage tag and running step
-// carries `clock`'s time, which places its pulse.
+// carries `clock`'s time, which places its pulse. A short name the manifest
+// lacks names the plugin's command registered at runtime under it, as a
+// declared action's is. The badge takes `badgeColor`; left out, the owner's
+// `badge` theme token.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
   sessionId: string,
   clock: Clock,
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
+  badgeColor?: string,
 ): WorkflowKit {
-  const base = createBaseKit(
-    ownerBaseKitDeps(manifest, services, null, rollback),
-  );
+  const manifestCommandNamed = commandNamedIn(manifest);
+  const base = createBaseKit({
+    ...ownerBaseKitDeps(manifest, services, null, rollback),
+    commandNamed(short) {
+      const runtimeId = qualify(manifest.id, short);
+      return (
+        manifestCommandNamed(short) ??
+        (services.commands.exists(runtimeId) ? runtimeId : null)
+      );
+    },
+  });
   const kit: WorkflowKit = {
     ...base,
     actionButton(parent, action, options = {}) {
@@ -131,7 +144,7 @@ export function createWorkflowKit(
       badge.title = label;
       badge.style.setProperty(
         '--workflow-badge-color',
-        `var(--wg-${manifest.id}-badge)`,
+        badgeColor ?? `var(--wg-${manifest.id}-badge)`,
       );
       return badge;
     },

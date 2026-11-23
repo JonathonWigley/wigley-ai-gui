@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
+import type { WorkflowDecl } from '../../../contracts/contributions';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import {
   DEMO_HARNESS_ID,
@@ -35,6 +36,7 @@ import {
 import {
   type AgentSession,
   type ContributeToolsOptions,
+  type HookHandler,
   type SessionsMainEvents,
   type SessionsMainExports,
   type ToolCallContext,
@@ -45,23 +47,35 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
+  CHECKLIST_HOOK,
+  CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
   type FoldEvent,
   type MainStage,
   type MainWorkflow,
   type SessionFlow,
   startsSkill,
+  workflowDeclaredSlot,
   workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowSignal,
   WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
+import {
+  DESIGN_MEDIUM,
+  DESIGN_PLUGIN,
+  DESIGN_SMALL,
+  designDeclared,
+  strategyOf,
+} from '../declared/fixtures.test-support';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
 import {
   FAKE_CHAT,
+  FAKE_CONTRIBUTIONS,
   FAKE_SESSIONS,
+  fakeContributions,
   startEngineMainPart,
 } from './engine-fakes.test-support';
 import { FLOWS_FILE } from './flow-store';
@@ -130,12 +144,29 @@ function session(id: string, hostSessionId: string): AgentSession {
 // as the last run left it; `selfTest` starts the part with the self-test on, so its
 // hooks are exported.
 // `setActiveTime` sets the clock chat's fake reports for every session.
+// `contributionsFake` is the contributions fake, ready at once unless the test
+// passes its own; `contributions` holds each tool contribution; `pushSettings` replaces the settings and tells the part;
+// `hooks` holds each relay hook handler and `invokeHandlers` each channel
+// handler the part took.
 function startWorkflowPart(
   options: {
     data?: MemoryFiles;
     selfTest?: boolean;
+    contributions?: ReturnType<typeof fakeContributions>;
   } = {},
 ) {
+  const contributionsFake = options.contributions ?? fakeContributions();
+  if (options.contributions === undefined) {
+    contributionsFake.resolveReady();
+  }
+  const hooks = new Map<string, HookHandler>();
+  const invokeHandlers = new Map<string, (arg: never) => unknown>();
+  let settings: typeof workflowManifest.settings = {
+    off: [],
+    autoStart: [],
+    layout: 'default',
+  };
+  const settingsListeners: ((next: typeof settings) => void)[] = [];
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: SessionFlow[] = [];
   const store = createSlotStore(() => undefined);
@@ -147,6 +178,7 @@ function startWorkflowPart(
   });
   const data = options.data ?? createMemoryFiles();
   const time = handTime();
+  const logged: string[] = [];
   const instructions: string[] = [];
   let activeTime: ActiveTime | null = null;
   let headless = false;
@@ -168,7 +200,15 @@ function startWorkflowPart(
     start: (session: AgentSession) => ToolSession;
     options: ContributeToolsOptions | undefined;
   }[] = [];
-  const sessions: Pick<SessionsMainExports, 'contributeTools'> = {
+  const sessions: Pick<
+    SessionsMainExports,
+    'contributeTools' | 'addHookHandler' | 'label'
+  > = {
+    label: () => null,
+    addHookHandler: (name, handler) => {
+      hooks.set(name, handler);
+      return { dispose: () => hooks.delete(name) };
+    },
     contributeTools: (tools, start, options) => {
       const contribution = { tools, start, options };
       contributions.push(contribution);
@@ -179,23 +219,37 @@ function startWorkflowPart(
       };
     },
   };
-  const dependencies: Record<string, unknown> = { chat, sessions };
+  const dependencies: Record<string, unknown> = {
+    chat,
+    sessions,
+    contributions: contributionsFake.exports,
+  };
   const api = {
     state: {
-      publish: () => store.publish(workflowFlowsSlot),
+      publish: (key: KeyedSlotKey<unknown>) => store.publish(key),
       read: (key: KeyedSlotKey<unknown>) => store.read(key, 'workflow'),
     },
+    channel: {
+      handle: (method: string, handler: (arg: never) => unknown) => {
+        invokeHandlers.set(method, handler);
+        return { dispose: () => invokeHandlers.delete(method) };
+      },
+    },
+    layouts: { register: () => ({ dispose: () => undefined }) },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       },
     },
-    settings: () => ({}),
-    onSettingsChanged: () => ({ dispose: () => undefined }),
+    settings: () => settings,
+    onSettingsChanged: (listener: (next: typeof settings) => void) => {
+      settingsListeners.push(listener);
+      return { dispose: () => undefined };
+    },
     services: {
       files: createMemoryFiles(),
-      log: () => undefined,
+      log: (line: string) => logged.push(line),
       clock: time.clock,
       timers: time.timers,
       paths: posixPaths,
@@ -283,6 +337,18 @@ function startWorkflowPart(
   return {
     data,
     time,
+    store,
+    logged,
+    hooks,
+    invokeHandlers,
+    contributionsFake,
+    pushSettings: async (next: typeof settings) => {
+      settings = next;
+      for (const listener of settingsListeners) {
+        listener(next);
+      }
+      await settled();
+    },
     dispose: async () => part.dispose?.('end'),
     setActiveTime: (next: ActiveTime) => {
       activeTime = next;
@@ -653,18 +719,18 @@ describe('workflowMainPart', () => {
       checklist: [{ text: 'a', done: false }],
     },
     {
-      name: 'a new flow',
+      name: 'a new flow, on the Checklist flow',
       opens: true,
       skill: null,
-      text: 'Ignored the checklist: this session has no workflow yet.',
-      pushes: 0,
-      checklist: null,
+      text: 'Checklist set: 0 of 1 done.',
+      pushes: 1,
+      checklist: [{ text: 'a', done: false }],
     },
     {
       name: 'no flow',
       opens: false,
       skill: null,
-      text: 'Ignored the checklist: this session has no workflow yet.',
+      text: 'Ignored the checklist: the app holds no flow for this session.',
       pushes: 0,
       checklist: null,
     },
@@ -673,9 +739,9 @@ describe('workflowMainPart', () => {
       data: () => savedFlowData({ workflow: 'gone', stage: 'somewhere' }),
       opens: true,
       skill: null,
-      text: 'Ignored the checklist: this session has no workflow yet.',
-      pushes: 0,
-      checklist: null,
+      text: 'Checklist set: 0 of 1 done.',
+      pushes: 1,
+      checklist: [{ text: 'a', done: false }],
     },
   ])(
     'ChecklistTool_Flow ($name)',
@@ -1167,6 +1233,7 @@ describe('workflowMainPart', () => {
     },
   ])('$name', async ({ events, replayed, missedLevel }) => {
     const workflow = startWorkflowPart();
+    workflow.exported().addWorkflow(finishingWorkflow());
     await workflow.openS1();
 
     let hostSessionId = 'h1';
@@ -1184,7 +1251,7 @@ describe('workflowMainPart', () => {
 
     expect(workflow.lastFlow()).toMatchObject({
       missedLevel,
-      workflow: null,
+      workflow: CHECKLIST_WORKFLOW_ID,
     });
   });
 
@@ -1331,7 +1398,7 @@ describe('workflowMainPart', () => {
     );
     return startMainPart(workflowMainPart, {
       state,
-      dependencies: [FAKE_SESSIONS, FAKE_CHAT],
+      dependencies: [FAKE_SESSIONS, FAKE_CHAT, FAKE_CONTRIBUTIONS],
     });
   }
 
@@ -1666,5 +1733,144 @@ describe('workflowMainPart', () => {
     const flow = { ...newFlow('s1', '/r'), workflow: workflowId, stage };
 
     expect(workflow.exported().stageFinishes(flow)).toBe(expected);
+  });
+});
+
+// The steps `set_workflow_step` offers now, none when the tool is gone.
+function stepsOffered(workflow: ReturnType<typeof startWorkflowPart>): string[] {
+  const definition = workflow.contributions
+    .flatMap(({ tools }) => tools)
+    .find((tool) => tool.name === SET_WORKFLOW_STEP_TOOL);
+  return definition === undefined
+    ? []
+    : (definition.inputSchema as { properties: { step: { enum: string[] } } })
+        .properties.step.enum;
+}
+
+// The ids `workflow.declared` holds, in its order.
+function declaredIds(workflow: ReturnType<typeof startWorkflowPart>): string[] {
+  return [
+    ...workflow.store.read(workflowDeclaredSlot, 'test').all().keys(),
+  ];
+}
+
+// The part over a contributions fake holding `decls` from the design plugin,
+// its `ready` still pending.
+function startWithContributed(decls: readonly WorkflowDecl[]) {
+  const contributions = fakeContributions();
+  contributions.set('workflows', [strategyOf(DESIGN_PLUGIN, decls)]);
+  return startWorkflowPart({ contributions });
+}
+
+describe('workflowMainPart › declared workflows', () => {
+  it('Contributed_ADeclaredWorkflow_OffersItsStepsInTheStepTool', async () => {
+    const workflow = startWithContributed([DESIGN_SMALL]);
+
+    workflow.contributionsFake.resolveReady();
+    await settled();
+
+    expect(declaredIds(workflow)).toEqual(['wigley:small']);
+    expect(stepsOffered(workflow)).toEqual([
+      'build',
+      'check',
+      'land',
+      'done',
+      'answered',
+    ]);
+  });
+
+  it('Off_ADeclaredWorkflow_LeavesTheSlotAndTheStepsOnlyItDeclares', async () => {
+    const workflow = startWithContributed([DESIGN_SMALL, DESIGN_MEDIUM]);
+    workflow.contributionsFake.resolveReady();
+    await settled();
+    const stepsBefore = stepsOffered(workflow);
+
+    await workflow.pushSettings({
+      off: ['wigley:small'],
+      autoStart: [],
+      layout: 'default',
+    });
+
+    expect(stepsBefore).toEqual(expect.arrayContaining(['check', 'answered']));
+    expect(declaredIds(workflow)).toEqual(['wigley:medium']);
+    expect(stepsOffered(workflow)).toEqual(
+      expect.arrayContaining(['build', 'review', 'fix', 'land', 'done']),
+    );
+    expect(stepsOffered(workflow)).not.toContain('check');
+    expect(stepsOffered(workflow)).not.toContain('answered');
+  });
+
+  it('addDeclared_AnIdThatIsOff_PublishesIt_AndDisposeRemovesIt', async () => {
+    const workflow = startWorkflowPart();
+    await workflow.pushSettings({
+      off: ['wigley:small'],
+      autoStart: [],
+      layout: 'default',
+    });
+
+    const added = workflow.exported().addDeclared(designDeclared('small'));
+    const whileAdded = declaredIds(workflow);
+    const stepsWhileAdded = stepsOffered(workflow);
+    added.dispose();
+
+    expect(whileAdded).toEqual(['wigley:small']);
+    expect(stepsWhileAdded).toContain('answered');
+    expect(declaredIds(workflow)).toEqual([]);
+    expect(stepsOffered(workflow)).not.toContain('answered');
+  });
+
+  it('SkillStartedBeforeContributionsReady_FoldsAfter_AndClaims', async () => {
+    const workflow = startWithContributed([DESIGN_SMALL]);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:small', ''));
+    const flowBeforeReady = workflow.lastFlow();
+
+    workflow.contributionsFake.resolveReady();
+    await settled();
+
+    expect(flowBeforeReady).toBeUndefined();
+    expect(workflow.lastFlow()).toMatchObject({
+      workflow: 'wigley:small',
+      stage: 'scope',
+    });
+  });
+
+  it('ClaimFromTheChecklistFlow_MetersTheRunFromTheClaim', async () => {
+    const workflow = startWorkflowPart();
+    workflow.exported().addDeclared(designDeclared('small'));
+    await workflow.openS1();
+    await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
+    workflow.setActiveTime(activeFor(3000));
+    await workflow.agentEvent(skill('wigley:small', ''));
+    workflow.setActiveTime(activeFor(5000));
+
+    await workflow.callStepTool('s1', 'done');
+
+    expect(await runLogLines(workflow)).toMatchObject([
+      { workflow: 'wigley:small', activeMs: 2000, movedUpFrom: null },
+    ]);
+  });
+
+  it('ChecklistHook_AfterAChecklist_RepliesReportedWithItsOpenItems', async () => {
+    const workflow = startWorkflowPart();
+    await workflow.openS1();
+    await workflow.callChecklistTool('s1', [
+      { text: 'a', done: true },
+      { text: 'b', done: false },
+    ]);
+
+    const reply = await workflow.hooks.get(CHECKLIST_HOOK)?.(
+      session('s1', 'h1'),
+      {},
+    );
+
+    expect(reply).toEqual({
+      reported: true,
+      open: 1,
+      items: [
+        { text: 'a', done: true },
+        { text: 'b', done: false },
+      ],
+    });
   });
 });

@@ -71,6 +71,14 @@ describe('manifests', () => {
     );
   });
 
+  it('manifests_Workflow_ListsItsSettings', () => {
+    const workflow = manifests.find(({ id }) => id === 'workflow');
+
+    expect(Object.keys(workflow?.settings ?? {}).sort()).toEqual(
+      ['autoStart', 'layout', 'off'].sort(),
+    );
+  });
+
   it('manifests_WorkflowSmall_HasItsLayoutSettingAndBadgeToken', () => {
     const small = manifests.find(({ id }) => id === 'workflow-small');
 

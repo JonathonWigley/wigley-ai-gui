@@ -4,7 +4,12 @@ import {
   MAIN_AGENT_ID,
   type UsageAgentEvent,
 } from '../../../contracts/agent';
-import type { SessionFlow } from '../../workflow/contract';
+import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
+  type SessionFlow,
+  sampleFlow,
+} from '../../workflow/contract';
 import {
   type AgentWaits,
   agentWaitReason,
@@ -16,20 +21,15 @@ import {
 
 const MIN_TOKENS = 200000;
 
-function flowOf(overrides: Partial<SessionFlow> = {}): SessionFlow {
-  return {
-    sessionId: 's1',
-    projectDir: '/repo',
+function flowOf(
+  overrides: Partial<Omit<SessionFlow, 'sessionId' | 'projectDir'>> = {},
+): SessionFlow {
+  return sampleFlow('s1', '/repo', {
     workflow: 'medium',
-    movedUpFrom: null,
     stage: 'build',
-    checklist: null,
-    state: null,
-    missedLevel: false,
-    turnRunning: false,
     runningSubagents: ['agent-1'],
     ...overrides,
-  };
+  });
 }
 
 function usage(contextTokens: number): UsageAgentEvent {
@@ -64,6 +64,11 @@ describe('agent wait', () => {
       expected: REASON,
     },
     { case: 'NoWorkflow', flow: flowOf({ workflow: null }), expected: null },
+    {
+      case: 'ChecklistFlow',
+      flow: flowOf({ workflow: CHECKLIST_WORKFLOW_ID, stage: CHECKLIST_STAGE }),
+      expected: null,
+    },
     { case: 'NoFlow', noFlow: true, expected: null },
     { case: 'ThresholdZero', minTokens: 0, expected: null },
     { case: 'Below', tokens: 150_000, expected: null },

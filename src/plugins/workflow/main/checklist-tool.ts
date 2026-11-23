@@ -64,7 +64,7 @@ export function parseChecklistItems(
 }
 
 export interface ChecklistToolDeps {
-  // Folds the list; resolves whether the session has a workflow to hold it.
+  // Folds the list; resolves whether the app holds a flow for the session.
   reportChecklist(
     sessionId: string,
     items: readonly ChecklistItem[],
@@ -73,7 +73,7 @@ export interface ChecklistToolDeps {
   lines: HeadlessLines;
 }
 
-// Bad items are an error. A session with no workflow succeeds with text saying
+// Bad items are an error. A session with no flow succeeds with text saying
 // so, since a skill's first call may come before the app knows of the flow.
 // `deps.lines` adds the headless line to each success.
 async function setWorkflowChecklist(
@@ -91,7 +91,7 @@ async function setWorkflowChecklist(
     return textResult(
       deps.lines.append(
         session,
-        'Ignored the checklist: this session has no workflow yet.',
+        'Ignored the checklist: the app holds no flow for this session.',
       ),
     );
   }

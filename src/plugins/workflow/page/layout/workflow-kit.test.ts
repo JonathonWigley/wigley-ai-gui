@@ -40,6 +40,26 @@ describe('workflow kit stage tag', () => {
   });
 });
 
+describe('workflow kit badge', () => {
+  beforeEach(() => installFakeDom(vi.stubGlobal));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('badge_BadgeColor_SetsTheBadgeColour', () => {
+    const { kit } = testWorkflowKit(
+      KIT_MANIFEST,
+      0,
+      's1',
+      'var(--wg-status-info)',
+    );
+    const parent = new FakeElement('div');
+
+    kit.badge(asHtml(parent), 'S', 'Small');
+
+    const [badge] = findAll(parent, 'workflow-badge');
+    expect(badge.style['--workflow-badge-color']).toBe('var(--wg-status-info)');
+  });
+});
+
 describe('workflow kit headless chip', () => {
   beforeEach(() => installFakeDom(vi.stubGlobal));
   afterEach(() => vi.unstubAllGlobals());

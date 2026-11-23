@@ -38,6 +38,7 @@ import { newFlow } from './workflow/flow';
 import {
   FAKE_CHAT,
   FAKE_SESSIONS,
+  fakeContributions,
   startEngineMainPart,
 } from './workflow/main/engine-fakes.test-support';
 import { FLOWS_FILE } from './workflow/main/flow-store';
@@ -216,7 +217,13 @@ function startWorkflowPart(
     start: (session: AgentSession) => ToolSession;
     options: ContributeToolsOptions | undefined;
   }[] = [];
-  const sessions: Pick<SessionsMainExports, 'label' | 'contributeTools'> = {
+  const contributionsFake = fakeContributions();
+  contributionsFake.resolveReady();
+  const sessions: Pick<
+    SessionsMainExports,
+    'label' | 'contributeTools' | 'addHookHandler'
+  > = {
+    addHookHandler: () => ({ dispose: () => undefined }),
     label: (sessionId) =>
       sessionId === 's1' ? (options.sessionLabel ?? null) : null,
     contributeTools: (tools, start, options) => {
@@ -232,16 +239,17 @@ function startWorkflowPart(
   const layouts = { register: () => ({ dispose: () => undefined }) };
   const engine = workflowMainPart.start({
     state: {
-      publish: () => store.publish(workflowFlowsSlot),
+      publish: (key: KeyedSlotKey<unknown>) => store.publish(key),
       read: (key: KeyedSlotKey<unknown>) => store.read(key, 'workflow'),
     },
+    channel: { handle: () => ({ dispose: () => undefined }) },
     events: {
       emit: () => undefined,
       on: (event: string, listener: (data: unknown) => void) => {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       },
     },
-    settings: () => ({}),
+    settings: () => ({ off: [], autoStart: [], layout: 'default' }),
     onSettingsChanged: () => ({ dispose: () => undefined }),
     services: {
       files: projectFiles,
@@ -253,7 +261,13 @@ function startWorkflowPart(
       demoSteps: createDemoStepRegistry<DemoMainStep>(),
     },
     dependency: (key: { id: string }) =>
-      ({ chat, sessions } as Record<string, unknown>)[key.id],
+      (
+        {
+          chat,
+          sessions,
+          contributions: contributionsFake.exports,
+        } as Record<string, unknown>
+      )[key.id],
     data,
     drive: null,
     layouts,

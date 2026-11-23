@@ -2,6 +2,7 @@
 // flows slot.
 
 import type { CommandKey } from '../../contracts/commands';
+import type { PlanFormat, WorkflowDecl } from '../../contracts/contributions';
 import type { DemoMainStep } from '../../contracts/demo';
 import type { Disposable } from '../../contracts/disposable';
 import type {
@@ -39,13 +40,97 @@ export type {
   WorkflowPart,
 } from './layouts/layout';
 
-// A registered workflow's id. Each workflow names its own.
+export { qualifiedWorkflowId } from '../../contracts/contributions';
+
+// A registered workflow's id. Each workflow names its own; a declared
+// workflow's is qualified, `<plugin name>:<id>`.
 export type WorkflowId = string;
 
 // A stage module's id, unique within its workflow.
 export type StageId = string;
 
 export const IDLE_STAGE: StageId = 'idle';
+
+// The engine's built-in workflow, which every flow starts on and a declared
+// workflow's claim replaces. It is never switched off.
+export const CHECKLIST_WORKFLOW_ID: WorkflowId = 'checklist';
+export const CHECKLIST_STAGE: StageId = 'work';
+export const CHECKLIST_WORKFLOW: WorkflowDecl = {
+  id: CHECKLIST_WORKFLOW_ID,
+  label: 'Checklist',
+  badge: 'C',
+  order: 1000,
+  claims: [],
+  sidePane: { kind: 'checklist', title: 'Checklist' },
+  stages: [
+    {
+      id: CHECKLIST_STAGE,
+      label: 'Checklist',
+      status: 'busy',
+      progress: ' {checklist}',
+      enter: [],
+    },
+  ],
+};
+
+// The short command id of a declared action: the workflow id with each `:`
+// as `-`, then `-<action id>` (`wigley-large-clearAndMake`).
+export function actionCommandShortId(
+  workflowId: string,
+  actionId: string,
+): string {
+  return `${workflowId.replaceAll(':', '-')}-${actionId}`;
+}
+
+// One declaration the workflows reader accepted, with its plugin's
+// `planFormat`, null when the plugin declares none.
+export interface DeclaredWorkflow {
+  id: WorkflowId;
+  pluginName: string;
+  decl: WorkflowDecl;
+  planFormat: PlanFormat | null;
+}
+
+// One entry of `workflow.autoStart`: the qualified workflow whose `auto`
+// actions run after `seconds`, at least 1.
+export interface AutoStartSetting {
+  workflow: string;
+  seconds: number;
+}
+
+// The flow's plan, kept by the plan capability. `dir` is the plan folder,
+// `reported` whether the agent reported it, `unreportedDir` a folder a plan
+// write named before any report, and `snapshots` each plan counter's value at
+// the last stage that `records` it.
+export interface PlanState {
+  dir: string | null;
+  reported: boolean;
+  unreportedDir: string | null;
+  progress: PlanProgress | null;
+  snapshots: Record<string, number>;
+}
+
+// What a read of the plan file gave: `wave` is the first group with an open
+// box, `counters` each `planFormat` counter.
+export interface PlanProgress {
+  title: string;
+  checked: number;
+  total: number;
+  wave: number | null;
+  counters: Record<string, number>;
+  tasks: PlanTaskLine[];
+}
+
+// One box of the plan: `file` its task document, `status` that document's
+// status, `verification` whether it is the verification task.
+export interface PlanTaskLine {
+  group: number | null;
+  text: string;
+  done: boolean;
+  file: string | null;
+  status: string | null;
+  verification: boolean;
+}
 
 export interface ChecklistItem {
   text: string;
@@ -59,15 +144,26 @@ export interface ChecklistItem {
 export interface SessionFlow {
   sessionId: string;
   projectDir: string;
-  // Null until a workflow claims a skill.
+  // A new flow's is the Checklist flow's; null only in a flow saved before it.
   workflow: WorkflowId | null;
   movedUpFrom: WorkflowId | null;
   stage: StageId;
   // From `checklistReported`.
   checklist: readonly ChecklistItem[] | null;
+  // True once a `checklistReported` folded; no claim resets it.
+  checklistReported: boolean;
   // The current workflow's own; null on a new claim.
   state: unknown;
-  // A live turn with agent work ended with `workflow` null.
+  // The plan capability's; null on another workflow's claim.
+  plan: PlanState | null;
+  // The declared workflow's counters by name.
+  counters: Record<string, number>;
+  // The stage a finishing stage was entered from.
+  enteredFrom: StageId | null;
+  // When the auto-start countdown runs its action, epoch ms; null for none.
+  countdownEndsAt: number | null;
+  // A live turn with agent work ended on the Checklist flow while another
+  // workflow was registered.
   missedLevel: boolean;
   turnRunning: boolean;
   // Agent ids the main agent spawned that have not finished.
@@ -97,6 +193,14 @@ export type WorkflowSignal =
   | { type: 'subagentFinished'; agentId: string }
   // Resets turnRunning and runningSubagents: a fresh process runs nothing.
   | { type: 'cleared' }
+  // From the plan capability: the read plan changed, or its folder holds no
+  // plan file.
+  | { type: 'planChanged'; progress: PlanProgress }
+  | { type: 'planGone' }
+  // A plan report through `set_workflow_plan` or a plan-run file.
+  | { type: 'planReported'; planDir: string }
+  // A declared event: an `event` action's, or a `launch` action's `then`.
+  | { type: 'event'; event: string }
   // A workflow's own event, which the engine does not read.
   | { type: 'custom'; event: unknown };
 
@@ -128,6 +232,16 @@ export interface MainWorkflow {
   foldState?(flow: SessionFlow, signal: WorkflowSignal): unknown;
   // Compares states for the fold's same-flow check. Left out: by reference.
   sameState?(a: unknown, b: unknown): boolean;
+  // The flow's other fields for this signal, after the checklist and before
+  // the stage rules; returns `flow` itself for no change.
+  foldFields?(flow: SessionFlow, signal: WorkflowSignal): SessionFlow;
+  // The flow after the stage rules, given `before`, the flow they started
+  // from; returns `next` itself for no change.
+  afterStage?(
+    before: SessionFlow,
+    next: SessionFlow,
+    signal: WorkflowSignal,
+  ): SessionFlow;
   // Review fix cycles for the run log. Left out: 0.
   fixCycles?(flow: SessionFlow): number;
 }
@@ -142,11 +256,16 @@ export function sampleFlow(
   return {
     sessionId,
     projectDir,
-    workflow: null,
+    workflow: CHECKLIST_WORKFLOW_ID,
     movedUpFrom: null,
-    stage: IDLE_STAGE,
+    stage: CHECKLIST_STAGE,
     checklist: null,
+    checklistReported: false,
     state: null,
+    plan: null,
+    counters: {},
+    enteredFrom: null,
+    countdownEndsAt: null,
     missedLevel: false,
     turnRunning: false,
     runningSubagents: [],
@@ -355,12 +474,36 @@ export interface WorkflowObserver {
 // each main-agent `turnEnded` once main applied it, whether or not the flow
 // changed; `callStepTool` makes a `set_workflow_step` call from the session and
 // `callChecklistTool` a `set_workflow_checklist` call, since the fake harness calls
-// no MCP tool.
+// no MCP tool. `addDeclared` enables a declared workflow beside the
+// contributed ones, whatever `workflow.off` lists, until the dispose.
 export interface WorkflowSelfTestHooks {
   forgetFlows(projectDir: string): void;
   onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
   callStepTool(sessionId: string, step: string): void;
   callChecklistTool(sessionId: string, items: readonly ChecklistItem[]): void;
+  addDeclared(workflow: DeclaredWorkflow): Disposable;
+}
+
+// The relay hook the `auri` checklist gate asks. Any request line; the reply
+// is `{ reported, open, items }`.
+export const CHECKLIST_HOOK = 'workflow.checklist';
+
+// The enabled declared workflows, keyed by qualified id, in workflow order:
+// the contributed ones `workflow.off` leaves on, then each `addDeclared` one.
+// The Checklist flow is never in it.
+export const workflowDeclaredSlot: KeyedSlotKey<
+  DeclaredWorkflow,
+  'main',
+  'workflow'
+> = { id: 'workflow.declared', process: 'main', kind: 'keyed' };
+
+export interface WorkflowChannel extends ChannelShape {
+  invoke: {
+    // Runs a declared action, by its short command id, or `cancelCountdown` on
+    // the session's flow; rejects with main's error text.
+    runAction(arg: { sessionId: string; action: string }): Promise<void>;
+  };
+  messages: Record<never, never>;
 }
 
 export interface WorkflowMainExports {
@@ -497,13 +640,15 @@ export type PagePluginApi = Pick<
 >;
 
 // `manifest` names the owner of the plugin's layouts and its commands' key hints;
-// `userLayout` reads the plugin's `layout` setting.
+// `userLayout` reads the plugin's `layout` setting. `badgeColor` is the badge's
+// CSS color; left out, the owner's `badge` theme token.
 export interface WorkflowDrawOptions {
   manifest: Pick<PluginManifest, 'id' | 'commands'>;
   defaultLayout: CompleteLayout;
   defaultStylesheet: string;
   userLayout(): string;
   sideTitle: string;
+  badgeColor?: string;
 }
 
 // `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the

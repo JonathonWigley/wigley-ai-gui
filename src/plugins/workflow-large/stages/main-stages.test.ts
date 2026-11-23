@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  MainStage,
-  SessionFlow,
-  WorkflowSignal,
+import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
+  type MainStage,
+  type SessionFlow,
+  type WorkflowSignal,
 } from '../../workflow/contract';
 import { foldFlow, newFlow } from '../../workflow/flow';
 import type { PlanProgress } from '../../../shared/plan-progress';
@@ -230,7 +232,11 @@ describe('largeMainWorkflow', () => {
     {
       name: 'wigley:review claims nothing',
       signal: skillStarted('wigley:review'),
-      expected: { workflow: null, stage: 'idle', movedUpFrom: null },
+      expected: {
+        workflow: CHECKLIST_WORKFLOW_ID,
+        stage: CHECKLIST_STAGE,
+        movedUpFrom: null,
+      },
       planDir: null,
     },
   ])('$name', ({ signal, expected, planDir }) => {

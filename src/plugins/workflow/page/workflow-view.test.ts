@@ -7,19 +7,21 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import type { RowActivity } from '../../sessions/contract';
-import type {
-  ChecklistItem,
-  ChipInput,
-  MarkState,
-  PageStage,
-  PageWorkflow,
-  SessionFlow,
-  SidePaneInput,
-  StageActionSpec,
-  StageStatus,
-  StripInput,
-  WorkflowDraw,
-  WorkflowKit,
+import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
+  type ChecklistItem,
+  type ChipInput,
+  type MarkState,
+  type PageStage,
+  type PageWorkflow,
+  type SessionFlow,
+  type SidePaneInput,
+  type StageActionSpec,
+  type StageStatus,
+  type StripInput,
+  type WorkflowDraw,
+  type WorkflowKit,
 } from '../contract';
 import { newFlow } from '../flow';
 import { createStageList } from '../stage-list';
@@ -583,6 +585,38 @@ describe('workflow view over several workflows', () => {
     expect(logged.filter((line) => line === 'proj no workflow')).toHaveLength(
       lines,
     );
+  });
+
+  it('Chip_ChecklistFlow_DrawsNoStageUntilAChecklistArrives', () => {
+    const { view, workflows, put } = setUp();
+    const checklist = stubWorkflow(
+      CHECKLIST_WORKFLOW_ID,
+      stageOf(CHECKLIST_STAGE, 'Work', 0),
+    );
+    workflows.push(checklist.workflow);
+    const chip = new FakeElement('div');
+    view.chipPart.build(asHtml(chip), 'a');
+
+    put(newFlow('a', '/p'));
+    const chipsBefore = checklist.chips.length;
+    put({ ...newFlow('a', '/p'), checklist: [{ text: 'x', done: false }] });
+
+    expect(chipsBefore).toBe(0);
+    expect(checklist.chips).toHaveLength(1);
+  });
+
+  it('Chip_ChecklistFlowWithMissedLevel_ShowsTheNoWorkflowTag', () => {
+    const { view, workflows, put } = setUp();
+    workflows.push(
+      stubWorkflow(CHECKLIST_WORKFLOW_ID, stageOf(CHECKLIST_STAGE, 'Work', 0))
+        .workflow,
+    );
+    const chip = new FakeElement('div');
+    view.chipPart.build(asHtml(chip), 'a');
+
+    put({ ...newFlow('a', '/p'), missedLevel: true });
+
+    expect(findAll(chip, 'ui-tag--error')).toHaveLength(1);
   });
 
   it('Chip_Input_CarriesBadge', () => {

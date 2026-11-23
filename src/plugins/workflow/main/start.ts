@@ -2,7 +2,6 @@ import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
-  ChannelShape,
   MainApi,
   MainPart,
   QualifiedEvents,
@@ -17,17 +16,24 @@ import {
   chatMainKey,
   chatSessionSlot,
 } from '../../chat/contract';
+import { contributionsMainKey } from '../../contributions/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
+  CHECKLIST_HOOK,
+  CHECKLIST_WORKFLOW,
+  CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
+  type DeclaredWorkflow,
   type FoldEvent,
   type MainWorkflow,
   type SessionFlow,
   type SignalOrigin,
+  type WorkflowChannel,
+  workflowDeclaredSlot,
   workflowFlowsSlot,
   type WorkflowMainExports,
   type WorkflowObserver,
@@ -35,6 +41,17 @@ import {
   type WorkflowSignal,
   WORKFLOW_OFFLINE_ANSWER,
 } from '../contract';
+import { createDeclaredActions } from '../declared/actions';
+import { buildMainWorkflow } from '../declared/build-main';
+import { checklistHookHandler } from '../declared/checklist-hook';
+import { autoStartSettingsLine, createAutoStart } from '../declared/countdown';
+import { createEnabledWorkflows } from '../declared/enabled-workflows';
+import { NO_PLAN_FOLD } from '../declared/plan-fold';
+import { planFormatReader } from '../declared/plan-format-reader';
+import {
+  declaredWorkflows,
+  workflowsReader,
+} from '../declared/workflows-reader';
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
@@ -61,7 +78,7 @@ import { createTurnWork } from './turn-work';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
-  ChannelShape,
+  WorkflowChannel,
   Record<never, never>,
   QualifiedEvents<'chat', ChatMainEvents> &
     QualifiedEvents<'sessions', SessionsMainEvents>
@@ -82,6 +99,11 @@ type WorkflowApi = MainApi<
 // actions. A demo session (an ephemeral open, or a row on the demo harness) opens
 // no flow, so nothing of it reaches `flows.json`; registers the `workflow.engine` demo step's main half. Exports `addWorkflow`, `signal`, `setState`, `observe`, and
 // `stageFinishes` for whether a flow sits in a stage that finishes its run.
+// Registers the `workflows` and `planFormat` readers with contributions, runs
+// the built-in Checklist flow and every declared workflow `workflow.off` leaves
+// on (published in `workflow.declared`), answers the `workflow.checklist`
+// hook, runs declared actions for the page and the auto-start countdown, and
+// logs the `autoStart` setting on each settings change.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -100,10 +122,94 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       paths: services.paths,
       clock,
     });
-    const ready = store.load().catch((error: unknown) => {
+    const contributions = api.dependency(contributionsMainKey);
+    contributions.registerFeature('workflows', workflowsReader);
+    contributions.registerFeature('planFormat', planFormatReader);
+    let isStopped = false;
+    const enabled = createEnabledWorkflows();
+    const declaredSlot = api.state.publish(workflowDeclaredSlot);
+    // Every `addDeclared` entry, in call order.
+    const addedDeclared: DeclaredWorkflow[] = [];
+    // Each enabled declared workflow's registration, by qualified id.
+    const declaredRegistrations = new Map<
+      string,
+      { json: string; registration: Disposable }
+    >();
+    // The enabled set again: the contributed declarations `workflow.off`
+    // leaves on, then each `addDeclared` one, an id already listed left out.
+    // Publishes it, hands it to `enabled`, and registers each changed entry.
+    const syncDeclared = () => {
+      if (isStopped) {
+        return;
+      }
+      const list: DeclaredWorkflow[] = [];
+      for (const entry of [
+        ...declaredWorkflows(
+          contributions.strategies('workflows'),
+          contributions.strategies('planFormat'),
+          api.settings().off,
+        ),
+        ...addedDeclared,
+      ]) {
+        if (!list.some((held) => held.id === entry.id)) {
+          list.push(entry);
+        }
+      }
+      publishDeclared(list);
+      enabled.set(list);
+      registerDeclared(list);
+    };
+    const publishDeclared = (list: readonly DeclaredWorkflow[]) => {
+      const keys = [...declaredSlot.all().keys()];
+      const isSameOrder =
+        keys.length === list.length &&
+        keys.every((key, index) => key === list[index].id);
+      if (!isSameOrder) {
+        for (const key of keys) {
+          declaredSlot.delete(key);
+        }
+      }
+      for (const entry of list) {
+        const held = declaredSlot.get(entry.id);
+        if (held === undefined || JSON.stringify(held) !== JSON.stringify(entry)) {
+          declaredSlot.set(entry.id, entry);
+        }
+      }
+    };
+    const registerDeclared = (list: readonly DeclaredWorkflow[]) => {
+      for (const [id, { registration }] of declaredRegistrations) {
+        if (!list.some((entry) => entry.id === id)) {
+          registration.dispose();
+          declaredRegistrations.delete(id);
+        }
+      }
+      for (const entry of list) {
+        const json = JSON.stringify(entry);
+        const held = declaredRegistrations.get(entry.id);
+        if (held?.json === json) {
+          continue;
+        }
+        held?.registration.dispose();
+        declaredRegistrations.set(entry.id, {
+          json,
+          registration: addWorkflow(buildMainWorkflow(entry, NO_PLAN_FOLD)),
+        });
+      }
+    };
+    const flowsLoaded = store.load().catch((error: unknown) => {
       log(`flows.json not read: ${errorText(error)}; starting with no flows`);
     });
-    let isStopped = false;
+    const declaredRead = contributions.ready.then(
+      () => syncDeclared(),
+      (error: unknown) => {
+        log(
+          `contributions not read: ${errorText(error)}; no declared workflows`,
+        );
+      },
+    );
+    // The flows loaded and the first enabled set registered, so no signal folds
+    // before the declared workflows can claim it.
+    const ready = Promise.all([flowsLoaded, declaredRead]).then(() => undefined);
     // Runs `work` once the flows load, unless the part stopped by then;
     // resolves to its result, else to `onceStopped`.
     const whenReady = <T>(work: () => T, onceStopped: T): Promise<T> =>
@@ -178,7 +284,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       const after = foldFlow(before, signal, workflows.all());
       if (after !== before) {
         putFlow(after, origin);
-        if (before.workflow === null && after.workflow !== null) {
+        const wasUnclaimed =
+          before.workflow === null || before.workflow === CHECKLIST_WORKFLOW_ID;
+        const isClaimed =
+          after.workflow !== null && after.workflow !== CHECKLIST_WORKFLOW_ID;
+        if (wasUnclaimed && isClaimed) {
           runMeter.claimed(sessionId);
         }
         logFinishedRun(before, after);
@@ -220,7 +330,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (flow === null || !turnWork.worked(sessionId)) {
         return;
       }
-      const next = markMissedLevel(flow);
+      const hasOtherWorkflow = workflows
+        .all()
+        .some((workflow) => workflow.id !== CHECKLIST_WORKFLOW_ID);
+      const next = markMissedLevel(flow, hasOtherWorkflow);
       if (next !== flow) {
         putFlow(next, 'live');
       }
@@ -255,14 +368,15 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       lines: headlessLines,
     });
 
-    // Folds a reported checklist as a live event; resolves whether a registered
-    // workflow holds the flow, false once the part stopped.
+    // Folds a reported checklist as a live event, whatever workflow holds the
+    // flow; resolves whether the session has a flow, false once the part
+    // stopped.
     const reportChecklist = (
       sessionId: string,
       items: readonly ChecklistItem[],
     ) =>
       whenReady(() => {
-        if (heldWorkflowOf(sessionId) === undefined) {
+        if (store.get(sessionId) === null) {
           return false;
         }
         apply(sessionId, { type: 'checklistReported', items }, 'live');
@@ -331,6 +445,77 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         },
       };
     };
+
+    addWorkflow(
+      buildMainWorkflow(
+        {
+          id: CHECKLIST_WORKFLOW_ID,
+          pluginName: '',
+          decl: CHECKLIST_WORKFLOW,
+          planFormat: null,
+        },
+        NO_PLAN_FOLD,
+      ),
+    );
+    contributions.onChanged('workflows', syncDeclared);
+    contributions.onChanged('planFormat', syncDeclared);
+
+    // Replaces fields of the session's flow with no fold, keeping the save
+    // time.
+    const setFlowFields = (sessionId: string, patch: Partial<SessionFlow>) => {
+      const flow = store.get(sessionId);
+      if (flow !== null) {
+        store.putKeepingSavedAt({ ...flow, ...patch });
+      }
+    };
+    const autoStart = createAutoStart({
+      clock,
+      timers: services.timers,
+      log,
+      flowOf: (sessionId) => store.get(sessionId),
+      flows: () => store.all(),
+      workflowOf: (flow) => enabled.workflowOf(flow),
+      autoStart: () => api.settings().autoStart,
+      setCountdownEndsAt: (sessionId, countdownEndsAt) =>
+        setFlowFields(sessionId, { countdownEndsAt }),
+      runAction: (sessionId, action) => actions.run(sessionId, action),
+      sessionName: (flow) =>
+        sessions.label(flow.sessionId) ?? services.paths.base(flow.projectDir),
+      isStopped: () => isStopped,
+    });
+    const actions = createDeclaredActions({
+      chat,
+      log,
+      workflows: () => enabled.enabledWorkflows(),
+      flowOf: (sessionId) => store.get(sessionId),
+      signal: (sessionId, signal) => apply(sessionId, signal, 'live'),
+      cancelCountdown: (sessionId) => autoStart.cancel(sessionId),
+      isStopped: () => isStopped,
+    });
+    observe(autoStart);
+    api.channel.handle('runAction', ({ sessionId, action }) =>
+      ready.then(async () => {
+        if (isStopped) {
+          return;
+        }
+        await actions.run(sessionId, action);
+      }),
+    );
+    sessions.addHookHandler(
+      CHECKLIST_HOOK,
+      checklistHookHandler({ ready, flowOf: (sessionId) => store.get(sessionId) }),
+    );
+    api.layouts.register({ layoutTypes });
+    api.onSettingsChanged(() => {
+      void ready.then(() => {
+        if (isStopped) {
+          return;
+        }
+        log(autoStartSettingsLine(api.settings().autoStart));
+        syncDeclared();
+        autoStart.settingsChanged();
+      });
+    });
 
     const openFlow = (
       sessionId: string,
@@ -477,6 +662,19 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         turnEndedListeners.add(registered);
         return { dispose: () => turnEndedListeners.delete(registered) };
       },
+      addDeclared(workflow) {
+        addedDeclared.push(workflow);
+        syncDeclared();
+        return {
+          dispose() {
+            const index = addedDeclared.indexOf(workflow);
+            if (index !== -1) {
+              addedDeclared.splice(index, 1);
+              syncDeclared();
+            }
+          },
+        };
+      },
     };
     return {
       commands: {},
@@ -485,6 +683,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       },
       dispose: () => {
         isStopped = true;
+        autoStart.stop();
         return store.flushed();
       },
       exports: (consumer): WorkflowMainExports => ({
@@ -492,13 +691,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         flowOf: (sessionId) => store.get(sessionId),
         flows: () => store.all(),
         stageFinishes,
-        setState(sessionId, state) {
-          const flow = store.get(sessionId);
-          if (flow === null) {
-            return;
-          }
-          store.putKeepingSavedAt({ ...flow, state: state ?? null });
-        },
+        setState: (sessionId, state) =>
+          setFlowFields(sessionId, { state: state ?? null }),
         ready,
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
         observe: (observer) => consumer.track(observe(observer)),

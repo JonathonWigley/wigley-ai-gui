@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
   checklistCount,
   isBusy,
   type MainStage,
@@ -143,10 +145,28 @@ const WORKFLOW_ROWS: {
     expected: UNCHANGED,
   },
   {
-    name: 'a report on a flow with no workflow changes nothing',
+    name: 'a report on the Checklist flow, not registered here, changes nothing',
     flow: flowWith({}),
     signal: { type: 'stepReported', step: 'build' },
     expected: UNCHANGED,
+  },
+  {
+    name: 'a claim from the Checklist flow leaves movedUpFrom null and keeps checklistReported',
+    flow: flowWith({ checklistReported: true, checklist: CHECKLIST }),
+    signal: skill('wigley:medium'),
+    expected: {
+      workflow: 'medium',
+      stage: 'interview',
+      movedUpFrom: null,
+      checklist: null,
+      checklistReported: true,
+    },
+  },
+  {
+    name: 'another workflow claim mid-run keeps checklistReported',
+    flow: flowWith({ ...SMALL_AT_BUILD, checklistReported: true }),
+    signal: skill('wigley:medium'),
+    expected: { workflow: 'medium', checklistReported: true },
   },
   {
     name: 'a checklist replaces the list',
@@ -178,10 +198,21 @@ const WORKFLOW_ROWS: {
     },
   },
   {
-    name: 'a checklist on a flow with no workflow changes nothing',
+    name: 'a checklist on the Checklist flow sets the list and checklistReported',
     flow: flowWith({}),
     signal: { type: 'checklistReported', items: CHECKLIST },
-    expected: UNCHANGED,
+    expected: {
+      workflow: CHECKLIST_WORKFLOW_ID,
+      stage: CHECKLIST_STAGE,
+      checklist: CHECKLIST,
+      checklistReported: true,
+    },
+  },
+  {
+    name: 'a checklist on a workflow id no plugin holds sets the list and checklistReported',
+    flow: flowWith({ workflow: 'gone', stage: 'build' }),
+    signal: { type: 'checklistReported', items: CHECKLIST },
+    expected: { stage: 'build', checklist: CHECKLIST, checklistReported: true },
   },
   {
     name: 'cleared clears missedLevel and keeps the workflow, stage and state',
@@ -407,17 +438,80 @@ describe('foldFlow_FoldState', () => {
 });
 
 describe('markMissedLevel', () => {
-  it('sets the flag on a flow with no workflow', () => {
-    expect(markMissedLevel(flowWith({})).missedLevel).toBe(true);
+  it('sets the flag on the Checklist flow with another workflow registered', () => {
+    expect(markMissedLevel(flowWith({}), true).missedLevel).toBe(true);
   });
 
   it.each([
-    { name: 'already set', fields: { missedLevel: true } },
-    { name: 'a workflow', fields: { workflow: 'small' } },
-  ])('keeps the same flow with $name', ({ fields }) => {
+    { name: 'already set', fields: { missedLevel: true }, other: true },
+    { name: 'a workflow', fields: { workflow: 'small' }, other: true },
+    { name: 'no other workflow registered', fields: {}, other: false },
+  ])('keeps the same flow with $name', ({ fields, other }) => {
     const flow = flowWith(fields);
 
-    expect(markMissedLevel(flow)).toBe(flow);
+    expect(markMissedLevel(flow, other)).toBe(flow);
+  });
+});
+
+describe('newFlow', () => {
+  it('NewFlow_IsOnTheChecklistFlow', () => {
+    expect(newFlow('s1', '/r')).toMatchObject({
+      workflow: CHECKLIST_WORKFLOW_ID,
+      stage: CHECKLIST_STAGE,
+      checklistReported: false,
+      plan: null,
+      counters: {},
+      enteredFrom: null,
+      countdownEndsAt: null,
+    });
+  });
+});
+
+describe('foldFlow on an unregistered workflow id', () => {
+  it('FoldsItsStageRules_OnceTheIdIsRegistered', () => {
+    const flow = flowWith({ workflow: 'late', stage: 'scope' });
+    const report: WorkflowSignal = { type: 'stepReported', step: 'build' };
+    const late = workflow('late', 30, 'x:late', 'scope');
+
+    expect(foldFlow(flow, report, WORKFLOWS)).toBe(flow);
+    expect(foldFlow(flow, report, [...WORKFLOWS, late]).stage).toBe('build');
+  });
+});
+
+describe('foldFlow field hooks', () => {
+  it('FoldFields_RunsBeforeTheStageRules_AndAfterStageSeesBoth', () => {
+    const seen: string[] = [];
+    const stub: MainWorkflow = {
+      id: 'stub',
+      order: 10,
+      claims: () => false,
+      firstStage: 'a',
+      stages: [
+        {
+          id: 'b',
+          order: 10,
+          enter: (flow) => (flow.counters.n === 1 ? 'b' : null),
+        },
+      ],
+      foldFields: (flow) => ({ ...flow, counters: { n: 1 } }),
+      afterStage: (before, next) => {
+        seen.push(`${before.stage}>${next.stage}`);
+        return { ...next, enteredFrom: before.stage };
+      },
+    };
+
+    const folded = foldFlow(
+      flowWith({ workflow: 'stub', stage: 'a' }),
+      { type: 'turnEnded' },
+      [stub],
+    );
+
+    expect(folded).toMatchObject({
+      stage: 'b',
+      counters: { n: 1 },
+      enteredFrom: 'a',
+    });
+    expect(seen).toEqual(['a>b']);
   });
 });
 

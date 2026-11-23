@@ -5,14 +5,21 @@ import type { Paths } from '../../../contracts/paths';
 import type { KeyedSlotWriter } from '../../../contracts/state';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject, isStringArray } from '../../../shared/json';
-import type { ChecklistItem, SessionFlow } from '../contract';
+import {
+  CHECKLIST_STAGE,
+  CHECKLIST_WORKFLOW_ID,
+  type ChecklistItem,
+  type SessionFlow,
+} from '../contract';
 import { newFlow } from '../flow';
 
 export const FLOWS_FILE = 'flows.json';
 
 // The open sessions' flows, and every flow saved in `flows.json`, keyed by
 // host session id (a row id is fresh on each launch). `load` reads the file
-// once; a flow read from it runs no turn and no subagent.
+// once; a flow read from it runs no turn and no subagent, takes the new flow's
+// value for each field it lacks, and sits on the Checklist flow when it was
+// saved with no workflow.
 // `put`, `putKeepingSavedAt`, `rekey`, `drop`, `open` and `forgetFlows` each
 // write the whole file, one write after another in call order; a write that
 // fails is logged and the next change writes again. `flushed` resolves once
@@ -146,7 +153,7 @@ export function createFlowStore(deps: {
       for (const { hostSessionId, flow, savedAt } of entries) {
         saved.set(hostSessionId, {
           flow: {
-            ...flow,
+            ...loadedFlow(flow),
             turnRunning: false,
             runningSubagents: [],
           },
@@ -220,8 +227,21 @@ export function createFlowStore(deps: {
   };
 }
 
+// A saved flow with the new flow's value for each field a file written before
+// that field lacks, and a flow saved with no workflow on the Checklist flow.
+function loadedFlow(saved: SessionFlow): SessionFlow {
+  const flow: SessionFlow = {
+    ...newFlow(saved.sessionId, saved.projectDir),
+    ...saved,
+  };
+  return flow.workflow === null
+    ? { ...flow, workflow: CHECKLIST_WORKFLOW_ID, stage: CHECKLIST_STAGE }
+    : flow;
+}
+
 // The entries of a `flows.json`, checked field by field; null when the text
-// is not JSON or not that shape.
+// is not JSON or not that shape. A field added after the file was written may
+// be missing; one present must hold its type.
 function parseFlowsFile(text: string): SavedEntry[] | null {
   let parsed: unknown;
   try {
@@ -259,7 +279,38 @@ function isSessionFlow(value: unknown): value is SessionFlow {
     'state' in value &&
     typeof value.missedLevel === 'boolean' &&
     typeof value.turnRunning === 'boolean' &&
-    isStringArray(value.runningSubagents)
+    isStringArray(value.runningSubagents) &&
+    isMissingOr(value.checklistReported, isBoolean) &&
+    isMissingOr(value.plan, isObjectOrNull) &&
+    isMissingOr(value.counters, isCounters) &&
+    isMissingOr(value.enteredFrom, isStringOrNull) &&
+    isMissingOr(value.countdownEndsAt, isNumberOrNull)
+  );
+}
+
+function isMissingOr(
+  value: unknown,
+  check: (value: unknown) => boolean,
+): boolean {
+  return value === undefined || check(value);
+}
+
+function isBoolean(value: unknown): boolean {
+  return typeof value === 'boolean';
+}
+
+function isObjectOrNull(value: unknown): boolean {
+  return value === null || isJsonObject(value);
+}
+
+function isNumberOrNull(value: unknown): boolean {
+  return value === null || typeof value === 'number';
+}
+
+function isCounters(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    Object.values(value).every((count) => typeof count === 'number')
   );
 }
 

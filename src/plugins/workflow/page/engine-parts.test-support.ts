@@ -66,6 +66,7 @@ export function testWorkflowKit(
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
   now = 0,
   sessionId = 's1',
+  badgeColor?: string,
 ): {
   kit: WorkflowKit;
   anchors: RecordedAnchor[];
@@ -92,6 +93,7 @@ export function testWorkflowKit(
     sessionId,
     { now: () => now },
     manifest,
+    badgeColor,
   );
   return { kit, anchors, runs };
 }

@@ -24,7 +24,7 @@ export function stepToolDefinition(
   return {
     name: SET_WORKFLOW_STEP_TOOL,
     description:
-      "Set this session's step in the wigley workflow, so the app shows it. Call it each time a skill moves to one of these steps.",
+      "Set this session's step in its workflow, so the app shows it. Call it each time a skill moves to one of these steps.",
     inputSchema: {
       type: 'object',
       properties: {

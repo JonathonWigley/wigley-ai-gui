@@ -1,4 +1,5 @@
 import type { Clock } from '../../../../contracts/ambient';
+import type { Disposable } from '../../../../contracts/disposable';
 import type { PluginLog } from '../../../../contracts/log';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
@@ -31,12 +32,27 @@ export function createWorkflowDraw(
   api: PagePluginApi,
   options: WorkflowDrawOptions,
 ): WorkflowDraw {
+  const { dispose: _dispose, ...draw } = createWorkflowDrawShow(
+    deps,
+    api,
+    options,
+  );
+  return draw;
+}
+
+// As `createWorkflowDraw`, with a `dispose` that ends the show, for a draw
+// that goes before its plugin does: a declared workflow's.
+export function createWorkflowDrawShow(
+  deps: WorkflowDrawDeps,
+  api: PagePluginApi,
+  options: WorkflowDrawOptions,
+): WorkflowDraw & Disposable {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: options.manifest.id,
     defaultLayout: options.defaultLayout,
     log: deps.log,
   });
-  api.layouts.show<Layout>({
+  const show = api.layouts.show<Layout>({
     defaultLayout: options.defaultLayout,
     defaultStylesheet: options.defaultStylesheet,
     read: readWorkflowLayout,
@@ -54,9 +70,11 @@ export function createWorkflowDraw(
       sessionId,
       deps.clock,
       options.manifest,
+      options.badgeColor,
     );
 
   return {
+    dispose: () => show.dispose(),
     sideTitle: options.sideTitle,
     chip: (parent, input, sessionId) =>
       toDrawn(

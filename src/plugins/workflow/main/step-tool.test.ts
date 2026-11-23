@@ -60,6 +60,12 @@ describe('set_workflow_step', () => {
     });
   });
 
+  it('definition_DescriptionNamesNoPluginOrLevel', () => {
+    const { description } = stepToolDefinition(WORKFLOWS);
+
+    expect(description).not.toMatch(/wigley|Small|Medium|Large|Spike/);
+  });
+
   it('call_ListedStep_ReportsTheStepForTheSession', async () => {
     const { call, reports } = toolWith(true);
 

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  coreRuntimeMainSlot,
+  coreRuntimePageSlot,
+} from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import type { PluginCommands } from '../../../contracts/plugin';
+import type { CommandInfo, PluginCommands } from '../../../contracts/plugin';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   fakeDependency,
@@ -32,16 +36,19 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
+  type DeclaredWorkflow,
   type PageStage,
   type PageWorkflow,
   type SessionFlow,
   type StageActionArg,
   type StripInput,
+  workflowDeclaredSlot,
   type WorkflowDraw,
   workflowFlowsSlot,
   type WorkflowPageExports,
   workflowStageActionCommand,
 } from '../contract';
+import { designDeclared } from '../declared/fixtures.test-support';
 import { newFlow } from '../flow';
 import { workflowPagePart } from './start';
 import type { createWorkflowView } from './workflow-view';
@@ -652,5 +659,102 @@ describe('workflow page part', () => {
       source: 'workflow',
       message: 'preview runs nothing for go',
     });
+  });
+});
+
+describe('workflow page part › declared workflows', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const RETRO = 'workflow.wigley-large-retro';
+
+  // The ids of the page's runtime commands and the commands its binds run.
+  function runtimeOf(harness: ReturnType<typeof startWorkflow>['harness']) {
+    const catalog = harness.state.read(coreRuntimePageSlot, 'test').get();
+    return {
+      commands: (catalog?.commands ?? []).map(({ id }) => id),
+      boundCommands: (catalog?.binds.binds ?? []).map(({ command }) => command),
+    };
+  }
+
+  const workflowLines = (
+    harness: ReturnType<typeof startWorkflow>['harness'],
+    pattern: RegExp,
+  ) =>
+    harness.logs
+      .filter(({ source }) => source === 'workflow')
+      .map(({ message }) => message)
+      .filter((message) => pattern.test(message));
+
+  // The Small example holding one more action, `go`, on the key `key`.
+  function smallWithKey(key: string): DeclaredWorkflow {
+    const small = designDeclared('small');
+    small.decl.actions = {
+      go: { kind: 'send', label: 'Go', text: '/go', key },
+    };
+    return small;
+  }
+
+  it('DeclaredAction_RegistersItsCommandAndKey_AndLeavingRemovesBoth', () => {
+    const { harness } = startWorkflow();
+    harness.ready();
+    const declared = harness.state.publish(workflowDeclaredSlot);
+
+    declared.set('wigley:large', designDeclared('large'));
+    const whileDeclared = runtimeOf(harness);
+    declared.delete('wigley:large');
+
+    expect(whileDeclared.commands).toContain(RETRO);
+    expect(whileDeclared.boundCommands).toContain(RETRO);
+    expect(runtimeOf(harness).commands).not.toContain(RETRO);
+    expect(runtimeOf(harness).boundCommands).not.toContain(RETRO);
+  });
+
+  it('TwoWorkflowsOnOneKey_LogOneNotBound_AndBothBuild', () => {
+    const { harness } = startWorkflow();
+    harness.ready();
+    const declared = harness.state.publish(workflowDeclaredSlot);
+
+    declared.set('wigley:large', designDeclared('large'));
+    declared.set('wigley:small', smallWithKey('<Leader>wt'));
+
+    expect(workflowLines(harness, / not bound: /)).toEqual([
+      expect.stringMatching(/^workflow wigley:small: key <Leader>wt not bound: /),
+    ]);
+    expect(runtimeOf(harness).commands).toEqual(
+      expect.arrayContaining([RETRO, 'workflow.wigley-small-go']),
+    );
+    expect(workflowLines(harness, / not drawn: /)).toEqual([]);
+  });
+
+  it('ActionCommandAlreadyRegistered_LogsOneNotRegistered_AndTheRestBuilds', () => {
+    const { harness } = startWorkflow();
+    harness.state.publish(coreRuntimeMainSlot).set({
+      commands: [
+        {
+          id: RETRO,
+          plugin: 'other',
+          label: 'Retro',
+          group: 'workflow',
+          runsIn: 'main',
+        } as CommandInfo,
+      ],
+      binds: { binds: [], app: [], intercept: [] },
+      started: true,
+    });
+    harness.ready();
+
+    harness.state
+      .publish(workflowDeclaredSlot)
+      .set('wigley:large', designDeclared('large'));
+
+    expect(workflowLines(harness, / not registered: /)).toEqual([
+      expect.stringMatching(
+        /^workflow wigley:large: command wigley-large-retro not registered: /,
+      ),
+    ]);
+    expect(runtimeOf(harness).commands).toContain(
+      'workflow.wigley-large-dismiss',
+    );
+    expect(workflowLines(harness, / not drawn: /)).toEqual([]);
   });
 });
