@@ -1003,14 +1003,16 @@ export type CompletionRowDraw = (
 // lives. Each dispose after the first does nothing. The last dispose shows the
 // hub and the section as `uiState` holds them then.
 // `newSessionWithDraft` opens the new-session prompt as the `startNewSession`
-// command does, and once the session it starts has its `chat.session` key on
-// the page, puts `text` in that session's box as `fillComposer` does, unsent.
-// It resolves to the new row's id once the box is filled, and to null, never
-// rejecting, when no session starts or the fill cannot run: the user leaves the
-// prompt, a sign-in ends signed out, the prompt cannot open, the start fails,
-// the prompt opens again, the page stops, the session closes before its key
-// arrives, or the key has not arrived 10 s (the start prompt's `JOIN_WAIT_MS`)
-// after the start.
+// command does, and once the session it starts has its Chat tab (its
+// `chat.session` key and its `sessions.rows` row both on the page), puts `text`
+// in that session's box as `fillComposer` does, unsent. It resolves to the new
+// row's id once the box is filled, and to null, never rejecting, when no
+// session starts or the fill cannot run: the user leaves the prompt, another
+// chat picker list replaces a prompt step, a sign-in ends signed out, the
+// prompt cannot open, the start fails, the prompt opens again before the start,
+// the page stops, the session's key leaves before its tab exists, or no tab
+// exists 10 s (the start prompt's `JOIN_WAIT_MS`) after the start; a session
+// that closes before its key arrives resolves at that wait.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;

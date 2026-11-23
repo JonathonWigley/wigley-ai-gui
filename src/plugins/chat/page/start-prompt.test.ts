@@ -29,6 +29,7 @@ import type {
   ResumeSectionRows,
   StartRequest,
 } from '../contract';
+import type { SessionRow } from '../../sessions/contract';
 import { chatCommand, chatScope } from '../ids';
 import type { PickerRowInput, PickerRowKit } from '../layouts/layout';
 import type { ChatLayouts } from './chat-layouts';
@@ -101,7 +102,8 @@ async function flush() {
 // replaces every harness; `defaultHarness` is `claude` unless given. The
 // prompt opens at once unless `skipOpen`. `stop` marks chat's page part
 // stopped and disposes the prompt, as chat's page part does. `setSession`
-// writes or deletes a key of the fake `chat.session` slot.
+// writes or deletes a key of the fake `chat.session` slot, and `addRow` adds
+// a key of the fake `sessions.rows` slot.
 function setUp(
   options: {
     profiles?: HarnessProfile[];
@@ -153,11 +155,13 @@ function setUp(
     ...options.answers,
   };
   // Holds one request at a time, as the real picker does: a pick or `close`
-  // closes it, and a new `open` replaces it with its cursor on `selected`.
+  // closes it, and a new `open` replaces it with its cursor on `selected`,
+  // then runs the replaced request's `superseded`.
   let shown: Opened | null = null;
   let cursor = 0;
   const picker: Pick<Picker, 'open' | 'isOpen' | 'cursorIndex'> = {
     open<T>(request: PickerRequest<T>) {
+      const replaced = shown;
       const entry: Opened = {
         title: request.title,
         labels: request.items.map((item) => request.label(item)),
@@ -173,6 +177,7 @@ function setUp(
       opened.push(entry);
       shown = entry;
       cursor = request.selected ?? 0;
+      replaced?.request.superseded?.();
       return { isOpen: () => shown === entry };
     },
     isOpen: () => shown !== null,
@@ -212,6 +217,12 @@ function setUp(
   const sessionListeners = new Set<
     (sessionId: string, info: ChatSessionInfo | undefined) => void
   >();
+  // The `sessions.rows` keys; the fake view holds a tab once a session has
+  // both its key and its row.
+  const rowKeys = new Set<string>();
+  const rowListeners = new Set<
+    (sessionId: string, row: SessionRow | undefined) => void
+  >();
   const fills: [string, string][] = [];
   const timers = fakeTimers();
   const prompt = createStartPrompt({
@@ -230,12 +241,18 @@ function setUp(
     toast: (text, tone) => toasts.push({ text, tone }),
     isStopped: () => isStopped,
     sessions: {
-      get: (sessionId) => sessionKeys.get(sessionId),
       on: (listener) => {
         sessionListeners.add(listener);
         return { dispose: () => sessionListeners.delete(listener) };
       },
     },
+    rows: {
+      on: (listener) => {
+        rowListeners.add(listener);
+        return { dispose: () => rowListeners.delete(listener) };
+      },
+    },
+    hasTab: (sessionId) => sessionKeys.has(sessionId) && rowKeys.has(sessionId),
     fillComposer: (sessionId, text) => fills.push([sessionId, text]),
     timers: timers.timers,
   });
@@ -254,11 +271,17 @@ function setUp(
       } else {
         sessionKeys.delete(sessionId);
       }
-      for (const listener of [...sessionListeners]) {
+      for (const listener of sessionListeners) {
         listener(sessionId, sessionKeys.get(sessionId));
       }
     },
-    sessionListeners: () => sessionListeners.size,
+    addRow: (sessionId: string) => {
+      rowKeys.add(sessionId);
+      for (const listener of rowListeners) {
+        listener(sessionId, { sessionId } as SessionRow);
+      }
+    },
+    listeners: () => sessionListeners.size + rowListeners.size,
     fills,
     timers,
     // Closes the shown list unpicked, as Esc does.
@@ -1794,44 +1817,174 @@ function setUpForDraft(options: Parameters<typeof setUp>[0] = {}) {
 }
 
 // Opens a draft and picks ~/dev/app, which starts `row-1` (one signed-in
-// profile, no saved sessions asked for), letting the prompt settle.
+// profile, no saved sessions asked for), letting the prompt settle; the
+// draft comes back wrapped, so awaiting the helper does not await it.
 async function draftStarted(run: ReturnType<typeof setUp>) {
   const drafted = run.prompt.newSessionWithDraft(DRAFT);
   await flush();
   pickFolder(run.last(), '~/dev/app');
   await flush();
-  return drafted;
+  return { drafted };
 }
 
 describe('start prompt newSessionWithDraft', () => {
-  it('newSessionWithDraft — fills the new session’s box once its tab exists', async () => {
-    const run = setUpForDraft();
-    const drafted = await draftStarted(run);
-    expect(run.invoked).not.toContain('pastSessions');
-    expect(run.revealed).toEqual(['row-1']);
-    expect(run.fills).toEqual([]);
+  // The view makes the tab only once both the key and the row are on the
+  // page, so a fill on either alone lands on no tab.
+  it.each([
+    { order: 'row first, key later', first: 'row' as const },
+    { order: 'key first, row later', first: 'key' as const },
+  ])(
+    'newSessionWithDraft — fills the new session’s box once its tab exists ($order)',
+    async ({ first }) => {
+      const run = setUpForDraft();
+      const { drafted } = await draftStarted(run);
+      expect(run.invoked).not.toContain('pastSessions');
+      expect(run.revealed).toEqual(['row-1']);
+      const arrivals = [
+        () => run.addRow('row-1'),
+        () => run.setSession('row-1', true),
+      ];
+      if (first === 'key') {
+        arrivals.reverse();
+      }
 
-    run.setSession('row-0', true);
-    expect(run.fills).toEqual([]);
+      run.setSession('row-0', true);
+      run.addRow('row-0');
+      arrivals[0]();
+      expect(run.fills).toEqual([]);
+      arrivals[1]();
+
+      await expect(drafted).resolves.toBe('row-1');
+      expect(run.fills).toEqual([['row-1', DRAFT]]);
+      expect(run.listeners()).toBe(0);
+      expect(run.timers.armed.size).toBe(0);
+    },
+  );
+
+  it('newSessionWithDraft — a tab already on the page fills at once', async () => {
+    const run = setUpForDraft();
+    run.addRow('row-1');
+    run.setSession('row-1', true);
+
+    const { drafted } = await draftStarted(run);
+
+    await expect(drafted).resolves.toBe('row-1');
+    expect(run.fills).toEqual([['row-1', DRAFT]]);
+    expect(run.listeners()).toBe(0);
+    expect(run.timers.armed.size).toBe(0);
+  });
+
+  it('newSessionWithDraft — a started draft fills through a later plain open', async () => {
+    const run = setUpForDraft();
+    const { drafted } = await draftStarted(run);
+
+    run.prompt.open();
+    await flush();
+    run.addRow('row-1');
     run.setSession('row-1', true);
 
     await expect(drafted).resolves.toBe('row-1');
     expect(run.fills).toEqual([['row-1', DRAFT]]);
-    expect(run.sessionListeners()).toBe(0);
-    expect(run.timers.armed.size).toBe(0);
   });
 
-  it('newSessionWithDraft — a key already on the page fills at once', async () => {
-    const run = setUpForDraft();
-    run.setSession('row-1', true);
+  // Each step that ends the prompt with no session, past the ones tested
+  // on their own below.
+  it.each<{
+    given: string;
+    options: Parameters<typeof setUp>[0];
+    reach: (run: ReturnType<typeof setUp>) => Promise<void>;
+  }>([
+    {
+      given: 'the default harness has no profiles',
+      options: { profiles: [] },
+      reach: flush,
+    },
+    {
+      given: 'the prompt cannot open',
+      options: {
+        answers: { recentFolders: () => Promise.reject(new Error('gone')) },
+      },
+      reach: flush,
+    },
+    {
+      given: 'Esc at the Project step',
+      options: { answers: { projects: () => Promise.resolve([aiDev]) } },
+      reach: async (run) => {
+        await flush();
+        expect(run.last().title).toBe(PROJECT_STEP_TITLE);
+        run.cancel();
+      },
+    },
+    {
+      given: 'Esc at the Profile step',
+      options: { profiles: [work, personal] },
+      reach: async (run) => {
+        await flush();
+        pickFolder(run.last(), '~/dev/app');
+        await flush();
+        expect(run.last().title).toBe('Profile');
+        run.cancel();
+      },
+    },
+    {
+      given: 'another list replacing a step',
+      options: {},
+      reach: async (run) => {
+        await flush();
+        run.openOther('Mode', ['plan', 'auto']);
+      },
+    },
+    {
+      given: 'the folder dialog failing',
+      options: {
+        answers: { chooseFolder: () => Promise.reject(new Error('no dialog')) },
+      },
+      reach: async (run) => {
+        await flush();
+        pickFolder(run.last(), CHOOSE_FOLDER_LABEL);
+        await flush();
+      },
+    },
+    {
+      given: 'a project’s fixed profile missing',
+      options: {
+        answers: {
+          projects: () => Promise.resolve([{ ...aiDev, profile: 'gone' }]),
+        },
+      },
+      reach: async (run) => {
+        await flush();
+        pickItem(run.last(), AI_DEV_LABEL);
+        await flush();
+      },
+    },
+    {
+      given: 'the target’s harness having no profiles',
+      options: {
+        harnesses: new Map([
+          ['claude', harnessInfo({ profiles: [work] })],
+          ['codex', harnessInfo({ profiles: [] })],
+        ]),
+        recent: [{ ...app, harness: 'codex' }],
+      },
+      reach: async (run) => {
+        await flush();
+        pickFolder(run.last(), '~/dev/app');
+        await flush();
+      },
+    },
+  ])(
+    'newSessionWithDraft — $given resolves null',
+    async ({ options, reach }) => {
+      const run = setUpForDraft(options);
+      const drafted = run.prompt.newSessionWithDraft(DRAFT);
 
-    const drafted = await draftStarted(run);
+      await reach(run);
 
-    await expect(drafted).resolves.toBe('row-1');
-    expect(run.fills).toEqual([['row-1', DRAFT]]);
-    expect(run.sessionListeners()).toBe(0);
-    expect(run.timers.armed.size).toBe(0);
-  });
+      await expect(drafted).resolves.toBeNull();
+      expect(run.started).toEqual([]);
+    },
+  );
 
   it('newSessionWithDraft — Esc at the first step resolves null', async () => {
     const run = setUpForDraft();
@@ -1855,6 +2008,7 @@ describe('start prompt newSessionWithDraft', () => {
     await flush();
     pickFolder(run.last(), '~/dev/app');
     await flush();
+    run.addRow('row-1');
     run.setSession('row-1', true);
 
     await expect(later).resolves.toBe('row-1');
@@ -1866,22 +2020,23 @@ describe('start prompt newSessionWithDraft', () => {
       answers: { start: () => Promise.reject(new Error('no claude')) },
     });
 
-    const drafted = await draftStarted(run);
+    const { drafted } = await draftStarted(run);
 
     await expect(drafted).resolves.toBeNull();
-    expect(run.sessionListeners()).toBe(0);
+    expect(run.listeners()).toBe(0);
   });
 
-  it('newSessionWithDraft — the page stopping resolves null and disposes the listener', async () => {
+  it('newSessionWithDraft — the page stopping resolves null and disposes the listeners', async () => {
     const run = setUpForDraft();
-    const drafted = await draftStarted(run);
-    expect(run.sessionListeners()).toBe(1);
+    const { drafted } = await draftStarted(run);
+    expect(run.listeners()).toBe(2);
 
     run.stop();
 
     await expect(drafted).resolves.toBeNull();
-    expect(run.sessionListeners()).toBe(0);
+    expect(run.listeners()).toBe(0);
     expect(run.timers.armed.size).toBe(0);
+    run.addRow('row-1');
     run.setSession('row-1', true);
     expect(run.fills).toEqual([]);
   });
@@ -1894,7 +2049,7 @@ describe('start prompt newSessionWithDraft', () => {
       },
     });
 
-    const drafted = await draftStarted(run);
+    const { drafted } = await draftStarted(run);
     run.signIns[0].finished?.(false);
 
     await expect(drafted).resolves.toBeNull();
@@ -1912,19 +2067,19 @@ describe('start prompt newSessionWithDraft', () => {
 
   it('newSessionWithDraft — the session closing before its key arrives resolves null', async () => {
     const run = setUpForDraft();
-    const drafted = await draftStarted(run);
+    const { drafted } = await draftStarted(run);
 
     run.setSession('row-1', false);
 
     await expect(drafted).resolves.toBeNull();
     expect(run.fills).toEqual([]);
-    expect(run.sessionListeners()).toBe(0);
+    expect(run.listeners()).toBe(0);
     expect(run.timers.armed.size).toBe(0);
   });
 
   it('newSessionWithDraft — no key within JOIN_WAIT_MS resolves null and logs', async () => {
     const run = setUpForDraft();
-    const drafted = await draftStarted(run);
+    const { drafted } = await draftStarted(run);
 
     run.timers.runAfter(JOIN_WAIT_MS);
 
@@ -1932,7 +2087,8 @@ describe('start prompt newSessionWithDraft', () => {
     expect(run.logs).toContain(
       'newSessionWithDraft: row-1 never reached the page',
     );
-    expect(run.sessionListeners()).toBe(0);
+    expect(run.listeners()).toBe(0);
+    run.addRow('row-1');
     run.setSession('row-1', true);
     expect(run.fills).toEqual([]);
   });

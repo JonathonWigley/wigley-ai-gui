@@ -23,7 +23,8 @@ import type {
   ResumeSectionRows,
   StartTarget,
 } from '../contract';
-import type { Picker, PickerHandle } from './picker';
+import type { SessionRow } from '../../sessions/contract';
+import type { Picker, PickerHandle, PickerRequest } from './picker';
 import {
   folderRowInput,
   profileRowInput,
@@ -73,9 +74,13 @@ export interface StartPromptDeps {
   toast(text: string, tone: ToastTone): void;
   // True once chat's page part stopped: a reply landing later does nothing.
   isStopped(): boolean;
-  // The page's `chat.session` slot, where a draft waits for its new session's
-  // key.
-  sessions: Pick<KeyedSlotReader<ChatSessionInfo>, 'get' | 'on'>;
+  // The page's `chat.session` and `sessions.rows` slots, whose updates a draft
+  // waits on for its new session's tab, the view hearing each first.
+  sessions: Pick<KeyedSlotReader<ChatSessionInfo>, 'on'>;
+  rows: Pick<KeyedSlotReader<SessionRow>, 'on'>;
+  // True once the Chat view holds the session's tab: its key and its row
+  // have both arrived.
+  hasTab(sessionId: string): boolean;
   // Puts `text` in the session's box and reveals its tab, as the
   // `fillComposer` export does.
   fillComposer(sessionId: string, text: string): void;
@@ -83,7 +88,7 @@ export interface StartPromptDeps {
 }
 
 // How long a draft waits, after its start resolved, for the new session's
-// `chat.session` key to reach the page.
+// tab.
 export const JOIN_WAIT_MS = 10_000;
 
 // `open` asks for a project — or, through `Other folder…` or with no
@@ -106,13 +111,15 @@ export const JOIN_WAIT_MS = 10_000;
 // `openForNewSession` asks the same way but lists no sections and no saved
 // sessions, so it starts a new session once the profile is signed in.
 // `newSessionWithDraft` opens as `openForNewSession` does, and once the
-// session it starts has its `chat.session` key, fills that session's box with
-// `text`, unsent; it resolves to the row id once filled. It resolves null, and
-// never rejects, when the prompt ends with no session (Esc at a step, a
-// sign-in ending signed out, a prompt that cannot open, a failed start), when
-// the prompt opens again, at `dispose`, when the new session's key leaves
-// before the fill, and `JOIN_WAIT_MS` after the start with no key, logging
-// `newSessionWithDraft: <rowId> never reached the page`.
+// session it starts has its Chat tab, fills that session's box with `text`,
+// unsent; it resolves to the row id once filled. It resolves null, and never
+// rejects, when the prompt ends with no session (Esc at a step, another picker
+// list replacing a step, a sign-in ending signed out, a prompt that cannot
+// open, a failed start), when the prompt opens again before the start, at
+// `dispose`, when the new session's key leaves before the fill, and
+// `JOIN_WAIT_MS` after the start with no tab, logging
+// `newSessionWithDraft: <rowId> never reached the page`. A draft whose session
+// started keeps waiting through a later open.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
 // `dispose` ends a draft's wait with null, as chat's page part stops.
 export interface StartPrompt {
@@ -124,13 +131,15 @@ export interface StartPrompt {
   dispose(): void;
 }
 
-// A `newSessionWithDraft` call while its open is current: the text, the end of
-// its promise, and its key listener and timer once its start resolved.
+// A `newSessionWithDraft` call until it resolves: the open carrying it, the
+// text, the end of its promise, and its slot listeners and timer once its
+// start resolved.
 interface DraftWait {
   opened: number;
   text: string;
   resolve(rowId: string | null): void;
-  listening: Disposable | null;
+  isEnded: boolean;
+  listening: Disposable[];
   timer: number | null;
 }
 
@@ -193,59 +202,82 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   // Counts the prompt's opens, so an answer can tell its own open is gone.
   let opens = 0;
 
-  // The draft the current open carries; null for none.
+  // The draft the current open carries until its start resolves; null for
+  // none.
   let draft: DraftWait | null = null;
+  // The drafts whose session started, each waiting for its tab.
+  const awaitingTab = new Set<DraftWait>();
 
-  // Ends `wait` with `rowId`, disposing its listener and timer; nothing once
+  // Ends `wait` with `rowId`, disposing its listeners and timer; nothing once
   // it has ended.
   const endDraft = (wait: DraftWait, rowId: string | null) => {
-    if (draft !== wait) {
+    if (wait.isEnded) {
       return;
     }
-    draft = null;
-    wait.listening?.dispose();
+    wait.isEnded = true;
+    if (draft === wait) {
+      draft = null;
+    }
+    awaitingTab.delete(wait);
+    for (const listening of wait.listening) {
+      listening.dispose();
+    }
     if (wait.timer !== null) {
       deps.timers.clear(wait.timer);
     }
     wait.resolve(rowId);
   };
 
-  // Fills the new session's box once its `chat.session` key is on the page:
-  // at once when it is there, else on the first update holding it.
-  const awaitSessionKey = (wait: DraftWait, rowId: string) => {
-    const fill = () => {
+  // Fills the new session's box once the view holds its tab: at once when it
+  // does, else on the first `chat.session` or `sessions.rows` update after
+  // which it does.
+  const awaitTab = (wait: DraftWait, rowId: string) => {
+    const fillOnceTabbed = () => {
+      if (!deps.hasTab(rowId)) {
+        return false;
+      }
       deps.fillComposer(rowId, wait.text);
       endDraft(wait, rowId);
+      return true;
     };
-    if (deps.sessions.get(rowId) !== undefined) {
-      fill();
+    if (fillOnceTabbed()) {
       return;
     }
-    wait.listening = deps.sessions.on((sessionId, info) => {
-      if (sessionId !== rowId) {
-        return;
-      }
-      if (info === undefined) {
-        log(`newSessionWithDraft: ${rowId} closed before its box filled`);
-        endDraft(wait, null);
-        return;
-      }
-      fill();
-    });
+    awaitingTab.add(wait);
+    wait.listening.push(
+      deps.sessions.on((sessionId, info) => {
+        if (sessionId !== rowId) {
+          return;
+        }
+        if (info === undefined) {
+          log(`newSessionWithDraft: ${rowId} closed before its box filled`);
+          endDraft(wait, null);
+          return;
+        }
+        fillOnceTabbed();
+      }),
+      deps.rows.on((sessionId) => {
+        if (sessionId === rowId) {
+          fillOnceTabbed();
+        }
+      }),
+    );
     wait.timer = deps.timers.set(() => {
       log(`newSessionWithDraft: ${rowId} never reached the page`);
       endDraft(wait, null);
     }, JOIN_WAIT_MS);
   };
 
-  // Open `opened`'s side of the draft it carries.
+  // Open `opened`'s side of the draft it carries; a started draft leaves the
+  // open, so a later open does not drop it.
   const draftHooksOf = (opened: number): DraftHooks => {
     const ownDraft = () => (draft?.opened === opened ? draft : null);
     return {
       started(rowId) {
         const wait = ownDraft();
         if (wait !== null) {
-          awaitSessionKey(wait, rowId);
+          draft = null;
+          awaitTab(wait, rowId);
         }
       },
       dropped() {
@@ -268,6 +300,32 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     }
     log(`${what} dropped: the start prompt opened again`);
     return true;
+  };
+
+  // True while the prompt opens one of its steps, which may replace its own
+  // shown step.
+  let isOpeningStep = false;
+
+  // Opens a step of `context`'s open, whose Esc, or another list replacing it,
+  // ends the open's draft.
+  const openStep = <T>(
+    context: PromptContext,
+    request: PickerRequest<T>,
+  ): PickerHandle => {
+    isOpeningStep = true;
+    try {
+      return deps.picker.open<T>({
+        ...request,
+        cancelled: () => context.draft.dropped(),
+        superseded: () => {
+          if (!isOpeningStep) {
+            context.draft.dropped();
+          }
+        },
+      });
+    } finally {
+      isOpeningStep = false;
+    }
   };
 
   // The sections' rows; none when they cannot be read.
@@ -296,8 +354,8 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       return [];
     });
 
-  // Opens the prompt, dropping the earlier open's draft; `carried` is the
-  // draft this open fills, null for none.
+  // Opens the prompt, dropping the earlier open's draft unless its session
+  // started; `carried` is the draft this open fills, null for none.
   const openPrompt = (
     offersSavedSessions: boolean,
     carried: Pick<DraftWait, 'text' | 'resolve'> | null = null,
@@ -312,7 +370,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     draft =
       carried === null
         ? null
-        : { ...carried, opened, listening: null, timer: null };
+        : { ...carried, opened, isEnded: false, listening: [], timer: null };
     const draftHooks = draftHooksOf(opened);
     void Promise.all([
       channel.invoke('recentFolders'),
@@ -388,7 +446,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       deps.paths,
     );
     const sectionRows = items.filter((item) => item.kind === 'section').length;
-    deps.picker.open<ProjectItem>({
+    openStep<ProjectItem>(context, {
       title: PROJECT_STEP_TITLE,
       items,
       label: (item) => item.label,
@@ -405,7 +463,6 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           openFolderStep(context);
         }
       },
-      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -419,7 +476,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       deps.paths,
     );
     const sectionRows = items.filter((item) => item.kind === 'section').length;
-    deps.picker.open<FolderItem>({
+    openStep<FolderItem>(context, {
       title: 'Folder',
       items,
       label: (item) => item.label,
@@ -444,7 +501,6 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           chooseFolder(context);
         }
       },
-      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -534,14 +590,13 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       checkProfile(context, target, profiles[0]);
       return;
     }
-    deps.picker.open<RegisteredProfile>({
+    openStep<RegisteredProfile>(context, {
       title: 'Profile',
       items: profiles,
       label: profileLabel,
       rowInput: profileRowInput,
       selected: preselectedProfileOf(context, target, profiles),
       picked: (profile) => checkProfile(context, target, profile),
-      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -746,33 +801,35 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   ) => {
     const showsSections = items.some((item) => item.kind === 'section');
     opened.items = items;
-    opened.shown = deps.picker.open<SessionItem<ProjectPastSessionRow>>({
-      title: SESSION_STEP_TITLE,
-      scope: 'resume',
-      archiveState: archiveStateOf,
-      items,
-      label: (item) => item.label,
-      rowInput: sessionRowInput,
-      section: (item) => sessionSection(item, showsSections),
-      selected,
-      picked: (item) => {
-        step = null;
-        if (item.kind === 'new') {
-          startSession(opened.context, opened.target, opened.profile);
-        } else {
-          resumeSession(
-            opened.context,
-            item.row.projectDir,
-            opened.profile.harnessId,
-            opened.profile.name,
-            item.row.hostSessionId,
-            shownTitle(item),
-            item.kind === 'section' && item.closed.headless === true,
-          );
-        }
+    opened.shown = openStep<SessionItem<ProjectPastSessionRow>>(
+      opened.context,
+      {
+        title: SESSION_STEP_TITLE,
+        scope: 'resume',
+        archiveState: archiveStateOf,
+        items,
+        label: (item) => item.label,
+        rowInput: sessionRowInput,
+        section: (item) => sessionSection(item, showsSections),
+        selected,
+        picked: (item) => {
+          step = null;
+          if (item.kind === 'new') {
+            startSession(opened.context, opened.target, opened.profile);
+          } else {
+            resumeSession(
+              opened.context,
+              item.row.projectDir,
+              opened.profile.harnessId,
+              opened.profile.name,
+              item.row.hostSessionId,
+              shownTitle(item),
+              item.kind === 'section' && item.closed.headless === true,
+            );
+          }
+        },
       },
-      cancelled: () => opened.context.draft.dropped(),
-    });
+    );
   };
 
   // Reopens the step on its changed rows, keeping the cursor on the item it
@@ -860,6 +917,9 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     dispose() {
       if (draft !== null) {
         endDraft(draft, null);
+      }
+      for (const wait of awaitingTab) {
+        endDraft(wait, null);
       }
     },
   };

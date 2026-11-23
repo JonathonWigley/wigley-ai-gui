@@ -397,6 +397,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       toast: services.toast,
       isStopped: () => isStopped,
       sessions: chatSessions,
+      rows,
+      hasTab: (sessionId) => view.session(sessionId) !== undefined,
       fillComposer: (sessionId, text) => fillComposerOf(sessionId, text),
       timers: services.timers,
     });

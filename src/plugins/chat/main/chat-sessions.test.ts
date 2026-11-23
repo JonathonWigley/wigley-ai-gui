@@ -4257,6 +4257,29 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.sessions()[0].headless).toBe(true);
   });
 
+  // Breaks if a clear drops the row's launch permissions, so a permissive
+  // worker's next process asks for every permission.
+  it('clear_PermissiveRow_KeepsPermissions', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    const sessionId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      permissions: 'auto',
+    });
+    await flush();
+
+    test.chat.clear(sessionId);
+    await flush();
+
+    expect(startsOf(test).map((start) => start.request.permissions)).toEqual([
+      'auto',
+      'auto',
+    ]);
+    expect(test.saved.last()?.sessions[0].permissions).toBe('auto');
+  });
+
   it('start_OpensTheRowNotHeadless', async () => {
     const test = setUp();
 
