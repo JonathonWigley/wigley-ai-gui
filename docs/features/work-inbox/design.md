@@ -33,7 +33,7 @@ The spike's record of the settled result is [`spike.md`](spike.md).
 | `work-board` | View: Board mode (`<Leader>kj`), drawn through its layouts from `work.state`. |
 
 Each view can be switched off alone; the data plugin keeps sweeping for the other. The views hold no state of their own
-beyond focus and selection, and every press is a `work` command, so a hook or a key reaches each action.
+beyond focus, selection and their place slots (`work-inbox.place`, `work-board.place`), and every press is a `work` command, so a hook or a key reaches each action.
 
 ## Flow
 
@@ -63,12 +63,16 @@ Auri sessions (chat.session, sessions.rows) ─┘
 ## The worker
 
 - **One session per job.** A sweep, and each Send, Move, Accept or nudge, is a job. The queue launches one at a time, a
-  fresh owned session each, and closes it once its row is idle with no background work, after a 5 s settle, as
-  auto-retro does. A fresh session keeps every job's context bounded; the conversation never grows across sweeps.
+  fresh owned session each, and ends it on an idle settle (its row idle with no background work for 5 s, as
+  auto-retro does), on its row's process ending, on the timeout, or on a close matched by the row's id or its host id,
+  so `/clear` on the worker row ends it too. Only the installed app's live run launches workers: a drive run or the dev
+  app queues jobs and logs each one not launched. A fresh session keeps every job's context bounded; the conversation never grows across sweeps.
 - **Queue.** A pure reducer over the queued jobs and the running one, saved in plugin data so a restart keeps queued
   presses. A sweep already queued is not queued twice, and a press for a target already queued replaces the queued one.
-  After a restart a job the quit cut short goes back to the head of the queue, and a running job whose row does not
-  come back within 30 s fails. A job that runs past 20 minutes is closed and fails.
+  After a restart a running job that never launched goes back to the head of the queue (an unlaunched sweep is dropped
+  when a sweep is already queued), and a launched one is kept for its row's return. A launched row has 30 s to report
+  its host id, else the row is closed and the job fails. A job that runs past 20 minutes is closed and fails. The
+  launched rows are recorded in `job-rows.json` (`work/main/job-rows.ts`).
 - **Unattended and permissive.** Each job launches `unattended` (a prompt is denied at once, never left waiting) and with
   chat's role-based `permissions: 'auto'`, which each harness maps to its most permissive launch mode, so connector
   calls need no allow rule. The worker's instructions are the only guard on what it writes: a sweep reads only, and a
@@ -77,7 +81,8 @@ Auri sessions (chat.session, sessions.rows) ─┘
   job's session. The page never reads a transcript.
 - **Harness-neutral text.** The instructions name capabilities ("your Slack tools", "your Jira tools"), never one
   harness's tool names.
-- **Status.** The status line in both views shows the running or last job, its time and outcome, and links to the last
+- **Status.** The status line in both views (the Board's layout also has an optional `problem` part, drawn in the status
+  slot under it while `work.json` was not read at start) shows the running or last job, its time and outcome, and links to the last
   finished job's transcript. A running job's row is hidden and owned, so it has no link until it ends.
 - **When.** Only while the app runs: one sweep at start, then a one-shot timer re-armed after each sweep. Interval 0
   turns the timer off; `W` still sweeps.

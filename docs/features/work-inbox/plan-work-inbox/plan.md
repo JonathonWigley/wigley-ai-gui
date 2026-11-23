@@ -297,4 +297,6 @@ Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 - 09: JOB_ROWS_FILE exported from start.ts; a failed reseed logs fixture not seeded · group 09
 - 12: work-inbox.box <D-Enter> is a plain bind, only <Esc> carries where: box; W is unbound in the box · group 12
 ### Review rounds
+- Fix round 1 (f1208c6e7..5c6c276f7): High: new async wait paths in the job runner (host wait, process-end close, row-id close match, rejecting enqueue), the worker launch gate, the picker supersede hook and the draft tab wait; correctness re-review runs.
+- Fix round 1 docs (W5): None: prose only (README, AGENTS.md, CHANGELOG, work-inbox design.md, one comment reflow in limited-processes.ts); closed on its commit.
 ### Test gate

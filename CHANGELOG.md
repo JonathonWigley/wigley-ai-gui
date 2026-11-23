@@ -26,7 +26,8 @@ changes for the user.
   moves the app suggests from your branches, commits, pull requests and sessions.
 - Background sweeps of Slack and Jira by unattended worker sessions every `work.intervalMinutes` while the app runs, or
   at once on `W`, with the `work.*` settings for channels, keywords, the Jira query, the Board columns and each signal's
-  column.
+  column. Worker sessions run with permission checks off, and launch only in the installed app's live run: the dev app
+  queues jobs and logs each one not launched.
 
 ### Changed
 

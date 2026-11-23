@@ -47,6 +47,8 @@ The app shows as Auri. Its executable, bundle and every path keep the name `wigl
 - Python 3 with the standard library only: the MCP relay, the hooks and the docs index run on it. The
   `programs.python` setting names it when the default lookup does not find it.
 - git.
+- The GitHub CLI (`gh`), logged in, for the Board's suggested moves from pull requests; without it those suggestions
+  are skipped.
 
 ## Install the app
 
