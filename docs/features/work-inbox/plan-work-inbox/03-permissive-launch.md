@@ -1,6 +1,6 @@
 # 03 — Role-based permissive launch
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses chat's saved-session format (`open-sessions.json`) and the process lifecycle (start, restart, relaunch restore, resume) into the claude-code harness's launch
 Wave: 1 · Depends on: none

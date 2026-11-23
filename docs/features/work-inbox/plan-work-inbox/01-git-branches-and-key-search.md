@@ -1,6 +1,6 @@
 # 01 — Git branch listing and key search
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `Git.branches` and `Git.commitsMatching`, which 07 consumes
 Wave: 1 · Depends on: none

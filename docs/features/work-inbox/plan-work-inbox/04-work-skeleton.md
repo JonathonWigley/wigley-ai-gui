@@ -1,6 +1,6 @@
 # 04 — Work plugin skeleton, contract and store
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · adds the persisted `work.json` format, its parse, and an atomic serial write chain that never overwrites a bad file, which every later work task builds on
 Wave: 1 · Depends on: none

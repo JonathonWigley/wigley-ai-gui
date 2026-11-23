@@ -1,6 +1,6 @@
 # 02 — Pull-request service over gh
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `PullRequests` contract and `MainServices.pullRequests`, which 07 consumes
 Wave: 1 · Depends on: none
