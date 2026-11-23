@@ -484,6 +484,34 @@ User-facing features, those other work builds on first.
   session, or run the command behind it (`install` through app-update's install line, `make` through workflow-large's
   Clear & make). It needs a way for a visual to ask the page to act, and which chips may run without a confirm.
   Source session: Claude Code 2d49f095-112d-44a6-acba-0359d2074186 in ai.
+- **Dock badge counts sessions that need the user** — *needs a feature plan*: the Dock badge counts only unviewed
+  scheduled runs (`docs/features/scheduled-tasks/design.md`), and session-titles leaves a needs-you badge out of
+  scope. Add a count of the sessions waiting on the user (an open form round, a pending approval), and a bounce when
+  one starts waiting while the app is hidden. What counts as waiting needs settling against session-titles'
+  activities. Reference: OpenCode 2.4.0 taskbar status (https://github.com/anomalyco/opencode/pull/65317). Accepted
+  in harness watch 2026-11-23 (`~/harness-watch/decisions.md`).
+- **Sidebar marks a session whose last turn was cut off** — *needs a feature plan*: a machine reboot or a dead host
+  ends a turn and the row just rests (`docs/features/session-host/design.md` § Intent), so nothing shows that the work
+  stopped partway. Mark such a row and offer a Continue action that resumes it. Reference: Qwen Code 0.28.4
+  "Continue" badge (https://github.com/QwenLM/qwen-code/pull/18044). Accepted in harness watch 2026-11-23
+  (`~/harness-watch/decisions.md`).
+- **Edits made through the shell or by another session are attributed** — *needs a feature plan*: a session's
+  changed files miss files changed by a shell command (`sed -i`, a heredoc, a script), and sessions share clones and
+  worktrees, so two sessions editing one file go unseen. Count shell edits as the session's own, and mark an edit that
+  overlaps another session's instead of crediting it to the wrong one. Reference: Nimbalyst 0.84.3
+  (https://github.com/nimbalyst/nimbalyst/releases/tag/v0.84.3). Accepted in harness watch 2026-11-23
+  (`~/harness-watch/decisions.md`).
+- **Scheduled tasks start on events** — *needs a feature plan*: scheduled tasks start only by clock or cron. Add
+  event triggers — a chatroom post, a land on `main`, a CI result, an MCP server event — and settle which events the
+  app can observe and how a run receives the event's details. Reference: OpenCode 2.4.0 Automations
+  (https://github.com/anomalyco/opencode/pull/65296), OpenHands 1.43.0. Accepted in harness watch 2026-11-23
+  (`~/harness-watch/decisions.md`).
+- **Side questions on a running session** — *needs a feature plan*: the user cannot ask about a running session
+  without interrupting its turn. Fork the session's context into a short background session with read-only tools,
+  answer there, and leave the main turn untouched. Claude Code's `/btw` does this in its terminal UI only. Reference:
+  OpenClaw 2026.11.10-beta.2 side questions
+  (https://github.com/openclaw/openclaw/releases/tag/v2026.11.10-beta.2). Accepted in harness watch 2026-11-23
+  (`~/harness-watch/decisions.md`).
 
 ## Code cleanup
 
