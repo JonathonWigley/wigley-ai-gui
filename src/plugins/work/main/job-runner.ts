@@ -596,7 +596,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     );
   };
 
-  // Claims the running job's restored row as started, taking the row's id and current host, then arms its timeout
+  // Claims the running job's restored row as started, taking the row's id and current host (or the saved host while the row has none), then arms its timeout
   // and checks it for done.
   const claimRestored = async (row: SessionRow) => {
     const host = row.hostSessionId ?? queue.running?.hostSessionId ?? null;

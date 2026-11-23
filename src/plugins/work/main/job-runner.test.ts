@@ -903,21 +903,39 @@ describe('createJobRunner', () => {
     expect(part.logs).toEqual([]);
   });
 
-  it.each<{ case: string; host: string; isLate: boolean }>([
-    { case: 'on its launch host, at start', host: 'host-9', isLate: false },
-    { case: 'on its launch host, late', host: 'host-9', isLate: true },
+  it.each<{ case: string; host: string; rowId: string; isLate: boolean }>([
+    {
+      case: 'on its launch host, at start',
+      host: 'host-9',
+      rowId: 'row-9',
+      isLate: false,
+    },
+    {
+      case: 'on its launch host, late',
+      host: 'host-9',
+      rowId: 'row-9',
+      isLate: true,
+    },
     {
       case: 'a /clear then a restart claims the row',
       host: 'host-cleared',
+      rowId: 'row-9',
       isLate: false,
     },
     {
       case: 'a /clear then a restart claims the row, late',
       host: 'host-cleared',
+      rowId: 'row-9',
       isLate: true,
     },
-  ])('restart_claimsRestoredRow: $case', async ({ host, isLate }) => {
-    const restored = workRow('row-9', host);
+    {
+      case: 'a new row id on the saved host claims the row',
+      host: 'host-9',
+      rowId: 'row-new',
+      isLate: false,
+    },
+  ])('restart_claimsRestoredRow: $case', async ({ host, rowId, isLate }) => {
+    const restored = workRow(rowId, host);
     const part = await runnerOver({
       savedQueue: savedRunning(),
       rows: isLate ? [] : [restored],
@@ -925,7 +943,7 @@ describe('createJobRunner', () => {
     await part.start();
     part.advance(10_000);
     if (isLate) {
-      part.rows.set('row-9', restored);
+      part.rows.set(rowId, restored);
     }
     await flush();
     part.advance(RESTORE_WAIT_MS);
@@ -934,40 +952,64 @@ describe('createJobRunner', () => {
     expect(part.closes).toEqual([]);
     expect(part.last()).toBeNull();
     expect(part.lastQueueWrite()?.running?.hostSessionId).toBe(host);
+    expect(part.lastQueueWrite()?.running?.rowId).toBe(rowId);
 
-    part.info.set('row-9', sessionInfo('row-9', 'idle'));
+    part.info.set(rowId, sessionInfo(rowId, 'idle'));
     part.advance(SETTLE_MS);
     await flush();
 
-    expect(part.closes).toEqual([['row-9', 'finished']]);
+    expect(part.closes).toEqual([[rowId, 'finished']]);
     expect(part.last()).toEqual(
-      expect.objectContaining(
-        lastOf('sweep', 'failed', 'row-9', NO_REPORT_NOTE),
-      ),
+      expect.objectContaining(lastOf('sweep', 'failed', rowId, NO_REPORT_NOTE)),
     );
   });
 
-  it('hostChanged_runningRow_jobFollowsHost', async () => {
-    const part = await runnerOver();
-    await part.start();
-    await part.enqueue(SWEEP);
+  it.each<{ case: string; isIdle: boolean; note: string }>([
+    { case: 'then times out', isIdle: false, note: TIMEOUT_NOTE },
+    {
+      case: 'then settles idle and closes',
+      isIdle: true,
+      note: NO_REPORT_NOTE,
+    },
+  ])(
+    'hostChanged_runningRow_jobFollowsHost: $case',
+    async ({ isIdle, note }) => {
+      const part = await runnerOver();
+      await part.start();
+      await part.enqueue(SWEEP);
 
-    part.rows.set('row-1', workRow('row-1', 'host-cleared'));
-    await flush();
+      if (isIdle) {
+        part.emit('chat.turnStarted', { sessionId: 'row-1' });
+        await flush();
+        part.info.set('row-1', sessionInfo('row-1', 'idle'));
+        await flush();
+        part.advance(SETTLE_MS - 1);
+      }
+      part.rows.set('row-1', workRow('row-1', 'host-cleared'));
+      await flush();
 
-    expect(part.lastQueueWrite()?.running?.hostSessionId).toBe('host-cleared');
-    expect(part.runner.jobOf(agentSession(null, 'host-cleared'))).toEqual(
-      SWEEP,
-    );
-    expect(part.runner.jobOf(agentSession(null, 'host-1'))).toBeNull();
+      expect(part.lastQueueWrite()?.running?.hostSessionId).toBe(
+        'host-cleared',
+      );
+      expect(part.runner.jobOf(agentSession(null, 'host-cleared'))).toEqual(
+        SWEEP,
+      );
+      expect(part.runner.jobOf(agentSession(null, 'host-1'))).toBeNull();
 
-    part.advance(JOB_TIMEOUT_MS);
-    await flush();
+      if (isIdle) {
+        part.advance(1);
+        await flush();
+        expect(part.closes).toEqual([['row-1', 'finished']]);
+      } else {
+        part.advance(JOB_TIMEOUT_MS);
+        await flush();
+      }
 
-    expect(part.last()).toEqual(
-      expect.objectContaining(lastOf('sweep', 'failed', 'row-1', TIMEOUT_NOTE)),
-    );
-  });
+      expect(part.last()).toEqual(
+        expect.objectContaining(lastOf('sweep', 'failed', 'row-1', note)),
+      );
+    },
+  );
 
   describe('beforeStart', () => {
     it('beforeStart_enqueue_staysPendingAndListed', async () => {
