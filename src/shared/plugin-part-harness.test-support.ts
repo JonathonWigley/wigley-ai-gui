@@ -332,7 +332,8 @@ interface HarnessWorld {
   state: SlotStore;
   commandRuns: HarnessCommandRun[];
   commands: RuntimeCommands<any>;
-  // Every command the harness's manifests declare, as the served config holds.
+  // The core commands and every command the harness's manifests declare, as
+  // the served config holds.
   declared: Readonly<Record<CommandId, CommandInfo>>;
 }
 
@@ -1564,8 +1565,8 @@ function fakePageApi(
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
       label: (id) => id,
-      // Any command the harness's manifests declare, as the served config
-      // holds; a fake dependency's commands stay absent.
+      // Any core command or command the harness's manifests declare, as the
+      // served config holds; a fake dependency's commands stay absent.
       command: (id) =>
         Object.hasOwn(world.declared, id) ? world.declared[id] : undefined,
       scopes: [],

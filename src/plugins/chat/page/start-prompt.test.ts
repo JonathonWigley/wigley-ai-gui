@@ -2065,10 +2065,11 @@ describe('start prompt newSessionWithDraft', () => {
     expect(run.opened).toEqual([]);
   });
 
-  it('newSessionWithDraft — the session closing before its key arrives resolves null', async () => {
+  it('newSessionWithDraft — the session key leaving before its tab exists resolves null', async () => {
     const run = setUpForDraft();
     const { drafted } = await draftStarted(run);
 
+    run.setSession('row-1', true);
     run.setSession('row-1', false);
 
     await expect(drafted).resolves.toBeNull();
@@ -2077,7 +2078,7 @@ describe('start prompt newSessionWithDraft', () => {
     expect(run.timers.armed.size).toBe(0);
   });
 
-  it('newSessionWithDraft — no key within JOIN_WAIT_MS resolves null and logs', async () => {
+  it('newSessionWithDraft — no tab within JOIN_WAIT_MS resolves null and logs', async () => {
     const run = setUpForDraft();
     const { drafted } = await draftStarted(run);
 
