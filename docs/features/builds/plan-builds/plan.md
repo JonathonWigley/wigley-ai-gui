@@ -319,7 +319,7 @@ Critical path: 02 → 06 → 07 → 08 → 09
 - [x] [README and changelog](08-readme-changelog.md) — after 03, 04, 05, 06, 07
 
 ### Wave 5
-- [ ] [Doc re-read](09-doc-reread.md) — after 07, 08
+- [x] [Doc re-read](09-doc-reread.md) — after 07, 08
 - [ ] [Final verification](10-final-verification.md)
 
 ## Run log
@@ -333,6 +333,7 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - 06 · hard · 2863e3ce3 · diff read: buildsPagePart, BuildsLayout, CompleteBuildsLayout, readBuildsLayout, every builds-view-model Produces and the builds.mode demo step present; wave typecheck and lint pass · concerns: movedKey is a fifth per-plugin copy of the clamped cursor move; <Leader>mq is bound before 07 names the <Leader>m group, so the keymap check may fail until 07; start.test.ts reads row numbers from the default layout's row text
 - 07 · hard · 578256e7a · diff read: BUILDING_ACTIVITY, rowLineInput, isBuilding, hubBuildInputs, offerCardInput, findRecord, startSessionParts, registerSessionDemoStep, layout inputs and the builds.session step present; layout contract registered in main; wave typecheck and lint pass · concerns: card look unchecked (uses --wg-radius-md, --wg-focus-border); the leave test checks only the last base scope; session tests sit in a sibling describe in start.test.ts
 - 08 · standard · 82ec3fe68 · diff read: README settings, plugin and skill rows and four changelog Added lines present; every key, command and setting checked against the landed manifests and keymap · concerns: none
+- 09 · standard · dc1fa4dd3 · diff read: every builds planned mark removed; the one left (AGENTS.md shareable-app) is another plan's; check_manifests.py passes at 2.28.4 · concerns: Builds mode side-bar dots and filter-chip layout lines not checked line by line
 ### Contract changes
 - 02 BuildsChannel.branches: returns Promise<{name; sha}[] | {problem}> inline rather than GitRemoteHead[], as the task doc directs; shape is identical · consumers: 03, 06
 - 06 toasts: the spec's warning tone lands as info, since ToastTone (src/contracts/plugin.ts) is success | info | error · consumers: 10 (live check expects the info look)

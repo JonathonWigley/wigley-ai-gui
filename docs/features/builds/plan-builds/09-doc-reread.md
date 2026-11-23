@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · a doc-only task that writes prose against landed code
 Wave: 5 · Depends on: 07 (it reads the landed code of every code task), 08 (it reads the landed README)
@@ -50,3 +50,5 @@ report. `check_manifests.py` passes when the manifests changed.
 Commit: one commit for the group: `builds: re-read the docs against the landed code`.
 
 ## Proof
+
+Commit dc1fa4dd3 · proof: diff read: every builds planned mark removed; the one left (AGENTS.md shareable-app) is another plan's; check_manifests.py passes at 2.28.4 · concerns: Builds mode side-bar dots and filter-chip layout lines not checked line by line
