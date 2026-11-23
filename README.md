@@ -183,6 +183,7 @@ By plugin:
 | `system-stats` | `system-stats.refreshSeconds`, `system-stats.processRows`, `system-stats.layout` |
 | `visual` | `visual.layout` |
 | `scheduling` | `scheduling.layout` |
+| `builds` | `builds.backends`, `builds.layout` |
 | `demo` | `demo.layout`, `demo.autoplaySeconds` |
 | `app-update` | `app-update.layout` |
 
@@ -196,6 +197,8 @@ Settings worth setting first:
   `{ "workflow", "seconds" }` records whose stages run their `auto` action after a countdown.
 - `unity-pool.scriptPath` — the `unity-pool` script the Unity pool panel runs. The plugin is off by default: remove
   `unity-pool` from `plugins.disabled` to use it.
+- `builds.backends` — the build backends this machine uses (`teamcity` or `local`), each with the games it
+  tracks, their build kinds and their sets. An agent adds a game on the user's ask.
 - `docs.scriptPath` — empty runs the app's own `agent-plugin/scripts/docs-index/docs_index.py`.
 
 ## Built-in plugins
@@ -243,6 +246,9 @@ Every feature is a plugin in `src/plugins/<id>/`. Settings mode's Plugins sectio
 | `visual` | Draws the html code blocks an agent writes as live visuals. |
 | `markdown-blocks` | Draws the `:::changes`, `:::tree` and `:::details` blocks agents write. |
 | `scheduling` | Runs agent tasks on a schedule as new headless sessions, also while the app is closed. |
+| `builds` | Builds mode: the CI and local builds of the tracked games, queued in one press; each session's builds on its row and in its hub, and a build offer above its composer. |
+| `builds-teamcity` | The `teamcity` build backend, over the TeamCity CLI. |
+| `builds-local` | The `local` build backend: a command per build kind, run in the game's clone. |
 | `window` | The command that brings the app forward from any other app. |
 | `demo` | Walks through every feature on sample data, one step at a time. |
 | `app-update` | Shows Update available when origin's `main` has moved past the installed app's commit. |
@@ -303,6 +309,7 @@ The `auri` plugin's skills, in `agent-plugin/skills/`, each invoked as `auri:<na
 | `primer` | Opening a primer and reading the edited triage. |
 | `audio-picker` | Opening an audio picker and reading the picks. |
 | `live-view` | Streaming a Unity Game View, the `liveView` command patterns, and the probe. |
+| `builds` | Queueing and offering builds, reading `builds.snapshot`, and tracking a game in `builds.backends`. |
 | `writing-auri-json` | Writing a plugin's `auri.json`. |
 
 ## Hooks
