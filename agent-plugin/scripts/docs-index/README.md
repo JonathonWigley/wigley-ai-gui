@@ -386,8 +386,9 @@ All three commands print or write one document:
 
 ## Headings and links
 
-`doc_fields.py` fills both fields on every command's entries; `section_refs.py` holds the one §
-parser, which `scripts/check_pointers.py` imports too.
+`doc_fields.py` fills both fields on every command's entries; `section_refs.py` holds the § parser,
+of which the wigley marketplace's `scripts/pointer_parser/section_refs.py` (read by its
+`scripts/check_pointers.py`) is a copy.
 
 **Which entries carry them.** An entry has a body when `line` is `null`, its kind is not `hook` or
 `plugin`, and `path` ends in `.md`.

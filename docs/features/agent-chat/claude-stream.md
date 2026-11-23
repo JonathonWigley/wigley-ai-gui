@@ -666,7 +666,9 @@ call needing permission:
 `mcp__plugin_wigley_wigley-primer__open_primer`. Its `mcp_servers` named `plugin:wigley:wigley-forms` (connected).
 This confirms the prefix `mcp__plugin_wigley_wigley-forms__`: the forms plugin's tools are named
 `mcp__plugin_wigley_wigley-forms__<tool>`, so `mcp__plugin_wigley_wigley-forms__permission_prompt` is the right name
-once the server exposes that tool. On this machine the plugin did not yet expose it.
+once the server exposes that tool. On this machine the plugin did not yet expose it. This capture predates the `auri`
+plugin (shareable-app): the app now pins `mcp__plugin_auri_auri__permission_prompt` (`CLAUDE_PERMISSION_TOOL`), and
+the server is `plugin:auri:auri`; the samples above keep the old names as captured.
 
 - The `--permission-prompt-tool` tool is **hidden from the model**: in the spike runs, init's `mcp_servers` listed
   `{"name":"spike","status":"connected","source":"dynamic"}`, but `tools` held no `mcp__spike__*` entry.

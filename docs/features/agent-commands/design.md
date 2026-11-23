@@ -69,8 +69,9 @@ any other. The set:
   `renameSession` shows Sessions mode, since its dialog waits on the user's typing. A targeted `closeSession` skips the
   session's end-session confirm, since the agent's run already asked the user, but main still refuses a session an
   open form holds.
-- **workflow** — `mainAction`, `toggleHeadless`; **workflow-large** — `clearAndMake`, `cancelCountdown`,
-  `makeInNewSession`, `resumeMake`, `retro`, `dismiss`: the stage action runs for the target.
+- **workflow** — `mainAction`, `toggleHeadless`, `cancelCountdown`, and each declared action, registered as
+  `workflow.<workflow id>-<action id>` (the sample Large's `wigley-large-clearAndMake`, `-makeInNewSession`,
+  `-resumeMake`, `-retro`, `-dismiss`): the stage action runs for the target.
 
 Every other command — one that opens a UI over the user's view, moves focus, or acts on a cursor, pane or list — takes
 no target. Run without `session`, it acts as a key does.
@@ -106,7 +107,7 @@ The set:
 - `docs.trash`, `docs.conflictReload`, `docs.conflictOverwrite`, `docs.confirmYes`, `docs.answerConfirm`
 - `notes.remove`, `notes.removeSession`, `notes.removeImageAt`, `notes.discard`, `notes.confirmYes`
 - `settings.reset`, `settings.removeBind`
-- `workflow.mainAction`, `workflow.stageAction`, `workflow-large.clearAndMake`, `workflow-large.resumeMake`
+- `workflow.mainAction`, `workflow.stageAction`, and each declared action marked `risky` (the sample Large's `workflow.wigley-large-clearAndMake` and `workflow.wigley-large-resumeMake`)
 - `forms.submit`, `forms.confirmCancel`, `primer.submit`, `primer.confirmCancel`, `audio-picker.submit`,
   `audio-picker.confirmCancel`
 - `unity-pool.open`, `live-view.openScreenSettings`, `core.openLink`

@@ -423,7 +423,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Profile:** every session row whose harness the app runs opens its row parts' line with a neutral Tag naming its
   profile: the name chat's profiles setting gives the session's config folder (`work`, `personal`), else the folder's
   last segment. A session with no config folder of its own counts as its harness's default folder.
-- **Unity pool:** a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
+- **Unity pool** (the `unity-pool` plugin, off in the default settings): a session row holding a pool clone carries a neutral Tag, `Unity 3`, in its row parts' line, and
   one waiting in a pool's queue an `attention` Tag, `Unity: queued 2nd`; one Tag per pool. While the shown session is
   in a pool, the right bar holds the pool panel after the usage details: a section header `Unity pool · <pool>`, a
   `text-12` `fg-tertiary` summary of the counts (`3 free · 1 held`: free always, the rest while not zero), then a
@@ -628,12 +628,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `fg-tertiary`. The editor takes the details' place and follows Settings' rows: each a label and its value or box in an
   InputFrame, the hint under it in `fg-tertiary`, the problem in `status-error`, the environment note last in
   `fg-tertiary`.
-- **Workflow:** three parts, each drawn by the `default` layout of the session's workflow, Spike's, Small's, Medium's or
-  Large's own (`docs/features/workflow/design.md`). The chip is one line under a session row: the level's badge, one letter
-  (X, S, M or L) in the plugin token `--wg-workflow-spike-badge` (default `fg-secondary`), `--wg-workflow-small-badge` (`status-info`), `--wg-workflow-medium-badge` (`accent`)
-  or `--wg-workflow-large-badge` (`status-warning`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
+- **Workflow:** three parts, each drawn by the `workflow` plugin's `default` layout for every workflow: the built-in Checklist flow
+  and each workflow an agent plugin's `auri.json` declares (`docs/features/workflow/design.md`). The chip is one line under a session row: the
+  workflow's badge, one letter (`C` on the Checklist flow) in the workflow's `badgeColor`, a CSS colour or theme token (default `accent`), then the stage's word as a Tag in its status's tone (`running`, pulsing at
   `duration-pulse`, while running; `success`, opening on a check, when done; neutral while paused or ready), unless the
-  row's label says it, and Large's countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
+  row's label says it, and the countdown; an idle session draws no stage, and on a row too narrow for the chip the row's usage bar shrinks away first, then the chip's tag ellipsizes (on a footer narrow enough that the bar moves to the line below, the tag ellipsizes alone); a session that finished a turn with no
   workflow started draws one error Tag, `No workflow`, in `status-error`, and while the session's row holds a running
   activity (chat's working: a turn, subagent or background task running) the chip ends on a running `Working` Tag,
   pulsing, unless its stage tag is already running; while the session is headless the chip ends on an `accent` `Headless`
@@ -645,11 +644,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   under reduced motion), paused in `fg` semibold, ready in `accent` semibold. A stage outside the stepper draws its status
   mark and line instead. Every stage's strip keeps the height of a line
   holding the action and starts on the composer's left edge; an idle session draws no strip. The side
-  pane sits beside the transcript from the first read of a plan (Large) or the agent's first checklist: the status mark and line (pending in `fg-tertiary`,
+  pane sits beside the transcript from the first read of a plan (a plan pane) or the agent's first checklist: the status mark and line (pending in `fg-tertiary`,
   running in `status-running`, ready in `accent`, paused in `status-warning`, done in `status-success`), the stage's
-  detail, a progress meter, the checklist and every action as buttons. Large's checklist, titled `Plan`, folds finished waves into one
-  toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
-  one row each under `Up next`, all on the pane's left edge. Spike's, Small's and Medium's pane, titled `Checklist`, draws the status
+  detail, a progress meter, the checklist and every action as buttons. A plan pane (`sidePane.kind` `plan`, titled `Plan` in Large) folds finished waves into one
+  toggle row, shows the current wave under its header with a mark per task (filled once done), and lists each later wave
+  in full under its own header, all on the pane's left edge. A checklist pane (`sidePane.kind` `checklist`, titled `Checklist` in the Checklist flow, Spike, Small and Medium) draws the status
   mark and line, a `<checked>/<total>` line, the progress meter and one flat list with a mark per item, and no actions. An idle session, a session with no plan or checklist and a hidden pane draw no pane. A
   disabled action draws disabled.
 - **Floating:** pickers (the leader search's rows included), help and dialogs use the floating material with `row-list` rows
@@ -683,7 +682,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-large-strip-*`, `workflow-large-side-pane-hidden`, `workflow-spike-*`, `workflow-small-*` and `workflow-medium-*`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-strip-*`, `workflow-side-pane-hidden`, `workflow-spike-*`, `workflow-small-*` and `workflow-medium-*`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

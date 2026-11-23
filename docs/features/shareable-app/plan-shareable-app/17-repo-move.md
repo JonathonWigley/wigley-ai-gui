@@ -1,6 +1,6 @@
 # 17 — Move the app to JonathonWigley/wigley-ai-gui
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · history rewrite, a force push and a sweep across two repos and the user's personal files, with an edit to `wigley-repo-files` that no existing pattern settles
 Wave: 8 · Depends on: 01–15 (the split takes the app folder as `ai`'s `main` holds it, so every app change must have landed first; 15's removal of the work email from `package.json` and its boundary lint must be in the tree the split carries), 19 (19's app-repo mode lands the new clone's work in step 11; the split takes the app folder as `ai`'s `main` holds it, so every app change must have landed first; 15's removal of the work email from `package.json` and its boundary lint must be in the tree the split carries)

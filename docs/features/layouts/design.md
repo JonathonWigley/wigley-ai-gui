@@ -156,7 +156,7 @@ does.
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key shelf, the leader search's rows, the title bar's Keys button |
-| `workflow-spike`, `workflow-small`, `workflow-medium`, `workflow-large` | `workflow-spike.layout`, `workflow-small.layout`, `workflow-medium.layout`, `workflow-large.layout` | each workflow's own: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (Large's status, plan checklist by wave and actions; Spike's, Small's and Medium's status, count and flat checklist) |
+| `workflow` | `workflow.layout` | one layout every declared workflow draws with: the status chip under each session row (the level's badge and the stage), the strip above the Chat composer (the stepper's trail and the main action), the side pane beside the transcript (a plan workflow's status, plan checklist by wave and actions; any other's status, count and flat checklist) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its widen and expand controls, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.

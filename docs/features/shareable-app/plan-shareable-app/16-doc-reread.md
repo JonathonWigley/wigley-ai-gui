@@ -1,6 +1,6 @@
 # 16 — Doc re-read against the built code
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · doc-only: prose checked against settled, landed code
 Wave: 9 · Depends on: 01–15 (it reads every landed task's code against the docs), 17 (it runs in the new clone 17 makes, after 17's sweep has fixed the paths)

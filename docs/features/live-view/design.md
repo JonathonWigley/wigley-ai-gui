@@ -88,9 +88,10 @@ The app's opening reads the editor's Game View rect with the same script the `wi
 `capture.py` runs, so both read one rect: `WigleyCapture.cs`'s `probe` reply's `window`, `[x, y, width, height]` in
 top-left global screen points.
 
-- **The script:** `skills/unity-playtest/unity/WigleyCapture.cs` in the first wigley plugin install among the
-  registered profiles' installs (`locateWigleyFile`, `src/shared/wigley-install.ts`, which also finds docs'
-  `docs_index.py`). The file runs as it is: its Recorder code compiles only under a define `capture.py` adds, and
+- **The script:** the `probe.file` of the first installed plugin whose `auri.json` `liveView` section names a probe,
+  resolved against that plugin's root (`probeScriptOf`, `src/plugins/live-view/main/live-view-reader.ts`); with none,
+  there is no probe and the view streams the whole editor window. The user's `wigley` plugin names
+  `skills/unity-playtest/unity/WigleyCapture.cs`. The file runs as it is: its Recorder code compiles only under a define `capture.py` adds, and
   the probe needs none.
 - **The CLI:** `services.processes.resolveProgram('unity')`, `unity` on the PATH main swaps in from the login
   shell, else `~/.unity/bin/unity`, as `capture.py` looks it up.

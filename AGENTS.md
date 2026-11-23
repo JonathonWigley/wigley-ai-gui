@@ -303,6 +303,7 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
+  contributions/ manifest.ts, contract.ts (`FeatureReader`, `ContributionsMainExports` with `registerFeature`, `strategies` and `onChanged`, `pickStrategy`, `strategyControlKind`), main/ (reads the `auri.json` at the root of the app's own agent plugin and of every plugin a registered profile installs, watches them, hands each section to the reader the feature registered under its key, and holds a refused section as a config problem), page/ (the `strategy:<feature>` and `strategy-list:workflows` control kinds Settings draws); draws nothing; starts ahead of every feature that reads it; `docs/features/feature-contributions/design.md`
   sessions/      manifest.ts, contract.ts (also the `sessions.rows`, `sessions.selection`, `sessions.active`,
                  `sessions.activity` and `sessions.place` slots, the last holding each session's selected tab, selection
                  count and hidden popups, `followRows`, and the row's `owner`: the plugin a row with no place in the side bar belongs to), session-title.ts (the title rules main and page share), main/ (the
@@ -337,18 +338,18 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layouts/ (its Layout contract and `default` layout); `docs/features/chat-bar/design.md` § The session hub
   live-view/     manifest.ts, contract.ts (the `live-view.picks` slot: each session's stream pick), window-pick.ts (the
                  editor window lookup, the crop and the moved check, and `demoStreamPick`, the window the demo step streams: the Unity editor, else the app's own, as pure functions), playtest-command.ts (a Bash
-                 command's playtest signal, a pure function), main/ (the `show_live_view` and `hide_live_view` tools,
+                 command's playtest signal, a pure function), main/ (`live-view-reader.ts`, the reader of the `liveView` section of `auri.json`; the `show_live_view` and `hide_live_view` tools,
                  the window list through `services.screenCapture`, the playtest watch: opens a session's Live view when
-                 a live `editor.playmode start` / `editor_play` / `capture.py start` Bash call succeeds, read through
-                 chat's entries, cropped to the Game View that `game-view-probe.ts` reads by running the wigley
-                 install's `WigleyCapture.cs` probe through the `unity` CLI, else the whole editor, and closes the view
-                 it opened on `editor.playmode stop` / `editor_stop` for the same project; the preview sample, its
+                 a live Bash call matching an installed `liveView` strategy's `open` patterns succeeds, read through
+                 chat's entries, cropped to the Game View that `game-view-probe.ts` reads by running the strategy's `probe`
+                 script through the `unity` CLI, else the whole editor, and closes the view
+                 it opened on a call matching its `close` patterns for the same project; the preview sample, its
                  self-test script),
                  page/ (live-section.ts, the session hub's Live section through chat's `addSidePart` with `shrinksLast`,
                  streaming only while on screen; stream-source.ts, the capture or `sample:` stream; layout/, the layout
                  reader), layouts/ (its Layout contract and `default` layout); `docs/features/live-view/design.md`
-  auto-retro/    manifest.ts, contract.ts, main/ (hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
-                 close or a clear in `queue.json` in its plugin data, launches one unattended `/wigley:retro auto` session at a time through chat's `launch`, and
+  auto-retro/    manifest.ts, contract.ts, main/ (`retro-reader.ts`, the reader of the `retro` section of `auri.json`; hears `chat.sessionClosed` and `chat.sessionCleared`, queues a user
+                 close or a clear, when the picked retro strategy's `on` lists it, in `queue.json` in its plugin data, launches one unattended session at a time through chat's `launch`, running the strategy's `command` with `{sessions}` replaced by the ended hosts' ids in its `folder`, and
                  closes it through chat's `close` once its turn ends with nothing running), page/ (the Retro section
                  through sessions' `addSection`, its header's queued count), layouts/ (its Layout contract and `default`
                  layout); `docs/features/auto-retro/design.md`
@@ -527,7 +528,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  session but an error ends on chat's `HEADLESS_NOTE`, and the first from either tool after headless turns off on
                  `HEADLESS_OFF_NOTE`: one line state per app session across tool sessions, started at the first result under each host
                  id from chat's `launchedHeadless`, the flag the session's process started with), appends a line to
-                 `runs.jsonl` when a workflow finishes, and exports `addWorkflow`, which each workflow plugin calls), page/
+                 `runs.jsonl` when a workflow finishes, reads the `workflows` and `planFormat` sections of `auri.json` through `contributions`, builds each declared workflow and the built-in Checklist flow through `addWorkflow`, and exports `addWorkflow`), page/
                  (hosts the row chip, the composer strip and the side pane, each drawn through the flow's workflow's layout,
                  and the preview; exports `addWorkflow`, `createWorkflowDraw` and `showSample`, which draws a given flow in place of a session's own until disposed), layouts/ (the workflow Layout contract and kit, no
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the strip ends on the Headless chip (`kit.headlessChip`), which runs `toggleHeadless`, and the row shows a `Headless` tag while the session is headless; the chip's `No workflow`, `Working` and `Headless` tags are the exception to
@@ -818,7 +819,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, `Plan` for Large and `Checklist` for the others),
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge or by Alt+Shift+h/l while the hub has the keys. The workflow plugin's side pane (one section per workflow, a plan pane or a checklist as the workflow's `sidePane` declares),
   the agent-skills plugin's list, the context-sources plugin's breakdown and the live-view plugin's stream are four. A part marked `shrinksLast` keeps its height while the others give theirs up, and one marked `keepsHeight` (the workflow's side pane) keeps its height ahead of every other, a `shrinksLast` one included. A side part takes no key scope and no stop: the hub is a pane of chat's
   own (Alt+l from the transcript or the box), whose cursor walks the section heads chat draws, `Enter` or `l`
   folding one.
@@ -1340,7 +1341,7 @@ name and prints its file and line.
   only the process the endpoint file names, waits for it to exit, starts the app and waits for its channel; a hand
   `pkill` misses processes and hits drive runs. A page edit hot reloads with no restart; a main-process edit needs
   one. The stable app runs the build `npm run install-app` last installed, and that command already restarts it.
-  The forms README's Restarting the app holds the rules.
+  The relay README's Restarting the app holds the rules.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
 - `npm test` runs the Vitest suite: every module whose correctness follows from inputs and outputs — round

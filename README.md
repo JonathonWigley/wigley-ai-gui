@@ -18,11 +18,8 @@
 
 ## Status
 
-Planned in `shareable-app`, not built yet: the `auri` agent plugin (`agent-plugin/`) with its skills and hooks, the
-marketplace file `.claude-plugin/marketplace.json`, the `--plugin-dir` launch, the `auri` server name, `auri.json`
-contributions and the `contributions` plugin, the settings `auto-retro.strategy`, `backlog.strategy`, `workflow.off`,
-`workflow.autoStart` and `workflow.layout`, Unity pool off by default, the removal of the four `workflow-*` level
-plugins, and the app's own repo at the clone URL below. Until they land, the app's MCP server is `wigley-forms`, registered by another agent plugin.
+Planned in `shareable-app`, not built yet: the app's own repo at the clone URL below (task 17's split). Everything
+else in this README is built.
 
 ## What Auri is
 
@@ -101,9 +98,11 @@ manifests.
   `CLAUDE_CONFIG_DIR` names (default `~/.claude`): run both commands once more with `CLAUDE_CONFIG_DIR` set for each
   other profile, unless that profile's `plugins` folder links to one that already has it.
 
-- **Codex** reads the plugin's Codex manifest, `agent-plugin/.codex-plugin/plugin.json`. Install it from the same
-  marketplace with Codex's plugin commands: add the marketplace, then `codex plugin add auri@auri`. Planned in `shareable-app`, not built yet: the Codex steps are checked
-  against the Codex plugin docs when the manifest lands.
+- **Codex** reads the plugin's Codex manifest, `agent-plugin/.codex-plugin/plugin.json`, and this repo's
+  `.claude-plugin/marketplace.json` as a legacy-compatible marketplace file. Add the marketplace with
+  `codex plugin marketplace add <path to this clone>`, then install `auri` from the Plugins directory. To enable it
+  for one project instead, set `[plugins."auri@auri"]` to `enabled = true` in that repo's `.codex/config.toml`.
+  Codex's docs name no command-line install for a plugin, so none is given here.
 - **Tool names.** Claude Code names the tools `mcp__plugin_auri_auri__<tool>` and Codex `mcp__auri__<tool>`, so
   skills name each tool by server and bare name ("the `auri` server's `ask_round` tool"). To pre-approve every tool
   in Claude Code, add `"mcp__plugin_auri_auri__*"` under `permissions.allow` in the profile's `settings.json`. That

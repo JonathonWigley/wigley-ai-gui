@@ -120,9 +120,10 @@ The panel redraws on each state change, each change of the shown session, and on
 Main runs the CLI as `<python> -X utf8 <script> …`, the Python being the one `resolveProgram('python')` gives (the
 core `programs.python` setting, else the first found of `py -3`, `python`, `python3` on Windows and `python3`,
 `python` elsewhere; a missing Python answers `no-python` and runs nothing) and the script the
-`unity-pool.scriptPath` setting. Empty, `scriptPath` is `~/.local/bin/unity-pool`, and on Windows
-`~/wigley-agents/tools/unity-pool/unity-pool`, since a Windows install writes launchers, not a symlink a Python can
-run; `resolveScriptPath` picks it from the platform main reads. A run drops every session variable from the app's
+`unity-pool.scriptPath` setting (`~` is the home folder). Empty, no script is set: the buttons run nothing and say
+`No unity-pool script is set: set unity-pool.scriptPath in Settings.` The plugin is off by default (`plugins.disabled`),
+and a user on Windows names a launcher there, since a Windows install writes launchers, not a symlink a Python can
+run. A run drops every session variable from the app's
 environment (`SESSION_IDENTITY_ENV`, `src/shared/session-env.ts`: `CLAUDE_CODE_SESSION_ID`, `WIGLEY_SESSION_ROW` and
 the rest), so the CLI takes it as the user's even in an app started from a Claude Code terminal. A Hold or Release
 run times out after 30 seconds, an Open run after 120, since it may wait on the editor's focus call. A clone runs one

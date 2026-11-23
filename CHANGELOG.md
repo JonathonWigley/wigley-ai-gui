@@ -40,6 +40,9 @@ changes for the user.
 - Workflows are declarative config. `workflow.autoStart` replaces the Large workflow's auto Clear & make settings,
   and `workflow.layout` replaces the four level layouts.
 - The Unity pool plugin is off by default, and `unity-pool.scriptPath` names its script.
+- The `auri` skills and the docs-index README match the landed app: the workflows-and-checklist skill says how an
+  unknown workflow step is refused and when to leave the checklist as it is, and the docs-index README names where the
+  pointer check's parser copy lives.
 
 ### Removed
 

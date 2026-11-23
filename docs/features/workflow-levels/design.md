@@ -21,16 +21,16 @@ for one is a new plugin folder or layout, with no engine edit. The rules for pic
 Where each part lives:
 
 - `docs/features/workflow/design.md` — the engine and every stage.
-- `src/plugins/workflow-spike/`, `src/plugins/workflow-small/`, `src/plugins/workflow-medium/` and
-  `src/plugins/workflow-large/` — the four workflow plugins.
+- `src/plugins/workflow/declared/` — turns each `auri.json` workflow into its main and page halves;
+  `declared/fixtures/sample-auri.json` holds the sample four, and the wigley plugin's `auri.json` the real ones.
 - `~/wigley-agents/tools/workflow-gate/README.md` — the edit gate.
 - `~/wigley-agents/workflows.md` — the rules for picking a level.
 - `wigley:spike`, `wigley:small` and `wigley:medium` — the steps of the three smaller workflows.
 
 ## Vocabulary
 
-- **Workflow** — a named set of stages a session runs, registered by one plugin. Spike, Small, Medium
-  and Large are the first four.
+- **Workflow** — a named set of stages a session runs, declared in an agent plugin's `auri.json`. Spike, Small,
+  Medium and Large are the wigley plugin's four.
 - **Level** — the user's word for a workflow in its size order. The app's **Effort** control is
   Claude's reasoning effort, a different thing, so nothing here is called effort.
 - **Engine** — the `workflow` plugin: it keeps each session's flow and hosts the row, composer and
@@ -43,15 +43,13 @@ Where each part lives:
 
 ```
 workflow          engine: flows, the fold, the tools, part hosts, the run log, addWorkflow
-├─ workflow-spike    stages, skill rule, layout
-├─ workflow-small    stages, skill rule, layout
-├─ workflow-medium   stages, skill rule, layout
-└─ workflow-large    Large's stages, plan reading, Clear & make, auto-start, layout
+├─ declared/      builds a workflow from each auri.json declaration (spike, small, medium, large)
+└─ plan/          plan reading, the plan watch, set_workflow_plan
 ```
 
-A plugin registers through `addWorkflow` in each process. Only the flow's current workflow folds its
-stage rules, so two workflows may both have a `build` stage. Each plugin owns its layout folder
-(`layouts/workflow-small/`), over a contract and kit the engine exports, so each hot reloads alone.
+The engine registers each declared workflow through `addWorkflow` in each process. Only the flow's current workflow
+folds its stage rules, so two workflows may both have a `build` stage. One layout, set by `workflow.layout`
+(`layouts/workflow/<name>/`), draws every workflow, over a contract and kit the engine exports.
 
 ## How the app learns
 
@@ -91,9 +89,8 @@ user asks to tune `workflows.md`, and it is the evidence for judging Large's age
   guidance are the precedents. Spike is not a size: it is throwaway work with no review, so it sits outside the
   size order. Its badge is X, for experiment, since S is Small's. Spike's stages loop — each ask goes back to
   `build`, and a round mid-loop back to `interview` — so its stages accept a step word earlier in the trail.
-  A fifth level is one plugin away, plus its skill in `LEVEL_SKILLS` in
-  `~/wigley-agents/tools/workflow-gate/workflow-gate` and a row in `~/wigley-agents/workflows.md`: without them the gate
-  denies that level's sessions' edits.
+  A fifth level is one more workflow in an `auri.json`: the gate reads each installed
+  `auri.json`'s workflow claims, so it needs no gate edit, only a row in `~/wigley-agents/workflows.md` for picking it.
 - **Large stays exactly as it was.** The user asked for no change to it. Published guidance argues
   against many agents on coding work, but it is vendor evidence, and the run log will give the user's
   own.

@@ -159,7 +159,7 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
   with new code waits for the runtime loader. A stop at quit leaves what must outlast it: chat's stop detaches the
   processes the session host keeps (`docs/features/session-host/design.md`), and main sends the page no plugin message
   from the first quit task on, so rows those stops end stay in the page's saved panes and recency.
-- **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow-large
+- **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (the workflow plugin
   on docs) no longer orders or blocks the main part. A list still names a plugin whose events the process only
   hears, since start order is how a listener exists before the first emit.
 - **Scoped logs on both sides.** Most hand-typed log sources were on main, so both processes get the scoped log.

@@ -29,8 +29,8 @@ user runs /clear  ──► chat.sessionCleared (sent true)
               auto-retro queue (plugin data) ──► one run at a time
                           │
                           ▼
-   chat.launch({ projectDir: <folder setting>, profile, unattended: true,
-                 message: "/wigley:retro auto <host ids>" })
+   chat.launch({ projectDir: <strategy folder>, profile, unattended: true,
+                 message: <strategy command, {sessions} = host ids> })
                           │
                           ▼
      retro row in the Retro section ── turn ends, nothing running ──►
@@ -41,8 +41,9 @@ user runs /clear  ──► chat.sessionCleared (sent true)
 
 ## The queue
 
-- **What queues.** Two events, each for a row that is not a retro row: one this plugin did not launch, and whose first
-  message does not open with `/wigley:retro auto`.
+- **What queues.** Two events, each for a row that is not a retro row — one this plugin did not launch, and whose first
+  message does not open with an installed retro strategy's command text before `{sessions}` — and only the endings
+  the picked strategy's `on` lists.
   - A `chat.sessionClosed` with reason `user` and `sent` true. Every other reason — a failed start,
     `closeSessionsIn`, `finished` — and a quit queue nothing.
   - A `chat.sessionCleared` with `sent` true: the conversation the clear ended. A clear of a conversation that sent
@@ -69,8 +70,8 @@ The sessions plugin draws its side bar as sections: Favorites, Recent, and every
 the sessions page export `addSection`. `auto-retro` registers Retro, always last, which claims the rows it launched
 and every row whose first message is a retro command. A plugin's section shows only while it claims a row.
 
-- Rows sit flat, with no project groups: every retro runs in the `folder` setting, `~/wigley-agents` by default, the
-  clone that holds the ledger.
+- Rows sit flat, with no project groups: every retro runs in the picked strategy's `folder` (the user's
+  `wigley` plugin names `~/wigley-agents`), the clone that holds the ledger.
 - A row's title is the title of the session it analyzes, and the sessions layout draws a claimed row muted, with a
   dashed accent edge, so it reads apart from the user's own sessions.
 - The header counts the retros still queued (`2 queued`), drawn through the auto-retro layout.

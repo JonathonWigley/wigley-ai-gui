@@ -49,7 +49,7 @@ start one whenever a check needs it.
    redrawn: `resize` with the size the window took, the others with the log lines they caused
    (`setting` also says whether the config applied). `setting <name> <json value>` takes the
    setting's dotted path, as `settings.json` nests it: `transparency`, `window.width`, and a
-   plugin's setting under its id, `workflow-large.autoStartSeconds`. It reports `applied: false` when the
+   plugin's setting under its id, `auto-retro.settleSeconds`. It reports `applied: false` when the
    served config did not change: the value was already served, or `settings.json` still holds a
    problem from an earlier write, which keeps the last good settings; fix or remove that key
    first. The page holds document focus as the visible app's does,
@@ -84,7 +84,7 @@ index load state other than `launch`, under `.claude/load-states/`; `indexDelayM
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash
 keeps the Docs tree's pending chips on screen long enough to see; default 0).
 A drive run starts with the default settings, so `docs-session-tab` is off and no session shows a Docs tab. A
-Docs-tab check first runs `setting plugins.disabled '["agent-lines","usage-tab-line"]'` (the default list without
+Docs-tab check first runs `setting plugins.disabled '["agent-lines","usage-tab-line","unity-pool"]'` (the default list without
 `docs-session-tab`), then `restart`, because turning a plugin on takes effect on the next app start.
 `docs.openDoc` (`{ path, line? }`) calls the docs page export `openDoc`: Docs mode shows and
 opens the doc at that line, or toasts that the machine index does not list it. `line` is a

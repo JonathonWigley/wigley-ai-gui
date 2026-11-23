@@ -103,7 +103,7 @@ The registry is a built-in plugin, id `contributions`, in `src/plugins/contribut
 contributionsMainKey = { id: 'contributions', process: 'main' }
 
 interface ContributionsMainExports {
-  registerFeature<V extends JsonValue>(key: FeatureKey, reader: FeatureReader<V>): Disposable;
+  registerFeature<V>(key: FeatureKey, reader: FeatureReader<V> & JsonSlot<V>): Disposable;
   strategies<V>(key: FeatureKey): readonly Strategy<V>[];
   onChanged(key: FeatureKey, listener: (strategies: readonly Strategy<unknown>[]) => void): Disposable;
   ready: Promise<void>;
@@ -112,7 +112,7 @@ interface ContributionsMainExports {
 
 - `registerFeature` throws on a key already registered. The registry runs the reader over every source's section for that key at once, and again on every scan.
 - A reader gets the raw section and the source. It returns the validated value or its reasons. A reader is pure: it reads no file. A reader that needs a file under the plugin (the live-view probe) resolves the path against `source.root` and leaves the read to the feature.
-- The value is JSON, because it travels in a slot.
+- The value is JSON, because it travels in a slot. `JsonSlot<V>` makes the call compile only when `V` is JSON-safe; `V` is not bound to `JsonValue` itself, since an interface value such as `WorkflowDecl[]` does not extend that recursive type.
 - `ready` resolves after the first scan settles. A feature reads `strategies` after `ready`, or hears `onChanged`.
 - Dispose of the registration removes the feature's strategies from the slot and its problems from the served config.
 
@@ -455,8 +455,8 @@ a trigger with `clearsPlan` or `planFromArgs`, or an `event` trigger on `planCha
 `records`; `fixCycles.planCounter`; an `openPlan` action; a template holding `{plan}` or `{plan.…}`. It lives in the `workflow` plugin, in `src/plugins/workflow/plan/`. It is generic code, and its only parameter is the workflow's `planFormat`. It owns:
 
 - the plan folder: from a write of a plan file (`planFormat.folder` + `planFormat.file`), from a `planFromArgs` skill argument, and from reports through `set_workflow_plan` and `<endpoint dir>/plan-runs/<row id>.json`; cleared by `clearsPlan`;
-- the plan watch over every git-worktree copy of the folder, moved unchanged from `workflow-large` (`plan-watch.ts`, `src/shared/plan-copies.ts`);
-- the reader `readPlan(text, taskDocs, format)`, which replaces `src/shared/plan-progress.ts` and takes the format as a parameter;
+- the plan watch over every git-worktree copy of the folder (`plan-watch.ts` and `plan-copies.ts`, in `src/plugins/workflow/plan/`);
+- the reader `readPlan(text, taskDocs, format)` (`read-plan.ts`), which takes the format as a parameter;
 - the `planChanged` and `planGone` events, the `records` snapshots, and the `reopens` rule;
 - the plan side pane, grouped by `planFormat.groupHeading`, with a task drawn as running while its task document's status is `taskDocs.running`.
 
@@ -477,7 +477,7 @@ Every knob is optional. Left out, the reader reads a plain checklist: every box 
 | `taskDocs` | `{ "link": "bareMd", "statusField": "Status", "statusLines": 15, "statuses": ["not started", "in progress", "done"], "running": "in progress" }`. A task's document is its first link target when that target is a bare `*.md` in the plan folder. Its status is the first `Status:` or `**Status:**` line in its first `statusLines` lines outside fences. `statuses` ranks the statuses, lowest first, for the worktree-copy rule. |
 | `verificationTask` | `{ "lastTaskDocLacking": "Rung" }`. The last box whose task document was read and has no `Rung:` or `Rung (…):` field is the verification task. `{plan.build}` leaves it out. |
 
-Fenced code never counts, and the checkbox and link-stripping rules stay as `plan-progress.ts` has them.
+Fenced code never counts, and `read-plan.ts` holds the checkbox and link-stripping rules.
 
 The user's:
 
@@ -610,7 +610,7 @@ The agent sends its list with `set_workflow_checklist`, which the engine contrib
 
 ## Names and types
 
-Sketches only: names, fields and signatures. `JsonValue` is the app's JSON type.
+Sketches only: names, fields and signatures. `JsonValue` is defined in `src/contracts/contributions.ts`.
 
 ### The agent plugin (`src/shared/agent-plugin.ts`)
 
@@ -727,7 +727,7 @@ interface Strategy<V> { id: string; label: string; source: ContributionSource; v
 interface FeatureStrategies { key: FeatureKey; label: string; strategies: Strategy<JsonValue>[] }
 
 interface ContributionsMainExports {
-  registerFeature<V extends JsonValue>(key: FeatureKey, reader: FeatureReader<V>): Disposable;
+  registerFeature<V>(key: FeatureKey, reader: FeatureReader<V> & JsonSlot<V>): Disposable;
   strategies<V>(key: FeatureKey): readonly Strategy<V>[];
   onChanged(key: FeatureKey, listener: (strategies: readonly Strategy<unknown>[]) => void): Disposable;
   ready: Promise<void>;

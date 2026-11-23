@@ -38,7 +38,7 @@ work's focus clearly changes.
   Write, MultiEdit and NotebookEdit calls until the session has sent a checklist. The denial says so. Send the
   checklist, then make the edit again. A subagent's edits pass, and so does every edit when the app is not reachable.
 - **Turn end.** While the checklist holds open items, the hook reminds the agent once at the end of a turn: tick what
-  finished, or say what keeps each item open.
+  finished, or leave the list as it is when the work waits on the user or a later turn.
 - **After a compaction**, the hook shows the last step and checklist again. Report the step and checklist that match
   the work in hand in the same message as the next call.
 
@@ -66,7 +66,8 @@ The user switches each declared workflow on or off in Settings. A switched-off w
   names, in the same message as the step's first call.
 - The tool's `step` values are the union of the steps every enabled declared workflow names. With no such workflow,
   the tool is not offered.
-- A step the session's own workflow does not declare succeeds with text saying so, and changes nothing.
+- A step no enabled workflow names is an error listing the accepted steps. A step the session's own workflow does not
+  take at its place succeeds with text saying it was ignored, and changes nothing.
 
 ## Plans
 

@@ -325,39 +325,17 @@ What Windows support and installers need.
   macOS, so on Windows a scheduled task does not fire after a restart until the app opens. It needs a launcher outside
   the `app-*` build folders that sets `ELECTRON_RUN_AS_NODE` and starts the host, and a Windows `LoginStart` adapter
   behind `src/contracts/login-start.ts`.
-- **A shareable build without the user's workflow** — *needs a feature plan*: the user wants to give the app to other
-  people with every reusable tool and none of the user's workflow. The workflow is interview, plan, make, review and
-  retro: the plugins `workflow-large`, `workflow-medium`, `workflow-small`, `workflow-spike`, `auto-retro` and
-  `primer`. Being a wigley part does not make a tool part of the workflow. Sessions, chat, unity-pool, the audio
-  picker, live view, usage, system stats, docs, notes, settings and keys all stay. A review of the plugins' `dependsOn`
-  and `reads` found no reusable plugin with a hard dependency on a workflow plugin. The gaps are these:
-  - The agent tools reach the app only through `relay.py`, and only the `wigley` marketplace plugin registers it (as
-    the `wigley-forms` MCP server). That plugin also ships every workflow skill. Without it, chat works but forms,
-    `set_session_title`, `start_session`, the audio picker, live view and the backlog and practice tools are missing.
-    Options: move the relay into its own marketplace plugin, or have the `claude-code` adapter pass `--mcp-config`
-    to the sessions the app starts. Sessions started in a terminal still need a plugin.
-  - `docs` finds `docs_index.py` through the installed `wigley@wigley-ai-marketplace` plugin (`script-locator.ts`). It
-    also fixes the wiki root at `~/wigley-agents/wiki/Main.md` (`doc-files.ts`), and `kinds.ts` fixes the
-    `wigley-agents` folder and the user's file-placement rules. These become settings, and the index script ships
-    with the app or with the relay's plugin.
-  - The `forms` tool text points agents at `~/wigley-agents/forms.md` (`tool-definitions.ts`, `question-format.ts`),
-    which another user does not have.
-  - `notes` lists `backlog` in `dependsOn.main`, so notes cannot run without backlog. Backlog reads the follow-up files
-    that review writes. Decide whether backlog stays. If it goes, invert the link: backlog registers a note target into
-    notes.
-  - `auto-compact` imports `workflow/contract` and reads `workflow.flows`. A disabled `workflow` is safe. A deleted one
-    breaks the build.
-  - `unity-pool` runs `~/wigley-agents/tools/unity-pool/unity-pool`, so the tool ships with the app.
-  - `app-update` installs from the user's clone's `origin/main`. Another user needs a fork of their own.
-  - `src/shared/plan-progress.ts` and `plan-copies.ts` are used only by `workflow-large`. They move into that plugin.
-  - The app lives in the `ai` repo beside `wigley-agents`, and its `AGENTS.md` points at the user's rules and skills.
-    A shared copy needs its own repo and a neutral `AGENTS.md`.
+- **Shareable build: what is still tied to the user** — *needs a feature plan*: the app now ships its own `auri` agent
+  plugin and binds the user's workflow, retro, backlog and docs through `auri.json`, so a build without that plugin
+  shows empty states. Three plugins still assume the user's setup:
+  - `notes` lists `backlog` in `dependsOn.main` (`src/plugins/notes/manifest.ts`), so notes cannot run without backlog.
+    Decide whether backlog stays. If it goes, invert the link: backlog registers a note target into notes.
+  - `auto-compact` reads the `workflow` plugin's `workflowFlowsSlot` (`src/plugins/auto-compact/main/start.ts`,
+    `reads.main` in its `manifest.ts`). A disabled `workflow` is safe. A deleted one breaks the build.
+  - `app-update` installs from the clone's `origin/main` (`INSTALL_REF` in `src/plugins/app-update/main/install-command.ts`),
+    so another user needs a fork of their own.
 
-  Decisions for the plan: disable the workflow plugins by default (`plugins.disabled`) or remove them from the build
-  (the folder and its entries in `src/plugins/manifests.ts`, `main.ts`, `page.ts` and `keymap.ts`; `npm run lint`
-  flags a missed entry); whether `workflow` (the engine) and `backlog` stay; and where the relay lives. A build with
-  the workflow folders deleted was not tried. Source session: Claude Code a20096e5-768a-4100-9290-f3696e2c4543 in
-  `~/Documents/ai`.
+  Source session: Claude Code a20096e5-768a-4100-9290-f3696e2c4543 in `~/Documents/ai`.
 
 ## Plugin extension points
 
@@ -481,8 +459,8 @@ User-facing features, those other work builds on first.
 - **Wrap-up action chips act on click** — *needs a feature plan*: the wrap-up card (`wigley:wrap-up` § Your move)
   draws standard actions — `push`, `install`, `/clear`, `restart`, `make`, `device build` — as chips, but a visual's
   frame is sandboxed, so a chip only shows the word the user then types. A click could send that word to the
-  session, or run the command behind it (`install` through app-update's install line, `make` through workflow-large's
-  Clear & make). It needs a way for a visual to ask the page to act, and which chips may run without a confirm.
+  session, or run the command behind it (`install` through app-update's install line, `make` through the Large workflow's
+  Clear & make action). It needs a way for a visual to ask the page to act, and which chips may run without a confirm.
   Source session: Claude Code 2d49f095-112d-44a6-acba-0359d2074186 in ai.
 - **Dock badge counts sessions that need the user** — *needs a feature plan*: the Dock badge counts only unviewed
   scheduled runs (`docs/features/scheduled-tasks/design.md`), and session-titles leaves a needs-you badge out of
@@ -548,7 +526,7 @@ Duplication and drift with no user-visible defect.
   merge of main into `scheduled-tasks-plan`.
 - **One `isStringOrNull` in `src/shared/json.ts`** — *agent-ready*: four copies exist —
   `src/plugins/chatroom/contract.ts:56` (exported type guard), `src/plugins/notes/draft.ts:33` (type guard),
-  `src/plugins/workflow-large/contract.ts:197` and `src/plugins/workflow/main/flow-store.ts:278` (both `boolean`).
+  `src/plugins/workflow/plan/` (the former `workflow-large/contract.ts:197`; re-check the line) and `src/plugins/workflow/main/flow-store.ts:278` (both `boolean`).
   Move the type guard into `src/shared/json.ts` beside `isJsonObject` and point every copy at it. Source session:
   Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
 

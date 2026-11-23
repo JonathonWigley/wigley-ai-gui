@@ -577,7 +577,7 @@ interview on 2026-10-23; this file is the record of both.
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.
-- **Self-test**: the self-test host takes one script per plugin and runs them in plugin start order, so chat's
+- **Self-test**: the self-test host takes the scripts each plugin hands it (one plugin may hand several) and runs them in plugin start order, so chat's
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
   swap with a real round is a live check in the final verification.
 - **Headless from an agent**: the `set_headless` MCP tool, which chat contributes main-agent only beside
