@@ -19,7 +19,7 @@ import { pickOf, rectOfTuple } from '../window-pick';
 const SHOW_TOOL: ToolDefinition = {
   name: 'show_live_view',
   description:
-    "Streams a Unity editor's Game View live in this session's Live section in the app, beside the chat, so the user watches the game while the agent plays it. Call it after each `capture.py start` of the unity-playtest skill, `--append` included. `projectPath` is the Unity project folder the editor has open; `gameRect` is the Game View's render area in global screen points, top-left origin, `[x, y, width, height]`: the `game_view` field of `capture.py start`'s reply. Without `gameRect` the whole editor window streams. Call it again after the Game View moves or resizes.",
+    "Streams a Unity editor's Game View live in this session's Live section in the app, beside the chat, so the user watches the game while the agent plays it. Call it after each playtest capture starts, `--append` included. `projectPath` is the Unity project folder the editor has open; `gameRect` is the Game View's render area in global screen points, top-left origin, `[x, y, width, height]`, as the capture tool reports it. Without `gameRect` the whole editor window streams. Call it again after the Game View moves or resizes.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -39,7 +39,7 @@ const SHOW_TOOL: ToolDefinition = {
 const HIDE_TOOL: ToolDefinition = {
   name: 'hide_live_view',
   description:
-    "Stops the stream in this session's Live section and hides it. Call it after the last `capture.py stop` of a playtest.",
+    "Stops the stream in this session's Live section and hides it. Call it after the playtest's last capture stops.",
   inputSchema: {
     type: 'object',
     properties: {},

@@ -217,7 +217,7 @@ describe('pickOf', () => {
       rect: { x: 2000, y: 1000, width: 100, height: 200 },
       result: {
         error:
-          "The Game View rect [2000, 1000, 100, 200] is not inside any window of Game's editor. Call show_live_view again with the game_view of a fresh capture.py start, or with no gameRect to stream the whole editor.",
+          "The Game View rect [2000, 1000, 100, 200] is not inside any window of Game's editor. Call show_live_view again with the Game View rect of a fresh capture, or with no gameRect to stream the whole editor.",
       },
     },
   ])(

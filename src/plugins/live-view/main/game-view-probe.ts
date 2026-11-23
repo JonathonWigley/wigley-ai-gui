@@ -5,20 +5,22 @@ import { errorText } from '../../../shared/error-text';
 import { programNotFoundMessage } from '../../../shared/program-lookup';
 import { type GameRectTuple, isGameRectWithArea } from './live-tools';
 
-// The wigley:unity-playtest skill's Unity script, from the wigley plugin's root.
-export const CAPTURE_SCRIPT_IN_INSTALL =
-  'skills/unity-playtest/unity/WigleyCapture.cs';
+// The Unity script the probe runs, from the first installed liveView strategy
+// with a probe: its full path, its C# entry, and its plugin's name.
+export interface ProbeScript {
+  file: string;
+  entry: string;
+  pluginName: string;
+}
 
-const ENTRY = 'Wigley.WigleyCapture.Run';
 const PROBE_ARGS = JSON.stringify([JSON.stringify({ action: 'probe' })]);
 const PIPELINE_PACKAGE = 'com.unity.pipeline';
 const SCRIPT_TIMEOUT_S = 8;
-// An old pin's run_script takes its own timeout in ms and the CLI's in s, the
-// CLI's this far past the script's, as capture.py passes it.
+// An old pin's run_script takes its own timeout in ms and the CLI's in s: the
+// CLI's timeout this far past the script's, on an old pin.
 const LEGACY_CLI_SLACK_S = 15;
-// How long past the CLI's `--timeout` the app lets a run go before killing it,
-// as capture.py's `client_timeout_s` gives its client: 23 s on a grouped pin,
-// 38 s on an old one.
+// How long past the CLI's `--timeout` the app lets a run go before killing it:
+// 23 s on a grouped pin, 38 s on an old one.
 const CLIENT_SLACK_S = 15;
 // How deep a reply may nest its script's reply under `result` keys.
 const MAX_REPLY_DEPTH = 6;
@@ -32,8 +34,8 @@ export interface GameViewProbeDeps {
   processes: Pick<ProcessRunner, 'run' | 'resolveProgram'>;
   files: Pick<Files, 'read' | 'realPath'>;
   paths: Pick<Paths, 'join'>;
-  // The WigleyCapture.cs to run, or null when no wigley install holds it.
-  locateScript(): Promise<string | null>;
+  // The probe script to run, or null when no installed plugin gives one.
+  locateScript(): Promise<ProbeScript | null>;
   wait(ms: number): Promise<void>;
 }
 
@@ -42,8 +44,8 @@ interface ProbeReply {
   window: GameRectTuple | null;
 }
 
-// The Game View rect of the editor that has `projectPath` open, from
-// WigleyCapture.cs's `probe` run through `unity command script run`
+// The Game View rect of the editor that has `projectPath` open, from the
+// probe script's `probe` action run through `unity command script run`
 // (`run_script` below com.unity.pipeline 0.9): `[x, y, width, height]` in
 // top-left global screen points. Up to PROBE_ATTEMPTS calls, PROBE_RETRY_MS
 // apart while `isCancelled` reads false: a failed call, or a reply with no
@@ -57,13 +59,13 @@ export async function probeGameRect(
   try {
     const script = await deps.locateScript();
     if (script === null) {
-      return { error: 'no wigley install holds WigleyCapture.cs' };
+      return { error: 'no installed plugin gives a Game View probe' };
     }
     const unity = await deps.processes.resolveProgram('unity');
     if (unity === null) {
       return { error: programNotFoundMessage('unity') };
     }
-    // The CLI is handed the resolved folder, as capture.py hands it.
+    // The CLI is handed the resolved folder.
     const call = await probeCall(
       deps,
       await deps.files.realPath(projectPath),
@@ -105,13 +107,20 @@ export async function probeGameRect(
 async function probeCall(
   deps: Pick<GameViewProbeDeps, 'files' | 'paths'>,
   projectPath: string,
-  script: string,
+  script: ProbeScript,
 ): Promise<{ args: string[]; cliTimeoutS: number }> {
   const manifest = await readIfPresent(
     deps.files,
     deps.paths.join(projectPath, 'Packages', 'manifest.json'),
   );
-  const call = ['--file', script, '--entry', ENTRY, '--args', PROBE_ARGS];
+  const call = [
+    '--file',
+    script.file,
+    '--entry',
+    script.entry,
+    '--args',
+    PROBE_ARGS,
+  ];
   const tail = ['--json', '--project-path', projectPath];
   if (usesGroupedNames(manifest)) {
     return {
@@ -144,7 +153,7 @@ async function probeCall(
 }
 
 // Whether a project's `Packages/manifest.json` text pins com.unity.pipeline at
-// 0.9 or above, as capture.py reads it: false only for a pin whose leading
+// 0.9 or above: false only for a pin whose leading
 // MAJOR.MINOR reads below 0.9; true for a missing or unreadable manifest, entry
 // or value.
 function usesGroupedNames(manifestText: string | null): boolean {
@@ -228,8 +237,7 @@ function scriptReplyOf(
   };
 }
 
-// The reason a failed reply gives, as capture.py's `script_result` and
-// `failure_text` and `mark_reply_failure` read it: its `error`, `errorDetails`,
+// The reason a failed reply gives: its `error`, `errorDetails`,
 // `failureReason` and `message`, its `errors[].message`, and the error-severity
 // compile `diagnostics` it, its `data` or its `data.result` carries, as
 // `line:column message`, joined with '; '.
@@ -255,8 +263,7 @@ function failureText(record: Record<string, unknown>): string {
   return parts.length === 0 ? 'no error message' : parts.join('; ');
 }
 
-// A reply's error-severity compile diagnostics, as capture.py's
-// `_diagnostic_lines` prints them: `line:column message`.
+// A reply's error-severity compile diagnostics, as `line:column message`.
 function diagnosticLines(holder: Record<string, unknown> | null): string[] {
   const diagnostics = Array.isArray(holder?.diagnostics)
     ? holder.diagnostics

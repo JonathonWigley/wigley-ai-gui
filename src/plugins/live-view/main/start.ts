@@ -1,4 +1,4 @@
-import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { LiveViewContribution } from '../../../contracts/contributions';
 import type {
   ChannelShape,
   MainApi,
@@ -11,8 +11,6 @@ import {
   FAKE_EDITOR_PROCESS_ID,
   FAKE_GAME_RECT,
 } from '../../../shared/fake-screen-capture';
-import { createHarnessFolders } from '../../../shared/harness-folders';
-import { locateWigleyFile } from '../../../shared/wigley-install';
 import {
   CHAT_PREVIEW_HOST_ID,
   type ChatMainEvents,
@@ -20,16 +18,26 @@ import {
   chatMainKey,
 } from '../../chat/contract';
 import {
+  contributionsMainKey,
+  type Strategy,
+} from '../../contributions/contract';
+import {
   type SessionsMainEvents,
   sessionsMainKey,
 } from '../../sessions/contract';
 import { livePicksSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { liveViewManifest } from '../manifest';
+import type { PlaytestPatterns } from '../playtest-command';
 import { pickOf, rectOfTuple } from '../window-pick';
 import { registerDemoSteps } from './demo-steps';
-import { CAPTURE_SCRIPT_IN_INSTALL, probeGameRect } from './game-view-probe';
+import { type ProbeScript, probeGameRect } from './game-view-probe';
 import { createLiveTools, LIVE_VIEW_OFFLINE } from './live-tools';
+import {
+  liveViewReader,
+  playtestPatternsOf,
+  probeScriptOf,
+} from './live-view-reader';
 import { createPlaytestWatch } from './playtest-watch';
 import { liveViewSelfTestScript } from './selftest-script';
 
@@ -41,13 +49,14 @@ type LiveViewApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Registers live-view's layouts; contributes `show_live_view` and
-// `hide_live_view` to every session, subagents included, which write the
-// session's pick to `live-view.picks`; runs the playtest watch, which opens and
-// closes a session's pick on its live playtest Bash calls, read from chat's
-// entries and agent events, cropping an opened pick to the Game View that
-// WigleyCapture.cs's probe, from the wigley plugin install, finds; deletes the
-// pick on `sessions.ended`; writes chat's layout preview row a sample pick,
+// Registers live-view's layouts and its `liveView` reader with
+// `contributions`; contributes `show_live_view` and `hide_live_view` to every
+// session, subagents included, which write the session's pick to
+// `live-view.picks`; runs the playtest watch, which opens a session's pick when
+// a live Bash call matches an installed plugin's open pattern, cropped to the
+// Game View that plugin's probe reports, and closes it on a close pattern,
+// read from chat's entries and agent events; deletes the pick on
+// `sessions.ended`; writes chat's layout preview row a sample pick,
 // the real pick and crop over the fake ScreenCapture's windows; registers the
 // Live view demo step's main half, which picks the Unity editor or the app's
 // own window; and hands the self-test its script.
@@ -57,23 +66,54 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     api.layouts.register({ layoutTypes });
     const { services } = api;
     const picks = api.state.publish(livePicksSlot);
-    const harnessInfos = api.state.read(coreAgentHarnessesSlot);
-    const folders = createHarnessFolders({
-      harnesses: services.agentHarnesses,
-      infos: () => harnessInfos.all(),
-      log: services.log,
-    });
+    // Empty until the first scan settles, then every strategy's, merged.
+    let patterns: PlaytestPatterns = { open: [], close: [] };
+    let probe: ProbeScript | null = null;
+    let isMissingProbeLogged = false;
+    const applyStrategies = (
+      strategies: readonly Strategy<LiveViewContribution>[],
+    ) => {
+      patterns = playtestPatternsOf(strategies);
+      probe = probeScriptOf(strategies, services.paths);
+      isMissingProbeLogged = false;
+    };
+    const contributions = api.dependency(contributionsMainKey);
+    contributions.registerFeature('liveView', liveViewReader);
+    contributions.onChanged('liveView', (strategies) =>
+      applyStrategies(
+        strategies as readonly Strategy<LiveViewContribution>[],
+      ),
+    );
+    void contributions.ready.then(() =>
+      applyStrategies(
+        contributions.strategies<LiveViewContribution>('liveView'),
+      ),
+    );
+    // The probe whose file exists; a missing file is logged once per change
+    // of the strategies.
+    const locateScript = async (): Promise<ProbeScript | null> => {
+      const script = probe;
+      if (script === null) {
+        return null;
+      }
+      try {
+        await services.files.realPath(script.file);
+        return script;
+      } catch {
+        if (!isMissingProbeLogged) {
+          isMissingProbeLogged = true;
+          services.log(
+            `live view: ${script.pluginName}'s probe file ${script.file} is missing`,
+          );
+        }
+        return null;
+      }
+    };
     const probeDeps = {
       processes: services.processes,
       files: services.files,
       paths: services.paths,
-      locateScript: () =>
-        locateWigleyFile(
-          services.files,
-          folders,
-          services.paths,
-          CAPTURE_SCRIPT_IN_INSTALL,
-        ),
+      locateScript,
       wait: (ms: number) =>
         new Promise<void>((resolve) => {
           services.timers.set(resolve, ms);
@@ -98,6 +138,7 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       entries: api.state.read(chatEntriesSlot),
       liveTools,
       log: services.log,
+      patterns: () => patterns,
     });
     api.events.on('sessions.ended', ({ sessionId }) => {
       liveTools.sessionEnded(sessionId);

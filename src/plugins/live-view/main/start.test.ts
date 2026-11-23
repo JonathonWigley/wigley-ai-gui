@@ -1,22 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../contracts/agent';
-import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type {
+  CommandPattern,
+  FeatureKey,
+  LiveViewContribution,
+} from '../../../contracts/contributions';
 import type {
   ScreenCapture,
   WindowList,
 } from '../../../contracts/screen-capture';
-import {
-  harnessInfo,
-  harnessRegistryOf,
-} from '../../../shared/agent-harness-registry.test-support';
-import {
-  createFakeAgentHarness,
-  FAKE_HARNESS_ID,
-  FAKE_MICROTASK_TIMERS,
-} from '../../../shared/fake-agent-harness';
 import { FakeProcesses } from '../../../shared/fake-processes';
-import { createMemoryFiles } from '../../../shared/memory-files';
-import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
 import {
   createFakeScreenCapture,
   FAKE_EDITOR_PROCESS_ID,
@@ -32,6 +25,11 @@ import {
   chatEntriesSlot,
   chatMainKey,
 } from '../../chat/contract';
+import {
+  type ContributionsMainExports,
+  contributionsMainKey,
+  type Strategy,
+} from '../../contributions/contract';
 import {
   type AgentSession,
   type ContributeToolsOptions,
@@ -77,11 +75,99 @@ const SAMPLE_PICK: LivePick = {
   summary: 'Game View · sample',
 };
 
-// The playtest's whole-editor line where no wigley install holds the probe.
-const NO_INSTALL_PLAYTEST_LINE =
-  'row-1 shows Editor · Game for a playtest (no Game View: no wigley install holds WigleyCapture.cs)';
-const WIGLEY_INSTALL = '/home/.claude/plugins/cache/wigley/1.0.0';
-const CAPTURE_SCRIPT = `${WIGLEY_INSTALL}/skills/unity-playtest/unity/WigleyCapture.cs`;
+// The playtest's whole-editor line where no strategy gives a probe.
+const NO_PROBE_PLAYTEST_LINE =
+  'row-1 shows Editor · Game for a playtest (no Game View: no installed plugin gives a Game View probe)';
+const PLUGIN_ROOT = '/home/.claude/plugins/cache/acme/1.0.0';
+const PROBE = {
+  file: 'unity/Probe.cs',
+  entry: 'Acme.Probe.Run',
+  runner: 'unityScript',
+} as const;
+const PROBE_FILE = `${PLUGIN_ROOT}/unity/Probe.cs`;
+
+const unityPattern = (words: string[]): CommandPattern => ({
+  program: 'unity',
+  words,
+  valueFlags: [],
+  projectPathFlag: '--project-path',
+  projectPathVariable: 'UNITY_PROJECT_PATH',
+});
+
+// The playtest patterns these tests run, as a strategy's reader value.
+const PLAYTEST_SECTION: LiveViewContribution = {
+  open: [
+    unityPattern(['command', 'editor_play']),
+    {
+      program: 'capture.py',
+      words: ['start'],
+      valueFlags: [],
+      projectPathFlag: '--project-path',
+    },
+  ],
+  close: [unityPattern(['command', 'editor_stop'])],
+};
+
+const GODOT_SECTION: LiveViewContribution = {
+  open: [
+    {
+      program: 'godot-play',
+      words: ['run'],
+      valueFlags: [],
+      projectPathFlag: '--project-path',
+    },
+  ],
+  close: [],
+};
+
+function strategyOf(
+  value: LiveViewContribution,
+): Strategy<LiveViewContribution> {
+  return {
+    id: 'acme',
+    label: 'acme',
+    source: {
+      pluginName: 'acme',
+      pluginKey: 'acme@market',
+      version: '1.0.0',
+      root: PLUGIN_ROOT,
+      harnessId: 'claude',
+    },
+    value,
+  };
+}
+
+// A contributions dependency that serves `strategies` once ready, records
+// the keys a reader registered under, and fires `onChanged` on `change`.
+function fakeContributions(
+  strategies: readonly Strategy<LiveViewContribution>[],
+) {
+  let current = strategies;
+  const registered: FeatureKey[] = [];
+  const listeners: ((next: readonly Strategy<unknown>[]) => void)[] = [];
+  const dependency = fakeDependency(
+    contributionsMainKey,
+    (consumer): ContributionsMainExports => ({
+      registerFeature: (key) => {
+        registered.push(key);
+        return consumer.track({ dispose() {} });
+      },
+      strategies: <V>() => current as unknown as readonly Strategy<V>[],
+      onChanged: (_key, listener) => {
+        listeners.push(listener);
+        return consumer.track({ dispose() {} });
+      },
+      ready: Promise.resolve(),
+    }),
+  );
+  const change = (next: readonly Strategy<LiveViewContribution>[]) => {
+    current = next;
+    for (const listener of listeners) {
+      listener(next);
+    }
+  };
+  return { dependency, registered, change };
+}
 
 // The `--project-path` of PROJECT, as a playtest command names it.
 const G = `--project-path ${PROJECT}`;
@@ -149,12 +235,28 @@ function toolStarted(
 }
 
 // `listWindows` answers through `capture.list`, which a test swaps; the editor
-// file of PROJECT names the fake editor's pid. With `probeReply`, a profile's
-// wigley install holds WigleyCapture.cs and every `unity` run prints that
-// script reply; without, no install holds it. `entries` is chat's entries
+// file of PROJECT names the fake editor's pid. The liveView strategies default
+// to one holding PLAYTEST_SECTION: with `probeReply` it also gives PROBE, its
+// file is written unless `probeFile` is false, and every `unity` run prints
+// that script reply; without, it gives no probe. `entries` is chat's entries
 // slot; `runCall` runs Bash call n as chat writes a live one: its entry, its
 // `toolStarted`, its completion.
-async function startPart({ probeReply }: { probeReply?: object } = {}) {
+async function startPart({
+  probeReply,
+  probeFile = probeReply !== undefined,
+  strategies = [
+    strategyOf(
+      probeReply === undefined
+        ? PLAYTEST_SECTION
+        : { ...PLAYTEST_SECTION, probe: PROBE },
+    ),
+  ],
+}: {
+  probeReply?: object;
+  probeFile?: boolean;
+  strategies?: Strategy<LiveViewContribution>[];
+} = {}) {
+  const liveViewStrategies = fakeContributions(strategies);
   const contributions: {
     tools: ToolDefinition[];
     start: (session: AgentSession) => ToolSession;
@@ -173,6 +275,7 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
   const harness = startMainPart(liveViewMainPart, {
     dependencies: [
       fakeDependency(chatMainKey, () => ({}) as ChatMainExports),
+      liveViewStrategies.dependency,
       fakeDependency(
         sessionsMainKey,
         (consumer) =>
@@ -194,11 +297,8 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
     EDITOR_FILE,
     JSON.stringify({ process_id: FAKE_EDITOR_PROCESS_ID }),
   );
-  if (probeReply !== undefined) {
-    await harness.files.write(CAPTURE_SCRIPT, '// WigleyCapture');
-    harness.state
-      .publish(coreAgentHarnessesSlot)
-      .set(FAKE_HARNESS_ID, harnessInfo({ profiles: [WIGLEY_PROFILE] }));
+  if (probeFile) {
+    await harness.files.write(PROBE_FILE, '// probe');
   }
   const toolSession = contributions[0]!.start({
     id: SESSION,
@@ -252,33 +352,19 @@ async function startPart({ probeReply }: { probeReply?: object } = {}) {
     runCall,
     liveViewLogs,
     probeRuns: probe.runs,
+    liveViewStrategies,
   };
 }
 
-const WIGLEY_PROFILE = { name: 'work', configDir: '/home/.claude' };
 const PLAYING_GAME_VIEW = { ok: true, playing: true, window: FAKE_GAME_RECT };
 
-// A fake harness whose profile lists the wigley install, and processes whose
-// every run prints `probeReply` as `script run` does, its args recorded in
-// `runs`; none without a reply.
+// Processes whose every run prints `probeReply` as `script run` does, its
+// args recorded in `runs`; none without a reply.
 function probeServices(probeReply: object | undefined) {
   const runs: string[][] = [];
   if (probeReply === undefined) {
     return { services: {}, runs };
   }
-  const agentHarness = createFakeAgentHarness(
-    { now: () => 0 },
-    createMemoryFiles(),
-    FAKE_MICROTASK_TIMERS,
-  );
-  agentHarness.setInstalledPlugins(WIGLEY_PROFILE.configDir, [
-    {
-      key: WIGLEY_PLUGIN_KEY,
-      installDir: WIGLEY_INSTALL,
-      version: '1.0.0',
-      listedAt: null,
-    },
-  ]);
   const processes = new FakeProcesses();
   processes.run = (_command, args) => {
     runs.push(args);
@@ -289,13 +375,7 @@ function probeServices(probeReply: object | undefined) {
       timedOut: false,
     });
   };
-  return {
-    services: {
-      agentHarnesses: harnessRegistryOf([agentHarness]),
-      processes,
-    },
-    runs,
-  };
+  return { services: { processes }, runs };
 }
 
 type Parts = Awaited<ReturnType<typeof startPart>>;
@@ -317,6 +397,12 @@ describe('liveViewMainPart', () => {
     expect(
       contributions.map(({ tools }) => tools.map(({ name }) => name)),
     ).toEqual([['show_live_view', 'hide_live_view']]);
+  });
+
+  it('start_RegistersTheLiveViewReader', async () => {
+    const { liveViewStrategies } = await startPart();
+
+    expect(liveViewStrategies.registered).toEqual(['liveView']);
   });
 
   it('contributes the live-view tools with their offline answers', async () => {
@@ -623,7 +709,7 @@ describe('liveViewMainPart', () => {
         await parts.call('hide_live_view', {});
         parts.emitStarted(1);
       },
-      logs: [NO_INSTALL_PLAYTEST_LINE, 'row-1 hid its Live section'],
+      logs: [NO_PROBE_PLAYTEST_LINE, 'row-1 hid its Live section'],
     },
     {
       given: 'a denied or failed call',
@@ -651,7 +737,7 @@ describe('liveViewMainPart', () => {
       run: (parts) =>
         parts.runCall(1, 'unity command editor_play --result-only'),
       logs: [
-        'row-1 opened no Live view for a playtest: the command names no --project-path',
+        'row-1 opened no Live view for a playtest: the command names no project folder',
       ],
     },
     {
@@ -751,6 +837,49 @@ describe('liveViewMainPart', () => {
       ).toEqual([log]);
     },
   );
+
+  it('playtest_NoStrategy_NoAutoOpen', async () => {
+    const parts = await startPart({ strategies: [] });
+
+    parts.runCall(1, PLAY);
+    await settle();
+
+    expect(parts.pickOf(SESSION)).toBeUndefined();
+    expect(parts.liveViewLogs()).toEqual([]);
+  });
+
+  it('playtest_ProbeFileMissing_WholeEditorAndOneLogLine', async () => {
+    const parts = await startPart({
+      probeReply: PLAYING_GAME_VIEW,
+      probeFile: false,
+    });
+
+    parts.runCall(1, PLAY);
+    await settle();
+    await parts.call('hide_live_view', {});
+    parts.runCall(2, PLAY);
+    await settle();
+
+    expect(parts.pickOf(SESSION)).toEqual(EDITOR_PICK);
+    expect(
+      parts.liveViewLogs().filter((line) => line.includes('probe file')),
+    ).toEqual([`live view: acme's probe file ${PROBE_FILE} is missing`]);
+    expect(parts.probeRuns).toEqual([]);
+  });
+
+  it('strategyChanged_NewPatternsApply', async () => {
+    const parts = await startPart();
+
+    parts.liveViewStrategies.change([strategyOf(GODOT_SECTION)]);
+    parts.runCall(1, PLAY);
+    await settle();
+    const pickAfterOldPattern = parts.pickOf(SESSION);
+    parts.runCall(2, `godot-play run ${G}`);
+    await settle();
+
+    expect(pickAfterOldPattern).toBeUndefined();
+    expect(parts.pickOf(SESSION)).toEqual(EDITOR_PICK);
+  });
 
   it('playtestStart_LeavesTheAgentsPick', async () => {
     const parts = await startPart();
@@ -917,7 +1046,7 @@ describe('liveViewMainPart', () => {
       given: 'a second live start',
       event: async (parts) => parts.runCall(2, PLAY),
       pick: EDITOR_PICK,
-      logs: [NO_INSTALL_PLAYTEST_LINE],
+      logs: [NO_PROBE_PLAYTEST_LINE],
     },
   ])(
     'playtestShow_InterruptedWhileTheWindowsList_given $given',

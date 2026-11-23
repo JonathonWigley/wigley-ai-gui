@@ -3,17 +3,25 @@ import type { ProcessResult } from '../../../contracts/processes';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import { PROBE_ATTEMPTS, probeGameRect } from './game-view-probe';
+import {
+  PROBE_ATTEMPTS,
+  type ProbeScript,
+  probeGameRect,
+} from './game-view-probe';
 
 const PROJECT = '/home/Game';
-const SCRIPT = '/plugins/wigley/skills/unity-playtest/unity/WigleyCapture.cs';
+const SCRIPT: ProbeScript = {
+  file: '/plugins/acme/unity/Probe.cs',
+  entry: 'Acme.Probe.Run',
+  pluginName: 'acme',
+};
 const RECT = [512, 140, 360, 640];
 const PROBE_ARGS = JSON.stringify([JSON.stringify({ action: 'probe' })]);
 const SCRIPT_CALL = [
   '--file',
-  SCRIPT,
+  SCRIPT.file,
   '--entry',
-  'Wigley.WigleyCapture.Run',
+  SCRIPT.entry,
   '--args',
   PROBE_ARGS,
 ];
@@ -64,7 +72,7 @@ async function setUp({
 }: {
   manifest?: string | null;
   results?: (ProcessResult | Error)[];
-  script?: string | null;
+  script?: ProbeScript | null;
   unity?: boolean;
 } = {}) {
   const files = createMemoryFiles();
@@ -103,8 +111,7 @@ async function setUp({
 }
 
 describe('probeGameRect', () => {
-  // The kill timeouts are capture.py's `client_timeout_s`: the CLI's
-  // `--timeout` plus 15 s.
+  // The kill timeouts are the CLI's `--timeout` plus 15 s.
   it.each<{
     given: string;
     manifest: string | null;
@@ -150,7 +157,7 @@ describe('probeGameRect', () => {
       timeoutMs: 38_000,
     },
   ])(
-    'calls the probe by the names the pipeline pin takes, given $given',
+    'calls the probe script and entry by the names the pipeline pin takes, given $given',
     async ({ manifest, projectPath = PROJECT, args, timeoutMs }) => {
       const { deps, runs, timeouts } = await setUp({ manifest });
 
@@ -326,15 +333,15 @@ describe('probeGameRect', () => {
 
   it.each<{
     given: string;
-    script: string | null;
+    script: ProbeScript | null;
     unity: boolean;
     error: string;
   }>([
     {
-      given: 'no wigley install holding the script',
+      given: 'no installed plugin giving a probe',
       script: null,
       unity: true,
-      error: 'no wigley install holds WigleyCapture.cs',
+      error: 'no installed plugin gives a Game View probe',
     },
     {
       given: 'no unity CLI',
