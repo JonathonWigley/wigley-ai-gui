@@ -1,4 +1,8 @@
-import type { SessionControl, UserMessage } from '../../../contracts/agent';
+import type {
+  AgentStart,
+  SessionControl,
+  UserMessage,
+} from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import { isJsonObject } from '../../../shared/json';
 import { type SessionTitles, TITLE_SOURCES } from '../../sessions/contract';
@@ -56,6 +60,9 @@ export interface SavedSession {
   // The row was launched unattended: each permission prompt is denied at once.
   // A file written without it reads as false.
   unattended: boolean;
+  // The `AgentStart.permissions` each of the row's process starts passes. A
+  // file written without it reads as 'default'.
+  permissions: AgentStart['permissions'];
   // The row is headless, as the user or its launching session set it. A file
   // written without it reads as false.
   headless: boolean;
@@ -91,6 +98,7 @@ type LaterSavedField =
   | 'activeMs'
   | 'rowId'
   | 'unattended'
+  | 'permissions'
   | 'headless'
   | 'instructions'
   | 'owner';
@@ -220,6 +228,9 @@ function isStoredSession(value: unknown): value is StoredSession {
     isOptionalActiveMs(value.activeMs) &&
     isOptionalId(value.rowId) &&
     (value.unattended === undefined || typeof value.unattended === 'boolean') &&
+    (value.permissions === undefined ||
+      value.permissions === 'default' ||
+      value.permissions === 'auto') &&
     (value.headless === undefined || typeof value.headless === 'boolean') &&
     isOptionalStrings(value.instructions) &&
     isOptionalId(value.owner)
@@ -268,6 +279,7 @@ function parseSavedSessions(text: string): SavedSessions {
       activeMs: stored.activeMs ?? 0,
       rowId: stored.rowId ?? null,
       unattended: stored.unattended ?? false,
+      permissions: stored.permissions ?? 'default',
       headless: stored.headless ?? false,
       instructions: stored.instructions ?? [],
       owner: stored.owner ?? null,

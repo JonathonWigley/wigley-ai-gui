@@ -71,6 +71,7 @@ const request: AgentStart = {
   instructions: [],
   idleCompactMinTokens: null,
   rowId: 'row-1',
+  permissions: 'default',
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.

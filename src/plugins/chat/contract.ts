@@ -97,10 +97,15 @@ export type StartRequest = StartTarget & { harness: string; profile: string };
 // no `open-sessions.json` row and records no recent folder, and its events
 // carry `ephemeral: true` so listeners that write to disk skip it. An app
 // restart loses the row. Kept with the row across a clear and a relaunch.
+// `permissions`: `'auto'` launches the session in its harness's most permissive
+// mode, so the agent acts with no permission prompt. Left out, the harness's
+// normal launch. Kept with the row across a clear, a process restart and a
+// relaunch.
 export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
   unattended?: boolean;
+  permissions?: 'auto';
   headless?: boolean;
   instructions?: readonly string[];
   owner?: string;
@@ -681,7 +686,9 @@ export interface ChatMainEvents extends EventShape {
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
   // selected row as it was. With `unattended` true the row denies each
-  // permission prompt at once and raises no `Turn finished` mark.
+  // permission prompt at once and raises no `Turn finished` mark. With
+  // `permissions: 'auto'` each of the row's process starts runs in its
+  // harness's most permissive mode.
   // `instructions` follow the global `addInstructions` texts at each of the
   // row's process starts; `owner` names the plugin the row belongs to, and
   // such a row raises no `Turn finished` mark. Resolves to the new row's
@@ -698,8 +705,9 @@ export interface ChatMainExports {
   // first process's, `env` added to the run's environment, and fresh ids (host
   // session id, process id, row id, message uuid), on the harness that
   // declares its profile. Opens nothing. Rejects where `launch` rejects, an
-  // unknown control id included, and on `ephemeral` (`chat cannot prepare an
-  // ephemeral launch`).
+  // unknown control id included, on `ephemeral` (`chat cannot prepare an
+  // ephemeral launch`) and on `permissions: 'auto'` (`chat cannot prepare a
+  // permissive launch`).
   prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,

@@ -80,6 +80,7 @@ interview on 2026-10-23; this file is the record of both.
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
                                             --include-partial-messages --verbose --session-id <id> (--resume <id> on resume)
                                             --permission-mode <the row's mode, auto without one> --permission-prompt-tool <the claude-code plugin's tool>
+                                            (a row launched with `permissions: 'auto'`: --dangerously-skip-permissions --permission-mode bypassPermissions, whatever its mode)
                                             (--model <m> and --effort <e> when the user picked them and Claude confirmed)
                                             (--append-system-prompt <the registered instructions>, none when no plugin added any)
                  │ the harness reports the session id (minted by the adapter for a new session) ─► the row adopts it
@@ -389,7 +390,7 @@ interview on 2026-10-23; this file is the record of both.
   untitled), its last process's
   id (none while a clear's fresh process has not reported its session id), the controls and resume flag that process launched with, the controls the row holds and the values the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), whether it is `headless` (a file without it reads as false), its own `instructions` and its `owner` (a file without them reads as none and null), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), whether it was launched `unattended` (a file without it reads as false), the `permissions` it launched with (`'default'` or `'auto'`; a file without it reads as `'default'`), whether it is `headless` (a file without it reads as false), its own `instructions` and its `owner` (a file without them reads as none and null), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, and a new or launched one only once its
   harness reports its host session id, so a start that fails leaves no record. A
@@ -415,7 +416,9 @@ interview on 2026-10-23; this file is the record of both.
   one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
   once it runs. Every process start in a row passes, in `AgentStart.controls`, the `mode` the row holds now as
   `--permission-mode` (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude
-  entered after the user approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as
+  entered after the user approved its `EnterPlanMode` card carries over. Every start and attach also passes the row's
+  `AgentStart.permissions`, the `permissions` it was launched with (`'default'` when left out), so a permissive row
+  launches in `bypassPermissions` at each start, whatever mode the row holds. It passes `model` as `--model` and `effort` as
   `--effort` only once the user picked them through `setControl` in the row and a controls report from the same process
   then held the picked value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer
   pick replaced is never passed. The picked value is what a start passes, and a report never changes it, so a typed

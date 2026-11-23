@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentStart } from '../../../contracts/agent';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import { NESTED_SESSION_ENV } from '../../../shared/session-env';
 import {
   CLAUDE_DROPPED_OUT_KEYS,
   CLAUDE_IDLE_RULE,
+  type ClaudeStart,
   claudeConfigFolder,
   claudeEnv,
   claudeLaunch,
@@ -26,6 +28,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-1',
+        permissions: 'default',
       },
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
       '/h',
@@ -55,6 +58,45 @@ describe('claudeLaunch', () => {
     });
   });
 
+  // Breaks if a permissive launch keeps the row's mode, drops the flag that
+  // lets Claude accept bypass, or drops the prompt tool a bypass still uses.
+  it('claudeLaunch_PermissiveStart_SkipsPermissionsWhateverTheMode', () => {
+    const launch = claudeLaunch(
+      {
+        processId: 'p-1',
+        sessionId: 's-1',
+        resume: false,
+        projectDir: '/proj',
+        profileDir: '/p',
+        controls: { mode: 'plan' },
+        instructions: [],
+        idleCompactMinTokens: null,
+        rowId: 'row-1',
+        permissions: 'auto',
+      },
+      { HOME: '/h' },
+      '/h',
+      posixPaths,
+    );
+
+    expect(launch.args).toEqual([
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--include-partial-messages',
+      '--verbose',
+      '--session-id',
+      's-1',
+      '--dangerously-skip-permissions',
+      '--permission-mode',
+      'bypassPermissions',
+      '--permission-prompt-tool',
+      TOOL,
+    ]);
+  });
+
   it('claudeLaunch_Resume_ResumeFlagAndInheritedConfigDir', () => {
     const env = { CLAUDE_CONFIG_DIR: '/x' };
 
@@ -69,6 +111,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-1',
+        permissions: 'default',
       },
       env,
       '/h',
@@ -83,6 +126,7 @@ describe('claudeLaunch', () => {
 
   it.each<{
     name: string;
+    permissions?: AgentStart['permissions'];
     controls: Record<string, string>;
     present: string[][];
     absent: string[][];
@@ -118,9 +162,20 @@ describe('claudeLaunch', () => {
       ],
       absent: [['--verbosity'], ['loud'], ['--model']],
     },
+    {
+      name: 'permissive with model',
+      permissions: 'auto',
+      controls: { model: 'sonnet', mode: 'acceptEdits' },
+      present: [
+        ['--permission-mode', 'bypassPermissions'],
+        ['--dangerously-skip-permissions'],
+        ['--model', 'sonnet'],
+      ],
+      absent: [['--permission-mode', 'acceptEdits']],
+    },
   ])(
     'claudeLaunch_Controls_BecomeLaunchFlags ($name)',
-    ({ controls, present, absent }) => {
+    ({ permissions = 'default', controls, present, absent }) => {
       const launch = claudeLaunch(
         {
           processId: 'p-1',
@@ -132,6 +187,7 @@ describe('claudeLaunch', () => {
           instructions: [],
           idleCompactMinTokens: null,
           rowId: 'row-1',
+          permissions,
         },
         {},
         '/h',
@@ -172,6 +228,7 @@ describe('claudeLaunch', () => {
           instructions,
           idleCompactMinTokens: null,
           rowId: 'row-1',
+          permissions: 'default',
         },
         {},
         '/h',
@@ -201,6 +258,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-1',
+        permissions: 'default',
       },
       {
         HOME: '/h',
@@ -241,6 +299,7 @@ describe('claudeLaunch', () => {
           instructions: [],
           idleCompactMinTokens: minTokens,
           rowId: 'row-1',
+          permissions: 'default',
         },
         { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' },
         '/h',
@@ -269,6 +328,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-7',
+        permissions: 'default',
       },
       env,
       '/h',
@@ -290,6 +350,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-1',
+        permissions: 'default',
       },
       { HOME: '/elsewhere' },
       '/Users/u',
@@ -311,6 +372,7 @@ describe('claudeLaunch', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: 'row-1',
+        permissions: 'default',
       },
       {},
       'C:\\Users\\jo',
@@ -355,6 +417,7 @@ describe('claudeLaunch', () => {
           instructions: [],
           idleCompactMinTokens: 5000,
           rowId: 'row-1',
+          permissions: 'default',
         },
         inherited,
         '/h',
@@ -379,7 +442,7 @@ describe('claudeLaunch', () => {
 
 describe('claudeSpawn', () => {
   it('claudeSpawn_Request_IsTheLaunchUnderTheProcessId', () => {
-    const request = {
+    const request: ClaudeStart = {
       processId: 'p-3',
       sessionId: 's-1',
       resume: false,
@@ -389,6 +452,7 @@ describe('claudeSpawn', () => {
       instructions: [],
       idleCompactMinTokens: null,
       rowId: 'row-1',
+      permissions: 'default',
     };
     const env = { HOME: '/h', CLAUDECODE: '1' };
 
