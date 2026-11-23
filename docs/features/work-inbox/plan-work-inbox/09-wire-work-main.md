@@ -1,6 +1,6 @@
 # 09 — Wire the work plugin, fixture and self-test
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · the main part's lifecycle joins chat's restore, the job runner, timers, the store's change chain and the self-test and drive modes
 Wave: 3 · Depends on: 02, 04, 05, 06, 07, 08
@@ -442,3 +442,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 414ee96c6 · proof: diff read: createSweepTimer, SweepTimerDeps, SweepTimer, MIN_SWEEP_MINUTES, FIXTURE_ITEM_IDS, FIXTURE_TASK_ID, fixtureFile, fixtureSignals, WorkSelfTestDeps, workSelfTestScript, reseedStep, WORK_SELFTEST_KEYS, RESEED_FILE, workMainPart signature kept; wave 3 typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail · concerns: tests assume unexercised harness behaviour (restart calls ready, counts().timers drops a cleared timer, memory watch file naming); self-test refusal steps rely on a rejected page command not failing the run; main part now needs chat and sessions contributeTools at start; start.test fakes runner and watch with vi.mock

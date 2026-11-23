@@ -1,6 +1,6 @@
 # 13 — Docs, the views' self-test steps, and the doc re-read
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · doc-only apart from the self-test groups, which follow `src/plugins/backlog/main/selftest-script.ts`
 and add no interface

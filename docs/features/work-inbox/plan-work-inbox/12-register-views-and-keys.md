@@ -1,6 +1,6 @@
 # 12 — Register the views and keys
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · follows Backlog's registration and its binds in `src/plugins/keymap.ts` (`<Leader>kb` and the
 `backlog.table` block), and every key is pinned below
@@ -120,3 +120,4 @@ One commit for the group: `work-inbox, work-board: register both views and bind 
 
 ## Proof
 
+Commit d5b47f0c4 · proof: diff read: both views in builtInManifests, pageParts, mainParts after work; <Leader>ki/kj; Ctrl+n scope list; view binds; wave 3 typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail (composition check clean) · concerns: keymap test checks the unmerged defaultKeymap only, not manifest-contributed binds; manifests test casts commands to Record<string, unknown>
