@@ -210,6 +210,18 @@ describe('statusLine', () => {
       expected: { text: 'Send queued', tone: 'running', hasRow: false },
     },
     {
+      case: 'a queued sweep this run does not launch',
+      running: job('sweep', 'queued', 10 * MINUTE, {
+        note: 'Not launched: this run launches no worker.',
+      }),
+      last: null,
+      expected: {
+        text: 'Sweep queued · Not launched: this run launches no worker.',
+        tone: 'running',
+        hasRow: false,
+      },
+    },
+    {
       case: 'a sweep running 3 minutes',
       running: job('sweep', 'running', 3 * MINUTE),
       last: null,

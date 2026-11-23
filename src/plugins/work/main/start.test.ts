@@ -442,37 +442,47 @@ describe('workMainPart', () => {
     },
   );
 
-  it("start — stale marks cleared once the start sweep's enqueue resolves; a pending job keeps its mark", async () => {
-    const restored = deferred<void>();
-    const sweep = deferred<void>();
-    const items = [
-      workItem('lost', { sending: 'On it' }),
-      workItem('kept', { sending: 'On it' }),
-    ];
-    const { harness } = await open({
-      runMode: 'live',
-      restored: restored.promise,
-      files: { [WORK_PATH]: fileText({ items }) },
-    });
-    lastRunner().answer = () => sweep.promise;
-    lastRunner().queued = [{ kind: 'send', itemId: 'kept', text: 'On it' }];
+  it.each<{ settles: 'resolves' | 'rejects' }>([
+    { settles: 'resolves' },
+    { settles: 'rejects' },
+  ])(
+    "start — stale marks cleared once the start sweep's enqueue $settles; a pending job keeps its mark",
+    async ({ settles }) => {
+      const restored = deferred<void>();
+      const sweep = deferred<void>();
+      const items = [
+        workItem('lost', { sending: 'On it' }),
+        workItem('kept', { sending: 'On it' }),
+      ];
+      const { harness } = await open({
+        runMode: 'live',
+        restored: restored.promise,
+        files: { [WORK_PATH]: fileText({ items }) },
+      });
+      lastRunner().answer = () => sweep.promise;
+      lastRunner().queued = [{ kind: 'send', itemId: 'kept', text: 'On it' }];
 
-    restored.resolve();
-    await settled();
-    expect(itemOf(harness, 'lost')?.sending).toBe('On it');
-    sweep.resolve();
-    await settled();
+      restored.resolve();
+      await settled();
+      expect(itemOf(harness, 'lost')?.sending).toBe('On it');
+      if (settles === 'resolves') {
+        sweep.resolve();
+      } else {
+        sweep.reject(new Error('x'));
+      }
+      await settled();
 
-    expect(itemOf(harness, 'lost')).toMatchObject({
-      sending: null,
-      note: 'Send failed: Its job was lost in a restart.',
-    });
-    expect(itemOf(harness, 'kept')).toMatchObject({
-      sending: 'On it',
-      note: null,
-    });
-    await harness.stop();
-  });
+      expect(itemOf(harness, 'lost')).toMatchObject({
+        sending: null,
+        note: 'Send failed: Its job was lost in a restart.',
+      });
+      expect(itemOf(harness, 'kept')).toMatchObject({
+        sending: 'On it',
+        note: null,
+      });
+      await harness.stop();
+    },
+  );
 
   it('redetect — keeps the saved suggestions while latest() is null', async () => {
     const saved = {

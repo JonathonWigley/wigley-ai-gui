@@ -39,7 +39,8 @@ export type JobQueueEvent =
   | { kind: 'closed'; hostSessionId: string }
   | { kind: 'started' }
   | { kind: 'restoreMissed'; hostSessionId: string }
-  | { kind: 'rowRestored'; hostSessionId: string; rowId: string };
+  | { kind: 'rowRestored'; hostSessionId: string; rowId: string }
+  | { kind: 'hostChanged'; rowId: string; hostSessionId: string };
 
 // The queue after `event`: a new object, `queue` left as it was.
 export function nextJobQueue(queue: JobQueue, event: JobQueueEvent): JobQueue {
@@ -65,19 +66,43 @@ export function nextJobQueue(queue: JobQueue, event: JobQueueEvent): JobQueue {
       return afterStarted(queue);
     case 'rowRestored':
       return afterRowRestored(queue, event.hostSessionId, event.rowId);
+    case 'hostChanged':
+      return afterHostChanged(queue, event.rowId, event.hostSessionId);
   }
 }
 
+// A launched running job takes the restored row that carries its row id or its host, with that row's id and host.
 function afterRowRestored(
   queue: JobQueue,
   hostSessionId: string,
   rowId: string,
 ): JobQueue {
   const { running } = queue;
-  if (running === null || running.hostSessionId !== hostSessionId) {
+  const isRunningRow =
+    running !== null &&
+    running.hostSessionId !== null &&
+    (running.rowId === rowId || running.hostSessionId === hostSessionId);
+  if (!isRunningRow) {
     return { ...queue };
   }
-  return { ...queue, running: { ...running, rowId } };
+  return { ...queue, running: { ...running, rowId, hostSessionId } };
+}
+
+// A launched running job follows its row to the row's new host, as a `/clear` moves it.
+function afterHostChanged(
+  queue: JobQueue,
+  rowId: string,
+  hostSessionId: string,
+): JobQueue {
+  const { running } = queue;
+  const isRunningRow =
+    running !== null &&
+    running.hostSessionId !== null &&
+    running.rowId === rowId;
+  if (!isRunningRow) {
+    return { ...queue };
+  }
+  return { ...queue, running: { ...running, hostSessionId } };
 }
 
 // The item a send or nudge posts on; null for any other job.

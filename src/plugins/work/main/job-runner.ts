@@ -53,6 +53,7 @@ const RESTORE_MISSED_NOTE = 'Its session did not come back after the restart.';
 const TIMEOUT_NOTE = 'The job ran past 20 minutes and was stopped.';
 const NO_REPORT_NOTE = 'The worker ended without reporting a result.';
 const CLOSED_BEFORE_NOTE = 'Its session closed before it reported.';
+const NOT_LAUNCHED_NOTE = 'Not launched: this run launches no worker.';
 
 // True once a job row that has started its first turn rests with nothing running: its process ended, or its turn is
 // idle with no subagent, task or compaction still running. `hasStarted` false is a row whose first turn has not
@@ -146,19 +147,29 @@ function rowTitle(job: WorkJob): string {
   }
 }
 
-// `job.running` for `running`: queued while its launch is pending, running once launched.
-function runningStatus(running: RunningJob | null): WorkJobStatus | null {
+// `job.running` for `running`: queued while its launch is pending, running once launched. A run that launches no
+// worker notes so on its unlaunched job.
+function runningStatus(
+  running: RunningJob | null,
+  launchesWorkers: boolean,
+): WorkJobStatus | null {
   if (running === null) {
     return null;
   }
   const isLaunched = running.hostSessionId !== null;
+  const isHeldUnlaunched = !isLaunched && !launchesWorkers;
   return {
     kind: running.job.kind,
     state: isLaunched ? 'running' : 'queued',
     rowId: isLaunched ? running.rowId : null,
     at: running.startedAt,
-    note: null,
+    note: isHeldUnlaunched ? NOT_LAUNCHED_NOTE : null,
   };
+}
+
+// Whether `a` and `b` are the same run of one job, across the queue's copies of it.
+function isSameRun(a: RunningJob | null, b: RunningJob): boolean {
+  return a !== null && a.job === b.job && a.startedAt === b.startedAt;
 }
 
 function endStatus(end: JobEnd): WorkJobStatus {
@@ -192,7 +203,8 @@ function closedOutcome(
 // data. Every event, launch result, report and enqueue applies in one serial chain that `start` begins. A launched
 // row has `HOST_WAIT_MS` to report its host id. A job ends when its row closes: after it reads done for `SETTLE_MS`,
 // when its process ends, past `JOB_TIMEOUT_MS`, or by the user; a close is matched by row or host id, so a `/clear`
-// on the row still ends it. With `launchesWorkers` false the head is never launched. Each change writes
+// on the row still ends it. The running job follows its row to each new host, and a restart claims its row by row id
+// or host. With `launchesWorkers` false the head is never launched, and `job.running` notes so. Each change writes
 // `job.running` to the store, and each end `job.last` (and a good sweep's `lastSweepAt`), then calls `ended`.
 export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   const { chat, rows, sessionInfo, clock, timers, log } = deps;
@@ -204,8 +216,8 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   const held: { job: WorkJob; resolve: () => void }[] = [];
   // The row id the running job's launch resolved to, set before its `launched` step runs.
   let launchedRowId: string | null = null;
-  // The host of the running job its timeout closed, so its end reads as a timeout.
-  let timedOutHost: string | null = null;
+  // The run its timeout closed, so its end reads as a timeout.
+  let timedOutRun: RunningJob | null = null;
   // Row ids whose first turn began, kept until the row leaves the side bar.
   const startedRows = new Set<string>();
   // The running job's timers: each one's fire does nothing once the job it was armed for no longer runs.
@@ -273,13 +285,13 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     jobTimers[name] = handle;
   };
 
-  // `armTimer` for the running job on `host`.
+  // `armTimer` for `running`, whichever host its row moves to.
   const armJobTimer = (
     name: keyof typeof jobTimers,
-    host: string,
+    running: RunningJob,
     ms: number,
     fire: () => Promise<void> | void,
-  ) => armTimer(name, ms, () => queue.running?.hostSessionId === host, fire);
+  ) => armTimer(name, ms, () => isSameRun(queue.running, running), fire);
 
   const save = async () => {
     if (!isFileWritable) {
@@ -293,7 +305,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   };
 
   const writeStatus = async (end: JobEnd | null) => {
-    const running = runningStatus(queue.running);
+    const running = runningStatus(queue.running, deps.launchesWorkers);
     await deps.store.update((file) => {
       if (end === null) {
         return { ...file, job: { ...file.job, running } };
@@ -340,7 +352,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   ) => {
     clearJobTimers();
     launchedRowId = null;
-    timedOutHost = null;
+    timedOutRun = null;
     return commit(nextJobQueue(queue, event), {
       job: running.job,
       outcome,
@@ -365,19 +377,19 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   // row id matches a row a `/clear` moved to a new host; the host matches a restored row not yet claimed.
   const endByClose = (rowId: string, host: string, failedNote: string) => {
     const { running } = queue;
-    const launchedHost = running?.hostSessionId ?? null;
-    if (running === null || launchedHost === null) {
+    const runningHost = running?.hostSessionId ?? null;
+    if (running === null || runningHost === null) {
       return;
     }
-    const isRunningRow = running.rowId === rowId || launchedHost === host;
+    const isRunningRow = running.rowId === rowId || runningHost === host;
     if (!isRunningRow) {
       return;
     }
-    const isTimedOut = timedOutHost === launchedHost;
+    const isTimedOut = timedOutRun !== null && isSameRun(running, timedOutRun);
     const outcome = closedOutcome(running, isTimedOut, failedNote);
     return endJob(
       running,
-      { kind: 'closed', hostSessionId: launchedHost },
+      { kind: 'closed', hostSessionId: runningHost },
       outcome,
     );
   };
@@ -420,13 +432,13 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     if (running?.rowId == null || running.hostSessionId === null) {
       return;
     }
-    const { rowId, hostSessionId } = running;
+    const { rowId } = running;
     if (!isJobDone(sessionInfo.get(rowId), startedRows.has(rowId))) {
       clearJobTimer('settle');
       return;
     }
     if (jobTimers.settle === null) {
-      armJobTimer('settle', hostSessionId, SETTLE_MS, closeIfStillDone);
+      armJobTimer('settle', running, SETTLE_MS, closeIfStillDone);
     }
   };
 
@@ -435,19 +447,19 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     if (running?.rowId == null || running.hostSessionId === null) {
       return;
     }
-    timedOutHost = running.hostSessionId;
+    timedOutRun = running;
     closeRow(running.rowId, running.hostSessionId);
   };
 
   // Arms the running job's timeout for what is left of `JOB_TIMEOUT_MS` since it started; with none left, closes now.
-  const armTimeout = (running: RunningJob, host: string) => {
+  const armTimeout = (running: RunningJob) => {
     const elapsed = clock.now() - Date.parse(running.startedAt);
     const remaining = Math.max(0, JOB_TIMEOUT_MS - elapsed);
     if (remaining === 0) {
       timedOut();
       return;
     }
-    armJobTimer('timeout', host, remaining, timedOut);
+    armJobTimer('timeout', running, remaining, timedOut);
   };
 
   // The running row's process ended, so nothing more runs in it: it closes now rather than at the timeout.
@@ -515,10 +527,16 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     } catch (error) {
       log(`work row ${rowId} not titled: ${errorText(error)}`);
     }
-    armTimeout(running, host);
+    armTimeout(running);
     checkDone();
   };
 
+  const launchFailed = (error: unknown) => {
+    launchedRowId = null;
+    void serial(() => failUnlaunched(`Launch failed: ${errorText(error)}`));
+  };
+
+  // Launches `running`'s row, failing the job unlaunched when a step of the launch throws or rejects.
   const launch = (running: RunningJob) => {
     if (!deps.launchesWorkers) {
       log(
@@ -526,6 +544,14 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
       );
       return;
     }
+    try {
+      startLaunch(running);
+    } catch (error) {
+      launchFailed(error);
+    }
+  };
+
+  const startLaunch = (running: RunningJob) => {
     const setting = deps.profile();
     const profile = setting !== '' ? setting : chat.defaultProfile(null);
     if (profile === null || profile === '') {
@@ -547,25 +573,36 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
         permissions: 'auto',
         owner: workManifest.id,
       })
-      .then(
-        (rowId) => {
-          launchedRowId = rowId;
-          void serial(() => launched(rowId));
-        },
-        (error: unknown) => {
-          launchedRowId = null;
-          void serial(() =>
-            failUnlaunched(`Launch failed: ${errorText(error)}`),
-          );
-        },
-      );
+      .then((rowId) => {
+        launchedRowId = rowId;
+        void serial(() => launched(rowId));
+      }, launchFailed);
   };
 
-  const hostRow = (host: string) =>
-    [...rows.all().values()].find((row) => row.hostSessionId === host);
+  // Whether `row` is the launched `running` job's row: by its row id, which a `/clear` keeps, or by its host.
+  const isRunningRow = (row: SessionRow, running: RunningJob) =>
+    running.hostSessionId !== null &&
+    (row.sessionId === running.rowId ||
+      row.hostSessionId === running.hostSessionId);
 
-  // Claims the restored row of the running job on `host` as started, then arms its timeout and checks it for done.
-  const claimRestored = async (row: SessionRow, host: string) => {
+  // The side bar's row of the launched `running` job: the row with its row id, else the row on its host.
+  const runningRowOf = (running: RunningJob) => {
+    const byId = running.rowId === null ? undefined : rows.get(running.rowId);
+    if (byId !== undefined) {
+      return byId;
+    }
+    return [...rows.all().values()].find(
+      (row) => row.hostSessionId === running.hostSessionId,
+    );
+  };
+
+  // Claims the running job's restored row as started, taking the row's id and current host, then arms its timeout
+  // and checks it for done.
+  const claimRestored = async (row: SessionRow) => {
+    const host = row.hostSessionId ?? queue.running?.hostSessionId ?? null;
+    if (host === null) {
+      return;
+    }
     clearJobTimer('restore');
     await apply({
       kind: 'rowRestored',
@@ -577,21 +614,45 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
       return;
     }
     startedRows.add(row.sessionId);
-    armTimeout(running, host);
+    armTimeout(running);
     checkDone();
   };
 
-  // A row that joins, or takes the running host, during the restore wait is the running job's restored row.
+  // A row that joins, or takes a host, during the restore wait is the running job's restored row when it carries
+  // the job's row id or host.
   const claimIfAwaited = (row: SessionRow) => {
-    const host = queue.running?.hostSessionId ?? null;
+    const { running } = queue;
     const isAwaitedRow =
-      jobTimers.restore !== null && host !== null && row.hostSessionId === host;
-    return isAwaitedRow ? claimRestored(row, host) : undefined;
+      jobTimers.restore !== null &&
+      running !== null &&
+      isRunningRow(row, running);
+    return isAwaitedRow ? claimRestored(row) : undefined;
   };
 
-  // A row that joined or took a host: the running job's restored row, or its launched row reporting its host.
+  // The running row took a new host, as a `/clear` gives it: the running job follows it there.
+  const followRunningHost = (row: SessionRow) => {
+    const { running } = queue;
+    const newHost = row.hostSessionId;
+    const isMovedRunningRow =
+      running !== null &&
+      running.hostSessionId !== null &&
+      row.sessionId === running.rowId &&
+      newHost !== running.hostSessionId;
+    if (newHost === null || !isMovedRunningRow) {
+      return;
+    }
+    return apply({
+      kind: 'hostChanged',
+      rowId: row.sessionId,
+      hostSessionId: newHost,
+    });
+  };
+
+  // A row that joined or took a host: the running job's restored row, its row moved to a new host, or its launched
+  // row reporting its host.
   const rowHostSeen = async (row: SessionRow) => {
     await claimIfAwaited(row);
+    await followRunningHost(row);
     await hostWaitRowChanged(row.sessionId, row);
   };
 
@@ -600,14 +661,13 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
     if (running?.hostSessionId == null) {
       return;
     }
-    const host = running.hostSessionId;
-    const row = hostRow(host);
+    const row = runningRowOf(running);
     if (row !== undefined) {
-      return claimRestored(row, host);
+      return claimRestored(row);
     }
     return endJob(
       running,
-      { kind: 'restoreMissed', hostSessionId: host },
+      { kind: 'restoreMissed', hostSessionId: running.hostSessionId },
       {
         ok: false,
         note: RESTORE_MISSED_NOTE,
@@ -632,16 +692,16 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 
   // The kept running job claims its restored row, or waits `RESTORE_WAIT_MS` for it.
   const claimOnRestart = async () => {
-    const host = queue.running?.hostSessionId ?? null;
-    if (host === null) {
+    const { running } = queue;
+    if (running?.hostSessionId == null) {
       return;
     }
-    const row = hostRow(host);
+    const row = runningRowOf(running);
     if (row !== undefined) {
-      await claimRestored(row, host);
+      await claimRestored(row);
       return;
     }
-    armJobTimer('restore', host, RESTORE_WAIT_MS, restoreWaitEnded);
+    armJobTimer('restore', running, RESTORE_WAIT_MS, restoreWaitEnded);
   };
 
   const jobOf = (session: AgentSession): WorkJob | null => {

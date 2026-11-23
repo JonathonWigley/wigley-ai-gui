@@ -503,7 +503,6 @@ export const workMainPart: MainPart<typeof workManifest> = {
         await runner.enqueue({ kind: 'sweep' });
       } catch (error) {
         log(`job not queued: ${errorText(error)}`);
-        return;
       }
       await store.update((file) => clearStaleMarks(file, runner.pending()));
     };

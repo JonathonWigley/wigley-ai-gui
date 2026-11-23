@@ -230,6 +230,7 @@ async function runnerOver(
     profile: 'p1',
     defaultProfile: 'd' as string | null,
     titleError: null as Error | null,
+    storeError: null as Error | null,
     message: (job: WorkJob): string | null => jobText(job),
     answerLaunch: (_request: LaunchRequest): Promise<string> => {
       const n = launches.length;
@@ -300,7 +301,14 @@ async function runnerOver(
     sessionInfo: slots.read(chatSessionSlot, 'work'),
     events: bus.events,
     data,
-    store,
+    store: {
+      update(change) {
+        if (knobs.storeError !== null) {
+          throw knobs.storeError;
+        }
+        return store.update(change);
+      },
+    },
     clock: time.clock,
     timers: time.timers,
     log,
@@ -506,6 +514,18 @@ describe('createJobRunner', () => {
       note: 'Launch failed: unknown profile',
     },
     {
+      case: 'launch_messageThrows_failsWithError',
+      arrange: (part) => {
+        part.message = (job) => {
+          if (job.kind === 'send') {
+            throw new Error('bad item');
+          }
+          return jobText(job);
+        };
+      },
+      note: 'Launch failed: bad item',
+    },
+    {
       case: 'launch_rowGone_fails',
       arrange: (part) => {
         const answer = part.answerLaunch;
@@ -600,6 +620,7 @@ describe('createJobRunner', () => {
     expect(part.store.file().job.running).toMatchObject({
       kind: 'sweep',
       state: 'queued',
+      note: 'Not launched: this run launches no worker.',
     });
     expect(part.runner.pending()).toEqual([SWEEP, SEND_A]);
     expect(part.logs).toEqual([
@@ -609,14 +630,12 @@ describe('createJobRunner', () => {
 
   it('enqueue_stepThrows_rejects', async () => {
     const part = await runnerOver();
-    part.message = () => {
-      throw new Error('bad item');
-    };
     await part.start();
+    part.storeError = new Error('disk full');
 
-    await expect(part.runner.enqueue(SWEEP)).rejects.toThrow('bad item');
+    await expect(part.runner.enqueue(SWEEP)).rejects.toThrow('disk full');
 
-    expect(part.logs).toContain('work job step failed: bad item');
+    expect(part.logs).toContain('work job step failed: disk full');
   });
 
   it('done_settlesThenCloses', async () => {
@@ -884,24 +903,70 @@ describe('createJobRunner', () => {
     expect(part.logs).toEqual([]);
   });
 
-  it('restart_lateRow_claimed', async () => {
-    const part = await runnerOver({ savedQueue: savedRunning() });
+  it.each<{ case: string; host: string; isLate: boolean }>([
+    { case: 'on its launch host, at start', host: 'host-9', isLate: false },
+    { case: 'on its launch host, late', host: 'host-9', isLate: true },
+    {
+      case: 'a /clear then a restart claims the row',
+      host: 'host-cleared',
+      isLate: false,
+    },
+    {
+      case: 'a /clear then a restart claims the row, late',
+      host: 'host-cleared',
+      isLate: true,
+    },
+  ])('restart_claimsRestoredRow: $case', async ({ host, isLate }) => {
+    const restored = workRow('row-9', host);
+    const part = await runnerOver({
+      savedQueue: savedRunning(),
+      rows: isLate ? [] : [restored],
+    });
     await part.start();
-
     part.advance(10_000);
-    part.rows.set('row-9', workRow('row-9', 'host-9'));
+    if (isLate) {
+      part.rows.set('row-9', restored);
+    }
     await flush();
     part.advance(RESTORE_WAIT_MS);
     await flush();
 
+    expect(part.closes).toEqual([]);
     expect(part.last()).toBeNull();
-    expect(part.runner.pending()).toEqual([SWEEP]);
+    expect(part.lastQueueWrite()?.running?.hostSessionId).toBe(host);
 
     part.info.set('row-9', sessionInfo('row-9', 'idle'));
     part.advance(SETTLE_MS);
     await flush();
 
     expect(part.closes).toEqual([['row-9', 'finished']]);
+    expect(part.last()).toEqual(
+      expect.objectContaining(
+        lastOf('sweep', 'failed', 'row-9', NO_REPORT_NOTE),
+      ),
+    );
+  });
+
+  it('hostChanged_runningRow_jobFollowsHost', async () => {
+    const part = await runnerOver();
+    await part.start();
+    await part.enqueue(SWEEP);
+
+    part.rows.set('row-1', workRow('row-1', 'host-cleared'));
+    await flush();
+
+    expect(part.lastQueueWrite()?.running?.hostSessionId).toBe('host-cleared');
+    expect(part.runner.jobOf(agentSession(null, 'host-cleared'))).toEqual(
+      SWEEP,
+    );
+    expect(part.runner.jobOf(agentSession(null, 'host-1'))).toBeNull();
+
+    part.advance(JOB_TIMEOUT_MS);
+    await flush();
+
+    expect(part.last()).toEqual(
+      expect.objectContaining(lastOf('sweep', 'failed', 'row-1', TIMEOUT_NOTE)),
+    );
   });
 
   describe('beforeStart', () => {
@@ -1138,20 +1203,6 @@ describe('createJobRunner', () => {
       },
     ]);
     expect(part.store.file().lastSweepAt).toBeNull();
-  });
-
-  it('restart_claimsRestoredRow', async () => {
-    const part = await runnerOver({
-      savedQueue: savedRunning(),
-      rows: [workRow('row-9', 'host-9')],
-    });
-    await part.start();
-
-    part.info.set('row-9', sessionInfo('row-9', 'idle'));
-    part.advance(SETTLE_MS);
-    await flush();
-
-    expect(part.closes).toEqual([['row-9', 'finished']]);
   });
 
   it('restart_strayClose_skipsClaimed', async () => {

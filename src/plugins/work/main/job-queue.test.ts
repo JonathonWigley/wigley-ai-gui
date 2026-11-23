@@ -214,6 +214,36 @@ describe('nextJobQueue', () => {
       ),
     },
     {
+      case: 'rowRestored after a /clear takes the new host',
+      start: queueOf([], runningOf(SWEEP, launchedH1)),
+      event: { kind: 'rowRestored', hostSessionId: 'h2', rowId: 'r1' },
+      after: queueOf(
+        [],
+        runningOf(SWEEP, { hostSessionId: 'h2', rowId: 'r1' }),
+      ),
+    },
+    {
+      case: 'rowRestored with none launched',
+      start: queueOf([], runningOf(SWEEP)),
+      event: { kind: 'rowRestored', hostSessionId: 'h1', rowId: 'r1' },
+      after: queueOf([], runningOf(SWEEP)),
+    },
+    {
+      case: 'hostChanged on the running row',
+      start: queueOf([], runningOf(SWEEP, launchedH1)),
+      event: { kind: 'hostChanged', rowId: 'r1', hostSessionId: 'h2' },
+      after: queueOf(
+        [],
+        runningOf(SWEEP, { hostSessionId: 'h2', rowId: 'r1' }),
+      ),
+    },
+    {
+      case: 'hostChanged on another row',
+      start: queueOf([], runningOf(SWEEP, launchedH1)),
+      event: { kind: 'hostChanged', rowId: 'r2', hostSessionId: 'h2' },
+      after: queueOf([], runningOf(SWEEP, launchedH1)),
+    },
+    {
       case: 'rowRestored other host',
       start: queueOf([], runningOf(SWEEP, launchedH1)),
       event: { kind: 'rowRestored', hostSessionId: 'h2', rowId: 'r9' },
@@ -268,6 +298,7 @@ describe('nextJobQueue', () => {
       { kind: 'launched', hostSessionId: 'h1', rowId: 'r1' },
       { kind: 'reported', result: { ok: true, note: null } },
       { kind: 'rowRestored', hostSessionId: 'h1', rowId: 'r9' },
+      { kind: 'hostChanged', rowId: 'r9', hostSessionId: 'h2' },
       { kind: 'closed', hostSessionId: 'h1' },
     ];
 

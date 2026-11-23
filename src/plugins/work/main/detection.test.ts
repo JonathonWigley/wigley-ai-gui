@@ -312,6 +312,13 @@ const ROWS: Row[] = [
     expected: [entry('local-1', session('R', null, T3), 'In Progress')],
   },
   {
+    case: 'session mark saved without a row (null) → suggests',
+    cards: [linkedTask],
+    seen: [session('S', null, T3)],
+    notYet: [{ cardId: 'local-1', signal: 'session', at: T1, rowId: null }],
+    expected: [entry('local-1', session('S', null, T3), 'In Progress')],
+  },
+  {
     case: 'local task, session link by row id',
     cards: [linkedTask],
     seen: [session('S', null, T1)],
