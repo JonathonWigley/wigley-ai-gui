@@ -96,7 +96,7 @@ badge. Waiting on others cards carry an editable nudge, Send, Snooze 1 day and D
 on that ticket.
 
 An item clears on Send, when a sweep sees the user replied or reacted in Slack, or on Dismiss; a snoozed item returns
-when its snooze ends. Cleared items stay under All, where Restore brings one back.
+when its snooze ends. Cleared and dismissed items stay under All for 90 days after their last activity, where Restore brings one back.
 
 ## Board
 

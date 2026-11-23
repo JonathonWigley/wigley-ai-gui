@@ -75,6 +75,7 @@ Decisions:
   - **Jira keys are normalised before they are checked.** Each `ticket_keys` element and each ticket's `key` is trimmed and upper-cased, then kept only when `ticketKeysIn` gives it back whole. Otherwise the call is refused `Refused: items[i].ticket_keys[j] must be a Jira key like ABC-123.` (or `tickets[i].key`). So `ws-12` and `"WS-12 "` store as `WS-12`, the form card ids and 07's matcher use, and `ws12` is refused.
 - **Item merge** (`mergeRecordedItems`, pure; the tool applies it through one `store.update`):
   - **A new id** gets `state: 'open'`, `firstSeen: now`, and `snoozedUntil`, `note` and `sending` all null.
+  - **Pruning (the user's choice):** after the merge, a `cleared` or `dismissed` item whose `at` is more than `PRUNE_CLOSED_ITEMS_MS` (`90 * 86_400_000`, a module constant here) before `now` is removed from `items`, with its card links left untouched; an `at` that does not parse counts as old. Open and snoozed items are never pruned. Table rows: cleared at 91 days removed, dismissed at 89 days kept, open at 200 days kept, cleared with an unparseable `at` removed.
   - **An existing id** takes every recorded field. `firstSeen`, `note`, `sending` and `snoozedUntil` are kept. A null recorded `draft` keeps the stored draft.
   - **The state of an existing id**:
     - A `dismissed` or `cleared` item goes back to `open` when the recorded `at` is later than the stored `at`, since new messages arrived. Otherwise it keeps its state.
