@@ -46,7 +46,6 @@ import { buildMainWorkflow } from '../declared/build-main';
 import { checklistHookHandler } from '../declared/checklist-hook';
 import { autoStartSettingsLine, createAutoStart } from '../declared/countdown';
 import { createEnabledWorkflows } from '../declared/enabled-workflows';
-import { NO_PLAN_FOLD } from '../declared/plan-fold';
 import { planFormatReader } from '../declared/plan-format-reader';
 import {
   declaredWorkflows,
@@ -54,6 +53,8 @@ import {
 } from '../declared/workflows-reader';
 import { foldFlow, foldRunningState, markMissedLevel } from '../flow';
 import { workflowManifest } from '../manifest';
+import { startPlanCapability } from '../plan/plan-capability';
+import { createPlanFold } from '../plan/plan-fold';
 import { createStageList } from '../stage-list';
 import { signalOf } from './agent-signals';
 import {
@@ -103,7 +104,9 @@ type WorkflowApi = MainApi<
 // the built-in Checklist flow and every declared workflow `workflow.off` leaves
 // on (published in `workflow.declared`), answers the `workflow.checklist`
 // hook, runs declared actions for the page and the auto-start countdown, and
-// logs the `autoStart` setting on each settings change.
+// logs the `autoStart` setting on each settings change. Folds each declared
+// workflow's plan through the plan capability, and once flows load runs its
+// plan watch, `set_workflow_plan` and plan report files.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -127,6 +130,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     contributions.registerFeature('planFormat', planFormatReader);
     let isStopped = false;
     const enabled = createEnabledWorkflows();
+    const planFold = createPlanFold();
     const declaredSlot = api.state.publish(workflowDeclaredSlot);
     // Every `addDeclared` entry, in call order.
     const addedDeclared: DeclaredWorkflow[] = [];
@@ -195,7 +199,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         held?.registration.dispose();
         declaredRegistrations.set(entry.id, {
           json,
-          registration: addWorkflow(buildMainWorkflow(entry, NO_PLAN_FOLD)),
+          registration: addWorkflow(buildMainWorkflow(entry, planFold)),
         });
       }
     };
@@ -459,7 +463,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           decl: CHECKLIST_WORKFLOW,
           planFormat: null,
         },
-        NO_PLAN_FOLD,
+        planFold,
       ),
     );
     contributions.onChanged('workflows', syncDeclared);
@@ -498,6 +502,30 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       isStopped: () => isStopped,
     });
     observe(autoStart);
+    // Started once flows load, so its follow of every held flow sees them.
+    let planCapability: Disposable | null = null;
+    void ready.then(() => {
+      if (isStopped) {
+        return;
+      }
+      planCapability = startPlanCapability({
+        git: services.git,
+        files: services.files,
+        paths: services.paths,
+        log,
+        homeDir: services.homeDir,
+        appInstance: services.appInstance,
+        sessions,
+        signal: (sessionId, signal, origin) => apply(sessionId, signal, origin),
+        flowOf: (sessionId) => store.get(sessionId),
+        flows: () => store.all(),
+        observe,
+        ready,
+        enabledWorkflows: () => enabled.enabledWorkflows(),
+        onWorkflowsChanged: (listener) => enabled.onWorkflowsChanged(listener),
+        workflowOf: (flow) => enabled.workflowOf(flow),
+      });
+    });
     api.channel.handle('runAction', ({ sessionId, action }) =>
       ready.then(async () => {
         if (isStopped) {
@@ -692,6 +720,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       dispose: () => {
         isStopped = true;
         autoStart.stop();
+        planCapability?.dispose();
         return store.flushed();
       },
       exports: (consumer): WorkflowMainExports => ({

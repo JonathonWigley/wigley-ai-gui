@@ -37,11 +37,11 @@ import {
 } from '../contract';
 import { CANCEL_COUNTDOWN_ACTION } from '../declared/actions';
 import { buildPageWorkflow, type PageBuildDeps } from '../declared/build-page';
-import { NO_PLAN_PANE } from '../declared/plan-pane';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowManifest } from '../manifest';
+import { createPlanPane } from '../plan/plan-pane';
 import { registerDemoSteps } from './demo-steps';
 import {
   createWorkflowDraw,
@@ -209,9 +209,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       sideTitle: entry.decl.sidePane.title,
       badgeColor: entry.decl.badgeColor ?? DEFAULT_BADGE_COLOR,
     });
+    const planPane = createPlanPane();
     const buildDeps = (draw: PageBuildDeps['draw']): PageBuildDeps => ({
       draw,
-      planPane: NO_PLAN_PANE,
+      planPane,
       runAction: (sessionId, action) =>
         api.channel.invoke('runAction', { sessionId, action }),
       // Docs is read at the call: a part started with no Docs page still draws.
