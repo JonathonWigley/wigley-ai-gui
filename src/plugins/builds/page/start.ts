@@ -193,8 +193,7 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
         queueOffer: () => sessionParts.queueOffer(),
         dismissOffer: () => sessionParts.dismissOffer(),
         queueSessionOffer: ({ arg }) => sessionParts.queueSessionOffer(arg),
-        dismissSessionOffer: ({ arg }) =>
-          sessionParts.dismissSessionOffer(arg),
+        dismissSessionOffer: ({ arg }) => sessionParts.dismissSessionOffer(arg),
         leaveOffer: () => sessionParts.leaveOffer(),
         offerFocusBox: () => sessionParts.offerToBox('insert'),
         offerAppendBox: () => sessionParts.offerToBox('append'),

@@ -19,21 +19,14 @@ import {
   type RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
 import type { LayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import type {
-  ChatPageExports,
-  ComposerStopExits,
-} from '../../chat/contract';
+import type { ChatPageExports, ComposerStopExits } from '../../chat/contract';
 import {
   followRows,
   type RowActivity,
   type SessionRow,
   type SessionsPageExports,
 } from '../../sessions/contract';
-import type {
-  BuildsChannel,
-  BuildsSnapshot,
-  SessionBuilds,
-} from '../contract';
+import type { BuildsChannel, BuildsSnapshot, SessionBuilds } from '../contract';
 import type {
   BaseKit,
   BuildsLayout,

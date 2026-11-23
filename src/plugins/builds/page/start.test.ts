@@ -40,11 +40,7 @@ import type {
   SessionBuilds,
 } from '../contract';
 import { buildsSessionsSlot, buildsSnapshotSlot } from '../contract';
-import {
-  buildOffer,
-  buildRecord,
-  gameEntry,
-} from '../contract.test-support';
+import { buildOffer, buildRecord, gameEntry } from '../contract.test-support';
 import { buildsPagePart } from './start';
 
 const MODE = 'builds.main';
@@ -154,7 +150,11 @@ function startBuildsPage(
   const composerParts: ChatComposerPart[] = [];
   const fakeSessions = {
     addRowPart: () => ({ dispose() {} }),
-    setActivity(sessionId: string, sourceId: string, activity: RowActivity | null) {
+    setActivity(
+      sessionId: string,
+      sourceId: string,
+      activity: RowActivity | null,
+    ) {
       activities.push([sessionId, sourceId, activity]);
     },
     shownSessionId: () => shown.sessionId,
@@ -204,7 +204,9 @@ function startBuildsPage(
     >,
   ) => commands[command]({ arg: undefined });
   const stop = (): ComposerStop => {
-    const found = composerParts.find((part) => part.id === 'builds.offer')?.stop;
+    const found = composerParts.find(
+      (part) => part.id === 'builds.offer',
+    )?.stop;
     if (found === undefined) {
       throw new Error('no builds.offer stop');
     }
@@ -772,7 +774,12 @@ describe('buildsPagePart session parts', () => {
 
   it.each([
     { where: 'the held session', holds: true, shown: 's1', invoked: ['s2'] },
-    { where: 'the focused session', holds: false, shown: 's1', invoked: ['s1'] },
+    {
+      where: 'the focused session',
+      holds: false,
+      shown: 's1',
+      invoked: ['s1'],
+    },
     { where: 'no session', holds: false, shown: null, invoked: [] },
   ])('queueOffer acts on $where', async ({ holds, shown, invoked }) => {
     const page = startBuildsPage(workSnapshot(), {

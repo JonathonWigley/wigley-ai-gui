@@ -136,7 +136,11 @@ export const buildsManifest = definePlugin({
       runsIn: 'page',
       arg: 'string',
     },
-    leaveOffer: { label: 'back to the entries', group: 'offer', runsIn: 'page' },
+    leaveOffer: {
+      label: 'back to the entries',
+      group: 'offer',
+      runsIn: 'page',
+    },
     offerFocusBox: { label: 'type a message', group: 'offer', runsIn: 'page' },
     offerAppendBox: {
       label: 'append to the message',

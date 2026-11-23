@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BuildRecord, BuildsSnapshot, SessionBuilds } from '../contract';
-import {
-  buildOffer,
-  buildRecord,
-  gameEntry,
-} from '../contract.test-support';
+import { buildOffer, buildRecord, gameEntry } from '../contract.test-support';
 import {
   hubBuildInputs,
   isBuilding,
@@ -117,7 +113,12 @@ describe('rowLineInput', () => {
 
 describe('isBuilding', () => {
   it.each([
-    { case: 'builds undefined', builds: undefined, listed: [], expected: false },
+    {
+      case: 'builds undefined',
+      builds: undefined,
+      listed: [],
+      expected: false,
+    },
     {
       case: 'one finished build',
       builds: linking('7'),
