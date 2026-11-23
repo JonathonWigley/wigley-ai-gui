@@ -1,5 +1,5 @@
 """The app's channel as its clients reach it: the channel the endpoint file names, and a connection to it (a Unix
-socket on macOS, a named pipe on Windows). `relay.py` and the chatroom hook script import it; README.md § The relay is
+socket on macOS, a named pipe on Windows). `relay.py` and `hook_client.py` import it; README.md § The relay is
 its spec. Standard library only.
 """
 

@@ -24,7 +24,7 @@ interface PluginManifest {
 }
 
 interface HookEntry {
-  matcher: string;
+  matcher?: string;
   hooks: { type: string; command: string; timeout: number }[];
 }
 
@@ -113,6 +113,34 @@ describe('the agent plugin folder', () => {
       matcher: 'Edit|Write|MultiEdit|NotebookEdit',
       script: 'scripts/chatroom/hook.py',
       mode: 'post',
+      timeout: 5,
+    },
+    {
+      event: 'PreToolUse',
+      matcher: 'Edit|Write|MultiEdit|NotebookEdit',
+      script: 'scripts/checklist/hook.py',
+      mode: 'edit',
+      timeout: 5,
+    },
+    {
+      event: 'PreToolUse',
+      matcher: 'AskUserQuestion',
+      script: 'scripts/ask-user-question/hook.py',
+      mode: '',
+      timeout: 5,
+    },
+    {
+      event: 'Stop',
+      matcher: undefined,
+      script: 'scripts/checklist/hook.py',
+      mode: 'stop',
+      timeout: 5,
+    },
+    {
+      event: 'SessionStart',
+      matcher: 'compact',
+      script: 'scripts/checklist/hook.py',
+      mode: 'compact',
       timeout: 5,
     },
   ];

@@ -466,7 +466,7 @@ channel, and adds one of its own; the app runs the tools. That one is
 `notifications/tools/list_changed`, sent to a host that has initialized once when the app's
 channel drops, a call waiting or not, and once after it opens one, so the host refetches
 `tools/list` (the relay's own list while the app is away). The endpoint lookup and the channel
-open live in `endpoint.py`, which `relay.py` and the chatroom hook script import.
+open live in `endpoint.py`, which `relay.py` and `hook_client.py` (the hook scripts' client) import.
 
 - **Finding the app.** The app writes `endpoint.json` to `~/.agents/<instance id>/` each
   time it starts — `~/.agents/wigley-ai-gui/` for the installed stable app,
@@ -497,8 +497,18 @@ open live in `endpoint.py`, which `relay.py` and the chatroom hook script import
   channel. The app opens no session, adds no row, and does not hold the hello. It answers `ok: false` when no handler
   holds the hook's name, when no live session matches the hello, when the handler fails, when the request line is not
   complete 5 s after the hello (bytes without a newline do not extend that), and when the handler takes over 5 s.
-  The chatroom hook (`scripts/chatroom/hook.py`) is the one client: it reads the endpoint file before any git call, so
-  an absent app costs it no git reads, gives up after 3 s in all, its git reads included, and then prints nothing.
+  Every hook client goes through `hook_client.py`: `app_channel` finds the channel from the endpoint file,
+  `session_hello` builds the hello with the hook's name, and `ask_app_reply` sends the hello and one request and
+  returns the reply object, or None when the app refuses, the channel fails, or the line is not complete within
+  `HOOK_DEADLINE_SECONDS` (3 s); the hook then prints nothing. The clients:
+  - the chatroom hook (`scripts/chatroom/hook.py`, `chatroom.pre` and `chatroom.post`), which prints the reply's
+    `text`. It reads the endpoint file before any git call, so an absent app costs it no git reads, and its 3 s cover
+    its git reads too.
+  - the checklist hook (`scripts/checklist/hook.py edit|stop|compact`, hook `workflow.checklist` for all three, request
+    `{"mode": "<mode>"}`), which reads the reply `{ "reported": bool, "open": int, "items": [{ "text", "done",
+    "running"? }] }` and asks only for an app session's main agent (`WIGLEY_SESSION_ROW` set, no `agent_id`).
+    `docs/features/feature-contributions/design.md` § The Checklist flow gives the fields' meaning.
+  - any later hook, through the same three calls.
 - **Starting the app.** On a tool call with no app reachable and no channel dropped in the
   last 30 s (a call inside those 30 s waits, under App gone mid-call), the relay runs
   `start_app.py`'s `start_app` (in offline mode it answers from the app's table instead, under

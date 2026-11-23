@@ -1,8 +1,8 @@
 """The chatroom's Claude Code hook: before an edit or a `git commit`, and after an edit, it sends the app one neutral
 request naming the touched paths and prints the app's reply text as `additionalContext`. It never blocks a tool, always
 exits 0, and prints nothing when the app is away, refuses, or does not answer within HOOK_DEADLINE_SECONDS.
-`hooks/hooks.json` runs it as `hook.py pre` and `hook.py post`; relay/README.md § The relay holds the wire. Standard
-library only.
+`hooks/hooks.json` runs it as `hook.py pre` and `hook.py post`; it talks to the app through relay/hook_client.py, and
+relay/README.md § The relay holds the wire. Standard library only.
 """
 
 from __future__ import annotations
@@ -18,10 +18,9 @@ from typing import Callable, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "relay"))
 
-import endpoint  # noqa: E402
-import start_app  # noqa: E402
+import hook_client  # noqa: E402
+from hook_client import HOOK_DEADLINE_SECONDS  # noqa: E402
 
-HOOK_DEADLINE_SECONDS = 3.0
 GIT_TIMEOUT_SECONDS = 1.0
 
 RunGit = Callable[[list[str], str], Optional[str]]
@@ -121,24 +120,9 @@ def commit_folder(command: str, cwd: str) -> str | None:
 def ask_app(channel: str, hello: dict, request: dict, deadline: float) -> str | None:
     """Sends the hook hello and `request` on `channel` and returns the reply's `text`; None when the app refuses,
     the reply holds no text, the channel fails, or the reply line is not complete by `deadline`."""
-    time_left = deadline - time.monotonic()
-    if time_left <= 0:
-        return None
-    try:
-        connection = endpoint.open_channel(channel, timeout=time_left)
-    except OSError:
-        return None
-    try:
-        for message in (hello, request):
-            if not _set_time_left(connection, deadline):
-                return None
-            connection.write(json.dumps(message).encode() + b"\n")
-        line = _read_line(connection, deadline)
-    except OSError:
-        return None
-    finally:
-        connection.close()
-    return None if line is None else _reply_text(line)
+    reply = hook_client.ask_app_reply(channel, hello, request, deadline)
+    text = None if reply is None else reply.get("text")
+    return text if isinstance(text, str) and text else None
 
 
 def output_for(event: str, text: str | None) -> str:
@@ -171,58 +155,14 @@ def _hook_output(argv: list[str], stdin, env, deadline: float) -> str:
     except ValueError:
         return ""
     # The channel first, so an absent app costs no git reads.
-    channel = endpoint.channel_path(start_app.endpoint_dir(env))
+    channel = hook_client.app_channel(env)
     if channel is None:
         return ""
     request = request_from_input(event, hook_input, git_runner(deadline))
     if request is None:
         return ""
-    return output_for(event, ask_app(channel, _session_hello(event, hook_input, env), request, deadline))
-
-
-def _session_hello(event: str, hook_input: dict, env) -> dict:
-    session_id = hook_input.get("session_id")
-    return {
-        "protocol": endpoint.HOOK_PROTOCOL,
-        "session_id": session_id if isinstance(session_id, str) else None,
-        "project_dir": env.get("CLAUDE_PROJECT_DIR") or hook_input["cwd"],
-        "harness": "claude",
-        "config_dir": env.get("CLAUDE_CONFIG_DIR") or None,
-        "row_id": env.get("WIGLEY_SESSION_ROW") or None,
-        "hook": HOOK_NAMES[event],
-    }
-
-
-def _set_time_left(connection, deadline: float) -> bool:
-    """Bounds the channel's next call by the time left; False when none is left."""
-    time_left = deadline - time.monotonic()
-    if time_left <= 0:
-        return False
-    connection.set_timeout(time_left)
-    return True
-
-
-def _read_line(connection, deadline: float) -> bytes | None:
-    """The first line the app sends, without its newline; None when the channel closes or `deadline` passes first."""
-    received = b""
-    while b"\n" not in received:
-        if not _set_time_left(connection, deadline):
-            return None
-        chunk = connection.read()
-        if not chunk:
-            return None
-        received += chunk
-    return received.split(b"\n", 1)[0]
-
-
-def _reply_text(line: bytes) -> str | None:
-    try:
-        reply = json.loads(line)
-    except ValueError:
-        return None
-    is_answered = isinstance(reply, dict) and reply.get("ok") is True and isinstance(reply.get("reply"), dict)
-    text = reply["reply"].get("text") if is_answered else None
-    return text if isinstance(text, str) and text else None
+    hello = hook_client.session_hello(HOOK_NAMES[event], hook_input, env)
+    return output_for(event, ask_app(channel, hello, request, deadline))
 
 
 def _tokens(command: str) -> list[str] | None:
