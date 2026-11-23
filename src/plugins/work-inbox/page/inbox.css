@@ -1,0 +1,59 @@
+/* Inbox mode's app-owned containers: the side bar's pane holder, and the sheet's, which hold the layout's panes and
+   the slots they place. */
+.work-inbox-side,
+.work-inbox-main {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.work-inbox-sections,
+.work-inbox-cards {
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+.work-inbox-cards {
+  padding: var(--wg-space-2) var(--wg-space-4);
+}
+
+/* The sheet is the main cell's direct child: its margins lie outside the box, so it takes the cell's height less its
+   two gutters. */
+.work-inbox-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .work-inbox-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.work-inbox-draft {
+  display: grid;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+.work-inbox-draft-text {
+  white-space: pre-wrap;
+}
+
+.work-inbox-draft-placeholder {
+  color: var(--wg-fg-tertiary);
+  display: none;
+}
+
+.work-inbox-draft.is-empty .work-inbox-draft-placeholder {
+  display: block;
+}
+
+.work-inbox-draft-hints {
+  display: flex;
+  gap: var(--wg-space-2);
+}
