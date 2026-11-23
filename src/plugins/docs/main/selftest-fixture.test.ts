@@ -134,7 +134,7 @@ describe('writeDocsFixture', () => {
     const tree = buildWikiTree(
       parseWikiMain(WIKI_MAIN_TEXT, DOCS_FIXTURE_BINDING.linkPrefixes),
       (await readIndex(files)).entries,
-      `${HOME}/wigley-agents/wiki`,
+      `${HOME}/wigley-agents/wiki/Main.md`,
       HOME,
       posixPaths,
       DOCS_FIXTURE_BINDING.linkPrefixes,

@@ -49,6 +49,7 @@ import {
   type IndexEntry,
   type IndexSource,
   MACHINE_SOURCE_ID,
+  NO_DOCS_BINDING,
   SAMPLE_HOME_FOLDER,
   SAMPLE_SOURCE_ID,
   type SampleDocs,
@@ -218,7 +219,7 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
   const { contributions, isLive, log } = deps;
   let features: FeaturesHomes | null = null;
   let binding: DocsBinding = isLive
-    ? { globalFolders: [], wikiMain: null, linkPrefixes: {}, features }
+    ? { ...NO_DOCS_BINDING, features }
     : DOCS_FIXTURE_BINDING;
   let isBound = false;
   let writtenText: string | null = null;
@@ -235,9 +236,14 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
     writtenText = text;
     fileWrite = fileWrite
       .then(() => deps.writeFile(text))
-      .catch((error: unknown) =>
-        log(`contributions file not written: ${errorText(error)}`),
-      );
+      .catch((error: unknown) => {
+        // A failed write leaves the file stale, so the same text is written
+        // again at the next binding.
+        if (writtenText === text) {
+          writtenText = null;
+        }
+        log(`contributions file not written: ${errorText(error)}`);
+      });
     return true;
   };
   const merged = (): DocsBinding =>

@@ -1162,7 +1162,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         : buildWikiTree(
             wikiMain.shelves(),
             entries,
-            deps.paths.parent(mainPath),
+            mainPath,
             deps.homeDir,
             deps.paths,
             deps.binding().linkPrefixes,

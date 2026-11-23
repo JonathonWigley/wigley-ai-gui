@@ -1168,6 +1168,7 @@ describe('buildTree on Windows', () => {
 
 describe('buildWikiTree', () => {
   const MAIN = '/dev/agents/wiki';
+  const MAIN_FILE = `${MAIN}/Main.md`;
   const SHELF_ID = 'shelf:Shelf A';
   const AT_A = '/dev/agents/a.md';
 
@@ -1338,14 +1339,14 @@ describe('buildWikiTree', () => {
     {
       given: 'empty path',
       target: pathTo(''),
-      entries: [entry({ path: `${MAIN}/Main.md` })],
+      entries: [entry({ path: MAIN_FILE })],
       expected: danglingTo(pathTo('')),
     },
   ])('buildWikiTree_PageTarget ($given)', ({ target, entries, expected }) => {
     const tree = buildWikiTree(
       shelfWith(target),
       entries,
-      MAIN,
+      MAIN_FILE,
       HOME,
       posixPaths,
       LINK_PREFIXES,
@@ -1358,7 +1359,7 @@ describe('buildWikiTree', () => {
     const tree = buildWikiTree(
       shelfWith(pathTo('C:\\Dev\\a.md')),
       [entry({ path: 'c:\\dev\\a.md' })],
-      'C:\\Dev\\wiki',
+      'C:\\Dev\\wiki\\Main.md',
       'C:\\Users\\u',
       windowsPaths,
       LINK_PREFIXES,
@@ -1386,7 +1387,7 @@ describe('buildWikiTree', () => {
     const tree = buildWikiTree(
       shelfWith(target),
       entries,
-      MAIN,
+      MAIN_FILE,
       HOME,
       posixPaths,
       LINK_PREFIXES,
@@ -1422,7 +1423,7 @@ describe('buildWikiTree', () => {
     const tree = buildWikiTree(
       shelves,
       [entry({ path: '/a.md' })],
-      MAIN,
+      MAIN_FILE,
       HOME,
       posixPaths,
       LINK_PREFIXES,

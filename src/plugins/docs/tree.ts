@@ -678,12 +678,11 @@ export function featureSlug(
 export function buildWikiTree(
   shelves: readonly WikiShelf[],
   entries: readonly IndexEntry[],
-  mainFolder: string,
+  mainFile: string,
   homeDir: string,
   paths: Paths,
   linkPrefixes: Readonly<Record<string, string>>,
 ): TreeNode[] {
-  const mainFile = paths.join(mainFolder, 'Main.md');
   const shelfIds = new Set<string>();
   const placedEntryIds = new Set<string>();
   return shelves.map((shelf) => {

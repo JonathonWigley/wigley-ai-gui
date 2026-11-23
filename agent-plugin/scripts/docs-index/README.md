@@ -243,7 +243,7 @@ wherever it sits. An instruction file (`AGENTS.md`, `CLAUDE.md` …) under an in
     `docs/followups/<topic>.md` item has no tags. An item whose text after the title, tags
     removed, begins with `shipped`, or that is struck through (`~~` at the start of its text or
     heading), is `done`; for a `## ` item the text after the title is the first
-    non-heading line under it. A `README.md` in a feature home's `followups/` is an index, not
+    non-heading line under it. A `README.md` in a feature home's `<areaFolder>/` is an index, not
     follow-ups: it is a `feature-doc`.
 
 ## The index file
@@ -386,9 +386,7 @@ All three commands print or write one document:
 
 ## Headings and links
 
-`doc_fields.py` fills both fields on every command's entries; `section_refs.py` holds the § parser,
-of which the wigley marketplace's `scripts/pointer_parser/section_refs.py` (read by its
-`scripts/check_pointers.py`) is a copy.
+`doc_fields.py` fills both fields on every command's entries; `section_refs.py` holds the § parser.
 
 **Which entries carry them.** An entry has a body when `line` is `null`, its kind is not `hook` or
 `plugin`, and `path` ends in `.md`.

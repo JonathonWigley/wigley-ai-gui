@@ -53,7 +53,12 @@ import {
 import { contributionsFileText } from './contributions-file';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { DOCS_FIXTURE_BINDING, docsFixtureInstalls } from './selftest-fixture';
-import { addDriveActions, docsMainPart, startDocs } from './start';
+import {
+  addDriveActions,
+  createDocsBinding,
+  docsMainPart,
+  startDocs,
+} from './start';
 
 const HOME = '/home';
 const CLAUDE_MD = `${HOME}/.claude/CLAUDE.md`;
@@ -1133,6 +1138,36 @@ function wigleyStrategy(value: DocsContribution): Strategy<DocsContribution> {
 
 // Lets every settled promise's chain run.
 const settled = () => new Promise((resolve) => setTimeout(resolve));
+
+describe('createDocsBinding', () => {
+  it('file_FirstWriteFailed_WritesTheSameTextAtTheNextBinding', async () => {
+    const contributions = fakeContributions();
+    const writes: string[] = [];
+    let attempts = 0;
+    const holder = createDocsBinding({
+      contributions: contributions.exports,
+      isLive: true,
+      writeFile: (text) => {
+        attempts += 1;
+        if (attempts === 1) {
+          return Promise.reject(new Error('disk full'));
+        }
+        writes.push(text);
+        return Promise.resolve();
+      },
+      filePath: CONTRIBUTIONS_PATH,
+      publish: () => undefined,
+      rebuildMachineIndex: () => undefined,
+      log: () => undefined,
+    });
+    await holder.file();
+
+    contributions.change([]);
+    await holder.file();
+
+    expect(writes).toEqual([contributionsFileText(NO_DOCS_BINDING)]);
+  });
+});
 
 describe('docs binding', () => {
   // Docs started live, its first contributions file written, with each

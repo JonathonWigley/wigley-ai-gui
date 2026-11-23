@@ -277,12 +277,12 @@ function sessionRun(
 
 // Runs `<python> -X utf8 <script> --contributions <file> <command> <args>`
 // with the Python `resolveProgram('python')` gives, its own args leading, once
-// the contributions file's write settles, logging what it wrote to stderr. With no Python found it runs nothing and logs one `not run`
-// line. UTF-8 mode lets the script print the index's `→` to a Windows
-// console's cp1252 pipe. A failed run's message is stderr's last non-empty
-// line, where a traceback puts its cause. A run the plugin's stop ended rejects
-// the caller: it is not a failure, so nothing in main logs it and no fallback
-// runs.
+// the contributions file's write settles, logging what it wrote to stderr.
+// With no Python found it runs nothing and logs one `not run` line. UTF-8 mode
+// lets the script print the index's `→` to a Windows console's cp1252 pipe. A
+// failed run's message is stderr's last non-empty line, where a traceback puts
+// its cause. A run the plugin's stop ended rejects the caller: it is not a
+// failure, so nothing in main logs it and no fallback runs.
 async function runScript(
   deps: IndexSourcesDeps,
   command: ScriptCommand,
