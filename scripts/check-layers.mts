@@ -356,6 +356,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
       },
     },
   },
+  // Its contract's setting readers check JSON through `src/shared/json`.
+  work: { contract: { layers: ['src/shared'] } },
   // Its contract names the layouts' types; main's agent signals use `node:path`.
   workflow: {
     contract: { layers: ['src/plugins/workflow/layouts'] },
