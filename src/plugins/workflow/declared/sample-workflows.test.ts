@@ -388,7 +388,7 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
   });
 
   // A template whose every variable is 0 renders empty.
-  it.each([
+  it.each<{ counters: Record<string, number>; progress: string }>([
     { counters: {}, progress: '' },
     { counters: { fix: 2 }, progress: ' · cycle 2' },
   ])('medium fixStatusProgress $progress', ({ counters, progress }) => {

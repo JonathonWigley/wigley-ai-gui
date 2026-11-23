@@ -46,7 +46,6 @@ const WAITING_FLOW: SessionFlow = {
   movedUpFrom: null,
   stage: 'build',
   checklist: null,
-  state: null,
   checklistReported: false,
   plan: null,
   counters: {},
