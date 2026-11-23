@@ -313,7 +313,7 @@ Critical path: 02 → 06 → 07 → 08 → 09
 - [x] [Builds mode and layout](06-builds-mode.md) — after 02
 
 ### Wave 3
-- [ ] [Session parts and offer card](07-session-parts.md) — after 03, 06
+- [x] [Session parts and offer card](07-session-parts.md) — after 03, 06
 
 ### Wave 4
 - [ ] [README and changelog](08-readme-changelog.md) — after 03, 04, 05, 06, 07
@@ -331,10 +331,12 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - 04 · deep · 151702206 · diff read: teamcityBackendKind, TeamcityCli, runTeamcity, parse* and readFirebaseLinks present; wave typecheck and lint pass · concerns: fixtures are written from the task table, not recorded; run list triggered.user.name nesting unconfirmed; concurrency test uses vi.waitFor on real timers; start.ts relies on builds' consumer.track for the addBackend Disposable
 - 05 · deep · b414c162a · diff read: localBackendKind, LocalTarget, ProgramLine, wrapperLine, aliveCheckLine, isAlive, killLine present; wave typecheck and lint pass · concerns: no-control-regex disable on the ANSI regex copied from claude-auth.ts unconfirmed as needed; one test overrides processes.run on its FakeProcesses instance
 - 06 · hard · 2863e3ce3 · diff read: buildsPagePart, BuildsLayout, CompleteBuildsLayout, readBuildsLayout, every builds-view-model Produces and the builds.mode demo step present; wave typecheck and lint pass · concerns: movedKey is a fifth per-plugin copy of the clamped cursor move; <Leader>mq is bound before 07 names the <Leader>m group, so the keymap check may fail until 07; start.test.ts reads row numbers from the default layout's row text
+- 07 · hard · 578256e7a · diff read: BUILDING_ACTIVITY, rowLineInput, isBuilding, hubBuildInputs, offerCardInput, findRecord, startSessionParts, registerSessionDemoStep, layout inputs and the builds.session step present; layout contract registered in main; wave typecheck and lint pass · concerns: card look unchecked (uses --wg-radius-md, --wg-focus-border); the leave test checks only the last base scope; session tests sit in a sibling describe in start.test.ts
 ### Contract changes
 - 02 BuildsChannel.branches: returns Promise<{name; sha}[] | {problem}> inline rather than GitRemoteHead[], as the task doc directs; shape is identical · consumers: 03, 06
 - 06 toasts: the spec's warning tone lands as info, since ToastTone (src/contracts/plugin.ts) is success | info | error · consumers: 10 (live check expects the info look)
 - 03 BackendRegistry: adds kinds() beyond the plan · consumers: none outside 03
+- 07: registerDemoSteps returns Disposable[]; demo-sample.ts adds BuildsDemoSample and demoSessionSample; SessionPartsDeps names the sessions exports dep sessionsPage · consumers: none outside 07
 ### Rulings
 - 01: the memory readEnd cuts the stored bytes, so it matches the node adapter's UTF-8 boundary handling · group 01
 - 01: node-files.ts gets a file-level CORE_LAYERS entry allowing src/shared (as node-processes.ts has) for the shared withoutLeadingContinuationBytes helper; its importers name the file key · group 01
@@ -354,4 +356,8 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - 06: Esc while branches is pending cancels the empty branch list and drops the late answer · group 06
 - 06: pickQueue targets the side-bar cursor while the mode shows and builds.games has the keys, else the shown entry; all or never shown opens step 0 · group 06
 - 06: rejected invokes toast their error in tone error; the feed header draws only when the empty reason is null or noMatches · group 06
+- 07: page/start.ts holds the one demo sample and hands its snapshot to the view's showSample; only the sample's sessions draw from it, every other session keeps real state and activity · group 07
+- 07: setActivity runs only on a change, over every row, slot session and earlier-set session, so a session that left the slot is cleared · group 07
+- 07: the hold-ending check for a gone offer runs on every changed(), not only on buildsSessionsSlot changes · group 07
+- 07: builds-view.ts BuildsViewCommand also excludes SessionPartsCommand (edit outside Files) · group 07
 

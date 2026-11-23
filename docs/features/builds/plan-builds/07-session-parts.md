@@ -1,6 +1,6 @@
 # 07 — Session parts: the row line, the `building` activity, the hub section and the offer card
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · many parts on the sessions and chat seams (row part, activity, side part, composer part with a stop), each following a named pattern
 Wave: 3 · Depends on: 03 (shared path `src/plugins/builds/main/start.ts`), 06
@@ -244,3 +244,5 @@ drive check goes to task 10 "Final verification".
 Commit: one commit for the group: `builds: session row line, building activity, hub section and offer card`.
 
 ## Proof
+
+Commit 578256e7a · proof: diff read: BUILDING_ACTIVITY, rowLineInput, isBuilding, hubBuildInputs, offerCardInput, findRecord, startSessionParts, registerSessionDemoStep, layout inputs and the builds.session step present; layout contract registered in main; wave typecheck and lint pass · concerns: card look unchecked (uses --wg-radius-md, --wg-focus-border); the leave test checks only the last base scope; session tests sit in a sibling describe in start.test.ts
