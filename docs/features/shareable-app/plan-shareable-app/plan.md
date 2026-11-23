@@ -337,7 +337,7 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [x] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
 
 ### Wave 6
-- [ ] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
+- [x] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
 
 ### Wave 7
 - [ ] [Personal rules rename](14-personal-rules-rename.md) — after 01, 12, 13
@@ -370,6 +370,7 @@ Review base: 35f62ddac
 - 11 · hard · 83b612921 · diff read: notes and tool descriptions name auri: skills (folders checked in agent-plugin/skills/); AUTO_ANSWER_GATE_CLAUSE shared; unity-pool in default plugins.disabled; resolveScriptPath gone; one quoting break in the primer description fixed before commit; wave 4 typecheck + lint pass · concerns: stale docs outside the task: docs/features/unity-pool/design.md:123-125 and docs/features/followups.md:350 describe the removed scriptPath fallbacks (to task 16)
 - 12 · hard · 3e205f034 · diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item
 - 06 · hard · 5af2b120a c7288b4c8 · diff read: sample-auri.json, SAMPLE_AURI_FILE, SAMPLE_PLUGIN_NAME, sampleDeclared present; four plugins and shared plan-progress/plan-copies removed; wave 5 typecheck + lint pass after one fixture fix round · concerns: plan-watch-driven sample Large rows (RunLog_LargeClosed fixCycles 2, Open_SavedCountdown_RunsNone) unrun; docs/features/agent-chat/design.md:577 still says one self-test script per plugin (task 16); ~/.config/wigley-ai-gui/layouts/workflow-{large,medium,small,spike}/ left as user state
+- 13 · standard · ca20d7316 · python3 parse: key order version..liveView; workflows and planFormat equal sample-auri.json; retro/backlog/docs/liveView match the pinned values; check_manifests.py passes · concerns: none
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01

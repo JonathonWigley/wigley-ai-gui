@@ -1,6 +1,6 @@
 # 13 — The wigley plugin's auri.json
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · a data file copied from landed fixtures, plus the manifest version rule `wigley-ai-marketplace/AGENTS.md` § Changing a plugin names
 Wave: 6 · Depends on: 06 (copies its `sample-auri.json`), 07, 08, 09, 10 (each section copies the user's value that task's reader test pins), 01 (both list the two wigley manifests). Task 14 runs after this one and follows the Version rule below
@@ -94,3 +94,5 @@ Run from `~/Documents/ai`:
 Commit: one commit for the group, in `~/Documents/ai`, naming only the files above.
 
 ## Proof
+
+Commit ca20d7316 · proof: python3 parse: key order version..liveView; workflows and planFormat equal sample-auri.json; retro/backlog/docs/liveView match the pinned values; check_manifests.py passes · concerns: none
