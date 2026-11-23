@@ -1,6 +1,6 @@
 # 06 — Retire the four level plugins onto sample declarations
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · many parts: four plugins' behaviour moves onto declarations, and a wrong label or trigger changes what the user sees
 Wave: 5 · Depends on: 04, 05
@@ -187,3 +187,5 @@ Dropped, each with its reason: the four `stop_LeavesNoLiveRegistration` and `sto
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 5af2b120a c7288b4c8 · proof: diff read: sample-auri.json, SAMPLE_AURI_FILE, SAMPLE_PLUGIN_NAME, sampleDeclared present; four plugins and shared plan-progress/plan-copies removed; wave 5 typecheck + lint pass after one fixture fix round · concerns: plan-watch-driven sample Large rows (RunLog_LargeClosed fixCycles 2, Open_SavedCountdown_RunsNone) unrun; docs/features/agent-chat/design.md:577 still says one self-test script per plugin (task 16); ~/.config/wigley-ai-gui/layouts/workflow-{large,medium,small,spike}/ left as user state

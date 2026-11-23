@@ -334,7 +334,7 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [x] [The auri hooks](12-auri-hooks.md) — after 01, 04
 
 ### Wave 5
-- [ ] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
+- [x] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
 
 ### Wave 6
 - [ ] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
@@ -369,6 +369,7 @@ Review base: 35f62ddac
 - 08 · hard · e01c387f6 · diff read: backlogReader, strategy setting, contributions dependency, setFeaturesHomes call, assistantInstructions present; wave 4 typecheck + lint pass · concerns: fixtureStrategy throws if DOCS_FIXTURE_BINDING.features is null; pickProblemText ?? '' only for the type
 - 11 · hard · 83b612921 · diff read: notes and tool descriptions name auri: skills (folders checked in agent-plugin/skills/); AUTO_ANSWER_GATE_CLAUSE shared; unity-pool in default plugins.disabled; resolveScriptPath gone; one quoting break in the primer description fixed before commit; wave 4 typecheck + lint pass · concerns: stale docs outside the task: docs/features/unity-pool/design.md:123-125 and docs/features/followups.md:350 describe the removed scriptPath fallbacks (to task 16)
 - 12 · hard · 3e205f034 · diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item
+- 06 · hard · 5af2b120a c7288b4c8 · diff read: sample-auri.json, SAMPLE_AURI_FILE, SAMPLE_PLUGIN_NAME, sampleDeclared present; four plugins and shared plan-progress/plan-copies removed; wave 5 typecheck + lint pass after one fixture fix round · concerns: plan-watch-driven sample Large rows (RunLog_LargeClosed fixCycles 2, Open_SavedCountdown_RunsNone) unrun; docs/features/agent-chat/design.md:577 still says one self-test script per plugin (task 16); ~/.config/wigley-ai-gui/layouts/workflow-{large,medium,small,spike}/ left as user state
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
@@ -394,5 +395,9 @@ Review base: 35f62ddac
 - 11: user settings.json gained plugins.disabled (without unity-pool, so it stays on for the user) and unity-pool.scriptPath ~/.local/bin/unity-pool; backup in the scratchpad · group 11
 - 11: an empty scriptPath answers no-cli 'No unity-pool script is set' with no stat; the start-test harness defaults to a set script path · group 11
 - 12: the fake hook app is shared as relay/tests/fake_hook_app.py; over the 10,000-char cap the compaction list ends on the … line without the footer; is_gated runs before the app is contacted · group 12
+- 06 (lead): one plugin may hand several self-test scripts; selftest.ts drops its second-script throw, a plugin filter runs every script of that plugin, the four sample scripts' groups carry a level prefix; src/contracts/plugin.ts, selftest.ts, selftest-config(.test).ts edited outside Files · group 06
+- 06: SampleDemoDeps is {showSample, addWorkflow, createDraw(workflow), planPane, runAction, openDoc}; demo page halves register no commands or keys · group 06
+- 06: sample Large main rows live in main/start.test.ts ('the sample Large'); fixtures.test-support.ts renamed sample-fixtures.test-support.ts; SessionFlow drops state · group 06
+- 06: engine behaviour now asserted: an untitled closed stage's detail is ''; {plan} actions hide while a flow has no plan dir; a template whose every variable is 0 renders '' · group 06
 ### Review rounds
 ### Test gate
