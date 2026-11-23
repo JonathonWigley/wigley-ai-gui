@@ -22,10 +22,7 @@
 // writes them with `kit.duration(ms)`. Kit scopes: `sideBar`, `allEntry`, `backendHeading` and `gameEntry`
 // `builds.games`; `main`, `gameHeader`, `feedHeader`, `setGroup`, `buildRow`, `buildDetail` and `empty`
 // `builds.list`; `pickerRow` `builds.picker`.
-import type {
-  BaseKit,
-  DotStatus,
-} from '../../../shared/page/layout-host/kit';
+import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 export type { BaseKit, DotStatus };
 

@@ -150,7 +150,8 @@ describe('createQueueing', () => {
         run.git.remoteHeads.mockResolvedValue([
           { name: 'releases/x/1', sha: SHA },
         ]),
-      call: (run: Run) => run.queueing.queue({ ...rcOnRelease, branch: 'main' }),
+      call: (run: Run) =>
+        run.queueing.queue({ ...rcOnRelease, branch: 'main' }),
       problem: '"main" does not match the set\'s branches releases/x/*',
     },
     {
@@ -213,15 +214,18 @@ describe('createQueueing', () => {
         run.queueing.launchSetAgent({ backend: 'b1', game: 'g1', set: 'rc' }),
       problem: 'no harness',
     },
-  ])('$case → $problem', async ({ capabilities, game, prepare, call, problem }) => {
-    const run = setup({ capabilities, game });
-    prepare?.(run);
+  ])(
+    '$case → $problem',
+    async ({ capabilities, game, prepare, call, problem }) => {
+      const run = setup({ capabilities, game });
+      prepare?.(run);
 
-    const result = await call(run);
+      const result = await call(run);
 
-    expect(result).toEqual({ problem });
-    expect(run.backend.queued).toEqual([]);
-  });
+      expect(result).toEqual({ problem });
+      expect(run.backend.queued).toEqual([]);
+    },
+  );
 
   it('pins one revision across a set and links each build to the session', async () => {
     const run = setup();
@@ -231,8 +235,14 @@ describe('createQueueing', () => {
 
     expect(result).toEqual({ ok: true });
     expect(run.backend.queued).toEqual([
-      { gameId: 'g1', request: { kind: 'dev', branch: 'releases/x/1', revision: SHA } },
-      { gameId: 'g1', request: { kind: 'release', branch: 'releases/x/1', revision: SHA } },
+      {
+        gameId: 'g1',
+        request: { kind: 'dev', branch: 'releases/x/1', revision: SHA },
+      },
+      {
+        gameId: 'g1',
+        request: { kind: 'release', branch: 'releases/x/1', revision: SHA },
+      },
     ]);
     expect(run.git.remoteHeads.mock.calls).toEqual([['/c', 'releases/x/*']]);
     const refs = [

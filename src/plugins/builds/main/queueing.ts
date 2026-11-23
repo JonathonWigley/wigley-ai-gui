@@ -228,18 +228,16 @@ export function createQueueing(deps: QueueingDeps): Queueing {
     if (arg.sessionId !== null) {
       const sessionId = arg.sessionId;
       store.addLinks(
-        queued.map(
-          (ref): SessionLink => ({
-            sessionId,
-            backendId: ref.backendId,
-            buildId: ref.buildId,
-            setRunId,
-            linkedAt: now,
-            failingNotified: false,
-            notified: false,
-            endedAt: null,
-          }),
-        ),
+        queued.map((ref): SessionLink => ({
+          sessionId,
+          backendId: ref.backendId,
+          buildId: ref.buildId,
+          setRunId,
+          linkedAt: now,
+          failingNotified: false,
+          notified: false,
+          endedAt: null,
+        })),
       );
     }
     deps.stored();
@@ -365,7 +363,9 @@ export function createQueueing(deps: QueueingDeps): Queueing {
 }
 
 // `run`'s result, or a `{ problem }` with the text of what it threw.
-async function settled<T>(run: () => Promise<T>): Promise<T | { problem: string }> {
+async function settled<T>(
+  run: () => Promise<T>,
+): Promise<T | { problem: string }> {
   try {
     return await run();
   } catch (error) {

@@ -41,7 +41,8 @@ const RC_REVISION = '7c41d09be2a35f18';
 const MAIN_REVISION = '2993a9e4c1b07d55';
 
 function sampleBuild(
-  fields: Partial<BuildRecord> & Pick<BuildRecord, 'id' | 'gameId' | 'queuedAt'>,
+  fields: Partial<BuildRecord> &
+    Pick<BuildRecord, 'id' | 'gameId' | 'queuedAt'>,
 ): BuildRecord {
   return {
     kind: 'dev',
@@ -66,7 +67,9 @@ function sampleBuild(
   };
 }
 
-function sampleJob(fields: Partial<BuildJob> & Pick<BuildJob, 'id' | 'label'>): BuildJob {
+function sampleJob(
+  fields: Partial<BuildJob> & Pick<BuildJob, 'id' | 'label'>,
+): BuildJob {
   return {
     state: 'finished',
     result: 'success',

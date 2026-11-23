@@ -168,7 +168,11 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       keepRecordsOf(next);
       log(appliedLine(next));
       for (const backend of next) {
-        live.set(backend.id, { instance: null, problem: null, hasPolled: false });
+        live.set(backend.id, {
+          instance: null,
+          problem: null,
+          hasPolled: false,
+        });
       }
       poller.setBackends(polledIds(), []);
       for (const backend of next) {
@@ -571,9 +575,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       queueing.dismissOffer(sessionId);
     });
     api.channel.handle('cancel', (arg) => queueing.cancel(arg));
-    api.channel.handle('launchSetAgent', (arg) =>
-      queueing.launchSetAgent(arg),
-    );
+    api.channel.handle('launchSetAgent', (arg) => queueing.launchSetAgent(arg));
     api.onSettingsChanged(() => apply());
     const registryChanged = registry.onChanged(() => apply());
 
@@ -593,7 +595,10 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
         queue: async ({ arg, callerSessionId }) => {
           refuseOnProblem(
             'queue',
-            await queueing.queue({ ...arg, sessionId: callerSessionId ?? null }),
+            await queueing.queue({
+              ...arg,
+              sessionId: callerSessionId ?? null,
+            }),
           );
         },
         offer: async ({ arg, callerSessionId }) => {
@@ -603,10 +608,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
           refuseOnProblem('offer', await queueing.offer(arg, callerSessionId));
         },
         launchSetAgent: async ({ arg }) => {
-          refuseOnProblem(
-            'launchSetAgent',
-            await queueing.launchSetAgent(arg),
-          );
+          refuseOnProblem('launchSetAgent', await queueing.launchSetAgent(arg));
         },
       },
       exports: (consumer): BuildsMainExports => ({

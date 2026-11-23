@@ -8,7 +8,11 @@ import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
-import { asFake, findAll, installFocusFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import {
   deferred,
   fakeDependency,
@@ -352,19 +356,22 @@ describe('buildsPagePart', () => {
       cancels: [{ backend: 'work', game: 'g1', build: '41' }],
       toast: null,
     },
-  ])('x on a $state build', async ({ capabilities, record, cancels, toast }) => {
-    const page = startBuildsPage(
-      workSnapshot({ capabilities, g1Builds: [record] }),
-      { cancel: () => ({ ok: true }) },
-    );
-    page.showGame(G1);
+  ])(
+    'x on a $state build',
+    async ({ capabilities, record, cancels, toast }) => {
+      const page = startBuildsPage(
+        workSnapshot({ capabilities, g1Builds: [record] }),
+        { cancel: () => ({ ok: true }) },
+      );
+      page.showGame(G1);
 
-    page.run('cancel');
-    await settle();
+      page.run('cancel');
+      await settle();
 
-    expect(page.callsOf('cancel')).toEqual(cancels);
-    expect(page.toasts()).toEqual(toast === null ? [] : [toast]);
-  });
+      expect(page.callsOf('cancel')).toEqual(cancels);
+      expect(page.toasts()).toEqual(toast === null ? [] : [toast]);
+    },
+  );
 
   it('toasts a build with no link on o', () => {
     const page = startBuildsPage(
@@ -421,7 +428,11 @@ describe('buildsPagePart', () => {
   });
 
   it.each([
-    { choice: 'set', kind: 'rc', toast: 'toast info: No branch on origin matches releases/*' },
+    {
+      choice: 'set',
+      kind: 'rc',
+      toast: 'toast info: No branch on origin matches releases/*',
+    },
     { choice: 'kind', kind: 'dev', toast: 'toast info: No branches on origin' },
   ])('toasts no heads for a $choice', async ({ kind, toast }) => {
     const page = startBuildsPage(workSnapshot(), { branches: () => [] });
@@ -533,7 +544,8 @@ describe('buildsPagePart', () => {
     return {
       cursor: cursor.map((row) => row.textContent.match(/#(\d+)/)?.[1]),
       detail: details.map(
-        (detail) => detail.previousElementSibling?.textContent.match(/#(\d+)/)?.[1],
+        (detail) =>
+          detail.previousElementSibling?.textContent.match(/#(\d+)/)?.[1],
       ),
     };
   }
@@ -578,7 +590,10 @@ describe('buildsPagePart', () => {
 
     page.publish(shown);
 
-    const selected = findAll(asFake(page.harness.mode(MODE).sideBar as HTMLElement), 'is-selected');
+    const selected = findAll(
+      asFake(page.harness.mode(MODE).sideBar as HTMLElement),
+      'is-selected',
+    );
     expect(selected.map((entry) => entry.textContent.trim())).toEqual(['All']);
   });
 
@@ -597,7 +612,9 @@ describe('buildsPagePart', () => {
       launchSetAgent: () => ({ ok: true }),
     });
 
-    page.commands.withAgent({ arg: { backend: 'work', game: 'g1', set: 'rc' } });
+    page.commands.withAgent({
+      arg: { backend: 'work', game: 'g1', set: 'rc' },
+    });
 
     expect(page.callsOf('launchSetAgent')).toEqual([
       { backend: 'work', game: 'g1', set: 'rc' },
@@ -614,22 +631,28 @@ describe('buildsPagePart', () => {
     },
     {
       command: 'pickQueue',
-      press: (page: ReturnType<typeof startBuildsPage>) => page.run('pickQueue'),
+      press: (page: ReturnType<typeof startBuildsPage>) =>
+        page.run('pickQueue'),
     },
-  ])('$command does nothing while the demo sample shows', async ({ command, press }) => {
-    const page = startBuildsPage(workSnapshot());
-    const step = page.demoSteps.list().find((held) => held.id === 'builds.mode');
-    if (step === undefined) {
-      throw new Error('no builds.mode step');
-    }
-    await step.enter({ scratchDir: '/scratch', sessions: {} });
-    const callsBefore = page.calls.length;
+  ])(
+    '$command does nothing while the demo sample shows',
+    async ({ command, press }) => {
+      const page = startBuildsPage(workSnapshot());
+      const step = page.demoSteps
+        .list()
+        .find((held) => held.id === 'builds.mode');
+      if (step === undefined) {
+        throw new Error('no builds.mode step');
+      }
+      await step.enter({ scratchDir: '/scratch', sessions: {} });
+      const callsBefore = page.calls.length;
 
-    press(page);
-    await settle();
+      press(page);
+      await settle();
 
-    expect(page.calls).toHaveLength(callsBefore);
-    expect(page.opens).toEqual([]);
-    expect(page.logged()).toContain(`demo: ${command} does nothing`);
-  });
+      expect(page.calls).toHaveLength(callsBefore);
+      expect(page.opens).toEqual([]);
+      expect(page.logged()).toContain(`demo: ${command} does nothing`);
+    },
+  );
 });

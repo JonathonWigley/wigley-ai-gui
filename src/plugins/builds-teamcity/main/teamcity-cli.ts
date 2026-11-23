@@ -14,11 +14,9 @@ export async function runTeamcity(
   args: readonly string[],
   timeoutMs: number,
 ): Promise<string> {
-  const result = await cli.processes.run(
-    cli.command,
-    [...args, '--no-input'],
-    { timeoutMs },
-  );
+  const result = await cli.processes.run(cli.command, [...args, '--no-input'], {
+    timeoutMs,
+  });
   const name = `teamcity ${args.slice(0, 2).join(' ')}`;
   if (result.timedOut) {
     throw new Error(`${name} timed out`);

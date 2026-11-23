@@ -46,9 +46,7 @@ export function setEndedMessage(
   setRun: SetRun,
   builds: BuildRecord[],
 ): string {
-  const succeeded = builds.filter(
-    (build) => build.result === 'success',
-  ).length;
+  const succeeded = builds.filter((build) => build.result === 'success').length;
   const blocks = setRun.builds.map((ref) => {
     const build = builds.find((listed) => listed.id === ref.buildId);
     return build === undefined
@@ -77,9 +75,7 @@ function failedLines(game: GameEntry, build: BuildRecord): string[] {
   if (failedJobs.length === 0) {
     const failed = `Failed: ${kindLabel(game, build.kind)} (${build.id})`;
     return [
-      build.statusText === null
-        ? failed
-        : `${failed} — ${build.statusText}`,
+      build.statusText === null ? failed : `${failed} — ${build.statusText}`,
     ];
   }
   return failedJobs.map((job) => {

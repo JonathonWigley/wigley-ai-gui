@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SetRun } from '../builds-model';
-import {
-  buildJob,
-  buildRecord,
-  gameEntry,
-} from '../contract.test-support';
+import { buildJob, buildRecord, gameEntry } from '../contract.test-support';
 import {
   endedMessage,
   failingMessage,

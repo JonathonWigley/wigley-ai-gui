@@ -110,7 +110,11 @@ describe('createLinkStore', () => {
     const store = run.open();
     await store.load();
 
-    expect([store.links(), store.setRuns(), store.offers()]).toEqual([[], [], {}]);
+    expect([store.links(), store.setRuns(), store.offers()]).toEqual([
+      [],
+      [],
+      {},
+    ]);
     expect(run.logs).toEqual(['session-links.json: dropped 3 bad entries']);
   });
 

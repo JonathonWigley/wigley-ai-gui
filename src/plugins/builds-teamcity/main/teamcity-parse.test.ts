@@ -181,7 +181,15 @@ describe('parseChainDetail', () => {
     },
   ])(
     '$fixture with pattern $pattern',
-    ({ json, pattern, revision, percent, leftSeconds, stepText, logJobIds }) => {
+    ({
+      json,
+      pattern,
+      revision,
+      percent,
+      leftSeconds,
+      stepText,
+      logJobIds,
+    }) => {
       expect(parseChainDetail(json, pattern)).toMatchObject({
         revision,
         percent,

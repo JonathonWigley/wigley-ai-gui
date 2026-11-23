@@ -149,7 +149,9 @@ function parseGame(
 }
 
 // The kinds, or the id of the first kind that is not an object with a string `label` and a `target` key.
-function parseKinds(kinds: JsonObject): Record<string, BuildKindEntry> | string {
+function parseKinds(
+  kinds: JsonObject,
+): Record<string, BuildKindEntry> | string {
   const parsed: Record<string, BuildKindEntry> = {};
   for (const [kindId, kind] of Object.entries(kinds)) {
     const isKind =

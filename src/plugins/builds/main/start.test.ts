@@ -140,7 +140,9 @@ async function startOnHarness(options: StartOptions = {}) {
   } else {
     await harness.files.write(LINKS_PATH, JSON.stringify(options.linksFile));
     if (options.failWrites) {
-      vi.spyOn(harness.files, 'write').mockRejectedValue(new Error('disk full'));
+      vi.spyOn(harness.files, 'write').mockRejectedValue(
+        new Error('disk full'),
+      );
     }
     await harness.restart();
   }

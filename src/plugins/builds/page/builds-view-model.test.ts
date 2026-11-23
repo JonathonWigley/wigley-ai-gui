@@ -95,8 +95,16 @@ describe('gameDot', () => {
       builds: [buildRecord({ state: 'running', result: null })],
       dot: 'running',
     },
-    { case: 'a success', builds: [buildRecord({ result: 'success' })], dot: 'success' },
-    { case: 'a failure', builds: [buildRecord({ result: 'failure' })], dot: 'error' },
+    {
+      case: 'a success',
+      builds: [buildRecord({ result: 'success' })],
+      dot: 'success',
+    },
+    {
+      case: 'a failure',
+      builds: [buildRecord({ result: 'failure' })],
+      dot: 'error',
+    },
     {
       case: 'a cancelled build',
       builds: [buildRecord({ result: 'cancelled' })],
@@ -118,7 +126,9 @@ describe('gameDot', () => {
 describe('sideBarEntries', () => {
   it('lists All, then each backend heading and its games', () => {
     const shown = snapshot([
-      backendView('a', [gameView('a1', []), gameView('a2', [])], { label: 'A' }),
+      backendView('a', [gameView('a1', []), gameView('a2', [])], {
+        label: 'A',
+      }),
       backendView('b', [], { label: 'B', problem: 'games[0].id is missing' }),
     ]);
 
@@ -148,13 +158,21 @@ describe('buildRowInput', () => {
     },
     {
       case: 'a queued build starting later',
-      record: buildRecord({ state: 'queued', result: null, startEstimate: NOW + 150_000 }),
+      record: buildRecord({
+        state: 'queued',
+        result: null,
+        startEstimate: NOW + 150_000,
+      }),
       queuedBy: null,
       expected: { startsInMs: 150_000 },
     },
     {
       case: 'a queued build past its estimate',
-      record: buildRecord({ state: 'queued', result: null, startEstimate: NOW - 5000 }),
+      record: buildRecord({
+        state: 'queued',
+        result: null,
+        startEstimate: NOW - 5000,
+      }),
       queuedBy: null,
       expected: { startsInMs: 0 },
     },
@@ -200,7 +218,12 @@ describe('gameRows', () => {
   it.each([
     {
       case: 'a set run at the place of its newest build',
-      builds: [build('b1', 100), build('b2', 300), build('b3', 200), build('b4', 250)],
+      builds: [
+        build('b1', 100),
+        build('b2', 300),
+        build('b3', 200),
+        build('b4', 250),
+      ],
       setRuns: [setRun('s1', ['b2', 'b3'])],
       expected: [{ set: 's1', rows: ['a/b2', 'a/b3'] }, 'a/b4', 'a/b1'],
     },
@@ -233,7 +256,12 @@ describe('feedRows', () => {
   const shown = snapshot([
     backendView('a', [
       gameView('g1', [
-        buildRecord({ id: 'b1', state: 'running', result: null, queuedAt: 100 }),
+        buildRecord({
+          id: 'b1',
+          state: 'running',
+          result: null,
+          queuedAt: 100,
+        }),
         buildRecord({ id: 'b2', state: 'finished', queuedAt: 200 }),
       ]),
       gameView('g2', [
@@ -282,7 +310,13 @@ describe('queuedBy', () => {
       triggeredBy: 'ci-bot',
       expected: 'ci-bot',
     },
-    { case: 'no link and no trigger', linked: [], labels: [], triggeredBy: null, expected: null },
+    {
+      case: 'no link and no trigger',
+      linked: [],
+      labels: [],
+      triggeredBy: null,
+      expected: null,
+    },
   ])('$case', ({ linked, labels, triggeredBy, expected }) => {
     expect(
       queuedBy('a/b1', triggeredBy, new Map(linked), new Map(labels)),
@@ -292,19 +326,39 @@ describe('queuedBy', () => {
 
 describe('heldKey', () => {
   it.each([
-    { before: ['a/1', 'a/2', 'a/3'], after: ['a/0', 'a/1', 'a/2', 'a/3'], key: 'a/2', expected: 'a/2' },
-    { before: ['a/1', 'a/2', 'a/3'], after: ['a/1', 'a/3'], key: 'a/2', expected: 'a/3' },
-    { before: ['a/1', 'a/2', 'a/3'], after: ['a/1', 'a/2'], key: 'a/3', expected: 'a/2' },
+    {
+      before: ['a/1', 'a/2', 'a/3'],
+      after: ['a/0', 'a/1', 'a/2', 'a/3'],
+      key: 'a/2',
+      expected: 'a/2',
+    },
+    {
+      before: ['a/1', 'a/2', 'a/3'],
+      after: ['a/1', 'a/3'],
+      key: 'a/2',
+      expected: 'a/3',
+    },
+    {
+      before: ['a/1', 'a/2', 'a/3'],
+      after: ['a/1', 'a/2'],
+      key: 'a/3',
+      expected: 'a/2',
+    },
     { before: ['a/1'], after: ['a/5', 'a/6'], key: 'a/1', expected: 'a/5' },
     { before: [], after: ['a/5'], key: null, expected: 'a/5' },
     { before: ['a/1'], after: [], key: 'a/1', expected: null },
-  ])('$key from $before to $after → $expected', ({ before, after, key, expected }) => {
-    expect(heldKey(before, after, key)).toBe(expected);
-  });
+  ])(
+    '$key from $before to $after → $expected',
+    ({ before, after, key, expected }) => {
+      expect(heldKey(before, after, key)).toBe(expected);
+    },
+  );
 });
 
 describe('emptyReason', () => {
-  const withBuilds = snapshot([backendView('a', [gameView('a1', [buildRecord()])])]);
+  const withBuilds = snapshot([
+    backendView('a', [gameView('a1', [buildRecord()])]),
+  ]);
   it.each<{
     case: string;
     shown: BuildsSnapshot;
@@ -312,7 +366,13 @@ describe('emptyReason', () => {
     rows: number;
     expected: ReturnType<typeof emptyReason>;
   }>([
-    { case: 'no backends', shown: snapshot([]), entry: 'all', rows: 0, expected: 'noBackends' },
+    {
+      case: 'no backends',
+      shown: snapshot([]),
+      entry: 'all',
+      rows: 0,
+      expected: 'noBackends',
+    },
     {
       case: 'a backend with no games',
       shown: snapshot([backendView('a', [])]),
@@ -322,12 +382,20 @@ describe('emptyReason', () => {
     },
     {
       case: 'the shown game has no builds',
-      shown: snapshot([backendView('a', [gameView('a1', []), gameView('a2', [buildRecord()])])]),
+      shown: snapshot([
+        backendView('a', [gameView('a1', []), gameView('a2', [buildRecord()])]),
+      ]),
       entry: 'a/a1',
       rows: 0,
       expected: 'noBuilds',
     },
-    { case: 'the filter hides every build', shown: withBuilds, entry: 'all', rows: 0, expected: 'noMatches' },
+    {
+      case: 'the filter hides every build',
+      shown: withBuilds,
+      entry: 'all',
+      rows: 0,
+      expected: 'noMatches',
+    },
     {
       case: 'no game has builds',
       shown: snapshot([backendView('a', [gameView('a1', [])])]),
@@ -335,7 +403,13 @@ describe('emptyReason', () => {
       rows: 0,
       expected: 'noBuilds',
     },
-    { case: 'rows are shown', shown: withBuilds, entry: 'all', rows: 2, expected: null },
+    {
+      case: 'rows are shown',
+      shown: withBuilds,
+      entry: 'all',
+      rows: 2,
+      expected: null,
+    },
   ])('$case → $expected', ({ shown, entry, rows, expected }) => {
     expect(emptyReason(shown, entry, rows)).toBe(expected);
   });
@@ -349,7 +423,13 @@ describe('queueChoices', () => {
         release: { label: 'Release', target: null },
       },
       sets: [
-        { id: 'rc', label: 'RC', kinds: ['dev'], branches: 'releases/*', agentPrompt: null },
+        {
+          id: 'rc',
+          label: 'RC',
+          kinds: ['dev'],
+          branches: 'releases/*',
+          agentPrompt: null,
+        },
       ],
     });
 

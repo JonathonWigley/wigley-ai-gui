@@ -65,8 +65,20 @@ function setup(isFast = false) {
 
 describe('createBuildsPoller', () => {
   it.each([
-    { case: 'a fast backend', isFast: true, rejects: false, ms: FAST_POLL_MS, logs: [] },
-    { case: 'a slow backend', isFast: false, rejects: false, ms: SLOW_POLL_MS, logs: [] },
+    {
+      case: 'a fast backend',
+      isFast: true,
+      rejects: false,
+      ms: FAST_POLL_MS,
+      logs: [],
+    },
+    {
+      case: 'a slow backend',
+      isFast: false,
+      rejects: false,
+      ms: SLOW_POLL_MS,
+      logs: [],
+    },
     {
       case: 'a rejected poll',
       isFast: false,

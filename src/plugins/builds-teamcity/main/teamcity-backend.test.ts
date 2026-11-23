@@ -173,7 +173,8 @@ function argsOf(runs: FakeRun[]): string[][] {
 
 function detailIds(runs: FakeRun[]): string[] {
   return argsOf(runs).flatMap(([verb, path]) => {
-    const match = verb === 'api' ? /^\/app\/rest\/builds\/id:(\d+)\?/.exec(path) : null;
+    const match =
+      verb === 'api' ? /^\/app\/rest\/builds\/id:(\d+)\?/.exec(path) : null;
     return match === null ? [] : [match[1]];
   });
 }
@@ -253,7 +254,10 @@ describe('teamcityBackendKind.create', () => {
   it('creates a backend that chooses branches and cannot cancel', async () => {
     const backend = await createBackend(setup().services);
 
-    expect(backend.capabilities).toEqual({ cancel: false, choosesBranch: true });
+    expect(backend.capabilities).toEqual({
+      cancel: false,
+      choosesBranch: true,
+    });
     expect(backend.cancel).toBeUndefined();
   });
 });
@@ -344,9 +348,9 @@ describe('list', () => {
     ]);
     const namesCut = (arg: string) =>
       arg.includes('821150') || arg.includes('821100');
-    expect(test.processes.runs.filter((run) => run.args.some(namesCut))).toEqual(
-      [],
-    );
+    expect(
+      test.processes.runs.filter((run) => run.args.some(namesCut)),
+    ).toEqual([]);
   });
 
   it('reads a cached finished build only once, across instances', async () => {
@@ -398,9 +402,9 @@ describe('list', () => {
     const beforeWindowEnd = test.processes.runs.length;
     await backend.list(GAME, 20);
 
-    expect(
-      detailIds(test.processes.runs.slice(beforeWindowEnd)),
-    ).not.toContain('821100');
+    expect(detailIds(test.processes.runs.slice(beforeWindowEnd))).not.toContain(
+      '821100',
+    );
 
     test.setNow(NOW + DETAIL_RETRY_MS);
     const atWindowEnd = test.processes.runs.length;
@@ -588,7 +592,11 @@ describe('list', () => {
     // Settles the `index`th detail call that started, with a finished chain of no jobs.
     const settleStarted = (index: number) => {
       const id = started()[index];
-      details.get(id)?.resolve(exited(JSON.stringify({ id: Number(id), state: 'finished' })));
+      details
+        .get(id)
+        ?.resolve(
+          exited(JSON.stringify({ id: Number(id), state: 'finished' })),
+        );
     };
 
     const listing = backend.list(GAME, 20);
@@ -669,7 +677,11 @@ describe('queue', () => {
       ],
     });
     const backend = await createBackend(test.services);
-    await backend.queue(GAME, { kind: 'dev', branch: 'feature/x', revision: A });
+    await backend.queue(GAME, {
+      kind: 'dev',
+      branch: 'feature/x',
+      revision: A,
+    });
 
     const records = await backend.list(GAME, 20);
 
@@ -706,7 +718,11 @@ describe('queue', () => {
     test.answer(runStartArgs(null), runStart);
     const backend = await createBackend(test.services);
 
-    await backend.queue(GAME, { kind: 'dev', branch: 'feature/x', revision: null });
+    await backend.queue(GAME, {
+      kind: 'dev',
+      branch: 'feature/x',
+      revision: null,
+    });
 
     expect(test.processes.runs.at(-1)?.args).not.toContain('--revision');
   });

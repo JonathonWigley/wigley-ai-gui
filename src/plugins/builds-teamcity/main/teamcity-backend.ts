@@ -171,7 +171,10 @@ function createTeamcityBackend(
     cacheWrites = cacheWrites.then(async () => {
       const file = {
         games: Object.fromEntries(
-          [...games].map(([gameId, records]) => [gameId, [...records.values()]]),
+          [...games].map(([gameId, records]) => [
+            gameId,
+            [...records.values()],
+          ]),
         ),
       };
       try {
@@ -269,7 +272,11 @@ function createTeamcityBackend(
     if (detail === null) {
       return { record, isCacheable: false };
     }
-    const withDetail = { ...record, revision: detail.revision, jobs: detail.jobs };
+    const withDetail = {
+      ...record,
+      revision: detail.revision,
+      jobs: detail.jobs,
+    };
     if (listed.state === 'running') {
       return {
         record: {

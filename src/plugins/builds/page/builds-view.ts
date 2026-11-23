@@ -202,13 +202,17 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     toast,
     log,
     drawRow(list, title, input) {
-      const drawn = parts.draw('pickerRow', list, (pickerRow, into, rollback) => ({
-        element: pickerRow(
-          into,
-          { picker: title, label: input.label },
-          { ...kitFor('picker', rollback), trailing: () => input.trailing },
-        ),
-      }));
+      const drawn = parts.draw(
+        'pickerRow',
+        list,
+        (pickerRow, into, rollback) => ({
+          element: pickerRow(
+            into,
+            { picker: title, label: input.label },
+            { ...kitFor('picker', rollback), trailing: () => input.trailing },
+          ),
+        }),
+      );
       return { element: drawn.built.element, dispose: drawn.dispose };
     },
   });
@@ -247,7 +251,10 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   const drawMainPane = () => {
     parts.redraw('main', mainPane, (main, into, rollback) => {
       const slot = appSlot(body, 'body', rollback);
-      const pane = main(into, { ...kitFor('list', rollback), body: slot.place });
+      const pane = main(into, {
+        ...kitFor('list', rollback),
+        body: slot.place,
+      });
       slot.placeIfLeftOut(requireElementIn(into, pane.element, 'main'));
       return pane;
     });
@@ -267,7 +274,10 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   const markRows = () => {
     for (const [key, root] of rowRoots) {
       root.classList.toggle('is-selected', key === listCursor);
-      root.classList.toggle('is-cursor', key === listCursor && focus === 'list');
+      root.classList.toggle(
+        'is-cursor',
+        key === listCursor && focus === 'list',
+      );
     }
     mainPane.classList.toggle('is-pane-inactive', focus !== 'list');
   };
@@ -297,13 +307,17 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
           break;
         case 'backend':
           entryDraws.push(
-            parts.draw('backendHeading', entriesList, (part, into, rollback) => ({
-              element: part(
-                into,
-                { label: entry.label, problem: entry.problem },
-                kitFor('games', rollback),
-              ),
-            })),
+            parts.draw(
+              'backendHeading',
+              entriesList,
+              (part, into, rollback) => ({
+                element: part(
+                  into,
+                  { label: entry.label, problem: entry.problem },
+                  kitFor('games', rollback),
+                ),
+              }),
+            ),
           );
           break;
         case 'game':
@@ -384,13 +398,18 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     if (target !== null) {
       return gameRows(target.view, queuedByOf, now);
     }
-    return feedRows(snapshot(), filter, new Set(links.keys()), queuedByOf, now).map(
-      (row): GameListItem => ({ kind: 'build', row }),
-    );
+    return feedRows(
+      snapshot(),
+      filter,
+      new Set(links.keys()),
+      queuedByOf,
+      now,
+    ).map((row): GameListItem => ({ kind: 'build', row }));
   };
 
   const drawBody = () => {
-    const target = selected === 'all' ? null : (lookup.games.get(selected) ?? null);
+    const target =
+      selected === 'all' ? null : (lookup.games.get(selected) ?? null);
     const items = listItems(target);
     const keys = items.flatMap((item) =>
       item.kind === 'build' ? [item.row.key] : item.rows.map((row) => row.key),
@@ -449,10 +468,18 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     }
     const nextSideKeys = sideBarEntries(snapshot()).flatMap(
       (entry): BuildsEntryKey[] =>
-        entry.kind === 'all' ? ['all'] : entry.kind === 'game' ? [entry.key] : [],
+        entry.kind === 'all'
+          ? ['all']
+          : entry.kind === 'game'
+            ? [entry.key]
+            : [],
     );
     if (sideCursor !== null) {
-      sideCursor = heldKey(sideKeys, nextSideKeys, sideCursor) as BuildsEntryKey | null;
+      sideCursor = heldKey(
+        sideKeys,
+        nextSideKeys,
+        sideCursor,
+      ) as BuildsEntryKey | null;
     }
     sideKeys = nextSideKeys;
     drawEntries();
@@ -564,7 +591,8 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   };
 
   const cursorBuild = (): ListedBuild | null => {
-    const listed = listCursor === null ? undefined : lookup.builds.get(listCursor);
+    const listed =
+      listCursor === null ? undefined : lookup.builds.get(listCursor);
     if (listed === undefined) {
       log('no build under the cursor');
       return null;
@@ -646,7 +674,10 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     queuePicker.pickChoice(target);
   };
 
-  const findTarget = (backendId: string, gameId: string): QueueTarget | null => {
+  const findTarget = (
+    backendId: string,
+    gameId: string,
+  ): QueueTarget | null => {
     const backend = snapshot().backends.find((held) => held.id === backendId);
     const view = backend?.games.find((held) => held.game.id === gameId);
     return backend === undefined || view === undefined
@@ -739,9 +770,10 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
         return;
       }
       const target = findTarget(arg.backend, arg.game);
-      const choice = target === null
-        ? undefined
-        : queueChoices(target.view.game).find((held) => held.id === arg.kind);
+      const choice =
+        target === null
+          ? undefined
+          : queueChoices(target.view.game).find((held) => held.id === arg.kind);
       if (target === null || choice === undefined) {
         log(`no ${arg.kind} in ${arg.backend}/${arg.game}`);
         return;

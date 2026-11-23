@@ -180,10 +180,7 @@ function dependencyRows(detail: JsonObject): JsonObject[] {
 }
 
 // The row as a one-item list, or `[]` when it lacks a field every dependency has.
-function dependency(
-  row: JsonObject,
-  buildJob: RegExp | null,
-): Dependency[] {
+function dependency(row: JsonObject, buildJob: RegExp | null): Dependency[] {
   const { id, buildTypeId, state } = row;
   if (
     typeof id !== 'number' ||
@@ -256,7 +253,10 @@ function buildJobOf(
 
 // A build's or job's result from TeamCity's `status`: null until finished; `SUCCESS` succeeded, `UNKNOWN` was
 // cancelled, any other status failed.
-export function resultOf(state: BuildState, status: unknown): BuildResult | null {
+export function resultOf(
+  state: BuildState,
+  status: unknown,
+): BuildResult | null {
   if (state !== 'finished') {
     return null;
   }
@@ -293,7 +293,9 @@ function roundedMean(values: (number | null)[]): number | null {
   const present = values.filter((value) => value !== null);
   return present.length === 0
     ? null
-    : Math.round(present.reduce((sum, value) => sum + value, 0) / present.length);
+    : Math.round(
+        present.reduce((sum, value) => sum + value, 0) / present.length,
+      );
 }
 
 function largest(values: (number | null)[]): number | null {

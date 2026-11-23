@@ -177,7 +177,9 @@ const layout = {
  * @returns {string}
  */
 function rowLabel(input) {
-  const parts = input.inFeed ? [input.gameLabel, input.kindLabel] : [input.kindLabel];
+  const parts = input.inFeed
+    ? [input.gameLabel, input.kindLabel]
+    : [input.kindLabel];
   if (input.number !== null) {
     parts.push(`#${input.number}`);
   }

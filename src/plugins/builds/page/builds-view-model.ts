@@ -35,7 +35,12 @@ export function isFeedFilter(text: string): text is FeedFilter {
 
 export type SideBarEntry =
   | { kind: 'all' }
-  | { kind: 'backend'; backendId: string; label: string; problem: string | null }
+  | {
+      kind: 'backend';
+      backendId: string;
+      label: string;
+      problem: string | null;
+    }
   | { kind: 'game'; key: BuildsEntryKey; label: string; dot: DotStatus };
 
 // One item of a game's list: a lone build, or a set run's builds under its group.
@@ -188,12 +193,7 @@ export function gameRows(
   now: number,
 ): GameListItem[] {
   const row = (record: BuildRecord) =>
-    buildRowInput(
-      record,
-      view,
-      queuedByOf(view.backendId, record.id),
-      now,
-    );
+    buildRowInput(record, view, queuedByOf(view.backendId, record.id), now);
   const sorted = newestFirst(view.builds);
   const runOf = new Map<string, number>();
   view.setRuns.forEach((run, index) => {
@@ -287,12 +287,17 @@ export function linkedBuilds(
 // The game's queue choices: its kinds in key order, then its sets in order.
 export function queueChoices(game: GameEntry): QueueChoice[] {
   return [
-    ...Object.entries(game.kinds).map(
-      ([id, kind]): QueueChoice => ({ kind: 'kind', id, label: kind.label }),
-    ),
-    ...game.sets.map(
-      (set): QueueChoice => ({ kind: 'set', id: set.id, label: set.label, set }),
-    ),
+    ...Object.entries(game.kinds).map(([id, kind]): QueueChoice => ({
+      kind: 'kind',
+      id,
+      label: kind.label,
+    })),
+    ...game.sets.map((set): QueueChoice => ({
+      kind: 'set',
+      id: set.id,
+      label: set.label,
+      set,
+    })),
   ];
 }
 

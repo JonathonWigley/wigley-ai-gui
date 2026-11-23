@@ -39,7 +39,9 @@ function validBackend(overrides: Record<string, unknown> = {}) {
 
 // The setting with game `g1` changed by `overrides`, beside a valid `g2`.
 function withGame1(overrides: Record<string, unknown>): unknown[] {
-  return [validBackend({ games: [validGame('g1', overrides), validGame('g2')] })];
+  return [
+    validBackend({ games: [validGame('g1', overrides), validGame('g2')] }),
+  ];
 }
 
 // The setting with `g1`'s one set changed by `overrides`.
@@ -49,11 +51,36 @@ function withSet(overrides: Record<string, unknown>): unknown[] {
 
 describe('parseBackends', () => {
   it.each([
-    { case: 'not an object', input: ['b1'], problem: 'entry 1 is not an object', level: 'backend' },
-    { case: 'no id', input: [validBackend({ id: '' })], problem: 'entry 1 has no id', level: 'backend' },
-    { case: 'id with a slash', input: [validBackend({ id: 'a/b' })], problem: 'a/b is not a valid id', level: 'backend' },
-    { case: 'id of dots', input: [validBackend({ id: '..' })], problem: '.. is not a valid id', level: 'backend' },
-    { case: 'id with a space', input: [validBackend({ id: 'my ci' })], problem: 'my ci is not a valid id', level: 'backend' },
+    {
+      case: 'not an object',
+      input: ['b1'],
+      problem: 'entry 1 is not an object',
+      level: 'backend',
+    },
+    {
+      case: 'no id',
+      input: [validBackend({ id: '' })],
+      problem: 'entry 1 has no id',
+      level: 'backend',
+    },
+    {
+      case: 'id with a slash',
+      input: [validBackend({ id: 'a/b' })],
+      problem: 'a/b is not a valid id',
+      level: 'backend',
+    },
+    {
+      case: 'id of dots',
+      input: [validBackend({ id: '..' })],
+      problem: '.. is not a valid id',
+      level: 'backend',
+    },
+    {
+      case: 'id with a space',
+      input: [validBackend({ id: 'my ci' })],
+      problem: 'my ci is not a valid id',
+      level: 'backend',
+    },
     {
       case: 'duplicate id, other case',
       input: [validBackend({ id: 'Work' }), validBackend({ id: 'work' })],
@@ -61,9 +88,24 @@ describe('parseBackends', () => {
       level: 'backend',
       id: 'work#2',
     },
-    { case: 'no kind', input: [validBackend({ kind: 3 })], problem: 'b1 has no kind', level: 'backend' },
-    { case: 'no label', input: [validBackend({ label: '' })], problem: 'b1 has no label', level: 'backend' },
-    { case: 'games not a list', input: [validBackend({ games: {} })], problem: 'b1: games is not a list', level: 'backend' },
+    {
+      case: 'no kind',
+      input: [validBackend({ kind: 3 })],
+      problem: 'b1 has no kind',
+      level: 'backend',
+    },
+    {
+      case: 'no label',
+      input: [validBackend({ label: '' })],
+      problem: 'b1 has no label',
+      level: 'backend',
+    },
+    {
+      case: 'games not a list',
+      input: [validBackend({ games: {} })],
+      problem: 'b1: games is not a list',
+      level: 'backend',
+    },
     {
       case: 'game not an object',
       input: [validBackend({ games: ['g1', validGame('g2')] })],
@@ -76,29 +118,84 @@ describe('parseBackends', () => {
       problem: 'duplicate game id "g2"',
       level: 'game',
     },
-    { case: 'game with no label', input: withGame1({ label: '' }), problem: 'game g1 has no label', level: 'game' },
-    { case: 'clone not a path', input: withGame1({ clone: 5 }), problem: 'game g1: clone is not a path', level: 'game' },
-    { case: 'no defaultBranch', input: withGame1({ defaultBranch: '' }), problem: 'game g1 has no defaultBranch', level: 'game' },
-    { case: 'empty kinds', input: withGame1({ kinds: {} }), problem: 'game g1 has no kinds', level: 'game' },
+    {
+      case: 'game with no label',
+      input: withGame1({ label: '' }),
+      problem: 'game g1 has no label',
+      level: 'game',
+    },
+    {
+      case: 'clone not a path',
+      input: withGame1({ clone: 5 }),
+      problem: 'game g1: clone is not a path',
+      level: 'game',
+    },
+    {
+      case: 'no defaultBranch',
+      input: withGame1({ defaultBranch: '' }),
+      problem: 'game g1 has no defaultBranch',
+      level: 'game',
+    },
+    {
+      case: 'empty kinds',
+      input: withGame1({ kinds: {} }),
+      problem: 'game g1 has no kinds',
+      level: 'game',
+    },
     {
       case: 'kind with no target',
       input: withGame1({ kinds: { dev: { label: 'Dev' } } }),
       problem: 'game g1: kind dev needs a label and a target',
       level: 'game',
     },
-    { case: 'sets not a list', input: withGame1({ sets: 'rc' }), problem: 'game g1: sets is not a list', level: 'game' },
-    { case: 'set not an object', input: withGame1({ sets: [5] }), problem: 'game g1: set 1 has no id', level: 'game' },
+    {
+      case: 'sets not a list',
+      input: withGame1({ sets: 'rc' }),
+      problem: 'game g1: sets is not a list',
+      level: 'game',
+    },
+    {
+      case: 'set not an object',
+      input: withGame1({ sets: [5] }),
+      problem: 'game g1: set 1 has no id',
+      level: 'game',
+    },
     {
       case: 'duplicate set id',
       input: withGame1({ sets: [validSet(), validSet()] }),
       problem: 'game g1: duplicate set id "rc"',
       level: 'game',
     },
-    { case: "set with a kind's id", input: withSet({ id: 'dev' }), problem: 'game g1: set "dev" has a kind\'s id', level: 'game' },
-    { case: 'set with no label', input: withSet({ label: '' }), problem: 'game g1: set rc has no label', level: 'game' },
-    { case: 'set with no kinds', input: withSet({ kinds: [] }), problem: 'game g1: set rc has no kinds', level: 'game' },
-    { case: 'set naming no kind', input: withSet({ kinds: ['dev', 'qa'] }), problem: 'game g1: set rc names no kind "qa"', level: 'game' },
-    { case: 'set with no branches', input: withSet({ branches: '' }), problem: 'game g1: set rc has no branches', level: 'game' },
+    {
+      case: "set with a kind's id",
+      input: withSet({ id: 'dev' }),
+      problem: 'game g1: set "dev" has a kind\'s id',
+      level: 'game',
+    },
+    {
+      case: 'set with no label',
+      input: withSet({ label: '' }),
+      problem: 'game g1: set rc has no label',
+      level: 'game',
+    },
+    {
+      case: 'set with no kinds',
+      input: withSet({ kinds: [] }),
+      problem: 'game g1: set rc has no kinds',
+      level: 'game',
+    },
+    {
+      case: 'set naming no kind',
+      input: withSet({ kinds: ['dev', 'qa'] }),
+      problem: 'game g1: set rc names no kind "qa"',
+      level: 'game',
+    },
+    {
+      case: 'set with no branches',
+      input: withSet({ branches: '' }),
+      problem: 'game g1: set rc has no branches',
+      level: 'game',
+    },
     {
       case: 'agentPrompt not text',
       input: withSet({ agentPrompt: 5 }),
@@ -186,7 +283,9 @@ describe('parseBackends', () => {
           label: 'Game g1',
           clone: '/home/u/dev/game',
           defaultBranch: 'main',
-          kinds: { dev: { label: 'Dev', target: { command: 'make', args: [] } } },
+          kinds: {
+            dev: { label: 'Dev', target: { command: 'make', args: [] } },
+          },
           sets: [],
         },
         {
