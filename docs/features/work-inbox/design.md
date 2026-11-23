@@ -65,12 +65,13 @@ Auri sessions (chat.session, sessions.rows) ─┘
 - **One session per job.** A sweep, and each Send, Move, Accept or nudge, is a job. The queue launches one at a time, a
   fresh owned session each, and ends it on an idle settle (its row idle with no background work for 5 s, as
   auto-retro does), on its row's process ending, on the timeout, or on a close matched by the row's id or its host id,
-  so `/clear` on the worker row ends it too. Only the installed app's live run launches workers: a drive run or the dev
-  app queues jobs and logs each one not launched. A fresh session keeps every job's context bounded; the conversation never grows across sweeps.
+  and follows its row to each new host, so `/clear` on the worker row does not end it. Only the installed app's live run
+  launches workers: a drive run or the dev app queues jobs, logs each one not launched and shows "Not launched: this run
+  launches no worker." on its queued status. A fresh session keeps every job's context bounded; the conversation never grows across sweeps.
 - **Queue.** A pure reducer over the queued jobs and the running one, saved in plugin data so a restart keeps queued
   presses. A sweep already queued is not queued twice, and a press for a target already queued replaces the queued one.
   After a restart a running job that never launched goes back to the head of the queue (an unlaunched sweep is dropped
-  when a sweep is already queued), and a launched one is kept for its row's return. A launched row has 30 s to report
+  when a sweep is already queued), and a launched one is kept for its row's return, which claims the row by its row id or its host id. A launched row has 30 s to report
   its host id, else the row is closed and the job fails. A job that runs past 20 minutes is closed and fails. The
   launched rows are recorded in `job-rows.json` (`work/main/job-rows.ts`).
 - **Unattended and permissive.** Each job launches `unattended` (a prompt is denied at once, never left waiting) and with

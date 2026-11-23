@@ -432,9 +432,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `work.json` store in plugin data with its one writer and `buildWorkState`; job-queue.ts, the pure
                  queue reducer; job-runner.ts, one unattended session per job through chat's `launch` with
                  `permissions: 'auto'` and `owner: 'work'`; a job ends on an idle settle, on its row's process
-                 ending, on the timeout, or on a close matched by row or host id (so `/clear` ends it), and a
+                 ending, on the timeout, or on a close matched by row or host id; the running job follows its row to a new host after `/clear`, and a restart claims the row by row or host id; and a
                  launched row has a 30 s host wait; only the installed app's live run launches workers, while a
-                 drive run or the dev app queues jobs and logs each one not launched; job-rows.ts, the
+                 drive run or the dev app queues jobs, logs each one not launched and notes it on `job.running`; job-rows.ts, the
                  `job-rows.json` record of launched rows; sweep-timer.ts,
                  the one-shot timer re-armed after each sweep; work-tools.ts, the `read_work_state`,
                  `record_work_items`, `record_work_tickets` and `report_work_job` tools, which answer only the running

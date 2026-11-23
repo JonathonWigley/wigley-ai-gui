@@ -299,4 +299,5 @@ Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 ### Review rounds
 - Fix round 1 (f1208c6e7..5c6c276f7): High: new async wait paths in the job runner (host wait, process-end close, row-id close match, rejecting enqueue), the worker launch gate, the picker supersede hook and the draft tab wait; correctness re-review runs.
 - Fix round 1 docs (W5): None: prose only (README, AGENTS.md, CHANGELOG, work-inbox design.md, one comment reflow in limited-processes.ts); closed on its commit.
+- Re-review 1 (f1208c6e7..5c6c276f7): R1 NEEDS FIXES (1 Important repeat of #27: host-only row match at restart; 2 Minor), R2 NEEDS FIXES (2 Minor, determined). Fix round 2: fe7b7a42e (R2, None: comments and a test) and the W6 runner commit (High: queue events, timers and the restart claim); correctness re-review 2 runs on the W6 commit.
 ### Test gate
