@@ -156,7 +156,7 @@ every parse is tested over recorded JSON.
   is read once per build; a log that fails is read again after the backoff above.
 - **Queue**: `run start <target> --branch <branch> --revision <sha> --no-push --json`. `--no-push`
   is always passed, since without it the CLI pushes the branch. Its answer names the branch as
-  `<default>` while TeamCity checks for changes, so the backend keeps the branch and revision it queued with, in its data file beside the finished-build cache, across restarts and re-applies, until the build is cached.
+  `<default>` while TeamCity checks for changes, so the backend keeps the branch and revision it queued with, in its data file beside the finished-build cache, across restarts and re-applies. A pin is kept until its build is cached, or until `LINK_WINDOW_MS` (3 days) after it was queued; a pin stored without a queue time is dropped.
 - **Capabilities**: `choosesBranch` true, `cancel` false: the account cannot cancel runs.
 - **Dates**: TeamCity writes `20261123T191020+0000`; the parser turns it into epoch milliseconds.
 
@@ -170,8 +170,9 @@ every parse is tested over recorded JSON.
   `startedAt`, `finishedAt`, `exitCode`, `cancelled` and `lastLine` — live in `runs.json` in the
   backend's data folder (`backends/<entry id>/` under the plugin's data folder). They are this
   backend's history. A run's log, pid file and exit-code file sit beside it under
-  `runs/<game id>/<kind>/<startedAt>/`. Each call reads `runs.json` afresh, so two instances of one
-  backend entry share the history.
+  `runs/<game id>/<kind>/<startedAt>/`. Each call reads `runs.json` afresh, so the two instances of one
+  backend entry across a re-apply share the history. They run no calls at once, unless the 30 s drain bound passes
+  (§ Polling and the model).
 - **Progress**: `percent` is elapsed time over the last successful run of the same game and kind,
   capped at 99 until the exit-code file appears, and null with no earlier success. `stepText` is the
   log's last non-empty line, read from the log's end through the files service's `readEnd`.
@@ -185,8 +186,10 @@ every parse is tested over recorded JSON.
 ## Polling and the model
 
 - **Cadence**: main polls each backend every 10 s while Builds mode shows or a build linked to a
-  session runs, and every 2 minutes otherwise. One backend instance never has two polls in flight; a replaced
-  backend's new instance polls at once while the old instance's poll finishes and publishes nothing. A backend
+  session runs, and every 2 minutes otherwise. One backend instance never has two polls in flight; a re-apply disposes the old
+  instance, which then refuses new calls with "the backend was replaced; try again". The entry's new instance is created only
+  once the old instance's `list`, `queue` and `cancel` calls settle, or once `DRAIN_TIMEOUT_MS` (30 s) passes, which is
+  logged. Until then queueing answers "<label>: still starting" and the poller skips the entry. A backend
   with no games is not polled. Each poll lists 20 builds per game.
 - **The model** (`builds-model.ts`, pure) folds the backends' records, the session links and the
   offers into the published slots, and reports what changed since the last fold: a linked build
