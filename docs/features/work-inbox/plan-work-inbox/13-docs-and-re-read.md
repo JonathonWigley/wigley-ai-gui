@@ -1,6 +1,6 @@
 # 13 — Docs, the views' self-test steps, and the doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · doc-only apart from the self-test groups, which follow `src/plugins/backlog/main/selftest-script.ts`
 and add no interface
@@ -246,3 +246,4 @@ One commit for the group: `work-inbox docs: AGENTS.md, keymap, DESIGN and layout
 
 ## Proof
 
+Commit ccff5cae5 · proof: diff read: AGENTS.md, keymap.md, DESIGN.md, layouts design, work-inbox design and spike, README, CHANGELOG edited; inbox keys and board keys groups in selftest-script.ts; final typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail; log scan: 4 oxlint warnings caused by the run (unused WORK_TOOLS import in work-tools.test.ts; no-useless-spread on listener copies in signals.test, job-runner.test, chat start-prompt.test), handed to review · concerns: self-test groups not run yet (test gate): Inbox re-show focus and Board t logging shown then filter WRK-3 may fail; code-vs-plan differences in report 13-1 (snooze only on Waiting on others; Open in Slack is a button outside the actions list)

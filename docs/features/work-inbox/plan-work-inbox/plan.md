@@ -248,7 +248,7 @@ Critical path: 04 → 07 → 09 → 13
 - [x] [Register the views and keys](12-register-views-and-keys.md) — after 10, 11
 
 ### Wave 4
-- [ ] [Docs and doc re-read](13-docs-and-re-read.md) — after 09, 12
+- [x] [Docs and doc re-read](13-docs-and-re-read.md) — after 09, 12
 - [ ] [Final verification](14-final-verification.md)
 
 ## Run log
@@ -268,6 +268,7 @@ Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 - 11 · hard (compile fix 0af59ab90 on the same rung) · 47fa87e13 · diff read: workBoardManifest, main and page parts, WorkBoardPlace/slot, board-state exports, createBoardView with showTicket/selectCard/openThreads/moveCardTo/pressCard, sampleBoardState; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes after the setScope and disabled fixes · concerns: sheet CSS sits unprefixed in layouts/default/layout.css (10 uses page CSS); 3 start.test.ts tests fail with no command core.openLink (seen by the fix worker; test gate); drag feel left to 14
 - 09 · deep · 414ee96c6 · diff read: createSweepTimer, SweepTimerDeps, SweepTimer, MIN_SWEEP_MINUTES, FIXTURE_ITEM_IDS, FIXTURE_TASK_ID, fixtureFile, fixtureSignals, WorkSelfTestDeps, workSelfTestScript, reseedStep, WORK_SELFTEST_KEYS, RESEED_FILE, workMainPart signature kept; wave 3 typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail · concerns: tests assume unexercised harness behaviour (restart calls ready, counts().timers drops a cleared timer, memory watch file naming); self-test refusal steps rely on a rejected page command not failing the run; main part now needs chat and sessions contributeTools at start; start.test fakes runner and watch with vi.mock
 - 12 · standard · d5b47f0c4 · diff read: both views in builtInManifests, pageParts, mainParts after work; <Leader>ki/kj; Ctrl+n scope list; view binds; wave 3 typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail (composition check clean) · concerns: keymap test checks the unmerged defaultKeymap only, not manifest-contributed binds; manifests test casts commands to Record<string, unknown>
+- 13 · standard · ccff5cae5 · diff read: AGENTS.md, keymap.md, DESIGN.md, layouts design, work-inbox design and spike, README, CHANGELOG edited; inbox keys and board keys groups in selftest-script.ts; final typecheck clean; lint: layers and styles clean, only the 5 pre-existing format files fail; log scan: 4 oxlint warnings caused by the run (unused WORK_TOOLS import in work-tools.test.ts; no-useless-spread on listener copies in signals.test, job-runner.test, chat start-prompt.test), handed to review · concerns: self-test groups not run yet (test gate): Inbox re-show focus and Board t logging shown then filter WRK-3 may fail; code-vs-plan differences in report 13-1 (snooze only on Waiting on others; Open in Slack is a button outside the actions list)
 ### Contract changes
 - 02: CORE_LAYERS 'src/main/pull-requests' layers ['src/contracts'] → ['src/contracts','src/shared'], packages [] · why: the mapper uses isJsonObject from src/shared/json · consumers: none
 - 07: detection.ts adds export cardColumn(card, columns) · why: detection needs the card's column · consumers: 07 only
