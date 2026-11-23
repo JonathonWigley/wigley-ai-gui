@@ -1031,6 +1031,7 @@ function fakeMainApi(
       appInstance: DEV_APP,
       appBuild: null,
       cloneDir: null,
+      appDir: '/app',
       window: {
         show() {},
         summon: () => false,

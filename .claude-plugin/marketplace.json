@@ -1,0 +1,13 @@
+{
+  "name": "auri",
+  "owner": { "name": "Wigley" },
+  "description": "The Auri app's agent plugin, for terminal Claude Code and Codex sessions.",
+  "plugins": [
+    {
+      "name": "auri",
+      "source": "./agent-plugin",
+      "description": "The Auri app's agent plugin: the app's MCP tools, its hooks and the skills for its features",
+      "category": "Development"
+    }
+  ]
+}

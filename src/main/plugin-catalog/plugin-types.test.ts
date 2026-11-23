@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { manifestSchema } from '../../shared/plugin-catalog/manifest-schema';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
-import { emittedTypesFolder, writePluginTypes } from './plugin-types';
+import {
+  appFolder,
+  emittedTypesFolder,
+  writePluginTypes,
+} from './plugin-types';
 
 const TYPES_FOLDER = '/config/plugins/_types';
 const EMITTED_FOLDER = '/app/.plugin-types';
@@ -76,6 +80,24 @@ describe('writePluginTypes', () => {
       'plugin.d.ts',
     ]);
   });
+});
+
+describe('appFolder', () => {
+  it.each([
+    { isPackaged: true, expected: '/Resources' },
+    { isPackaged: false, expected: '/repo' },
+  ])(
+    'appFolder_PicksResourcesWhenPackaged: packaged $isPackaged',
+    ({ isPackaged, expected }) => {
+      expect(
+        appFolder({
+          isPackaged,
+          appPath: '/repo',
+          resourcesPath: '/Resources',
+        }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe('emittedTypesFolder', () => {

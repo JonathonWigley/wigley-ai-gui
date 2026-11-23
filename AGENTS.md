@@ -29,7 +29,7 @@ a `default` change from the user's screen: check it before the change, apply the
 it in the report.
 
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
-vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
+vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `auri`
 tools, receiving agents' review rounds, feature primers and audio pickers and showing each in a popup
 over its agent session's tabs for the user to answer; and it
 browses and edits every agent doc on the machine through the docs index, as a wiki over the user's own pages and as a tree of all of them (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
@@ -92,6 +92,8 @@ modes, the command and key engine, settings, themes, the Bridge and services; ev
 reaches the app only through the plugin API, so a new tool has the same reach as anything already built.
 
 ```
+agent-plugin/    the `auri` agent plugin, passed to Claude Code with `--plugin-dir` and listed in
+                 `.claude-plugin/marketplace.json`
 src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
                  record of a clock that counts only while something runs; `state.ts`: the `SlotKey` records, writers and
                  readers behind `api.state`, with `JsonSafe`; `core-state.ts`: the core's own slots;
@@ -550,10 +552,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/visuals/design.md`
 ```
 
-Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
-wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
-the `retro` skill reads, and the relay's side of the channel). A change to either contract
-lands in both folders together. Each relay connection is one agent session, owned by the `sessions` plugin. A
+Each Claude Code or Codex session runs the `auri` plugin's `relay.py` (`agent-plugin/scripts/relay/`, whose README
+states the tool contract, the saved-round file format readers of the saved files read, and the relay's side of the
+channel). The README and the app's side of each contract change in the same commit. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
 again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
@@ -1204,7 +1205,7 @@ with no prompt. The review's Cancel prompt is a different act: it cancels the ro
 ## Review
 
 The user takes every recommendation in a review of this repo, so a review here — `wigley:review`, or `wigley:make`'s
-step 6 — sends no `wigley-forms` round for its findings and questions. Each item takes its recommended pick, and the
+step 6 — sends no forms round for its findings and questions. Each item takes its recommended pick, and the
 run carries on as if the user had submitted the round with every item on its recommendation: `Fix now` and
 `Step back` dispatched and re-reviewed, `Follow-up` appended to the follow-ups, `Leave it` left. Follow-up rounds
 after the fixes land are taken the same way. The reply lists the pick each item took beside the round's notices, so
@@ -1289,8 +1290,8 @@ Test fixtures, the demo's sample data and `docs/features/` are exempt. `npm run 
   loses them and asks again; a denied Documents grant makes every session in `~/Documents` exit with `EPERM`. The
   `install` skill (`.agents/skills/install/SKILL.md`) holds the steps. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
-- **To put the running app on a new build**, run the marketplace's `start_app.py`
-  (`wigley-ai-marketplace/plugins/wigley/scripts/forms/` in the `ai` clone) with `--restart --dev` for the dev app, or
+- **To put the running app on a new build**, run the `auri` plugin's `start_app.py`
+  (`agent-plugin/scripts/relay/` in this repo) with `--restart --dev` for the dev app, or
   `--from <checkout>` to start the dev app from that checkout, such as the worktree holding the change. It quits
   only the process the endpoint file names, waits for it to exit, starts the app and waits for its channel; a hand
   `pkill` misses processes and hits drive runs. A page edit hot reloads with no restart; a main-process edit needs

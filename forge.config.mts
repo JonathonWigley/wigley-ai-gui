@@ -31,8 +31,10 @@ const config: ForgeConfig = {
     },
     // The plugin contract types `generateAssets` emits, copied under the same
     // name to `<Resources>/.plugin-types` outside the asar for the app to write
-    // to the user's `plugins/_types/` at start.
-    extraResource: [PLUGIN_TYPES_FOLDER],
+    // to the user's `plugins/_types/` at start. `agent-plugin` too: Claude Code
+    // reads the plugin from disk through `--plugin-dir`, and Python cannot run
+    // scripts inside the asar.
+    extraResource: [PLUGIN_TYPES_FOLDER, 'agent-plugin'],
   },
   rebuildConfig: {},
   hooks: {

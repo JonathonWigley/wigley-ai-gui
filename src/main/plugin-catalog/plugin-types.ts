@@ -57,15 +57,22 @@ export async function writePluginTypes(deps: PluginTypesDeps): Promise<void> {
   }
 }
 
+// The folder that holds the app's own files outside the asar: the resources
+// folder when packaged, the app's folder in dev.
+export function appFolder(app: {
+  isPackaged: boolean;
+  appPath: string;
+  resourcesPath: string;
+}): string {
+  return app.isPackaged ? app.resourcesPath : app.appPath;
+}
+
 // Where the build put the emitted `.d.ts` tree.
 export function emittedTypesFolder(
   app: { isPackaged: boolean; appPath: string; resourcesPath: string },
   paths: Paths,
 ): string {
-  return paths.join(
-    app.isPackaged ? app.resourcesPath : app.appPath,
-    EMITTED_FOLDER,
-  );
+  return paths.join(appFolder(app), EMITTED_FOLDER);
 }
 
 async function copyDeclarations(

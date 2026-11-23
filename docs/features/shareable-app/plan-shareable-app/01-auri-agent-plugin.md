@@ -1,6 +1,6 @@
 # 01 — The `auri` agent plugin scaffold, and the relay and chatroom hook moved into it
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · adds `src/shared/agent-plugin.ts` and `MainServices.appDir`, which 02 and 03 consume, and moves code across two plugins
 Wave: 1 · Depends on: none

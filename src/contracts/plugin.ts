@@ -1165,7 +1165,9 @@ export interface DriveHost {
 // `demoSteps` is the demo-step registry: a plugin registers its steps there,
 // each id starting `<plugin id>.`, and stopping the plugin disposes its
 // registrations. `cloneDir` is the clone the app runs from, or null when none
-// resolves. `pluginSwitch` tells whether a plugin may switch off now, and runs
+// resolves. `appDir` is the folder that holds the app's files outside the asar
+// (the resources folder when packaged, the repo folder in dev);
+// `agentPluginDir` resolves the `auri` plugin under it. `pluginSwitch` tells whether a plugin may switch off now, and runs
 // the built-in plugins the user switched off, in memory, as
 // `PluginSwitchService` says.
 export interface MainServices {
@@ -1204,6 +1206,7 @@ export interface MainServices {
   appInstance: AppInstance;
   appBuild: AppBuild | null;
   cloneDir: string | null;
+  appDir: string;
   selfTest: SelfTestHost | null;
   pluginSwitch: PluginSwitchService;
 }

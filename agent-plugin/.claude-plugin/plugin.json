@@ -1,0 +1,14 @@
+{
+  "name": "auri",
+  "version": "1.0.0",
+  "description": "The Auri app's agent plugin: the app's MCP tools, its hooks and the skills for its features",
+  "author": { "name": "Wigley" },
+  "license": "MIT",
+  "mcpServers": {
+    "auri": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/relay/relay.py"],
+      "env": { "WIGLEY_FORMS_DEADLINE_SECONDS": "300" }
+    }
+  }
+}

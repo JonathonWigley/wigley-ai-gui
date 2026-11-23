@@ -151,6 +151,7 @@ import { createBuiltInSource } from './plugin-catalog/built-in-source';
 import { importModuleFrom } from './plugin-catalog/import-module';
 import { startPluginCatalog } from './plugin-catalog/plugin-catalog';
 import {
+  appFolder,
   emittedTypesFolder,
   writePluginTypes,
 } from './plugin-catalog/plugin-types';
@@ -1293,6 +1294,11 @@ function createWindow(
         runMode === 'live',
       ),
       cloneDir: inputs.repoDir,
+      appDir: appFolder({
+        isPackaged: app.isPackaged,
+        appPath: app.getAppPath(),
+        resourcesPath: process.resourcesPath,
+      }),
       sessionHost,
       loginStart: loginStartOf(),
       agentHarnesses,
