@@ -146,7 +146,7 @@ const GROUPS: SelfTestGroup[] = [
         why: 'The self-test home has no saved place, so the first show is Needs you at its one open card.',
       },
       viewStep(['i'], inboxLine('box focused')),
-      viewStep(['<Esc>'], inboxLine('list focused')),
+      viewStep(['Escape', 'Escape'], inboxLine('list focused')),
       viewStep(
         ['t'],
         boardLine('shown'),
@@ -162,7 +162,7 @@ const GROUPS: SelfTestGroup[] = [
         undefined,
         'All is the last section row.',
       ),
-      viewStep(['<CR>'], inboxLine('section All'), [
+      viewStep(['Enter'], inboxLine('section All'), [
         /^\[work-inbox\] list focused$/,
       ]),
       viewStep(
@@ -178,7 +178,7 @@ const GROUPS: SelfTestGroup[] = [
       viewStep(['<A-h>'], inboxLine('sections focused')),
       viewStep(['g', 'g'], inboxLine('section cursor Needs you')),
       viewStep(['j'], inboxLine('section cursor You promised')),
-      viewStep(['<CR>'], inboxLine('section You promised'), [
+      viewStep(['Enter'], inboxLine('section You promised'), [
         /^\[work-inbox\] list focused$/,
       ]),
       viewStep(
@@ -205,8 +205,7 @@ const GROUPS: SelfTestGroup[] = [
         keys: [' ', 'k', 'j'],
         expect: boardLine('shown'),
         checksFit: true,
-        alsoExpect: [/^\[work-board\] selected WRK-1$/],
-        why: 'The first show puts the cursor on the first card of the first column that has cards.',
+        why: 'The first show leaves the cursor on the first card of the first column that has cards: the next step moves it to WRK-2 from there. The cursor line itself is not expected, since the inbox keys group already flashed WRK-1 and the Board logs a cursor only when it changes.',
       },
       viewStep(['l'], boardLine('selected WRK-2')),
       viewStep(['j'], boardLine(`selected ${FIXTURE_TASK_ID}`)),
@@ -218,7 +217,7 @@ const GROUPS: SelfTestGroup[] = [
       ),
       viewStep(['k'], boardLine('selected WRK-3')),
       viewStep(['t'], inboxLine('shown'), [/^\[work-inbox\] filter WRK-3$/]),
-      viewStep(['<Esc>'], inboxLine('filter cleared')),
+      viewStep(['Escape'], inboxLine('filter cleared')),
       viewStep(
         [' ', 'k', 'j'],
         boardLine('shown'),
@@ -238,7 +237,7 @@ export function workSelfTestScript(deps: WorkSelfTestDeps): SelfTestScript {
   return {
     pageBinds: PAGE_BINDS,
     settings: {},
-    scrollsItself: [],
+    scrollsItself: ['.work-board-columns'],
     open() {
       return { shownLine: SEEDED_LINE, result: deps.seed() };
     },
