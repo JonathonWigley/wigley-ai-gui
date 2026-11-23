@@ -114,7 +114,14 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   // Its contract's records hold the follow-up file module's types.
-  backlog: { contract: { layers: ['src/shared/followups'] } },
+  backlog: {
+    contract: { layers: ['src/shared/followups'] },
+    // Its reader checks home templates with Docs' `features-homes.ts`, and its
+    // fixture strategy copies Docs' fixture binding's features homes.
+    main: {
+      layers: ['src/plugins/docs', 'src/plugins/docs/main/selftest-fixture.ts'],
+    },
+  },
   chat: {
     // Its contract's `readAdoptRequest` reads JSON with the shared readers, and
     // it names the layouts' entry types, for `addEntryRenderer`.
@@ -141,7 +148,25 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
   'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.
-  docs: { main: NODE_ONLY },
+  docs: {
+    main: {
+      layers: ['src/plugins/docs/main/selftest-fixture.ts'],
+      packages: ['node:'],
+    },
+    sublayers: {
+      // Its own layer, so Backlog's main reads the fixture binding and no
+      // other Docs main file.
+      'src/plugins/docs/main/selftest-fixture.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/docs/contract.ts',
+          'src/plugins/docs/main',
+        ],
+        packages: [],
+      },
+    },
+  },
   forms: {
     // Its contract imports NUMBER_KEY_COUNT from `./manifest`.
     contract: { layers: ['src/plugins/forms'] },

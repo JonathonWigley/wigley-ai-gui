@@ -1,6 +1,8 @@
+import type { BacklogContribution } from '../../../contracts/contributions';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
+import { DOCS_FIXTURE_BINDING } from '../../docs/main/selftest-fixture';
 
 export interface BacklogFixtureDeps {
   files: Files;
@@ -15,6 +17,25 @@ export const BACKLOG_FEATURES_HOME = `${BACKLOG_REPO}/docs/features`;
 export const BACKLOG_FOLLOWUPS = `${BACKLOG_FEATURES_HOME}/followups.md`;
 export const FIXTURE_COMMIT_SUBJECT = 'Backlog self-test fixture';
 export const FIXTURE_CHANGE_SUBJECT = 'Change the app';
+
+// Docs' fixture binding's features homes as a backlog strategy, so the two
+// plugins read one value outside a live run.
+function fixtureStrategy(): BacklogContribution {
+  const features = DOCS_FIXTURE_BINDING.features;
+  if (features === null) {
+    throw new Error("Docs' fixture binding holds no features homes");
+  }
+  const { homes, file, areaFolder } = features;
+  return {
+    label: 'Fixture',
+    homes: [...homes],
+    file,
+    ...(areaFolder === null ? {} : { areaFolder }),
+  };
+}
+
+// The backlog strategy every run mode but `live` picks.
+export const BACKLOG_FIXTURE_STRATEGY: BacklogContribution = fixtureStrategy();
 
 // The file Moved item names, which the second commit changes.
 const APP_FILE = `${BACKLOG_REPO}/src/app.ts`;

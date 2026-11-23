@@ -1,7 +1,7 @@
 import { fenceAfterLine } from '../markdown-fence';
 
-// The follow-up file shape (triage.md § The project's follow-ups in
-// wigley-ai-marketplace): reads a features home's follow-ups file into items,
+// The follow-up file shape (the auri:backlog-format skill describes it):
+// reads a features home's follow-ups file into items,
 // as `docs_index.py` reads it, and turns one item edit into the file's new
 // text, in the file's own shape. Pure: text in, text out.
 

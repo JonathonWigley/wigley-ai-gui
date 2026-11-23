@@ -1,5 +1,6 @@
 import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
+import { strategyControlKind } from '../contributions/contract';
 import type { RepoFolderSetting } from './contract';
 
 // Backlog mode: one table of every repo's follow-ups, each one's staleness,
@@ -7,7 +8,8 @@ import type { RepoFolderSetting } from './contract';
 // through the Backlog assistant. `tags` is read for notes; `layout` names the
 // layout Backlog draws with. `launchBrief` is what a chunk's session reads
 // first; `repoFolders` gives the folder of each repo whose features home lies
-// outside it. `selectRow` and `selectChunk` are the clicks on a table row and
+// outside it; `strategy` names the backlog strategy whose homes, follow-up
+// file and assistant text Backlog uses, `''` picking the only one installed. `selectRow` and `selectChunk` are the clicks on a table row and
 // a chunk card, each naming its row or chunk, so neither has a key. The page
 // runs sessions' `selectRow` by key to open a started chunk's session.
 export const backlogManifest = definePlugin({
@@ -16,7 +18,7 @@ export const backlogManifest = definePlugin({
   description:
     "Adds Backlog mode: every repo's follow-ups in one table, their staleness, and chunks started as sessions.",
   dependsOn: {
-    main: ['docs', 'chat', 'sessions', 'scoped-agents'],
+    main: ['docs', 'chat', 'sessions', 'scoped-agents', 'contributions'],
     page: ['docs', 'scoped-agents'],
   },
   reads: { main: [], page: ['sessions'] },
@@ -142,9 +144,18 @@ export const backlogManifest = definePlugin({
     launchBrief:
       'Work these follow-ups in this session. First check each one against the code as it is now: remove an item whose work has landed, and rewrite an item the code has moved past. Then work the rest under your workflow, and report what you did with each item.',
     repoFolders: [] as RepoFolderSetting[],
+    strategy: '',
   },
-  settingControls: { layout: 'layout' },
+  settingControls: {
+    layout: 'layout',
+    strategy: strategyControlKind('backlog'),
+  },
   settingInfo: {
+    strategy: {
+      label: 'Backlog plugin',
+      description:
+        'The plugin whose follow-up homes Backlog lists. Automatic picks the only one installed.',
+    },
     tags: {
       label: 'Tags',
       description: 'The tags the notes popup offers a follow-up.',

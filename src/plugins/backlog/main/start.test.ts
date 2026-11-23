@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { BacklogContribution } from '../../../contracts/contributions';
 import type { DemoMainStep } from '../../../contracts/demo';
 import type { Files } from '../../../contracts/files';
 import type { Git, GitCommit } from '../../../contracts/git';
@@ -21,8 +22,14 @@ import {
   type SessionCloseReason,
 } from '../../chat/contract';
 import {
+  type ContributionsMainExports,
+  contributionsMainKey,
+  type Strategy,
+} from '../../contributions/contract';
+import {
   type DocsMainExports,
   docsMainKey,
+  type FeaturesHomes,
   type IndexEntry,
   type SourceRead,
 } from '../../docs/contract';
@@ -44,6 +51,7 @@ import type {
   NoteTarget,
 } from '../contract';
 import type { backlogManifest } from '../manifest';
+import { BACKLOG_FIXTURE_STRATEGY } from './selftest-fixture';
 import { backlogMainPart } from './start';
 
 const CLONE = '/dev/r';
@@ -97,7 +105,55 @@ const SETTINGS: BacklogSettings = {
   layout: 'default',
   launchBrief: 'Work these.',
   repoFolders: [],
+  strategy: '',
 };
+
+const USER_HOMES: FeaturesHomes = {
+  homes: ['{repo}/docs/features', '~/wigley-features/{name}'],
+  file: 'followups.md',
+  areaFolder: 'followups',
+};
+
+// A backlog strategy of the plugin `id`, its value `value`.
+function strategyOf(
+  id: string,
+  value: BacklogContribution,
+): Strategy<BacklogContribution> {
+  return {
+    id,
+    label: id,
+    source: {
+      pluginName: id,
+      pluginKey: `${id}@market`,
+      version: '1.0.0',
+      root: `/plugins/${id}`,
+      harnessId: 'fake',
+    },
+    value,
+  };
+}
+
+const USER_STRATEGY = strategyOf('wigley', {
+  homes: USER_HOMES.homes,
+  file: 'followups.md',
+  areaFolder: 'followups',
+});
+
+const OTHER_STRATEGY = strategyOf('other', {
+  homes: ['{repo}/notes'],
+  file: 'todo.md',
+});
+
+const CHOOSE_TEXT = 'Several plugins bind Backlog: pick one in Settings.';
+
+interface StartOptions {
+  // The registry's backlog strategies; the user's alone by default.
+  strategies?: Strategy<BacklogContribution>[];
+  settings?: BacklogSettings;
+  runMode?: 'live' | 'selfTest';
+  // The registry's `ready`; settled by default.
+  ready?: Promise<void>;
+}
 
 const CHIP_TARGET: NoteTarget = {
   type: 'create',
@@ -224,8 +280,15 @@ function chunkOf(
 // holds each `contributeTools` call's tool names. `enterStep` enters the
 // Backlog demo step in SCRATCH, whose sample docs read `index.sample`, its
 // fixture's git runs all succeeding; `trash` spies on `Files.trash`. The page
-// never opened Backlog, and the run is no drive run.
-function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
+// never opened Backlog, and the run is no drive run. The contributions fake
+// serves `strategies` (set it, then `strategiesChanged` tells each
+// `onChanged` listener) once `ready`; `featuresHomes` holds each
+// `setFeaturesHomes` call's homes.
+function startBacklog(
+  entries: IndexEntry[],
+  disk: Record<string, string>,
+  options: StartOptions = {},
+) {
   const links = new Map<string, string>();
   const files = new Map(Object.entries(disk));
   let time = 0;
@@ -254,7 +317,24 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   const data = createMemoryFiles();
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const trash = vi.spyOn(listed, 'trash');
-  let settings = SETTINGS;
+  let settings = options.settings ?? SETTINGS;
+  const registry = { strategies: options.strategies ?? [USER_STRATEGY] };
+  const strategyListeners = new Set<
+    (strategies: readonly Strategy<unknown>[]) => void
+  >();
+  const contributions = {
+    registerFeature: () => ({ dispose: () => undefined }),
+    strategies: () => registry.strategies,
+    onChanged: (
+      _key: string,
+      listener: (strategies: readonly Strategy<unknown>[]) => void,
+    ) => {
+      strategyListeners.add(listener);
+      return { dispose: () => strategyListeners.delete(listener) };
+    },
+    ready: options.ready ?? Promise.resolve(),
+  } as unknown as ContributionsMainExports;
+  const featuresHomes: (FeaturesHomes | null)[] = [];
   const settingsListeners: ((next: BacklogSettings) => void)[] = [];
   const held = new Set<string>();
   const chat = {
@@ -297,7 +377,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     }),
     machineIndex: async () => index.read,
     rebuildMachineIndex: async () => index.read,
-    setFeaturesHomes: () => undefined,
+    setFeaturesHomes: (homes) => featuresHomes.push(homes),
     readDoc: async (path) => {
       calls.push(['readDoc', path]);
       const text = files.get(path);
@@ -329,6 +409,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
   };
   const dependencies: Record<string, unknown> = {
     chat,
+    contributions,
     docs,
     'scoped-agents': scopedAgents,
     sessions,
@@ -364,7 +445,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       },
       paths: posixPaths,
       clock: { now: () => NOW },
-      runMode: 'live',
+      runMode: options.runMode ?? 'live',
       homeDir: '/home/me',
       log: (message: string) => logged.push(message),
       randomHex: () => 'c-new',
@@ -446,6 +527,13 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
         listener(next);
       }
     },
+    registry,
+    strategiesChanged: () => {
+      for (const listener of strategyListeners) {
+        listener(registry.strategies);
+      }
+    },
+    featuresHomes,
     invoke,
     emit,
   };
@@ -459,8 +547,8 @@ function settle(): Promise<void> {
 // Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
 // files each watch under the part, as docs' view does, a chat fake that
 // holds no session, a scoped-agents fake whose assistant holds
-// ASSISTANT_ROW at scope `global`, and a sessions fake that files nothing;
-// a drive run when `drive`. `watched` lists each live watch's path.
+// ASSISTANT_ROW at scope `global`, a sessions fake that files nothing, and a
+// contributions fake serving the user's strategy; a drive run when `drive`. `watched` lists each live watch's path.
 function startBacklogOnHarness({ drive = false } = {}) {
   const watched: string[] = [];
   const docs = fakeDependency(
@@ -468,6 +556,7 @@ function startBacklogOnHarness({ drive = false } = {}) {
     (consumer) =>
       ({
         machineIndex: async () => indexRead([entry('followup', FOLLOWUPS)]),
+        setFeaturesHomes: () => undefined,
         readDoc: async () => FOLLOWUPS_TEXT,
         watchDoc: async (path: string) => {
           watched.push(path);
@@ -504,8 +593,18 @@ function startBacklogOnHarness({ drive = false } = {}) {
         contributeTools: () => ({ dispose: () => undefined }),
       }) as unknown as SessionsMainExports,
   );
+  const contributions = fakeDependency(
+    contributionsMainKey,
+    (consumer) =>
+      ({
+        registerFeature: () => consumer.track({ dispose: () => undefined }),
+        strategies: () => [USER_STRATEGY],
+        onChanged: () => consumer.track({ dispose: () => undefined }),
+        ready: Promise.resolve(),
+      }) as unknown as ContributionsMainExports,
+  );
   const harness = startMainPart(backlogMainPart, {
-    dependencies: [docs, chat, scopedAgents, sessions],
+    dependencies: [docs, chat, scopedAgents, sessions, contributions],
     services: { git: fakeGit(), runMode: 'live' },
     drive,
   });
@@ -835,6 +934,191 @@ describe('backlog main part', () => {
     const read = await backlog.invoke<BacklogRead>('load');
 
     expect(read.homes[0].gitRoot).toBeNull();
+  });
+
+  it.each([
+    { root: `${CLONE}/features`, repoFolder: CLONE },
+    { root: `${CLONE}/proj/features`, repoFolder: `${CLONE}/proj` },
+  ])(
+    'load_OnePartTemplate_InGitWithItsRepoFolder ($root)',
+    async ({ root, repoFolder }) => {
+      const backlog = startBacklog(
+        [entry('followup', `${root}/followups.md`, {}, root)],
+        { [`${root}/followups.md`]: FOLLOWUPS_TEXT },
+        {
+          strategies: [
+            strategyOf('acme', {
+              homes: ['{repo}/features'],
+              file: 'followups.md',
+            }),
+          ],
+        },
+      );
+
+      const read = await backlog.invoke<BacklogRead>('load');
+
+      expect(read.homes.map((home) => [home.gitRoot, home.repoFolder])).toEqual(
+        [[CLONE, repoFolder]],
+      );
+    },
+  );
+
+  it('load_UserStrategy_DocsGetsItsHomes', async () => {
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+    });
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(backlog.featuresHomes).toEqual([USER_HOMES]);
+    expect(read.homes.map((home) => home.root)).toEqual([HOME]);
+  });
+
+  it('load_NoStrategy_EmptyStateMessageAndNoHomes', async () => {
+    const backlog = startBacklog(
+      [entry('followup', FOLLOWUPS)],
+      { [FOLLOWUPS]: FOLLOWUPS_TEXT },
+      { strategies: [] },
+    );
+    const machineIndex = vi.spyOn(backlog.docs, 'machineIndex');
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read).toEqual({
+      homes: [],
+      message: 'No installed plugin binds Backlog.',
+    });
+    expect(machineIndex).not.toHaveBeenCalled();
+    expect(backlog.featuresHomes).toEqual([null]);
+  });
+
+  it('load_TwoStrategiesAutomatic_ChooseMessage', async () => {
+    const backlog = startBacklog(
+      [entry('followup', FOLLOWUPS)],
+      { [FOLLOWUPS]: FOLLOWUPS_TEXT },
+      { strategies: [USER_STRATEGY, OTHER_STRATEGY] },
+    );
+
+    expect(await backlog.invoke('load')).toEqual({
+      homes: [],
+      message: CHOOSE_TEXT,
+    });
+  });
+
+  it('pickChanged_SendsTheNewHomesToDocs', async () => {
+    const backlog = startBacklog(
+      [],
+      {},
+      {
+        strategies: [USER_STRATEGY],
+        settings: { ...SETTINGS, strategy: 'other' },
+      },
+    );
+    await backlog.invoke('load');
+
+    backlog.registry.strategies = [USER_STRATEGY, OTHER_STRATEGY];
+    backlog.strategiesChanged();
+
+    expect(backlog.featuresHomes).toEqual([
+      null,
+      { homes: ['{repo}/notes'], file: 'todo.md', areaFolder: null },
+    ]);
+    expect(backlog.sent).toEqual([['changed', { homeRoot: null }]]);
+  });
+
+  it('pickChanged_NoneToChoose_StatusRedraws', async () => {
+    const backlog = startBacklog([], {}, { strategies: [] });
+    await backlog.invoke('load');
+
+    backlog.registry.strategies = [USER_STRATEGY, OTHER_STRATEGY];
+    backlog.strategiesChanged();
+
+    expect(backlog.featuresHomes).toEqual([null]);
+    expect(backlog.sent).toEqual([['changed', { homeRoot: null }]]);
+    expect(await backlog.invoke('load')).toEqual({
+      homes: [],
+      message: CHOOSE_TEXT,
+    });
+  });
+
+  it('load_BeforeReady_WaitsForTheRegistry', async () => {
+    let settleReady = (): void => undefined;
+    const ready = new Promise<void>((resolve) => {
+      settleReady = resolve;
+    });
+    const backlog = startBacklog(
+      [entry('followup', FOLLOWUPS)],
+      { [FOLLOWUPS]: FOLLOWUPS_TEXT },
+      { strategies: [], ready },
+    );
+
+    const loading = backlog.invoke<BacklogRead>('load');
+    backlog.registry.strategies = [USER_STRATEGY];
+    settleReady();
+    const read = await loading;
+
+    expect(read.message).toBeNull();
+    expect(read.homes.map((home) => home.root)).toEqual([HOME]);
+  });
+
+  it('selfTestMode_FixtureStrategyPicked', async () => {
+    const backlog = startBacklog(
+      [entry('followup', FOLLOWUPS)],
+      { [FOLLOWUPS]: FOLLOWUPS_TEXT },
+      { strategies: [], runMode: 'selfTest' },
+    );
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(backlog.featuresHomes).toEqual([
+      {
+        homes: BACKLOG_FIXTURE_STRATEGY.homes,
+        file: BACKLOG_FIXTURE_STRATEGY.file,
+        areaFolder: BACKLOG_FIXTURE_STRATEGY.areaFolder,
+      },
+    ]);
+    expect(read.homes.map((home) => home.root)).toEqual([HOME]);
+  });
+
+  it('assistant_StrategyInstructions_AppendedToTheText', async () => {
+    const backlog = startBacklog(
+      [],
+      {},
+      {
+        strategies: [
+          strategyOf('acme', {
+            ...USER_STRATEGY.value,
+            assistant: { instructions: 'Tag each item.' },
+          }),
+        ],
+      },
+    );
+
+    const [spec] = backlog.specs;
+
+    expect(await spec.instructions('global')).toMatch(/\n\nTag each item\.$/);
+  });
+
+  it('fileNote_StrategyFile_CreatesThatFile', async () => {
+    const backlog = startBacklog(
+      [entry('followup', UI_FOLLOWUPS)],
+      { [UI_FOLLOWUPS]: UI_TEXT },
+      {
+        strategies: [
+          strategyOf('acme', { ...USER_STRATEGY.value, file: 'todo.md' }),
+        ],
+      },
+    );
+
+    const result = await backlog.exports.fileNote(
+      HOME,
+      CHIP_TARGET,
+      'Text.',
+      [],
+    );
+
+    expect(result).toMatchObject({ type: 'applied' });
+    expect(callsOf(backlog.calls, 'writeDoc')).toEqual([`${HOME}/todo.md`]);
   });
 
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {

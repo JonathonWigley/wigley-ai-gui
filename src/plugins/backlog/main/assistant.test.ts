@@ -3,7 +3,11 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import type { ScopedAgentRecord } from '../../scoped-agents/contract';
 import type { BacklogStaleness } from '../contract';
 import { rowKey } from '../row-key';
-import { createAssistantStore, sweepMessage } from './assistant';
+import {
+  assistantInstructions,
+  createAssistantStore,
+  sweepMessage,
+} from './assistant';
 import type { BacklogRow } from './rows';
 
 const FILE = 'assistant.json';
@@ -115,6 +119,21 @@ describe('assistant store', () => {
       global: GLOBAL,
       other: OTHER,
     });
+  });
+});
+
+describe('assistantInstructions', () => {
+  it('assistantInstructions_NoExtra_NamesTheFormatSkill', () => {
+    const text = assistantInstructions(null);
+
+    expect(text).toContain('auri:backlog-format');
+    expect(text).not.toContain('triage.md');
+  });
+
+  it('assistantInstructions_Extra_AppendedAfterABlankLine', () => {
+    expect(assistantInstructions('Tag each item.')).toBe(
+      `${assistantInstructions(null)}\n\nTag each item.`,
+    );
   });
 });
 
