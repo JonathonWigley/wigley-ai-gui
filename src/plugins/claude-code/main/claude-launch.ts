@@ -134,7 +134,7 @@ export function defaultConfigFolder(homeDir: string, paths: Paths): string {
 // stream-json both ways, partial messages streamed, the request's `mode`
 // control as the permission mode (`launchMode`) with what it would still
 // prompt sent to `CLAUDE_PERMISSION_TOOL`, its `model` and `effort` controls as
-// `--model` and `--effort`, and the request's `instructions`, when there are
+// `--model` and `--effort`, the app's `auri` plugin as `--plugin-dir`, and the request's `instructions`, when there are
 // any, as one `--append-system-prompt` joined with a blank line, and
 // `claudeEnv`'s environment, plus the request's `idleCompactMinTokens` when it
 // is not null and its `rowId` as `WIGLEY_SESSION_ROW`, and `claudeUnsetEnv`'s
@@ -144,6 +144,7 @@ export function claudeLaunch(
   env: Readonly<Record<string, string>>,
   homeDir: string,
   paths: Paths,
+  pluginDir: string,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
   const { model, effort } = request.controls;
@@ -174,6 +175,8 @@ export function claudeLaunch(
       launchMode(request.controls),
       '--permission-prompt-tool',
       CLAUDE_PERMISSION_TOOL,
+      '--plugin-dir',
+      pluginDir,
       ...modelArgs,
       ...effortArgs,
       ...instructionArgs,
@@ -193,6 +196,7 @@ export interface ClaudeSpawnInput {
   env: Readonly<Record<string, string>>;
   homeDir: string;
   paths: Paths;
+  pluginDir: string;
   stdin: readonly string[];
   inheritEnv: boolean;
 }
@@ -206,6 +210,7 @@ export function claudeSpawn(input: ClaudeSpawnInput): HostedSpawn {
     input.env,
     input.homeDir,
     input.paths,
+    input.pluginDir,
   );
   return {
     id: input.request.processId,

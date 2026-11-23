@@ -1,5 +1,10 @@
 import type { PermissionDecision } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import {
+  AGENT_PLUGIN_NAME,
+  AGENT_SERVER_NAME,
+  claudePluginToolName,
+} from '../../../shared/agent-plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   type AgentSession,
@@ -11,12 +16,14 @@ import {
 } from '../../sessions/contract';
 
 // The MCP tool Claude Code asks what a session's permission mode would still
-// prompt, served to every session by the app's MCP server. Claude Code names a
-// plugin's MCP tool `mcp__plugin_<plugin>_<server>__<tool>`: the server is
-// `wigley-forms` in the marketplace's `wigley` plugin, Claude's name for that
-// plugin's server rather than the app's.
+// prompt, served to every session by the `auri` plugin's server, which every
+// app launch loads with `--plugin-dir`.
 export const PERMISSION_TOOL_NAME = 'permission_prompt';
-export const CLAUDE_PERMISSION_TOOL = `mcp__plugin_wigley_wigley-forms__${PERMISSION_TOOL_NAME}`;
+export const CLAUDE_PERMISSION_TOOL = claudePluginToolName(
+  AGENT_PLUGIN_NAME,
+  AGENT_SERVER_NAME,
+  PERMISSION_TOOL_NAME,
+);
 export const DEFAULT_DENY_MESSAGE = 'The user denied this tool call.';
 export const CANCELLED_REASON =
   'The tool call was cancelled before the user answered.';

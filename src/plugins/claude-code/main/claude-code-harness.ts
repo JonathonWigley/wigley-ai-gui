@@ -141,6 +141,8 @@ export interface ClaudeCodeHarnessDeps {
   files: Files;
   homeDir: string;
   paths: Paths;
+  // The `auri` plugin's folder, loaded into every launch with `--plugin-dir`.
+  agentPluginDir: string;
   clock: Clock;
   randomUuid: RandomUuid;
 }
@@ -922,6 +924,7 @@ function startClaudeProcess(
         env: deps.env,
         homeDir: deps.homeDir,
         paths: deps.paths,
+        pluginDir: deps.agentPluginDir,
         stdin: [],
         inheritEnv: false,
       });
@@ -994,6 +997,7 @@ async function prepareClaudeRun(
     env: { ...carried, ...env },
     homeDir: deps.homeDir,
     paths: deps.paths,
+    pluginDir: deps.agentPluginDir,
     stdin: claudeOpeningLines(firstMessage, deps.randomUuid()),
     inheritEnv: true,
   });

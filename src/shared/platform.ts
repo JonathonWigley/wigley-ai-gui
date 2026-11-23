@@ -6,6 +6,7 @@ import type {
   PlatformPrograms,
   PlatformRelay,
 } from '../contracts/platform';
+import { AGENT_SERVER_NAME } from './agent-plugin';
 
 export interface PlatformInputs {
   username: string;
@@ -48,8 +49,9 @@ const POSIX_PROGRAMS: PlatformPrograms = {
   ],
 };
 
-// The server key of the marketplace plugin's `.mcp.json`.
-export const RELAY_SERVER_NAME = 'wigley-forms';
+// The server key of the `auri` plugin's manifests, which the app's MCP server
+// also gives as its name.
+export const RELAY_SERVER_NAME = AGENT_SERVER_NAME;
 
 // How a relay starts the app: `npm start` from the repo when this is the dev
 // app and npm started this run, else the running executable, so a stable app

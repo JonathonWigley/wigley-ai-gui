@@ -381,6 +381,7 @@ function started(
     files,
     homeDir: '/Users/u',
     paths: posixPaths,
+    agentPluginDir: '/app/agent-plugin',
     clock: harnessClock,
     randomUuid: () => {
       uuidCount += 1;
@@ -537,6 +538,7 @@ function idleHarness(
     files,
     homeDir,
     paths: posixPaths,
+    agentPluginDir: '/app/agent-plugin',
     clock,
     randomUuid: () => 'uuid-1',
   });
@@ -2930,6 +2932,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       files,
       homeDir: '/Users/u',
       paths: posixPaths,
+      agentPluginDir: '/app/agent-plugin',
       clock,
       randomUuid: () => 'uuid-1',
     });
@@ -2971,6 +2974,7 @@ describe('createClaudeCodeHarness past sessions', () => {
         files: createMemoryFiles(),
         homeDir: '/Users/u',
         paths: posixPaths,
+        agentPluginDir: '/app/agent-plugin',
         clock,
         randomUuid: () => 'uuid-1',
       });
@@ -3044,6 +3048,7 @@ describe('createClaudeCodeHarness accounts', () => {
       files: createMemoryFiles(),
       homeDir: '/Users/u',
       paths: posixPaths,
+      agentPluginDir: '/app/agent-plugin',
       clock: harnessClock,
       randomUuid: () => 'uuid-1',
     });
@@ -3539,6 +3544,7 @@ describe('createClaudeCodeHarness on the session host', () => {
       files: overrides.files ?? createMemoryFiles(),
       homeDir: overrides.homeDir ?? '/Users/u',
       paths: overrides.paths ?? posixPaths,
+      agentPluginDir: '/app/agent-plugin',
       clock: harnessClock,
       randomUuid: () => {
         uuidCount += 1;
@@ -3593,6 +3599,20 @@ describe('createClaudeCodeHarness on the session host', () => {
       name === 'entry' ? [payload as ChatEntry] : [],
     );
 
+  it('liveStart_SpawnsWithPluginDir', async () => {
+    const host = createFakeSessionHost(clock);
+
+    hostHarness(host, clock).start(request, recordingEvents().events);
+    await settle();
+
+    const args = host.processes[0].request?.args ?? [];
+    const at = args.indexOf(CLAUDE_PERMISSION_TOOL);
+    expect(args.slice(at + 1, at + 3)).toEqual([
+      '--plugin-dir',
+      '/app/agent-plugin',
+    ]);
+  });
+
   it('start_SpawnsThroughTheHost', async () => {
     const host = createFakeSessionHost(clock);
 
@@ -3616,6 +3636,8 @@ describe('createClaudeCodeHarness on the session host', () => {
         'auto',
         '--permission-prompt-tool',
         CLAUDE_PERMISSION_TOOL,
+        '--plugin-dir',
+        '/app/agent-plugin',
       ],
       cwd: '/proj',
       env: { WIGLEY_SESSION_ROW: 'row-1' },
@@ -4128,6 +4150,13 @@ describe('createClaudeCodeHarness on the session host', () => {
     const live = liveHost.processes[0].request;
     expect(spawn.command).toBe(live?.command);
     expect(spawn.args).toEqual(live?.args);
+    expect(spawn.args).toEqual(
+      expect.arrayContaining([
+        CLAUDE_PERMISSION_TOOL,
+        '--plugin-dir',
+        '/app/agent-plugin',
+      ]),
+    );
     expect(spawn.cwd).toBe(live?.cwd);
     expect(spawn.unsetEnv).toEqual(live?.unsetEnv);
     expect(spawn.idleRule).toEqual(live?.idleRule);

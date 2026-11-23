@@ -2346,7 +2346,7 @@ describe('createChatSessions', () => {
       at: 1000,
       agentId: 'subagent-1',
       toolUseId: 't1',
-      tool: 'mcp__wigley-forms__set_workflow_step',
+      tool: 'mcp__plugin_auri_auri__set_workflow_step',
       summary: '',
     });
 
@@ -2518,7 +2518,7 @@ describe('createChatSessions', () => {
           at: 1000,
           agentId: 'subagent-1',
           toolUseId: 't1',
-          tool: 'mcp__wigley-forms__set_workflow_step',
+          tool: 'mcp__plugin_auri_auri__set_workflow_step',
           summary: '',
         }),
     });

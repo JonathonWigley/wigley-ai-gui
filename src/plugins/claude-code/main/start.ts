@@ -1,4 +1,5 @@
 import type { MainPart } from '../../../contracts/plugin';
+import { agentPluginDir } from '../../../shared/agent-plugin';
 import { sessionsMainKey } from '../../sessions/contract';
 import { claudeCodeManifest } from '../manifest';
 import { createClaudeCodeHarness } from './claude-code-harness';
@@ -47,6 +48,7 @@ export const claudeCodeMainPart: MainPart<typeof claudeCodeManifest> = {
       files: services.files,
       homeDir: services.agentHomeDir,
       paths: services.paths,
+      agentPluginDir: agentPluginDir(services.appDir, services.paths),
       clock: services.clock,
       randomUuid: services.randomUuid,
       profiles: () => api.settings().profiles,
