@@ -67,7 +67,7 @@ export interface SignalWatch {
 
 type WatchedRootDeps = Pick<
   SignalDeps,
-  'git' | 'chat' | 'pools' | 'repoFolders' | 'homeDir' | 'paths'
+  'git' | 'chat' | 'pools' | 'repoFolders' | 'homeDir' | 'paths' | 'log'
 >;
 
 // The folders whose clones are watched, in watched order: chat's folder projects and the clones of its pool
