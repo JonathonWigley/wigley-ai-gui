@@ -1,0 +1,171 @@
+/* The default layout's look: the head (title, status line, sweep hint), then one row of columns that scrolls
+   sideways, each column scrolling its own cards. */
+
+/* The app-owned containers: the sheet, the board pane holder, and the columns and cards slots. The sheet is the main
+   cell's direct child: its margins lie outside the box, so it takes the cell's height less its two gutters. */
+.work-board-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .work-board-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.work-board {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.work-board-columns {
+  align-items: stretch;
+  display: flex;
+  gap: var(--wg-space-3);
+  min-height: 0;
+  overflow-x: auto;
+  padding: var(--wg-space-2) var(--wg-space-4) var(--wg-space-3);
+}
+
+.work-board-cards {
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--wg-space-1) var(--wg-space-2);
+}
+
+/* The pane: the head, then the columns row. */
+.work-board-pane[data-layout-owner='work-board'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+[data-layout-owner='work-board'] .work-board-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-title {
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+[data-layout-owner='work-board'] .work-board-head .work-board-box-hint {
+  margin-left: auto;
+}
+
+.work-board-status[data-layout-owner='work-board'] {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  gap: var(--wg-space-2);
+}
+
+/* A column: its head over its cards, which scroll. */
+.work-board-column[data-layout-owner='work-board'] {
+  border-radius: var(--wg-radius-md);
+  display: grid;
+  flex: 0 0 calc(var(--wg-space-8) * 9);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.work-board-column.is-drop-target[data-layout-owner='work-board'] {
+  outline: var(--wg-indicator-width) solid var(--wg-focus-border);
+}
+
+[data-layout-owner='work-board'] .work-board-column-head {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-1) var(--wg-space-1) var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-column-name {
+  font-weight: var(--wg-weight-semibold);
+}
+
+[data-layout-owner='work-board'] .work-board-count {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A card: its head, chip, suggestion, moving line, note and buttons. */
+.work-board-card[data-layout-owner='work-board'] {
+  display: grid;
+  gap: var(--wg-space-1_5);
+  margin-bottom: var(--wg-space-2);
+}
+
+.work-board-card.is-cursor[data-layout-owner='work-board'] {
+  border-color: var(--wg-focus-border);
+}
+
+.work-board-card.is-flash[data-layout-owner='work-board'] {
+  background: var(--wg-accent-tint);
+}
+
+.work-board-card.is-dragging[data-layout-owner='work-board'] {
+  opacity: 0.5;
+}
+
+[data-layout-owner='work-board'] .work-board-card-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-card-key {
+  font-family: var(--wg-font-mono);
+}
+
+[data-layout-owner='work-board'] .work-board-card-title {
+  font-weight: var(--wg-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-thread-chip {
+  justify-self: start;
+}
+
+[data-layout-owner='work-board'] .work-board-suggestion {
+  color: var(--wg-fg-secondary);
+  display: grid;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='work-board'] .work-board-suggestion-actions,
+[data-layout-owner='work-board'] .work-board-card-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-moving {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+[data-layout-owner='work-board'] .work-board-note {
+  color: var(--wg-status-error);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-control-hint {
+  margin-left: var(--wg-space-1);
+}
