@@ -1,6 +1,6 @@
 # 08 — README and changelog
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · every README and changelog line is pinned below
 Wave: 4 · Depends on: 03 (its lines describe the landed commands and setting), 04 (its lines describe the landed plugin), 05 (its lines describe the landed plugin), 06 (its lines describe the landed keys), 07 (the landed binds `<Leader>mm`, `<Leader>mx` and the row, hub and offer parts)
@@ -64,3 +64,5 @@ check goes to task 10 "Final verification".
 Commit: one commit for the group: `builds: README and changelog`.
 
 ## Proof
+
+Commit 82ec3fe68 · proof: diff read: README settings, plugin and skill rows and four changelog Added lines present; every key, command and setting checked against the landed manifests and keymap · concerns: none

@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · a doc-only task that writes prose against landed code
 Wave: 5 · Depends on: 07 (it reads the landed code of every code task), 08 (it reads the landed README)
