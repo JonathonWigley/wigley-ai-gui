@@ -122,7 +122,7 @@ from it):
 | PR merged, none open | `services.pullRequests` | Done |
 | Session linked | started from the card, or the key in its branch or first message | In Progress |
 
-`work.signals` maps each signal to a column or off. A signal whose column sits after the card's suggests a move: the
+`work.signals.<signal>` maps each signal to a column or off. A signal whose column sits after the card's suggests a move: the
 card shows it with its reason, Accept (a Move job) and Not yet (hides it until a newer signal). A move Jira's own
 automation already made shows as done rather than suggested.
 
@@ -131,7 +131,7 @@ Watched repos are chat's projects with their pool clones, plus `work.repoFolders
 ## Spin-up
 
 Start session (Inbox) and Session (Board) launch a visible session with `chat.launch`, as notes does, its message
-carrying the key, title, link and linked threads' summaries. `work.projects` maps a Jira project key to an Auri
+carrying the key, title, link and linked threads' summaries. `work.projects` pairs a Jira project key with an Auri
 project; a key with no entry, and a thread with no ticket, open chat's new-session prompt with the message ready. The
 session is linked to the card, so its branch and work count as signals.
 
@@ -148,9 +148,9 @@ session is linked to the card, so its branch and work count as signals.
 | `work.stallHours` | 24 | Hours of quiet before a thread counts as Waiting on others |
 | `work.jiraQuery` | `assignee = currentUser() AND (statusCategory != Done OR resolved >= -14d) ORDER BY updated DESC` | The JQL for the Board's tickets |
 | `work.columns` | Backlog: Backlog · Todo: To Do, Selected for Development, Open · In Progress: In Progress · In QA: In QA, QA, In Review, Ready for QA · Done: Done, Closed, Resolved | Columns in order, each `{ "name", "jiraStatuses" }` |
-| `work.signals` | branch → In Progress · commit → In Progress · PR opened → In QA · PR merged → Done · session → In Progress | Each signal's column, or `off` |
+| `work.signals.branch`, `.commit`, `.pr_opened`, `.pr_merged`, `.session` | In Progress · In Progress · In QA · Done · In Progress | Each signal's column, or `off` |
 | `work.repoFolders` | `[]` | Folders watched beyond chat's projects and pool clones |
-| `work.projects` | `{}` | Jira project key → Auri project name, for spin-up |
+| `work.projects` | `[]` | Spin-up targets, each `{ "jiraProject", "project" }`: a Jira project key and the Auri project its sessions start in |
 
 ## Keys
 
