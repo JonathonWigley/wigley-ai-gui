@@ -1,6 +1,6 @@
 # 02 — Builds contract, manifest and model
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · adds the `builds` contract, manifests, part skeletons and model that tasks 03–08 consume
 Wave: 1 · Depends on: none
@@ -325,3 +325,5 @@ published state through the mode.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 8b8cdf96c · proof: diff read: contract records, keys, slots, BuildsChannel, manifests and foldBuilds present; wave typecheck and lint pass (oxfmt 8efb32854) · concerns: the array setting default (backends: [] as unknown[]) is unverified against the settings schema beyond typecheck; the demo coverage check fails for builds until 06 and 07 add steps

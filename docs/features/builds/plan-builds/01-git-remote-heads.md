@@ -1,6 +1,6 @@
 # 01 — Git remote heads and commit subjects, and Files' readEnd
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · adds two `Git` members, `GitRemoteHead` and `Files.readEnd`, which tasks 03 and 05 consume
 Wave: 1 · Depends on: none
@@ -154,3 +154,5 @@ task; task 10 "Final verification" checks 2 and 4 show both reads in the running
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 9d73fee74 · proof: diff read: remoteHeads, commitSubject, Files.readEnd present in contracts and adapters; wave typecheck and lint pass after 017e1d0e7 · concerns: remoteHeads returns null whenever timedOut is set; git ls-remote --heads is deprecated in git 2.46 for --branches, kept as the task names it; a whole-file readEnd drops a BOM as readStart does

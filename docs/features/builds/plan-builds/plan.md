@@ -303,8 +303,8 @@ contract change.
 Critical path: 02 → 06 → 07 → 08 → 09
 
 ### Wave 1
-- [ ] [Git: remote heads and commit subjects](01-git-remote-heads.md)
-- [ ] [Builds contract, manifest and model](02-builds-contract-model.md)
+- [x] [Git: remote heads and commit subjects](01-git-remote-heads.md)
+- [x] [Builds contract, manifest and model](02-builds-contract-model.md)
 
 ### Wave 2
 - [ ] [Builds main part](03-builds-main.md) — after 01, 02
@@ -324,4 +324,15 @@ Critical path: 02 → 06 → 07 → 08 → 09
 
 ## Run log
 Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
+### Groups
+- 01 · hard; layer fix 017e1d0e7 same rung (compile-class) · 9d73fee74 · diff read: remoteHeads, commitSubject, Files.readEnd present in contracts and adapters; wave typecheck and lint pass after 017e1d0e7 · concerns: remoteHeads returns null whenever timedOut is set; git ls-remote --heads is deprecated in git 2.46 for --branches, kept as the task names it; a whole-file readEnd drops a BOM as readStart does
+- 02 · hard · 8b8cdf96c · diff read: contract records, keys, slots, BuildsChannel, manifests and foldBuilds present; wave typecheck and lint pass (oxfmt 8efb32854) · concerns: the array setting default (backends: [] as unknown[]) is unverified against the settings schema beyond typecheck; the demo coverage check fails for builds until 06 and 07 add steps
+### Contract changes
+- 02 BuildsChannel.branches: returns Promise<{name; sha}[] | {problem}> inline rather than GitRemoteHead[], as the task doc directs; shape is identical · consumers: 03, 06
+### Rulings
+- 01: the memory readEnd cuts the stored bytes, so it matches the node adapter's UTF-8 boundary handling · group 01
+- 01: node-files.ts gets a file-level CORE_LAYERS entry allowing src/shared (as node-processes.ts has) for the shared withoutLeadingContinuationBytes helper; its importers name the file key · group 01
+- 02: a set run whose backend or game is gone yields no setEnded event · group 02
+- 02: set links keep notified false unless task 03 sets it · group 02
+- 02: kindLabel uses Object.hasOwn; sorts are stable; activeBackends counts set links · group 02
 
