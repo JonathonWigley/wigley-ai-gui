@@ -58,8 +58,8 @@ export function wrapperLine(
   };
 }
 
-// The line that prints the command line of the process `pid`, so `isAlive` can tell a wrapper from another program
-// that took its pid after a reboot.
+// The line that prints the command line of the process `pid`, so `isAlive` can tell the run's wrapper from another
+// program, or another run's wrapper, that took its pid after a reboot.
 export function aliveCheckLine(os: OsName, pid: number): ProgramLine {
   if (os === 'windows') {
     return {
@@ -75,18 +75,23 @@ export function aliveCheckLine(os: OsName, pid: number): ProgramLine {
   return { command: 'ps', args: ['-o', 'command=', '-p', String(pid)] };
 }
 
-// Whether the alive check of `pid` found a wrapper still running. A check that timed out counts as alive, so the
-// next list checks again.
+// Whether the alive check found the wrapper that writes `pidFile` still running: its command line holds the wrapper
+// mark and that path, as `wrapperLine` put it there. A check that timed out counts as alive, so the next list checks
+// again.
 export function isAlive(
   os: OsName,
-  pid: number,
+  pidFile: string,
   result: ProcessResult,
 ): boolean {
   if (result.timedOut) {
     return true;
   }
-  const namesWrapper = result.stdout.includes(WRAPPER_MARK);
-  return os === 'windows' ? namesWrapper : result.code === 0 && namesWrapper;
+  const pidFileArg = os === 'windows' ? quoted(pidFile) : pidFile;
+  const namesRunWrapper =
+    result.stdout.includes(WRAPPER_MARK) && result.stdout.includes(pidFileArg);
+  return os === 'windows'
+    ? namesRunWrapper
+    : result.code === 0 && namesRunWrapper;
 }
 
 // The line that ends the wrapper of `pid` and every process under it: on macOS and Linux its whole process group.
@@ -103,13 +108,14 @@ function windowsWrapperScript(
 ): string {
   const call = [target.command, ...target.args].map(quoted).join(' ');
   const exitTemp = quoted(`${files.exitCode}.tmp`);
+  // The call runs under the default error preference: under `Stop`, Windows PowerShell 5.1 can turn a native
+  // program's redirected stderr into a terminating error.
   return [
-    "$ErrorActionPreference = 'Stop'",
-    `Set-Content -LiteralPath ${quoted(files.pid)} -Value $PID`,
+    `Set-Content -LiteralPath ${quoted(files.pid)} -Value $PID -ErrorAction Stop`,
     `try { & ${call}; $code = $LASTEXITCODE } catch { Write-Output $_; $code = 1 }`,
     'if ($null -eq $code) { $code = 0 }',
-    `Set-Content -LiteralPath ${exitTemp} -Value $code`,
-    `Move-Item -LiteralPath ${exitTemp} -Destination ${quoted(files.exitCode)} -Force # ${WRAPPER_MARK}`,
+    `Set-Content -LiteralPath ${exitTemp} -Value $code -ErrorAction Stop`,
+    `Move-Item -LiteralPath ${exitTemp} -Destination ${quoted(files.exitCode)} -Force -ErrorAction Stop # ${WRAPPER_MARK}`,
   ].join('; ');
 }
 

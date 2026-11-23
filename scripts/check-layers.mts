@@ -290,7 +290,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
           'src/plugins/practice/main',
           'src/main/processes',
           'src/main/processes/node-processes.test-support.ts',
-          'src/main/files/node-files.ts',
+          'src/main/files',
         ],
         packages: ['node:'],
       },
@@ -719,14 +719,9 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
-  // Drops a cut character's leading bytes with the pure shared UTF-8 helper the memory adapter uses too.
-  'src/main/files/node-files.ts': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: ['node:'],
-  },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {
-    layers: ['src/contracts', 'src/shared', 'src/main/files/node-files.ts'],
+    layers: ['src/contracts', 'src/shared', 'src/main/files'],
     packages: ['node:'],
   },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
@@ -741,7 +736,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/paths',
-      'src/main/files/node-files.ts',
+      'src/main/files',
       'src/main/processes/node-processes.ts',
     ],
     packages: ['node:'],
@@ -849,7 +844,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/main/images',
       'src/main/system-stats',
       'src/main/screen-capture',
-      'src/main/files/node-files.ts',
+      'src/main/files',
       'src/main/processes',
       'src/main/processes/node-processes.ts',
       'src/main/git',

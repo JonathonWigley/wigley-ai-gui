@@ -39,7 +39,7 @@ const CHECK_TIMEOUT_MS = 5_000;
 // A game id or kind key, each a folder name under `runs/`.
 const FOLDER_NAME = /^[A-Za-z0-9._-]+$/;
 // oxlint-disable-next-line no-control-regex
-const ANSI_ESCAPE = /\x1b\[[0-9;]*[A-Za-z]/g;
+const ANSI_ESCAPE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const LINE_BREAK = /[\r\n]/;
 
 // One build this backend started, as `runs.json` keeps it. `id` is `<game id>/<kind>/<startedAt>`, which is also
@@ -137,8 +137,9 @@ function parseTarget(target: unknown): LocalTarget | null {
   return { command, args: [...args] };
 }
 
-// One backend entry's instance. Every call runs through one serial chain, and every write of `runs.json` inside it
-// first reads the file again and merges by run id, so another instance's runs over the same data stay.
+// One backend entry's instance. Every call runs through one serial chain, reads `runs.json` as it starts and again
+// before it writes, and lays only the runs it changed over the file's, so another instance's runs over the same data
+// stay.
 function createLocalBackend(
   games: Map<string, LocalGame>,
   services: BackendServices,
@@ -146,8 +147,8 @@ function createLocalBackend(
   const { dataFiles, processes, clock } = services;
   const os = services.platform.os;
   const chain = createSerialQueue();
-  // Null until the first call reads `runs.json`.
-  let runs: LocalRun[] | null = null;
+  // The runs as this instance last read or wrote them; only those in `changedIds` outlive the next read.
+  let runs: LocalRun[] = [];
   // The ids of runs this instance added or changed since its last write.
   const changedIds = new Set<string>();
 
@@ -162,23 +163,23 @@ function createLocalBackend(
       name,
     );
 
-  const loadedRuns = async (): Promise<LocalRun[]> => {
-    runs ??= await readRuns(dataFiles);
+  const changedRuns = () => runs.filter((run) => changedIds.has(run.id));
+
+  // The file's runs with this instance's unsaved changes laid over them, which becomes the instance's list.
+  const currentRuns = async (): Promise<LocalRun[]> => {
+    const ours = changedRuns();
+    runs = mergedRuns(await readRuns(dataFiles), ours);
+    for (const run of ours) {
+      if (!runs.includes(run)) {
+        changedIds.delete(run.id);
+      }
+    }
     return runs;
   };
 
-  const writeRuns = async (loaded: LocalRun[]) => {
-    const fileRuns = await readRuns(dataFiles);
-    const ours = new Map(
-      loaded
-        .filter((run) => changedIds.has(run.id))
-        .map((run) => [run.id, run]),
-    );
-    const fileIds = new Set(fileRuns.map((run) => run.id));
-    const merged = [
-      ...fileRuns.map((run) => ours.get(run.id) ?? run),
-      ...[...ours.values()].filter((run) => !fileIds.has(run.id)),
-    ];
+  // Writes the merge of the file's runs and this instance's changes, and gives the runs it kept.
+  const writeRuns = async (): Promise<LocalRun[]> => {
+    const merged = mergedRuns(await readRuns(dataFiles), changedRuns());
     const { kept, dropped } = keptRuns(merged);
     await dataFiles.write(RUNS_FILE, `${JSON.stringify({ runs: kept })}\n`);
     runs = kept;
@@ -188,6 +189,7 @@ function createLocalBackend(
         await dataFiles.deleteFile(dataPath(run, name));
       }
     }
+    return kept;
   };
 
   const readExitCode = async (run: LocalRun): Promise<number | null> => {
@@ -218,11 +220,13 @@ function createLocalBackend(
     }
   };
 
-  const runAliveCheck = (pid: number) => {
+  // Whether the wrapper of `run`, at `pid`, is still running.
+  const checkAlive = async (run: LocalRun, pid: number) => {
     const line = aliveCheckLine(os, pid);
-    return processes.run(line.command, line.args, {
+    const result = await processes.run(line.command, line.args, {
       timeoutMs: CHECK_TIMEOUT_MS,
     });
+    return isAlive(os, fullPath(run, PID_FILE), result);
   };
 
   const finish = async (
@@ -266,10 +270,7 @@ function createLocalBackend(
       await finish(run, null, clock.now());
       return true;
     }
-    const alive = await runAliveCheck(pid).then(
-      (result) => isAlive(os, pid, result),
-      () => true,
-    );
+    const alive = await checkAlive(run, pid).catch(() => true);
     if (alive) {
       return false;
     }
@@ -326,12 +327,10 @@ function createLocalBackend(
   };
 
   const list = async (game: GameEntry, limit: number) => {
-    const loaded = await loadedRuns();
-    if (await settleGame(loaded, game.id)) {
-      await writeRuns(loaded);
-    }
-    // A write makes the merged list the instance's list.
-    const current = await loadedRuns();
+    const loaded = await currentRuns();
+    const current = (await settleGame(loaded, game.id))
+      ? await writeRuns()
+      : loaded;
     const newest = current
       .filter((run) => run.gameId === game.id)
       .sort((a, b) => b.startedAt - a.startedAt)
@@ -345,7 +344,7 @@ function createLocalBackend(
     if (localGame === undefined || target === undefined) {
       throw new Error(`${game.id} has no kind ${request.kind}`);
     }
-    const loaded = await loadedRuns();
+    const loaded = await currentRuns();
     await settleGame(loaded, game.id);
     const isKindRunning = loaded.some(
       (run) =>
@@ -396,7 +395,7 @@ function createLocalBackend(
       throw error;
     }
     try {
-      await writeRuns(loaded);
+      await writeRuns();
     } catch (error) {
       services.log(`Could not save runs.json: ${errorText(error)}`);
     }
@@ -404,8 +403,7 @@ function createLocalBackend(
   };
 
   const cancel = async (game: GameEntry, buildId: string) => {
-    const loaded = await loadedRuns();
-    const run = loaded.find(
+    const run = (await currentRuns()).find(
       (candidate) => candidate.id === buildId && candidate.gameId === game.id,
     );
     if (run === undefined) {
@@ -417,17 +415,16 @@ function createLocalBackend(
     const exitCode = await readExitCode(run);
     if (exitCode !== null) {
       await finishWithExitCode(run, exitCode);
-      await writeRuns(loaded);
+      await writeRuns();
       return;
     }
     const pid = await readPid(run);
     if (pid === null) {
       throw new Error('The build has not written its pid yet');
     }
-    const check = await runAliveCheck(pid);
-    if (!isAlive(os, pid, check)) {
+    if (!(await checkAlive(run, pid))) {
       await finishGone(run);
-      await writeRuns(loaded);
+      await writeRuns();
       return;
     }
     const kill = killLine(os, pid);
@@ -437,12 +434,18 @@ function createLocalBackend(
     if (killed.timedOut) {
       throw new Error(`${kill.command} timed out stopping the build`);
     }
+    // A kill that exits non-zero found no process to end: the build had already ended.
+    if (killed.code !== 0) {
+      await finishGone(run);
+      await writeRuns();
+      return;
+    }
     run.cancelled = true;
     run.exitCode = null;
     run.finishedAt = clock.now();
     run.lastLine = await readLastLine(run);
     changedIds.add(run.id);
-    await writeRuns(loaded);
+    await writeRuns();
   };
 
   return {
@@ -513,6 +516,24 @@ function parseRun(value: unknown): LocalRun | null {
     cancelled: value.cancelled as boolean,
     lastLine: value.lastLine as string | null,
   };
+}
+
+// `fileRuns` with `ours` laid over them by run id, and those of `ours` the file lacks after them. A run the file holds
+// finished keeps the file's record.
+function mergedRuns(fileRuns: LocalRun[], ours: LocalRun[]): LocalRun[] {
+  const finishedInFile = new Set(
+    fileRuns.filter((run) => run.finishedAt !== null).map((run) => run.id),
+  );
+  const laid = new Map(
+    ours
+      .filter((run) => !finishedInFile.has(run.id))
+      .map((run) => [run.id, run]),
+  );
+  const fileIds = new Set(fileRuns.map((run) => run.id));
+  return [
+    ...fileRuns.map((run) => laid.get(run.id) ?? run),
+    ...[...laid.values()].filter((run) => !fileIds.has(run.id)),
+  ];
 }
 
 // The newest `KEPT_RUNS` finished runs of each game and kind, by `startedAt`, and every unfinished run; `dropped`

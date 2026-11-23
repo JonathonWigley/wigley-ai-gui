@@ -1,7 +1,11 @@
 import type { Clock } from '../contracts/ambient';
-import type { FileEntry, Files, FileStat } from '../contracts/files';
+import {
+  type FileEntry,
+  type Files,
+  type FileStat,
+  withoutLeadingContinuationBytes,
+} from '../contracts/files';
 import { relativeSegments } from './scoped-files';
-import { withoutLeadingContinuationBytes } from './utf8-cut';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
 // `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report

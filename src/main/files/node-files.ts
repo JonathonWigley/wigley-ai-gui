@@ -29,9 +29,9 @@ import {
   type FileWatch,
   isMissingFile,
   type WatchOptions,
+  withoutLeadingContinuationBytes,
 } from '../../contracts/files';
 import type { OsName } from '../../contracts/platform';
-import { withoutLeadingContinuationBytes } from '../../shared/utf8-cut';
 
 // Editors save through a rename and FSEvents repeats events, so one save
 // arrives as several events for one path.

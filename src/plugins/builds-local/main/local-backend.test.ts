@@ -39,11 +39,15 @@ function result(fields: Partial<ProcessResult>): ProcessResult {
   return { code: 0, stdout: '', stderr: '', timedOut: false, ...fields };
 }
 
+// The alive check's answer on macOS while the wrapper of the run `id` holds pid 4321.
+function aliveAnswer(id: string): ProcessResult {
+  return result({
+    stdout: `/bin/sh -c sh-script builds-local /data/runs/${id}/pid /data/runs/${id}/exit-code ./build.sh --env dev\n`,
+  });
+}
+
 // The scripted answers of the alive check of pid 4321 on macOS.
-const ALIVE = result({
-  stdout:
-    '/bin/sh -c sh-script builds-local /data/runs/demo/ok/1000000/pid /data/runs/demo/ok/1000000/exit-code ./build.sh --env dev\n',
-});
+const ALIVE = aliveAnswer(FIRST_ID);
 const ANOTHER_PROGRAM = result({ stdout: '/usr/bin/vim notes.txt\n' });
 const GONE = result({ code: 1 });
 const TIMED_OUT = result({ code: -1, timedOut: true });
@@ -759,7 +763,7 @@ describe('progress', () => {
     t.setClock(2_000_000);
     const { id } = await backend.queue(t.game, QUEUE_OK);
     await t.dataFiles.write(`runs/${id}/pid`, '4321\n');
-    t.processes.script('ps', PS_ARGS, ALIVE);
+    t.processes.script('ps', PS_ARGS, aliveAnswer(id));
     t.setClock(now);
 
     const record = await t.recordOf(backend, id);
@@ -784,6 +788,11 @@ describe('the step', () => {
       name: 'a line without its colour escapes',
       log: '\x1b[32mdone\x1b[0m\n',
       stepText: 'done',
+    },
+    {
+      name: 'a line without its cursor escapes',
+      log: '\x1b[?25lcompiling 3/9\x1b[?25h\n',
+      stepText: 'compiling 3/9',
     },
     { name: 'no line', log: '\n  \n', stepText: null },
   ])('shows $name as the step', async ({ log, stepText }) => {
@@ -877,6 +886,60 @@ describe('list', () => {
     ]);
   });
 
+  it('refuses a second build of a kind another instance started since its last call', async () => {
+    const t = setup();
+    const earlier = await t.create();
+    await earlier.list(t.game, 20);
+    await t.startFirstRun(ALIVE);
+    t.setClock(1_300_000);
+
+    await expect(earlier.queue(t.game, QUEUE_OK)).rejects.toThrow(/OK.*Demo/);
+    expect(t.processes.detachedStarts).toHaveLength(1);
+  });
+
+  it('keeps a cancel another instance wrote since its last call', async () => {
+    const t = setup();
+    const canceller = await t.startFirstRun(ALIVE);
+    const other = await t.create();
+    t.setClock(1_300_000);
+    expect((await t.recordOf(other, FIRST_ID))?.state).toBe('running');
+    t.processes.script('kill', KILL_ARGS, result({}));
+    t.setClock(1_500_000);
+    await canceller.cancel?.(t.game, FIRST_ID);
+    await t.dataFiles.write(`${FIRST_FOLDER}/exit-code`, '143\n');
+
+    expect(await t.recordOf(other, FIRST_ID)).toMatchObject({
+      result: 'cancelled',
+      finishedAt: 1_500_000,
+    });
+    expect((await t.storedRuns())[0]).toMatchObject({ exitCode: null });
+  });
+
+  it('keeps the finish another instance wrote during its own settle', async () => {
+    const t = setup();
+    const backend = await t.startFirstRun(ALIVE);
+    const [stored] = await t.storedRuns();
+    const check = deferred<ProcessResult>();
+    t.processes.script('ps', PS_ARGS, check.promise);
+    t.setClock(1_500_000);
+
+    const listing = backend.list(t.game, 20);
+    for (let turn = 0; turn < 5; turn++) {
+      await flush();
+    }
+    expect(t.commandsRun()).toEqual(['ps']);
+    await t.writeRunsJson([
+      { ...stored, finishedAt: 1_400_000, cancelled: true },
+    ]);
+    check.resolve(GONE);
+
+    expect((await listing)[0]).toMatchObject({
+      result: 'cancelled',
+      finishedAt: 1_400_000,
+    });
+    expect((await t.storedRuns())[0]).toMatchObject({ finishedAt: 1_400_000 });
+  });
+
   it('drops the oldest finished runs past KEPT_RUNS with their files', async () => {
     const t = setup();
     const finished = Array.from({ length: KEPT_RUNS + 1 }, (_, index) =>
@@ -961,7 +1024,7 @@ describe('cancel', () => {
         ],
         answer: result({
           stdout:
-            'powershell.exe -NoProfile -Command ps-script # builds-local\r\n',
+            "powershell.exe -NoProfile -Command Set-Content -LiteralPath 'C:\\data\\runs\\demo\\ok\\1000000\\pid' -Value $PID; ps-script # builds-local\r\n",
         }),
       },
       kill: { command: 'taskkill', args: ['/PID', '4321', '/T', '/F'] },
@@ -1073,12 +1136,17 @@ describe('cancel', () => {
       after: { state: 'running' },
     },
     {
-      name: 'ends the run on a non-zero kill exit',
+      name: 'ends the run as gone on a non-zero kill exit',
       aliveCheck: ALIVE,
       kill: result({ code: 1, stderr: 'kill: 4321: No such process' }),
       rejects: null,
       commands: ['ps', 'kill'],
-      after: { state: 'finished', result: 'cancelled' },
+      after: {
+        state: 'finished',
+        result: 'failure',
+        statusText: 'ended without an exit code',
+        finishedAt: 1_500_000,
+      },
     },
   ])('cancel $name', async (row) => {
     const t = setup();

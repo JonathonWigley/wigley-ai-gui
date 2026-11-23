@@ -761,7 +761,14 @@ describe('createProcessGit', () => {
     'commitSubject_Outcome_SubjectOrNull ($case)',
     async ({ sha, result, expected, runs }) => {
       const test = setUp();
-      const show = git('show', '-s', '--no-show-signature', '--format=%s', sha);
+      const show = git(
+        'show',
+        '-s',
+        '--no-show-signature',
+        '--format=%s',
+        `${sha}^{commit}`,
+        '--',
+      );
       if (result !== null) {
         test.processes.script('git', show, result);
       }
@@ -777,7 +784,14 @@ describe('createProcessGit', () => {
     const test = setUp();
     test.processes.script(
       'git',
-      git('show', '-s', '--no-show-signature', '--format=%s', SHA_A),
+      git(
+        'show',
+        '-s',
+        '--no-show-signature',
+        '--format=%s',
+        `${SHA_A}^{commit}`,
+        '--',
+      ),
       new Error('Could not run git: spawn git ENOENT'),
     );
 

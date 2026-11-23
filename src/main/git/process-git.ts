@@ -313,7 +313,8 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         '-s',
         '--no-show-signature',
         '--format=%s',
-        sha,
+        `${sha}^{commit}`,
+        '--',
       ]);
       return result.code === 0 ? result.stdout.replace(/\n$/, '') : null;
     },
