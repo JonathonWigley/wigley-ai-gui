@@ -1,6 +1,6 @@
 # 10 — Inbox view plugin
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the `work-inbox.filterTicket` command that 11 runs and 12 binds, and a new layout contract; it follows
 Backlog's and Schedules' view patterns but leaves the card actions, the draft box and the focus moves to judge
@@ -453,3 +453,4 @@ One commit for the group: `work-inbox: Inbox mode view over work.state, its layo
 
 ## Proof
 
+Commit 49aee87ed · proof: diff read: workInboxManifest (filterTicket command), main and page parts, contract place slot, inbox-state, inbox-view, sample-state, demo-steps, read-layout, layout.d.ts, default layout; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: own card age format (work's helper is private); harness guesses in tests; page/inbox.css outside Files

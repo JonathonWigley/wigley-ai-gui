@@ -1,6 +1,6 @@
 # 08 — Card actions, clearing and spin-up
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · chat's `newSessionWithDraft` page export waits across processes for a `chat.session` key, through the start prompt's async steps, a dropped prompt and the page's stop; the press marks must agree with the job runner's lifecycle
 Wave: 2 · Depends on: 03 (both edit `src/plugins/chat/contract.ts`), 04
@@ -398,3 +398,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 77d192ffa · proof: diff read: actions.ts exports, spin-up startFromWork/linkSession/SpinUpResult, WorkStartResult, WorkLinkArg, channel linkSession, chat newSessionWithDraft page export; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: fill waits only on the chat.session key, not sessions.rows (14 checks); a session closing before its key resolves only at the 10 s timeout; AGENTS.md needs the chat export (13); picker.ts edited outside Files

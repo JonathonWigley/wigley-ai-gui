@@ -1,6 +1,6 @@
 # 11 — Board view plugin
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the `work-board.showTicket` command that 10 runs and 12 binds, and a new layout contract; the column
 cursor, the moves and the drag wiring are left to judge
@@ -353,3 +353,4 @@ One commit for the group: `work-board: Board mode view over work.state, its layo
 
 ## Proof
 
+Commit 47fa87e13 · proof: diff read: workBoardManifest, main and page parts, WorkBoardPlace/slot, board-state exports, createBoardView with showTicket/selectCard/openThreads/moveCardTo/pressCard, sampleBoardState; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes after the setScope and disabled fixes · concerns: sheet CSS sits unprefixed in layouts/default/layout.css (10 uses page CSS); 3 start.test.ts tests fail with no command core.openLink (seen by the fix worker; test gate); drag feel left to 14

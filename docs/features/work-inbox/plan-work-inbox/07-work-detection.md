@@ -1,6 +1,6 @@
 # 07 — Work detection
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · signals.ts crosses git, gh, chat, sessions and unity-pool through async gathers, slot listeners and a debounce
 Wave: 2 · Depends on: 01, 02, 04
@@ -335,3 +335,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit a4fe8018e · proof: diff read: signalKeys, commitKeyPattern, compareIso, signalColumn, detectSuggestions, SeenSignal, DetectionInput, SignalDeps, SignalWatch, watchedRoots, createSignalWatch and the three constants; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes after the WatchedRootDeps log fix · concerns: cardColumn duplicates buildWorkState's placement rule in store.ts (review); signals.test imports deferred and sessionRow from other test-support files

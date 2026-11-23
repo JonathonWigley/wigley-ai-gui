@@ -1,6 +1,6 @@
 # 12 — Register the views and keys
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · follows Backlog's registration and its binds in `src/plugins/keymap.ts` (`<Leader>kb` and the
 `backlog.table` block), and every key is pinned below

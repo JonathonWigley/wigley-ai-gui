@@ -1,6 +1,6 @@
 # 06 — Worker tools and job text
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the worker's tool contract and its merge rules into the store, which 09 wires and the worker's text names
 Wave: 2 · Depends on: 04
@@ -248,3 +248,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit ba45181c8 · proof: diff read: four tools and WORK_TOOLS, WorkToolsDeps, startWorkTools, mergeRecordedItems/Tickets, RecordedItem/Ticket, JobTextSettings, WORKER_INSTRUCTIONS, jobMessage; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: task doc's prunes-nothing bullet is stale (90-day pruning is built); README needs the four tool names (13); test reads manifest defaults

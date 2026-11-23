@@ -236,12 +236,12 @@ Critical path: 04 → 07 → 09 → 13
 - [x] [Work plugin skeleton, contract and store](04-work-skeleton.md)
 
 ### Wave 2
-- [ ] [Job queue and runner](05-job-queue-and-runner.md) — after 03, 04
-- [ ] [Worker tools and job text](06-worker-tools-and-text.md) — after 04
-- [ ] [Work detection](07-work-detection.md) — after 01, 02, 04
-- [ ] [Card actions, clearing and spin-up](08-actions-and-spin-up.md) — after 03, 04
-- [ ] [Inbox view plugin](10-inbox-view.md) — after 04
-- [ ] [Board view plugin](11-board-view.md) — after 04
+- [x] [Job queue and runner](05-job-queue-and-runner.md) — after 03, 04
+- [x] [Worker tools and job text](06-worker-tools-and-text.md) — after 04
+- [x] [Work detection](07-work-detection.md) — after 01, 02, 04
+- [x] [Card actions, clearing and spin-up](08-actions-and-spin-up.md) — after 03, 04
+- [x] [Inbox view plugin](10-inbox-view.md) — after 04
+- [x] [Board view plugin](11-board-view.md) — after 04
 
 ### Wave 3
 - [ ] [Wire the work plugin, fixture and self-test](09-wire-work-main.md) — after 02, 04, 05, 06, 07, 08
@@ -260,8 +260,18 @@ Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 - 02 · hard (compile fix 1441de573 on the same rung) · 385a0c52b · diff read: PullRequestInfo, PullRequests, createGhPullRequests, PR_LIST_LIMIT, PR_LIST_TIMEOUT_MS, MainServices.pullRequests, MAX_GH_RUNS, notFaked harness entry, CORE_LAYERS; wave 1 typecheck + lint clean after the packages fix · concerns: CORE_LAYERS entries lacked required packages (fixed); test pins literals 100 and 15000 rather than the constants
 - 03 · deep · ae6e9e16e · diff read: LaunchRequest.permissions, AgentStart.permissions, launchMode/startingControls on Pick<AgentStart,'controls'|'permissions'>, BYPASS_MODE, SKIP_PERMISSIONS_FLAG, BYPASS_CHOICE; wave 1 typecheck + lint clean · concerns: fake-agent-harness ignores permissions, so permissive Mode choices are pinned only in claude-controls and session-fold tests; startingControls_PermissiveStart test names interpolate an object; edited agent-chat/design.md outside its Files list (kept: stale-doc fix)
 - 04 · deep · 23d8904d9 · diff read: manifest (12 commands, settings), contract (types, columnForStatus, ticketKeysIn, readColumns, readProjects, statusLine, workStateSlot, WorkChannel, 3 CommandKeys), store (parseWorkFile, buildWorkState, createWorkStore), main and page starts, registered after backlog; wave 1 typecheck + lint clean · concerns: hand formatting passed oxfmt; readColumns/readProjects carry as-string casts on an any entry; start_emptySlot and columnForStatus default rows read the manifest defaults
+- 05 · deep · 38d94e33b · diff read: nextJobQueue, parseJobQueue, JOB_QUEUE_FILE, SETTLE_MS, RESTORE_WAIT_MS, JOB_TIMEOUT_MS, isJobDone, JobOutcome, JobRunnerDeps, JobRunner, createJobRunner; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: tests use a local manualTime scheduler; some listed tests split or tabled
+- 06 · hard · ba45181c8 · diff read: four tools and WORK_TOOLS, WorkToolsDeps, startWorkTools, mergeRecordedItems/Tickets, RecordedItem/Ticket, JobTextSettings, WORKER_INSTRUCTIONS, jobMessage; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: task doc's prunes-nothing bullet is stale (90-day pruning is built); README needs the four tool names (13); test reads manifest defaults
+- 07 · deep (compile fix 829ee5840 on the same rung) · a4fe8018e · diff read: signalKeys, commitKeyPattern, compareIso, signalColumn, detectSuggestions, SeenSignal, DetectionInput, SignalDeps, SignalWatch, watchedRoots, createSignalWatch and the three constants; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes after the WatchedRootDeps log fix · concerns: cardColumn duplicates buildWorkState's placement rule in store.ts (review); signals.test imports deferred and sessionRow from other test-support files
+- 08 · deep · 77d192ffa · diff read: actions.ts exports, spin-up startFromWork/linkSession/SpinUpResult, WorkStartResult, WorkLinkArg, channel linkSession, chat newSessionWithDraft page export; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: fill waits only on the chat.session key, not sessions.rows (14 checks); a session closing before its key resolves only at the 10 s timeout; AGENTS.md needs the chat export (13); picker.ts edited outside Files
+- 10 · hard · 49aee87ed · diff read: workInboxManifest (filterTicket command), main and page parts, contract place slot, inbox-state, inbox-view, sample-state, demo-steps, read-layout, layout.d.ts, default layout; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: own card age format (work's helper is private); harness guesses in tests; page/inbox.css outside Files
+- 11 · hard (compile fix 0af59ab90 on the same rung) · 47fa87e13 · diff read: workBoardManifest, main and page parts, WorkBoardPlace/slot, board-state exports, createBoardView with showTicket/selectCard/openThreads/moveCardTo/pressCard, sampleBoardState; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes after the setScope and disabled fixes · concerns: sheet CSS sits unprefixed in layouts/default/layout.css (10 uses page CSS); 3 start.test.ts tests fail with no command core.openLink (seen by the fix worker; test gate); drag feel left to 14
 ### Contract changes
 - 02: CORE_LAYERS 'src/main/pull-requests' layers ['src/contracts'] → ['src/contracts','src/shared'], packages [] · why: the mapper uses isJsonObject from src/shared/json · consumers: none
+- 07: detection.ts adds export cardColumn(card, columns) · why: detection needs the card's column · consumers: 07 only
+- 08: spinUpMessage takes cards; WorkStartResult and WorkLinkArg with channel linkSession; work page startSession toasts or runs chat newSessionWithDraft then linkSession; PickerRequest.cancelled?(); StartPromptDeps gains sessions, fillComposer, timers; StartPrompt.dispose; JOIN_WAIT_MS exported · why: the prompt path needs the chat composer · consumers: 09, 13
+- 10: inbox layout gains an 8th part problem; InboxCardAction and InboxEmptyReason in layout.d.ts; InboxDemoPageDeps gains selectSection · consumers: 10 only
+- 11: CardInput.suggestion carries isDone; board part takes BoardPaneKit; BoardViewDeps matches InboxViewDeps · consumers: 11 only
 ### Rulings
 - 01: branches strips refs/heads/ or refs/remotes/ by one regex; any other ref prefix keeps its full name (none can appear) · group 01
 - 02: a run with code 0 but timedOut resolves null · group 02
@@ -272,5 +282,13 @@ Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 - 04: contract.test-support.ts holds workItem/jiraCard/localCard fixtures for later tasks · group 04
 - 04: an update before load() starts the load; settled() waits for load and chain; save, then tell listeners, then resolve · group 04
 - 04: parseWorkFile checks enum values too; statusLine ages floor to just now / Nm / Nh (<48h) / Nd · group 04
+- 05: pending() includes enqueues held before start() · group 05
+- 05: a replaced queued job keeps its queuedAt; a restore-missed job has a null rowId · group 05
+- 05: a throwing ended callback is logged; stray rows close after the claim · group 05
+- 08: picker.ts gains PickerRequest.cancelled?() outside the Files list, kept: the start prompt needs it · group 08
+- 10: a sending card shows a read-only text block (the editor has no read-only mode) · group 10
+- 10: showMode behaves like Backlog's; the cursor lands on the first card · group 10
+- 11: unknown showTicket key toasts info and does not show the mode; empty board draws empty in place of the columns · group 11
+- 11: a leaving cursor card moves to the same row, else the column's last, else the nearest column with cards (right wins a tie); H and L log no card with no cursor · group 11
 ### Review rounds
 ### Test gate

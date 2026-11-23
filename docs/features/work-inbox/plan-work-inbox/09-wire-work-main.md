@@ -1,6 +1,6 @@
 # 09 — Wire the work plugin, fixture and self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · the main part's lifecycle joins chat's restore, the job runner, timers, the store's change chain and the self-test and drive modes
 Wave: 3 · Depends on: 02, 04, 05, 06, 07, 08

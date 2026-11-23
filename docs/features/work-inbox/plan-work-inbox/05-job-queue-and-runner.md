@@ -1,6 +1,6 @@
 # 05 — Job queue and runner
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses chat's launch, close and restore lifecycle, a persisted queue across restarts, and one serial chain over async events
 Wave: 2 · Depends on: 03, 04
@@ -237,3 +237,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 38d94e33b · proof: diff read: nextJobQueue, parseJobQueue, JOB_QUEUE_FILE, SETTLE_MS, RESTORE_WAIT_MS, JOB_TIMEOUT_MS, isJobDone, JobOutcome, JobRunnerDeps, JobRunner, createJobRunner; wave 2 typecheck clean; lint fails only on the composition check for work-inbox/work-board, which 12 closes · concerns: tests use a local manualTime scheduler; some listed tests split or tabled
