@@ -74,12 +74,12 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
   finding or deferred item that needs the user's decision — carries `origin`, which sets
   the card it draws as and the fields it takes:
 
-  | `origin` | Card | Means |
-  |---|---|---|
-  | `caused` | Defect | a defect the change under review introduced |
-  | `pre_existing` | Defect | a real defect in code the change read but did not cause |
-  | `design` | Decision | a design call: options to weigh, now or in a feature plan |
-  | `nit` | Nit | nothing builds on it, and it cannot be shown happening |
+  | `origin`       | Card     | Means                                                     |
+  | -------------- | -------- | --------------------------------------------------------- |
+  | `caused`       | Defect   | a defect the change under review introduced               |
+  | `pre_existing` | Defect   | a real defect in code the change read but did not cause   |
+  | `design`       | Decision | a design call: options to weigh, now or in a feature plan |
+  | `nit`          | Nit      | nothing builds on it, and it cannot be shown happening    |
 
   Every finding carries `title`, `origin`, `impact` (one plain sentence: what goes wrong,
   and for whom), `finding` (what is wrong; for a Decision, what is to decide), `choices`
@@ -102,16 +102,17 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
   - **The actions** — the same three values on every card, each card labelling them its
     own way:
 
-    | Value | Defect | Decision | Nit |
-    |---|---|---|---|
-    | `fix_now` | Fix now | Decide now | Fix anyway |
-    | `follow_up` | Follow-up | Plan it | — |
-    | `leave_it` | Leave it | Drop it | Leave it |
+    | Value       | Defect    | Decision   | Nit        |
+    | ----------- | --------- | ---------- | ---------- |
+    | `fix_now`   | Fix now   | Decide now | Fix anyway |
+    | `follow_up` | Follow-up | Plan it    | —          |
+    | `leave_it`  | Leave it  | Drop it    | Leave it   |
 
     A Nit offers no `follow_up`. A choice's `action` and `recommend_action` each take an
     action the origin offers, and any other fails the call, such as `Finding 1:
     choices[1].action is follow_up, which a nit finding does not offer; it offers fix_now
     or leave_it.`
+
   - **`recommend`** — the 1-based number of the recommended choice in `choices` as sent;
     that choice's `action` equals `recommend_action`. Left out exactly when no choice
     carries `recommend_action`, as a recommended `leave_it` on a finding whose choices are
@@ -147,6 +148,7 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
   optional comment box. Use `findings` for review
   findings still open, `questions` for any other open decision, and `notices` for what is
   already handled, a fix the agent made or a decision it took alone included.
+
 - **`collect_last_round`** — takes no required arguments (an optional `wait` boolean;
   `false` returns the current draft at once instead of waiting) and re-attaches to the
   round already open, or returns the last finished round's answers again. When to call it
@@ -227,14 +229,14 @@ and notices panes come the same way without the item. A name with no folder hold
 
 `outcome` holds one of six values, and each tells the caller what to do next:
 
-| `outcome` | Means | The caller |
-|---|---|---|
-| `submitted` | The user sent the round. | Reads the answers. |
-| `draft` | The user is still answering; the deadline handed back the answers so far. | Calls `collect_last_round`, again after every `draft`, however many come back in a row. The deadline hands back a draft every few minutes by design: a wait is the user still writing, so the caller never stops the call, and a caller that stops leaves the user to announce the submission by hand. A `draft` whose `next` says the round was not opened (another round is still open) has no answers: the caller sends the same round again with `ask_round`, never `collect_last_round`, which would return the other round's answers. |
-| `cancelled` | The user stopped the round on purpose. | Leaves the round closed and reports what it settled. |
-| `needs_manual_open` | The relay could not start the app, so no round exists; `summary` gives the reason. | Sends the same round again with `ask_round` once — the relay tries the start again. On a second `needs_manual_open`, tells the user the reason in `summary` and asks the round's questions and findings in the reply. Never calls `collect_last_round` for it. |
-| `auto_answered` | The session is headless: the app showed no form and answered every question and finding with its recommendation. | Reads the answers as its own picks, lists each as a Decided notice in the reply, and sends no more rounds while the session stays headless (the `auri` plugin's forms skill § Headless). `collect_last_round` returns the same result again. |
-| `no_round` | No round is open for this session and no finished answers wait for it: the round was never sent, a restart lost it, or its call was cancelled. A draft may still be saved. | Sends the same round again with `ask_round`; the user's saved answers fill in. Never calls `collect_last_round` for it, which holds nothing to return, and never tells the user a round is open that was not sent. |
+| `outcome`           | Means                                                                                                                                                                      | The caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitted`         | The user sent the round.                                                                                                                                                   | Reads the answers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `draft`             | The user is still answering; the deadline handed back the answers so far.                                                                                                  | Calls `collect_last_round`, again after every `draft`, however many come back in a row. The deadline hands back a draft every few minutes by design: a wait is the user still writing, so the caller never stops the call, and a caller that stops leaves the user to announce the submission by hand. A `draft` whose `next` says the round was not opened (another round is still open) has no answers: the caller sends the same round again with `ask_round`, never `collect_last_round`, which would return the other round's answers. |
+| `cancelled`         | The user stopped the round on purpose.                                                                                                                                     | Leaves the round closed and reports what it settled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `needs_manual_open` | The relay could not start the app, so no round exists; `summary` gives the reason.                                                                                         | Sends the same round again with `ask_round` once — the relay tries the start again. On a second `needs_manual_open`, tells the user the reason in `summary` and asks the round's questions and findings in the reply. Never calls `collect_last_round` for it.                                                                                                                                                                                                                                                                              |
+| `auto_answered`     | The session is headless: the app showed no form and answered every question and finding with its recommendation.                                                           | Reads the answers as its own picks, lists each as a Decided notice in the reply, and sends no more rounds while the session stays headless (the `auri` plugin's forms skill § Headless). `collect_last_round` returns the same result again.                                                                                                                                                                                                                                                                                                |
+| `no_round`          | No round is open for this session and no finished answers wait for it: the round was never sent, a restart lost it, or its call was cancelled. A draft may still be saved. | Sends the same round again with `ask_round`; the user's saved answers fill in. Never calls `collect_last_round` for it, which holds nothing to return, and never tells the user a round is open that was not sent.                                                                                                                                                                                                                                                                                                                          |
 
 No hook holds the `draft` rule: the prose does, for rounds and primers alike
 ([The feature primer](#the-feature-primer) gives the primer's names). The user may end a session
@@ -386,8 +388,8 @@ only when the round holds no questions.
 choice's text and the overview render inline markdown only. A caller may write:
 
 - paragraphs, with `**bold**`, `*italic*` and inline `` `code` ``
-- fenced code blocks; inside a `` ```diff `` fence a line starting `+` is coloured added,
-  `-` removed and `~` changed; a `` ```html `` fence draws a live visual (the `auri` plugin's visuals skill)
+- fenced code blocks; inside a ` ```diff ` fence a line starting `+` is coloured added,
+  `-` removed and `~` changed; a ` ```html ` fence draws a live visual (the `auri` plugin's visuals skill)
 - unordered and ordered lists, headings, blockquotes
 - pipe tables, with the alignment row (`:---`, `:---:`, `---:`)
 - three `:::` blocks, each closed by a line holding only `:::`:
@@ -620,7 +622,14 @@ the app for, and must not start it. Offline mode lets such a run carry on with a
   `structuredContent`, optional `isError`), and whether the call replays onto its row when the app opens:
 
   ```json
-  { "tools": { "<tool name>": { "result": { "content": [{ "type": "text", "text": "…" }] }, "replay": true } } }
+  {
+    "tools": {
+      "<tool name>": {
+        "result": { "content": [{ "type": "text", "text": "…" }] },
+        "replay": true
+      }
+    }
+  }
   ```
 
 - **Calls file.** The relay appends one JSON line per `tools/call` it answered alone in offline mode to
@@ -636,6 +645,7 @@ the app for, and must not start it. Offline mode lets such a run carry on with a
   file by name, so a line written after the app renamed
   the file starts a new one. When the app adopts the run as a row, it claims the file by renaming it, applies the
   replayable calls in file order, and deletes it.
+
 - **No session id.** With a null hello `session_id` (`CLAUDE_CODE_SESSION_ID` unset; a run the app's host fires
   always sets it), each call still gets its offline answer, but the relay writes no calls-file line and logs one
   line on stderr for each such call. Nothing of that run replays.

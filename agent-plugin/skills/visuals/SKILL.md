@@ -1,6 +1,6 @@
 ---
 name: visuals
-description: "Drawing a live visual or showing an image or video in an Auri reply or forms round — an html code block the app renders in a sandboxed frame, or a render, screenshot or recorded clip on disk shown by its path. Use when a UI mockup, a mock of a look decision, a systems flowchart or architecture diagram, a rendered image, a flow worth showing in motion, or any picture would explain better than prose, in a session the app started."
+description: 'Drawing a live visual or showing an image or video in an Auri reply or forms round — an html code block the app renders in a sandboxed frame, or a render, screenshot or recorded clip on disk shown by its path. Use when a UI mockup, a mock of a look decision, a systems flowchart or architecture diagram, a rendered image, a flow worth showing in motion, or any picture would explain better than prose, in a session the app started.'
 ---
 
 **Contents**
@@ -14,7 +14,7 @@ description: "Drawing a live visual or showing an image or video in an Auri repl
 - **Flowcharts** — a systems flow drawn as SVG.
 - **Before sending** — the check that ends the work.
 
-A **visual** is a whole HTML document in an ```` ```html ```` code block in the reply. The Auri app draws it in
+A **visual** is a whole HTML document in an ` ```html ` code block in the reply. The Auri app draws it in
 place, live, in the user's theme. An **image** is a file on disk — a render, a screenshot, a capture still — that the
 app shows in place from its absolute path, and a **video** is a recorded clip on disk shown the same way. A good
 visual or image shows at a glance what prose would take a paragraph to say, and reads as part of the app.

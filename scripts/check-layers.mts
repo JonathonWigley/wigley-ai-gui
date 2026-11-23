@@ -607,6 +607,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
   'src/shared/followups': { layers: ['src/shared'], packages: [] },
+  // Reads the agent-plugin manifests from disk to check them against its constants.
+  'src/shared/agent-plugin.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
+    packages: ['node:'],
+  },
   // The local channel transport the relay and the session host share.
   'src/shared/local-channel': {
     layers: ['src/contracts'],
