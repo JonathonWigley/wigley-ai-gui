@@ -11,7 +11,7 @@ Branch: `spike/work-inbox` · Started: 2026-11-23
 - A background agent session gathers the data through Claude's Slack and Atlassian connectors. It
   runs on a timer and on a refresh key, on the Claude profile a setting names, and writes into
   the plugin through the plugin's own tools — first ask
-- Two full-window modes: Inbox (`Space k i`) and Board (`Space k j`); `Space k r` sweeps now — first ask
+- Two full-window modes: Inbox (`Space k i`) and Board (`Space k j`); `Space k r` (landed as `W` in both views) sweeps now — first ask
 - The Inbox has four sections:
   - Needs you: DMs, @mentions and direct asks
   - My threads: threads the user posted in that have new replies
@@ -38,14 +38,14 @@ Branch: `spike/work-inbox` · Started: 2026-11-23
 ## Tuned values
 | Value | Setting | Where |
 |---|---|---|
-| Worker profile | `''` (chat's default) | `work-inbox.profile` |
-| Sweep interval | 10 minutes (0 = never) | `work-inbox.intervalMinutes` |
-| First-sweep lookback | 48 hours | `work-inbox.lookbackHours` |
-| Watched channels | none | `work-inbox.channels` |
-| Broadcast channels | general, announcements | `work-inbox.broadcastChannels` |
-| Keywords | none | `work-inbox.keywords` |
-| Jira query | `assignee = currentUser() AND (statusCategory != Done OR resolved >= -14d) ORDER BY updated DESC` | `work-inbox.jiraQuery` |
-| Columns → statuses | Backlog: Backlog · Todo: To Do, Selected for Development, Open · In Progress: In Progress · In QA: In QA, QA, In Review, Ready for QA · Done: Done, Closed, Resolved | `work-inbox.columns` |
+| Worker profile | `''` (chat's default) | `work-inbox.profile` (landed as `work.profile`) |
+| Sweep interval | 10 minutes (0 = never) | `work-inbox.intervalMinutes` (landed as `work.intervalMinutes`) |
+| First-sweep lookback | 48 hours | `work-inbox.lookbackHours` (landed as `work.lookbackHours`) |
+| Watched channels | none | `work-inbox.channels` (landed as `work.channels`) |
+| Broadcast channels | general, announcements | `work-inbox.broadcastChannels` (landed as `work.broadcastChannels`) |
+| Keywords | none | `work-inbox.keywords` (landed as `work.keywords`) |
+| Jira query | `assignee = currentUser() AND (statusCategory != Done OR resolved >= -14d) ORDER BY updated DESC` | `work-inbox.jiraQuery` (landed as `work.jiraQuery`) |
+| Columns → statuses | Backlog: Backlog · Todo: To Do, Selected for Development, Open · In Progress: In Progress · In QA: In QA, QA, In Review, Ready for QA · Done: Done, Closed, Resolved | `work-inbox.columns` (landed as `work.columns`) |
 
 ## Next
 - Work detection from git branches and commits, pull requests and Auri sessions, matched by
@@ -61,7 +61,7 @@ Branch: `spike/work-inbox` · Started: 2026-11-23
 The user approved an HTML prototype of these four (2026-11-23):
 - "You promised" and "Waiting on others" are their own Inbox sections
 - A promise with no ticket goes on the Board as a local task; it creates no Jira ticket
-- Every Inbox card has a spin-up row (Start session, Add to Backlog); every Board card has a
+- Every Inbox card has a spin-up row (Start session, Add to Backlog; landed as Add to Board); every Board card has a
   Session button
 - A suggested move sits on the Board card with its reason, and has Accept and Not yet
 - Waiting on others cards carry an editable nudge or reply draft, Send, Snooze 1 day and Dismiss

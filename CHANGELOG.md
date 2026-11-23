@@ -20,6 +20,13 @@ changes for the user.
   checklist.
 - `README.md`, this changelog and an MIT `LICENSE`. `npm run lint` fails when a branch changes app code without a
   changelog entry, and a test fails when the README leaves out a plugin, tool, setting, skill or hook.
+- Inbox mode (`Space k i`): your Slack threads sorted by what needs you, with drafts ready to send, snooze, dismiss and
+  restore, a ticket filter, and a Dock badge counting what needs you.
+- Board mode (`Space k j`): your Jira tickets and local tasks in columns, with moves you make by key, button or drag and
+  moves the app suggests from your branches, commits, pull requests and sessions.
+- Background sweeps of Slack and Jira by unattended worker sessions every `work.intervalMinutes` while the app runs, or
+  at once on `W`, with the `work.*` settings for channels, keywords, the Jira query, the Board columns and each signal's
+  column.
 
 ### Changed
 

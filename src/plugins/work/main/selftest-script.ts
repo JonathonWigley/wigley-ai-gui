@@ -77,6 +77,27 @@ const press = (
 const needsYouLine = (count: number) =>
   new RegExp(`^\\[work\\] needs you: ${count}$`);
 
+const inboxLine = (text: string) => `[work-inbox] ${text}`;
+const boardLine = (text: string) => `[work-board] ${text}`;
+
+// Titles from `selftest-fixture.ts`: the newest item, the second and the oldest.
+const NEEDS_YOU_TITLE = 'Can you look at WRK-1?';
+const SECOND_TITLE = 'Notes from the planning call';
+const DISMISSED_TITLE = 'Lunch order';
+
+// A key typed in a view once its mode shows: raw presses, the line they log, and optionally more lines and a why.
+const viewStep = (
+  keys: string[],
+  expect: string,
+  alsoExpect?: RegExp[],
+  why?: string,
+): SelfTestStep => ({
+  keys,
+  expect,
+  ...(alsoExpect === undefined ? {} : { alsoExpect }),
+  ...(why === undefined ? {} : { why }),
+});
+
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'inbox',
@@ -108,6 +129,106 @@ const GROUPS: SelfTestGroup[] = [
     name: 'sweep',
     why: 'In the self-test a sweep queues and no worker launches.',
     steps: [reseedStep('sweep'), press('w', 'sweep queued')],
+  },
+  {
+    name: 'inbox keys',
+    why: 'The Inbox opens on Needs you at its first card, its keys move the sections and the list, and each card key reaches main.',
+    steps: [
+      reseedStep('inbox keys'),
+      {
+        keys: [' ', 'k', 'i'],
+        expect: inboxLine('shown'),
+        checksFit: true,
+        alsoExpect: [
+          /^\[work-inbox\] section Needs you$/,
+          /^\[work-inbox\] selected Can you look at WRK-1\?$/,
+        ],
+        why: 'The self-test home has no saved place, so the first show is Needs you at its one open card.',
+      },
+      viewStep(['i'], inboxLine('box focused')),
+      viewStep(['<Esc>'], inboxLine('list focused')),
+      viewStep(
+        ['t'],
+        boardLine('shown'),
+        [/^\[work-board\] flash WRK-1$/],
+        "The card's ticket key shows its ticket on the Board.",
+      ),
+      viewStep([' ', 'k', 'i'], inboxLine('shown')),
+      viewStep(['d'], line(`dismissed ${FIXTURE_ITEM_IDS.needsYou}`)),
+      viewStep(['<A-h>'], inboxLine('sections focused')),
+      viewStep(
+        ['G'],
+        inboxLine('section cursor All'),
+        undefined,
+        'All is the last section row.',
+      ),
+      viewStep(['<CR>'], inboxLine('section All'), [
+        /^\[work-inbox\] list focused$/,
+      ]),
+      viewStep(
+        ['G'],
+        inboxLine(`selected ${DISMISSED_TITLE}`),
+        undefined,
+        'All lists newest first, so the dismissed item, the oldest, ends it.',
+      ),
+      viewStep(['g', 'g'], inboxLine(`selected ${NEEDS_YOU_TITLE}`)),
+      viewStep(['j'], inboxLine(`selected ${SECOND_TITLE}`)),
+      viewStep(['G'], inboxLine(`selected ${DISMISSED_TITLE}`)),
+      viewStep(['u'], line(`restored ${FIXTURE_ITEM_IDS.dismissed}`)),
+      viewStep(['<A-h>'], inboxLine('sections focused')),
+      viewStep(['g', 'g'], inboxLine('section cursor Needs you')),
+      viewStep(['j'], inboxLine('section cursor You promised')),
+      viewStep(['<CR>'], inboxLine('section You promised'), [
+        /^\[work-inbox\] list focused$/,
+      ]),
+      viewStep(
+        ['W'],
+        line('sweep queued'),
+        undefined,
+        "The bind runs work-inbox.sweep, which reaches main through the view's reporting run.",
+      ),
+      viewStep(['<C-n>'], '[chat] picker shown: Folder'),
+      viewStep(
+        ['Escape'],
+        '[chat] picker closed: Folder',
+        undefined,
+        "Closing the picker keeps the next group's keys out of it.",
+      ),
+    ],
+  },
+  {
+    name: 'board keys',
+    why: 'The Board opens on its first card, its keys move the cursor and the cards, and each card key reaches main.',
+    steps: [
+      reseedStep('board keys'),
+      {
+        keys: [' ', 'k', 'j'],
+        expect: boardLine('shown'),
+        checksFit: true,
+        alsoExpect: [/^\[work-board\] selected WRK-1$/],
+        why: 'The first show puts the cursor on the first card of the first column that has cards.',
+      },
+      viewStep(['l'], boardLine('selected WRK-2')),
+      viewStep(['j'], boardLine(`selected ${FIXTURE_TASK_ID}`)),
+      viewStep(
+        ['L'],
+        line(`moved ${FIXTURE_TASK_ID} to In Progress`),
+        undefined,
+        'A local task moves at once, so the cursor stays on it, now below WRK-3.',
+      ),
+      viewStep(['k'], boardLine('selected WRK-3')),
+      viewStep(['t'], inboxLine('shown'), [/^\[work-inbox\] filter WRK-3$/]),
+      viewStep(['<Esc>'], inboxLine('filter cleared')),
+      viewStep(
+        [' ', 'k', 'j'],
+        boardLine('shown'),
+        undefined,
+        'The Board keeps its cursor on WRK-3.',
+      ),
+      viewStep(['y'], line('moving WRK-3 to In QA')),
+      viewStep(['h'], boardLine('selected WRK-2')),
+      viewStep(['n'], line('not yet WRK-2')),
+    ],
   },
 ];
 

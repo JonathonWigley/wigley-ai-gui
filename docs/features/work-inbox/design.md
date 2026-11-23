@@ -1,7 +1,5 @@
 # Work inbox
 
-Planned in `plan-work-inbox`, not built yet: every plugin, command, setting and key below lands with that plan.
-
 **Contents**
 
 - **Intent** — why Slack and Jira come into the app, and what the user never has to do by hand.
@@ -65,11 +63,12 @@ Auri sessions (chat.session, sessions.rows) ─┘
 ## The worker
 
 - **One session per job.** A sweep, and each Send, Move, Accept or nudge, is a job. The queue launches one at a time, a
-  fresh owned session each, and closes it once its row is idle with no background work, after a short settle, as
+  fresh owned session each, and closes it once its row is idle with no background work, after a 5 s settle, as
   auto-retro does. A fresh session keeps every job's context bounded; the conversation never grows across sweeps.
 - **Queue.** A pure reducer over the queued jobs and the running one, saved in plugin data so a restart keeps queued
-  presses. A sweep already queued is not queued twice. A restart drops a running job whose row never returned and
-  re-queues a press that never launched.
+  presses. A sweep already queued is not queued twice, and a press for a target already queued replaces the queued one.
+  After a restart a job the quit cut short goes back to the head of the queue, and a running job whose row does not
+  come back within 30 s fails. A job that runs past 20 minutes is closed and fails.
 - **Unattended and permissive.** Each job launches `unattended` (a prompt is denied at once, never left waiting) and with
   chat's role-based `permissions: 'auto'`, which each harness maps to its most permissive launch mode, so connector
   calls need no allow rule. The worker's instructions are the only guard on what it writes: a sweep reads only, and a
@@ -88,26 +87,45 @@ Auri sessions (chat.session, sessions.rows) ─┘
 Sections, in order: **Needs you** (DMs, @mentions, direct asks), **You promised** (commitments the user made in Slack),
 **Waiting on others** (the user's questions and owed replies gone quiet past `work.stallHours`), **My threads** (threads
 the user posted in with new replies), **Around Slack** (watched-channel posts tied to the user's tickets or keywords,
-each with a why), **Worth knowing** (important posts in broadcast channels, each with a why), and **All**.
+each with a why), **Worth knowing** (important posts in broadcast channels, each with a why), and **All**, the
+seventh nav row. The side bar lists the seven as rows with their open counts (All counts every item); the shown section
+fills the sheet, newest first.
 
 A card shows its summary, participants, latest reply, Open in Slack, ticket chips and a spin-up row (Start session, Add
-to Board). Needs you cards carry an editable draft and Send, have a warning-colour edge, and their count drives the Dock
-badge. Waiting on others cards carry an editable nudge, Send, Snooze 1 day and Dismiss. A ticket chip opens the Board
-on that ticket.
+to Board). Needs you cards carry an editable draft and Send, have a warning-colour edge (drawn in the layout's CSS,
+since the Card primitive has no such variant), and their count drives the Dock badge. Waiting on others cards carry an
+editable nudge, Send, Snooze 1 day and Dismiss. Every other open card has Dismiss, Start session and Add to Board. A
+ticket chip opens the Board on that ticket.
+
+- **The draft** is the user's edit, else the worker's. Edits are kept per item in `work-inbox.place` while the item is
+  in `work.state`, so a reload keeps them. Send posts the draft and drops the edit; an empty draft toasts and sends
+  nothing. A card being sent shows its draft read-only and takes no other press.
+- **The ticket filter** (the Board's `N thread` chip, `t` on a Board card, or a ticket chip) lists the open items
+  holding one ticket key across every section, shown as a chip reading `<key> ✕`. `Esc` in the list or a click on the
+  chip clears it and returns to the section shown before.
+- **First show.** With no saved place the Inbox opens on Needs you with the cursor on its first card. Its place (section,
+  filter, cursor and drafts) is `work-inbox.place`, kept across reloads.
 
 An item clears on Send, when a sweep sees the user replied or reacted in Slack, or on Dismiss; a snoozed item returns
-when its snooze ends. Cleared and dismissed items stay under All for 90 days after their last activity, where Restore brings one back.
+when its snooze ends. Cleared and dismissed items stay under All for 90 days after their last activity, where Restore
+brings one back; a sweep's recording removes the older ones.
 
 ## Board
 
-Columns from `work.columns`, each a name and the Jira statuses it stands for, plus Other for any unmapped status. A
+Columns from `work.columns`, each a name and the Jira statuses it stands for, plus Other for any unmapped status, shown
+only while it holds a card and never a drop target. A
 card is either a Jira ticket from `work.jiraQuery` or a **local task**: a card with no Jira ticket, made by Add to
 Board or from a promise with no ticket, kept in plugin data, starting in Todo and gone only when the user deletes it.
 
 A card moves by ◀/▶ or drag. A Jira card shows "Moving to X in Jira…" while its Move job runs; the worker takes the
 first status in the target column's list the ticket can reach, and the card shows a note when none is reachable. A
 local task moves at once. A card's "N thread" chip opens the Inbox filtered to that ticket, and its Session button
-starts a session ([Spin-up](#spin-up)).
+starts a session ([Spin-up](#spin-up)). A local task's Delete removes it at once, with no confirm. An empty board
+shows one line with the sweep hint in place of the columns. A card shown by another view (a ticket chip in the Inbox)
+flashes; a key `showTicket` finds no card for toasts and leaves the mode alone.
+
+A Jira card's ◀/▶ and a drop mark it moving and queue a Move job; a card in Other has neither. When the cursor card
+leaves its column, the cursor keeps the same row, else the column's last card, else the nearest column with cards.
 
 ## Work detection
 
@@ -131,9 +149,10 @@ Watched repos are chat's projects with their pool clones, plus `work.repoFolders
 ## Spin-up
 
 Start session (Inbox) and Session (Board) launch a visible session with `chat.launch`, as notes does, its message
-carrying the key, title, link and linked threads' summaries. `work.projects` pairs a Jira project key with an Auri
-project; a key with no entry, and a thread with no ticket, open chat's new-session prompt with the message ready. The
-session is linked to the card, so its branch and work count as signals.
+carrying the key, title, link and linked threads' summaries (up to five). `work.projects` pairs a Jira project key with
+an Auri project chat lists; a key with no entry, a project chat does not list, and a thread with no ticket, open chat's
+new-session prompt with the message in its box, through chat's `newSessionWithDraft`. The session is linked to the
+card, so its branch and work count as signals.
 
 ## Settings
 
@@ -155,8 +174,38 @@ session is linked to the card, so its branch and work count as signals.
 ## Keys
 
 - `<Leader>ki` Inbox, `<Leader>kj` Board, in the `k` go-to group.
-- `W` sweeps now in both views, matching Backlog's sweep.
+- `W` sweeps now in both views (in the Inbox's sections and list, not in a draft box, where it types), matching
+  Backlog's sweep. `gs` shows the last job's transcript row.
 - Ctrl+n opens the new-session prompt from both views, as in every main view.
+
+**Inbox sections** (side bar): `j`/`k`, `gg`/`G` move the cursor, `Enter` shows the section and moves focus to the
+list, `l` shows it keeping focus. Alt+h/l move focus between the sections and the list.
+
+**Inbox list:** `j`/`k`, `gg`/`G` move the card cursor.
+
+| Key | Does |
+|---|---|
+| `Enter` | Open the thread in Slack |
+| `i` | Edit the draft |
+| `Cmd+Enter` | Send the draft (in the draft box too; `Esc` leaves the box) |
+| `d` | Dismiss |
+| `z` | Snooze 1 day |
+| `u` | Restore |
+| `b` | Add to Board |
+| `s` | Start a session |
+| `t` | Show the card's ticket on the Board |
+| `Esc` | Clear the ticket filter |
+
+**Board:** `j`/`k` and `gg`/`G` move the cursor in a column, `h`/`l` between columns.
+
+| Key | Does |
+|---|---|
+| `H` / `L` | Move the card to the previous or next column |
+| `Enter` | Open the ticket, or the task's source thread |
+| `y` / `n` | Accept the suggested move, or Not yet |
+| `t` | Show the ticket's threads in the Inbox |
+| `s` | Start a session |
+| `d` | Delete the local task |
 
 ## Decisions
 
