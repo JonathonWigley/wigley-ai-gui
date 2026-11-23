@@ -1,4 +1,5 @@
 import type { FeatureKey } from '../../../contracts/contributions';
+import type { KeyedSlotKey } from '../../../contracts/state';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ChannelShape,
@@ -10,6 +11,7 @@ import { createHarnessFolders } from '../../../shared/harness-folders';
 import {
   type ContributionsMainExports,
   contributionsFeaturesSlot,
+  type FeatureStrategies,
   type Strategy,
 } from '../contract';
 import { contributionsManifest } from '../manifest';
@@ -18,6 +20,21 @@ import { createReload } from './reload';
 import { scanSources } from './sources';
 
 type ContributionsApi = MainApi<typeof contributionsManifest, ChannelShape>;
+
+// `contributions.features` as the part publishes it: each strategy's value is
+// `unknown`, because `JsonSlot` cannot expand the recursive `JsonValue`
+// (TS2589). Every value the registry writes is a reader's value, which
+// `registerFeature`'s `JsonSlot` already checked, and readers see the key's
+// own `FeatureStrategies`.
+interface PublishedFeatures extends Omit<FeatureStrategies, 'strategies'> {
+  strategies: Strategy<unknown>[];
+}
+
+const publishedFeaturesSlot = contributionsFeaturesSlot as KeyedSlotKey<
+  PublishedFeatures,
+  'main',
+  'contributions'
+>;
 
 // Scans the app's own agent plugin and every install a registered profile
 // lists for `auri.json`, serves each registered feature's strategies through
@@ -37,7 +54,7 @@ export const contributionsMainPart: MainPart<typeof contributionsManifest> = {
       log,
     });
     const registry = createRegistry({
-      slot: api.state.publish(contributionsFeaturesSlot),
+      slot: api.state.publish(publishedFeaturesSlot),
       paths,
       log,
       setProblems: (problems) => services.configProblems.set(problems),

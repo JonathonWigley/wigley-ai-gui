@@ -35,10 +35,9 @@ const GUARDS = { from: STRINGS, when: PREDICATES };
 
 const TRIGGER = {
   anyOf: [
-    record(
-      { skill: STRING, ...GUARDS, clearsPlan: TRUE, planFromArgs: TRUE },
-      ['skill'],
-    ),
+    record({ skill: STRING, ...GUARDS, clearsPlan: TRUE, planFromArgs: TRUE }, [
+      'skill',
+    ]),
     record({ step: STRING, ...GUARDS }, ['step']),
     record({ event: STRING, ...GUARDS, clearsPlan: TRUE }, ['event']),
   ],
@@ -117,10 +116,10 @@ const WORKFLOW = record(
         record({ planCounter: STRING }, ['planCounter']),
       ],
     },
-    sidePane: record(
-      { kind: { enum: ['checklist', 'plan'] }, title: STRING },
-      ['kind', 'title'],
-    ),
+    sidePane: record({ kind: { enum: ['checklist', 'plan'] }, title: STRING }, [
+      'kind',
+      'title',
+    ]),
     actions: { type: 'object', additionalProperties: ref('action') },
     stages: { type: 'array', items: ref('stage') },
   },

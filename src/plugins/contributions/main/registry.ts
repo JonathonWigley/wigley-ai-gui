@@ -133,7 +133,7 @@ export function createRegistry(deps: RegistryDeps): Registry {
   };
 
   const tell = (key: FeatureKey, strategies: readonly Strategy<unknown>[]) => {
-    for (const listener of [...(listeners.get(key) ?? [])]) {
+    for (const listener of listeners.get(key) ?? []) {
       try {
         listener(strategies);
       } catch (error) {

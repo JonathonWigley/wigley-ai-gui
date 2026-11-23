@@ -12,9 +12,7 @@ import {
   FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
-import {
-  startMainPart,
-} from '../../../shared/plugin-part-harness.test-support';
+import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   type ContributionsMainExports,
@@ -48,15 +46,16 @@ interface SetUpOptions {
   files?: Record<string, string>;
   // Whether `installed_plugins.json` is on disk; true when left out.
   hasInstallsFile?: boolean;
-  // Called with the harness as the part starts, before any watch.
-  onStart?(harness: ReturnType<typeof startMainPart>): void;
+  // A folder whose first watch throws at start.
+  throwWatchOnce?: string;
 }
 
 // The part over one fake profile, at `/cfg`, that installs `wigley` at
 // `/p/wigley`. The first scan finds nothing, since no profile is registered
 // and no file is written; then the files are written, `core.agentHarnesses`
 // names the profile, and the scan that follows settles. `reads(path)` counts
-// the reads of `path` since the setup.
+// the reads of `path` since the setup; `watchesOf(folder)` lists the watches
+// started on `folder` since the part started.
 async function setUp(options: SetUpOptions = {}) {
   const agentHarness = createFakeAgentHarness(
     { now: () => 0 },
@@ -74,10 +73,10 @@ async function setUp(options: SetUpOptions = {}) {
   const harness = startMainPart(contributionsMainPart, {
     services: { agentHarnesses: harnessRegistryOf([agentHarness]) },
   });
-  options.onStart?.(harness);
-  const exports = harness.started().exports?.(
-    createRegistrations(),
-  ) as ContributionsMainExports;
+  const { watchesOf } = spyWatches(harness, options.throwWatchOnce);
+  const exports = harness
+    .started()
+    .exports?.(createRegistrations()) as ContributionsMainExports;
   exports.registerFeature('retro', acceptAll);
   await exports.ready;
   if (options.hasInstallsFile ?? true) {
@@ -95,7 +94,7 @@ async function setUp(options: SetUpOptions = {}) {
   const reads = (path: string) =>
     read.mock.calls.filter(([each]) => each === path).length;
   const messages = () => harness.logs.map(({ message }) => message);
-  return { harness, exports, infos, reads, messages };
+  return { harness, exports, infos, reads, messages, watchesOf };
 }
 
 // A spy on `files.watch` that records each watch's folder and options, and
@@ -206,33 +205,26 @@ describe('contributionsMainPart', () => {
 
   // Catches a reload that dies after one watch error.
   it('starts a failed watch again on the next scan', async () => {
-    let spy: ReturnType<typeof spyWatches> | undefined;
-    const { harness, messages } = await setUp({
+    const { harness, messages, watchesOf } = await setUp({
       files: { [APP_FILE]: GOOD_TEXT },
-      onStart: (started) => {
-        spy = spyWatches(started);
-      },
     });
-    spy.watchesOf(APP_ROOT)[0].options.onError?.(new Error('gone'));
+    watchesOf(APP_ROOT)[0].options.onError?.(new Error('gone'));
 
     await harness.files.write(INSTALLS_FILE, '{ "a": 1 }');
     harness.advance(300);
     await flush();
 
     expect(messages()).toContain(`watch of ${APP_ROOT} failed: gone`);
-    expect(spy.watchesOf(APP_ROOT)).toHaveLength(2);
+    expect(watchesOf(APP_ROOT)).toHaveLength(2);
     await harness.stop();
   });
 
   it('logs a watch that throws at start and tries it on the next scan', async () => {
-    let spy: ReturnType<typeof spyWatches> | undefined;
-    const { harness, messages } = await setUp({
+    const { harness, messages, watchesOf } = await setUp({
       files: { [APP_FILE]: GOOD_TEXT },
-      onStart: (started) => {
-        spy = spyWatches(started, APP_ROOT);
-      },
+      throwWatchOnce: APP_ROOT,
     });
-    const afterFirst = spy.watchesOf(APP_ROOT).length;
+    const afterFirst = watchesOf(APP_ROOT).length;
 
     await harness.files.write(INSTALLS_FILE, '{ "a": 1 }');
     harness.advance(300);
@@ -240,20 +232,16 @@ describe('contributionsMainPart', () => {
 
     expect(messages()).toContain(`watch of ${APP_ROOT} failed: denied`);
     expect(afterFirst).toBe(0);
-    expect(spy.watchesOf(APP_ROOT)).toHaveLength(1);
+    expect(watchesOf(APP_ROOT)).toHaveLength(1);
     await harness.stop();
   });
 
   it('rescans 300 ms after a watch may have missed a change', async () => {
-    let spy: ReturnType<typeof spyWatches> | undefined;
-    const { harness, reads } = await setUp({
+    const { harness, reads, watchesOf } = await setUp({
       files: { [APP_FILE]: GOOD_TEXT },
-      onStart: (started) => {
-        spy = spyWatches(started);
-      },
     });
 
-    spy.watchesOf(APP_ROOT)[0].options.onMissed?.();
+    watchesOf(APP_ROOT)[0].options.onMissed?.();
     harness.advance(299);
     await flush();
     const before = reads(APP_FILE);
@@ -267,15 +255,9 @@ describe('contributionsMainPart', () => {
 
   // Catches a watch that creates a missing folder.
   it('watches no folder that is absent', async () => {
-    let spy: ReturnType<typeof spyWatches> | undefined;
-    const { harness } = await setUp({
-      hasInstallsFile: false,
-      onStart: (started) => {
-        spy = spyWatches(started);
-      },
-    });
+    const { harness, watchesOf } = await setUp({ hasInstallsFile: false });
 
-    expect(spy.watchesOf(INSTALLS_FOLDER)).toEqual([]);
+    expect(watchesOf(INSTALLS_FOLDER)).toEqual([]);
     expect(await harness.files.stat(INSTALLS_FOLDER)).toBeNull();
     await harness.stop();
   });

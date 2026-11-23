@@ -150,9 +150,7 @@ describe('createRegistry', () => {
     registry.register('retro', reader('Retro'));
 
     expect(read).not.toHaveBeenCalled();
-    expect(slot.get('retro')?.strategies.map(({ id }) => id)).toEqual([
-      'auri',
-    ]);
+    expect(slot.get('retro')?.strategies.map(({ id }) => id)).toEqual(['auri']);
   });
 
   // Catches a bad file that leaks a section.
