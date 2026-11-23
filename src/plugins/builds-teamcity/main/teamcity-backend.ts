@@ -1,11 +1,12 @@
 import { isMissingFile } from '../../../contracts/files';
 import { errorText } from '../../../shared/error-text';
-import { isJsonObject } from '../../../shared/json';
+import { isJsonObject, type JsonObject } from '../../../shared/json';
 import type {
   BackendEntry,
   BackendKind,
   BackendServices,
   BuildBackend,
+  BuildJob,
   BuildLink,
   BuildRecord,
   GameEntry,
@@ -25,8 +26,9 @@ import {
 export const MAX_CALLS_IN_FLIGHT = 4;
 // How long a finished build whose detail or a log could not be read waits before a list reads it again.
 export const DETAIL_RETRY_MS = 10 * 60 * 1000;
-// How long after a build finishes its deploy logs are still read for install links.
-const LINK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+// How long after a build finishes its deploy logs are still read for install links, and how long after a build is
+// queued its pin is kept.
+export const LINK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 const VERSION_TIMEOUT_MS = 10_000;
 const LIST_TIMEOUT_MS = 30_000;
@@ -136,14 +138,16 @@ function kindsByTarget(game: GameEntry): Map<string, string> {
   return kinds;
 }
 
-// What this backend queued a build with, for the rows TeamCity lists as `<default>`.
+// What this backend queued a build with, and when, for the rows TeamCity lists as `<default>`.
 interface QueuedPin {
   branch: string;
   revision: string | null;
+  queuedAt: number;
 }
 
 // What CACHE_FILE holds: finished builds whose detail and every log were read, by game id then build id, and what
-// this backend queued each build with, by build id, until that build is cached.
+// this backend queued each build with, by build id, until that build is cached or LINK_WINDOW_MS has passed since it
+// was queued.
 interface StoredBuilds {
   finished: Map<string, Map<string, BuildRecord>>;
   pins: Map<string, QueuedPin>;
@@ -183,6 +187,7 @@ function createTeamcityBackend(
 
   const writeStored = (builds: StoredBuilds) => {
     storeWrites = storeWrites.then(async () => {
+      dropExpiredPins(builds.pins, services.clock.now());
       const file = {
         games: Object.fromEntries(
           [...builds.finished].map(([gameId, records]) => [
@@ -467,6 +472,7 @@ function createTeamcityBackend(
       store.pins.set(id, {
         branch: request.branch,
         revision: request.revision,
+        queuedAt: services.clock.now(),
       });
       await writeStored(store);
       return { id };
@@ -516,7 +522,7 @@ function listedRecord(
 }
 
 // The cache file's finished records and pins; a missing or malformed file reads as empty, and a malformed record or
-// pin is left out.
+// pin, or a pin past the link window, is left out.
 async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
   const builds: StoredBuilds = { finished: new Map(), pins: new Map() };
   let text: string;
@@ -551,7 +557,17 @@ async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
       builds.pins.set(id, pin);
     }
   }
+  dropExpiredPins(builds.pins, services.clock.now());
   return builds;
+}
+
+// Deletes each pin queued more than LINK_WINDOW_MS before `now`.
+function dropExpiredPins(pins: Map<string, QueuedPin>, now: number): void {
+  for (const [id, pin] of pins) {
+    if (now - pin.queuedAt > LINK_WINDOW_MS) {
+      pins.delete(id);
+    }
+  }
 }
 
 const RECORD_STRINGS = ['id', 'gameId', 'kind', 'branch'] as const;
@@ -573,26 +589,25 @@ const RECORD_NULLABLE_NUMBERS = [
   'startEstimate',
 ] as const;
 
+const JOB_STRINGS = ['id', 'label', 'state'] as const;
+const JOB_NULLABLE_STRINGS = ['result', 'stepText'] as const;
+const JOB_NULLABLE_NUMBERS = ['percent', 'leftSeconds'] as const;
+
 // Whether a cached value is a finished build's record, every field of its type.
 function isFinishedRecord(value: unknown): value is BuildRecord {
   if (!isJsonObject(value)) {
     return false;
   }
-  const hasStrings = RECORD_STRINGS.every(
-    (key) => typeof value[key] === 'string',
-  );
-  const hasNullableStrings = RECORD_NULLABLE_STRINGS.every(
-    (key) => value[key] === null || typeof value[key] === 'string',
-  );
-  const hasNullableNumbers = RECORD_NULLABLE_NUMBERS.every(
-    (key) => value[key] === null || typeof value[key] === 'number',
+  const hasFields = hasFieldTypes(
+    value,
+    RECORD_STRINGS,
+    RECORD_NULLABLE_STRINGS,
+    RECORD_NULLABLE_NUMBERS,
   );
   const hasLinks = Array.isArray(value.links) && value.links.every(isLink);
   const hasJobs = Array.isArray(value.jobs) && value.jobs.every(isJob);
   return (
-    hasStrings &&
-    hasNullableStrings &&
-    hasNullableNumbers &&
+    hasFields &&
     hasLinks &&
     hasJobs &&
     value.state === 'finished' &&
@@ -608,21 +623,44 @@ function isLink(value: unknown): value is BuildLink {
   );
 }
 
-// Whether a cached job carries the id, label and state every job has.
-function isJob(value: unknown): boolean {
+// Whether a cached value is a build's job, every field of its type.
+function isJob(value: unknown): value is BuildJob {
   return (
     isJsonObject(value) &&
-    typeof value.id === 'string' &&
-    typeof value.label === 'string' &&
-    typeof value.state === 'string'
+    hasFieldTypes(
+      value,
+      JOB_STRINGS,
+      JOB_NULLABLE_STRINGS,
+      JOB_NULLABLE_NUMBERS,
+    )
   );
 }
 
+// Whether `value` holds a string at each of `strings`, a string or null at each of `nullableStrings`, and a number or
+// null at each of `nullableNumbers`.
+function hasFieldTypes(
+  value: JsonObject,
+  strings: readonly string[],
+  nullableStrings: readonly string[],
+  nullableNumbers: readonly string[],
+): boolean {
+  const hasStrings = strings.every((key) => typeof value[key] === 'string');
+  const hasNullableStrings = nullableStrings.every(
+    (key) => value[key] === null || typeof value[key] === 'string',
+  );
+  const hasNullableNumbers = nullableNumbers.every(
+    (key) => value[key] === null || typeof value[key] === 'number',
+  );
+  return hasStrings && hasNullableStrings && hasNullableNumbers;
+}
+
+// A pin stored without `queuedAt` is left out, as one past the link window would be.
 function isQueuedPin(value: unknown): value is QueuedPin {
   return (
     isJsonObject(value) &&
     typeof value.branch === 'string' &&
-    (value.revision === null || typeof value.revision === 'string')
+    (value.revision === null || typeof value.revision === 'string') &&
+    typeof value.queuedAt === 'number'
   );
 }
 

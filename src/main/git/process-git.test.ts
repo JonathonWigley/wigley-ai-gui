@@ -1143,6 +1143,8 @@ describe('createProcessGit over a real clone', () => {
       expect(await adapter.remoteHeads(clone, 'nope')).toEqual([]);
       expect(await adapter.commitSubject(clone, sha)).toBe('first');
       expect(await adapter.commitSubject(clone, '0'.repeat(40))).toBeNull();
+      const tree = (await run('-C', clone, 'rev-parse', 'HEAD^{tree}')).trim();
+      expect(await adapter.commitSubject(clone, tree)).toBeNull();
     },
   );
 

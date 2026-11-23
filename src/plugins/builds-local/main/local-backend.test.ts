@@ -790,6 +790,11 @@ describe('the step', () => {
       stepText: 'done',
     },
     {
+      name: 'a line without its key and private-parameter escapes',
+      log: '\x1b[>4mlinking\x1b[2~ app\n',
+      stepText: 'linking app',
+    },
+    {
       name: 'a line without its cursor escapes',
       log: '\x1b[?25lcompiling 3/9\x1b[?25h\n',
       stepText: 'compiling 3/9',

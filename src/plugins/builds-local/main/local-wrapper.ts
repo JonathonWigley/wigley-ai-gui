@@ -109,11 +109,12 @@ function windowsWrapperScript(
   const call = [target.command, ...target.args].map(quoted).join(' ');
   const exitTemp = quoted(`${files.exitCode}.tmp`);
   // The call runs under the default error preference: under `Stop`, Windows PowerShell 5.1 can turn a native
-  // program's redirected stderr into a terminating error.
+  // program's redirected stderr into a terminating error; which failures the catch sees is unchecked on Windows.
+  // `$LASTEXITCODE` stays null when no native program ran, so `$?` tells the call's success.
   return [
     `Set-Content -LiteralPath ${quoted(files.pid)} -Value $PID -ErrorAction Stop`,
-    `try { & ${call}; $code = $LASTEXITCODE } catch { Write-Output $_; $code = 1 }`,
-    'if ($null -eq $code) { $code = 0 }',
+    `try { & ${call}; $succeeded = $?; $code = $LASTEXITCODE } catch { Write-Output $_; $code = 1 }`,
+    'if ($null -eq $code) { if ($succeeded) { $code = 0 } else { $code = 1 } }',
     `Set-Content -LiteralPath ${exitTemp} -Value $code -ErrorAction Stop`,
     `Move-Item -LiteralPath ${exitTemp} -Destination ${quoted(files.exitCode)} -Force -ErrorAction Stop # ${WRAPPER_MARK}`,
   ].join('; ');

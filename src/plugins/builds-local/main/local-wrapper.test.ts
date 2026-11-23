@@ -93,7 +93,7 @@ describe('wrapperLine', () => {
         command: 'powershell.exe',
         args: [
           ...WINDOWS_ARGS,
-          "Set-Content -LiteralPath 'C:\\data\\runs\\r1\\pid' -Value $PID -ErrorAction Stop; try { & 'build.cmd' '--env' 'it''s'; $code = $LASTEXITCODE } catch { Write-Output $_; $code = 1 }; if ($null -eq $code) { $code = 0 }; Set-Content -LiteralPath 'C:\\data\\runs\\r1\\exit-code.tmp' -Value $code -ErrorAction Stop; Move-Item -LiteralPath 'C:\\data\\runs\\r1\\exit-code.tmp' -Destination 'C:\\data\\runs\\r1\\exit-code' -Force -ErrorAction Stop # builds-local",
+          "Set-Content -LiteralPath 'C:\\data\\runs\\r1\\pid' -Value $PID -ErrorAction Stop; try { & 'build.cmd' '--env' 'it''s'; $succeeded = $?; $code = $LASTEXITCODE } catch { Write-Output $_; $code = 1 }; if ($null -eq $code) { if ($succeeded) { $code = 0 } else { $code = 1 } }; Set-Content -LiteralPath 'C:\\data\\runs\\r1\\exit-code.tmp' -Value $code -ErrorAction Stop; Move-Item -LiteralPath 'C:\\data\\runs\\r1\\exit-code.tmp' -Destination 'C:\\data\\runs\\r1\\exit-code' -Force -ErrorAction Stop # builds-local",
         ],
       },
     },
@@ -105,12 +105,12 @@ describe('wrapperLine', () => {
     {
       name: 'no args',
       target: { command: 'build.cmd', args: [] },
-      call: "& 'build.cmd'; $code = $LASTEXITCODE",
+      call: "& 'build.cmd'; $succeeded = $?",
     },
     {
       name: 'a typographic quote',
       target: { command: 'build.cmd', args: ['--name', 'it\u2019s'] },
-      call: "& 'build.cmd' '--name' 'it\u2019\u2019s'; $code = $LASTEXITCODE",
+      call: "& 'build.cmd' '--name' 'it\u2019\u2019s'; $succeeded = $?",
     },
   ])('windows with $name', ({ target, call }) => {
     const line = wrapperLine('windows', WINDOWS_FILES, target);

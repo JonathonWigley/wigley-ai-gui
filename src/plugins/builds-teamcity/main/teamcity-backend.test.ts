@@ -25,6 +25,7 @@ import runListRelease from './fixtures/run-list-release.json';
 import runStart from './fixtures/run-start.json';
 import {
   DETAIL_RETRY_MS,
+  LINK_WINDOW_MS,
   MAX_CALLS_IN_FLIGHT,
   teamcityBackendKind,
 } from './teamcity-backend';
@@ -570,6 +571,48 @@ describe('list', () => {
         },
       }),
     },
+    {
+      name: 'holds a record whose job lacks a field',
+      text: JSON.stringify({
+        games: {
+          'tiki-smash': [
+            {
+              id: '821200',
+              gameId: 'tiki-smash',
+              kind: 'dev',
+              branch: 'protos/physics-fun',
+              number: '330',
+              version: '0.12.0',
+              revision: F,
+              result: 'success',
+              statusText: null,
+              stepText: null,
+              webUrl: null,
+              triggeredBy: null,
+              percent: null,
+              leftSeconds: null,
+              startedAt: null,
+              finishedAt: 1795458852000,
+              startEstimate: null,
+              state: 'finished',
+              queuedAt: 1795458000000,
+              links: [],
+              // no `percent`
+              jobs: [
+                {
+                  id: '821193',
+                  label: 'Build',
+                  state: 'finished',
+                  result: 'success',
+                  leftSeconds: null,
+                  stepText: null,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    },
   ])(
     'reads the finished builds again over a cache file that $name',
     async ({ text }) => {
@@ -754,9 +797,8 @@ describe('queue', () => {
     ]);
   });
 
-  it('shows the queued branch and revision while TeamCity reports <default>, across instances', async () => {
-    const test = setup();
-    test.answer(runStartArgs(A), runStart);
+  // A list of build 821339 alone, queued, its branch `<default>`.
+  const answerDefaultBranchQueue = (test: Setup) => {
     test.answer(runListArgs(DEV, 20), { build: [] });
     test.answer(runListArgs(RELEASE, 20), { build: [] });
     test.answer(QUEUE_ARGS, {
@@ -771,6 +813,12 @@ describe('queue', () => {
         },
       ],
     });
+  };
+
+  it('shows the queued branch and revision while TeamCity reports <default>, across instances', async () => {
+    const test = setup();
+    test.answer(runStartArgs(A), runStart);
+    answerDefaultBranchQueue(test);
     const backend = await createBackend(test.services);
     await backend.queue(GAME, {
       kind: 'dev',
@@ -788,6 +836,89 @@ describe('queue', () => {
       statusText: 'Checking for changes is in progress',
     });
   });
+
+  it.each([
+    {
+      name: 'a pin queued at the link window',
+      pin: { branch: 'feature/x', revision: A, queuedAt: NOW - LINK_WINDOW_MS },
+      shows: { branch: 'feature/x', revision: A },
+    },
+    {
+      name: 'a pin queued past the link window',
+      pin: {
+        branch: 'feature/x',
+        revision: A,
+        queuedAt: NOW - LINK_WINDOW_MS - 1,
+      },
+      shows: { branch: 'protos/physics-fun', revision: null },
+    },
+    {
+      name: 'a pin stored without its queue time',
+      pin: { branch: 'feature/x', revision: A },
+      shows: { branch: 'protos/physics-fun', revision: null },
+    },
+  ])('reads $name from the file', async ({ pin, shows }) => {
+    const test = setup();
+    await test.dataFiles.write(
+      CACHE_FILE,
+      JSON.stringify({ games: {}, pins: { '821339': pin } }),
+    );
+    answerDefaultBranchQueue(test);
+    const backend = await createBackend(test.services);
+
+    const records = await backend.list(GAME, 20);
+
+    expect(records[0]).toMatchObject(shows);
+  });
+
+  it.each([
+    {
+      name: 'its build is cached',
+      later: NOW + 1,
+      then: 'list',
+      pins: [],
+    },
+    {
+      name: 'a queue at the link window',
+      later: NOW + LINK_WINDOW_MS,
+      then: 'queue',
+      pins: ['821200', '821400'],
+    },
+    {
+      name: 'a queue past the link window',
+      later: NOW + LINK_WINDOW_MS + 1,
+      then: 'queue',
+      pins: ['821400'],
+    },
+  ])(
+    "the file's pins of 821200 and a later build after $name",
+    async ({ later, then, pins }) => {
+      const test = setup();
+      test.answer(runStartArgs(A), { id: 821200 });
+      const backend = await createBackend(test.services);
+      await backend.queue(GAME, {
+        kind: 'dev',
+        branch: 'feature/x',
+        revision: A,
+      });
+
+      test.setNow(later);
+      if (then === 'list') {
+        answerRecordedList(test);
+        await backend.list(GAME, 20);
+      } else {
+        test.answer(runStartArgs(A), { id: 821400 });
+        await backend.queue(GAME, {
+          kind: 'dev',
+          branch: 'feature/x',
+          revision: A,
+        });
+      }
+
+      const file = JSON.parse(await test.dataFiles.read(CACHE_FILE));
+      expect(Object.keys(file.pins).sort()).toEqual(pins);
+    },
+  );
 
   it.each([
     { name: 'an unknown kind', kind: 'qa', answer: null, message: 'qa' },

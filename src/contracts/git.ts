@@ -115,8 +115,8 @@ export interface Git {
   // start. Never rejects.
   remoteHeads(root: string, pattern: string): Promise<GitRemoteHead[] | null>;
   // The one-line subject of `sha` in the clone at `root`; null when the clone
-  // lacks it, also null for a `sha` that is not 4 to 40 hex characters
-  // (nothing runs) and on any other non-zero exit.
+  // has no commit by that sha, also null for a `sha` that is not 4 to 40 hex
+  // characters (nothing runs) and on any other non-zero exit.
   commitSubject(root: string, sha: string): Promise<string | null>;
   // Every local branch and remote-tracking branch of the clone at `root`,
   // newest tip first; a remote's symbolic `HEAD` is left out. `name` has no
