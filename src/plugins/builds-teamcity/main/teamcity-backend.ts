@@ -517,9 +517,7 @@ function listedRecord(
 
 // The cache file's finished records and pins; a missing or malformed file reads as empty, and a malformed record or
 // pin is left out.
-async function readCacheFile(
-  services: BackendServices,
-): Promise<StoredBuilds> {
+async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
   const builds: StoredBuilds = { finished: new Map(), pins: new Map() };
   let text: string;
   try {
@@ -541,9 +539,7 @@ async function readCacheFile(
   }
   const games = isJsonObject(file.games) ? file.games : {};
   for (const [gameId, records] of Object.entries(games)) {
-    const kept = Array.isArray(records)
-      ? records.filter(isFinishedRecord)
-      : [];
+    const kept = Array.isArray(records) ? records.filter(isFinishedRecord) : [];
     builds.finished.set(
       gameId,
       new Map(kept.map((record) => [record.id, record])),

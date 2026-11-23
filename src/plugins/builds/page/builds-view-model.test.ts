@@ -221,7 +221,12 @@ describe('buildDetailInput', () => {
   it('gives each job its time left in ms', () => {
     const record = buildRecord({
       jobs: [
-        buildJob({ id: 'ios', state: 'running', result: null, leftSeconds: 90 }),
+        buildJob({
+          id: 'ios',
+          state: 'running',
+          result: null,
+          leftSeconds: 90,
+        }),
         buildJob({ id: 'android', state: 'queued', result: null }),
       ],
     });

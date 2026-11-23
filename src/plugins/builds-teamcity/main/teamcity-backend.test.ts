@@ -570,25 +570,26 @@ describe('list', () => {
         },
       }),
     },
-  ])('reads the finished builds again over a cache file that $name', async ({
-    text,
-  }) => {
-    const test = setup();
-    await test.dataFiles.write(CACHE_FILE, text);
-    answerRecordedList(test);
-    const backend = await createBackend(test.services);
+  ])(
+    'reads the finished builds again over a cache file that $name',
+    async ({ text }) => {
+      const test = setup();
+      await test.dataFiles.write(CACHE_FILE, text);
+      answerRecordedList(test);
+      const backend = await createBackend(test.services);
 
-    const records = await backend.list(GAME, 20);
+      const records = await backend.list(GAME, 20);
 
-    expect(records.map((record) => record.id)).toEqual(FIRST_LIST_IDS);
-    expect(detailIds(test.processes.runs)).toEqual(
-      expect.arrayContaining(['821200', '821150']),
-    );
-    expect(records[2].links).toEqual([
-      { label: 'iOS', url: IOS_URL },
-      { label: 'Android', url: ANDROID_URL },
-    ]);
-  });
+      expect(records.map((record) => record.id)).toEqual(FIRST_LIST_IDS);
+      expect(detailIds(test.processes.runs)).toEqual(
+        expect.arrayContaining(['821200', '821150']),
+      );
+      expect(records[2].links).toEqual([
+        { label: 'iOS', url: IOS_URL },
+        { label: 'Android', url: ANDROID_URL },
+      ]);
+    },
+  );
 
   it('gives a cached build the kind its listing names', async () => {
     const test = setup();
