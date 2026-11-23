@@ -347,7 +347,7 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [ ] [Repo move](17-repo-move.md) — after 01–15, 19
 
 ### Wave 9
-- [ ] [Doc re-read](16-doc-reread.md) — after 17
+- [x] [Doc re-read](16-doc-reread.md) — after 17
 
 ### Wave 10
 - [ ] [Final verification](18-final-verification.md) — after 16, 17
@@ -373,6 +373,7 @@ Review base: 35f62ddac
 - 13 · standard · ca20d7316 · python3 parse: key order version..liveView; workflows and planFormat equal sample-auri.json; retro/backlog/docs/liveView match the pinned values; check_manifests.py passes · concerns: none
 - 14 · hard · e03dd181d · diff read: personal files keep only additions and point at auri skills; wigley visuals/chatroom skills deleted; workflow-gate reads declared_level_skills from installed auri.json and is_app_session from WIGLEY_SESSION_ROW, checklist halves removed; py_compile + check_manifests pass; its pytest suites wait for the test gate (no pytest on python3 here) · concerns: machine edits (settings.json AskUserQuestion group and workflow-gate Stop group, ask-user-question-to-forms hook, AGENTS.local.md) held in scratchpad machine-edits-14.md for the landing; once on main the old checklist gate stops until the app ships auri hooks; the gate passes every edit until the installed wigley plugin carries auri.json; Verification grep needs one more exclusion for answers.py:36; wiki/Main.md visuals link is a file path for task 17's sweep
 - 15 · hard · c15be8077 · diff read; wave 7 typecheck + full lint pass: layers, styles, changelog (entry under Unreleased), boundary (2176 files clean), oxlint, oxfmt · concerns: forms-tools.golden.txt edited by hand; readme-coverage.test.mts unrun; docs/features/live-view/design.md:92 names the deleted wigley-install.ts (task 16); the exits-1 proof must first remove the branch's own Added line
+- 16 · standard · 924dfd766 · Five lanes (reports/16-agents-1, 16-readmes-1, 16-skills-1, 16-ai-1, 16-design-1): app AGENTS.md, READMEs and CHANGELOG, every agent-plugin and .agents skill, keymap, DESIGN.md, and 14 feature designs read and checked against landed src; the ai side's 40-odd skills and agent docs hunk-checked plus a stale-name grep, its six core docs read in full. Lead diff read. npm run lint passes; readme-coverage test passes; the planned-mark grep leaves only README.md:21 (the repo split, task 17). check_pointers.py fails only in wigley-agents/learning/candidates (wigley:visuals, wigley:chatroom names, three § headings), which the retro owns. · concerns: Path references to the app inside ai left for 17's sweep. builds-marked lines (README auri:builds row, keymap km/m, agent-plugin/skills/builds) wait on the Builds run. followups' isStringOrNull copy list may be stale. learning/ candidates name retired wigley:visuals/chatroom skills; the retro owns them. The 1.1.0 release commit was undone and is re-cut after the Builds land.
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01

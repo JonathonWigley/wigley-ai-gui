@@ -1,6 +1,6 @@
 # 16 — Doc re-read against the built code
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: prose checked against settled, landed code
 Wave: 9 · Depends on: 01–15 (it reads every landed task's code against the docs), 17 (it runs in the new clone 17 makes, after 17's sweep has fixed the paths)
@@ -91,3 +91,4 @@ Commit: one commit per repo for the group.
 
 ## Proof
 
+Commit 924dfd766 · proof: Five lanes (reports/16-agents-1, 16-readmes-1, 16-skills-1, 16-ai-1, 16-design-1): app AGENTS.md, READMEs and CHANGELOG, every agent-plugin and .agents skill, keymap, DESIGN.md, and 14 feature designs read and checked against landed src; the ai side's 40-odd skills and agent docs hunk-checked plus a stale-name grep, its six core docs read in full. Lead diff read. npm run lint passes; readme-coverage test passes; the planned-mark grep leaves only README.md:21 (the repo split, task 17). check_pointers.py fails only in wigley-agents/learning/candidates (wigley:visuals, wigley:chatroom names, three § headings), which the retro owns. · concerns: Path references to the app inside ai left for 17's sweep. builds-marked lines (README auri:builds row, keymap km/m, agent-plugin/skills/builds) wait on the Builds run. followups' isStringOrNull copy list may be stale. learning/ candidates name retired wigley:visuals/chatroom skills; the retro owns them. The 1.1.0 release commit was undone and is re-cut after the Builds land.
