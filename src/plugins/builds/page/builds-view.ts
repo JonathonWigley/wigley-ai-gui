@@ -60,14 +60,17 @@ import {
   sideBarEntries,
 } from './builds-view-model';
 import { createQueuePicker, type QueueTarget } from './queue-picker';
+import type { SessionPartsCommand } from './session-parts';
 
 // The base scopes the view sets: the side bar's game list and the sheet's build list. The picker's is pushed over
 // them.
 export type BuildsScope = 'games' | 'list';
 
-// Every page command but those the page part runs itself (`showMode`) and the clicks, which take an arg.
+// Every page command but those the page part runs itself (`showMode`), the session parts' (`SessionPartsCommand`)
+// and the clicks, which take an arg.
 export type BuildsViewCommand = Exclude<
   CommandsRunIn<typeof buildsManifest, 'page'>,
+  | SessionPartsCommand
   | 'showMode'
   | 'selectEntry'
   | 'selectBuild'

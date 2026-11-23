@@ -7,9 +7,10 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // and reads `sessions` for the rows it messages; the page names `sessions` for the row line and activity and `chat`
 // for the hub section and the offer card. `queue` and `offer` take a kind or a set id as `kind`. `layout` names the
 // layout Builds mode and the session parts draw with. The page's commands run Builds mode (`showMode`), its queue
-// picker (`pickQueue` and the list picker's keys) and its two lists' keys; the clicks `selectEntry` (a side-bar entry
-// key), `selectBuild` (`<backendId>/<buildId>`), `queueButton`, `withAgent`, `setFilter` and `openLink` (a URL) take
-// an arg and have no key.
+// picker (`pickQueue` and the list picker's keys) and its two lists' keys, and the session's build offer
+// (`queueOffer`, `dismissOffer`, and the offer card's keys); the clicks `selectEntry` (a side-bar entry key),
+// `selectBuild` (`<backendId>/<buildId>`), `queueButton`, `withAgent`, `setFilter`, `openLink` (a URL), and the offer
+// card's `queueSessionOffer` and `dismissSessionOffer` (a session id) take an arg and have no key.
 export const buildsManifest = definePlugin({
   id: 'builds',
   label: 'Builds',
@@ -113,12 +114,42 @@ export const buildsManifest = definePlugin({
       runsIn: 'page',
       arg: 'string',
     },
+    queueOffer: {
+      label: "queue the session's build offer",
+      group: 'build',
+      runsIn: 'page',
+    },
+    dismissOffer: {
+      label: "dismiss the session's build offer",
+      group: 'build',
+      runsIn: 'page',
+    },
+    queueSessionOffer: {
+      label: 'queue this build offer',
+      group: 'build',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    dismissSessionOffer: {
+      label: 'dismiss this build offer',
+      group: 'build',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    leaveOffer: { label: 'back to the entries', group: 'offer', runsIn: 'page' },
+    offerFocusBox: { label: 'type a message', group: 'offer', runsIn: 'page' },
+    offerAppendBox: {
+      label: 'append to the message',
+      group: 'offer',
+      runsIn: 'page',
+    },
     ...LIST_PICKER_COMMANDS,
   },
   scopes: {
     games: 'In the Builds game list',
     list: 'In the Builds list',
     picker: 'In the Builds queue picker',
+    offer: 'On a build offer card',
   },
   settings: { backends: [] as unknown[], layout: 'default' },
   settingControls: { layout: 'layout' },

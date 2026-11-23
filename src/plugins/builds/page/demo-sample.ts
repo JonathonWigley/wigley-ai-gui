@@ -3,6 +3,7 @@ import type {
   BuildRecord,
   BuildsSnapshot,
   GameEntry,
+  SessionBuilds,
 } from '../contract';
 
 const BACKEND = 'sample';
@@ -206,3 +207,36 @@ export function demoSample(now: number): BuildsSnapshot {
 
 // The side-bar key of the sample's first game.
 export const DEMO_FIRST_GAME = `${BACKEND}/${SKY_HOP.id}` as const;
+
+// What a demo step shows in place of the slots: a snapshot, and the session builds of the demo sessions it holds.
+export interface BuildsDemoSample {
+  snapshot: BuildsSnapshot;
+  sessions: ReadonlyMap<string, SessionBuilds>;
+}
+
+// The Session builds step's sample: `demoSample(now)`, with session `sessionId` linking its running Dev build (60 %,
+// 7 minutes left) and a finished, successful Dev build, and holding an offer of Sky Hop's Release on `protos/game`.
+export function demoSessionSample(
+  now: number,
+  sessionId: string,
+): BuildsDemoSample {
+  const builds: SessionBuilds = {
+    builds: [
+      { backendId: BACKEND, buildId: 'sky-105' },
+      { backendId: BACKEND, buildId: 'sky-103' },
+    ],
+    offer: {
+      backendId: BACKEND,
+      gameId: SKY_HOP.id,
+      kind: 'release',
+      branch: 'protos/game',
+      revision: MAIN_REVISION,
+      subject: 'Tune the jump arc',
+      createdAt: now - MINUTE,
+    },
+  };
+  return {
+    snapshot: demoSample(now),
+    sessions: new Map([[sessionId, builds]]),
+  };
+}

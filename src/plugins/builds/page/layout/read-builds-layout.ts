@@ -15,6 +15,9 @@ const LAYOUT_PARTS: Record<keyof BuildsLayout, true> = {
   buildDetail: true,
   empty: true,
   pickerRow: true,
+  rowLine: true,
+  hubBuild: true,
+  offerCard: true,
 };
 
 // The builds layout a user's `layout.js` module exports as its default. A layout defines only the parts it changes;

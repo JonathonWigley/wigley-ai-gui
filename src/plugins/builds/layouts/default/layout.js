@@ -4,7 +4,8 @@
 // as list rows ending in a status dot; the sheet's game head with a button per kind and set, or the All feed's three
 // filter chips; one list row per build (kind, number and version, then branch, revision and subject, ending in its
 // state and who queued it), a set run's rows under its heading, and the open build's detail under its row; the empty
-// states; and the queue picker's rows.
+// states; the queue picker's rows; the line under a session row (its newest build and its state); the hub's builds
+// (each with its branch, revision, jobs and links); and the offer card with its Queue and Dismiss buttons.
 
 /** @type {Record<import('../layout').EmptyInput['reason'], string>} */
 const EMPTY_TEXTS = {
@@ -169,7 +170,82 @@ const layout = {
       trailing: kit.trailing(),
     });
   },
+  rowLine(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'builds-row-line');
+    kit.el(element, 'span', 'builds-line-label', buildLabel(input));
+    drawState(element, { ...input, startsInMs: null }, kit);
+    return element;
+  },
+  hubBuild(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'builds-hub-build');
+    const head = kit.el(element, 'div', 'builds-hub-head');
+    kit.el(head, 'span', 'builds-line-label', buildLabel(input));
+    drawState(
+      head,
+      { ...input, percent: null, leftMs: null, startsInMs: null },
+      kit,
+    );
+    const where = kit.el(element, 'div', 'builds-muted');
+    where.append(input.branch);
+    if (input.shortRevision !== null) {
+      where.append(' · ');
+      kit.el(where, 'span', 'builds-revision', input.shortRevision);
+    }
+    for (const job of input.jobs) {
+      const line = kit.el(element, 'div', 'builds-job');
+      kit.el(line, 'span', 'builds-job-label', job.label);
+      drawState(line, { ...job, startsInMs: null }, kit);
+    }
+    if (input.links.length > 0) {
+      const actions = kit.el(element, 'div', 'builds-actions');
+      for (const link of input.links) {
+        kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
+      }
+    }
+    return element;
+  },
+  offerCard(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'builds-offer-card');
+    const text = kit.el(element, 'div', 'builds-offer-text');
+    kit.el(
+      text,
+      'span',
+      'builds-line-label',
+      `Build ${input.gameLabel} ${input.choiceLabel}?`,
+    );
+    const where = kit.el(text, 'span', 'builds-muted');
+    where.append(input.branch);
+    if (input.shortRevision !== null) {
+      where.append(' · ');
+      kit.el(where, 'span', 'builds-revision', input.shortRevision);
+    }
+    if (input.subject !== null) {
+      where.append(` ${input.subject}`);
+    }
+    const actions = kit.el(element, 'div', 'builds-actions');
+    kit.button(actions, 'Queue', 'builds.queueSessionOffer', {
+      arg: input.sessionId,
+    });
+    kit.button(actions, 'Dismiss', 'builds.dismissSessionOffer', {
+      arg: input.sessionId,
+      variant: 'ghost',
+    });
+    return element;
+  },
 };
+
+/**
+ * A session part's build: the game, the kind and `#<number>`.
+ * @param {{ gameLabel: string; kindLabel: string; number: string | null }} input
+ * @returns {string}
+ */
+function buildLabel(input) {
+  const parts = [input.gameLabel, input.kindLabel];
+  if (input.number !== null) {
+    parts.push(`#${input.number}`);
+  }
+  return parts.join(' ');
+}
 
 /**
  * The row's first line: the game in the All feed, the kind, `#<number>` and `(<version>)`.

@@ -18,20 +18,33 @@ import {
   fakeDependency,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
-import { chatPageKey, type ChatPageExports } from '../../chat/contract';
 import {
+  type ChatComposerPart,
+  chatPageKey,
+  type ChatPageExports,
+  type ComposerStop,
+} from '../../chat/contract';
+import {
+  type RowActivity,
   type SessionsPageExports,
   sessionsPageKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
+import { sessionRow } from '../../sessions/contract.test-support';
 import type {
   BackendCapabilities,
   BackendView,
   BuildRecord,
   BuildsSnapshot,
   GameView,
+  SessionBuilds,
 } from '../contract';
-import { buildsSnapshotSlot } from '../contract';
-import { buildRecord, gameEntry } from '../contract.test-support';
+import { buildsSessionsSlot, buildsSnapshotSlot } from '../contract';
+import {
+  buildOffer,
+  buildRecord,
+  gameEntry,
+} from '../contract.test-support';
 import { buildsPagePart } from './start';
 
 const MODE = 'builds.main';
@@ -107,7 +120,8 @@ type Answer = (...args: unknown[]) => unknown;
 
 // The Builds page on the harness, drawing its layout for real, with `snapshot` published to `builds.snapshot`.
 // `answers` answers an invoke by method, else undefined; `calls` holds each invoke, `opens` each picker request,
-// `opened` each `openExternal` url.
+// `opened` each `openExternal` url. The fake sessions record each `setActivity` in `activities` and answer
+// `shownSessionId` with `shown.sessionId`; the fake chat records each composer part, and `stop()` is the offer card's.
 function startBuildsPage(
   snapshot: BuildsSnapshot,
   answers: Record<string, Answer> = {},
@@ -133,6 +147,27 @@ function startBuildsPage(
   const state = createSlotStore(() => undefined);
   const snapshotWriter = state.publish(buildsSnapshotSlot);
   snapshotWriter.set(snapshot);
+  const sessionsWriter = state.publish(buildsSessionsSlot);
+  const rowsWriter = state.publish(sessionsRowsSlot);
+  const activities: [string, string, RowActivity | null][] = [];
+  const shown: { sessionId: string | null } = { sessionId: null };
+  const composerParts: ChatComposerPart[] = [];
+  const fakeSessions = {
+    addRowPart: () => ({ dispose() {} }),
+    setActivity(sessionId: string, sourceId: string, activity: RowActivity | null) {
+      activities.push([sessionId, sourceId, activity]);
+    },
+    shownSessionId: () => shown.sessionId,
+    activate() {},
+  } as Partial<SessionsPageExports> as SessionsPageExports;
+  const fakeChat = {
+    addSidePart: () => ({ dispose() {} }),
+    addComposerPart(part: ChatComposerPart) {
+      composerParts.push(part);
+      return { dispose() {} };
+    },
+    showHubForNow: () => ({ dispose() {} }),
+  } as Partial<ChatPageExports> as ChatPageExports;
   const harness = startDrawingPagePart(buildsPagePart, {
     firstModeTaken: true,
     state,
@@ -145,8 +180,8 @@ function startBuildsPage(
       },
     },
     dependencies: [
-      fakeDependency(sessionsPageKey, () => ({}) as SessionsPageExports),
-      fakeDependency(chatPageKey, () => ({}) as ChatPageExports),
+      fakeDependency(sessionsPageKey, () => fakeSessions),
+      fakeDependency(chatPageKey, () => fakeChat),
     ],
     invoke: async (method, ...args) => {
       calls.push({ method, args });
@@ -164,8 +199,24 @@ function startBuildsPage(
       | 'withAgent'
       | 'setFilter'
       | 'openLink'
+      | 'queueSessionOffer'
+      | 'dismissSessionOffer'
     >,
   ) => commands[command]({ arg: undefined });
+  const stop = (): ComposerStop => {
+    const found = composerParts.find((part) => part.id === 'builds.offer')?.stop;
+    if (found === undefined) {
+      throw new Error('no builds.offer stop');
+    }
+    return found;
+  };
+  const enterStep = async (id: string, sessions: Record<string, string>) => {
+    const step = demoSteps.list().find((held) => held.id === id);
+    if (step === undefined) {
+      throw new Error(`no ${id} step`);
+    }
+    return step.enter({ scratchDir: '/scratch', sessions });
+  };
   const callsOf = (method: string) =>
     calls.filter((call) => call.method === method).map((call) => call.args[0]);
   const logged = () => harness.logs.map((line) => line.message);
@@ -204,6 +255,15 @@ function startBuildsPage(
     showGame,
     demoSteps,
     publish: (next: BuildsSnapshot) => snapshotWriter.set(next),
+    setSession: (sessionId: string, builds: SessionBuilds) =>
+      sessionsWriter.set(sessionId, builds),
+    dropSession: (sessionId: string) => sessionsWriter.delete(sessionId),
+    addRow: (sessionId: string) =>
+      rowsWriter.set(sessionId, sessionRow(sessionId)),
+    activities,
+    shown,
+    stop,
+    enterStep,
   };
 }
 
@@ -655,4 +715,195 @@ describe('buildsPagePart', () => {
       expect(page.logged()).toContain(`demo: ${command} does nothing`);
     },
   );
+});
+
+const BUILDING = { word: 'building', tone: 'running', rank: 18 };
+const OFFERED: SessionBuilds = {
+  builds: [],
+  offer: buildOffer({ backendId: 'work', gameId: 'g1' }),
+};
+const linking = (buildId: string): SessionBuilds => ({
+  builds: [{ backendId: 'work', buildId }],
+  offer: null,
+});
+
+// Exits that record each call.
+function fakeExits() {
+  return { toEntries: vi.fn(), toBox: vi.fn() };
+}
+
+// A page where sessions `s1` and `s2` each hold an offer and the stop holds `s2`.
+function holdingS2(answers: Record<string, Answer> = {}) {
+  const page = startBuildsPage(workSnapshot(), answers);
+  page.setSession('s1', OFFERED);
+  page.setSession('s2', OFFERED);
+  const exits = fakeExits();
+  page.stop().enter('s2', exits);
+  return { page, exits };
+}
+
+describe('buildsPagePart session parts', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sets building while a linked build runs, then clears it', () => {
+    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    page.setSession('s1', linking('41'));
+
+    page.publish(
+      workSnapshot({ g1Builds: [buildRecord({ id: '41', gameId: 'g1' })] }),
+    );
+
+    expect(page.activities.filter(([id]) => id === 's1')).toEqual([
+      ['s1', 'builds', BUILDING],
+      ['s1', 'builds', null],
+    ]);
+  });
+
+  it('clears the activity of a session that left the slot', () => {
+    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    page.setSession('s1', linking('41'));
+
+    page.dropSession('s1');
+
+    expect(page.activities.at(-1)).toEqual(['s1', 'builds', null]);
+  });
+
+  it.each([
+    { where: 'the held session', holds: true, shown: 's1', invoked: ['s2'] },
+    { where: 'the focused session', holds: false, shown: 's1', invoked: ['s1'] },
+    { where: 'no session', holds: false, shown: null, invoked: [] },
+  ])('queueOffer acts on $where', async ({ holds, shown, invoked }) => {
+    const page = startBuildsPage(workSnapshot(), {
+      queueOffer: () => ({ ok: true }),
+    });
+    page.setSession('s1', OFFERED);
+    page.setSession('s2', OFFERED);
+    if (holds) {
+      page.stop().enter('s2', fakeExits());
+    }
+    page.shown.sessionId = shown;
+
+    page.run('queueOffer');
+    await settle();
+
+    expect(page.callsOf('queueOffer')).toEqual(invoked);
+    expect(page.toasts()).toEqual(
+      invoked.length === 0
+        ? ['toast info: No build offer in this session']
+        : [],
+    );
+  });
+
+  it("dismisses the focused session's offer", async () => {
+    const page = startBuildsPage(workSnapshot());
+    page.setSession('s1', OFFERED);
+    page.shown.sessionId = 's1';
+
+    page.run('dismissOffer');
+    await settle();
+
+    expect(page.callsOf('dismissOffer')).toEqual(['s1']);
+  });
+
+  it.each([
+    { offer: 'no offer', builds: linking('41'), enters: false },
+    { offer: 'an offer', builds: OFFERED, enters: true },
+  ])('the stop with $offer', ({ builds, enters }) => {
+    const page = startBuildsPage(workSnapshot());
+    page.setSession('s1', builds);
+
+    expect(page.stop().enter('s1', fakeExits())).toBe(enters);
+  });
+
+  it.each([
+    { command: 'leaveOffer', entries: 1, box: [] },
+    { command: 'offerFocusBox', entries: 0, box: [['insert']] },
+    { command: 'offerAppendBox', entries: 0, box: [['append']] },
+  ] as const)(
+    '$command leaves the stop through exits',
+    ({ command, entries, box }) => {
+      const { page, exits } = holdingS2();
+
+      page.run(command);
+
+      expect(exits.toEntries).toHaveBeenCalledTimes(entries);
+      expect(exits.toBox.mock.calls).toEqual(box);
+    },
+  );
+
+  it('queues and dismisses the session its arg names', async () => {
+    const { page, exits } = holdingS2({ queueOffer: () => ({ ok: true }) });
+
+    page.commands.queueSessionOffer({ arg: 's1' });
+    page.commands.dismissSessionOffer({ arg: 's1' });
+    await settle();
+
+    expect(page.callsOf('queueOffer')).toEqual(['s1']);
+    expect(page.callsOf('dismissOffer')).toEqual(['s1']);
+    expect(exits.toEntries).not.toHaveBeenCalled();
+  });
+
+  it('keeps the hold on a problem', async () => {
+    const { page, exits } = holdingS2({
+      queueOffer: () => ({ problem: 'Local has a problem' }),
+    });
+
+    page.run('queueOffer');
+    await settle();
+
+    expect(page.toasts()).toEqual(['toast error: Local has a problem']);
+    expect(exits.toEntries).not.toHaveBeenCalled();
+  });
+
+  it('ends the hold when the held offer goes', async () => {
+    const { page, exits } = holdingS2({ queueOffer: () => ({ ok: true }) });
+
+    page.setSession('s2', { builds: [], offer: null });
+    page.shown.sessionId = 's1';
+    page.run('queueOffer');
+    await settle();
+
+    expect(exits.toEntries).toHaveBeenCalledTimes(1);
+    expect(page.callsOf('queueOffer')).toEqual(['s1']);
+  });
+
+  it('drops the hold on leave', async () => {
+    const { page } = holdingS2({ queueOffer: () => ({ ok: true }) });
+
+    page.stop().leave('s2');
+    page.shown.sessionId = 's1';
+    page.run('queueOffer');
+    await settle();
+
+    expect(page.callsOf('queueOffer')).toEqual(['s1']);
+    expect(page.harness.scope()).toBe('builds.offer');
+  });
+
+  it('queues nothing for the demo session', async () => {
+    const page = startBuildsPage(workSnapshot());
+    await page.enterStep('builds.session', { build: 'd1' });
+    page.shown.sessionId = 'd1';
+
+    page.run('queueOffer');
+    await settle();
+
+    expect(page.callsOf('queueOffer')).toEqual([]);
+    expect(page.logged()).toContain('demo: queueOffer does nothing');
+  });
+
+  it('sets activity only for the demo session while the sample shows', async () => {
+    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    page.addRow('s1');
+    page.setSession('s1', linking('41'));
+    const callsBefore = page.activities.length;
+
+    await page.enterStep('builds.session', { build: 'd1' });
+    page.publish(workSnapshot({ g1Builds: [running('41'), running('42')] }));
+
+    const after = page.activities.slice(callsBefore);
+    expect(after).toContainEqual(['d1', 'builds', BUILDING]);
+    expect(after.filter(([id]) => id === 's1')).toEqual([]);
+  });
 });

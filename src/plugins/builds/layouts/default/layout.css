@@ -132,3 +132,55 @@
   font-size: var(--wg-text-12);
   color: var(--wg-fg-secondary);
 }
+
+/* The session parts: the line under a session row, the hub's builds and the offer card. */
+
+.session-row-part[data-part='builds.row'] {
+  order: 2;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row-line,
+[data-layout-owner='builds'][data-layout='default'] .builds-hub-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-line-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-hub-build {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  padding-block: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-offer-card {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3);
+  border: 1px solid var(--wg-border-subtle);
+  border-radius: var(--wg-radius-md);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-offer-card.is-cursor {
+  border-color: var(--wg-focus-border);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-offer-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}

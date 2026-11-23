@@ -4,7 +4,10 @@
 // shown entry's head (`gameHeader` for a game, `feedHeader` for All), then the list, then `empty` while the list
 // shows no build. The list holds one `buildRow` per build, newest first; in a game's list a set run's builds sit in
 // one `setGroup` at the place of its newest build, and the All feed is flat. The open build's `buildDetail` sits
-// right after its row. The queue picker draws one `pickerRow` per choice. The app sets `data-layout-owner="builds"`
+// right after its row. The queue picker draws one `pickerRow` per choice. Under each session row with a build the app
+// draws one `rowLine`, the session's newest build; in the session hub's Builds section one `hubBuild` per build the
+// session queued, newest first; and above the Chat composer of a session with a build offer one `offerCard`. The app
+// sets `data-layout-owner="builds"`
 // and `data-layout="<name>"` on the element each part returns, `<name>` being the layout that drew it, so
 // `[data-layout-owner="builds"][data-layout="<name>"] …` in a layout's CSS selects only its own parts.
 //
@@ -15,13 +18,16 @@
 // - the click, `is-selected` and `is-cursor` on each `allEntry`, `gameEntry` and `buildRow` root: `is-selected` on
 //   the shown entry and on the list cursor's row, `is-cursor` on the same while its pane has the keys; a row gives
 //   `kit.row` no `onClick`;
+// - the offer card's keys: `j` from the last chat entry gives them to the card while it shows, where Enter queues
+//   the offer, `x` dismisses it, `k` and Esc go back to the entries, and `i` / `a` to the chat box; `is-cursor` on the
+//   `offerCard` root while the card holds them;
 // - the scrolling: it scrolls the `.is-cursor` of the side bar and of the list into view;
 // - every redraw: on each change of the builds, of the sessions' links and rows, the shown entry, the filter and the
 //   open detail.
 // Every kit extends `BaseKit`. Each part appends its root to `parent` and returns it. Times are milliseconds; a layout
 // writes them with `kit.duration(ms)`. Kit scopes: `sideBar`, `allEntry`, `backendHeading` and `gameEntry`
-// `builds.games`; `main`, `gameHeader`, `feedHeader`, `setGroup`, `buildRow`, `buildDetail` and `empty`
-// `builds.list`; `pickerRow` `builds.picker`.
+// `builds.games`; `main`, `gameHeader`, `feedHeader`, `setGroup`, `buildRow`, `buildDetail`, `empty`, `rowLine` and
+// `hubBuild` `builds.list`; `pickerRow` `builds.picker`; `offerCard` `builds.offer`.
 import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 export type { BaseKit, DotStatus };
@@ -128,6 +134,44 @@ export interface PickerRowInput {
   label: string;
 }
 
+// A session's newest build, under its row: game, kind and number, a progress bar and time left while it runs, its
+// result once it ends. `percent` (0–100) and `leftMs` are null when the backend cannot read them.
+export interface RowLineInput {
+  gameLabel: string;
+  kindLabel: string;
+  number: string | null;
+  state: 'queued' | 'running' | 'finished';
+  result: 'success' | 'failure' | 'cancelled' | null;
+  percent: number | null;
+  leftMs: number | null;
+}
+
+// One build the session queued, in its hub's Builds section: the branch, the short revision (null when the build
+// names none), each job's progress, and its links (each a `kit.button` running `builds.openLink` with its `url`).
+export interface HubBuildInput {
+  gameLabel: string;
+  kindLabel: string;
+  number: string | null;
+  branch: string;
+  shortRevision: string | null;
+  state: 'queued' | 'running' | 'finished';
+  result: 'success' | 'failure' | 'cancelled' | null;
+  jobs: BuildDetailInput['jobs'];
+  links: { label: string; url: string }[];
+}
+
+// The session's build offer: the game, the kind's or set's label, the branch, its origin head short and that commit's
+// subject (each null when not read). A `Queue` button runs `builds.queueSessionOffer` and a `Dismiss` button
+// `builds.dismissSessionOffer`, each with `sessionId` as its arg.
+export interface OfferCardInput {
+  sessionId: string;
+  gameLabel: string;
+  choiceLabel: string;
+  branch: string;
+  shortRevision: string | null;
+  subject: string | null;
+}
+
 // `entries` appends the app's `ol.builds-entries` to `parent` and returns it; the app draws the entries in it. A list
 // the part leaves out goes at the end of its root.
 export interface SideBarKit extends BaseKit {
@@ -157,7 +201,9 @@ export interface PickerRowKit extends BaseKit {
 // `allEntry`, `backendHeading` and `gameEntry` draw into the entries `ol` and return an `li`. `setGroup` and
 // `buildRow` draw into the list `ol` in `div.builds-body`, a row of a set into its group's `ol.builds-set-rows`, and
 // return an `li`. `buildDetail` draws into the same `ol` as its row and returns an `li`, which the app places right
-// after the row's root. `gameHeader`, `feedHeader` and `empty` draw into `div.builds-body`.
+// after the row's root. `gameHeader`, `feedHeader` and `empty` draw into `div.builds-body`. `rowLine` draws into the
+// session row part's wrapper (`.session-row-part[data-part='builds.row']`), `hubBuild` into the Builds section's body
+// and `offerCard` into the composer part's wrapper.
 export interface BuildsLayout {
   sideBar?(parent: HTMLElement, kit: SideBarKit): BuildsPane;
   main?(parent: HTMLElement, kit: MainKit): BuildsPane;
@@ -203,6 +249,17 @@ export interface BuildsLayout {
     parent: HTMLElement,
     input: PickerRowInput,
     kit: PickerRowKit,
+  ): HTMLElement;
+  rowLine?(parent: HTMLElement, input: RowLineInput, kit: BaseKit): HTMLElement;
+  hubBuild?(
+    parent: HTMLElement,
+    input: HubBuildInput,
+    kit: BaseKit,
+  ): HTMLElement;
+  offerCard?(
+    parent: HTMLElement,
+    input: OfferCardInput,
+    kit: BaseKit,
   ): HTMLElement;
 }
 

@@ -24,6 +24,7 @@ import {
   type GameEntry,
   type SessionBuilds,
 } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { buildsManifest } from '../manifest';
 import { type ParsedBackend, parseBackends } from './backend-config';
 import { createBackendRegistry } from './backend-registry';
@@ -37,6 +38,7 @@ import { createLinkStore, LINKS_FILE } from './link-store';
 import { createBuildsPoller, SLOW_POLL_MS } from './poller';
 import { createQueueing, type QueueingResult } from './queueing';
 import { buildsSelfTestScript } from './selftest-script';
+import { registerSessionDemoStep } from './session-demo-step';
 
 type BuildsApi = MainApi<typeof buildsManifest, BuildsChannel>;
 
@@ -77,10 +79,12 @@ interface EventMessage {
 // each entry's anew, each publishing as its own `create` settles. Polls each backend with an instance and games, folds
 // after each poll, apply and store change into `builds.snapshot` and `builds.sessions`, and tells each linked session
 // its build's failing job and end, and a set's end, writing the flag before the message. Exports `addBackend`; the
-// commands and the channel queue, offer, cancel and launch a set's agent through `queueing`.
+// commands and the channel queue, offer, cancel and launch a set's agent through `queueing`. Registers the builds
+// layout contract and the main half of the Session builds demo step.
 export const buildsMainPart: MainPart<typeof buildsManifest> = {
   manifest: buildsManifest,
   start(api: BuildsApi) {
+    api.layouts.register({ layoutTypes });
     const { services } = api;
     const { clock, log } = services;
     const chat = api.dependency(chatMainKey);
@@ -578,6 +582,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
     api.channel.handle('launchSetAgent', (arg) => queueing.launchSetAgent(arg));
     api.onSettingsChanged(() => apply());
     const registryChanged = registry.onChanged(() => apply());
+    const sessionDemoStep = registerSessionDemoStep(services);
 
     if (services.selfTest !== null) {
       registry.add(selfTestBackendKind(clock));
@@ -634,6 +639,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
             () => poller.dispose(),
             ...instances.map((instance) => () => instance.dispose()),
             () => registryChanged.dispose(),
+            () => sessionDemoStep.dispose(),
           ],
           (dispose) => dispose(),
         );
