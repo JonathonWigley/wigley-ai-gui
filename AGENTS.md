@@ -9,6 +9,8 @@
   user config file, theme, plugin data, layout, agent harness, session control, agent form type, MCP tool or
   third-party tool goes, and the layer check.
 - **Review** — every review recommendation taken without a form round.
+- **README, changelog and boundary** — the README and changelog kept true on every change, the version heading on
+  landing, and the names no app code may hold.
 - **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, the restart, Node
   version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login shell's PATH and SSH_AUTH_SOCK.
@@ -1208,6 +1210,36 @@ run carries on as if the user had submitted the round with every item on its rec
 after the fixes land are taken the same way. The reply lists the pick each item took beside the round's notices, so
 the user can still overrule one. A pick that would push, install third-party code or destroy the user's state still
 stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
+
+## README, changelog and boundary
+
+Planned in `shareable-app`, not built yet: the `lint:changelog`, `lint:boundary` and `changelog:release` scripts, the
+README coverage test, and the `agent-plugin/` manifests they check. Until they land, follow the upkeep rules by hand.
+
+Anyone can set the app up from `README.md` alone, and `CHANGELOG.md` tells them what each version changed, so both
+stay true on every change:
+
+- **README.** A change that adds, removes or renames a built-in plugin, a contributed MCP tool, a setting, an `auri`
+  skill or a hook updates `README.md` in the same change, as does a change to install or setup steps. The Vitest
+  test `scripts/readme-coverage.test.mts` fails when the README leaves out a built-in plugin id, a tool name, a
+  setting path, an `agent-plugin/skills/` skill or an `agent-plugin/hooks/hooks.json` hook.
+- **Changelog.** A change to app code — anything outside `docs/`, `.claude/`, `.agents/` and the root `*.md` files —
+  or to `agent-plugin/` adds one line per user-visible change under `## Unreleased` in `CHANGELOG.md`, under
+  `### Added`, `### Changed`, `### Fixed` or `### Removed`. `npm run lint:changelog`, part of `npm run lint`, fails
+  when the branch changes such a file against `origin/main` and adds no entry line to `CHANGELOG.md`.
+- **Version heading on landing.** Landing on `main` runs `npm run changelog:release` in the branch before the merge:
+  it moves the `## Unreleased` entries under `## <version> — <YYYY-MM-DD>` and bumps the version in `package.json`,
+  `agent-plugin/.claude-plugin/plugin.json` and `agent-plugin/.codex-plugin/plugin.json` together, MINOR when Added,
+  Changed or Removed hold entries and PATCH when only Fixed does. The landing session runs it and commits the result
+  before `wigley-land`, which neither settles nor checks the version.
+  `npm run lint:changelog` fails when the three versions disagree.
+
+**Boundary.** The app works for anyone, so no code names one user's setup: every personal binding comes from a
+plugin's `auri.json` (`docs/features/feature-contributions/design.md`). Nothing under `src/`, `agent-plugin/`,
+`scripts/` or in `README.md` and `CHANGELOG.md` names `~/wigley-agents`, `wigley-features`, `wigley-ai-marketplace`, a
+`wigley:` skill, the `wigley` plugin key, `WigleyCapture`, `capture.py`, `plan.py` or a `unity-pool` install path.
+Test fixtures, the demo's sample data and `docs/features/` are exempt. `npm run lint:boundary`, part of
+`npm run lint`, fails on any such name and prints its file and line.
 
 ## Running and testing
 
