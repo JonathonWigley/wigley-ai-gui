@@ -13,7 +13,7 @@ Files:
 - create `src/plugins/work/main/job-text.ts` · test `src/plugins/work/main/job-text.test.ts`
 
 Consumes:
-- `WorkItem`, `WorkCard`, `WorkJob`, `WorkSection`, `WORK_SECTIONS`, `WorkColumnSetting`, `ticketKeysIn`, `columnForStatus` in `src/plugins/work/contract.ts` ← 04
+- `WorkItem`, `WorkCard`, `WorkJob`, `WorkSection`, `WORK_SECTIONS`, `WorkColumnSetting`, `ticketKeysIn`, `columnForStatus` in `src/plugins/work/contract.ts` ← 04. The `columns` this task receives (`WorkToolsDeps.columns()`, `JobTextSettings.columns`) are already read through 04's `readColumns`; 09 wires that.
 - `WorkStore` (`file`, `update`), `WorkFile` in `src/plugins/work/main/store.ts` ← 04
 - From the tree: `ToolDefinition`, `ToolSession`, `AgentSession`, `textResult`, `errorResult` (`src/plugins/sessions/contract.ts`), `Clock`, `isJsonObject`, `isStringArray`
 
@@ -51,7 +51,7 @@ export interface JobTextSettings {
   keywords: readonly string[]; stallHours: number; jiraQuery: string; columns: readonly WorkColumnSetting[];
 }
 export const WORKER_INSTRUCTIONS: string
-export function jobMessage(job: WorkJob, settings: JobTextSettings, file: Pick<WorkFile, 'items' | 'lastSweepAt'>): string | null
+export function jobMessage(job: WorkJob, settings: JobTextSettings, file: Pick<WorkFile, 'items' | 'cards' | 'lastSweepAt'>): string | null
 ```
 Task 09 hands these to 05's runner: `instructions: () => [WORKER_INSTRUCTIONS]` and `message: (job) => jobMessage(job, <settings>, store.file())`.
 
@@ -71,13 +71,17 @@ Decisions:
   - `<what>` is one of: `a string`, `a list`, `a list of strings`, `a boolean`, `an ISO time`, `a Jira key like ABC-123`, or `one of needs_you, promised, waiting, my_threads, around, worth_knowing`.
   - An ISO time is a string `Date.parse` reads.
   - A Jira key is a string that `ticketKeysIn` gives back whole.
-  - Snake-case input fields map to the camel-case fields of `RecordedItem` and `RecordedTicket`. An optional string field that is absent or `''` reads as null.
+  - Snake-case input fields map to the camel-case fields of `RecordedItem` and `RecordedTicket`. An optional string field that is absent or `''` reads as null. An optional list (`participants`, `ticket_keys`, `reachable_statuses`) that is absent reads as `[]`, except `reachable_statuses`, which reads as null (the stored list is kept).
+  - **Jira keys are normalised before they are checked.** Each `ticket_keys` element and each ticket's `key` is trimmed and upper-cased, then kept only when `ticketKeysIn` gives it back whole. Otherwise the call is refused `Refused: items[i].ticket_keys[j] must be a Jira key like ABC-123.` (or `tickets[i].key`). So `ws-12` and `"WS-12 "` store as `WS-12`, the form card ids and 07's matcher use, and `ws12` is refused.
 - **Item merge** (`mergeRecordedItems`, pure; the tool applies it through one `store.update`):
   - **A new id** gets `state: 'open'`, `firstSeen: now`, and `snoozedUntil`, `note` and `sending` all null.
   - **An existing id** takes every recorded field. `firstSeen`, `note`, `sending` and `snoozedUntil` are kept. A null recorded `draft` keeps the stored draft.
   - **The state of an existing id**:
     - A `dismissed` or `cleared` item goes back to `open` when the recorded `at` is later than the stored `at`, since new messages arrived. Otherwise it keeps its state.
+    - `at` is compared by `Date.parse`. A stored `at` that does not parse counts as earlier than any recorded one (the recorded `at` always parses: validation checks it).
     - `snoozed` and `open` items keep theirs. The snooze's end is 08's.
+  - **The user's own reply does not reopen an item.** The app does not know the user's Slack name, so the worker judges this, and the sweep text tells it to (step 4): a conversation `read_work_state` shows `cleared` or `dismissed` is recorded in `items` only when someone other than the user has posted in it since the stored `at`. A conversation the user has replied or reacted to goes in `clear`, never in `items`. So the user's own Send (08 clears the item) does not bring its card back at the next sweep. A waiting item whose nudge the user sent stays cleared until the other side answers.
+  - **Order in one call.** `items` apply first, then `clear`, so an id in both ends cleared.
   - **`title`** is the recorded title, else the summary's first 60 characters.
   - **`ticketKeys`** is the recorded keys, then `ticketKeysIn(summary + '\n' + latest)`, distinct, in that order.
   - **`clear`** sets each listed `open` or `snoozed` item to `cleared` and its `snoozedUntil` to null. An unknown id is counted and skipped.
@@ -89,13 +93,15 @@ Decisions:
     - A new card gets `movingTo: null`, `note: null`, `linkedSessionIds: []`, `movedAt: null`, `column: ''`.
   - **A changed `jiraStatus`** on an existing card sets `movedAt: now`.
   - **`replace: true`** also drops every Jira card the record leaves out, since the ticket left the query. Local tasks are never touched.
+  - **`replace: true` with an empty `tickets` list is refused** `Refused: tickets must not be empty with replace true; call report_work_job with ok false if Jira could not be read.` (the tool name interpolated from `REPORT_WORK_JOB_TOOL.name`). A worker that reads a Jira error as "no tickets" would otherwise wipe every Jira card. The cost: a user whose query truly returns nothing keeps the last cards until a ticket returns; the sweep text tells the worker to skip the call then (step 2).
+  - A dropped card loses its `linkedSessionIds`, `movedAt` and `note`. When the ticket returns to the query it comes back as a new card. Keeping a dropped card's links is out of scope.
   - **`replace: false`** updates only the cards given.
 - **`report_work_job`** calls `deps.report(session, { ok, note })`. The last report before the row closes is the job's outcome (05). The report tool writes nothing to the store itself.
 - **`read_work_state`** answers `textResult(JSON.stringify(view, null, 1))`. The `view` holds:
   - `job`: the running job, as `{ kind, itemId?, key?, column? }`
   - `lastSweepAt`
   - `columns`: `[{ name, jiraStatuses }]`
-  - `items`: `[{ id, section, state, title, at }]`
+  - `items`: `[{ id, section, state, title, at }]`: every `open` and `snoozed` item, and the `cleared` and `dismissed` items whose `at` is within `READ_CLOSED_ITEMS_MS` (7 days, `7 * 86_400_000`) of `deps.clock.now()`. An older closed item cannot be touched by a sweep's Slack read unless new messages arrive, and recording it then is right. This bounds each sweep's first tool result however long the store keeps items.
   - `cards`: `[{ kind, id, title, jiraStatus?, column }]`, with a Jira card's column from `columnForStatus`
 
   It carries no summaries, which keeps the result small. The worker reads Slack for those.
@@ -104,7 +110,8 @@ Decisions:
   - A sweep is read only.
   - A send, nudge or move carries exactly one write, then a record and a report.
   - A move takes the first status in the target column's `jiraStatuses` that the ticket can reach.
-- **`jobMessage` returns null** when a send or nudge names an item the file lacks, or a move names a column `settings.columns` lacks (`Other` included), so the runner fails the job with "gone" (05).
+- **`jobMessage` returns null** when a send or nudge names an item the file lacks, a move names a key with no `kind: 'jira'` card in `file.cards` (a replace sweep dropped it), or a move names a column `settings.columns` lacks (`Other` included), so the runner fails the job with "gone" (05). The worker never transitions a ticket the Board no longer shows.
+- **Store growth.** Cleared and dismissed items stay in `work.json` (design.md: cleared items stay under All), so the file and the slot grow with every conversation ever recorded. This task bounds only what the worker reads (`read_work_state` above), and prunes nothing from the store.
 
 Pinned values:
 - Tool names: `read_work_state`, `record_work_items`, `record_work_tickets`, `report_work_job`.
@@ -147,6 +154,7 @@ Pinned values:
   - `record_work_tickets`: `Recorded <n> tickets.`, followed by ` Dropped <d> tickets no longer in the query.` when `replace` dropped any
   - `report_work_job`: `Recorded.`
 - Refusals are quoted in Decisions.
+- `READ_CLOSED_ITEMS_MS` is `7 * 86_400_000`, a module constant in `work-tools.ts`.
 - `WORKER_INSTRUCTIONS`, verbatim, `{read}` and the others standing for the interpolated `*_TOOL.name`:
 
   ```
@@ -171,7 +179,7 @@ Pinned values:
   - Board columns: <columns>
 
   1. Call {read}.
-  2. Jira: run the query with your Jira tools. For each ticket, read its status and the statuses its transitions reach now. Call {tickets} with every ticket and replace true.
+  2. Jira: run the query with your Jira tools. For each ticket, read its status and the statuses its transitions reach now. Call {tickets} with every ticket and replace true. If the query fails, call {report} with ok false and a note on the error, and stop. If it returns no tickets, skip {tickets}.
   3. Slack: read the user's DMs and mentions, the threads the user posted in, the watched and broadcast channels, and search for the open ticket keys and the keywords. An item is one conversation, its id the permalink of its root message. Sort each into one section:
      - needs_you: a DM to the user, or a message that mentions the user or asks the user something directly, not yet answered. Draft a reply in the user's voice, unless it needs facts only the user has; then leave draft empty.
      - promised: something the user said they would do ("I'll send that tomorrow") and has not done yet.
@@ -180,7 +188,7 @@ Pinned values:
      - around: a post in a watched channel, or found by the search, tied to the user's tickets or keywords. Set why to one line on why it matters to the user. Leave out anything unrelated.
      - worth_knowing: an important post in a broadcast channel that matters to anyone on the team, such as a release freeze, a process change or an outage. Set why. Leave out chatter and routine notices.
      Give each item a two-sentence summary, the latest reply as "Name: text", the participants, and every Jira key it names or plainly concerns; set link_reason for a key it does not name.
-  4. Call {items} with every new or changed item, and in clear the ids of items the user has since replied or reacted to.
+  4. Call {items} with every new or changed item, and in clear the ids of items the user has since replied or reacted to. An item {read} shows cleared or dismissed goes in items only when someone other than the user has posted in it since its time; a conversation whose newer messages are only the user's own goes in clear, not items.
   5. Call {report} with ok true and a one-line note on what changed.
   ```
 - Send and nudge message (`<Label>` is `SEND` and `a reply`, or `NUDGE` and `a nudge`; `<text>` is the job's text unchanged):
@@ -205,6 +213,10 @@ Pinned values:
 GIVEN a session that is not the running job's WHEN it calls any work tool THEN it gets the refusal and the store is unchanged
 GIVEN a dismissed item WHEN a sweep records it with a later `at` THEN it is open again, its `firstSeen` kept; with the same `at` it stays dismissed
 GIVEN a move job WHEN the worker calls `record_work_tickets` with `replace: true` THEN it is refused and no card changes
+GIVEN a sweep WHEN the worker calls `record_work_tickets` with `replace: true` and no tickets THEN it is refused and no card changes
+GIVEN one call naming an id in both `items` and `clear` WHEN it merges THEN the item ends cleared
+GIVEN a ticket key `ws-12 ` WHEN an item records it THEN it is stored as `WS-12`
+GIVEN a move whose Jira card is gone from the file WHEN `jobMessage` builds it THEN it returns null
 GIVEN a sweep that records tickets A and B over stored Jira cards A and C and a local task WHEN replace is true THEN the cards are A, B and the local task
 GIVEN the default settings WHEN `jobMessage` builds a move to `In QA` THEN the message lists `In QA, QA, In Review, Ready for QA` in that order
 GIVEN any job WHEN its message or the standing instructions are built THEN neither holds `mcp__`, `ToolSearch`, `claude` or `Atlassian`
@@ -212,18 +224,21 @@ GIVEN any job WHEN its message or the standing instructions are built THEN neith
 Tests:
 - `work-tools.test.ts`:
   - `gate_otherSession_refusesEveryTool` — a table of the four tools, each refused with its own name in the text, the store fake showing no update.
-  - `records_validation` table, each refused with its exact text: an item missing `id`; section `later`; `at` of `yesterday`; `participants` not a list of strings; `clear` given as a string; a ticket key `ws12`; `replace` given as a string.
-  - `mergeRecordedItems` table: a new item; an existing item updated with its draft kept on a null draft; dismissed with a later `at` going open; dismissed with the same `at` staying dismissed; snoozed with a later `at` staying snoozed; clear on open, on snoozed and on an unknown id; a title falling back to the summary's first 60 characters; keys from the summary merged and deduped.
+  - `records_validation` table, each refused with its exact text: an item missing `id`; section `later`; `at` of `yesterday`; `participants` not a list of strings; `clear` given as a string; a ticket key `ws12`; an item `ticket_keys` element `WS 12`; `replace` given as a string; `replace: true` with `tickets: []`.
+  - `records_normalised` table, each accepted: item `ticket_keys` `['ws-12', ' AB-3 ']` stores `['WS-12', 'AB-3']`; ticket `key` `ws-12` stores card `WS-12`; an item with no `participants` and no `ticket_keys` stores `[]` for both.
+  - `mergeRecordedItems` table: a new item; an existing item updated with its draft kept on a null draft; dismissed with a later `at` going open; dismissed with the same `at` staying dismissed; cleared with a stored `at` that does not parse going open; snoozed with a later `at` staying snoozed; clear on open, on snoozed and on an unknown id; an id in both `items` (later `at`) and `clear` ending cleared; a title falling back to the summary's first 60 characters; keys from the summary merged and deduped.
   - `mergeRecordedTickets` table: a new card's defaults; a status change setting `movedAt`; an unchanged status keeping `movedAt`; reachable statuses kept on a null record; replace dropping a missing Jira card and keeping a local task; no-replace keeping the missing card.
   - `recordTickets_replaceOutsideSweep_refused`.
   - `report_passesResult` — the `deps.report` fake receives `{ ok: false, note: 'x' }` and the reply is `Recorded.`.
   - `readState_shape` — the JSON's keys and a Jira card's derived column.
+  - `readState_closedItemsBounded` — an open item 30 days old, a cleared item 2 days old and a dismissed item 8 days old: the first two are listed, the third is not.
 - `job-text.test.ts`:
   - `sweep_since` table: a null `lastSweepAt` with 48 hours gives `the last 48 hours`, and a set one gives its time with the late-replies clause.
   - `sweep_lists` — empty lists read `none`, and the columns line holds `Todo = To Do / Selected for Development / Open`.
   - `send_and_nudge` — the job's text appears verbatim between blank lines, and the label is `SEND` or `NUDGE`.
   - `move_statusesInOrder`.
-  - `jobMessage_gone` table: a send for a missing item, a move to `Other`, and a move to an unknown column each give null.
+  - `jobMessage_gone` table: a send for a missing item, a move for a key with no Jira card in the file, a move to `Other`, and a move to an unknown column each give null.
+  - `sweep_guardsJiraAndOwnReplies` — the sweep message holds the step 2 failure and no-tickets lines and the step 4 own-reply line.
   - `text_isHarnessNeutral` — no `mcp__`, `ToolSearch`, `claude` or `Atlassian` (case-insensitive) in the instructions or in any job kind's message. The instructions hold both `your Slack tools` and `your Jira tools`, and the sweep message holds `your Jira tools`.
   - `text_namesToolsByDefinition` — the instructions hold all four `WORK_TOOLS[i].name`, each message holds `REPORT_WORK_JOB_TOOL.name`, and no text holds a `*_work_*` word that is no definition's name.
 

@@ -20,10 +20,13 @@ Files:
 - modify `docs/features/work-inbox/design.md`
 - modify `docs/features/work-inbox/spike.md`
 - modify `src/plugins/work/main/selftest-script.ts`
-- modify `README.md` and `CHANGELOG.md`, only when the shareable-app plan has landed (below)
+- modify `README.md` and `CHANGELOG.md`
+- modify `src/plugins/work/main/selftest-fixture.ts`, only to set the `at` values the steps below need
 
 Consumes:
 - the landed `work` plugin: its manifest, its contract, its main and page parts, and its self-test fixture and script ← 09
+- 09's `reseedStep(group: string): SelfTestStep` in `selftest-script.ts`, which re-seeds the fixture so a group sees
+  no other group's changes; its expected line is `[work] fixture seeded: 7 items, 7 cards, 3 suggestions` ← 09
 - the registered views and every bind ← 12
 - 01's `Git.branches` and `Git.commitsMatching`, 02's `PullRequests` and `services.pullRequests`, and 03's
   `LaunchRequest.permissions` and `AgentStart.permissions`, as landed. Each is reached through 09 and 12.
@@ -94,7 +97,7 @@ by a search.
    docs/features/backlog/design.md § The mode.`). Add after it: `The Inbox's and the Board's own keys (` + a short
    list as landed + `) are listed in docs/features/work-inbox/design.md § Keys.` The short list is `i` draft,
    Cmd+Enter send, `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W`
-   sweep, `gs` the job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet.
+   sweep, `gs` the last job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet.
 4. **The side-bar list paragraph** (`- **A side-bar list** opens the cursor's item on Enter`). Add `the Inbox
    sections` to its parenthesised list.
 5. **The Alt+hjkl paragraph's side bar list** (`to the shown mode's side bar on the left (the Sessions list, the docs
@@ -116,39 +119,73 @@ by a search.
   - `work-board` | `work-board.layout` | the board's head and status line, the columns, the Jira and local cards
     with their suggestion and moving lines, and the empty text
   Use the part names as landed.
-- **README.md and CHANGELOG.md.** Check first with `git -C <repo root> log main --oneline | grep -i shareable`, and
-  read plan.md's Preconditions. Only when the shareable-app plan has landed: add a README.md and a CHANGELOG.md entry
-  for each plugin (`work`, `work-inbox`, `work-board`), tool (the work MCP tools) and setting (every `work.*` and
-  each view's `layout`) this plan adds, in the shape that plan's coverage test and changelog lint enforce. Run that
-  test and lint. Otherwise neither file exists in this tree: leave them, and say so in the report.
+- **README.md.** Both files exist on `main`, written ahead by the shareable-app docs commit, and every built-in
+  plugin, MCP tool and setting must appear in README (its § Settings, § Built-in plugins and § MCP tools). Add, in
+  the shape and voice of the neighbouring rows:
+  - § Built-in plugins, after the `backlog` row: `work` (the data plugin: Slack and Jira work gathered by background
+    worker sessions, with every card action), `work-inbox` (Inbox mode) and `work-board` (Board mode), each one line
+    on what it does for the user.
+  - § Settings' By plugin table, after the `backlog` row: a `work` row listing every `work.*` path as landed in
+    04's manifest (the five `work.signals.*` leaves each by name), and a `work-inbox` row and a `work-board` row, each
+    `<id>.layout`.
+  - § MCP tools, after `set_backlog_chunks`: one row per tool in 06's `WORK_TOOLS` as landed, each ending `Answers
+    only the running work job's session.`, as the Backlog rows end on their own scope.
+  Leave § Status alone: it lists the shareable-app plan's unbuilt parts, and this plan adds none.
+- **CHANGELOG.md.** Under `## Unreleased` › `### Added`, add one line each, saying what changes for the user (the
+  file's own rule): Inbox mode, Board mode, and the `work` plugin's background sweeps with their settings. Add no
+  version heading: CHANGELOG's own rule puts the `## <version>` heading and the version bump on the landing.
+- Should the shareable-app plan's code have landed by then (plan.md Preconditions: `git -C <repo root> cat-file -e
+  main:wigley-ai-gui/src/shared/agent-plugin.ts` exits 0), run `npm run lint:changelog` and its README coverage test
+  as well, when `package.json` holds that script and the test exists. Otherwise neither exists yet, and the entries
+  are checked by hand against the landed manifests.
 
 ## The views' self-test steps
 
-Add two groups to `src/plugins/work/main/selftest-script.ts`, after the groups 09 wrote, over 09's fixture. Take the
-fixture's item titles and card ids from `selftest-fixture.ts` as landed. Each step's `expect` is a log line 10, 11 or
-09 writes. Read each one from the landed code, since the lines below name their shape. Follow
-`backlog/main/selftest-script.ts`, with a `why` on every step that is not obvious.
+Add two groups to `src/plugins/work/main/selftest-script.ts`, after the groups 09 wrote, over 09's fixture. Each
+group opens with 09's `reseedStep(<group>)`, so it starts from the freshly seeded fixture whatever 09's
+`inbox`, `board` and `sweep` groups changed before it. Take the fixture's item titles and card ids from
+`selftest-fixture.ts` as landed. Each step's `expect` is a log line 10, 11 or 09 writes. Read each one from the landed
+code, since the lines below name their shape. Follow `backlog/main/selftest-script.ts`, with a `why` on every step
+that is not obvious.
+
+The steps rest on these facts of the seeded fixture (09) and the views (10, 11):
+- The self-test home is a temp home, so neither view has a saved place: each first show is the default one.
+- Needs you holds one open card, `fixture-needs-you`, with ticket key `WRK-1`. All holds all seven items, newest `at`
+  first. `fixture-dismissed` must be the oldest of the seven, so `G` under All reaches it. If the landed fixture does
+  not make it the oldest, set its `at` in `selftest-fixture.ts` and say so in the report.
+- The Board's columns run Backlog (`WRK-1`), Todo (`WRK-2`, then `fixture-task`), In Progress (`WRK-3`), In QA
+  (`WRK-4`), Done (`WRK-5`) and Other (`WRK-6`), in the fixture's card order. `WRK-2` and `WRK-3` hold `suggested`
+  moves, and `fixture-around` holds `WRK-3`, so `WRK-3` draws the `1 thread` chip. If the landed order differs, take
+  the ids from it and keep each step's intent.
 
 - **`inbox keys`:**
-  1. `Space k i` expects `[work-inbox] shown`, with `checksFit: true`.
-  2. `G` then `gg` expect `[work-inbox] selected <last>` and `selected <first>`.
-  3. `j` expects the next card.
-  4. `i` expects `[work-inbox] box focused`, then `Esc` expects `list focused`.
-  5. `d` on a fixture card expects the line work main logs for `work.dismiss`. Then `Alt+h`, `G` (All) and `Enter`
-     reach the dismissed card under All, and `u` expects the line for `work.restore`.
-  6. `Alt+h` expects `sections focused`, `j` expects `section You promised`, and `Enter` expects `list focused`.
-  7. `W` expects the line work main logs when it queues a sweep.
-  8. `t` on a card with a ticket key expects `[work-board] shown` and `[work-board] flash <key>`.
-  9. `Ctrl+n` expects the line chat logs when its new-session prompt opens. Read it from chat's page.
+  1. `Space k i` expects `[work-inbox] shown`, with `checksFit: true`, then `section Needs you` and
+     `selected <fixture-needs-you title>` (first show).
+  2. `i` expects `[work-inbox] box focused`, then `Esc` expects `list focused`.
+  3. `t` expects `[work-board] shown` and `[work-board] flash WRK-1`. Then `Space k i` expects `[work-inbox] shown`.
+  4. `d` expects `[work] dismissed fixture-needs-you`.
+  5. `Alt+h` expects `sections focused`. `G` expects `section cursor All`, and `Enter` expects `section All` and
+     `list focused`.
+  6. `G` expects `selected <fixture-dismissed title>`, `gg` expects `selected <newest title>`, and `j` expects
+     `selected <second title>`. Then `G` again, and `u` expects `[work] restored fixture-dismissed`.
+  7. `Alt+h`, then `gg` expects `section cursor Needs you`, `j` expects `section cursor You promised`, and `Enter`
+     expects `section You promised` and `list focused`.
+  8. `W` expects `[work] sweep queued`. Why: the bind runs `work-inbox.sweep`, which reaches main through the view's
+     reporting run.
+  9. `Ctrl+n` expects `[chat] picker shown: Folder`, then `Escape` expects `[chat] picker closed: Folder`, as
+     `chat/main/selftest-script.ts` closes it, so the next group's keys do not land in the open picker.
 - **`board keys`:**
-  1. `Space k j` expects `[work-board] shown`.
-  2. `l` then `j` expect `selected <id>` lines.
-  3. `L` on a local fixture task expects the line for `work.moveCard`.
-  4. `t` on a card with threads expects `[work-inbox] shown` and `[work-inbox] filter <KEY>`. Then `Esc` expects
-     `filter cleared`.
-  5. `Space k j` returns to the Board. `y` on the fixture's suggestion card expects the line for
-     `work.acceptSuggestion`. The fixture launches no real worker: any job that queues runs on the fake harness, as
-     task 14 item 7 expects.
+  1. `Space k j` expects `[work-board] shown` and `selected WRK-1` (first show: the first card of the first column
+     with cards).
+  2. `l` expects `selected WRK-2`, and `j` expects `selected fixture-task`.
+  3. `L` expects `[work] moved fixture-task to In Progress`. A local task moves at once, so the cursor stays on it, now
+     in In Progress after `WRK-3`.
+  4. `k` expects `selected WRK-3`. `t` expects `[work-inbox] shown` and `[work-inbox] filter WRK-3`. Then `Esc`
+     expects `[work-inbox] filter cleared`.
+  5. `Space k j` expects `[work-board] shown`, with the cursor back on `WRK-3` from the place. `y` expects
+     `[work] moving WRK-3 to In QA`.
+  6. `h` expects `selected WRK-2`, and `n` expects `[work] not yet WRK-2`.
+  The fixture launches no worker: a job that queues stays in the self-test's queue, as 09's `sweep` group shows.
 
 Should a step need a fixture record 09 did not write, add it to `selftest-fixture.ts` and say so in the report. The
 whole self-test runs the end-of-run placement check, which every in-view bind must pass through 10's and 11's anchors.
@@ -183,8 +220,9 @@ Do this after the entries above, against the landed code:
   `work-board/`, each naming only files that exist.
 - GIVEN `docs/keymap.md` WHEN its k row is read THEN it lists `ki` Inbox and `kj` Board, matching `keymap.ts`.
 - GIVEN `design.md` WHEN read THEN no line says planned or not built.
-- GIVEN the whole self-test WHEN it runs THEN the `inbox keys` and `board keys` groups pass, and no
-  `[keys] unplaced` line names a `work-inbox` or `work-board` scope.
+- GIVEN the whole self-test WHEN it runs THEN the `inbox keys` and `board keys` groups pass after 09's groups, each
+  from a fresh seed, and no `[keys] unplaced` line names a `work-inbox` or `work-board` scope.
+- GIVEN README.md WHEN a reader looks up a work setting, plugin or tool THEN it has a row.
 
 ## Tests
 
@@ -198,7 +236,9 @@ Do this after the entries above, against the landed code:
 - `npm run lint` passes.
 - `npm run selftest -- --plugin work` passes.
 - The checks under Tests print what they should.
-- The README.md and CHANGELOG.md question is settled either way and stated in the report.
+- README.md names `work`, `work-inbox` and `work-board`, every `work.*` setting and each view's `layout`, and every
+  work MCP tool, each matching the landed manifests and `WORK_TOOLS`; CHANGELOG.md has their `### Added` lines under
+  `## Unreleased`.
 
 ## Commit
 

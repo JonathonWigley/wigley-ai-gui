@@ -26,7 +26,8 @@ fixture's settings as 09 names them).
    - No text wraps mid-word, which was a spike defect. Run `fit` at the minimum width.
 2. **Expected — Board renders columns and moves.** `key Space k j`. Screenshot `board`. Check:
    - The columns run Backlog, Todo, In Progress, In QA, Done, Other.
-   - A card head (key, priority) stays on one line.
+   - A card head (key, priority) stays on one line: run `fit` on the head of the fixture card 09 gives a priority
+     and the longest title, at the minimum width. Its priority draws as a neutral Tag.
    - A suggestion shows its reason, Accept and Not yet.
 3. **Low-confidence — drag a local task.** Drag it from Todo to In Progress with `drag`, then screenshot `board-drag`. The
    card lands at once with no "Moving…" text, and a restart (`npm run drive -- restart`) keeps it there. No test
@@ -36,22 +37,28 @@ fixture's settings as 09 names them).
 5. **Expected — Dismiss and Restore.** Dismiss a card. The section count drops. Under All, Restore brings it back.
 6. **Low-confidence — the Dock badge.** Read the app log or `query` for the alert count. It equals the number of open
    Needs you items, and it drops by one after a Dismiss.
-7. **Expected — keys.** `W` in each view queues a sweep: the status line shows the job queued, and the fake
-   harness's owned row opens. Ctrl+n opens the new-session prompt from each view.
+7. **Expected — keys.** `W` in each view queues a sweep: the app log shows `[work] sweep queued`, and the status
+   line shows the new job as `Sweep queued` or `Sweep running · started <ago>`, whichever state the queue holds at the
+   screenshot. Whether the fake harness then runs it, and its owned row opens, follows 09's rule for a seeded run
+   (whether the runner starts in one). Check the outcome 09's doc states, and once a sweep is `done`, check that Show
+   transcript draws and opens its row. Ctrl+n opens the new-session prompt from each view.
+8. **Expected — a refusal toasts.** Press Add to Board on an Inbox card already on the Board (the fixture's
+   `fixture-around`, which holds `WRK-3`). A toast reads `Already on the board as WRK-3`, and the app log holds
+   `work.addToBoard failed: Already on the board as WRK-3`.
 
 ## Real Claude run
 
 Start this run with `npm run drive -- start --harness claude --user-config`. It spends tokens, so name the run in the
 report. It is read-only against Slack and Jira.
 
-8. **Low-confidence — a real sweep fills the Inbox and Board.** Press `W` in the Inbox.
+9. **Low-confidence — a real sweep fills the Inbox and Board.** Press `W` in the Inbox.
    - The job row launches unattended in the harness's permissive mode. Confirm `--dangerously-skip-permissions` in the
      row's process command line through the system stats panel (`--system-stats live`), or in the app log line
      the harness writes at launch.
    - The row closes itself when the job is done. Cards then show real Slack items and Jira tickets.
    - The status line names the finished job, and its link opens the job's transcript.
    - Screenshot `inbox-real` and `board-real`.
-9. **Low-confidence — work detection on real repos.** After the sweep, a ticket key that has a branch in a watched
+10. **Low-confidence — work detection on real repos.** After the sweep, a ticket key that has a branch in a watched
    repo, or an open PR, shows a suggested move with its reason. If no such ticket exists, record that in the report.
    Don't create a branch to force one.
 

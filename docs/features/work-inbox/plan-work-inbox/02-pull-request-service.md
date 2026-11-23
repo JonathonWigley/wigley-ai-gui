@@ -12,6 +12,7 @@ Files:
 - test `src/main/pull-requests/gh-pull-requests.test.ts`
 - modify `src/contracts/plugin.ts`
 - modify `src/main/main.ts`
+- modify `src/main/processes/limited-processes.ts` (its comment only)
 - modify `src/shared/plugin-part-harness.test-support.ts`
 - modify `scripts/check-layers.mts`
 
@@ -46,14 +47,25 @@ Produces:
     waiting on a prompt the app can never answer.
   - `gh` is run as a bare name, as `git` is. `ProcessRunner` looks it up on the PATH, which main swaps for the login
     shell's at a Finder start (AGENTS.md § Dev quirks). On Windows it looks it up over PATH × PATHEXT.
-  - The run goes through the root runner (`processes` in `main.ts`), not a per-plugin view, as `git` does. A plugin's
-    stop does not abort it. The 15 s timeout bounds it.
-- **Limit 100** is the most one GitHub API page returns. It covers a repo's recent PRs across all states for detection.
-  Detection only needs PRs whose head branch carries a card's key, and those are recent.
+  - The run goes through the root runner (`processes` in `main.ts`), not a per-plugin view, so a plugin's stop does
+    not abort it. The 15 s timeout bounds it.
+  - Like git, it runs through its own `limitRuns` (`src/main/processes/limited-processes.ts`), since detection (07)
+    calls `forRepo` once per watched origin at once. main.ts gets `const MAX_GH_RUNS = 4;` beside `MAX_GIT_RUNS`, and
+    gh gets a limiter of its own, so a slow gh run never holds one of git's four slots. `limitRuns` counts a run's
+    `timeoutMs` from its start, so the 15 s budget is unchanged by the wait.
+  - `limitRuns`' comment says "the limit is git's, and git only runs". Reword that clause to "the limit is for
+    programs that only run, as git and gh do", so the comment stays true.
+- **Limit 100** is the most one GitHub API page returns. `gh pr list` lists newest created first, so the result is the
+  repo's 100 most recently created PRs across all states. A card's PR created before those 100 is absent, which reads
+  the same as "no PR": its `pr_opened` and `pr_merged` suggestions do not appear. This is accepted. Such a card has
+  most likely moved already, and its branch and commit signals still read.
 - **Mapping.** Each JSON record becomes `{ number, title, url, headBranch: headRefName, state, updatedAt }`.
   - `state` maps `OPEN` → `open`, `MERGED` → `merged`, `CLOSED` → `closed`. gh prints these upper-case values.
   - A record with any other state, or a field of the wrong type, is dropped, and the rest are kept. Fail closed per
     record.
+  - The mapper checks each element with `isJsonObject` first, then `typeof` on every field it reads: `number` a
+    number, and `title`, `url`, `headRefName`, `state` and `updatedAt` strings. An element that is no object (`null`,
+    a number, a list) is dropped the same way. So no element can throw, which keeps the "never rejects" rule.
   - `updatedAt` stays gh's ISO string.
   - Order is gh's output order.
 - **Null, never a rejection.** `forRepo` never rejects. It resolves null when:
@@ -65,10 +77,12 @@ Produces:
 
   The caller cannot tell these apart from gh's output alone, and detection treats every one as "no PR signal this
   sweep". An empty array resolves `[]`, which is a GitHub repo with no PRs.
-  - Contract comment: "The newest PRs of the GitHub repo the clone holding `folder` points at, in every state; null
+  - Contract comment: "The 100 most recently created PRs of the GitHub repo the clone holding `folder` points at, in
+    every state, so an older PR is absent; null
     when that cannot be read: the tool is missing or signed out, the folder has no GitHub remote or is in no clone,
     or the read failed or timed out. Never rejects."
-- **Wiring in `main.ts`.** Make `const pullRequests = createGhPullRequests({ processes });` directly below
+- **Wiring in `main.ts`.** Make
+  `const pullRequests = createGhPullRequests({ processes: limitRuns(processes, MAX_GH_RUNS) });` directly below
   `const git = createProcessGit(…)` (line 485). Pass `pullRequests` beside `git` in the `startMainParts` services
   record (line 1276).
   - It is one instance for every run mode, as `git` is.
@@ -93,6 +107,7 @@ Produces:
 
 GIVEN gh prints two PRs WHEN `forRepo` runs THEN it resolves both, `headRefName` as `headBranch` and the state lower-cased
 GIVEN gh prints a record with state `DRAFT` WHEN `forRepo` runs THEN that record is dropped and the others are kept
+GIVEN gh prints an array holding `null` or a number beside a valid record WHEN `forRepo` runs THEN it resolves the valid record alone and does not reject
 GIVEN gh exits 4, or 1 WHEN `forRepo` runs THEN it resolves null
 GIVEN gh cannot start WHEN `forRepo` runs THEN it resolves null and does not reject
 GIVEN the run times out WHEN `forRepo` runs THEN it resolves null
@@ -106,9 +121,9 @@ New file `src/main/pull-requests/gh-pull-requests.test.ts`, over `FakeProcesses`
 - `forRepo_GhOutput_MapsEachRecord`: output holds an `OPEN` and a `MERGED` record. The result equals the two mapped
   records in order. `processes.runs[0]` has `command: 'gh'`, the pinned args, `cwd: '/r'`, `timeoutMs: 15000` and
   `setEnv: { GH_PROMPT_DISABLED: '1' }`.
-- `forRepo_UnreadableRecord_DropsOnlyIt`, a table of three rows: state `DRAFT`, `number` a string, and `headRefName`
-  missing. Each row's output holds one valid `CLOSED` record beside the bad one, and the result is the valid record
-  alone.
+- `forRepo_UnreadableRecord_DropsOnlyIt`, a table of rows: state `DRAFT`, `number` a string, `headRefName` missing,
+  `title` a number, `url` null, `updatedAt` a number, an element `null`, and an element `5`. Each row's output holds
+  one valid `CLOSED` record beside the bad one, and the result is the valid record alone.
 - `forRepo_GhCannotAnswer_Null`, a table with one row per null cause:
   - exit 4 with stderr `gh auth login`
   - exit 1 with stderr `none of the git remotes configured for this repository point to a known GitHub host`

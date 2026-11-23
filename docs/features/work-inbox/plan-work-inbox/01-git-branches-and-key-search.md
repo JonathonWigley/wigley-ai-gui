@@ -6,16 +6,20 @@ Rung: hard · adds `Git.branches` and `Git.commitsMatching`, which 07 consumes
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
-Files:     modify `src/contracts/git.ts` · modify `src/main/git/process-git.ts` · test `src/main/git/process-git.test.ts`
+Files:     modify `src/contracts/git.ts` · modify `src/main/git/process-git.ts` · test `src/main/git/process-git.test.ts` · test `src/plugins/backlog/main/start.test.ts`
 Consumes:  `ProcessRunner.run` and the existing `gitOutput`, `nulFields` and `logCommits` helpers in `process-git.ts`
 Produces:
 - `export interface GitBranch { name: string; at: string; isRemote: boolean }` in `src/contracts/git.ts`
 - `branches(root: string): Promise<GitBranch[]>` on `Git` in `src/contracts/git.ts`, implemented in `createProcessGit` in `src/main/git/process-git.ts`
 - `commitsMatching(root: string, pattern: string, since: string | null): Promise<GitCommit[]>` on `Git` in `src/contracts/git.ts`, implemented in `createProcessGit`
 
-No other file implements `Git`. Every fake in the tree is a `Partial<Git>` cast, an `as never` or `as unknown as Git`
-object, or `notFaked<Git>` in `src/shared/plugin-part-harness.test-support.ts`, which is a proxy. So the typecheck names
-no other file.
+One other file implements the whole of `Git`: `fakeGit()` in `src/plugins/backlog/main/start.test.ts` is a full literal
+ending `} satisfies Git;`, one `vi.fn<Git['<member>']>` per member. Add
+`branches: vi.fn<Git['branches']>(async () => [])` and
+`commitsMatching: vi.fn<Git['commitsMatching']>(async () => [])` after its `firstAdded`. Every other fake in the tree
+is a `Partial<Git>` cast, an `as never` or `as unknown as Git` object, a partial object (`workflow-large/main/plan-watch.test.ts`,
+`app-update/main/start.test.ts`), or `notFaked<Git>` in `src/shared/plugin-part-harness.test-support.ts`, which is a
+proxy, and needs no edit.
 
 ## Decisions
 
@@ -82,6 +86,8 @@ GIVEN a pattern and a since WHEN `commitsMatching` runs THEN it runs the pinned 
 GIVEN since null WHEN `commitsMatching` runs THEN the args carry no `--since`
 GIVEN an empty pattern WHEN `commitsMatching` runs THEN it returns `[]` and records no run
 GIVEN a real clone whose merge commit carries `proj-7` only in its body WHEN `commitsMatching(root, 'PROJ-7', null)` runs THEN it returns that merge commit and no other
+GIVEN a real clone holding a stash made on branch `proj-7-x` WHEN `commitsMatching(root, 'PROJ-7', null)` runs THEN no stash commit is returned
+GIVEN a real clone with a remote-tracking branch and a symbolic `origin/HEAD` WHEN `branches` runs THEN the remote branch is returned with `isRemote: true` and no `origin/HEAD` record appears
 
 ## Tests
 
@@ -105,9 +111,19 @@ and a `matchingArgs(pattern, since)` helper beside `logArgs`.
   2. Run `merge --no-ff side -m 'Merge side' -m 'Closes proj-7'`.
   3. `commitsMatching(root, 'PROJ-7', null)` returns exactly one commit. Its sha is `rev-parse HEAD`, its subject
      `Merge side`, its `paths` `[]`.
-  4. `commitsMatching(root, 'PROJ-7', <an ISO time after the merge>)` returns `[]`.
-- `branches_RealClone_LocalBranchesNewestFirst` (`it.skipIf(!gitOnPath)`): in the same kind of clone, `branches(root)`
-  holds `main` and `side`, each with `isRemote: false` and an `at` that `Date.parse` reads.
+  4. `commitsMatching(root, 'PROJ-7', new Date(Date.now() + 86_400_000).toISOString())` (a day ahead, so after the
+     merge whatever the clock) returns `[]`.
+- `commitsMatching_RealClone_StashLeftOut` (`it.skipIf(!gitOnPath)`, with `isolateGitConfig()`):
+  1. On `main`, write and commit a tracked file `a.txt` with message `first`.
+  2. Branch `proj-7-x`, change `a.txt` without committing, and run `git stash push`. git names the stash
+     `WIP on proj-7-x: …`. An empty-commit clone has nothing to stash, so the test writes a file.
+  3. `commitsMatching(root, 'PROJ-7', null)` returns `[]`. Without `--exclude=refs/stash` it would return the stash's
+     two commits.
+- `branches_RealClone_LocalAndRemoteWithDates` (`it.skipIf(!gitOnPath)`): in the same kind of clone as the merge test,
+  run `git update-ref refs/remotes/origin/side side` and
+  `git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/side`. `branches(root)` holds `main` and `side` with
+  `isRemote: false`, and `origin/side` with `isRemote: true`, each with an `at` that `Date.parse` reads, and no record
+  named `origin/HEAD`. It asserts the set of names, not their order: commits made in one second tie on committer date.
 
 Done when: `npm run typecheck` and `npm run lint` pass, and the test gate runs the tests above. Runtime checks defer to
 [14 — Final verification](14-final-verification.md).

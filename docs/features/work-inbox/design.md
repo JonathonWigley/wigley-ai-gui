@@ -78,8 +78,8 @@ Auri sessions (chat.session, sessions.rows) ─┘
   job's session. The page never reads a transcript.
 - **Harness-neutral text.** The instructions name capabilities ("your Slack tools", "your Jira tools"), never one
   harness's tool names.
-- **Status.** The status line in both views shows the running or last job, its time and outcome, and links to its row's
-  transcript.
+- **Status.** The status line in both views shows the running or last job, its time and outcome, and links to the last
+  finished job's transcript. A running job's row is hidden and owned, so it has no link until it ends.
 - **When.** Only while the app runs: one sweep at start, then a one-shot timer re-armed after each sweep. Interval 0
   turns the timer off; `W` still sweeps.
 

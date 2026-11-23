@@ -55,8 +55,10 @@ Produces:
   - Every `harness.start` and `harness.attach` request chat builds passes `permissions: session.permissions`. That
     covers the start at line 2429 and the attach at line 2524, so every later process start of the row (a
     restart after an exit, a clear) keeps it.
-  - The saved record (line 966) writes it, and the restore from `open-sessions.json` (line 3825) reads it back. A
-    relaunch that re-attaches or restarts the row stays permissive.
+  - The saved record (line 972) writes it, and the restore from `open-sessions.json` (line 3831) reads it back. A
+    relaunch that re-attaches or restarts the row stays permissive. A restored worker row keeps its saved
+    permissions, so the job runner (05) claims it as it was launched. A restored row the user goes on in by hand (a
+    send that restarts its process) keeps its launch permissions as saved too.
   - `SavedSession.permissions` joins `LaterSavedField` in `open-sessions.ts`, the way `unattended` did. A stored row
     without it reads `'default'`, and one that holds anything other than `'default'` or `'auto'` makes the file
     unreadable, as `isStoredSession` already treats a bad `unattended`. This follows the file's own pattern for a
@@ -103,16 +105,29 @@ Produces:
   launch.
 - **`launchMode` and `startingControls`** take the request's `controls` and `permissions`. `launchMode` returns
   `BYPASS_MODE` for `'auto'`, else `controls.mode ?? 'auto'`.
-  - `startingControls` therefore starts a permissive process's Mode control at `bypassPermissions`. That value is not
-    among the control's choices, and Claude's own report shows the same value through `controlValue`, which passes an
-    unknown mode through.
+  - **A permissive row restarts in bypass**, whatever its Mode control last held. Chat saves a `permissionMode`-role
+    control's value into `launchControls` (`controlValuesOf`), so a user who picks Plan on a permissive row restarts it
+    with `controls.mode: 'plan'` and `permissions: 'auto'`, and `launchMode` returns `bypassPermissions`. The pick
+    holds only until the process restarts. Worker rows are hidden and unattended, and the user does not drive them.
+  - `startingControls` therefore starts a permissive process's Mode control at `bypassPermissions`.
+  - **The Mode picker shows bypass as its own choice on a permissive process.** For `'auto'`, `startingControls`
+    appends `BYPASS_CHOICE = { value: 'bypassPermissions', label: 'Bypass permissions' }` (a constant in
+    `claude-controls.ts`) to that process's copy of the Mode choices. Its chip reads `Mode: Bypass permissions`
+    (`valueLabel` in `chat/page/chat-state.ts` finds the choice). The picker (`openChoices` in
+    `chat/page/chat-commands.ts`) highlights it, and the user can pick it again after picking another mode, since the
+    flagged process accepts it and `isChoice` finds it. Today, with the value outside the choices, the chip shows the
+    raw value and the picker highlights the first choice (`Math.max(0, -1)`). Neither throws, but the picker would
+    show the wrong row. session-fold replaces only the Model choices on `initialize` (`setControlChoices(state,
+    'model', …)`), so the added Mode choice stays for the process's life. Claude's own report of
+    `bypassPermissions` then resolves through `controlValue` to that choice. A `'default'` process's choices are
+    `CLAUDE_CONTROLS`' unchanged.
   - The two callers change with them: `session-fold.ts:261` passes `request`, and `claude-code-harness.ts:1467`
     passes `{ controls: {}, permissions: 'default' }`.
   - `bypassPermissions` is not added to `CLAUDE_CONTROLS`' Mode choices, so the user still cannot pick it in a
     normal row.
-  - The comment at `claude-controls.ts:20` is rewritten to say both halves: bypass is not a pickable choice, because
-    Claude refuses it mid-session unless the process launched with the flag, and a permissive launch reports
-    `bypassPermissions` as the Mode value.
+  - The comment at `claude-controls.ts:20` is rewritten to say both halves: bypass is not a choice of a normal
+    process, because Claude refuses it mid-session unless the process launched with the flag, and a permissive launch
+    starts at `bypassPermissions` with `BYPASS_CHOICE` added to its own Mode choices.
 - **Out of scope.** The worker's guard on what it writes is its instructions (design.md § The worker). The user's own
   settings could switch bypass off (`permissions.disableBypassPermissionsMode`); neither profile's `settings.json`
   sets it today. 14 checks the live launch.
@@ -123,7 +138,9 @@ GIVEN a permissive row saved to `open-sessions.json` WHEN chat restores it THEN 
 GIVEN a saved file whose rows have no `permissions` WHEN chat loads it THEN each row reads `'default'`
 GIVEN `prepareLaunch` with `permissions: 'auto'` WHEN it runs THEN it rejects `chat cannot prepare a permissive launch` and prepares nothing
 GIVEN an `AgentStart` with `permissions: 'auto'` and `controls.mode: 'plan'` WHEN `claudeLaunch` builds the args THEN they hold `--dangerously-skip-permissions`, `--permission-mode bypassPermissions` and `--permission-prompt-tool`, and no `--permission-mode plan`
-GIVEN `permissions: 'auto'` WHEN `startingControls` runs THEN the Mode control's value is `bypassPermissions`
+GIVEN `permissions: 'auto'` WHEN `startingControls` runs THEN the Mode control's value is `bypassPermissions`, and its choices end with `Bypass permissions`
+GIVEN a permissive row whose process is live in the session host WHEN chat re-attaches it after a relaunch THEN the attach request carries `permissions: 'auto'`
+GIVEN a permissive row whose Mode the user set to Plan WHEN its process restarts THEN it launches with `--permission-mode bypassPermissions`
 
 ## Tests
 
@@ -142,7 +159,11 @@ GIVEN `permissions: 'auto'` WHEN `startingControls` runs THEN the Mode control's
 - `src/plugins/claude-code/main/claude-controls.test.ts`: new `startingControls_PermissiveStart_ModeIsBypass`, a table
   of `{ permissions: 'auto', controls: {} }` → `bypassPermissions`, `{ permissions: 'auto', controls: { mode: 'plan' } }`
   → `bypassPermissions`, and `{ permissions: 'default', controls: {} }` → `auto`, each read as the `mode` control's
-  `value`.
+  `value`. The two `'auto'` rows' Mode choices end with `BYPASS_CHOICE`, and the `'default'` row's equal
+  `CLAUDE_CONTROLS`' Mode choices.
+- `src/plugins/claude-code/main/session-fold.test.ts`: new `createSessionFoldState_Permissive_ModeIsBypassChoice`:
+  `createSessionFoldState({ ...request, permissions: 'auto' })` holds a Mode control with value `bypassPermissions`
+  and `BYPASS_CHOICE` among its choices.
 - `src/plugins/chat/main/chat-sessions.test.ts`:
   - New `launch_Permissions_FirstStartAndLaterStartsPassThem`, modelled on
     `launch_Controls_FirstStartAndLaterStartsPassThem` (line 10688). Launch with `permissions: 'auto'`. The first
@@ -154,6 +175,9 @@ GIVEN `permissions: 'auto'` WHEN `startingControls` runs THEN the Mode control's
     `chat cannot prepare a permissive launch`, and `preparedRuns` is empty.
   - New `restore_PermissiveRow_NextStartIsPermissive`: a saved snapshot row with `permissions: 'auto'` and no live
     process restores, and its next start's request carries `'auto'`.
+  - New `restore_PermissiveRowLiveInHost_AttachIsPermissive`: a saved snapshot row with `permissions: 'auto'` whose
+    process the fake harness holds live re-attaches, and the fake's `attachCalls[0].permissions` is `'auto'`. Model it
+    on the existing re-attach test near `harness.attach` (line 2524).
 - `src/plugins/chat/main/open-sessions.test.ts`:
   - New `save_PermissiveRow_RoundTrips`, modelled on `save_HeadlessRow_RoundTrips` (line 413).
   - Add a row to the load fixtures (the stored-row records near lines 39–93) so a row with no `permissions` reads

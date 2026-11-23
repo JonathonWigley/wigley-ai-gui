@@ -33,7 +33,7 @@ Each command below was run at plan time. `wigley:make` re-runs each one before i
   - Rebase this branch onto its tip.
   - Add `appDir` handling wherever this plan builds a `MainServices` fake (its task 01 adds `appDir: string`).
   - Name tools through the server-name constant in `src/shared/agent-plugin.ts`. Tool names become `mcp__plugin_auri_auri__*`.
-  - Task 13 must add a README.md and CHANGELOG.md entry for every plugin, tool and setting this plan adds, because that plan's coverage test and changelog lint enforce them.
+  - Task 13's README.md and CHANGELOG.md entries are then checked by that plan's coverage test and changelog lint.
 
   If its repo move (its task 17) has run, land in `~/Documents/wigley-ai-gui`, not in `ai`.
 
@@ -42,7 +42,7 @@ Each command below was run at plan time. `wigley:make` re-runs each one before i
 - `wigley-ai-gui/docs/features/work-inbox/design.md`: the full design, marked planned.
 - `wigley-ai-gui/docs/features/work-inbox/spike.md`: the spike's settled result, brought over from `spike/work-inbox`.
 
-Both are in commit `4e900a7bf`. Task 13 writes the `AGENTS.md`, `docs/keymap.md` and README/CHANGELOG entries. Those files are read as live fact by every session, so their entries land with the code rather than ahead of it.
+Both are in the docs commit under the plan commit. `README.md` and `CHANGELOG.md` already exist on `main`, written ahead by the shareable-app docs commit, and every built-in plugin, contributed MCP tool and setting must appear in `README.md` with a `CHANGELOG.md` entry under `## Unreleased`. Task 13 writes those entries, and the `AGENTS.md` and `docs/keymap.md` ones. Those files are read as live fact by every session, so their entries land with the code rather than ahead of it.
 
 ## Mandatory Reads
 
@@ -119,7 +119,7 @@ Paths are relative to `wigley-ai-gui/`.
 - `src/contracts/agent.ts` (`AgentStart.permissions`), `src/plugins/chat/contract.ts` (`LaunchRequest.permissions`), chat's `chat-sessions.ts` and `open-sessions.ts` (a saved row without `permissions` reads `'default'`), and claude-code's `claude-launch.ts`, `claude-controls.ts`, `session-fold.ts` and `claude-code-harness.ts` (+ tests) (03)
 - `src/plugins/main.ts`, `page.ts` and `manifests.ts` (register `work`) (04); the same three (register the views, each with a main part for its layout) and `src/plugins/keymap.ts` (12)
 - `src/plugins/chat/contract.ts`, `chat/page/start.ts` and `chat/page/start-prompt.ts`: the page export `newSessionWithDraft(text): Promise<string | null>` for spin-up's fallback (08)
-- `AGENTS.md`, `DESIGN.md`, `docs/keymap.md`, `docs/features/layouts/design.md`, the feature's `design.md` and `spike.md`, the views' groups in `work/main/selftest-script.ts`, plus README.md and CHANGELOG.md when the shareable-app plan has landed (13)
+- `AGENTS.md`, `DESIGN.md`, `docs/keymap.md`, `docs/features/layouts/design.md`, the feature's `design.md` and `spike.md`, the views' groups in `work/main/selftest-script.ts`, `README.md` and `CHANGELOG.md` (13)
 
 **New:**
 - `src/contracts/pull-requests.ts`: the seam. The live adapter is `gh`, and tests use a fake (02).
@@ -174,6 +174,8 @@ WorkColumnSetting { name; jiraStatuses: string[] }, WorkProjectSetting { jiraPro
 WorkSignalSetting (a column name or 'off')
 columnForStatus(status, columns): string             // OTHER_COLUMN when unmapped; the one column rule
 ticketKeysIn(text): string[]                          // the one in-process key matcher
+readColumns(raw), readProjects(raw)                   // every reader of work.columns / work.projects
+statusLine(job, now): WorkStatusLine { text, tone, hasRow }   // the one status-line rule; hasRow = last.rowId set
 workStateSlot                                         // main-published slot of WorkState
 // work commands (page-runnable): sweep, send, dismiss, restore, snooze, addToBoard, moveCard,
 //   acceptSuggestion, notYet, deleteTask, startSession, openJobRow
@@ -190,7 +192,7 @@ createWorkStore(data, log): WorkStore { load, file, update(change), onChange, pr
 
 // src/plugins/work/main/job-runner.ts, job-queue.ts — 05
 createJobRunner(deps): JobRunner { start(); enqueue(job): Promise<void>; jobOf(session);
-                                   report(session, { ok, note }): boolean; dispose() }
+                                   report(session, { ok, note }): boolean; pending(): WorkJob[]; dispose() }
 // deps include profile(), instructions(), message(job): string | null, ended(job, outcome)
 nextJobQueue(queue, event), parseJobQueue, EMPTY_JOB_QUEUE   // queue.json
 
@@ -199,8 +201,16 @@ startWorkTools(deps): (session) => ToolSession; WORK_TOOLS =
   read_work_state, record_work_items, record_work_tickets, report_work_job
 mergeRecordedItems, mergeRecordedTickets; WORKER_INSTRUCTIONS; jobMessage(job, settings, file)
 
-// view commands run across plugins by id — 10, 11
-work-board.showTicket, work-inbox.filterTicket
+// src/plugins/work/main/actions.ts — 08
+clearStaleMarks(file, pending), LOST_JOB_NOTE         // 09 runs it at start against runner.pending()
+
+// src/plugins/work/main/selftest-script.ts — 09
+reseedStep(group): SelfTestStep; self-test binds under WORK_SELFTEST_KEYS = Space z w   // 13 consumes
+
+// view commands — 10, 11, 12
+work-board.showTicket, work-inbox.filterTicket       // run across plugins by id
+// each view runs every work.* command through its own view commands and one runWork path (runFor), which toasts
+// a refusal; W and gs bind the views' own sweep and showJobRow, never a work.* command
 ```
 
 Settings shape (04): `work.projects` is a list of `WorkProjectSetting`, and `work.signals` is five leaves

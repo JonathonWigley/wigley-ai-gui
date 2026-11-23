@@ -31,12 +31,16 @@ Files:
 
 Consumes:
 - `WorkState`, `WorkItem`, `WorkSection`, `WorkJobStatus` and `workStateSlot` from `src/plugins/work/contract.ts` ← 04
+- `statusLine(job: WorkState['job'], now: number): WorkStatusLine`, with `WorkStatusLine` `{ text, tone, hasRow }`,
+  from `src/plugins/work/contract.ts` ← 04. It is the one status-line rule for both views (Decisions, Status line).
 - the `work` page part, as `dependsOn.page: ['work']` ← 04
 - work commands, run by qualified id: `work.sweep`, `work.send`, `work.dismiss`, `work.restore`, `work.snooze`,
-  `work.addToBoard`, `work.startSession`, `work.openJobRow` ← 04 (declared), 08 and 09 (run)
+  `work.addToBoard`, `work.startSession`, `work.openJobRow` ← 04 (declared), 08 and 09 (run). Their page handlers
+  reject with main's refusal text (04, 09), which only a reporting run sees.
 - `work-board.showTicket` (arg: a ticket key string), run by id only and never imported. Task 11 declares it in this
   same wave, so neither task waits on the other. 12's manifests test pins the id once both land.
 - tree: `MODES_SHOW` and `CORE_OPEN_LINK` (`src/contracts/commands.ts`), `services.editor` (`EditorHost.create`),
+  `services.toast`, `api.commands.runFor` (`PluginCommands.runFor`, `src/contracts/plugin.ts`), `errorText`,
   `createBaseKit` and `ownerBaseKitDeps` (`src/shared/page/layout-host/base-kit.ts`), `readLayoutParts`,
   `placeWrites` (`src/shared/page/place-slot.ts`), `createReducerStore`, `createLayoutParts`
 
@@ -66,8 +70,9 @@ Produces:
   - `export function shownItems(work: WorkState, view: InboxViewState): WorkItem[]`
   - `export function cardActions(item: WorkItem, view: InboxViewState): readonly InboxCardAction[]`
   - `export function emptyReason(work: WorkState, view: InboxViewState): InboxEmptyReason`
-  - `export function statusLine(job: WorkState['job'], now: number): InboxStatusInput`
-- `export function createInboxView(deps: InboxViewDeps): InboxView` in `page/inbox-view.ts`. `InboxView` has:
+  - `export function prunedDrafts(drafts: Record<string, string>, work: WorkState): Record<string, string>`
+- `export function createInboxView(deps: InboxViewDeps): InboxView` in `page/inbox-view.ts`. `InboxViewDeps` carries
+  `runFor` (`api.commands.runFor`), `toast` and `log` beside the layout and editor deps. `InboxView` has:
   - `sheet` and `sideBar`
   - `shown()`, `hidden()`, `focusMain()`, `focusSideBar()`, `sideBarHidden()`, `sideBarOpenedOver()`
   - `stateChanged(value: WorkState | undefined)`
@@ -76,7 +81,8 @@ Produces:
   - `dispose()`
   - `commands`: every no-arg page command but `showMode`
   - `filterTicket(key: string)`, `selectItem(id: string)`, `selectSection(id: string)`, `sendItem(id: string)`,
-    `openTicket(key: string)`
+    `openTicket(key: string)`, and `pressItem(action: InboxCardAction, id: string)`, which the five arg-taking card
+    commands (`dismissItem`, `restoreItem`, `snoozeItem`, `addItemToBoard`, `startItemSession`) call
 - `export function sampleInboxState(now: number): WorkState` in `page/sample-state.ts`.
 - `export function registerDemoSteps(services: PageServices, deps: InboxDemoPageDeps): Disposable` in `page/demo-steps.ts`.
 - `export interface InboxLayout` and `CompleteInboxLayout` in `layouts/layout.d.ts`, with the parts under Layout contract.
@@ -86,7 +92,8 @@ Produces:
 
 04's `work/contract.ts` holds every field and command this view reads. The ones beyond plan.md's lists:
 - `WORK_SECTIONS`, the nav's order.
-- `WorkItem.sending`: the text of a queued or running Send or nudge, else null.
+- `WorkItem.sending`: the text of a queued or running Send or nudge, else null. A press keeps the item `open` with
+  `sending` set until its job ends; success clears the item, and failure clears `sending` and sets `note` (08).
 - `WorkState.problem`: why `work.json` was not read at start, else null.
 - The arg shapes:
   - `work.send` takes `WorkSendArg` (`{ itemId, text }`). On a Waiting on others item it queues a `nudge` job.
@@ -94,6 +101,10 @@ Produces:
   - `work.startSession` takes `WorkStartArg` (`{ source: 'item', id }`).
   - `work.sweep` and `work.openJobRow` take none.
 - The `CommandKey` exports `workSendCommand` and `workStartSessionCommand`.
+- `statusLine` and `WorkStatusLine` (Consumes). `WorkStatusLine.tone` is `'idle' | 'running' | 'success' | 'error'`,
+  each a `DotStatus` value, so the view passes it to the layout unchanged. Its text is the copy under Pinned values,
+  and `hasRow` follows 09's `openJobRow` rule: true only when `job.last` has a `rowId` with a saved record, whatever
+  `job.running` holds, since a running job's row has no side-bar place to open.
 
 04's `job` holds only `running` and `last`, so the status line shows no queued count.
 
@@ -128,75 +139,120 @@ Produces:
   carries Dismiss, and every card that is not open carries Restore. A Needs you card has a `status-warning` start edge
   at `indicator-width`. The default layout's CSS draws it, since the Card primitive's edges are `attention` and
   `error` only (DESIGN.md § Primitives). Task 14 checks this edge against `--wg-status-warning`.
-- **Card presses.** Each layout button runs a command through `kit.button(parent, label, qualifiedId, { arg })`:
-  - Dismiss, Restore, Snooze 1 day, Add to Board and Start session run the `work.*` command with the item id, or with
-    `{ source: 'item', id }` for Start session.
-  - Open in Slack runs `core.openLink` with `item.url`.
+- **One run path for work commands.** `kit.button` and `commands.run` cannot show a refusal: `KitCommands.run`
+  returns `void` and logs a failure, and `PluginCommands.run` resolves on a handler failure. Only
+  `PluginCommands.runFor(id, arg, sessions)` rejects with the handler's failure. So the view runs every command of
+  another plugin through one internal path, `runWork(id, arg)`:
+  - It calls `deps.runFor(id, arg, {})`. A key or click carries no session, so `sessions` is `{}`.
+  - On a rejection it logs `<id> failed: <errorText>` and toasts the `errorText` with tone `error`. Once the view is
+    disposed it does nothing.
+  - It never throws, and the caller does not await it.
+  - `openTicket` runs `work-board.showTicket` through it too, but toasts `Board is off: switch on work-board in
+    Settings` in place of the error text.
+  Every work command the view runs goes through `runWork`: the buttons, the keys and the `W` and `gs` binds. The
+  layout's buttons therefore run this view's own commands, never a `work.*` id, and 12 binds `W` and `gs` to this
+  view's `sweep` and `showJobRow`. Backlog has no reporting run to copy here: its view toasts its own channel's
+  rejections, a channel this view does not own.
+- **Card presses.** Each layout button runs a `work-inbox` command through `kit.button(parent, label, qualifiedId,
+  { arg })`:
+  - Dismiss, Restore, Snooze 1 day, Add to Board and Start session run `work-inbox.dismissItem`, `restoreItem`,
+    `snoozeItem`, `addItemToBoard` and `startItemSession` with the item id. Each calls `pressItem(action, id)`, which
+    runs `work.dismiss`, `work.restore`, `work.snooze` or `work.addToBoard` with the id, or `work.startSession` with
+    `{ source: 'item', id }`, through `runWork`.
+  - Open in Slack runs `core.openLink` with `item.url`. It opens a link and refuses nothing, so it needs no
+    `runWork`.
   - Send runs `work-inbox.sendItem` with the item id, since only the view holds the box's text.
-  - A ticket chip runs `work-inbox.openTicket` with its key. The view then runs `work-board.showTicket`, so a card still
-    draws while work-board is off. A rejected run toasts `Board is off: switch on work-board in Settings`.
+  - A ticket chip runs `work-inbox.openTicket` with its key, so a card still draws while work-board is off.
   - A card's own click runs `work-inbox.selectItem` with its id, as Backlog's `selectRow` does.
-  Keys run the no-arg view commands, which act on the cursor card. A rejected work command logs
-  `<command> failed: <text>` and toasts the text, as Backlog's invokes do.
+  - The status line's Show transcript runs `work-inbox.showJobRow`, and the `never` empty line's hint names
+    `work-inbox.sweep`.
+  Keys run the no-arg view commands, which act on the cursor card through the same `pressItem`.
+- **A key whose action the card lacks.** Every per-card key is bound in the whole `list` scope, but a card offers only
+  its `cardActions`. A key whose action is not in the cursor card's `cardActions`, or whose button draws disabled (Send
+  while `isSending`), runs nothing and logs `no <command> for <id>`, `<command>` being the view command's short name
+  (`no restore for fixture-needs-you`). `i` on a card with no draft area logs `no editDraft for <id>`. With no cursor
+  card, each per-card key logs `no card`. The view never lets a work command refuse an action the card did not offer.
+  `t` (`ticketOnBoard`) takes the card's first ticket key, in `ticketKeys` order; a card with none logs
+  `no ticketOnBoard for <id>`.
 - **The draft box.** Only the cursor card's draft is a vim box: `services.editor.create`, placed through the card kit's
   `draftBox` slot. Every other card shows its draft as plain wrapped text. The box opens on the user's edit for the
   item, else the item's `draft`, else empty with the placeholder `Write a reply…`. Each edit goes into
   `drafts[itemId]` in the view state and the place slot, so a redraw, a sweep or a page reload keeps unsent text.
-  A sweep that brings a new `draft` for an item the user has edited keeps the user's text.
+  A sweep that brings a new `draft` for an item the user has edited keeps the user's text. On each state change,
+  `prunedDrafts` drops the edit of every id that is no longer in `WorkState.items`, and keeps the edit of an item in
+  any state, so the place slot cannot grow without bound and a Restore brings back the user's text.
   `i` (`editDraft`) focuses the box and sets the `box` scope. `Esc` (`leaveBox`, `where: 'box'`) returns to the `list`
   scope. A redraw while the box has focus keeps the box element and its editor, as Backlog keeps its filter frame.
 - **Send.** `send` (Cmd+Enter in the list or the box) and `sendItem(id)` read the item's text: the edit, else the
   draft. Blank text toasts `Nothing to send` (`info`) and runs nothing. Otherwise they run `work.send { itemId, text }`
-  and drop the edit. While `item.sending` is set, the box shows that text read-only, Send is disabled and its label is
-  `Sending…`.
+  through `runWork` and drop the edit. The item stays `open` in its section while `item.sending` is set (08), so the
+  sending state shows in every section and under All: the box shows the `sending` text read-only, Send is disabled and
+  its label is `Sending…`. The item leaves the section once its job succeeds and main clears it. A failed job clears
+  `sending` and sets `note`, which the card shows in `status-error`, with the box editable again.
 - **Problem.** While `WorkState.problem` is set, the head shows it as a `status-error` line above the list.
-  The item leaves the section once main clears it (08).
-- **Status line.** `statusLine(job, now)` reads `job.running`, else `job.last`. Its text and tone are under Pinned
-  values. The **Show transcript** button runs `work.openJobRow`, and shows only while the job it describes has a
-  `rowId`. `gs` runs the same command. The line's age redraws once a minute through `services.timers`.
+- **Status line.** The view draws 04's `statusLine(job, now)` (Contract needs). Its text describes `job.running`, else
+  `job.last`, with the copy under Pinned values. The **Show transcript** button runs `work-inbox.showJobRow`, which runs
+  `work.openJobRow` through `runWork`, and draws only while `hasRow` is true: the last finished job has a saved row.
+  While a job runs, the button still opens the last finished job's row. `gs` runs `showJobRow` too. The line's age
+  redraws once a minute through `services.timers`.
 - **Empty list.** `emptyReason` returns one of:
   - `never`: no job ever ran and no item exists
   - `section`: the section has no open item
   - `filter`: no open item holds the filter key
   The `empty` part draws one EmptyState line, with the `W` hint on `never`.
+- **First show.** With no place to put back, the view opens on `needs_you`, with `sectionCursor` on that row, focus on
+  the list, and the cursor on the section's first card in shown order (none when it is empty). That placement logs
+  `section Needs you`, then `selected <title>` when there is a card. A page load with a saved place opens on that
+  place instead (Place), and logs its section and cursor the same way.
 - **Cursor.** j/k/gg/G move the cursor card in shown order. The cursor card carries the focus ring and its cursor
-  prompt. When the cursor's item leaves the list, the cursor moves to the next card in shown order, else the previous
-  one, else none. The view logs these lines, which 13's self-test checks:
+  prompt. A section change, a filter and a clear each put the cursor on the new list's first card. When the cursor's
+  item leaves the list, the cursor moves to the next card in shown order, else the previous one, else none. The view
+  logs these lines, which 13's self-test checks:
   - `shown`, each time the mode shows
-  - `selected <title>`, on each cursor move
+  - `selected <title>`, on each cursor move and each placement
+  - `section cursor <title>`, on each move of the side bar's section cursor
   - `section <title>`, on each section change
   - `filter <KEY>` and `filter cleared`
   - `sections focused`, `list focused` or `box focused`, on each focus change
-- **Side bar keys.** j/k/gg/G move the section cursor. Enter opens the section and moves focus to main, and `l` opens
-  it keeping focus (`docs/keymap.md`, A side-bar list).
+  - `no <command> for <id>` and `no card` (A key whose action the card lacks)
+- **Side bar keys.** j/k/gg/G move only `sectionCursor` and log `section cursor <title>`; they do not change the shown
+  section. Enter opens the cursor's section and moves focus to the list, and `l` opens it keeping focus
+  (`docs/keymap.md`, A side-bar list). Each open logs `section <title>`. While a filter is set, opening a section drops
+  the filter.
+- **Focus from another view.** `filterTicket(key)` and `selectItem(id)` show the mode and focus the list, so the
+  list's keys (`Esc` clearing the filter) act at once. `selectItem` of an id not in the shown list switches to All
+  first, since the item may not be open.
 - **Place.** `section`, `ticketFilter`, `cursorId` and `drafts` go to `workInboxPlaceSlot` on each change, and a page
   load puts the last page's place back once the first state lands, as Backlog does with `backlog.place`. The title
   bar's context is `{ title: 'Inbox', detail: <section title, or the filter key> }`.
 - **Demo step.** `sampleInboxState(now)` is this view's own sample. The views may not import `work/main` (plan.md
   Boundary rules), so the work fixture is out of reach. The sample holds at least:
-  - two Needs you items, one with a worker draft
+  - two Needs you items, one with a worker draft. The first in shown order (the newest `at`) holds a ticket key, so
+    beat 1 places the `t` anchor.
   - one each in You promised, My threads, Around Slack (with a `why`) and Worth knowing (with a `why`)
   - one Waiting on others item with a nudge
-  - one dismissed item
-  - ticket keys on three items
-  - `job.last`: a finished sweep with a `rowId`
+  - one dismissed item, the newest `at` of all seven, so beat 3's cursor lands on it as the first card under All
+  - ticket keys on three items, the first Needs you item among them
+  - `job.last`: a finished sweep with a `rowId`, so `hasRow` is true and the `gs` anchor draws
   `showSample(state)` draws the sample in place of the slot until its dispose, and holds the place slot. Its beats
   are:
   1. `needs you`: Inbox shown, cursor on the first Needs you card
   2. `waiting`: section Waiting on others, cursor on its card
   3. `all`: section All, cursor on the dismissed card
-  Together they draw every card action's anchor in the `list` scope, so the self-test's end-of-run placement check
-  finds every bind 12 adds there. The step presses nothing and launches no worker. A key pressed during the demo acts
-  on sample ids, which main refuses, and the refusal toasts. That is acceptable.
+  Together they draw every card action's anchor in the `list` scope: beat 1 places `i`, Cmd+Enter, `d`, `s`, `b`
+  and `t`, beat 2 `z`, beat 3 `u`, and every beat `W` and `gs`. So the self-test's end-of-run placement check finds
+  every bind 12 adds there. The step presses nothing and launches no worker. A key pressed during the demo acts on
+  sample ids, which main refuses, and `runWork` toasts the refusal. That is acceptable.
 - **The Dock badge is not this view's.** Alerts is a main service (`src/main/alerts/`), so work main sets the Needs you
   count (04 or 09). The view only draws the nav count.
 - **Keys** are listed under Pinned values. Task 12 writes every bind in `src/plugins/keymap.ts`. This task declares
   the commands and scopes and places every anchor:
-  - `W` sweep as a box hint in the list head, and again in the side bar's header for the `sections` scope
+  - `W` (`work-inbox.sweep`) as a box hint in the list head, and again in the side bar's header for the `sections`
+    scope
   - Cmd+Enter as Send's control hint
   - `i` on the cursor card's draft
   - `d`, `z`, `u`, `b`, `s` and `t` in the cursor card's prompt, each shown only where its action applies
-  - `gs` as the Show transcript button's control hint
+  - `gs` (`work-inbox.showJobRow`) as the Show transcript button's control hint
   Ctrl+n needs no anchor of its own: Backlog's three scopes bind it and place none.
 - **Lint until 12.** `npm run lint`'s composition check fails on the new folder until 12 registers it in
   `src/plugins/main.ts`, `page.ts` and `manifests.ts`. That one failure is expected at this task's proof. The style
@@ -219,10 +275,11 @@ Copy this view chooses:
 - The state Tags under All: `cleared`, `dismissed`, and `snoozed until <MMM d>`.
 - The filter chip: `<KEY> ✕`.
 - Empty lines:
-  - `never`: `Nothing gathered yet: sweep Slack and Jira` with the `work.sweep` hint
+  - `never`: `Nothing gathered yet: sweep Slack and Jira` with the `work-inbox.sweep` hint
   - `section`: `Nothing in <section title>.`
   - `filter`: `No open threads for <KEY>.`
-- The status line, for the job `running ?? last`. The kind words are sweep `Sweep`, send `Send`, move `Move` and
+- The status line's copy, which 04's `statusLine` returns and its table test pins; the Board shows the same. It is
+  for the job `running ?? last`. The kind words are sweep `Sweep`, send `Send`, move `Move` and
   nudge `Nudge`. `<ago>` is `just now`, `<n>m ago`, `<n>h ago` under 48 hours, else `<n>d ago`. Its forms:
   - none: `No job yet`, tone `idle`
   - queued: `<Kind> queued`, tone `running`
@@ -251,11 +308,20 @@ Commands (`workInboxManifest.commands`, every one `runsIn: 'page'`):
 | `startSession` | | `start a session` |
 | `ticketOnBoard` | | `show its ticket on the Board` |
 | `clearFilter` | | `clear the ticket filter` |
+| `sweep` | | `sweep Slack and Jira` |
+| `showJobRow` | | `show the last job's transcript` |
 | `filterTicket` | `'string'` | `show the threads of a ticket` |
 | `selectItem` | `'string'` | `select this card` |
 | `selectSection` | `'string'` | `show this section` |
 | `sendItem` | `'string'` | `send this card's draft` |
 | `openTicket` | `'string'` | `show this ticket on the Board` |
+| `dismissItem` | `'string'` | `dismiss this card` |
+| `restoreItem` | `'string'` | `restore this card` |
+| `snoozeItem` | `'string'` | `snooze this card 1 day` |
+| `addItemToBoard` | `'string'` | `add this card to the Board` |
+| `startItemSession` | `'string'` | `start a session from this card` |
+
+`sweep` runs `work.sweep` and `showJobRow` runs `work.openJobRow`, each through `runWork`, so their refusals toast.
 
 Scopes:
 - `sections`: `In the Inbox sections`
@@ -267,8 +333,8 @@ in `any`, which holds no raw key.
 
 | Scope | Keys → command |
 | --- | --- |
-| `work-inbox.sections` | `j` sectionDown · `k` sectionUp · `gg` sectionTop · `G` sectionBottom · `<CR>` openSection · `l` peekSection · `W` `work.sweep` · `<C-n>` `chat.startNewSession` |
-| `work-inbox.list` | `j` listDown · `k` listUp · `gg` listTop · `G` listBottom · `<CR>` openSlack · `i` editDraft · `<D-Enter>` send · `d` dismiss · `z` snooze · `u` restore · `b` addToBoard · `s` startSession · `t` ticketOnBoard · `<Esc>` clearFilter · `W` `work.sweep` · `gs` `work.openJobRow` · `<C-n>` `chat.startNewSession` |
+| `work-inbox.sections` | `j` sectionDown · `k` sectionUp · `gg` sectionTop · `G` sectionBottom · `<CR>` openSection · `l` peekSection · `W` sweep · `<C-n>` `chat.startNewSession` |
+| `work-inbox.list` | `j` listDown · `k` listUp · `gg` listTop · `G` listBottom · `<CR>` openSlack · `i` editDraft · `<D-Enter>` send · `d` dismiss · `z` snooze · `u` restore · `b` addToBoard · `s` startSession · `t` ticketOnBoard · `<Esc>` clearFilter · `W` sweep · `gs` showJobRow · `<C-n>` `chat.startNewSession` |
 | `work-inbox.box` | `<D-Enter>` send · `<Esc>` leaveBox (`where: 'box'`) · `<C-n>` `chat.startNewSession` |
 
 Why these keys:
@@ -290,8 +356,9 @@ parts:
   `is-selected` and `is-cursor` and the click.
 - `main(parent, kit: MainKit): InboxPane`. Its slots are `status` → `div.work-inbox-status-slot`,
   `filter` → `div.work-inbox-filter-slot` and `cards` → `ol.work-inbox-cards`.
-- `status(parent, input: InboxStatusInput, kit)`. `InboxStatusInput` is `{ text, tone: DotStatus, hasRow }`. It draws
-  the Show transcript button only when `hasRow` is true.
+- `status(parent, input: InboxStatusInput, kit)`. `InboxStatusInput` is `{ text, tone: DotStatus, hasRow }`, filled
+  from 04's `WorkStatusLine` field for field. It draws the Show transcript button, running `work-inbox.showJobRow`,
+  only when `hasRow` is true.
 - `filter(parent, input: { ticketKey: string }, kit)`.
 - `card(parent, input: CardInput, kit: CardKit)`. `CardKit` adds the `draftBox(parent)` slot, placed only on the cursor
   card while it has a draft area. `CardInput` holds:
@@ -317,13 +384,23 @@ parts:
   text and its focus.
 - GIVEN an edited draft WHEN `send` runs THEN `work.send` runs with `{ itemId, text }` holding the edited text, and
   the edit is dropped. GIVEN blank text THEN it toasts `Nothing to send` and runs nothing.
-- GIVEN `item.sending` set WHEN the card draws THEN Send reads `Sending…` and is disabled, and the box is read-only.
+- GIVEN an open Needs you item with `item.sending` set WHEN its card draws in Needs you THEN Send reads `Sending…` and
+  is disabled, and the box is read-only. WHEN `send` runs on it THEN it logs `no send for <id>` and runs nothing.
 - GIVEN the cursor card leaves the shown list WHEN the slot changes THEN the cursor moves to the next card, else the
   previous one.
-- GIVEN `job.running` is a running sweep with a `rowId` WHEN the status draws THEN it reads
-  `Sweep running · started <ago>` in tone `running`, with Show transcript.
+- GIVEN `job.running` is a running sweep and `job.last` is null WHEN the status draws THEN it reads
+  `Sweep running · started <ago>` in tone `running`, with no Show transcript. GIVEN `job.last` is a done sweep with a
+  saved row THEN Show transcript draws, also while another job runs.
+- GIVEN `work.dismiss` rejects with `x is not open` WHEN Dismiss is pressed or `d` runs THEN the view logs
+  `work.dismiss failed: x is not open` and toasts `x is not open` with tone `error`. The same holds for `W` and `gs`.
+- GIVEN the cursor on an open Needs you card WHEN `u` runs THEN it logs `no restore for <id>` and runs no command.
+- GIVEN a card with ticket keys `['ABC-1', 'ABC-2']` WHEN `t` runs THEN `work-board.showTicket` runs with `ABC-1`.
 - GIVEN `openTicket('ABC-1')` WHEN `work-board.showTicket` rejects THEN the view toasts
   `Board is off: switch on work-board in Settings`.
+- GIVEN an edit for an item WHEN a slot change no longer holds the item THEN the edit leaves the view state and the
+  place. GIVEN the item is dismissed instead THEN the edit stays, and a Restore shows it.
+- GIVEN no saved place WHEN the mode first shows THEN Needs you is shown with the cursor on its first card, logging
+  `section Needs you` then `selected <title>`.
 
 ## Tests
 
@@ -332,21 +409,31 @@ parts:
   - `shownItems filters by section, All and ticket key, newest first`: table.
   - `cardActions gives each section and state its actions`: a table over Needs you open, Waiting open, Around open,
     and dismissed under All, asserting the exact action lists from the `CardInput.actions` order.
-  - `statusLine words each job state`: a table of none, queued, running, done, failed and noted, with the exact text
-    and tone under Pinned values.
-  - `inboxReducer keeps the cursor on a neighbour when its item leaves`.
+  - `inboxReducer keeps the cursor on the next card, else the previous, when its item leaves`: table.
+  - `inboxReducer clears the filter back to the section shown before it`.
   - `emptyReason names never, section and filter`.
-- `inbox-view.test.ts`, on the fake DOM and editor as `backlog-view.test.ts` uses them:
+  - `prunedDrafts keeps edits of items in any state and drops the rest`: table.
+  The status line's words are 04's `statusLine` table test; this task adds no copy of it.
+- `inbox-view.test.ts`, on the fake DOM and editor as `backlog-view.test.ts` uses them, with a fake `runFor`:
   - `send runs work.send with the edited text and drops the edit`
   - `blank send toasts and runs nothing`
+  - `a sending card reads Sending…, disables Send and keeps its section`
   - `a slot change keeps the focused draft box and its text`
+  - `a rejected work command logs and toasts its text`: a table over a button press, a key, `W` and `gs`, each
+    asserting that `runFor` ran the `work.*` id and the toast holds the rejection text.
+  - `a key whose action the card lacks logs and runs nothing`: a table over `u` on an open card, `z` on Needs you,
+    `i` on an Around card and `d` on a dismissed card.
+  - `t runs the board command with the card's first ticket key`
   - `openTicket toasts when the board command rejects`
+  - `Show transcript draws only while hasRow is true`
+  - `the Needs you count draws as a warning Tag while over 0`
+  - `first show opens Needs you on its first card and logs both lines`
   - `each focus change sets its scope and logs it`
   - `the Needs you card carries is-direct`
 - `start.test.ts`:
   - `showMode shows the mode and leaves it shown`
   - `a page load puts back the place`
-  - `filterTicket shows the mode filtered`
+  - `filterTicket shows the mode filtered with the list focused`
 - `demo-steps.test.ts`: `the Inbox step registers and its beats enter and dispose without throwing`, as
   `backlog/page/demo-steps.test.ts` does.
 - `read-layout.test.ts`: as Backlog's, over this contract's parts.

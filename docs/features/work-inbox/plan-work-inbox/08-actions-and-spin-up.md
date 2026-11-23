@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · every press as a pure change of the work file, the job each press queues, spin-up, and chat's `newSessionWithDraft` page export
+Rung: deep · chat's `newSessionWithDraft` page export waits across processes for a `chat.session` key, through the start prompt's async steps, a dropped prompt and the page's stop; the press marks must agree with the job runner's lifecycle
 Wave: 2 · Depends on: 03 (both edit `src/plugins/chat/contract.ts`), 04
 Plan: [plan.md](plan.md)
 
@@ -37,8 +37,9 @@ Consumes:
 - From the tree:
   - `ChatMainExports.launch`, `projects()`, `defaultProfile`, plus `ChatProject`, `LaunchRequest`,
     `ChatPageExports` and `chatPageKey` (`src/plugins/chat/contract.ts`)
-  - the start prompt's `openForNewSession` path and `fillComposer` (`src/plugins/chat/page/start-prompt.ts`,
-    `chat-commands.ts`)
+  - the start prompt's `openForNewSession` path, its `isStopped` and sign-in steps, and `fillComposer`
+    (`src/plugins/chat/page/start-prompt.ts`, `chat-commands.ts`)
+  - `chatSessionSlot` (`src/plugins/chat/contract.ts`), read in chat's page for the wait
   - notes' visible launch, the pattern spin-up follows (`src/plugins/notes/main/note-sender.ts`, `toSession`)
   - `PageServices.toast`, `ToastTone` (`src/contracts/plugin.ts`), `PluginLog`, `errorText`
 
@@ -65,7 +66,9 @@ export function acceptSuggestion(file: WorkFile, cardId: string, columns: readon
 export function notYet(file: WorkFile, cardId: string): ActionResult | Refusal
 export function deleteTask(file: WorkFile, cardId: string): ActionResult | Refusal
 export function jobEnded(file: WorkFile, job: WorkJob, end: JobEnd, now: number): WorkFile   // the same object when nothing changes
+export function clearStaleMarks(file: WorkFile, pending: readonly WorkJob[]): WorkFile      // the same object when none is stale
 export function isRefusal(result: ActionResult | Refusal): result is Refusal
+export const LOST_JOB_NOTE = 'Its job was lost in a restart.'
 export const SNOOZE_MS = 24 * 60 * 60 * 1000
 export const LOCAL_START_COLUMN = 'Todo'
 ```
@@ -114,6 +117,10 @@ Decisions:
   `jiraStatuses` from the settings.
 
 **Inbox items (actions.ts)**
+- **A sending item takes no other press.** While an item's `sending` is not null, `dismiss`, `snooze` and `send`
+  refuse with `<itemId> is sending`, checked before any other refusal of theirs. `restore` needs no check: a sending
+  item is `open`, so it refuses with `<itemId> is already open`. This keeps the mark and the queued job in step: a
+  second job for the item never reaches 05's queue, and the end of the job never meets an item the user moved away.
 - **`dismiss`** sets `state: 'dismissed'` and `snoozedUntil: null`, from any state but `dismissed`.
 - **`restore`** sets `state: 'open'` and `snoozedUntil: null`, from `cleared`, `dismissed` or `snoozed`.
 - **`snooze`** sets `state: 'snoozed'` and `snoozedUntil` to the ISO time of `now + SNOOZE_MS`. Only an `open` item
@@ -123,8 +130,9 @@ Decisions:
 - **Clearing** of items the user replied to is 06's `mergeRecordedItems` (`clear`). This task has no clear action.
 - **`send`**:
   - It is allowed on an `open` item whose `arg.text` is not empty after trimming. The text is kept as given.
-  - It sets the item's `draft` and `sending` to `arg.text`, `state: 'cleared'` and `note: null`. The clear is
-    optimistic, so the item leaves Needs you, and the Dock badge drops, at the press.
+  - It sets the item's `draft` and `sending` to `arg.text` and `note: null`, and keeps `state: 'open'`. The item stays
+    in its section, showing `Sending…`, until its job ends (`jobEnded`): success clears it, failure reopens the
+    draft with a note. The Dock badge drops when the job succeeds, not at the press.
   - Its job is `{ kind: 'nudge', itemId, text }` for an item whose `section` is `waiting`, and
     `{ kind: 'send', itemId, text }` for any other. So `work.send` on a Waiting on others item queues a nudge, as
     10 assumes.
@@ -149,8 +157,14 @@ Decisions:
     refuses, checked in this order:
     1. `Other has no Jira status` for `OTHER_COLUMN`
     2. `No column <column>` for any other name not in `columns`
-    3. `Already moving to <movingTo>` while `movingTo` is set
-    4. `Already in <column>` for the card's own column
+    3. `No Jira status in <column>` for a column whose `jiraStatuses` is empty, since the worker could never reach
+       one and the settings allow such a column
+    4. `Already moving to <movingTo>` while `movingTo` is set
+    5. `Already in <column>` for the card's own column
+
+    Column names are matched as `columnForStatus` matches statuses, trimmed and case-insensitive, and `movingTo`, the
+    job's `column` and the refusal texts carry the `columns` entry's own `name`. A local task's move matches the
+    same way.
 - **`acceptSuggestion`** finds the card's entry in `file.suggestions`. With none, it refuses with
   `No suggestion for <cardId>`. A `done` entry refuses with `Already in <column>`. Otherwise it is `moveCard` to the
   entry's `column`, and it also drops the card's entries from `file.suggestions`, so the block leaves at once.
@@ -161,13 +175,24 @@ Decisions:
   with `Only a local task can be deleted`.
 
 **Job ends (actions.ts)**
-- **`jobEnded`** is the store side of each job's end. 09 runs it from 05's `ended(job, outcome)`.
-  - **A `send` or `nudge`** sets the item's `sending` to null. When `end.ok` is false, the item goes back to `open`
-    with its `draft` kept and `note` set to `Send failed: <end.note>`, or `Send failed` when the note is null.
+- **`jobEnded`** is the store side of each job's end. 09 runs it from 05's `ended(job, outcome)`, and also for a
+  press whose job was never queued (09 § Commands), with `{ ok: false, note: 'Not queued: <errorText>' }`, so a press
+  never leaves its mark with no job behind it.
+  - **A `send` or `nudge`** sets the item's `sending` to null. When `end.ok` is true, an `open` item becomes
+    `cleared` (one a sweep already cleared stays `cleared`) and its `note` is null. When `end.ok` is false, the item
+    keeps its state, its `draft` is kept, and `note` is `Send failed: <end.note>`, or `Send failed` when the note is
+    null. Since a sending item takes no dismiss or snooze, a failed send finds it `open`, or `cleared` by a sweep
+    that saw the user reply in Slack meanwhile.
   - **A `move`** sets the card's `movingTo` to null. Its `note` is null when `end.ok` is true, else `end.note`, or
     `Move failed` when that is null. 06's ticket record has already written the new `jiraStatus` and `movedAt`.
   - **A `sweep`** is `expireSnoozes(file, now)`.
   - An item or card that is gone changes nothing.
+- **`clearStaleMarks(file, pending)`** clears the marks no job holds, for 09's start. An
+  item whose `sending` is set, with no `send` or `nudge` for its id in `pending`, gets `sending: null` and `note:
+  Send failed: <LOST_JOB_NOTE>`, its state kept. A card whose `movingTo` is set, with no `move` for its key in
+  `pending`, gets `movingTo: null` and `note: LOST_JOB_NOTE`. `pending` is 05's `JobRunner.pending()`, the running
+  job then the queued ones. This covers a `queue.json` lost or unreadable at start, where 05 starts empty and a saved
+  mark would otherwise outlive its job for good.
 
 **Spin-up (spin-up.ts)**
 - **The target** is 04's `WorkStartArg`. `source: 'card'` targets the card whose `id` is `arg.id`, and
@@ -196,6 +221,12 @@ Decisions:
 - **`spinUpMessage`** is harness-neutral text (Pinned values). Its threads are the items whose `ticketKeys` hold the
   card's key (upper-cased), in any state, newest `at` first, at most `SPIN_UP_THREADS`. A local task's thread is its
   source item, when that item still exists.
+- **An item with tickets** builds the Jira card form for its first `ticketKeys` entry, `<KEY>`.
+  - The title and url come from the Jira card with that key when the board holds one, else from the item itself
+    (`Work on <KEY>: <item.title>` and `<item.url>`). Add to Board refuses only for a key on the board, so an item's
+    key need not name a card.
+  - The thread list starts with the item itself, then the other items naming `<KEY>`, newest first, with the item not
+    repeated. The item counts toward the `SPIN_UP_THREADS` five.
 
 **The page (`page/start.ts`)**
 - The `startSession` handler is the one handler that is not a bare invoke:
@@ -217,15 +248,30 @@ Decisions:
 - The box fills once chat's view holds the new session's tab. A session started through the channel's `start` gets
   its tab once its `chat.session` key reaches the page, so the fill waits for that rather than calling
   `fillComposer` straight after `reveal`. That call would log `fillComposer for unknown session` and drop the text.
-- It resolves to the row id once the fill is done. It resolves null when the user leaves the prompt at any step, when
-  a start fails, or when the prompt opens again and drops this one ("Opening the prompt again drops the earlier one").
-  It never rejects.
+- **The wait.** Once the start resolves to the new row id, the export reads the page's `chat.session` slot. When the
+  key is already there it fills at once. Otherwise it listens on the slot for that key, and fills on the first
+  update that holds it. The listener is disposed when the fill runs, when the wait resolves null, and when the page
+  stops. The fill reveals the new session's tab and focuses its box, as `fillComposer` does; that is the tab the
+  start has just revealed, so nothing the user chose is taken away.
+- It resolves to the row id once the fill is done. It resolves null, and never rejects, on each of these:
+  - the user leaves the prompt at any step: Esc at the project, folder, profile or session step
+  - the sign-in dialog finishes signed out or cancelled
+  - the prompt cannot open: no profiles, or chat's `defaultHarness` not registered, which toasts and opens nothing
+  - a start fails
+  - the prompt opens again and drops this one ("Opening the prompt again drops the earlier one")
+  - the page stops (`isStopped()`) at any point before the fill
+  - the new row's `chat.session` key leaves before the fill, because the session closed
+  - `JOIN_WAIT_MS` (10 000 ms) passes after the start resolved with no key, logged as
+    `newSessionWithDraft: <rowId> never reached the page`
 - Chat has no other path that opens the prompt with text ready, which is why it is an export. The `chat.newSession`
   command takes no argument, and command args cannot be optional (`checkCommandArg`). This is the one chat change in
   this task.
 
 Pinned values:
-- `SNOOZE_MS = 86400000`, `LOCAL_START_COLUMN = 'Todo'`, `SPIN_UP_THREADS = 5`
+- `SNOOZE_MS = 86400000`, `LOCAL_START_COLUMN = 'Todo'`, `SPIN_UP_THREADS = 5`,
+  `LOST_JOB_NOTE = 'Its job was lost in a restart.'`
+- Chat's `JOIN_WAIT_MS = 10000`, a constant in `chat/page/start-prompt.ts`, and its log line
+  `newSessionWithDraft: <rowId> never reached the page`
 - `ActionResult.log` lines, which 09 logs under `[work]`:
   - `dismissed <itemId>`
   - `restored <itemId>`
@@ -242,6 +288,8 @@ Pinned values:
   - `restore` of an open item: `<itemId> is already open`
   - `snooze` of an item that is not open: `Only an open item snoozes`
   - `send` of an item that is not open: `<itemId> is not open`; of blank text: `Nothing to send`
+  - `dismiss`, `snooze` or `send` of a sending item: `<itemId> is sending`
+  - `moveCard` (and `acceptSuggestion`) to a column with no statuses: `No Jira status in <column>`
 - The spin-up message for a Jira card, with each `<…>` filled in and a blank line before the thread list:
 
   ```
@@ -265,33 +313,44 @@ Pinned values:
   Latest: <latest>
   ```
 
-  An item with tickets uses the Jira card form for its first card, with the item itself listed first among the
-  threads.
+  An item with tickets uses the Jira card form for its first key, as Decisions › An item with tickets says.
 
 GIVEN `work.projects` `[{ "jiraProject": "ABC", "project": "gamma" }]` and chat project `gamma` WHEN Session is pressed on `ABC-12` THEN chat launches `{ project: 'gamma' }` visibly with no owner, the page toasts `Session started in gamma`, and `ABC-12`'s `linkedSessionIds` holds the new row id
 GIVEN no mapping for `XYZ` WHEN Session is pressed on `XYZ-3` THEN the new-session prompt opens; once the user picks a project, the new session's box holds the message unsent, and the card links to the session
 GIVEN a Jira card in Todo WHEN it moves to In QA THEN it shows `movingTo: 'In QA'` and the job is `{ kind: 'move', key, column: 'In QA' }`
-GIVEN a `waiting` item WHEN `send` runs THEN the job is a `nudge` with the text, and the item is cleared with `sending` set
+GIVEN a `waiting` item WHEN `send` runs THEN the job is a `nudge` with the text, and the item stays open with `sending` set
+GIVEN a send job that ended ok WHEN `jobEnded` runs THEN the item is cleared and `sending` null
 GIVEN a send job that failed with note `x` WHEN `jobEnded` runs THEN the item is open, its draft kept, its note `Send failed: x`, and `sending` null
+GIVEN an item with `sending` set WHEN `dismiss` runs THEN it refuses `<itemId> is sending`
+GIVEN a saved `movingTo` and no pending move for its key WHEN `clearStaleMarks` runs THEN `movingTo` is null and the note is `Its job was lost in a restart.`
+GIVEN the new-session prompt from `newSessionWithDraft` WHEN the new session's key never reaches the page THEN it resolves null after 10 s
 GIVEN a snoozed item WHEN `expireSnoozes` runs 24 h after the snooze THEN it is open again
 
 Tests:
 - `actions.test.ts`, one table per action, each row a starting file, an argument and the expected file with its job,
   refusal and log line:
   - `dismiss` / `restore` / `snooze`: each state in, the state out, `snoozedUntil` exact to the ms; the refusal from a
-    wrong state
+    wrong state; `dismiss` and `snooze` of a sending item refused `<itemId> is sending`
   - `expireSnoozes`: one item before its end, one at it, one after; the same object back when none expired
-  - `send`: a `needs_you` item gives a `send` job and a `waiting` item a `nudge` job; `sending` and `draft` set; blank
-    text refuses; a cleared item refuses
+  - `send`: a `needs_you` item gives a `send` job and a `waiting` item a `nudge` job; `sending` and `draft` set and
+    `state` still `open`; blank text refuses; a cleared item refuses; a sending item refuses `<itemId> is sending`
   - `addToBoard`: a new local task in Todo; the first column when no Todo exists; an existing Jira card refused; a
-    second add refused
+    second add refused; no columns refused `The Board has no columns`
   - `moveCard`: a local task moves at once and sets `movedAt`; a Jira card gives the move job; Other, an unknown
-    column, already moving and the same column each refuse with their text
-  - `acceptSuggestion`: forward, the entry dropped; the `done` refusal; none refused
+    column, a column with no statuses, already moving and the same column each refuse with their text; a refusal
+    order table, each row a card and column that break two rules at once (Other while moving; an unknown column while
+    moving; a no-status column that is the card's own), expecting the earlier rule's text; a column named
+    ` in qa ` moves to `In QA`
+  - `acceptSuggestion`: a Jira card forward, the move job, the entry dropped; a local task's entry moves it at once,
+    sets `movedAt`, gives no job and drops the entry; the `done` refusal; none refused
   - `notYet`: the mark written from the entry and replacing an older one, the entry dropped; none refused
   - `deleteTask`: the task, its marks and entries removed; a Jira delete refused
-  - `jobEnded`: send ok, send failed, nudge failed with a null note, move ok, move failed, sweep expiring a snooze, and
+  - `jobEnded`: send ok clearing an open item, send ok on an item a sweep already cleared, send failed keeping state
+    and draft, nudge failed with a null note, a `Not queued: x` end, move ok, move failed, sweep expiring a snooze, and
     a gone item giving the same object
+  - `clearStaleMarks`: a `sending` with no pending send cleared with its note; one with a pending nudge for its id
+    kept; a `movingTo` with no pending move cleared; one with a pending move for its key kept; the same object back
+    when nothing is stale
   - `actions — never mutates its input`: deep-frozen files through every action
 - `spin-up.test.ts`, over a fake chat:
   - `startFromWork — target table`:
@@ -311,7 +370,9 @@ Tests:
 
     The launch request is asserted exactly: project, profile, text, `images: []`, and no `owner`, `unattended` or
     `permissions` key.
-  - `spinUpMessage`: the three forms verbatim; thread order and the five-thread cap
+  - `spinUpMessage`: the three forms verbatim; thread order and the five-thread cap; an item whose key names a
+    board card takes the card's title and url; an item whose key names no card takes its own title and url; the item
+    is listed first, not repeated, and counts toward the five
   - `spinUpCardIds`: a card itself; an item's Jira cards and local task
   - `linkSession`: appended once; a second link of the same id is a no-op
 - `page/start.test.ts` › `startSession` table, over a fake channel and a fake chat page:
@@ -324,6 +385,12 @@ Tests:
   - `newSessionWithDraft — Esc at the first step resolves null`
   - `newSessionWithDraft — opening the prompt again resolves the earlier one null`
   - `newSessionWithDraft — a failed start resolves null`
+  - `newSessionWithDraft — a key already on the page fills at once`
+  - `newSessionWithDraft — the page stopping resolves null and disposes the listener`
+  - `newSessionWithDraft — a cancelled sign-in resolves null`
+  - `newSessionWithDraft — default harness not registered resolves null`
+  - `newSessionWithDraft — the session closing before its key arrives resolves null`
+  - `newSessionWithDraft — no key within JOIN_WAIT_MS resolves null and logs`
 
 Done when: `npm run typecheck` and `npm run lint` pass, the test gate runs the tests above, and runtime checks defer to
 task 14 (Final verification), whose fixture run covers Start session from a card.
