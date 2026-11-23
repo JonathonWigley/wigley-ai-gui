@@ -360,4 +360,5 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - 07: setActivity runs only on a change, over every row, slot session and earlier-set session, so a session that left the slot is cleared · group 07
 - 07: the hold-ending check for a gone offer runs on every changed(), not only on buildsSessionsSlot changes · group 07
 - 07: builds-view.ts BuildsViewCommand also excludes SessionPartsCommand (edit outside Files) · group 07
+- lead: 08's rebase onto main ran as a merge of origin/main (3f6abfa3d) in 42c412c23, since replaying 01 conflicted commit by commit with work-inbox's Git additions; the review diff is `git diff 3f6abfa3d HEAD` (the run's changes alone), not 4e46c96b2..HEAD
 

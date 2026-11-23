@@ -1,6 +1,6 @@
 # 08 — README and changelog
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · every README and changelog line is pinned below
 Wave: 4 · Depends on: 03 (its lines describe the landed commands and setting), 04 (its lines describe the landed plugin), 05 (its lines describe the landed plugin), 06 (its lines describe the landed keys), 07 (the landed binds `<Leader>mm`, `<Leader>mx` and the row, hub and offer parts)
