@@ -39,6 +39,7 @@ import { createQueueing, type QueueingResult } from './queueing';
 import { buildsSelfTestScript } from './selftest-script';
 import { registerSessionDemoStep } from './demo-steps';
 import {
+  createDrains,
   DRAIN_TIMEOUT_MS,
   type TrackedBackend,
   trackCalls,
@@ -81,624 +82,632 @@ interface EventMessage {
 // Starts with an empty snapshot and loads the session links. `ready` waits for the load and chat's restore of its
 // rows, then applies the `backends` setting, and applies it again on each settings change and each kind a backend
 // plugin adds or removes: an apply that changes the parsed backends or the kinds disposes every instance and creates
-// each entry's anew once the calls into its replaced instance have settled, or once `DRAIN_TIMEOUT_MS` has passed
-// (logged), each publishing as its own `create` settles. Polls each backend with an instance and games, folds after
-// each poll, apply and store change into `builds.snapshot` and `builds.sessions`, and tells each linked session
-// its build's failing job and end, and a set's end, writing the flag before the message. Exports `addBackend`; the
-// commands and the channel queue, offer, cancel and launch a set's agent through `queueing`. Registers the builds
-// layout contract and the main half of the Session builds demo step.
-export const buildsMainPart: MainPart<typeof buildsManifest> = {
-  manifest: buildsManifest,
-  start(api: BuildsApi) {
-    api.layouts.register({ layoutTypes });
-    const { services } = api;
-    const { clock, log } = services;
-    const chat = api.dependency(chatMainKey);
-    const sessionRows = api.state.read(sessionsRowsSlot);
-    const snapshot = api.state.publish(buildsSnapshotSlot);
-    const sessions = api.state.publish(buildsSessionsSlot);
-    snapshot.set({ backends: [], polledAt: null });
-    const registry = createBackendRegistry();
-    const store = createLinkStore(api.data, log);
-    const loaded = store
-      .load()
-      .catch((error: unknown) =>
-        log(`${LINKS_FILE} unreadable: ${errorText(error)}`),
-      );
-
-    let isReady = false;
-    let isStopped = false;
-    let shown = false;
-    // Bumped by each apply that changes something and by the stop, so a `create` or a poll begun before it publishes
-    // nothing.
-    let generation = 0;
-    let appliedKey: string | null = null;
-    let parsed: ParsedBackend[] = [];
-    const live = new Map<string, LiveBackend>();
-    // By backend id, the wait for the calls of its replaced instances, held until it settles.
-    const drains = new Map<string, Promise<void>>();
-    // By backend id, then game id; kept across applies while the game stays in its entry.
-    const records = new Map<string, Map<string, GameRecords>>();
-    let polledAt: number | null = null;
-    let activeBackends: string[] = [];
-    // By `subjectKey`: a read subject for the part's life, and when a read found none.
-    const subjects = new Map<string, string>();
-    const missingSubjects = new Map<string, number>();
-    const subjectFailures = new Set<string>();
-    let endedWaiters: {
-      link: SessionLink;
-      resolve(link: SessionLink): void;
-    }[] = [];
-
-    const poller = createBuildsPoller({
-      timers: services.timers,
-      poll,
-      isFast: (id) => shown || activeBackends.includes(id),
-      log,
-    });
-
-    const queueing = createQueueing({
-      backend(id) {
-        const backend = parsed.find((each) => each.id === id);
-        if (backend === undefined) {
-          return null;
-        }
-        const instanceProblem = live.get(id)?.problem ?? null;
-        return {
-          label: backend.label,
-          entry: backend.entry,
-          instance: live.get(id)?.instance ?? null,
-          problem:
-            backend.entry === null
-              ? backend.problems.join('; ')
-              : instanceProblem,
-        };
-      },
-      store,
-      git: services.git,
-      clock,
-      randomHex: services.randomHex,
-      chat,
-      pollNow: (id) => poller.pollNow(id),
-      stored: () => fold(),
-      log,
-    });
-
-    function apply() {
-      if (!isReady || isStopped) {
-        return;
-      }
-      const next = parseBackends(api.settings().backends, (text) =>
-        services.paths.expandTilde(text, services.homeDir),
-      );
-      const key = JSON.stringify({ backends: next, kinds: registry.kinds() });
-      if (key === appliedKey) {
-        return;
-      }
-      appliedKey = key;
-      generation += 1;
-      const startedIn = generation;
-      disposeInstances();
-      drainInstances();
-      live.clear();
-      parsed = next;
-      keepRecordsOf(next);
-      log(appliedLine(next));
-      for (const backend of next) {
-        live.set(backend.id, {
-          instance: null,
-          problem: null,
-          hasPolled: false,
-        });
-      }
-      poller.setBackends(polledIds(), []);
-      for (const backend of next) {
-        if (backend.entry !== null) {
-          void create(backend.entry, startedIn);
-        }
-      }
-      fold();
-    }
-
-    function disposeInstances() {
-      const instances = [...live.values()].flatMap((backend) =>
-        backend.instance === null ? [] : [backend.instance],
-      );
-      try {
-        callEach(instances, (instance) => instance.dispose());
-      } catch (error) {
-        log(`backend dispose failed: ${errorText(error)}`);
-      }
-    }
-
-    // Holds, for each entry with an instance, a wait for its calls after any wait already held for the entry.
-    function drainInstances() {
-      for (const [backendId, backend] of live) {
-        if (backend.instance === null) {
-          continue;
-        }
-        const drain = Promise.all([
-          drains.get(backendId),
-          drainOf(backendId, backend.instance),
-        ]).then(() => undefined);
-        drains.set(backendId, drain);
-        void drain.then(() => {
-          if (drains.get(backendId) === drain) {
-            drains.delete(backendId);
-          }
-        });
-      }
-    }
-
-    async function drainOf(backendId: string, instance: TrackedBackend) {
-      if (!(await instance.drained())) {
-        log(
-          `${backendId}: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; creating the new one`,
+// each entry's anew once the calls into every instance replaced over its data folder have settled, those of a start
+// before a restart included, logging once while it still waits after `DRAIN_TIMEOUT_MS`; each publishes as its own
+// `create` settles. The stop disposes every instance and leaves the wait for its calls to the next start. Polls each
+// backend with an instance and games, folds after each poll, apply and store change into `builds.snapshot` and
+// `builds.sessions`, and tells each linked session its build's failing job and end, and a set's end, writing the flag
+// before the message. Exports `addBackend`; the commands and the channel queue, offer, cancel and launch a set's agent
+// through `queueing`. Registers the builds layout contract and the main half of the Session builds demo step. Each
+// part made holds its own drains, kept across its starts.
+export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
+  // By backend data folder, the wait for the calls of the instances replaced over it.
+  const drains = createDrains();
+  return {
+    manifest: buildsManifest,
+    start(api: BuildsApi) {
+      api.layouts.register({ layoutTypes });
+      const { services } = api;
+      const { clock, log } = services;
+      const chat = api.dependency(chatMainKey);
+      const sessionRows = api.state.read(sessionsRowsSlot);
+      const snapshot = api.state.publish(buildsSnapshotSlot);
+      const sessions = api.state.publish(buildsSessionsSlot);
+      snapshot.set({ backends: [], polledAt: null });
+      const registry = createBackendRegistry();
+      const store = createLinkStore(api.data, log);
+      const loaded = store
+        .load()
+        .catch((error: unknown) =>
+          log(`${LINKS_FILE} unreadable: ${errorText(error)}`),
         );
-      }
-    }
 
-    // Drops the records of every game no longer in its backend's entry.
-    function keepRecordsOf(next: ParsedBackend[]) {
-      for (const [backendId, games] of records) {
-        const entry = next.find((backend) => backend.id === backendId)?.entry;
-        for (const gameId of games.keys()) {
-          if (!entry?.games.some((game) => game.id === gameId)) {
-            games.delete(gameId);
+      let isReady = false;
+      let isStopped = false;
+      let shown = false;
+      // Bumped by each apply that changes something and by the stop, so a `create` or a poll begun before it publishes
+      // nothing.
+      let generation = 0;
+      let appliedKey: string | null = null;
+      let parsed: ParsedBackend[] = [];
+      const live = new Map<string, LiveBackend>();
+      // By backend id, then game id; kept across applies while the game stays in its entry.
+      const records = new Map<string, Map<string, GameRecords>>();
+      let polledAt: number | null = null;
+      let activeBackends: string[] = [];
+      // By `subjectKey`: a read subject for the part's life, and when a read found none.
+      const subjects = new Map<string, string>();
+      const missingSubjects = new Map<string, number>();
+      const subjectFailures = new Set<string>();
+      let endedWaiters: {
+        link: SessionLink;
+        resolve(link: SessionLink): void;
+      }[] = [];
+
+      const poller = createBuildsPoller({
+        timers: services.timers,
+        poll,
+        isFast: (id) => shown || activeBackends.includes(id),
+        log,
+      });
+
+      const queueing = createQueueing({
+        backend(id) {
+          const backend = parsed.find((each) => each.id === id);
+          if (backend === undefined) {
+            return null;
           }
-        }
-        if (games.size === 0) {
-          records.delete(backendId);
-        }
-      }
-    }
+          const instanceProblem = live.get(id)?.problem ?? null;
+          return {
+            label: backend.label,
+            entry: backend.entry,
+            instance: live.get(id)?.instance ?? null,
+            problem:
+              backend.entry === null
+                ? backend.problems.join('; ')
+                : instanceProblem,
+          };
+        },
+        store,
+        git: services.git,
+        clock,
+        randomHex: services.randomHex,
+        chat,
+        pollNow: (id) => poller.pollNow(id),
+        stored: () => fold(),
+        log,
+      });
 
-    async function create(entry: BackendEntry, startedIn: number) {
-      await drains.get(entry.id);
-      if (startedIn !== generation || isStopped) {
-        return;
-      }
-      const made = await createInstance(entry);
-      if (startedIn !== generation || isStopped) {
+      function apply() {
+        if (!isReady || isStopped) {
+          return;
+        }
+        const next = parseBackends(api.settings().backends, (text) =>
+          services.paths.expandTilde(text, services.homeDir),
+        );
+        const key = JSON.stringify({ backends: next, kinds: registry.kinds() });
+        if (key === appliedKey) {
+          return;
+        }
+        appliedKey = key;
+        generation += 1;
+        const startedIn = generation;
         try {
-          made.instance?.dispose();
+          releaseInstances();
         } catch (error) {
           log(`backend dispose failed: ${errorText(error)}`);
         }
-        return;
-      }
-      live.set(entry.id, { ...made, hasPolled: false });
-      poller.setBackends(polledIds(), [entry.id]);
-      fold();
-    }
-
-    async function createInstance(
-      entry: BackendEntry,
-    ): Promise<{ instance: TrackedBackend | null; problem: string | null }> {
-      const kind = registry.get(entry.kind);
-      if (kind === null) {
-        return {
-          instance: null,
-          problem: `no backend kind "${entry.kind}": its plugin is off or missing`,
-        };
-      }
-      try {
-        const made = await kind.create(entry, backendServices(entry));
-        return 'problem' in made
-          ? { instance: null, problem: made.problem }
-          : { instance: trackCalls(made, services.timers), problem: null };
-      } catch (error) {
-        return {
-          instance: null,
-          problem: `create failed: ${errorText(error)}`,
-        };
-      }
-    }
-
-    function backendServices(entry: BackendEntry): BackendServices {
-      const dataFolder = services.paths.join(
-        api.dataFolder,
-        'backends',
-        entry.id,
-      );
-      return {
-        processes: services.processes,
-        git: services.git,
-        files: services.files,
-        dataFiles: scopedFiles(services.files, dataFolder, services.paths),
-        dataFolder,
-        paths: services.paths,
-        clock,
-        timers: services.timers,
-        homeDir: services.homeDir,
-        platform: services.platform,
-        log: (message) => log(`${entry.id}: ${message}`),
-      };
-    }
-
-    // The backends with an instance and at least one game.
-    function polledIds(): string[] {
-      return parsed
-        .filter(
-          (backend) =>
-            live.get(backend.id)?.instance &&
-            (backend.entry?.games.length ?? 0) > 0,
-        )
-        .map((backend) => backend.id);
-    }
-
-    async function poll(backendId: string): Promise<void> {
-      const startedIn = generation;
-      const backend = live.get(backendId);
-      const entry = parsed.find((each) => each.id === backendId)?.entry;
-      if (!backend?.instance || !entry) {
-        return;
-      }
-      const { instance } = backend;
-      const isCurrent = () => startedIn === generation && !isStopped;
-      const lists: GameList[] = [];
-      for (const game of entry.games) {
-        try {
-          const builds = await instance.list(game, BUILDS_PER_GAME);
-          lists.push({ game, builds, failure: null });
-        } catch (error) {
-          const builds = records.get(backendId)?.get(game.id)?.builds ?? [];
-          lists.push({ game, builds, failure: errorText(error) });
+        live.clear();
+        parsed = next;
+        keepRecordsOf(next);
+        log(appliedLine(next));
+        for (const backend of next) {
+          live.set(backend.id, {
+            instance: null,
+            problem: null,
+            hasPolled: false,
+          });
         }
+        poller.setBackends(polledIds(), []);
+        for (const backend of next) {
+          if (backend.entry !== null) {
+            void create(backend.entry, startedIn);
+          }
+        }
+        fold();
+      }
+
+      // Disposes every live instance and holds the wait for its calls in `drains` under its data folder; throws the
+      // first dispose's error once every instance is released.
+      function releaseInstances() {
+        const released = [...live].flatMap(([backendId, backend]) =>
+          backend.instance === null
+            ? []
+            : [{ backendId, instance: backend.instance }],
+        );
+        callEach(released, ({ backendId, instance }) => {
+          try {
+            instance.dispose();
+          } finally {
+            drains.hold(dataFolderOf(backendId), instance);
+          }
+        });
+      }
+
+      // Waits for the calls of every instance replaced over the entry's data folder; logs once after
+      // `DRAIN_TIMEOUT_MS` while it still waits, the part runs and no later apply has begun.
+      async function awaitDrain(backendId: string, startedIn: number) {
+        const handle = services.timers.set(() => {
+          if (startedIn === generation && !isStopped) {
+            log(
+              `${backendId}: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; waiting for its calls to settle`,
+            );
+          }
+        }, DRAIN_TIMEOUT_MS);
+        await drains.settled(dataFolderOf(backendId));
+        services.timers.clear(handle);
+      }
+
+      // Drops the records of every game no longer in its backend's entry.
+      function keepRecordsOf(next: ParsedBackend[]) {
+        for (const [backendId, games] of records) {
+          const entry = next.find((backend) => backend.id === backendId)?.entry;
+          for (const gameId of games.keys()) {
+            if (!entry?.games.some((game) => game.id === gameId)) {
+              games.delete(gameId);
+            }
+          }
+          if (games.size === 0) {
+            records.delete(backendId);
+          }
+        }
+      }
+
+      async function create(entry: BackendEntry, startedIn: number) {
+        await awaitDrain(entry.id, startedIn);
+        if (startedIn !== generation || isStopped) {
+          return;
+        }
+        const made = await createInstance(entry);
+        if (startedIn !== generation || isStopped) {
+          try {
+            made.instance?.dispose();
+          } catch (error) {
+            log(`backend dispose failed: ${errorText(error)}`);
+          }
+          return;
+        }
+        live.set(entry.id, { ...made, hasPolled: false });
+        poller.setBackends(polledIds(), [entry.id]);
+        fold();
+      }
+
+      async function createInstance(
+        entry: BackendEntry,
+      ): Promise<{ instance: TrackedBackend | null; problem: string | null }> {
+        const kind = registry.get(entry.kind);
+        if (kind === null) {
+          return {
+            instance: null,
+            problem: `no backend kind "${entry.kind}": its plugin is off or missing`,
+          };
+        }
+        try {
+          const made = await kind.create(entry, backendServices(entry));
+          return 'problem' in made
+            ? { instance: null, problem: made.problem }
+            : { instance: trackCalls(made), problem: null };
+        } catch (error) {
+          return {
+            instance: null,
+            problem: `create failed: ${errorText(error)}`,
+          };
+        }
+      }
+
+      function dataFolderOf(backendId: string): string {
+        return services.paths.join(api.dataFolder, 'backends', backendId);
+      }
+
+      function backendServices(entry: BackendEntry): BackendServices {
+        const dataFolder = dataFolderOf(entry.id);
+        return {
+          processes: services.processes,
+          git: services.git,
+          files: services.files,
+          dataFiles: scopedFiles(services.files, dataFolder, services.paths),
+          dataFolder,
+          paths: services.paths,
+          clock,
+          timers: services.timers,
+          homeDir: services.homeDir,
+          platform: services.platform,
+          log: (message) => log(`${entry.id}: ${message}`),
+        };
+      }
+
+      // The backends with an instance and at least one game.
+      function polledIds(): string[] {
+        return parsed
+          .filter(
+            (backend) =>
+              live.get(backend.id)?.instance &&
+              (backend.entry?.games.length ?? 0) > 0,
+          )
+          .map((backend) => backend.id);
+      }
+
+      async function poll(backendId: string): Promise<void> {
+        const startedIn = generation;
+        const backend = live.get(backendId);
+        const entry = parsed.find((each) => each.id === backendId)?.entry;
+        if (!backend?.instance || !entry) {
+          return;
+        }
+        const { instance } = backend;
+        const isCurrent = () => startedIn === generation && !isStopped;
+        const lists: GameList[] = [];
+        for (const game of entry.games) {
+          try {
+            const builds = await instance.list(game, BUILDS_PER_GAME);
+            lists.push({ game, builds, failure: null });
+          } catch (error) {
+            const builds = records.get(backendId)?.get(game.id)?.builds ?? [];
+            lists.push({ game, builds, failure: errorText(error) });
+          }
+          if (!isCurrent()) {
+            return;
+          }
+        }
+        await readSubjects(lists);
         if (!isCurrent()) {
           return;
         }
-      }
-      await readSubjects(lists);
-      if (!isCurrent()) {
-        return;
-      }
-      let listedCount = 0;
-      for (const { game, builds, failure } of lists) {
-        const gameRecords = recordsOf(backendId, game.id);
-        if (failure !== null && failure !== gameRecords.failure) {
-          log(`poll ${backendId} failed: ${game.label}: ${failure}`);
+        let listedCount = 0;
+        for (const { game, builds, failure } of lists) {
+          const gameRecords = recordsOf(backendId, game.id);
+          if (failure !== null && failure !== gameRecords.failure) {
+            log(`poll ${backendId} failed: ${game.label}: ${failure}`);
+          }
+          if (failure === null) {
+            listedCount += builds.length;
+            gameRecords.hasListed = true;
+          }
+          gameRecords.builds = builds;
+          gameRecords.failure = failure;
+          gameRecords.subjects = knownSubjects(game, builds);
         }
-        if (failure === null) {
-          listedCount += builds.length;
-          gameRecords.hasListed = true;
+        polledAt = clock.now();
+        if (!backend.hasPolled) {
+          backend.hasPolled = true;
+          log(`first poll ${backendId}: ${listedCount} builds`);
         }
-        gameRecords.builds = builds;
-        gameRecords.failure = failure;
-        gameRecords.subjects = knownSubjects(game, builds);
+        fold();
       }
-      polledAt = clock.now();
-      if (!backend.hasPolled) {
-        backend.hasPolled = true;
-        log(`first poll ${backendId}: ${listedCount} builds`);
-      }
-      fold();
-    }
 
-    function recordsOf(backendId: string, gameId: string): GameRecords {
-      let games = records.get(backendId);
-      if (games === undefined) {
-        games = new Map();
-        records.set(backendId, games);
-      }
-      let gameRecords = games.get(gameId);
-      if (gameRecords === undefined) {
-        gameRecords = {
-          builds: [],
-          subjects: {},
-          failure: null,
-          hasListed: false,
-        };
-        games.set(gameId, gameRecords);
-      }
-      return gameRecords;
-    }
-
-    // Reads the subject of each listed revision in a game with a clone that the cache does not hold: a null read is
-    // asked again only `SLOW_POLL_MS` after it.
-    async function readSubjects(lists: readonly GameList[]) {
-      const now = clock.now();
-      const asks = new Map<string, Promise<void>>();
-      for (const { game, builds } of lists) {
-        const { clone } = game;
-        if (clone === null) {
-          continue;
+      function recordsOf(backendId: string, gameId: string): GameRecords {
+        let games = records.get(backendId);
+        if (games === undefined) {
+          games = new Map();
+          records.set(backendId, games);
         }
-        for (const build of builds) {
-          if (build.revision === null) {
+        let gameRecords = games.get(gameId);
+        if (gameRecords === undefined) {
+          gameRecords = {
+            builds: [],
+            subjects: {},
+            failure: null,
+            hasListed: false,
+          };
+          games.set(gameId, gameRecords);
+        }
+        return gameRecords;
+      }
+
+      // Reads the subject of each listed revision in a game with a clone that the cache does not hold: a null read is
+      // asked again only `SLOW_POLL_MS` after it.
+      async function readSubjects(lists: readonly GameList[]) {
+        const now = clock.now();
+        const asks = new Map<string, Promise<void>>();
+        for (const { game, builds } of lists) {
+          const { clone } = game;
+          if (clone === null) {
             continue;
           }
-          const key = subjectKey(clone, build.revision);
-          const missingAt = missingSubjects.get(key);
-          const isCached =
-            subjects.has(key) ||
-            (missingAt !== undefined && now - missingAt < SLOW_POLL_MS);
-          if (!isCached && !asks.has(key)) {
-            asks.set(key, readSubject(clone, build.revision, key));
+          for (const build of builds) {
+            if (build.revision === null) {
+              continue;
+            }
+            const key = subjectKey(clone, build.revision);
+            const missingAt = missingSubjects.get(key);
+            const isCached =
+              subjects.has(key) ||
+              (missingAt !== undefined && now - missingAt < SLOW_POLL_MS);
+            if (!isCached && !asks.has(key)) {
+              asks.set(key, readSubject(clone, build.revision, key));
+            }
+          }
+        }
+        await Promise.all(asks.values());
+      }
+
+      async function readSubject(clone: string, sha: string, key: string) {
+        try {
+          const subject = await services.git.commitSubject(clone, sha);
+          if (subject === null) {
+            missingSubjects.set(key, clock.now());
+          } else {
+            subjects.set(key, subject);
+            missingSubjects.delete(key);
+          }
+        } catch (error) {
+          const text = errorText(error);
+          if (!subjectFailures.has(text)) {
+            subjectFailures.add(text);
+            log(`commit subject failed: ${text}`);
           }
         }
       }
-      await Promise.all(asks.values());
-    }
 
-    async function readSubject(clone: string, sha: string, key: string) {
-      try {
-        const subject = await services.git.commitSubject(clone, sha);
-        if (subject === null) {
-          missingSubjects.set(key, clock.now());
+      // The cached subject of each of `builds`' revisions, by sha.
+      function knownSubjects(
+        game: GameEntry,
+        builds: readonly BuildRecord[],
+      ): Record<string, string> {
+        const known: Record<string, string> = {};
+        for (const build of builds) {
+          const subject =
+            game.clone === null || build.revision === null
+              ? undefined
+              : subjects.get(subjectKey(game.clone, build.revision));
+          if (subject !== undefined && build.revision !== null) {
+            known[build.revision] = subject;
+          }
+        }
+        return known;
+      }
+
+      // The parsed problems, then the instance's, then each game's last list failure; null when there are none.
+      function headingProblem(backend: ParsedBackend): string | null {
+        const texts = [...backend.problems];
+        const instanceProblem = live.get(backend.id)?.problem ?? null;
+        if (instanceProblem !== null) {
+          texts.push(instanceProblem);
+        }
+        for (const game of backend.entry?.games ?? []) {
+          const failure =
+            records.get(backend.id)?.get(game.id)?.failure ?? null;
+          if (failure !== null) {
+            texts.push(`${game.label}: ${failure}`);
+          }
+        }
+        return texts.length === 0 ? null : texts.join('; ');
+      }
+
+      function backendStates(): BackendState[] {
+        return parsed.map((backend) => ({
+          id: backend.id,
+          kind: backend.kind,
+          label: backend.label,
+          problem: headingProblem(backend),
+          capabilities: live.get(backend.id)?.instance?.capabilities ?? null,
+          games: (backend.entry?.games ?? []).map((game) => {
+            const gameRecords = records.get(backend.id)?.get(game.id);
+            return {
+              game,
+              builds: gameRecords?.builds ?? [],
+              subjects: gameRecords?.subjects ?? {},
+              hasListed: gameRecords?.hasListed ?? false,
+            };
+          }),
+        }));
+      }
+
+      function fold() {
+        if (!isReady || isStopped) {
+          return;
+        }
+        const now = clock.now();
+        const result = foldBuilds({
+          backends: backendStates(),
+          links: store.links(),
+          setRuns: store.setRuns(),
+          offers: store.offers(),
+          polledAt,
+          now,
+        });
+        activeBackends = result.activeBackends;
+        snapshot.set(result.snapshot);
+        writeSessions(result.sessions);
+        poller.reschedule();
+        const isPruned = store.prune(now, result.isUnlisted);
+        handleEvents(result.events);
+        if (isPruned) {
+          fold();
+        }
+      }
+
+      function writeSessions(next: Record<string, SessionBuilds>) {
+        for (const [sessionId, value] of Object.entries(next)) {
+          const isSame =
+            JSON.stringify(sessions.get(sessionId)) === JSON.stringify(value);
+          if (!isSame) {
+            sessions.set(sessionId, value);
+          }
+        }
+        for (const sessionId of sessions.all().keys()) {
+          if (!Object.hasOwn(next, sessionId)) {
+            sessions.delete(sessionId);
+          }
+        }
+      }
+
+      // Sets every event's flags at once, before any write settles, so a fold meanwhile reports none of them again;
+      // then tells each in fold order.
+      function handleEvents(events: BuildsEvent[]) {
+        if (events.length === 0) {
+          return;
+        }
+        const now = clock.now();
+        for (const event of events) {
+          markTold(event, now);
+        }
+        void tellInOrder(events);
+      }
+
+      function markTold(event: BuildsEvent, now: number) {
+        if (event.kind === 'failing') {
+          store.updateLinks(isLinkOf(event.sessionId, event.ref), {
+            failingNotified: true,
+          });
+        } else if (event.kind === 'ended') {
+          store.updateLinks(isLinkOf(event.sessionId, event.ref), {
+            notified: true,
+            endedAt: event.build.finishedAt ?? now,
+          });
         } else {
-          subjects.set(key, subject);
-          missingSubjects.delete(key);
-        }
-      } catch (error) {
-        const text = errorText(error);
-        if (!subjectFailures.has(text)) {
-          subjectFailures.add(text);
-          log(`commit subject failed: ${text}`);
-        }
-      }
-    }
-
-    // The cached subject of each of `builds`' revisions, by sha.
-    function knownSubjects(
-      game: GameEntry,
-      builds: readonly BuildRecord[],
-    ): Record<string, string> {
-      const known: Record<string, string> = {};
-      for (const build of builds) {
-        const subject =
-          game.clone === null || build.revision === null
-            ? undefined
-            : subjects.get(subjectKey(game.clone, build.revision));
-        if (subject !== undefined && build.revision !== null) {
-          known[build.revision] = subject;
+          const finishes = event.builds.flatMap((build) =>
+            build.finishedAt === null ? [] : [build.finishedAt],
+          );
+          const endedAt = finishes.length === 0 ? now : Math.max(...finishes);
+          const setRunId = event.setRun.id;
+          store.updateSetRun(setRunId, { notified: true, endedAt });
+          store.updateLinks((link) => link.setRunId === setRunId, {
+            notified: true,
+            endedAt,
+          });
         }
       }
-      return known;
-    }
 
-    // The parsed problems, then the instance's, then each game's last list failure; null when there are none.
-    function headingProblem(backend: ParsedBackend): string | null {
-      const texts = [...backend.problems];
-      const instanceProblem = live.get(backend.id)?.problem ?? null;
-      if (instanceProblem !== null) {
-        texts.push(instanceProblem);
-      }
-      for (const game of backend.entry?.games ?? []) {
-        const failure = records.get(backend.id)?.get(game.id)?.failure ?? null;
-        if (failure !== null) {
-          texts.push(`${game.label}: ${failure}`);
+      async function tellInOrder(events: BuildsEvent[]) {
+        for (const event of events) {
+          await tell(event);
+          if (event.kind === 'ended') {
+            settleEndedWaiters(event.sessionId, event.ref);
+          }
         }
       }
-      return texts.length === 0 ? null : texts.join('; ');
-    }
 
-    function backendStates(): BackendState[] {
-      return parsed.map((backend) => ({
-        id: backend.id,
-        kind: backend.kind,
-        label: backend.label,
-        problem: headingProblem(backend),
-        capabilities: live.get(backend.id)?.instance?.capabilities ?? null,
-        games: (backend.entry?.games ?? []).map((game) => {
-          const gameRecords = records.get(backend.id)?.get(game.id);
-          return {
-            game,
-            builds: gameRecords?.builds ?? [],
-            subjects: gameRecords?.subjects ?? {},
-            hasListed: gameRecords?.hasListed ?? false,
-          };
-        }),
-      }));
-    }
-
-    function fold() {
-      if (!isReady || isStopped) {
-        return;
+      async function tell(event: BuildsEvent) {
+        const isWritten = await store.written();
+        if (isStopped) {
+          return;
+        }
+        const { sessionId, line, text } = messageOf(event);
+        if (sessionId === null) {
+          return;
+        }
+        if (!isWritten) {
+          log(`${line}: not written, not sent`);
+          return;
+        }
+        if (sessionRows.get(sessionId) === undefined) {
+          log(`${line}: no session row, not sent`);
+          return;
+        }
+        try {
+          await chat.send(sessionId, { text, images: [] });
+          log(`${line}: sent`);
+        } catch (error) {
+          log(`${line}: send failed: ${errorText(error)}`);
+        }
       }
-      const now = clock.now();
-      const result = foldBuilds({
-        backends: backendStates(),
-        links: store.links(),
-        setRuns: store.setRuns(),
-        offers: store.offers(),
-        polledAt,
-        now,
+
+      function settleEndedWaiters(sessionId: string, ref: BuildRef) {
+        const isLink = isLinkOf(sessionId, ref);
+        const settling = endedWaiters.filter((waiter) => isLink(waiter.link));
+        endedWaiters = endedWaiters.filter((waiter) => !isLink(waiter.link));
+        for (const waiter of settling) {
+          waiter.resolve(store.links().find(isLink) ?? waiter.link);
+        }
+      }
+
+      const addLinkUntilEnded = (link: SessionLink) =>
+        new Promise<SessionLink>((resolve) => {
+          endedWaiters.push({ link, resolve });
+          store.addLinks([link]);
+          fold();
+        });
+
+      api.channel.handle('setShown', (next) => {
+        shown = next;
+        poller.reschedule();
       });
-      activeBackends = result.activeBackends;
-      snapshot.set(result.snapshot);
-      writeSessions(result.sessions);
-      poller.reschedule();
-      const isPruned = store.prune(now, result.isUnlisted);
-      handleEvents(result.events);
-      if (isPruned) {
-        fold();
-      }
-    }
-
-    function writeSessions(next: Record<string, SessionBuilds>) {
-      for (const [sessionId, value] of Object.entries(next)) {
-        const isSame =
-          JSON.stringify(sessions.get(sessionId)) === JSON.stringify(value);
-        if (!isSame) {
-          sessions.set(sessionId, value);
-        }
-      }
-      for (const sessionId of sessions.all().keys()) {
-        if (!Object.hasOwn(next, sessionId)) {
-          sessions.delete(sessionId);
-        }
-      }
-    }
-
-    // Sets every event's flags at once, before any write settles, so a fold meanwhile reports none of them again;
-    // then tells each in fold order.
-    function handleEvents(events: BuildsEvent[]) {
-      if (events.length === 0) {
-        return;
-      }
-      const now = clock.now();
-      for (const event of events) {
-        markTold(event, now);
-      }
-      void tellInOrder(events);
-    }
-
-    function markTold(event: BuildsEvent, now: number) {
-      if (event.kind === 'failing') {
-        store.updateLinks(isLinkOf(event.sessionId, event.ref), {
-          failingNotified: true,
-        });
-      } else if (event.kind === 'ended') {
-        store.updateLinks(isLinkOf(event.sessionId, event.ref), {
-          notified: true,
-          endedAt: event.build.finishedAt ?? now,
-        });
-      } else {
-        const finishes = event.builds.flatMap((build) =>
-          build.finishedAt === null ? [] : [build.finishedAt],
-        );
-        const endedAt = finishes.length === 0 ? now : Math.max(...finishes);
-        const setRunId = event.setRun.id;
-        store.updateSetRun(setRunId, { notified: true, endedAt });
-        store.updateLinks((link) => link.setRunId === setRunId, {
-          notified: true,
-          endedAt,
-        });
-      }
-    }
-
-    async function tellInOrder(events: BuildsEvent[]) {
-      for (const event of events) {
-        await tell(event);
-        if (event.kind === 'ended') {
-          settleEndedWaiters(event.sessionId, event.ref);
-        }
-      }
-    }
-
-    async function tell(event: BuildsEvent) {
-      const isWritten = await store.written();
-      if (isStopped) {
-        return;
-      }
-      const { sessionId, line, text } = messageOf(event);
-      if (sessionId === null) {
-        return;
-      }
-      if (!isWritten) {
-        log(`${line}: not written, not sent`);
-        return;
-      }
-      if (sessionRows.get(sessionId) === undefined) {
-        log(`${line}: no session row, not sent`);
-        return;
-      }
-      try {
-        await chat.send(sessionId, { text, images: [] });
-        log(`${line}: sent`);
-      } catch (error) {
-        log(`${line}: send failed: ${errorText(error)}`);
-      }
-    }
-
-    function settleEndedWaiters(sessionId: string, ref: BuildRef) {
-      const isLink = isLinkOf(sessionId, ref);
-      const settling = endedWaiters.filter((waiter) => isLink(waiter.link));
-      endedWaiters = endedWaiters.filter((waiter) => !isLink(waiter.link));
-      for (const waiter of settling) {
-        waiter.resolve(store.links().find(isLink) ?? waiter.link);
-      }
-    }
-
-    const addLinkUntilEnded = (link: SessionLink) =>
-      new Promise<SessionLink>((resolve) => {
-        endedWaiters.push({ link, resolve });
-        store.addLinks([link]);
-        fold();
-      });
-
-    api.channel.handle('setShown', (next) => {
-      shown = next;
-      poller.reschedule();
-    });
-    api.channel.handle('branches', (arg) => queueing.branches(arg));
-    api.channel.handle('queue', (arg) => queueing.queue(arg));
-    api.channel.handle('queueOffer', (sessionId) =>
-      queueing.queueOffer(sessionId),
-    );
-    api.channel.handle('dismissOffer', (sessionId) => {
-      queueing.dismissOffer(sessionId);
-    });
-    api.channel.handle('cancel', (arg) => queueing.cancel(arg));
-    api.channel.handle('launchSetAgent', (arg) => queueing.launchSetAgent(arg));
-    api.onSettingsChanged(() => apply());
-    const registryChanged = registry.onChanged(() => apply());
-    const sessionDemoStep = registerSessionDemoStep(services);
-
-    if (services.selfTest !== null) {
-      registry.add(selfTestBackendKind(clock));
-      services.selfTest.run(
-        buildsSelfTestScript({
-          addLinkUntilEnded,
-          now: () => clock.now(),
-          log,
-        }),
+      api.channel.handle('branches', (arg) => queueing.branches(arg));
+      api.channel.handle('queue', (arg) => queueing.queue(arg));
+      api.channel.handle('queueOffer', (sessionId) =>
+        queueing.queueOffer(sessionId),
       );
-    }
+      api.channel.handle('dismissOffer', (sessionId) => {
+        queueing.dismissOffer(sessionId);
+      });
+      api.channel.handle('cancel', (arg) => queueing.cancel(arg));
+      api.channel.handle('launchSetAgent', (arg) =>
+        queueing.launchSetAgent(arg),
+      );
+      api.onSettingsChanged(() => apply());
+      const registryChanged = registry.onChanged(() => apply());
+      const sessionDemoStep = registerSessionDemoStep(services);
 
-    return {
-      commands: {
-        queue: async ({ arg, callerSessionId }) => {
-          refuseOnProblem(
-            'queue',
-            await queueing.queue({
-              ...arg,
-              sessionId: callerSessionId ?? null,
-            }),
+      if (services.selfTest !== null) {
+        registry.add(selfTestBackendKind(clock));
+        services.selfTest.run(
+          buildsSelfTestScript({
+            addLinkUntilEnded,
+            now: () => clock.now(),
+            log,
+          }),
+        );
+      }
+
+      return {
+        commands: {
+          queue: async ({ arg, callerSessionId }) => {
+            refuseOnProblem(
+              'queue',
+              await queueing.queue({
+                ...arg,
+                sessionId: callerSessionId ?? null,
+              }),
+            );
+          },
+          offer: async ({ arg, callerSessionId }) => {
+            if (callerSessionId === undefined) {
+              throw new Error('builds.offer: no calling session');
+            }
+            refuseOnProblem(
+              'offer',
+              await queueing.offer(arg, callerSessionId),
+            );
+          },
+          launchSetAgent: async ({ arg }) => {
+            refuseOnProblem(
+              'launchSetAgent',
+              await queueing.launchSetAgent(arg),
+            );
+          },
+        },
+        exports: (consumer): BuildsMainExports => ({
+          addBackend: (kind) => consumer.track(registry.add(kind)),
+        }),
+        ready() {
+          void Promise.all([loaded, chat.restored()]).then(() => {
+            if (isStopped) {
+              return;
+            }
+            isReady = true;
+            apply();
+          });
+        },
+        dispose: () => {
+          isStopped = true;
+          generation += 1;
+          callEach<() => void>(
+            [
+              () => poller.dispose(),
+              () => releaseInstances(),
+              () => registryChanged.dispose(),
+              () => sessionDemoStep.dispose(),
+            ],
+            (dispose) => dispose(),
           );
         },
-        offer: async ({ arg, callerSessionId }) => {
-          if (callerSessionId === undefined) {
-            throw new Error('builds.offer: no calling session');
-          }
-          refuseOnProblem('offer', await queueing.offer(arg, callerSessionId));
-        },
-        launchSetAgent: async ({ arg }) => {
-          refuseOnProblem('launchSetAgent', await queueing.launchSetAgent(arg));
-        },
-      },
-      exports: (consumer): BuildsMainExports => ({
-        addBackend: (kind) => consumer.track(registry.add(kind)),
-      }),
-      ready() {
-        void Promise.all([loaded, chat.restored()]).then(() => {
-          if (isStopped) {
-            return;
-          }
-          isReady = true;
-          apply();
-        });
-      },
-      dispose: () => {
-        isStopped = true;
-        generation += 1;
-        const instances = [...live.values()].flatMap((backend) =>
-          backend.instance === null ? [] : [backend.instance],
-        );
-        callEach<() => void>(
-          [
-            () => poller.dispose(),
-            ...instances.map((instance) => () => instance.dispose()),
-            () => registryChanged.dispose(),
-            () => sessionDemoStep.dispose(),
-          ],
-          (dispose) => dispose(),
-        );
-      },
-    };
-  },
-};
+      };
+    },
+  };
+}
+
+export const buildsMainPart = createBuildsMainPart();
 
 // Throws a command's refusal, so an agent's `run_command` reports it.
 function refuseOnProblem(command: string, result: QueueingResult) {

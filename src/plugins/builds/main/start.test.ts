@@ -28,11 +28,12 @@ import {
 import { buildsManifest } from '../manifest';
 import { LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
 import { FAST_POLL_MS, SLOW_POLL_MS } from './poller';
-import { buildsMainPart } from './start';
+import { createBuildsMainPart } from './start';
 import { DRAIN_TIMEOUT_MS } from './tracked-backend';
 
 const SHA = '2993a9e4c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
 const LINKS_PATH = `/data/builds/${LINKS_FILE}`;
+const STILL_WAITING = `b1: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; waiting for its calls to settle`;
 
 const settle = async () => {
   for (let round = 0; round < 5; round++) {
@@ -130,9 +131,9 @@ interface StartOptions {
   git?: Partial<Git>;
 }
 
-// The part under test with one fixture backend `b1` of game `g1`, a fake chat, and a row for `s1`. A `linksFile` is
-// written and read by a restart. `ready` lets the part's `ready` finish: chat's `restored` waits for it, and for
-// `restored` when given.
+// A new part under test, so no drain outlives its test, with one fixture backend `b1` of game `g1`, a fake chat, and
+// a row for `s1`. A `linksFile` is written and read by a restart. `ready` lets the part's `ready` finish: chat's
+// `restored` waits for it, and for `restored` when given.
 async function startOnHarness(options: StartOptions = {}) {
   const fixture = createFixtureBackend();
   const gate = deferred<void>();
@@ -145,7 +146,7 @@ async function startOnHarness(options: StartOptions = {}) {
       await options.restored;
     },
   };
-  const harness = startMainPart(buildsMainPart, {
+  const harness = startMainPart(createBuildsMainPart(), {
     dependencies: [
       fakeDependency(chatMainKey, () => chat as unknown as ChatMainExports),
     ],
@@ -296,32 +297,60 @@ describe('buildsMainPart', () => {
   );
 
   it.each([
-    { case: 'the old list settles', isSettled: true, timedOut: 0 },
-    { case: 'the old list never settles', isSettled: false, timedOut: 1 },
+    {
+      case: 'the old list settles before the bound',
+      replace: 'apply',
+      waited: DRAIN_TIMEOUT_MS - 1,
+      newLists: [1],
+      logs: 0,
+    },
+    {
+      case: 'after the bound, it logs and still waits',
+      replace: 'apply',
+      waited: DRAIN_TIMEOUT_MS,
+      newLists: [1],
+      logs: 1,
+    },
+    {
+      case: 'the part stopped during the drain creates nothing and logs nothing',
+      replace: 'stop',
+      waited: DRAIN_TIMEOUT_MS,
+      newLists: [],
+      logs: 0,
+    },
+    {
+      case: 'a restarted part over the same data waits too',
+      replace: 'restart',
+      waited: DRAIN_TIMEOUT_MS,
+      newLists: [1],
+      logs: 1,
+    },
   ])(
-    'creates a re-applied entry once its old instance drains: $case',
-    async ({ isSettled, timedOut }) => {
+    'creates a replaced entry only once its old list settles: $case',
+    async ({ replace, waited, newLists, logs }) => {
       const hanging = hangingFirstListKind();
       const run = await startOnHarness({ kinds: () => [hanging.kind] });
       await run.ready();
 
-      await run.pushBackends([backendSetting({ label: 'Second' })]);
-      await run.advance(DRAIN_TIMEOUT_MS - 1);
-      expect(hanging.instances).toHaveLength(1);
-      if (isSettled) {
-        hanging.listed.resolve([]);
+      if (replace === 'restart') {
+        await run.harness.restart();
+        run.addKind(hanging.kind);
         await settle();
       } else {
-        await run.advance(1);
+        await run.pushBackends([backendSetting({ label: 'Second' })]);
       }
+      if (replace === 'stop') {
+        await run.harness.stop();
+      }
+      await run.advance(waited);
+      expect(hanging.instances).toHaveLength(1);
+      hanging.listed.resolve([]);
+      await settle();
 
-      expect(hanging.instances).toHaveLength(2);
-      expect(hanging.instances[1].listCalls).toHaveLength(1);
       expect(
-        run.logged(
-          `b1: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; creating the new one`,
-        ),
-      ).toBe(timedOut);
+        hanging.instances.slice(1).map((each) => each.listCalls.length),
+      ).toEqual(newLists);
+      expect(run.logged(STILL_WAITING)).toBe(logs);
     },
   );
 

@@ -597,12 +597,12 @@ describe('list', () => {
               state: 'finished',
               queuedAt: 1795458000000,
               links: [],
-              // no `percent`
               jobs: [
                 {
                   id: '821193',
                   label: 'Build',
                   state: 'finished',
+                  // no `percent`
                   result: 'success',
                   leftSeconds: null,
                   stepText: null,

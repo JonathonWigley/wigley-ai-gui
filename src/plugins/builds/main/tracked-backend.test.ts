@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createFixtureBackend, gameEntry } from '../contract.test-support';
 import { trackCalls } from './tracked-backend';
 
-const timers = { set: () => 0, clear: () => undefined };
-
 describe('trackCalls', () => {
   it.each([
     {
@@ -29,7 +27,7 @@ describe('trackCalls', () => {
     'rejects a $case after dispose without reaching the backend',
     async ({ call }) => {
       const fixture = createFixtureBackend();
-      const tracked = trackCalls(fixture, timers);
+      const tracked = trackCalls(fixture);
 
       tracked.dispose();
 
