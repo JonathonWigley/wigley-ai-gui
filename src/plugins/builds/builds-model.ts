@@ -184,7 +184,9 @@ function gameView(
   setRuns: SetRun[],
 ): GameView {
   const views: SetRunView[] = setRuns
-    .filter((run) => run.backendId === backendId && run.gameId === state.game.id)
+    .filter(
+      (run) => run.backendId === backendId && run.gameId === state.game.id,
+    )
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((run) => ({
       id: run.id,
@@ -320,13 +322,10 @@ function activeBackends(
       continue;
     }
     const found = findListed(listed, link);
-    const isRecentUnlisted =
-      !found && now - link.linkedAt < UNLISTED_ACTIVE_MS;
+    const isRecentUnlisted = !found && now - link.linkedAt < UNLISTED_ACTIVE_MS;
     if ((found && isActive(found.build)) || isRecentUnlisted) {
       active.add(link.backendId);
     }
   }
-  return backends
-    .map((backend) => backend.id)
-    .filter((id) => active.has(id));
+  return backends.map((backend) => backend.id).filter((id) => active.has(id));
 }

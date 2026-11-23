@@ -176,7 +176,9 @@ describe('foldBuilds', () => {
       case: 'failing then ended',
       input: input({
         backends: [
-          backend('b1', [record('x', { result: 'failure', jobs: [failedJob('ios')] })]),
+          backend('b1', [
+            record('x', { result: 'failure', jobs: [failedJob('ios')] }),
+          ]),
         ],
         links: [link()],
       }),
@@ -282,7 +284,10 @@ describe('foldBuilds', () => {
       input: input({
         backends: [backend('b1', [record('x')])],
         setRuns: [
-          setRun({ builds: refs('x', 'y'), createdAt: NOW - UNLISTED_ACTIVE_MS }),
+          setRun({
+            builds: refs('x', 'y'),
+            createdAt: NOW - UNLISTED_ACTIVE_MS,
+          }),
         ],
       }),
       expected: [{ kind: 'setEnded', setRunId: 'r1', builds: ['x'] }],

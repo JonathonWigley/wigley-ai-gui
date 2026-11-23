@@ -18,14 +18,24 @@ export const buildsManifest = definePlugin({
       label: 'queue a build or a build set',
       group: 'builds',
       runsIn: 'main',
-      arg: { backend: 'string', game: 'string', kind: 'string', branch: 'string' },
+      arg: {
+        backend: 'string',
+        game: 'string',
+        kind: 'string',
+        branch: 'string',
+      },
       risky: true,
     },
     offer: {
       label: 'offer a build for the user to queue',
       group: 'builds',
       runsIn: 'main',
-      arg: { backend: 'string', game: 'string', kind: 'string', branch: 'string' },
+      arg: {
+        backend: 'string',
+        game: 'string',
+        kind: 'string',
+        branch: 'string',
+      },
     },
     launchSetAgent: {
       label: 'run the set with its agent',
