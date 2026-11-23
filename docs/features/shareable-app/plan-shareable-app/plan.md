@@ -314,7 +314,7 @@ Names the drafting added (each with the task that produces it):
 Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 
 ### Wave 1
-- [ ] [The auri agent plugin scaffold](01-auri-agent-plugin.md)
+- [x] [The auri agent plugin scaffold](01-auri-agent-plugin.md)
 
 ### Wave 2
 - [ ] [Contributions registry](03-contributions-registry.md) — after 01
@@ -357,7 +357,10 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 Review base: 35f62ddac
 
 ### Groups
+- 01 · hard · 8f40515f6 b64e14f07 · diff read: every Produces present (agent-plugin.ts names, appFolder, MainServices.appDir, manifests, hooks, marketplace, moves, wigley 3.0.0); typecheck, lint, check_manifests, claude plugin validate x3 pass; Python and npm tests wait for the test gate · concerns: check-layers had no entry for agent-plugin.test.ts (fixed in b64e14f07, same rung); oxfmt also flagged 5 pre-existing Markdown files from main, formatted; check_pointers fails only on 4 pre-existing ~/wigley-agents/learning/candidates headings, outside this diff; retro ledger files and forms.md line 14 still name old paths (task 14)
 ### Contract changes
 ### Rulings
+- test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
+- relay README 'Registering the server' describes the built state, including task 02's --plugin-dir launch · group 01
 ### Review rounds
 ### Test gate

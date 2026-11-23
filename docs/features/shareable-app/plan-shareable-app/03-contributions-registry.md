@@ -1,6 +1,6 @@
 # 03 — Contributions registry: the `contributions` plugin and config problems
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the harness install lists, file watches with a debounce, and the ConfigStore's served problems
 Wave: 2 · Depends on: 01

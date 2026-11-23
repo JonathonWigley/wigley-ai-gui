@@ -1,6 +1,6 @@
 # 19 — wigley-land lands the app repo
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds a second repo mode and a new stage to a tool whose steps stop before anything they cannot undo; 17 relies on its behaviour
 Wave: 2 · Depends on: 01 (the app repo is recognised by the `auri` manifests 01 creates, and the update step installs `auri@auri`)

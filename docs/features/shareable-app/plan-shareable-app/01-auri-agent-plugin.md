@@ -1,6 +1,6 @@
 # 01 — The `auri` agent plugin scaffold, and the relay and chatroom hook moved into it
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · adds `src/shared/agent-plugin.ts` and `MainServices.appDir`, which 02 and 03 consume, and moves code across two plugins
 Wave: 1 · Depends on: none
@@ -302,3 +302,4 @@ Commit: one commit for the group, touching both repos' folders in `ai`.
 
 ## Proof
 
+Commit 8f40515f6 b64e14f07 · proof: diff read: every Produces present (agent-plugin.ts names, appFolder, MainServices.appDir, manifests, hooks, marketplace, moves, wigley 3.0.0); typecheck, lint, check_manifests, claude plugin validate x3 pass; Python and npm tests wait for the test gate · concerns: check-layers had no entry for agent-plugin.test.ts (fixed in b64e14f07, same rung); oxfmt also flagged 5 pre-existing Markdown files from main, formatted; check_pointers fails only on 4 pre-existing ~/wigley-agents/learning/candidates headings, outside this diff; retro ledger files and forms.md line 14 still name old paths (task 14)
