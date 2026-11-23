@@ -1,26 +1,33 @@
 import { definePlugin } from '../../shared/define-plugin';
+import { strategyControlKind } from '../contributions/contract';
 
 // Auto retro: each conversation the user ends, by closing its session or a /clear, after it sent a message, queues
-// a background `/wigley:retro auto` run, launched one at a time as an unattended chat row in the retro folder, shown in the side bar's Retro section and
-// closed once its work ends. It names `chat` for the close and clear events, the launch, the session state and the
-// close, and `sessions` for the rows, their titles and the Retro section; it reads the profiles from
-// `core.agentHarnesses`.
+// the picked retro strategy's command, launched one at a time as an unattended chat row in that strategy's folder,
+// shown in the side bar's Retro section and closed once its work ends. It names `chat` for the close and clear events,
+// the launch, the session state and the close, `sessions` for the rows, their titles and the Retro section, and
+// `contributions` for the retro strategies; it reads the profiles from `core.agentHarnesses`.
 export const autoRetroManifest = definePlugin({
   id: 'auto-retro',
   label: 'Auto retro',
   description:
     'Runs a background retro for each conversation the user ends, by a close or a /clear, shown in the side bar until it finishes.',
-  dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
+  dependsOn: {
+    main: ['chat', 'sessions', 'contributions'],
+    page: ['sessions'],
+  },
   reads: { main: [], page: [] },
   commands: {},
   scopes: {},
-  settings: { folder: '~/wigley-agents', layout: 'default', settleSeconds: 5 },
-  settingControls: { layout: 'layout' },
+  settings: { strategy: '', layout: 'default', settleSeconds: 5 },
+  settingControls: {
+    layout: 'layout',
+    strategy: strategyControlKind('retro'),
+  },
   settingInfo: {
-    folder: {
-      label: 'Retro folder',
+    strategy: {
+      label: 'Retro plugin',
       description:
-        'The folder each background retro runs in: the clone that holds the retro ledger. ~ is the home folder.',
+        'The plugin whose retro runs for each ended conversation. Automatic picks the only one installed.',
     },
     layout: {
       label: 'Layout',

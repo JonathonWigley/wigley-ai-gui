@@ -18,8 +18,15 @@ export interface RetroQueue {
   launched: string[]; // host ids of every open retro row
 }
 
-// The command a retro row's first message opens with, before its host ids.
-export const RETRO_COMMAND = '/wigley:retro auto';
+// What a retro strategy's command holds once, in place of the ended conversation's host ids.
+export const SESSIONS_PLACEHOLDER = '{sessions}';
+
+// The prefix of every installed retro strategy's command, and the endings the picked one queues on, none without a
+// pick.
+export interface RetroPolicy {
+  prefixes: readonly string[];
+  on: readonly ('close' | 'clear')[];
+}
 
 export const EMPTY_QUEUE: RetroQueue = {
   queued: [],
@@ -53,14 +60,19 @@ export type QueueEvent =
   | { kind: 'restoreMissed' };
 
 // The queue after `event`: a new object, `queue` left as it was. A user close or a `/clear` whose conversation sent a
-// message queues a retro of that conversation, unless the row is a retro row: one in `launched`, or one whose first
-// message is a `RETRO_COMMAND`, which covers a retro row `launched` lost. One retro runs at a time.
-export function nextQueue(queue: RetroQueue, event: QueueEvent): RetroQueue {
+// message queues a retro of that conversation when `policy.on` holds that ending, unless the row is a retro row: one
+// in `launched`, or one whose first message opens with one of `policy.prefixes`, which covers a retro row `launched`
+// lost. One retro runs at a time. Only `closed` and `cleared` read the policy.
+export function nextQueue(
+  queue: RetroQueue,
+  event: QueueEvent,
+  policy: RetroPolicy,
+): RetroQueue {
   switch (event.kind) {
     case 'closed':
-      return afterClose(queue, event);
+      return afterClose(queue, event, policy);
     case 'cleared':
-      return afterClear(queue, event);
+      return afterClear(queue, event, policy);
     case 'launching':
       return afterLaunching(queue);
     case 'launched':
@@ -77,6 +89,7 @@ export function nextQueue(queue: RetroQueue, event: QueueEvent): RetroQueue {
 function afterClose(
   queue: RetroQueue,
   closed: Extract<QueueEvent, { kind: 'closed' }>,
+  policy: RetroPolicy,
 ): RetroQueue {
   const host = closed.hostSessionId;
   if (queue.launched.includes(host)) {
@@ -88,9 +101,10 @@ function afterClose(
     };
   }
   const queuesRetro =
+    policy.on.includes('close') &&
     isUserClose(closed.reason) &&
     closed.sent &&
-    !opensWithRetroCommand(closed.titles);
+    !opensWithRetroCommand(closed.titles, policy.prefixes);
   return queuesRetro
     ? withRetroQueued(queue, host, closed.profile, closed.titles)
     : { ...queue };
@@ -99,6 +113,7 @@ function afterClose(
 function afterClear(
   queue: RetroQueue,
   cleared: Extract<QueueEvent, { kind: 'cleared' }>,
+  policy: RetroPolicy,
 ): RetroQueue {
   const oldHost = cleared.oldHostSessionId;
   const newHost = cleared.newHostSessionId;
@@ -113,15 +128,39 @@ function afterClear(
       launched: queue.launched.map((id) => (id === oldHost ? newHost : id)),
     };
   }
-  const queuesRetro = cleared.sent && !opensWithRetroCommand(cleared.titles);
+  const queuesRetro =
+    policy.on.includes('clear') &&
+    cleared.sent &&
+    !opensWithRetroCommand(cleared.titles, policy.prefixes);
   return queuesRetro
     ? withRetroQueued(queue, oldHost, cleared.profile, cleared.titles)
     : { ...queue };
 }
 
-// Whether a row's first message opens with `RETRO_COMMAND`, as every retro row's does, one `launched` lost included.
-export function opensWithRetroCommand(titles: SessionTitles): boolean {
-  return titles.firstMessage?.startsWith(`${RETRO_COMMAND} `) ?? false;
+// Whether a row's first message opens with one of `prefixes`, as every retro row's opens with its strategy's, one
+// `launched` lost included.
+export function opensWithRetroCommand(
+  titles: SessionTitles,
+  prefixes: readonly string[],
+): boolean {
+  const { firstMessage } = titles;
+  return (
+    firstMessage !== null &&
+    prefixes.some((prefix) => firstMessage.startsWith(prefix))
+  );
+}
+
+// A retro command's text before `{sessions}`, untrimmed: what a retro row's first message opens with.
+export function commandPrefix(command: string): string {
+  return command.slice(0, command.indexOf(SESSIONS_PLACEHOLDER));
+}
+
+// A retro command with `{sessions}` replaced by `hostIds`, joined by spaces: a retro row's first message.
+export function retroCommandText(
+  command: string,
+  hostIds: readonly string[],
+): string {
+  return command.replace(SESSIONS_PLACEHOLDER, () => hostIds.join(' '));
 }
 
 function withRetroQueued(
