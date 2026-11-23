@@ -172,8 +172,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `sparkline`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
-                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
-                 disposes the rest; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
+                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged,
+                 disposes the rest, and puts a copy button in each plain code block, whose click the core's
+                 `src/renderer/code-copy-commands.ts` turns into `core.copyCode`; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the

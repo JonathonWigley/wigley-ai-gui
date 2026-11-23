@@ -7,7 +7,11 @@ import './index.css';
 import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
-import { CORE_OPEN_LINK, MODES_SHOW } from '../contracts/commands';
+import {
+  CORE_COPY_CODE,
+  CORE_OPEN_LINK,
+  MODES_SHOW,
+} from '../contracts/commands';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -50,6 +54,11 @@ import {
 import { layoutState } from '../shared/state/slot-store';
 import { wireAnchors } from './anchor-wiring';
 import { createBoxFocus } from './box-focus';
+import {
+  codeClipboardWriter,
+  listenToCodeCopyClicks,
+  registerCodeCopyCommands,
+} from './code-copy-commands';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
@@ -373,6 +382,19 @@ async function start() {
       log(
         'commands',
         `command ${CORE_OPEN_LINK.id} failed: ${errorText(error)}`,
+      );
+    });
+  });
+  registerCodeCopyCommands(registry, {
+    writeClipboard: codeClipboardWriter(config.runMode),
+    toast: (text, tone) => toasts.show(text, tone),
+    log: (message) => log('page', message),
+  });
+  listenToCodeCopyClicks(document, (code) => {
+    commands.router.run(CORE_COPY_CODE.id, code).catch((error: unknown) => {
+      log(
+        'commands',
+        `command ${CORE_COPY_CODE.id} failed: ${errorText(error)}`,
       );
     });
   });

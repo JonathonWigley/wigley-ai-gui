@@ -556,7 +556,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
 - **Docs:** in Docs mode the tree is the side bar; in the optional `docs-session-tab` plugin's session Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
-  with `radius-md` and no border. The page draws through a frame of article and right column; the column holds On this
+  with `radius-md` and no border, and in every markdown surface a plain code block shows a small copy IconButton
+  in its top-right corner while the pointer is over it. The page draws through a frame of article and right column; the column holds On this
   page and Linked from and sticks while the article scrolls.
 - **Backlog** (`docs/features/backlog/design.md`): no side bar.
   The sheet holds three Splits: the table pane beside the review pane (the table `640px` at first), the chunk strip
