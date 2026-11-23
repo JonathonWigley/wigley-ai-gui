@@ -243,7 +243,7 @@ function sampleSteps(paths: PageServices['paths']): readonly SampleStep[] {
 }
 
 const FILES = [
-  'src/plugins/workflow/declared/sample-auri.json',
+  'src/plugins/workflow/declared/fixtures/sample-auri.json',
   'src/plugins/workflow/declared/sample-workflows.ts',
   'src/plugins/workflow/page/sample-demo-steps.ts',
   'src/plugins/workflow/declared/build-page.ts',

@@ -398,7 +398,7 @@ export type AgentEvent =
     }
   | { type: 'userMessage'; at: number }
   // A skill or slash command started: the agent called its Skill tool, or the user's sent message began with `/`.
-  // `skill` has no leading `/` (`wigley:make`); `args` is trimmed, `''` when none.
+  // `skill` has no leading `/` (`my-plugin:make`); `args` is trimmed, `''` when none.
   | {
       type: 'skillStarted';
       at: number;

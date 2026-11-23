@@ -13,6 +13,7 @@ import type {
 } from '../../sessions/contract';
 import {
   type DocsFixtureOptions,
+  VENDOR_PLUGIN_KEY,
   WIKI_GUIDE_FILE,
   WIKI_GUIDE_TEXT,
   WIKI_MAIN_FILE,
@@ -450,7 +451,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       keys: ['G', 'h', 'h', 'h', 'h'],
-      expect: '[docs] collapsed wigley@vendor-market',
+      expect: `[docs] collapsed ${VENDOR_PLUGIN_KEY}`,
       why: "The wigley: link selected its skill, which expanded the plugin's groups. h steps up from the skill and collapses Skills and the plugin, so the row above the last row is the synced skill again.",
     },
     {

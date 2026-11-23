@@ -4,6 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { sampleQualified } from '../../../shared/sample-plugin';
 import {
   FAKE_WORKFLOW_FEATURE_TEXT,
   FAKE_WORKFLOW_PLAN_PATH,
@@ -25,12 +26,16 @@ const SELFTEST_PROJECT_NAME = 'workflow-selftest';
 
 // Relative to the self-test's temp home, as `writeFile` takes it.
 const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
+const LARGE_WORKFLOW = sampleQualified('large');
+const MAKE_SEND = `/${sampleQualified('make')}`;
+
 // 30 s outlasts every step's wait, so the countdown never runs out mid-group.
-const AUTO_START_SETTINGS =
-  '{"workflow":{"autoStart":[{"workflow":"wigley:large","seconds":30}]}}';
+const AUTO_START_SETTINGS = JSON.stringify({
+  workflow: { autoStart: [{ workflow: LARGE_WORKFLOW, seconds: 30 }] },
+});
 const NO_SETTINGS = '{}';
 
-const FEATURE_SEND = `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`;
+const FEATURE_SEND = `/${sampleQualified('feature')} ${FAKE_WORKFLOW_FEATURE_TEXT}`;
 
 // A send the fake answers as any other, whose turn end makes the
 // `set_workflow_step` call this step would come with from a real agent.
@@ -78,7 +83,7 @@ const anchored = (text: string) =>
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'Large: feature to plan ready',
-    why: 'A wigley:feature turn that writes a plan and ends moves the session to plan ready on the chip, the strip and the side pane, and ws hides and shows the pane.',
+    why: 'A feature-skill turn that writes a plan and ends moves the session to plan ready on the chip, the strip and the side pane, and ws hides and shows the pane.',
     steps: [
       {
         width: 1200,
@@ -101,7 +106,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'Large: clear and make',
-    why: 'ww runs Clear & make: the session clears and sends /wigley:make with the plan folder, and make shows progress.',
+    why: 'ww runs Clear & make: the session clears and sends the make command with the plan folder, and make shows progress.',
     steps: [
       {
         keys: [' ', 'w', 'w'],
@@ -156,7 +161,7 @@ const GROUPS: SelfTestGroup[] = [
       {
         writeFile: { path: SETTINGS_FILE, text: AUTO_START_SETTINGS },
         keys: [],
-        expect: '[workflow] settings: autoStart wigley:large 30s',
+        expect: `[workflow] settings: autoStart ${LARGE_WORKFLOW} 30s`,
       },
       {
         keys: FEATURE_KEYS,
@@ -199,7 +204,7 @@ function expectedSends(project: string): string[] {
   return [
     'hello',
     FEATURE_SEND,
-    `/wigley:make ${planFolder}`,
+    `${MAKE_SEND} ${planFolder}`,
     FAKE_WORKFLOW_STEP_TEXT,
     FAKE_WORKFLOW_STEP_TEXT,
     REPORT_FIX_SEND,
@@ -223,7 +228,7 @@ function runProblems(
     problems.push(`sends were ${JSON.stringify(sends)}`);
   }
   const makeAt = records.findIndex((record) =>
-    sendTexts(record).some((text) => text.startsWith('/wigley:make ')),
+    sendTexts(record).some((text) => text.startsWith(`${MAKE_SEND} `)),
   );
   const earlierRecordRuns = records
     .slice(0, Math.max(makeAt, 0))

@@ -1,6 +1,6 @@
 # 15 — README and changelog checks, boundary lint, package metadata
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · three checks read the repo's own structure (manifests, tool definitions, git diff), and each must fail on the break it names without failing on the tree as it stands
 Wave: 7 · Depends on: 01 (both `auri` manifests), 12 (`agent-plugin/hooks/hooks.json` entries), and every task of waves 2–6 that adds, removes or renames a plugin, tool, setting or skill (02–11, 13), since the coverage test reads the tree they leave

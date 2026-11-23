@@ -209,7 +209,13 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   // Its self-test script builds a PNG with `node:zlib`.
-  notes: { main: NODE_ONLY },
+  // Its self-test reads back the follow-ups file of Docs' fixture repo.
+  notes: {
+    main: {
+      layers: ['src/plugins/docs/main/selftest-fixture.ts'],
+      packages: ['node:'],
+    },
+  },
   primer: {
     // A primer is an agent form with a `node:crypto` fingerprint.
     main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },

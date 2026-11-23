@@ -30,6 +30,7 @@ import type { HostedSpawn, IdleRule } from '../contracts/session-host';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
 import { errorText } from './error-text';
 import { capPermission } from './permission-cap';
+import { sampleQualified } from './sample-plugin';
 import {
   SAMPLE_VISUALS_OPEN_TEXT,
   SAMPLE_VISUALS_TEXT,
@@ -61,8 +62,8 @@ import { typedSkill } from './typed-skill';
 // with none of `start`'s emissions, its pid included: the replay stands for
 // them. An `attach` with a null session id rejects. Once a process
 // has detached, it emits nothing. The workflow
-// sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
-// `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
+// sends (`FAKE_WORKFLOW_FEATURE_TEXT`, the sample plugin's
+// `/<plugin>:make <plan folder>`, `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';
@@ -116,11 +117,13 @@ export const FAKE_CONTEXT_TEXT = 'fake: context';
 // tool, allowed or refused, and replies. The turn stays open while the request
 // waits.
 export const FAKE_PERMISSION_TEXT = 'fake: permission';
-// A send of this text, or `/wigley:feature ` before it, runs a wigley:feature
-// turn that writes `fakeWorkflowPlan(0, 0)` at `FAKE_WORKFLOW_PLAN_PATH` under
-// the process's project folder.
+// A send of this text, or the sample plugin's `/<plugin>:feature ` before it
+// (`sample-plugin.ts`), runs a feature-skill turn that writes
+// `fakeWorkflowPlan(0, 0)` at `FAKE_WORKFLOW_PLAN_PATH` under the process's
+// project folder.
 export const FAKE_WORKFLOW_FEATURE_TEXT = 'fake: workflow feature';
-// After `/wigley:make <that plan's folder>`, each send of this text runs the
+// After the sample plugin's `/<plugin>:make <that plan's folder>`, each
+// send of this text runs the
 // next make step: a tick, a tick with a review round, then the folder removed.
 export const FAKE_WORKFLOW_STEP_TEXT = 'fake: workflow step';
 // Relative to the process's project folder.
@@ -859,7 +862,7 @@ function emitStepsTurn(
 // marks a subagent that runs in the background.
 const FAKE_SUBAGENTS = [
   {
-    agentType: 'wigley:sonnet-medium',
+    agentType: sampleQualified('sonnet-medium'),
     description: 'Map the stream decoder',
     name: 'map-decoder',
     model: 'sonnet',
@@ -1075,12 +1078,13 @@ function workflowTurnOf(
   }
   const typed = typedSkill(text);
   const isTypedFeature =
-    typed?.skill === 'wigley:feature' &&
+    typed?.skill === sampleQualified('feature') &&
     typed.args === FAKE_WORKFLOW_FEATURE_TEXT;
   if (isTypedFeature) {
     return { kind: 'feature', runsSkill: false };
   }
-  const typedMakeFolder = typed?.skill === 'wigley:make' ? typed.args : null;
+  const typedMakeFolder =
+    typed?.skill === sampleQualified('make') ? typed.args : null;
   const folder =
     typedMakeFolder ?? (text === FAKE_WORKFLOW_STEP_TEXT ? makeFolder : null);
   const plan = folder === null ? undefined : workflowPlans.get(folder);
@@ -1754,7 +1758,14 @@ export function createFakeAgentHarness(
     const runWorkflowFeature = async (turn: number, runsSkill: boolean) => {
       const planPath = workflowPlanPathOf(record.request.projectDir);
       if (runsSkill) {
-        emitWorkflowSkill(events, emitEntry, clock, turn, 1, 'wigley:feature');
+        emitWorkflowSkill(
+          events,
+          emitEntry,
+          clock,
+          turn,
+          1,
+          sampleQualified('feature'),
+        );
       }
       const change = await writeWorkflowPlan(
         turn,
@@ -1784,7 +1795,14 @@ export function createFakeAgentHarness(
         return;
       }
       if (plan.ticked === 2) {
-        emitWorkflowSkill(events, emitEntry, clock, turn, 1, 'wigley:review');
+        emitWorkflowSkill(
+          events,
+          emitEntry,
+          clock,
+          turn,
+          1,
+          sampleQualified('review'),
+        );
         const change = await writeWorkflowPlan(turn, 2, 'Edit', planPath, {
           ticked: 3,
           reviewRounds: plan.reviewRounds + 1,

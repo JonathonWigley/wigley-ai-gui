@@ -112,9 +112,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
                  `bash-command.ts`: `bashCommandOf`, a Bash call input's command, which chat and live-view read,
-                 `harness-folders.ts`: each registered profile's harness folders and plugin installs, and
-                 `wigley-install.ts`: `locateWigleyFile`, a file in the first wigley plugin install, both read by docs
-                 and live-view,
+                 `harness-folders.ts`: each registered profile's harness folders and plugin installs,
+                 `sample-plugin.ts`: `SAMPLE_PLUGIN_NAME` and `sampleQualified`, the one name the sample workflows,
+                 the fake harness, the sample self-tests and the previews qualify their skills and agents under,
                  `command-args.ts`: `checkCommandArg`, which checks a run's argument against its manifest declaration,
                  `command-router.ts`: the run and intercept chain each process builds its commands on, over
                  `command-registry.ts`, which holds `onDidRun`,
@@ -501,8 +501,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout of its own); it names no skill and no workflow's stages beyond idle (`IDLE_STAGE`); the strip ends on the Headless chip (`kit.headlessChip`), which runs `toggleHeadless`, and the row shows a `Headless` tag while the session is headless; the chip's `No workflow`, `Working` and `Headless` tags are the exception to
                  the layout rule: the engine draws them with no layout, since no workflow owns such a flow or the flag; `docs/features/workflow/design.md`,
                  `docs/features/workflow-levels/design.md`; declared/ (each declared workflow's main and page halves, its
-                 actions and auto-start countdown, and `sample-auri.json`, the four sample workflows Small, Medium, Spike and
-                 Large that `sampleDeclared` reads under the `wigley` or `demo` plugin name, for tests, the self-test and the
+                 actions and auto-start countdown, and `fixtures/sample-auri.json`, the four sample workflows Small, Medium, Spike and
+                 Large that `sampleDeclared` reads under the sample plugin's name (`src/shared/sample-plugin.ts`) or `demo`, for tests, the self-test and the
                  demo steps), plan/ (the plan capability: the plan fold, the watch of every copy of a plan folder across a
                  clone's worktrees, `set_workflow_plan`, the `plan-runs/<row>.json` report files and the plan side pane)
   unity-pool/    manifest.ts, contract.ts, main/ (watches `~/.local/state/unity-pool/*/state.json` into the `unity-pool.snapshot` slot, runs
@@ -1203,20 +1203,21 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
 
 ## README, changelog and boundary
 
-Planned in `shareable-app`, not built yet: the `lint:changelog`, `lint:boundary` and `changelog:release` scripts, the
-README coverage test, and the `agent-plugin/` manifests they check. Until they land, follow the upkeep rules by hand.
-
 Anyone can set the app up from `README.md` alone, and `CHANGELOG.md` tells them what each version changed, so both
 stay true on every change:
 
 - **README.** A change that adds, removes or renames a built-in plugin, a contributed MCP tool, a setting, an `auri`
   skill or a hook updates `README.md` in the same change, as does a change to install or setup steps. The Vitest
   test `scripts/readme-coverage.test.mts` fails when the README leaves out a built-in plugin id, a tool name, a
-  setting path, an `agent-plugin/skills/` skill or an `agent-plugin/hooks/hooks.json` hook.
+  setting path, an `agent-plugin/skills/` skill (as `auri:<folder>`) or an `agent-plugin/hooks/hooks.json` hook's
+  event and `scripts/<folder>/`, each in backticks; its pin on the tool count fails when the tool scan finds fewer.
 - **Changelog.** A change to app code — anything outside `docs/`, `.claude/`, `.agents/` and the root `*.md` files —
   or to `agent-plugin/` adds one line per user-visible change under `## Unreleased` in `CHANGELOG.md`, under
   `### Added`, `### Changed`, `### Fixed` or `### Removed`. `npm run lint:changelog`, part of `npm run lint`, fails
-  when the branch changes such a file against `origin/main` and adds no entry line to `CHANGELOG.md`.
+  when the branch changes such a file against `origin/main` and adds no entry line to `CHANGELOG.md` (an entry
+  `changelog:release` moved under a version heading `origin/main` lacks still counts); with no `origin/main` it
+  skips that check. `scripts/changelog-rules.mts` `needsEntry` holds the paths that need no entry; change both
+  together.
 - **Version heading on landing.** Landing on `main` runs `npm run changelog:release` in the branch before the merge:
   it moves the `## Unreleased` entries under `## <version> — <YYYY-MM-DD>` and bumps the version in `package.json`,
   `agent-plugin/.claude-plugin/plugin.json` and `agent-plugin/.codex-plugin/plugin.json` together, MINOR when Added,
@@ -1228,8 +1229,12 @@ stay true on every change:
 plugin's `auri.json` (`docs/features/feature-contributions/design.md`). Nothing under `src/`, `agent-plugin/`,
 `scripts/` or in `README.md` and `CHANGELOG.md` names `~/wigley-agents`, `wigley-features`, `wigley-ai-marketplace`, a
 `wigley:` skill, the `wigley` plugin key, `WigleyCapture`, `capture.py`, `plan.py` or a `unity-pool` install path.
-Test fixtures, the demo's sample data and `docs/features/` are exempt. `npm run lint:boundary`, part of
-`npm run lint`, fails on any such name and prints its file and line.
+Exempt, as tests, fixtures and sample data (`scripts/boundary-rules.mts` `isExempt`; change both together): files
+ending `.test.ts`, `.test.mts` or `.test-support.ts`, any path with a `fixtures` folder, `src/**/demo-steps.ts`,
+`src/**/selftest-fixture.ts`, `docs/features/**`, `agent-plugin/**/tests/**` and `scripts/boundary-rules.mts` itself.
+`AGENTS.md`, `DESIGN.md`, `.claude/` and `.agents/` sit outside the scan. Sample data elsewhere names the sample
+plugin through `src/shared/sample-plugin.ts`. `npm run lint:boundary`, part of `npm run lint`, fails on any such
+name and prints its file and line.
 
 ## Running and testing
 

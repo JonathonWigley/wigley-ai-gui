@@ -7,6 +7,7 @@
 
 import type { Disposable } from '../../../contracts/disposable';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
+import { sampleQualified } from '../../../shared/sample-plugin';
 import {
   type SampleWorkflowId,
   sampleDeclared,
@@ -28,7 +29,7 @@ interface SampleLevelSpec {
 }
 
 const SMALL_PROJECT_NAME = 'sample-small-selftest';
-const SMALL_SEND = '/wigley:small';
+const SMALL_SEND = `/${sampleQualified('small')}`;
 const small = levelLines(SMALL_PROJECT_NAME);
 
 const SMALL: SampleLevelSpec = {
@@ -106,7 +107,7 @@ const SMALL: SampleLevelSpec = {
 };
 
 const MEDIUM_PROJECT_NAME = 'sample-medium-selftest';
-const MEDIUM_SEND = '/wigley:medium';
+const MEDIUM_SEND = `/${sampleQualified('medium')}`;
 const medium = levelLines(MEDIUM_PROJECT_NAME);
 
 const MEDIUM: SampleLevelSpec = {
@@ -186,7 +187,7 @@ const MEDIUM: SampleLevelSpec = {
 };
 
 const SPIKE_PROJECT_NAME = 'sample-spike-selftest';
-const SPIKE_SEND = '/wigley:spike';
+const SPIKE_SEND = `/${sampleQualified('spike')}`;
 const spike = levelLines(SPIKE_PROJECT_NAME);
 
 const SPIKE: SampleLevelSpec = {

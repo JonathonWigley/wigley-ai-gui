@@ -1,16 +1,17 @@
-// The user's four workflows and plan format as sample data: the one copy in
-// the app, which the tests, the self-tests and the demo run on, and which the
-// `wigley` plugin's `auri.json` copies. Its `wigley:` skill names are test
-// fixture and demo sample data, which the boundary rules allow
-// (docs/features/shareable-app/plan-shareable-app/plan.md § Boundary rules).
+// The sample workflows and plan format: the one copy in the app, which the
+// tests, the self-tests and the demo run on, declared under the sample plugin
+// (`src/shared/sample-plugin.ts`). The JSON sits under `fixtures/`, since its
+// skill names are sample data the boundary check exempts (`AGENTS.md` § README,
+// changelog and boundary).
 
 import type { AuriFile } from '../../../contracts/contributions';
+import { SAMPLE_PLUGIN_NAME } from '../../../shared/sample-plugin';
 import { type DeclaredWorkflow, qualifiedWorkflowId } from '../contract';
-import sampleAuri from './sample-auri.json';
+import sampleAuri from './fixtures/sample-auri.json';
 
 export const SAMPLE_AURI_FILE: AuriFile = sampleAuri as AuriFile;
 
-export const SAMPLE_PLUGIN_NAME = 'wigley';
+export { SAMPLE_PLUGIN_NAME };
 
 export type SampleWorkflowId = 'small' | 'medium' | 'large' | 'spike';
 

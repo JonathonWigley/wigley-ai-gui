@@ -20,6 +20,9 @@ changes for the user.
   checklist.
 - `README.md`, this changelog and an MIT `LICENSE`. `npm run lint` fails when a branch changes app code without a
   changelog entry, and a test fails when the README leaves out a plugin, tool, setting, skill or hook.
+- `npm run lint` also fails when app code names one user's setup (`npm run lint:boundary`), and
+  `npm run changelog:release` moves the Unreleased entries under a version heading and bumps the app and `auri`
+  plugin versions together.
 
 ### Changed
 

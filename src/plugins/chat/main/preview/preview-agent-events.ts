@@ -1,4 +1,5 @@
 import { type AgentEvent, MAIN_AGENT_ID } from '../../../../contracts/agent';
+import { sampleQualified } from '../../../../shared/sample-plugin';
 
 const MAPPER = 'preview-agent-map';
 const CHECKER = 'preview-agent-check';
@@ -17,7 +18,7 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       at: at - 95_000,
       agentId: MAPPER,
       parentAgentId: MAIN_AGENT_ID,
-      agentType: 'wigley:sonnet-medium',
+      agentType: sampleQualified('sonnet-medium'),
       description: 'Map every caller of the session list',
       name: 'map-sessions',
       model: 'sonnet',
@@ -27,7 +28,7 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       type: 'skillStarted',
       at: at - 93_000,
       agentId: MAIN_AGENT_ID,
-      skill: 'wigley:writing-code',
+      skill: sampleQualified('writing-code'),
       args: '',
     },
     {
@@ -44,7 +45,7 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       type: 'skillStarted',
       at: at - 89_000,
       agentId: MAPPER,
-      skill: 'wigley:explore',
+      skill: sampleQualified('explore'),
       args: '',
     },
     ...previewTool(

@@ -63,7 +63,7 @@ export function createCountdown(deps: {
 }
 
 // The log line of the `workflow.autoStart` setting:
-// `settings: autoStart wigley:large 30s, …`, or `settings: autoStart none`.
+// `settings: autoStart my-plugin:large 30s, …`, or `settings: autoStart none`.
 export function autoStartSettingsLine(
   autoStart: readonly AutoStartSetting[],
 ): string {

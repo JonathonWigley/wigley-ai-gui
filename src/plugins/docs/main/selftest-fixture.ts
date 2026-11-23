@@ -15,7 +15,7 @@ const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
 const FIXTURE_WIGLEY_KEY = 'wigley@wigley-ai-marketplace';
 // The fixture binding's `wigley:` prefix maps to it, so the `wigley:vendored`
 // link finds the plugin's skill.
-const VENDOR_PLUGIN_KEY = 'wigley@vendor-market';
+export const VENDOR_PLUGIN_KEY = 'wigley@vendor-market';
 // Makes CLAUDE.md several pages long, rendered and in the editor, so a
 // half-page scroll moves it.
 const LONG_SECTION = `\n## Long section\n\n${Array.from(
@@ -243,6 +243,12 @@ function fixturePaths(home: string, paths: Paths) {
       'plugins/cache/wigley-ai-marketplace/wigley/0.0.0/scripts/docs-index',
     ),
   };
+}
+
+// The fixture repo's `followups.md` in its features home, which Notes'
+// self-test reads back.
+export function docsFixtureFollowupsFile(home: string, paths: Paths): string {
+  return fixturePaths(home, paths).followups;
 }
 
 // The folder whose `scripts/docs-index/docs_index.py` is the fixture's

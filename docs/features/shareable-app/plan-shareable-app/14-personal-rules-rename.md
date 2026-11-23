@@ -1,6 +1,6 @@
 # 14 — Personal rules: rename to auri, cut what auri skills now hold, workflow-gate reads declared workflows
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · rewrites workflow-gate's level source and app-session test, and moves rule text between personal files and plugin skills, where a wrong cut drops a rule
 Wave: 7 · Depends on: 01 (the `auri` tool names and skills), 12 (the `auri` hooks replace workflow-gate's checklist halves and the AskUserQuestion hook this task removes), 13 (workflow-gate's live check reads the `wigley` plugin's `auri.json`)

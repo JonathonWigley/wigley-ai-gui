@@ -22,7 +22,7 @@ Planned in `shareable-app`, not built yet: the `auri` agent plugin (`agent-plugi
 marketplace file `.claude-plugin/marketplace.json`, the `--plugin-dir` launch, the `auri` server name, `auri.json`
 contributions and the `contributions` plugin, the settings `auto-retro.strategy`, `backlog.strategy`, `workflow.off`,
 `workflow.autoStart` and `workflow.layout`, Unity pool off by default, the removal of the four `workflow-*` level
-plugins, the `lint:changelog` and `lint:boundary` scripts, and the app's own repo at the clone URL below. Until they land, the app's MCP server is `wigley-forms`, registered by another agent plugin.
+plugins, and the app's own repo at the clone URL below. Until they land, the app's MCP server is `wigley-forms`, registered by another agent plugin.
 
 ## What Auri is
 
@@ -76,7 +76,9 @@ The app shows as Auri. Its executable, bundle and every path keep the name `wigl
 (`~/.agents/wigley-ai-gui-dev/`). Both share the user config folder.
 
 Checks: `npm run typecheck`, `npm run lint` (which runs `npm run lint:changelog` and `npm run lint:boundary`),
-`npm test`, `npm run selftest`.
+`npm test`, `npm run selftest`. Before landing on `main`, `npm run changelog:release` moves the `## Unreleased`
+entries of `CHANGELOG.md` under a version heading and bumps the version in `package.json` and both plugin
+manifests.
 
 ## The auri agent plugin
 
@@ -281,19 +283,19 @@ The `auri` server offers these tools to every session, unless the row says other
 
 ## Skills
 
-The `auri` plugin's skills, in `agent-plugin/skills/`, each invoked as `auri:<name>`:
+The `auri` plugin's skills, in `agent-plugin/skills/<name>/`:
 
-| Skill                     | What it teaches                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------- |
-| `forms`                   | Asking the user in a forms round: wording, outcomes, headless, the written fallback.  |
-| `visuals`                 | Live html visuals, images and videos in replies and rounds; mocks of a look decision. |
-| `chatroom`                | What to post in the chatroom, when, and to whom; reading the board; claims.           |
-| `workflows-and-checklist` | Session title, checklist, steps and plans; the Checklist flow and the edit gate.      |
-| `backlog-format`          | The follow-up file format, and the Backlog assistant's tools.                         |
-| `primer`                  | Opening a primer and reading the edited triage.                                       |
-| `audio-picker`            | Opening an audio picker and reading the picks.                                        |
-| `live-view`               | Streaming a Unity Game View, the `liveView` command patterns, and the probe.          |
-| `writing-auri-json`       | Writing a plugin's `auri.json`.                                                       |
+| Skill                          | What it teaches                                                                       |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `auri:forms`                   | Asking the user in a forms round: wording, outcomes, headless, the written fallback.  |
+| `auri:visuals`                 | Live html visuals, images and videos in replies and rounds; mocks of a look decision. |
+| `auri:chatroom`                | What to post in the chatroom, when, and to whom; reading the board; claims.           |
+| `auri:workflows-and-checklist` | Session title, checklist, steps and plans; the Checklist flow and the edit gate.      |
+| `auri:backlog-format`          | The follow-up file format, and the Backlog assistant's tools.                         |
+| `auri:primer`                  | Opening a primer and reading the edited triage.                                       |
+| `auri:audio-picker`            | Opening an audio picker and reading the picks.                                        |
+| `auri:live-view`               | Streaming a Unity Game View, the `liveView` command patterns, and the probe.          |
+| `auri:writing-auri-json`       | Writing a plugin's `auri.json`.                                                       |
 
 ## Hooks
 

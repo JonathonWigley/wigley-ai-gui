@@ -6,6 +6,7 @@ import type {
   SessionsMainExports,
 } from '../../sessions/contract';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
+import { sampleQualified } from '../../../shared/sample-plugin';
 import type { Roster, RosterAgent, RosterTask } from '../contract';
 
 // Holds no alerts or window, so the preview cannot raise a badge. `clock` dates the sample's starts at open.
@@ -38,7 +39,7 @@ export function sampleRoster(now: number): Roster {
   const agents: RosterAgent[] = [
     {
       agentId: 'preview-agent-1',
-      agentType: 'wigley:sonnet-medium',
+      agentType: sampleQualified('sonnet-medium'),
       name: 'map-sessions',
       description: 'Map every caller of the session list',
       startedAt: now - 42_000,
