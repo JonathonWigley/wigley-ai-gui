@@ -372,4 +372,6 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 - Round 2 fixes 6ecaef2cd..4688bcb6e (W7 backends, W6 one instance per entry via tracked-backend drain, compile fix). Tier High: start.ts apply seam and backend call wrapping change concurrency; re-review 2 (correctness) of that range.
 - Re-review 2: NEEDS FIXES, Minor only; two repeats of R1#1-3 (drain timeout cuts working calls; part dispose skips the drain), a timer log after stop, a misplaced test comment. Cycles at max 2: the rest take their recommendation in the last fix round.
 - Last fix round (8.1) 60a8f65d8..658b4e7ca: drain registry outlives the part, keyed by data folder, waits for calls to settle, logs once at DRAIN_TIMEOUT_MS; findings 3-4 closed. No re-review (cycles spent); the test gate covers it.
+### Test gate
+- npm test (whole suite, 845 files): 18387 passed, 3 failed in node-files watch tests under load; that file reran alone twice, 64/64, and its watch code is untouched by the run (only readEnd added). npm run selftest -- --plugin builds: all passed. typecheck and lint clean (5 base-unformatted files).
 
