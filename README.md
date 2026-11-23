@@ -47,6 +47,8 @@ The app shows as Auri. Its executable, bundle and every path keep the name `wigl
 - Python 3 with the standard library only: the MCP relay, the hooks and the docs index run on it. The
   `programs.python` setting names it when the default lookup does not find it.
 - git.
+- The GitHub CLI (`gh`), logged in, for the Board's suggested moves from pull requests; without it those suggestions
+  are skipped.
 
 ## Install the app
 
@@ -170,6 +172,9 @@ By plugin:
 | `settings` | `settings.layout` |
 | `scoped-agents` | `scoped-agents.layout` |
 | `backlog` | `backlog.strategy`, `backlog.tags`, `backlog.layout`, `backlog.launchBrief`, `backlog.repoFolders` |
+| `work` | `work.profile`, `work.intervalMinutes`, `work.lookbackHours`, `work.channels`, `work.broadcastChannels`, `work.keywords`, `work.stallHours`, `work.jiraQuery`, `work.columns`, `work.signals.branch`, `work.signals.commit`, `work.signals.pr_opened`, `work.signals.pr_merged`, `work.signals.session`, `work.repoFolders`, `work.projects` |
+| `work-inbox` | `work-inbox.layout` |
+| `work-board` | `work-board.layout` |
 | `notes` | `notes.launchBrief`, `notes.autosaveDelayMs`, `notes.layout` |
 | `practice` | `practice.folder`, `practice.compiler`, `practice.flags`, `practice.timeLimitMs`, `practice.reviewSteps`, `practice.layout` |
 | `usage` | `usage.pollIntervalSeconds`, `usage.layout` |
@@ -224,6 +229,9 @@ Every feature is a plugin in `src/plugins/<id>/`. Settings mode's Plugins sectio
 | `settings` | Settings mode: every setting and key bind. |
 | `scoped-agents` | Runs the agent chats a plugin owns per scope, such as Backlog's assistant. |
 | `backlog` | Backlog mode: every repo's follow-ups in one table, their staleness, and chunks started as sessions. |
+| `work` | Slack and Jira work gathered by background worker sessions, with every card action: send, dismiss, snooze, move, accept, start a session. |
+| `work-inbox` | Inbox mode: Slack threads sorted by what needs you, with drafts ready to send. |
+| `work-board` | Board mode: your Jira tickets and local tasks in columns, with suggested moves. |
 | `notes` | A note popup over every mode that sends a note to a follow-up or a new session. |
 | `practice` | Practice mode: coding problems in C++ with a judge, progress and an interviewer. |
 | `usage` | Plan usage in the status bar, and each session's context and spend. |
@@ -270,6 +278,10 @@ The `auri` server offers these tools to every session, unless the row says other
 | `chatroom_release` | Ends a claim. |
 | `read_backlog_state` | Reads what the user sees in Backlog. Answers only the Backlog assistant. |
 | `set_backlog_chunks` | Replaces one repo's unstarted chunks. Answers only the Backlog assistant. |
+| `read_work_state` | Reads what the Inbox and Board hold: the running job, the Board columns, every item and card. Answers only the running work job's session. |
+| `record_work_items` | Adds or updates Slack conversations in the Inbox, and clears the ones the user has since answered. Answers only the running work job's session. |
+| `record_work_tickets` | Records the user's Jira tickets on the Board, with their statuses and the statuses their transitions reach. Answers only the running work job's session. |
+| `report_work_job` | Ends the job with whether it did what its message asked and a one-line note. Answers only the running work job's session. |
 | `add_practice_problem` | Adds or rewrites a Practice problem. |
 | `read_practice_state` | Reads what the user sees in Practice. |
 | `schedule_task` | Schedules a prompt to run on a schedule. |

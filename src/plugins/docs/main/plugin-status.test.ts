@@ -120,6 +120,8 @@ function cleanGit() {
     firstAdded: vi.fn<Git['firstAdded']>(async () => null),
     remoteHeads: vi.fn<Git['remoteHeads']>(async () => null),
     commitSubject: vi.fn<Git['commitSubject']>(async () => null),
+    branches: vi.fn<Git['branches']>(async () => []),
+    commitsMatching: vi.fn<Git['commitsMatching']>(async () => []),
   } satisfies Git;
 }
 

@@ -258,7 +258,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     ),
     tracker: createTurnTracker(),
     definitions: new Map(),
-    controls: startingControls(request.controls),
+    controls: startingControls(request),
     commandRecords: [],
     activity: 'idle',
     sendCount: 0,

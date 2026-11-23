@@ -81,7 +81,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   ahead of a box's vim, as Ctrl chords do.
 - **Ctrl+n** opens the new-session prompt with only its folder and profile steps, from every main view and its boxes in
   every vim mode: Sessions with nothing shown, the Sessions list, the Chat tab, its session hub and its agent strip, the
-  docs tree, doc and the doc's right column, the Backlog table, review pane and chunk strip, the Settings sections, rows
+  docs tree, doc and the doc's right column, the Backlog table, review pane and chunk strip, the Inbox sections, list and draft
+  box, the Board, the Settings sections, rows
   and Leader menu panes, the gallery, a form and its review, the primer's columns, card and review, the audio picker's
   list, the note popup, the Schedules list, details and editor, and the Practice list, problem pane, editor, console
   and the scoped-agents ask box
@@ -94,7 +95,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
   and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
   Practice's interviewer pane under its editor and console, reached with Alt+j from the console and left with Alt+k, from the chat box after a first Alt+k to its transcript), then, at main's edge, to the shown mode's side bar on the left (the
-  Sessions list, the docs tree, the Settings sections, the Schedules list from its details or editor), past it to the left bar
+  Sessions list, the docs tree, the Settings sections, the Inbox sections, the Schedules list from its details or editor), past it to the left bar
   (between the activity bar and the side bar; from main itself while the side bar is hidden or the mode gives it no
   stop), and the right bar on the right (in each bar, each part of it that has rows, Alt+j/k between them). Backlog
   has no side bar;
@@ -109,21 +110,25 @@ hjkl is the direction in every layer; the modifier picks the verb.
   § Architecture), never a bind of its own. Each move takes the keyboard with it: the box or list of the pane left
   behind keeps no focus.
 - **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
-  focus in the list (the docs tree, the Sessions list, the Settings sections, the Practice list, the Schedules list). `a` on
+  focus in the list (the docs tree, the Sessions list, the Settings sections, the Inbox sections, the Practice list, the Schedules list). `a` on
   the Practice list starts an import. On the Schedules list `Enter` on the "+ New task" row opens the new-task editor
   and `l` there does nothing; `a` new task, `i` edit, `p` pause or resume, `r` run now and `d` remove act from the list
   and from the details, where `j`/`k`/`gg`/`G` move the history cursor and `Enter` or `l` open the run's row. In the
   editor `j`/`k` move the field cursor, `Enter` or `i` edit the field (a box, or a list picker of its choices), `Cmd+Enter`
   saves and `Esc` cancels. Backlog's own keys (the table's `Enter` activate, `x` mark, `c` chunk, `u` unchunk,
   `r` rename, `s`/`S` start (`S` skips started and empty chunks), `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
-  `docs/features/backlog/design.md` § The mode. The Sessions
+  `docs/features/backlog/design.md` § The mode. The Inbox's and the Board's own keys (`i` draft, `Cmd+Enter` send,
+  `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W` sweep, `gs` the last
+  job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet) are listed in
+  `docs/features/work-inbox/design.md` § Keys. The Sessions
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
   and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line where
   the pane has no rows): the doc, the Backlog review pane, the form and its review, the primer card and its review, the
   audio picker's list, the session hub (its section heads), the doc's right column, the Practice problem pane, the
-  gallery and the key help; the Backlog table moves a row. The doc's right column also opens its cursor row on `Enter`
+  gallery, the key help and the Inbox list; the Backlog table moves a row, and the Board moves a card, with `h`/`l`
+  between its columns. The doc's right column also opens its cursor row on `Enter`
   or `l` and returns to the doc on `Esc`. The right bar's system stats panel (scope `system-stats.panel`) moves its
   process rows with `j`/`k` and `gg`/`G`, cycles its sort column on `s`, opens a group on `Enter` or `l` and closes it
   on `h`. The Demo panel (scope `demo.panel`, first in the left bar) moves its step cursor with `j`/`k`, goes to the
@@ -182,8 +187,8 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `;`                | none: close                          | close session, the same as `bd`, kept one key from the leader                                                                                                                                                                                                                                                                                                                                                                             |
 | `'`                | none: stash                          | stash session, the same as `bs`, kept one key from the leader                                                                                                                                                                                                                                                                                                                                                                             |
 | `b`                | session                              | `bn` new session, `br` rename, `bd` close, `bs` stash (a note dialog, then the close; the start prompt lists it under Stashed), `bX` stop every session's process (`chat.stopAll`; the rows stay, resting), `bp` hide or show the session's popup, `bh` hide or show the session hub                                                                                                                                                      |
-| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `kp` Practice, `kt` Schedules, `kc` Chatroom, `km` Builds (planned in `builds`), `k,` Settings                                                                                                                                                                                                                                                                                                                                       |
-| `m`                | build                                | planned in `builds`, not built yet: `mm` queue the focused session's build offer, `mx` dismiss it, `mq` open the queue picker |
+| `k`                | go to                                | `ks` Sessions, `kd` Docs, `kb` Backlog, `ki` Inbox, `kj` Board, `kp` Practice, `kt` Schedules, `kc` Chatroom, `km` Builds (planned in `builds`), `k,` Settings                                                                                                                                                                                                                                                                            |
+| `m`                | build                                | planned in `builds`, not built yet: `mm` queue the focused session's build offer, `mx` dismiss it, `mq` open the queue picker                                                                                                                                                                                                                                                                                                             |
 | `n`                | notes                                | `nn` open or close the note popup; in the popup `nf` new follow-up, `na` append to a follow-up, `ns` new session, `nc` capture the window, `nd` discard                                                                                                                                                                                                                                                                                   |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                                                                                                                                                                                                                                                      |
 | `v`                | view                                 | `vt` hide or show the docs tree, `vw` switch the docs sidebar between the wiki and All pages, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vb` show or hide the Backlog assistant, `vr` pick the Backlog repo, `vc` hide chunked follow-ups, `vs` stale follow-ups first, `vi` focus or leave the Practice interviewer, `vu` hide or show usage details, `vy` hide or show the system stats panel |

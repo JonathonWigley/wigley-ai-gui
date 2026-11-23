@@ -27,6 +27,15 @@ export interface GitWorktree {
   readonly isMain: boolean;
 }
 
+// One branch of a clone, local or remote-tracking.
+export interface GitBranch {
+  // Without `refs/heads/`; a remote branch keeps its remote (`origin/x`).
+  name: string;
+  // The tip's committer date in strict ISO 8601 with its offset.
+  at: string;
+  isRemote: boolean;
+}
+
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
 // to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
@@ -109,4 +118,18 @@ export interface Git {
   // lacks it, also null for a `sha` that is not 4 to 40 hex characters
   // (nothing runs) and on any other non-zero exit.
   commitSubject(root: string, sha: string): Promise<string | null>;
+  // Every local branch and remote-tracking branch of the clone at `root`,
+  // newest tip first; a remote's symbolic `HEAD` is left out. `name` has no
+  // `refs/heads/`, and a remote branch keeps its remote (`origin/x`).
+  branches(root: string): Promise<GitBranch[]>;
+  // The commits on any ref of the clone at `root` but the stash, merges
+  // included, whose message (subject or body) matches `pattern`, a
+  // case-insensitive extended regular expression; committed after `since`
+  // (ISO) when it is not null. Each has `paths` `[]`. `[]` for an empty
+  // `pattern`, running nothing.
+  commitsMatching(
+    root: string,
+    pattern: string,
+    since: string | null,
+  ): Promise<GitCommit[]>;
 }

@@ -193,6 +193,9 @@ export interface PermissionRequest {
 // leaves the harness's default.
 // `rowId` is the app's id for the session's row, which `/clear` keeps while `sessionId` changes; each adapter hands it
 // to its harness's environment for tools that track the row, such as `unity-pool`.
+// `permissions` is the role-based launch mode chat asks for: `'default'` for the harness's normal launch, `'auto'` for
+// its most permissive one. Each adapter maps it to its harness's own launch, and a harness with no permissive mode
+// treats `'auto'` as `'default'`.
 export interface AgentStart {
   processId: string;
   sessionId: string | null;
@@ -203,6 +206,7 @@ export interface AgentStart {
   instructions: readonly string[];
   idleCompactMinTokens: number | null;
   rowId: string;
+  permissions: 'default' | 'auto';
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';

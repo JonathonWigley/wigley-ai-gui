@@ -42,6 +42,7 @@ import type { Paths } from './paths';
 import type { LoginStart } from './login-start';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
+import type { PullRequests } from './pull-requests';
 import type { ScreenCapture } from './screen-capture';
 import type { SessionHost } from './session-host';
 import type {
@@ -1129,7 +1130,9 @@ export interface DriveHost {
 // good. `paths` handles full paths by the rules of the OS main runs on, and
 // `platform` is the record of that OS, picked by the composition root.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
-// `git`, and stopping the plugin leaves a `git` run to finish. `alerts` gets
+// `git`, and stopping the plugin leaves a `git` run to finish. `pullRequests`
+// reads a clone's GitHub pull requests through `gh`, and stopping the plugin
+// leaves its run to finish too. `alerts` gets
 // the user's attention, and stopping the plugin zeroes the open counts it set.
 // Stopping the plugin also clears its pending `timers`, disposes its live
 // `files` watches and stops its running `processes`, each of which then rejects
@@ -1172,6 +1175,7 @@ export interface MainServices {
   files: Files;
   processes: ProcessRunner;
   git: Git;
+  pullRequests: PullRequests;
   log: PluginLog;
   clock: Clock;
   timers: Timers;

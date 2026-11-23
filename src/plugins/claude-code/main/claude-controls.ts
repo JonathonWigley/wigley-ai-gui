@@ -17,9 +17,11 @@ const MODEL_CHOICES: ControlChoice[] = [
   { value: 'fable', label: 'Fable' },
 ];
 
-// `bypassPermissions` is left out: Claude refuses it mid-session unless the
-// process was launched with `--dangerously-skip-permissions`. The model choices
-// are the ones a process starts with; its `initialize` answer replaces them.
+// `bypassPermissions` is no choice of a normal process: Claude refuses it
+// mid-session unless the process launched with `SKIP_PERMISSIONS_FLAG`. A
+// permissive launch starts at `BYPASS_MODE`, with `BYPASS_CHOICE` added to its
+// own Mode choices (`startingControls`). The model choices are the ones a
+// process starts with; its `initialize` answer replaces them.
 export const CLAUDE_CONTROLS: readonly {
   id: ClaudeControlId;
   label: string;
@@ -64,6 +66,15 @@ export const EFFORT_CLEARING_VALUE = 'auto';
 // The permission mode a process launches with when its request sets none.
 const LAUNCH_MODE = 'auto';
 
+// The permission mode, launch flag and Mode choice of a permissive launch
+// (`AgentStart.permissions` 'auto').
+export const BYPASS_MODE = 'bypassPermissions';
+export const SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions';
+export const BYPASS_CHOICE: ControlChoice = {
+  value: BYPASS_MODE,
+  label: 'Bypass permissions',
+};
+
 // The `mode` values from least to most permissive.
 export const CLAUDE_PERMISSION_ORDER: readonly string[] = [
   'plan',
@@ -73,9 +84,16 @@ export const CLAUDE_PERMISSION_ORDER: readonly string[] = [
   'auto',
 ];
 
-// The permission mode a process launches with: the request's, else `auto`.
-export function launchMode(controls: AgentStart['controls']): string {
-  return controls.mode ?? LAUNCH_MODE;
+// The permission mode a process launches with: `BYPASS_MODE` for a permissive
+// request, whatever its `mode` control holds; else the request's `mode`, else
+// `auto`.
+export function launchMode(
+  request: Pick<AgentStart, 'controls' | 'permissions'>,
+): string {
+  if (request.permissions === 'auto') {
+    return BYPASS_MODE;
+  }
+  return request.controls.mode ?? LAUNCH_MODE;
 }
 
 // Each Claude control with its role, a copy of its choices and no value, in
@@ -100,21 +118,27 @@ export function capClaudeControls(
   });
 }
 
-// The controls a process launched with `controls` starts with: the mode it
-// launches in (`launchMode`), and the model and effort `controls` holds, else
-// null.
+// The controls a process launched with `request` starts with: the mode it
+// launches in (`launchMode`), and the model and effort its `controls` holds,
+// else null. A permissive process's Mode choices end with `BYPASS_CHOICE`.
 export function startingControls(
-  controls: AgentStart['controls'],
+  request: Pick<AgentStart, 'controls' | 'permissions'>,
 ): SessionControl[] {
   const launched: Readonly<Record<string, string>> = {
-    ...controls,
-    mode: launchMode(controls),
+    ...request.controls,
+    mode: launchMode(request),
   };
-  return CLAUDE_CONTROLS.map((control) => ({
-    ...control,
-    choices: [...control.choices],
-    value: launched[control.id] ?? null,
-  }));
+  const isPermissive = request.permissions === 'auto';
+  return CLAUDE_CONTROLS.map((control) => {
+    const addsBypass = isPermissive && control.id === 'mode';
+    return {
+      ...control,
+      choices: addsBypass
+        ? [...control.choices, BYPASS_CHOICE]
+        : [...control.choices],
+      value: launched[control.id] ?? null,
+    };
+  });
 }
 
 // A typed `/effort <value>` or `/model <value>`.

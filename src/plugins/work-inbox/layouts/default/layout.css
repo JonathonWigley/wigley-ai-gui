@@ -1,0 +1,156 @@
+/* The default layout's look: the side bar's sections; the sheet's head (title, filter chip, status line) and its
+   cards, each with its draft area, buttons and cursor prompt. */
+
+/* The side bar: its head over the section rows, which scroll. */
+.work-inbox-side-pane[data-layout-owner='work-inbox'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-side-head {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+  justify-content: space-between;
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-section-end {
+  align-items: center;
+  display: inline-flex;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-count {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sheet: the head, then the cards, which scroll. */
+.work-inbox-pane[data-layout-owner='work-inbox'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-head {
+  display: grid;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-2);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-head-top {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-title {
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-head-top .work-inbox-box-hint {
+  margin-left: auto;
+}
+
+.work-inbox-status[data-layout-owner='work-inbox'] {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  gap: var(--wg-space-2);
+}
+
+.work-inbox-problem[data-layout-owner='work-inbox'] {
+  color: var(--wg-status-error);
+  margin: 0;
+}
+
+.work-inbox-filter[data-layout-owner='work-inbox'] {
+  font-family: var(--wg-font-mono);
+}
+
+/* A card: its lines, then its draft, buttons and prompt. */
+.work-inbox-card[data-layout-owner='work-inbox'] {
+  display: grid;
+  gap: var(--wg-space-1_5);
+  margin-bottom: var(--wg-space-2);
+}
+
+/* A Needs you card's warning edge: the Card primitive's edges are attention and error only. */
+.work-inbox-card.is-direct[data-layout-owner='work-inbox'] {
+  border-left: var(--wg-indicator-width) solid var(--wg-status-warning);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-meta {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-age {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-title {
+  font-size: var(--wg-text-13);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-summary,
+[data-layout-owner='work-inbox'] .work-inbox-card-latest,
+[data-layout-owner='work-inbox'] .work-inbox-card-people,
+[data-layout-owner='work-inbox'] .work-inbox-card-why,
+[data-layout-owner='work-inbox'] .work-inbox-card-draft,
+[data-layout-owner='work-inbox'] .work-inbox-card-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-latest,
+[data-layout-owner='work-inbox'] .work-inbox-card-people,
+[data-layout-owner='work-inbox'] .work-inbox-card-why {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-draft {
+  color: var(--wg-fg-secondary);
+  white-space: pre-wrap;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-note {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-card-tickets,
+[data-layout-owner='work-inbox'] .work-inbox-card-actions,
+[data-layout-owner='work-inbox'] .work-inbox-card-prompt {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-ticket {
+  font-family: var(--wg-font-mono);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-control-hint {
+  margin-left: var(--wg-space-1);
+}
+
+.work-inbox-empty[data-layout-owner='work-inbox'] {
+  list-style: none;
+}

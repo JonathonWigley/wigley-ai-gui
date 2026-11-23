@@ -37,6 +37,9 @@ import { usageMainPart } from './usage/main/start';
 import { usageTabLineMainPart } from './usage-tab-line/main/start';
 import { visualMainPart } from './visual/main/start';
 import { windowMainPart } from './window/main/start';
+import { workMainPart } from './work/main/start';
+import { workBoardMainPart } from './work-board/main/start';
+import { workInboxMainPart } from './work-inbox/main/start';
 import { workflowMainPart } from './workflow/main/start';
 import { workflowLargeMainPart } from './workflow-large/main/start';
 import { workflowMediumMainPart } from './workflow-medium/main/start';
@@ -71,6 +74,9 @@ export const mainParts: readonly MainPart[] = [
   settingsMainPart,
   scopedAgentsMainPart,
   backlogMainPart,
+  workMainPart,
+  workInboxMainPart,
+  workBoardMainPart,
   notesMainPart,
   practiceMainPart,
   usageMainPart,

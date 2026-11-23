@@ -1,0 +1,37 @@
+/* Board mode's app-owned containers: the sheet, the board pane holder, and the columns and cards slots. The sheet is
+   the main cell's direct child: its margins lie outside the box, so it takes the cell's height less its two
+   gutters. */
+.work-board-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .work-board-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.work-board {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  outline: none;
+}
+
+.work-board-columns {
+  align-items: stretch;
+  display: flex;
+  gap: var(--wg-space-3);
+  min-height: 0;
+  overflow-x: auto;
+  padding: var(--wg-space-2) var(--wg-space-4) var(--wg-space-3);
+}
+
+.work-board-cards {
+  list-style: none;
+  margin: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--wg-space-1) var(--wg-space-2);
+}

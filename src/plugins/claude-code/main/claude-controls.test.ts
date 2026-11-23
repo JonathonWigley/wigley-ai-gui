@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ControlChoice, SessionControl } from '../../../contracts/agent';
+import type {
+  AgentStart,
+  ControlChoice,
+  SessionControl,
+} from '../../../contracts/agent';
 import {
   appliedControlsOf,
+  BYPASS_CHOICE,
   capClaudeControls,
   CLAUDE_CONTROLS,
   claudeOpeningLines,
@@ -10,6 +15,7 @@ import {
   controlOf,
   controlValue,
   isChoice,
+  startingControls,
   userMessage,
 } from './claude-controls';
 
@@ -250,6 +256,43 @@ describe('claude-controls', () => {
       CLAUDE_CONTROLS.map((control) => control.choices),
     );
   });
+
+  // Breaks if a permissive process starts at the row's mode, or its Mode
+  // picker lacks the bypass choice (or a normal one gains it).
+  it.each<{
+    request: Pick<AgentStart, 'controls' | 'permissions'>;
+    mode: string;
+    addsBypass: boolean;
+  }>([
+    {
+      request: { permissions: 'auto', controls: {} },
+      mode: 'bypassPermissions',
+      addsBypass: true,
+    },
+    {
+      request: { permissions: 'auto', controls: { mode: 'plan' } },
+      mode: 'bypassPermissions',
+      addsBypass: true,
+    },
+    {
+      request: { permissions: 'default', controls: {} },
+      mode: 'auto',
+      addsBypass: false,
+    },
+  ])(
+    'startingControls_PermissiveStart_ModeIsBypass ($request.permissions, $request.controls)',
+    ({ request, mode, addsBypass }) => {
+      const modeControl = startingControls(request).find(
+        (control) => control.id === 'mode',
+      );
+      const declared = controlOf('mode')?.choices ?? [];
+
+      expect(modeControl?.value).toBe(mode);
+      expect(modeControl?.choices).toEqual(
+        addsBypass ? [...declared, BYPASS_CHOICE] : declared,
+      );
+    },
+  );
 
   it('claudeOpeningLines_FirstMessage_RequestsThenTheMessage', () => {
     const message = { text: 'run it', images: [] };

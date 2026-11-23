@@ -1464,7 +1464,7 @@ export function createClaudeCodeHarness(
       projectConfigFolder: '.claude',
       profiles: deps.profiles(),
     }),
-    controls: () => startingControls({}),
+    controls: () => startingControls({ controls: {}, permissions: 'default' }),
     toolUseIdOf,
     configRoots: (profileDir) => configRoots(deps, profileDir),
     installedPlugins: (profileDir) => listInstalledPlugins(deps, profileDir),

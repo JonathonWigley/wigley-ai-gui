@@ -159,4 +159,54 @@ describe('chat picker', () => {
       expect(doc.activeElement === box).toBe(keeps);
     },
   );
+
+  // A replaced request that hears nothing leaves its opener waiting for good;
+  // one that hears `cancelled` would end callers that reopen over themselves.
+  it.each<{
+    case: string;
+    act: (picker: ReturnType<typeof createPicker>) => void;
+    heard: string[];
+  }>([
+    { case: 'close', act: (picker) => picker.close(), heard: ['cancelled'] },
+    {
+      case: 'open in the same scope',
+      act: (picker) => picker.open(choicesRequest(['b'])),
+      heard: ['superseded'],
+    },
+    {
+      case: 'open in another scope',
+      act: (picker) =>
+        picker.open({ ...choicesRequest(['b']), scope: 'resume' }),
+      heard: ['superseded'],
+    },
+    {
+      case: 'pick, then open',
+      act: (picker) => {
+        picker.pick();
+        picker.open(choicesRequest(['b']));
+      },
+      heard: ['picked'],
+    },
+    {
+      case: 'close, then open',
+      act: (picker) => {
+        picker.close();
+        picker.open(choicesRequest(['b']));
+      },
+      heard: ['cancelled'],
+    },
+  ])('open_EndOfTheRequest_RunsItsOneHook ($case)', ({ act, heard }) => {
+    const { picker } = pickerSetup();
+    const events: string[] = [];
+    picker.open({
+      ...choicesRequest(['main', 'a']),
+      picked: () => events.push('picked'),
+      cancelled: () => events.push('cancelled'),
+      superseded: () => events.push('superseded'),
+    });
+
+    act(picker);
+
+    expect(events).toEqual(heard);
+  });
 });

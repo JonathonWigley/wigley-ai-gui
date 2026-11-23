@@ -11,7 +11,7 @@ import {
   NESTED_SESSION_ENV,
   SESSION_ROW_ENV,
 } from '../../../shared/session-env';
-import { launchMode } from './claude-controls';
+import { launchMode, SKIP_PERMISSIONS_FLAG } from './claude-controls';
 import { CLAUDE_PERMISSION_TOOL } from './permission-route';
 import { TERMINAL_STATES } from './turn-tracker';
 
@@ -132,8 +132,10 @@ export function defaultConfigFolder(homeDir: string, paths: Paths): string {
 
 // The arguments, folder and environment `claude` runs one session with:
 // stream-json both ways, partial messages streamed, the request's `mode`
-// control as the permission mode (`launchMode`) with what it would still
-// prompt sent to `CLAUDE_PERMISSION_TOOL`, its `model` and `effort` controls as
+// control as the permission mode (`launchMode`), or for a permissive launch
+// (`permissions` 'auto') `SKIP_PERMISSIONS_FLAG` then `BYPASS_MODE` whatever
+// `mode` holds, with what it would still prompt sent to
+// `CLAUDE_PERMISSION_TOOL`, its `model` and `effort` controls as
 // `--model` and `--effort`, and the request's `instructions`, when there are
 // any, as one `--append-system-prompt` joined with a blank line, and
 // `claudeEnv`'s environment, plus the request's `idleCompactMinTokens` when it
@@ -149,6 +151,8 @@ export function claudeLaunch(
   const { model, effort } = request.controls;
   const modelArgs = model === undefined ? [] : ['--model', model];
   const effortArgs = effort === undefined ? [] : ['--effort', effort];
+  const skipPermissionsArgs =
+    request.permissions === 'auto' ? [SKIP_PERMISSIONS_FLAG] : [];
   const instructionArgs =
     request.instructions.length === 0
       ? []
@@ -170,8 +174,9 @@ export function claudeLaunch(
       '--verbose',
       sessionFlag,
       request.sessionId,
+      ...skipPermissionsArgs,
       '--permission-mode',
-      launchMode(request.controls),
+      launchMode(request),
       '--permission-prompt-tool',
       CLAUDE_PERMISSION_TOOL,
       ...modelArgs,

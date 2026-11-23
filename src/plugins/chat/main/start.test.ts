@@ -132,6 +132,7 @@ function heldFake() {
       instructions: [],
       idleCompactMinTokens: null,
       rowId: 'held',
+      permissions: 'default',
     },
     {
       sessionId: ignore,

@@ -53,6 +53,13 @@ export interface PickerRequest<T> {
   section?(item: T): string | null;
   // Runs once the picker has closed.
   picked(item: T): void;
+  // Runs once the picker has closed unpicked: on `close`, on
+  // `closeSessionBound` of a session-bound request, or on the pushed scope's
+  // base changing. Another `open` replacing the request runs neither: it runs
+  // `superseded`.
+  cancelled?(): void;
+  // Runs once another `open` has replaced the request while it was open.
+  superseded?(): void;
 }
 
 // One opened request's place in the picker.
@@ -63,7 +70,8 @@ export interface PickerHandle {
 
 // The shared list picker with a filter box, in the window's overlay, holding
 // one request at a time: `open` replaces the open request, if any, keeping
-// the pushed scope when the new request names the same one. `pick`
+// the pushed scope when the new request names the same one, then runs the
+// replaced request's `superseded`. `pick`
 // with nothing visible does nothing; `close` and the pushed scope's base
 // changing close it unpicked and log `picker closed: <title>`.
 // `closeSessionBound` closes it only while its request is session-bound.
@@ -128,11 +136,14 @@ export function createPicker(deps: PickerDeps): Picker {
   };
 
   let isSessionBound = false;
-  // The open request's handle; null once it is picked or closed.
+  // The open request's handle and its `superseded`; null once it is picked or
+  // closed.
   let shown: PickerHandle | null = null;
+  let shownSuperseded: (() => void) | undefined;
 
   return {
     open(next) {
+      const replaced = shown?.isOpen() === true ? shownSuperseded : undefined;
       const nextScope = next.scope ?? 'picker';
       const isSameScope = nextScope === scope;
       const keepsFilter =
@@ -149,6 +160,7 @@ export function createPicker(deps: PickerDeps): Picker {
         isOpen: () => shown === handle && list.isOpen(),
       };
       shown = handle;
+      shownSuperseded = next.superseded;
       list.open({
         title: next.title,
         items: next.items,
@@ -164,6 +176,7 @@ export function createPicker(deps: PickerDeps): Picker {
         cancelled: () => {
           shown = null;
           deps.log(`picker closed: ${next.title}`);
+          next.cancelled?.();
         },
         drawRow: (parent, item, row) =>
           drawPickerRow(deps, nextScope, parent, {
@@ -179,6 +192,7 @@ export function createPicker(deps: PickerDeps): Picker {
         drawHeading: (parent, title) =>
           drawPickerHeading(deps, nextScope, parent, title),
       });
+      replaced?.();
       return handle;
     },
     isOpen: () => list.isOpen(),

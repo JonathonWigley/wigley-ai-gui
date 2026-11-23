@@ -579,6 +579,34 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   neutral Tag, the item count, an accent `headless` Tag while on, and a `running` StatusDot with `started` while
   started; the last card reads `New chunk`. An empty table shows one empty-state line saying why, and `Space v b` when
   nothing is left to show.
+- **Inbox** (`docs/features/work-inbox/design.md`): the section nav is the side bar, under an `Inbox` SectionHeader
+  and the `sweep` key hint: a `row-list` row per section (Needs you, You promised, Waiting on others, My threads,
+  Around Slack, Worth knowing, All) with its open count at the end, in `fg-tertiary`; Needs you draws its count in a
+  `warning` Tag while it is over 0, and All counts every item. The sheet is one pane: a head (the `Inbox` heading, the
+  ticket filter chip as a `secondary` Button reading `<key> ✕` while a filter is set, the `sweep` hint), the status
+  line under it (a StatusDot in the job's tone, then the job line, and a `ghost` Show transcript Button with its hint
+  while the last job has a transcript), then the cards, which scroll. A card is a Card with a meta line (`channel ·
+  author`, a neutral Tag for its section under All and a ticket filter, a Tag for `cleared`, `dismissed` or `snoozed
+  until <date>`, the age at the end), the title as a heading, the summary, the latest reply, `With <participants>`,
+  `Why:` while the worker gave one and a ghost Button per ticket key. A card with a draft draws it as text, and the
+  cursor card draws it in its vim box with the box's hints; a sending card draws it read-only. The Buttons close the
+  card in this order: Open in Slack (`ghost`), then Send (`primary`), Snooze 1 day, Dismiss (`ghost`), Start session
+  and Add to Board, or Restore alone on a card that is not open; the cursor card shows its keys' prompts under them and
+  a failed Send's note last. A Needs you card carries a `status-warning` edge on its left, drawn in the layout's CSS,
+  since the Card primitive's edges are attention and error only. An empty list shows one empty-state line saying why,
+  with the `sweep` hint when nothing was ever gathered.
+- **Board** (`docs/features/work-inbox/design.md`): no side bar. The sheet is one pane: a head (the `Board` heading,
+  the status line as in Inbox, the `sweep` hint) over one row of columns that scrolls sideways, each column
+  `9 × space-8` wide and scrolling its own cards; a column head is its name and card count, and the Other column
+  shows only while it holds a card. A card is a Card in `space-2` rows, the cursor card with the focus ring and the
+  card another view just showed (an Inbox ticket chip or key) flashed in `accent-tint`; a card being dragged is half transparent
+  and a column it can drop on takes the focus outline. A Jira card's head is its key, a link, with its priority as a
+  Tag; a local task's is a `Local task` Tag; the title follows. A `1 thread` or `N threads` secondary Button follows
+  while open Inbox threads hold its ticket. A suggested move is a block of its reason with Accept (`primary`) and Not
+  yet (`secondary`); a move Jira already made is a `done` `success` Tag with the reason and no buttons. A moving card
+  shows `Moving to <column> in Jira…`, and a failed job's note follows. The buttons close the card: ◀ and ▶ (`ghost`,
+  disabled at an end), Session (`secondary`) and, on a local task, Delete (`danger`); the cursor card's key hints
+  draw inside them. An empty board shows one empty-state line with the `sweep` hint in place of the columns.
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows, each a
   label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the user set
   carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame, its check

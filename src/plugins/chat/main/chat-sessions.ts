@@ -187,8 +187,9 @@ export interface ChatSessions {
   // Starts a session with its row unselected, on the harness that declares the
   // request's profile, and sends `message` as its first message; returns the
   // row's sessionId. A request with `unattended` true
-  // makes the row deny each permission prompt at once, and one with `headless`
-  // true opens it headless. The request's
+  // makes the row deny each permission prompt at once, one with `permissions`
+  // passes it to each of the row's process starts and attaches ('default' when
+  // left out), and one with `headless` true opens it headless. The request's
   // `instructions` follow the global ones at each of the row's process starts,
   // and its `owner` goes to sessions with the row; both are kept across a clear
   // and a relaunch, and a row with an owner raises no `Turn finished` mark.
@@ -204,7 +205,8 @@ export interface ChatSessions {
   // request's own, then the headless note when the request is headless, and
   // `env` passed to the harness unchanged; `adopt` opens its row. Opens,
   // starts, records and saves nothing, also after `detachAll`. Rejects where
-  // `launch` throws, and where the harness's `prepareRun` rejects.
+  // `launch` throws, on an ephemeral or permissive request, and where the
+  // harness's `prepareRun` rejects.
   prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
@@ -628,6 +630,9 @@ interface HeldSession {
   // Nobody answers this row: each permission prompt is denied at once, and a
   // finished turn raises no mark. Saved with the row, kept across a clear.
   unattended: boolean;
+  // The launch mode each of the row's process starts and attaches passes.
+  // Saved with the row, kept across a clear.
+  permissions: AgentStart['permissions'];
   // The row is headless; mirrored in `chat.session`. Saved with the row, kept
   // across a clear.
   headless: boolean;
@@ -657,6 +662,7 @@ interface ResolvedTarget {
 // controls its first process starts with, by control id.
 interface StartFlags {
   unattended: boolean;
+  permissions: AgentStart['permissions'];
   headless: boolean;
   instructions: readonly string[];
   owner: string | null;
@@ -856,6 +862,7 @@ function adoptedRecordOf(
     activeMs: 0,
     rowId: run.rowId,
     unattended: run.unattended,
+    permissions: 'default',
     headless: run.headless,
     instructions: [...run.instructions],
     owner: run.owner,
@@ -970,6 +977,7 @@ function savedSessionOf(
     activeMs: activeMsAt(activeTime, now),
     rowId: session.sessionId,
     unattended: session.unattended,
+    permissions: session.permissions,
     headless: session.headless,
     instructions: [...session.instructions],
     owner: session.owner,
@@ -1977,6 +1985,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       activeMs: number;
       origin: SessionOrigin;
       unattended: boolean;
+      permissions: AgentStart['permissions'];
       headless: boolean;
       instructions: readonly string[];
       owner: string | null;
@@ -2087,6 +2096,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       waiting: null,
       processProfileDir: null,
       unattended: opening.unattended,
+      permissions: opening.permissions,
       headless: opening.headless,
       launchHeadless: opening.launchHeadless,
       instructions: opening.instructions,
@@ -2437,6 +2447,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         instructions: currentInstructions(session),
         idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
         rowId: sessionId,
+        permissions: session.permissions,
       },
       processEvents(
         session,
@@ -2532,6 +2543,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           instructions: currentInstructions(session),
           idleCompactMinTokens: null,
           rowId: sessionId,
+          permissions: session.permissions,
         },
         processEvents(
           session,
@@ -2977,6 +2989,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       titles: SessionTitles;
       origin: SessionOrigin;
       unattended: boolean;
+      permissions: AgentStart['permissions'];
       headless: boolean;
       instructions: readonly string[];
       owner: string | null;
@@ -3012,6 +3025,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeMs: 0,
         origin: opening.origin,
         unattended: opening.unattended,
+        permissions: opening.permissions,
         headless: opening.headless,
         instructions: opening.instructions,
         owner: opening.owner,
@@ -3084,6 +3098,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activeMs: 0,
         origin: 'resumed',
         unattended: false,
+        permissions: 'default',
         headless: opening.headless,
         instructions: opening.instructions,
         owner: opening.owner,
@@ -3632,6 +3647,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       { select: false },
       {
         unattended: request.unattended === true,
+        permissions: request.permissions ?? 'default',
         headless: request.headless === true,
         instructions: request.instructions ?? [],
         owner: request.owner ?? null,
@@ -3651,13 +3667,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // Each check runs where `launch` runs it, so a prepared run fails where a
   // live launch would. `requireNotDetached` is left out: it opens nothing. A
   // prepared run's row is restored from its record, which an ephemeral row
-  // never has.
+  // never has. A prepared run starts with nobody present, under controls its
+  // caller capped, so it never launches permissive.
   async function prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
   ): Promise<PreparedLaunch> {
     if (request.ephemeral === true) {
       throw new Error('chat cannot prepare an ephemeral launch');
+    }
+    if (request.permissions === 'auto') {
+      throw new Error('chat cannot prepare a permissive launch');
     }
     requireAttachableImages(request.message);
     const harness = requireHarnessOfProfile(deps.harnesses, request.profile);
@@ -3683,6 +3703,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       instructions: instructionsOf(instructions, headless),
       idleCompactMinTokens: currentIdleCompactMinTokens(rowId),
       rowId,
+      permissions: 'default',
     };
     const spawn = await harness.prepareRun(start, request.message, env);
     const firstMessage = firstMessageTitleOf(request.message.text);
@@ -3829,6 +3850,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           activeMs: record.activeMs,
           origin,
           unattended: record.unattended,
+          permissions: record.permissions,
           headless: record.headless,
           instructions: record.instructions,
           owner: record.owner,
@@ -4388,6 +4410,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         titles,
         origin: 'resumed',
         unattended: false,
+        permissions: 'default',
         headless: request.headless === true,
         instructions,
         owner,
@@ -4560,6 +4583,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         { select: true },
         {
           unattended: false,
+          permissions: 'default',
           headless: false,
           instructions: [],
           owner: null,
