@@ -103,10 +103,15 @@ export type StartRequest = StartTarget & { harness: string; profile: string };
 // no `open-sessions.json` row and records no recent folder, and its events
 // carry `ephemeral: true` so listeners that write to disk skip it. An app
 // restart loses the row. Kept with the row across a clear and a relaunch.
+// `permissions`: `'auto'` launches the session in its harness's most permissive
+// mode, so the agent acts with no permission prompt. Left out, the harness's
+// normal launch. Kept with the row across a clear, a process restart and a
+// relaunch.
 export type LaunchRequest = StartTarget & {
   profile: string;
   message: UserMessage;
   unattended?: boolean;
+  permissions?: 'auto';
   headless?: boolean;
   instructions?: readonly string[];
   owner?: string;
@@ -687,7 +692,9 @@ export interface ChatMainEvents extends EventShape {
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
   // selected row as it was. With `unattended` true the row denies each
-  // permission prompt at once and raises no `Turn finished` mark.
+  // permission prompt at once and raises no `Turn finished` mark. With
+  // `permissions: 'auto'` each of the row's process starts runs in its
+  // harness's most permissive mode.
   // `instructions` follow the global `addInstructions` texts at each of the
   // row's process starts; `owner` names the plugin the row belongs to, and
   // such a row raises no `Turn finished` mark. Resolves to the new row's
@@ -704,8 +711,9 @@ export interface ChatMainExports {
   // first process's, `env` added to the run's environment, and fresh ids (host
   // session id, process id, row id, message uuid), on the harness that
   // declares its profile. Opens nothing. Rejects where `launch` rejects, an
-  // unknown control id included, and on `ephemeral` (`chat cannot prepare an
-  // ephemeral launch`).
+  // unknown control id included, on `ephemeral` (`chat cannot prepare an
+  // ephemeral launch`) and on `permissions: 'auto'` (`chat cannot prepare a
+  // permissive launch`).
   prepareLaunch(
     request: LaunchRequest,
     env: Readonly<Record<string, string>>,
@@ -1000,10 +1008,22 @@ export type CompletionRowDraw = (
 // without writing `uiState`. Holds stack: the hub stays shown while any hold
 // lives. Each dispose after the first does nothing. The last dispose shows the
 // hub and the section as `uiState` holds them then.
+// `newSessionWithDraft` opens the new-session prompt as the `startNewSession`
+// command does, and once the session it starts has its Chat tab (its
+// `chat.session` key and its `sessions.rows` row both on the page), puts `text`
+// in that session's box as `fillComposer` does, unsent. It resolves to the new
+// row's id once the box is filled, and to null, never rejecting, when no
+// session starts or the fill cannot run: the user leaves the prompt, another
+// chat picker list replaces a prompt step, a sign-in ends signed out, the
+// prompt cannot open, the start fails, the prompt opens again before the start,
+// the page stops, the session's key leaves before its tab exists, or no tab
+// exists 10 s (the start prompt's `JOIN_WAIT_MS`) after the start; a session
+// that closes before its key arrives resolves at that wait.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   addCompletionRow(draw: CompletionRowDraw): Disposable;
   fillComposer(sessionId: string, text: string): void;
+  newSessionWithDraft(text: string): Promise<string | null>;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
   addSidePart(part: ChatSidePart): Disposable;

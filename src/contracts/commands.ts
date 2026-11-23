@@ -55,6 +55,12 @@ export const CORE_OPEN_LINK: CommandKey<string, 'core.openLink'> = {
   id: 'core.openLink',
 };
 
+// Writes the code its arg holds to the clipboard, as a click on a rendered
+// code block's copy button does, and toasts that it copied.
+export const CORE_COPY_CODE: CommandKey<string, 'core.copyCode'> = {
+  id: 'core.copyCode',
+};
+
 // Loads the user plugin its arg names again from its folder, as a save under
 // that folder does; rejects for a built-in or unknown id.
 export const CORE_RELOAD_PLUGIN: CommandKey<string, 'core.reloadPlugin'> = {

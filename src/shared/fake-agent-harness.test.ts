@@ -67,6 +67,7 @@ const request: AgentStart = {
   instructions: [],
   idleCompactMinTokens: null,
   rowId: 'row-1',
+  permissions: 'default',
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,

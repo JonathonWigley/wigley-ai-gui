@@ -37,6 +37,9 @@ import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
 import { windowManifest } from './window/manifest';
+import { workManifest } from './work/manifest';
+import { workBoardManifest } from './work-board/manifest';
+import { workInboxManifest } from './work-inbox/manifest';
 import { workflowManifest } from './workflow/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
@@ -74,6 +77,9 @@ export const builtInManifests = [
   settingsManifest,
   scopedAgentsManifest,
   backlogManifest,
+  workManifest,
+  workInboxManifest,
+  workBoardManifest,
   notesManifest,
   practiceManifest,
   usageManifest,

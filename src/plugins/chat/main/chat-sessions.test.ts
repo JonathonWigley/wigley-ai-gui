@@ -320,6 +320,7 @@ function record(
     activeMs: 0,
     rowId: null,
     unattended: false,
+    permissions: 'default',
     headless: false,
     instructions: [],
     owner: null,
@@ -965,6 +966,7 @@ describe('createChatSessions', () => {
         instructions: [],
         idleCompactMinTokens: null,
         rowId: ROW_ID,
+        permissions: 'default',
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -1301,6 +1303,7 @@ describe('createChatSessions', () => {
       instructions: [],
       idleCompactMinTokens: null,
       rowId: ROW_ID,
+      permissions: 'default',
     });
     expect(test.hostIdChanges).toEqual([]);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -4023,6 +4026,7 @@ describe('createChatSessions saved sessions', () => {
           instructions: [],
           idleCompactMinTokens: null,
           rowId: ROW_ID,
+          permissions: 'default',
         },
       ]);
       expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -4096,6 +4100,7 @@ describe('createChatSessions saved sessions', () => {
         activeMs: 0,
         rowId: ROW_ID,
         unattended: false,
+        permissions: 'default',
         headless: false,
         instructions: [],
         owner: null,
@@ -4250,6 +4255,29 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.isHeadless(ROW_ID)).toBe(true);
     expect(test.chat.launchedHeadless(ROW_ID)).toBe(true);
     expect(test.chat.sessions()[0].headless).toBe(true);
+  });
+
+  // Breaks if a clear drops the row's launch permissions, so a permissive
+  // worker's next process asks for every permission.
+  it('clear_PermissiveRow_KeepsPermissions', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    const sessionId = test.chat.launch({
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      message: { text: 'go', images: [] },
+      permissions: 'auto',
+    });
+    await flush();
+
+    test.chat.clear(sessionId);
+    await flush();
+
+    expect(startsOf(test).map((start) => start.request.permissions)).toEqual([
+      'auto',
+      'auto',
+    ]);
+    expect(test.saved.last()?.sessions[0].permissions).toBe('auto');
   });
 
   it('start_OpensTheRowNotHeadless', async () => {
@@ -4423,6 +4451,36 @@ describe('createChatSessions saved sessions', () => {
       expect(test.harness.attachCalls[0].instructions).toEqual(expected);
     },
   );
+
+  // Breaks if a restore drops the saved permissions, so a relaunch's next
+  // start launches the row normally.
+  it('restore_PermissiveRow_NextStartIsPermissive', async () => {
+    const test = setUp();
+    restoreOne(test, record('host-a', { permissions: 'auto' }), []);
+
+    await test.chat.send(ROW_ID, { text: 'hi', images: [] });
+    await flush();
+
+    expect(startsOf(test).map((start) => start.request.permissions)).toEqual([
+      'auto',
+    ]);
+  });
+
+  // Breaks if the re-attach of a live permissive process passes 'default'.
+  it('restore_PermissiveRowLiveInHost_AttachIsPermissive', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      turns: 0,
+      replay() {},
+    });
+
+    restoreOne(test, hostedRecord({ permissions: 'auto' }), [hostedP1()]);
+    await flush();
+
+    expect(test.harness.attachCalls).toHaveLength(1);
+    expect(test.harness.attachCalls[0].permissions).toBe('auto');
+  });
 
   it('restore_UnattendedRecord_DeniesPermissionAtOnce', async () => {
     const test = setUp();
@@ -5360,6 +5418,7 @@ describe('createChatSessions clear', () => {
           activeMs: 0,
           rowId: ROW_ID,
           unattended: false,
+          permissions: 'default',
           headless: false,
           instructions: [],
           owner: null,
@@ -10706,6 +10765,24 @@ describe('createChatSessions prepare and adopt', () => {
     ]);
   });
 
+  // Breaks if the row drops its launch permissions at a restart.
+  it('launch_Permissions_FirstStartAndLaterStartsPassThem', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    const sessionId = test.chat.launch({ ...LAUNCH, permissions: 'auto' });
+    await flush();
+
+    expect(startsOf(test)[0].request.permissions).toBe('auto');
+    startsOf(test)[0].events.ended({ code: 0, error: null });
+    await test.chat.send(sessionId, { text: 'again', images: [] });
+    await flush();
+    expect(startsOf(test).map((start) => start.request.permissions)).toEqual([
+      'auto',
+      'auto',
+    ]);
+  });
+
   it('launch_NoControls_OpensAsBefore', async () => {
     const test = setUp();
 
@@ -10713,6 +10790,7 @@ describe('createChatSessions prepare and adopt', () => {
 
     expect(test.chat.sessions()[0].controls).toEqual([]);
     await flush();
+    expect(startsOf(test)[0].request.permissions).toBe('default');
     expect(startsOf(test)[0].request.controls).toEqual({});
   });
 
@@ -10777,6 +10855,7 @@ describe('createChatSessions prepare and adopt', () => {
       instructions: ['global', 'own', HEADLESS_NOTE],
       idleCompactMinTokens: null,
       rowId,
+      permissions: 'default',
     });
     expect(message).toBe(MESSAGE);
     expect(passedEnv).toBe(env);
@@ -10824,6 +10903,17 @@ describe('createChatSessions prepare and adopt', () => {
     await expect(
       test.chat.prepareLaunch({ ...LAUNCH, ephemeral: true }, {}),
     ).rejects.toThrow('chat cannot prepare an ephemeral launch');
+    expect(test.harness.preparedRuns).toEqual([]);
+  });
+
+  // Breaks if a prepared run, whose controls its caller capped, launches
+  // permissive past that cap.
+  it('prepareLaunch_Permissive_Rejects', async () => {
+    const test = setUp();
+
+    await expect(
+      test.chat.prepareLaunch({ ...LAUNCH, permissions: 'auto' }, {}),
+    ).rejects.toThrow('chat cannot prepare a permissive launch');
     expect(test.harness.preparedRuns).toEqual([]);
   });
 

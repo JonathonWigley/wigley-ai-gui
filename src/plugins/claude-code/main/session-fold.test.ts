@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentStart } from '../../../contracts/agent';
 import type { PipeDirection, PipeLine } from '../../../contracts/session-host';
-import { controlMessage, userMessage } from './claude-controls';
+import { BYPASS_CHOICE, controlMessage, userMessage } from './claude-controls';
 import {
   advanceFold,
   createSessionFoldState,
@@ -24,6 +24,7 @@ const request: AgentStart = {
   instructions: [],
   idleCompactMinTokens: null,
   rowId: 'row-1',
+  permissions: 'default',
 };
 
 const GRACE_NOTICE =
@@ -233,6 +234,16 @@ const compactionEvents = (effects: readonly FoldEffect[]) =>
   );
 
 describe('session-fold', () => {
+  // Breaks if the fold starts from the request's controls alone, dropping its
+  // permissions.
+  it('createSessionFoldState_Permissive_ModeIsBypassChoice', () => {
+    const state = createSessionFoldState({ ...request, permissions: 'auto' });
+
+    const mode = state.controls.find((control) => control.id === 'mode');
+    expect(mode?.value).toBe('bypassPermissions');
+    expect(mode?.choices).toContainEqual(BYPASS_CHOICE);
+  });
+
   it('stopTask_AnsweredWithError_LogsTheTask', () => {
     const state = createSessionFoldState(request);
     foldPipeLine(state, inLine(stopTaskRequest('wigley-2', 'b1')));

@@ -37,6 +37,7 @@ const TWO_SESSIONS: SavedSessions = {
       activeMs: 42000,
       rowId: 'row-alpha',
       unattended: true,
+      permissions: 'auto',
       headless: true,
       instructions: ['own note'],
       owner: 'practice',
@@ -61,6 +62,7 @@ const TWO_SESSIONS: SavedSessions = {
       activeMs: 0,
       rowId: 'row-beta',
       unattended: false,
+      permissions: 'default',
       headless: false,
       instructions: [],
       owner: null,
@@ -91,6 +93,7 @@ const ONE_SESSION: SavedSessions = {
       activeMs: 1500,
       rowId: null,
       unattended: false,
+      permissions: 'default',
       headless: false,
       instructions: [],
       owner: null,
@@ -158,6 +161,7 @@ describe('createOpenSessions', () => {
             activeMs: 0,
             rowId: null,
             unattended: false,
+            permissions: 'default',
             headless: false,
             instructions: [],
             owner: null,
@@ -237,6 +241,16 @@ describe('createOpenSessions', () => {
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], owner: undefined }]),
       expected: {
         sessions: [{ ...TWO_SESSIONS.sessions[0], owner: null }],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without permissions',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], permissions: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], permissions: 'default' }],
         selectedHostSessionId: null,
       },
     },
@@ -376,6 +390,10 @@ describe('createOpenSessions', () => {
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], unattended: 'yes' }]),
     },
     {
+      file: 'permissions not a mode',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], permissions: 'yes' }]),
+    },
+    {
       file: 'headless a string',
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], headless: 'yes' }]),
     },
@@ -419,6 +437,19 @@ describe('createOpenSessions', () => {
     expect(loaded.sessions.map((session) => session.headless)).toEqual([
       true,
       false,
+    ]);
+  });
+
+  // Breaks if the file writes or reads back a row's permissions wrong.
+  it('save_PermissiveRow_RoundTrips', async () => {
+    const test = setUp();
+
+    await test.open.save(TWO_SESSIONS);
+
+    const loaded = await test.open.load();
+    expect(loaded.sessions.map((session) => session.permissions)).toEqual([
+      'auto',
+      'default',
     ]);
   });
 

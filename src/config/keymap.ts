@@ -1,5 +1,6 @@
 import {
   type CommandId,
+  CORE_COPY_CODE,
   CORE_OPEN_LINK,
   CORE_RELOAD_PLUGIN,
   MODES_SHOW,
@@ -73,6 +74,13 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
   [CORE_OPEN_LINK.id]: {
     label: 'open the link',
     group: 'links',
+    runsIn: 'page',
+    arg: 'string',
+    risky: true,
+  },
+  [CORE_COPY_CODE.id]: {
+    label: 'copy the code block',
+    group: 'markdown',
     runsIn: 'page',
     arg: 'string',
     risky: true,

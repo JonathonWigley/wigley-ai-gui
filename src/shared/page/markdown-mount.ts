@@ -6,7 +6,8 @@ import type {
   MarkdownRenderer,
 } from '../../contracts/markdown';
 import { errorText } from '../error-text';
-import { moveConnected } from './dom';
+import { CODE_COPY_BUTTON, moveConnected } from './dom';
+import { iconButton } from './ui/icon-button';
 
 // `liveFences` false keeps every fence whose contribution runs its source as
 // code; one that only formats it still draws. True when left out.
@@ -23,8 +24,9 @@ export interface MarkdownDrawOptions {
 // whose target was removed from its parent, is disposed; a target moved to
 // another parent keeps its views. A target drawn with no parent is never
 // swept as removed. A video the last draw left in the target stays, playing,
-// in place of the new draw's video of the same source. `dispose` disposes
-// every view it holds.
+// in place of the new draw's video of the same source. Each code block a draw
+// leaves as plain code, outside any fence view, gets a copy button. `dispose`
+// disposes every view it holds.
 export interface MarkdownMount extends Disposable {
   draw(target: HTMLElement, html: string, options?: MarkdownDrawOptions): void;
 }
@@ -302,6 +304,7 @@ export function createMarkdownMount(
   return {
     draw(target, html, options = {}) {
       keepVideos(target, () => drawMarkdown(target, html, options));
+      addCopyButtons(target);
     },
     dispose() {
       if (isDisposed) {
@@ -314,6 +317,23 @@ export function createMarkdownMount(
       records = [];
     },
   };
+}
+
+// Puts a copy button first in each `pre` under `target` that sits in no fence
+// placeholder and holds none yet. Its click bubbles to the page core's
+// listener, which runs `core.copyCode` with the block's code, so the button
+// itself does nothing.
+function addCopyButtons(target: HTMLElement): void {
+  for (const pre of target.querySelectorAll<HTMLElement>('pre')) {
+    const isPlainCode =
+      pre.closest(PLACEHOLDER) === null &&
+      pre.querySelector(CODE_COPY_BUTTON) === null;
+    if (isPlainCode) {
+      const copy = iconButton('copy', 'Copy code', () => undefined, 'sm');
+      copy.classList.add('md-copy');
+      pre.prepend(copy);
+    }
+  }
 }
 
 function fencesIn(root: HTMLElement): Fence[] {

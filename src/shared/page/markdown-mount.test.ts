@@ -5,6 +5,7 @@ import {
   fencePlaceholder,
   installMarkdownDom,
   localVideo,
+  plainCode,
 } from './markdown-mount.test-support';
 import { asFake, type FakeElement } from './test-dom';
 
@@ -121,6 +122,19 @@ describe('createMarkdownMount', () => {
     ]);
     expect(viewsIn(target, fake.views)).toEqual([0, 1, -1]);
     expect(placeholdersIn(target)[2].children[0].tagName).toBe('PRE');
+  });
+
+  it('puts one copy button on each plain code block and none in a fence', () => {
+    mount.draw(
+      target,
+      `${plainCode('a')}${fencePlaceholder('zzz', true, 'b')}${plainCode('c')}`,
+    );
+
+    const blocks = asFake(target).querySelectorAll('pre');
+    expect(
+      blocks.map((pre) => pre.children.map((child) => child.tagName)),
+    ).toEqual([['BUTTON', 'CODE'], ['CODE'], ['BUTTON', 'CODE']]);
+    expect(asFake(target).querySelectorAll('.md-copy')).toHaveLength(2);
   });
 
   it.each([

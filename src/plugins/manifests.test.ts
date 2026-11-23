@@ -52,6 +52,24 @@ describe('manifests', () => {
     expect(problems).toEqual([]);
   });
 
+  it('manifests_WorkViews_DeclareTheCommandsEachOtherRuns', () => {
+    const command = (plugin: string, name: string) =>
+      (
+        builtInManifests.find(({ id }) => id === plugin)?.commands as
+          | Record<string, unknown>
+          | undefined
+      )?.[name];
+
+    expect(command('work-board', 'showTicket')).toMatchObject({
+      runsIn: 'page',
+      arg: 'string',
+    });
+    expect(command('work-inbox', 'filterTicket')).toMatchObject({
+      runsIn: 'page',
+      arg: 'string',
+    });
+  });
+
   it('manifests_Workflow_ListsItsSettings', () => {
     const workflow = manifests.find(({ id }) => id === 'workflow');
 

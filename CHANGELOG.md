@@ -8,6 +8,8 @@ changes for the user.
 
 ### Added
 
+- Every code block in chat, docs, forms and practice shows a copy button in its corner on hover; a click copies
+  the block's code and toasts Copied.
 - The app ships its own agent plugin, `auri`, in `agent-plugin/`: the MCP relay, the chatroom, checklist and
   AskUserQuestion hooks, and skills for forms, visuals, chatroom, workflows and checklist, backlog format, primer,
   audio picker, live view and writing `auri.json`. App sessions load it through `--plugin-dir`; terminal and Codex
@@ -23,6 +25,14 @@ changes for the user.
 - `npm run lint` also fails when app code names one user's setup (`npm run lint:boundary`), and
   `npm run changelog:release` moves the Unreleased entries under a version heading and bumps the app and `auri`
   plugin versions together.
+- Inbox mode (`Space k i`): your Slack threads sorted by what needs you, with drafts ready to send, snooze, dismiss and
+  restore, a ticket filter, and a Dock badge counting what needs you.
+- Board mode (`Space k j`): your Jira tickets and local tasks in columns, with moves you make by key, button or drag and
+  moves the app suggests from your branches, commits, pull requests and sessions.
+- Background sweeps of Slack and Jira by unattended worker sessions every `work.intervalMinutes` while the app runs, or
+  at once on `W`, with the `work.*` settings for channels, keywords, the Jira query, the Board columns and each signal's
+  column. Worker sessions run with permission checks off, and launch only in the installed app's live run: the dev app
+  queues jobs and logs each one not launched.
 
 ### Changed
 

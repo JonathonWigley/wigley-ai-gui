@@ -1,5 +1,10 @@
 import type { Files } from '../../contracts/files';
-import type { Git, GitCommit, GitWorktree } from '../../contracts/git';
+import type {
+  Git,
+  GitBranch,
+  GitCommit,
+  GitWorktree,
+} from '../../contracts/git';
 import type { Paths } from '../../contracts/paths';
 import type { ProcessRunner } from '../../contracts/processes';
 
@@ -266,6 +271,43 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       );
       return commits[0] ?? null;
     },
+    branches: async (root) =>
+      branchRecords(
+        await gitOutput(processes, 'for-each-ref', [
+          '-C',
+          root,
+          'for-each-ref',
+          '--sort=-committerdate',
+          '--format=%(refname)%00%(symref)%00%(committerdate:iso-strict)',
+          'refs/heads',
+          'refs/remotes',
+        ]),
+      ),
+    commitsMatching: async (root, pattern, since) => {
+      if (pattern === '') {
+        return [];
+      }
+      // `--exclude` applies to the `--all` after it, keeping the stash's
+      // `WIP on <branch>` commits out. `--grep` is attached so a pattern
+      // starting with `-` is not read as an option.
+      const sinceArgs = since === null ? [] : [`--since=${since}`];
+      return logCommits(
+        await gitOutput(processes, 'log', [
+          '-C',
+          root,
+          'log',
+          '--exclude=refs/stash',
+          '--all',
+          '--no-show-signature',
+          '--regexp-ignore-case',
+          '--extended-regexp',
+          `--grep=${pattern}`,
+          ...sinceArgs,
+          '--format=%x00%H%x00%cI%x00%s',
+          '-z',
+        ]),
+      );
+    },
   };
 }
 
@@ -357,6 +399,25 @@ function logCommits(output: string): GitCommit[] {
     commits.push({ sha, subject, at, paths });
   }
   return commits;
+}
+
+// The branches of a `for-each-ref` run, one `<refname>\0<symref>\0<date>`
+// line per ref; a symbolic ref (a remote's `HEAD`) is skipped.
+function branchRecords(output: string): GitBranch[] {
+  const branches: GitBranch[] = [];
+  for (const line of output.split('\n')) {
+    if (line === '') {
+      continue;
+    }
+    const [refName, symref, at] = line.split('\0');
+    if (symref !== '') {
+      continue;
+    }
+    const isRemote = refName.startsWith('refs/remotes/');
+    const name = refName.replace(/^refs\/(heads|remotes)\//, '');
+    branches.push({ name, at, isRemote });
+  }
+  return branches;
 }
 
 // The checkouts of a `worktree list --porcelain` run, whose records end at an

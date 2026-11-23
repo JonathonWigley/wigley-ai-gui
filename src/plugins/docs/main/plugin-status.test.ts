@@ -118,6 +118,8 @@ function cleanGit() {
     fileAtHead: vi.fn<Git['fileAtHead']>(async () => null),
     log: vi.fn<Git['log']>(async () => []),
     firstAdded: vi.fn<Git['firstAdded']>(async () => null),
+    branches: vi.fn<Git['branches']>(async () => []),
+    commitsMatching: vi.fn<Git['commitsMatching']>(async () => []),
   } satisfies Git;
 }
 

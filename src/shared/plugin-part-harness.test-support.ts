@@ -28,6 +28,7 @@ import { blockNameProblem } from '../contracts/markdown';
 import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
 import type { OuterPanes } from '../contracts/panes';
+import type { PullRequests } from '../contracts/pull-requests';
 import type {
   AreaName,
   ChannelShape,
@@ -76,6 +77,7 @@ import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
 import { uiStateOver } from './fake-ui-state.test-support';
 import { createListeners, type Listeners } from './listeners';
+import { coreCommands } from '../config/keymap';
 import { createMemoryFiles, type MemoryFiles } from './memory-files';
 import { posixPaths } from './paths/posix-paths';
 import { fakePlatform } from './platform.test-support';
@@ -333,7 +335,8 @@ interface HarnessWorld {
   state: SlotStore;
   commandRuns: HarnessCommandRun[];
   commands: RuntimeCommands<any>;
-  // Every command the harness's manifests declare, as the served config holds.
+  // The core commands and every command the harness's manifests declare, as
+  // the served config holds.
   declared: Readonly<Record<CommandId, CommandInfo>>;
 }
 
@@ -499,7 +502,7 @@ function createWorld(
   const store = state ?? createSlotStore(log);
   const commandRuns: HarnessCommandRun[] = [];
   const registry = new CommandRegistry<any>(log);
-  const declared = commandInfos({}, manifests);
+  const declared = commandInfos(coreCommands, manifests);
   const [ownKey, otherKey] =
     process === 'main'
       ? [coreRuntimeMainSlot, coreRuntimePageSlot]
@@ -1072,6 +1075,7 @@ function fakeMainApi(
       },
       openExternal: gateExternalLinks(async () => undefined),
       git: notFaked<Git>('git'),
+      pullRequests: notFaked<PullRequests>('pullRequests'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
       images: notFaked<ImageEncoder>('images'),
       systemStats: notFaked<SystemStats>('systemStats'),
@@ -1594,8 +1598,8 @@ function fakePageApi(
       onKeymapChanged: (listener) =>
         register(world.keymapListeners.add(listener)),
       label: (id) => id,
-      // Any command the harness's manifests declare, as the served config
-      // holds; a fake dependency's commands stay absent.
+      // Any core command or command the harness's manifests declare, as the
+      // served config holds; a fake dependency's commands stay absent.
       command: (id) =>
         Object.hasOwn(world.declared, id) ? world.declared[id] : undefined,
       scopes: [],

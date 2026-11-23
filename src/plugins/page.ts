@@ -35,6 +35,9 @@ import { unityPoolPagePart } from './unity-pool/page/start';
 import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
+import { workPagePart } from './work/page/start';
+import { workBoardPagePart } from './work-board/page/start';
+import { workInboxPagePart } from './work-inbox/page/start';
 import { workflowPagePart } from './workflow/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
@@ -70,6 +73,9 @@ export const pageParts: readonly PagePart[] = [
   settingsPagePart,
   scopedAgentsPagePart,
   backlogPagePart,
+  workPagePart,
+  workInboxPagePart,
+  workBoardPagePart,
   practicePagePart,
   schedulingPagePart,
   chatroomPagePart,
