@@ -174,15 +174,19 @@ describe('createBuildsPoller', () => {
     }
   });
 
-  it('marks one more for a replaced id whose poll runs', async () => {
+  it('polls a replaced id at once while its poll runs, and only the new poll arms', async () => {
     const run = setup();
     run.poller.setBackends(['b1'], []);
 
     run.poller.setBackends(['b1'], ['b1']);
-    expect(run.calls).toEqual(['b1']);
-    await run.resolveNext();
-
     expect(run.calls).toEqual(['b1', 'b1']);
+    await run.resolveNext();
+    await run.advance(SLOW_POLL_MS);
+    expect(run.calls).toEqual(['b1', 'b1']);
+    await run.resolveNext();
+    await run.advance(SLOW_POLL_MS);
+
+    expect(run.calls).toEqual(['b1', 'b1', 'b1']);
   });
 
   it('pollNow on a waiting id clears its timer and polls at once', async () => {

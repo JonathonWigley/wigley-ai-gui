@@ -44,4 +44,16 @@ describe('createBackendRegistry', () => {
 
     expect(calls).toBe(2);
   });
+
+  it('lists the live kinds sorted, without a disposed one', () => {
+    const registry = createBackendRegistry();
+    registry.add(kindOf('teamcity'));
+    const local = registry.add(kindOf('local'));
+    registry.add(kindOf('fixture'));
+    expect(registry.kinds()).toEqual(['fixture', 'local', 'teamcity']);
+
+    local.dispose();
+
+    expect(registry.kinds()).toEqual(['fixture', 'teamcity']);
+  });
 });

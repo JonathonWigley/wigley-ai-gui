@@ -34,14 +34,18 @@ const failedJob = (id: string) =>
 const runningJob = (id: string) =>
   buildJob({ id, label: id, state: 'running', result: null });
 
-function backend(id: string, builds: BuildRecord[]): BackendState {
+function backend(
+  id: string,
+  builds: BuildRecord[],
+  hasListed = true,
+): BackendState {
   return {
     id,
     kind: 'fixture',
     label: `Backend ${id}`,
     problem: null,
     capabilities: { cancel: true, choosesBranch: true },
-    games: [{ game, builds, subjects: {} }],
+    games: [{ game, builds, subjects: {}, hasListed }],
   };
 }
 
@@ -293,6 +297,40 @@ describe('foldBuilds', () => {
       expected: [{ kind: 'setEnded', setRunId: 'r1', builds: ['x'] }],
     },
     {
+      case: 'set ref unlisted, old, game not listed yet',
+      input: input({
+        backends: [backend('b1', [], false)],
+        setRuns: [
+          setRun({
+            builds: refs('x', 'y'),
+            createdAt: NOW - UNLISTED_ACTIVE_MS,
+          }),
+        ],
+      }),
+      expected: [],
+    },
+    {
+      case: 'set of a gone backend',
+      input: input({
+        backends: [backend('b1', [record('x')])],
+        setRuns: [
+          setRun({
+            backendId: 'b9',
+            builds: [{ backendId: 'b9', buildId: 'x' }],
+          }),
+        ],
+      }),
+      expected: [],
+    },
+    {
+      case: 'set of a gone game',
+      input: input({
+        backends: [backend('b1', [record('x')])],
+        setRuns: [setRun({ gameId: 'g9', builds: refs('x') })],
+      }),
+      expected: [],
+    },
+    {
       case: 'set empty',
       input: input({
         backends: [backend('b1', [record('x')])],
@@ -395,6 +433,39 @@ describe('foldBuilds', () => {
     );
   });
 
+  it.each([
+    {
+      case: 'listed',
+      ref: { backendId: 'b1', buildId: 'x' },
+      hasListed: true,
+      unlisted: false,
+    },
+    {
+      case: 'unlisted',
+      ref: { backendId: 'b1', buildId: 'y' },
+      hasListed: true,
+      unlisted: true,
+    },
+    {
+      case: 'unlisted, game not listed yet',
+      ref: { backendId: 'b1', buildId: 'y' },
+      hasListed: false,
+      unlisted: false,
+    },
+    {
+      case: 'of a backend not in the input',
+      ref: { backendId: 'b9', buildId: 'y' },
+      hasListed: false,
+      unlisted: true,
+    },
+  ])('isUnlisted of a ref $case: $unlisted', ({ ref, hasListed, unlisted }) => {
+    const fold = foldBuilds(
+      input({ backends: [backend('b1', [record('x')], hasListed)] }),
+    );
+
+    expect(fold.isUnlisted(ref)).toBe(unlisted);
+  });
+
   it('publishes each backend in order, with its set runs newest first', () => {
     const b2 = backend('b2', [record('w')]);
     b2.games[0].subjects = { abc: 'Fix the thing' };
@@ -442,6 +513,7 @@ describe('foldBuilds', () => {
   it.each([
     { kind: 'dev', expected: 'Dev' },
     { kind: 'gone', expected: 'gone' },
+    { kind: 'toString', expected: 'toString' },
   ])('kindLabel of $kind is $expected', ({ kind, expected }) => {
     expect(kindLabel(gameEntry(), kind)).toBe(expected);
   });

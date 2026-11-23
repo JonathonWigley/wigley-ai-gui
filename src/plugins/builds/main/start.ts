@@ -38,7 +38,7 @@ import { createLinkStore, LINKS_FILE } from './link-store';
 import { createBuildsPoller, SLOW_POLL_MS } from './poller';
 import { createQueueing, type QueueingResult } from './queueing';
 import { buildsSelfTestScript } from './selftest-script';
-import { registerSessionDemoStep } from './session-demo-step';
+import { registerSessionDemoStep } from './demo-steps';
 
 type BuildsApi = MainApi<typeof buildsManifest, BuildsChannel>;
 
@@ -50,12 +50,13 @@ interface LiveBackend {
   hasPolled: boolean;
 }
 
-// A game's last listed builds, the commit subjects read for their revisions, and its last list failure until a good
-// list.
+// A game's last listed builds, the commit subjects read for their revisions, its last list failure until a good
+// list, and whether a list of it ever succeeded.
 interface GameRecords {
   builds: BuildRecord[];
   subjects: Record<string, string>;
   failure: string | null;
+  hasListed: boolean;
 }
 
 // One game's list in a poll: the listed builds, or on a failure the builds held before it, with the failure's text.
@@ -117,7 +118,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
     const subjects = new Map<string, string>();
     const missingSubjects = new Map<string, number>();
     const subjectFailures = new Set<string>();
-    const endedWaiters: {
+    let endedWaiters: {
       link: SessionLink;
       resolve(link: SessionLink): void;
     }[] = [];
@@ -135,11 +136,15 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
         if (backend === undefined) {
           return null;
         }
+        const instanceProblem = live.get(id)?.problem ?? null;
         return {
           label: backend.label,
           entry: backend.entry,
           instance: live.get(id)?.instance ?? null,
-          problem: headingProblem(backend),
+          problem:
+            backend.entry === null
+              ? backend.problems.join('; ')
+              : instanceProblem,
         };
       },
       store,
@@ -200,9 +205,9 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
 
     // Drops the records of every game no longer in its backend's entry.
     function keepRecordsOf(next: ParsedBackend[]) {
-      for (const [backendId, games] of [...records]) {
+      for (const [backendId, games] of records) {
         const entry = next.find((backend) => backend.id === backendId)?.entry;
-        for (const gameId of [...games.keys()]) {
+        for (const gameId of games.keys()) {
           if (!entry?.games.some((game) => game.id === gameId)) {
             games.delete(gameId);
           }
@@ -216,7 +221,11 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
     async function create(entry: BackendEntry, startedIn: number) {
       const made = await createInstance(entry);
       if (startedIn !== generation || isStopped) {
-        made.instance?.dispose();
+        try {
+          made.instance?.dispose();
+        } catch (error) {
+          log(`backend dispose failed: ${errorText(error)}`);
+        }
         return;
       }
       live.set(entry.id, { ...made, hasPolled: false });
@@ -313,6 +322,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
         }
         if (failure === null) {
           listedCount += builds.length;
+          gameRecords.hasListed = true;
         }
         gameRecords.builds = builds;
         gameRecords.failure = failure;
@@ -334,7 +344,12 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       }
       let gameRecords = games.get(gameId);
       if (gameRecords === undefined) {
-        gameRecords = { builds: [], subjects: {}, failure: null };
+        gameRecords = {
+          builds: [],
+          subjects: {},
+          failure: null,
+          hasListed: false,
+        };
         games.set(gameId, gameRecords);
       }
       return gameRecords;
@@ -432,6 +447,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
             game,
             builds: gameRecords?.builds ?? [],
             subjects: gameRecords?.subjects ?? {},
+            hasListed: gameRecords?.hasListed ?? false,
           };
         }),
       }));
@@ -442,9 +458,8 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
         return;
       }
       const now = clock.now();
-      const backends = backendStates();
       const result = foldBuilds({
-        backends,
+        backends: backendStates(),
         links: store.links(),
         setRuns: store.setRuns(),
         offers: store.offers(),
@@ -455,8 +470,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       snapshot.set(result.snapshot);
       writeSessions(result.sessions);
       poller.reschedule();
-      const listed = listedRefs(backends);
-      const isPruned = store.prune(now, (ref) => listed.has(refKey(ref)));
+      const isPruned = store.prune(now, result.isUnlisted);
       handleEvents(result.events);
       if (isPruned) {
         fold();
@@ -471,7 +485,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
           sessions.set(sessionId, value);
         }
       }
-      for (const sessionId of [...sessions.all().keys()]) {
+      for (const sessionId of sessions.all().keys()) {
         if (!Object.hasOwn(next, sessionId)) {
           sessions.delete(sessionId);
         }
@@ -551,11 +565,10 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
 
     function settleEndedWaiters(sessionId: string, ref: BuildRef) {
       const isLink = isLinkOf(sessionId, ref);
-      for (const waiter of [...endedWaiters]) {
-        if (isLink(waiter.link)) {
-          endedWaiters.splice(endedWaiters.indexOf(waiter), 1);
-          waiter.resolve(store.links().find(isLink) ?? waiter.link);
-        }
+      const settling = endedWaiters.filter((waiter) => isLink(waiter.link));
+      endedWaiters = endedWaiters.filter((waiter) => !isLink(waiter.link));
+      for (const waiter of settling) {
+        waiter.resolve(store.links().find(isLink) ?? waiter.link);
       }
     }
 
@@ -702,21 +715,4 @@ function messageOf(event: BuildsEvent): EventMessage {
 
 function subjectKey(clone: string, sha: string): string {
   return `${clone}\n${sha}`;
-}
-
-function refKey(ref: BuildRef): string {
-  return `${ref.backendId}\n${ref.buildId}`;
-}
-
-// Every listed build's ref, by `refKey`.
-function listedRefs(backends: BackendState[]): Set<string> {
-  const listed = new Set<string>();
-  for (const backend of backends) {
-    for (const state of backend.games) {
-      for (const build of state.builds) {
-        listed.add(refKey({ backendId: backend.id, buildId: build.id }));
-      }
-    }
-  }
-  return listed;
 }

@@ -1,7 +1,7 @@
 import type { Clock, Timers } from '../../contracts/ambient';
 import type { Disposable } from '../../contracts/disposable';
 import type { Files } from '../../contracts/files';
-import type { Git } from '../../contracts/git';
+import type { Git, GitRemoteHead } from '../../contracts/git';
 import type { Paths } from '../../contracts/paths';
 import type { Platform } from '../../contracts/platform';
 import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
@@ -230,9 +230,9 @@ export const buildsSessionsSlot: KeyedSlotKey<SessionBuilds, 'main', 'builds'> =
   };
 
 // The page's calls into main. `setShown` reports whether Builds mode shows, which speeds polling; the last report
-// wins. `branches` lists a game's origin branch heads, those matching the set's pattern when `set` names one; each
-// head is `GitRemoteHead` of `src/contracts/git.ts`. `queue` queues a kind or a set, linked to `sessionId` when set.
-// `queueOffer` and `dismissOffer` act on the session's offer.
+// wins. `branches` lists a game's origin branch heads, those matching the set's pattern when `set` names one. `queue`
+// queues a kind or a set, linked to `sessionId` when set. `queueOffer` and `dismissOffer` act on the session's offer;
+// a `queueOffer` while one for the session is in flight is refused.
 export interface BuildsChannel extends ChannelShape {
   invoke: {
     setShown(shown: boolean): void;
@@ -240,7 +240,7 @@ export interface BuildsChannel extends ChannelShape {
       backend: string;
       game: string;
       set: string | null;
-    }): Promise<{ name: string; sha: string }[] | { problem: string }>;
+    }): Promise<GitRemoteHead[] | { problem: string }>;
     queue(arg: {
       backend: string;
       game: string;

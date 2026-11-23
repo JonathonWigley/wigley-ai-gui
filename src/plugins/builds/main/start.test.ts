@@ -25,7 +25,7 @@ import {
   fixtureBackendKind,
 } from '../contract.test-support';
 import { buildsManifest } from '../manifest';
-import { LINKS_FILE } from './link-store';
+import { LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
 import { FAST_POLL_MS, SLOW_POLL_MS } from './poller';
 import { buildsMainPart } from './start';
 
@@ -102,7 +102,7 @@ interface StartOptions {
   // The kinds added through the exports before `ready`; the fixture kind `fixture` over the run's fixture when left out.
   kinds?: (fixture: FixtureBackend) => BackendKind[];
   linksFile?: object;
-  // Every file write rejects from the restart that reads `linksFile` on; the part's files are a copy made at start.
+  // Every file write rejects from just before the restart that reads `linksFile`, so every write after the load rejects.
   failWrites?: boolean;
   restored?: Promise<void>;
   rows?: string[];
@@ -225,6 +225,59 @@ describe('buildsMainPart', () => {
 
     expect(run.backendView()?.problem).toBeNull();
     expect(late.listCalls).toHaveLength(1);
+  });
+
+  it('re-applies when a kind is removed, disposing its instance', async () => {
+    const run = await startOnHarness({ kinds: () => [] });
+    await run.ready();
+    const added = run.addKind(fixtureBackendKind('fixture', run.fixture));
+    await settle();
+    expect(run.backendView()?.problem).toBeNull();
+
+    added.dispose();
+    await settle();
+
+    expect(run.fixture.disposed).toBe(true);
+    expect(run.backendView()?.problem).toBe(
+      'no backend kind "fixture": its plugin is off or missing',
+    );
+  });
+
+  it('refuses a queue while the backend is still starting', async () => {
+    const created = deferred<BuildBackend>();
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameSetting(), gameSetting()] })],
+      kinds: () => [
+        { kind: 'fixture', label: 'Slow', create: () => created.promise },
+      ],
+    });
+    await run.ready();
+
+    await expect(
+      run.harness.started().commands.queue({
+        arg: { backend: 'b1', game: 'g1', kind: 'dev', branch: 'main' },
+      }),
+    ).rejects.toThrow('builds.queue: Backend: still starting');
+  });
+
+  it('ends no set run and prunes nothing before its game first lists', async () => {
+    const pastPrune = -PRUNE_AFTER_MS - 1;
+    const run = await startOnHarness({
+      linksFile: {
+        setRuns: [setRun({ createdAt: pastPrune })],
+        links: [sessionLink({ buildId: 'y', linkedAt: pastPrune })],
+      },
+    });
+    vi.spyOn(run.fixture, 'list').mockImplementation(
+      () => new Promise<ReturnType<typeof buildRecord>[]>(() => undefined),
+    );
+
+    await run.ready();
+
+    expect(run.chat.send).not.toHaveBeenCalled();
+    const file = await run.file();
+    expect(file.setRuns.map(({ notified }) => notified)).toEqual([false]);
+    expect(file.links.map(({ buildId }) => buildId)).toEqual(['y']);
   });
 
   it('tells a missed ending once, writing the flag first', async () => {

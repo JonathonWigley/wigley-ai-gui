@@ -121,7 +121,7 @@ function parseGame(
     return `game ${id} has no label`;
   }
   const hasClone = game.clone !== undefined && game.clone !== null;
-  if (hasClone && typeof game.clone !== 'string') {
+  if (hasClone && !isFilledText(game.clone)) {
     return `game ${id}: clone is not a path`;
   }
   if (!isFilledText(game.defaultBranch)) {

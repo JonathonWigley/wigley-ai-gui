@@ -110,6 +110,19 @@ describe('createQueueing', () => {
       problem: 'Backend: no cli',
     },
     {
+      case: 'the backend is still starting',
+      prepare: (run: Run) => {
+        run.found.backend = {
+          label: 'Backend',
+          entry: backendEntry({ id: 'b1', label: 'Backend' }),
+          instance: null,
+          problem: null,
+        };
+      },
+      call: (run: Run) => run.queueing.queue(devOnMain),
+      problem: 'Backend: still starting',
+    },
+    {
       case: 'no game with the id',
       call: (run: Run) => run.queueing.queue({ ...devOnMain, game: 'nope' }),
       problem: 'no game "nope" in Backend',
@@ -358,6 +371,40 @@ describe('createQueueing', () => {
 
     expect(Object.keys(run.store.offers())).toEqual(['s1']);
     expect(run.store.offers().s1.kind).toBe('release');
+  });
+
+  it('stores an offer with no subject when the subject read rejects', async () => {
+    const run = setup();
+    run.git.commitSubject.mockRejectedValue(new Error('bad object'));
+
+    const result = await run.queueing.offer(
+      { backend: 'b1', game: 'g1', kind: 'dev', branch: 'main' },
+      's1',
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(run.store.offers().s1).toMatchObject({
+      revision: SHA,
+      subject: null,
+    });
+  });
+
+  it('refuses a second queueOffer while the first is in flight', async () => {
+    const run = setup();
+    run.store.setOffer(
+      's1',
+      buildOffer({ backendId: 'b1', gameId: 'g1', revision: SHA }),
+    );
+    const queued = deferred<{ id: string }>();
+    vi.spyOn(run.backend, 'queue').mockReturnValueOnce(queued.promise);
+
+    const first = run.queueing.queueOffer('s1');
+    const second = await run.queueing.queueOffer('s1');
+    queued.resolve({ id: 'a' });
+
+    expect(second).toEqual({ problem: 'the offer is already queueing' });
+    expect(await first).toEqual({ ok: true });
+    expect(run.store.links().map((link) => link.buildId)).toEqual(['a']);
   });
 
   it('dismisses an offer, and a missing offer is no problem', () => {

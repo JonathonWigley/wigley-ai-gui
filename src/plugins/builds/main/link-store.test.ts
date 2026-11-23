@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { deferred } from '../../../shared/plugin-part-harness.test-support';
 import type { SessionLink, SetRun } from '../builds-model';
 import { buildOffer } from '../contract.test-support';
 import { createLinkStore, LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
+
+const flush = () => new Promise((settle) => setImmediate(settle));
 
 function sessionLink(overrides: Partial<SessionLink> = {}): SessionLink {
   return {
@@ -82,6 +85,9 @@ describe('createLinkStore', () => {
   it.each([
     { case: 'not JSON', text: '{' },
     { case: 'an array', text: '[]' },
+    { case: 'links not a list', text: '{"links":{}}' },
+    { case: 'setRuns not a list', text: '{"setRuns":5}' },
+    { case: 'offers not an object', text: '{"offers":[]}' },
   ])('writes nothing after a load of $case', async ({ text }) => {
     const run = setup();
     await run.files.write(LINKS_FILE, text);
@@ -118,6 +124,41 @@ describe('createLinkStore', () => {
     expect(run.logs).toEqual(['session-links.json: dropped 3 bad entries']);
   });
 
+  it('keeps a change made before the load settles after the file, and writes only after the read', async () => {
+    const run = setup();
+    await run.files.write(
+      LINKS_FILE,
+      JSON.stringify({ links: [sessionLink({ buildId: 'filed' })] }),
+    );
+    const store = run.open();
+    const readFile = run.files.read.bind(run.files);
+    const read = deferred<void>();
+    vi.spyOn(run.files, 'read').mockImplementationOnce(async (path) => {
+      await read.promise;
+      return readFile(path);
+    });
+    const write = vi.spyOn(run.files, 'write');
+
+    const loading = store.load();
+    store.addLinks([sessionLink({ buildId: 'early' })]);
+    await flush();
+    expect(write).not.toHaveBeenCalled();
+    read.resolve();
+    await loading;
+
+    expect(store.links().map((link) => link.buildId)).toEqual([
+      'filed',
+      'early',
+    ]);
+    expect(await store.written()).toBe(true);
+    const reloaded = run.open();
+    await reloaded.load();
+    expect(reloaded.links().map((link) => link.buildId)).toEqual([
+      'filed',
+      'early',
+    ]);
+  });
+
   it('resolves written false when a write rejects', async () => {
     const run = setup();
     const store = run.open();
@@ -135,58 +176,58 @@ describe('createLinkStore', () => {
     {
       case: 'ended at the limit',
       add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS }) },
-      listed: true,
+      unlisted: false,
       kept: true,
     },
     {
       case: 'ended past the limit',
       add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
-      listed: true,
+      unlisted: false,
       kept: false,
     },
     {
       case: 'untold, listed, old',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
-      listed: true,
+      unlisted: false,
       kept: true,
     },
     {
       case: 'untold, unlisted, old',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
-      listed: false,
+      unlisted: true,
       kept: false,
     },
     {
       case: 'untold, unlisted, at the limit',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS }) },
-      listed: false,
+      unlisted: true,
       kept: true,
     },
     {
       case: 'set run ended at the limit',
       add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS }) },
-      listed: true,
+      unlisted: false,
       kept: true,
     },
     {
       case: 'set run ended past the limit',
       add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
-      listed: true,
+      unlisted: false,
       kept: false,
     },
     {
       case: 'offer at the limit',
       add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS }) },
-      listed: true,
+      unlisted: false,
       kept: true,
     },
     {
       case: 'offer past the limit',
       add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS - 1 }) },
-      listed: true,
+      unlisted: false,
       kept: false,
     },
-  ])('prune keeps $case: $kept', async ({ add, listed, kept }) => {
+  ])('prune keeps $case: $kept', async ({ add, unlisted, kept }) => {
     const store = setup().open();
     await store.load();
     if (add.link) {
@@ -199,7 +240,7 @@ describe('createLinkStore', () => {
       store.setOffer('s1', add.offer);
     }
 
-    const dropped = store.prune(now, () => listed);
+    const dropped = store.prune(now, () => unlisted);
 
     const held =
       store.links().length +

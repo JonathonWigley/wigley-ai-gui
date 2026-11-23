@@ -131,6 +131,12 @@ describe('parseBackends', () => {
       level: 'game',
     },
     {
+      case: 'clone empty',
+      input: withGame1({ clone: '' }),
+      problem: 'game g1: clone is not a path',
+      level: 'game',
+    },
+    {
       case: 'no defaultBranch',
       input: withGame1({ defaultBranch: '' }),
       problem: 'game g1 has no defaultBranch',

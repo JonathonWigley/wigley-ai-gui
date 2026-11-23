@@ -12,7 +12,8 @@ import type {
 } from './contract';
 
 // How long a linked build or a set run's build that no list holds counts as still active: time for a queued build
-// to show in its backend's list, after which a build that fell out of the newest listed ends.
+// to show in its backend's list. Past it, an unlisted linked build stops making its backend poll fast, and an unlisted
+// build of a set run counts as ended once its game has listed.
 export const UNLISTED_ACTIVE_MS = 10 * 60 * 1000;
 
 // A session's link to a build it queued, kept in plugin data. `failingNotified` and `notified` are set once the
@@ -45,11 +46,13 @@ export interface SetRun {
   endedAt: number | null;
 }
 
-// A tracked game's last listed builds, newest first, and the commit subjects read for their revisions.
+// A tracked game's last listed builds, newest first, and the commit subjects read for their revisions. `hasListed` is
+// set once a list of the game succeeded; until then no build of it counts as unlisted.
 export interface GameState {
   game: GameEntry;
   builds: BuildRecord[];
   subjects: Record<string, string>;
+  hasListed: boolean;
 }
 
 // A backend entry as the poller holds it: `capabilities` is null while it has no instance.
@@ -98,12 +101,14 @@ export type BuildsEvent =
     };
 
 // The published state, the events to tell in order (failing, then ended, then setEnded), and the backends that poll
-// fast for a linked build still active, in input order.
+// fast for a linked build still active, in input order. `isUnlisted` says a ref's backend lists no such build while
+// every game of the backend has listed; a ref of a backend not in the input is unlisted.
 export interface BuildsFold {
   snapshot: BuildsSnapshot;
   sessions: Record<string, SessionBuilds>;
   events: BuildsEvent[];
   activeBackends: string[];
+  isUnlisted(ref: BuildRef): boolean;
 }
 
 interface ListedBuild {
@@ -141,6 +146,9 @@ export function foldBuilds(input: BuildsModelInput): BuildsFold {
       listed,
       input.now,
     ),
+    isUnlisted: (ref) =>
+      findListed(listed, ref) === null &&
+      everyGameListed(input.backends, ref.backendId),
   };
 }
 
@@ -169,6 +177,12 @@ function indexListedBuilds(
     listed.set(backend.id, byId);
   }
   return listed;
+}
+
+// Whether every game of backend `backendId` has listed; true for a backend not in `backends`.
+function everyGameListed(backends: BackendState[], backendId: string): boolean {
+  const backend = backends.find((each) => each.id === backendId);
+  return backend?.games.every((state) => state.hasListed) ?? true;
 }
 
 function findListed(
@@ -285,22 +299,23 @@ function setEndedEvents(
 ): BuildsEvent[] {
   const events: BuildsEvent[] = [];
   for (const setRun of setRuns) {
-    const game = backends
+    const state = backends
       .find((backend) => backend.id === setRun.backendId)
-      ?.games.find((state) => state.game.id === setRun.gameId)?.game;
-    if (setRun.notified || setRun.builds.length === 0 || !game) {
+      ?.games.find((each) => each.game.id === setRun.gameId);
+    if (setRun.notified || setRun.builds.length === 0 || !state) {
       continue;
     }
-    const isPastUnlistedWindow = now - setRun.createdAt >= UNLISTED_ACTIVE_MS;
+    const isUnlistedEnded =
+      state.hasListed && now - setRun.createdAt >= UNLISTED_ACTIVE_MS;
     const found = setRun.builds.map((ref) => findListed(listed, ref));
     const everyBuildEnded = found.every((entry) =>
-      entry ? entry.build.state === 'finished' : isPastUnlistedWindow,
+      entry ? entry.build.state === 'finished' : isUnlistedEnded,
     );
     if (everyBuildEnded) {
       events.push({
         kind: 'setEnded',
         setRun,
-        game,
+        game: state.game,
         builds: found
           .filter((entry) => entry !== null)
           .map((entry) => entry.build),

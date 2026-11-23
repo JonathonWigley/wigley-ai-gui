@@ -5,7 +5,7 @@ import type { SessionLink, SetRun } from '../builds-model';
 import type { BuildOffer, BuildRef } from '../contract';
 
 // How long a link, a set run or an offer stays once it is done with: 14 days after its build ends, or after it was
-// made when its build was never seen to end and is no longer listed.
+// made when its build was never seen to end and is known to be unlisted.
 export const PRUNE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 export const LINKS_FILE = 'session-links.json';
 
@@ -21,7 +21,8 @@ interface LinksValue {
 // member of the wrong type), nothing is written for the rest of the run, so the file stays for the user to read. An
 // entry of the wrong shape is dropped, and their count logged once. `written` resolves once every write so far
 // settled: true when the last one landed, false when it rejected (logged) or the store is not writable. `prune` drops
-// what is done with, writes when it dropped something, and says whether it did.
+// what is done with, a never-ended link or set run only when `isUnlisted` holds for its builds, writes when it dropped
+// something, and says whether it did.
 export interface LinkStore {
   load(): Promise<void>;
   links(): SessionLink[];
@@ -36,7 +37,7 @@ export interface LinkStore {
   ): void;
   updateSetRun(id: string, change: Partial<SetRun>): void;
   written(): Promise<boolean>;
-  prune(now: number, isListed: (ref: BuildRef) => boolean): boolean;
+  prune(now: number, isUnlisted: (ref: BuildRef) => boolean): boolean;
 }
 
 export function createLinkStore(
@@ -132,20 +133,20 @@ export function createLinkStore(
       write();
     },
     written: () => lastWrite,
-    prune(now, isListed) {
+    prune(now, isUnlisted) {
       const isKept = (
         endedAt: number | null,
         madeAt: number,
-        listed: boolean,
+        unlisted: boolean,
       ): boolean =>
         endedAt === null
-          ? listed || now - madeAt <= PRUNE_AFTER_MS
+          ? !unlisted || now - madeAt <= PRUNE_AFTER_MS
           : now - endedAt <= PRUNE_AFTER_MS;
       const links = value.links.filter((link) =>
-        isKept(link.endedAt, link.linkedAt, isListed(link)),
+        isKept(link.endedAt, link.linkedAt, isUnlisted(link)),
       );
       const setRuns = value.setRuns.filter((run) =>
-        isKept(run.endedAt, run.createdAt, run.builds.some(isListed)),
+        isKept(run.endedAt, run.createdAt, run.builds.every(isUnlisted)),
       );
       const offers = Object.fromEntries(
         Object.entries(value.offers).filter(

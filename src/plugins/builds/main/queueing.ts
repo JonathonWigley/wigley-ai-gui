@@ -13,7 +13,7 @@ import type {
 import type { LinkStore } from './link-store';
 
 // A backend entry as queueing finds it: `entry` is null when the entry failed its parse, and `instance` null while it
-// has none; `problem` is the heading's problem.
+// has none; `problem` is why it has no instance (the parse problems, or the instance's), null while `create` awaits.
 export interface QueueingBackend {
   label: string;
   entry: BackendEntry | null;
@@ -49,7 +49,7 @@ export interface QueueArg {
 
 // The page's and the commands' queueing, offers, branch lists, cancels and set agents. Each resolves to `{ ok: true }`
 // or a `{ problem }` (`branches` to the heads), never rejects, and changes nothing on a problem; a set whose later
-// queue fails keeps the builds it queued.
+// queue fails keeps the builds it queued. A `queueOffer` while one for the same session is in flight is refused.
 export interface Queueing {
   queue(arg: QueueArg): Promise<QueueingResult>;
   offer(
@@ -86,6 +86,8 @@ type Target = { kinds: string[]; set: BuildSetEntry | null };
 
 export function createQueueing(deps: QueueingDeps): Queueing {
   const { store, git, clock } = deps;
+  // Session ids whose `queueOffer` is in flight.
+  const offersQueueing = new Set<string>();
 
   function find(backendId: string, gameId: string): Found {
     const backend = deps.backend(backendId);
@@ -348,7 +350,17 @@ export function createQueueing(deps: QueueingDeps): Queueing {
   return {
     queue: (arg) => settled(() => queue(arg)),
     offer: (arg, sessionId) => settled(() => offer(arg, sessionId)),
-    queueOffer: (sessionId) => settled(() => queueOffer(sessionId)),
+    async queueOffer(sessionId) {
+      if (offersQueueing.has(sessionId)) {
+        return { problem: 'the offer is already queueing' };
+      }
+      offersQueueing.add(sessionId);
+      try {
+        return await settled(() => queueOffer(sessionId));
+      } finally {
+        offersQueueing.delete(sessionId);
+      }
+    },
     dismissOffer(sessionId) {
       if (Object.hasOwn(store.offers(), sessionId)) {
         store.setOffer(sessionId, null);
