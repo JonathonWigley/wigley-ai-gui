@@ -1,6 +1,6 @@
 # 14 — Personal rules: rename to auri, cut what auri skills now hold, workflow-gate reads declared workflows
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · rewrites workflow-gate's level source and app-session test, and moves rule text between personal files and plugin skills, where a wrong cut drops a rule
 Wave: 7 · Depends on: 01 (the `auri` tool names and skills), 12 (the `auri` hooks replace workflow-gate's checklist halves and the AskUserQuestion hook this task removes), 13 (workflow-gate's live check reads the `wigley` plugin's `auri.json`)
@@ -243,4 +243,4 @@ Commit: one commit in `ai` for the repo files (machine files are not committed).
 
 ## Proof
 
-<written by wigley:make>
+Commit e03dd181d · proof: diff read: personal files keep only additions and point at auri skills; wigley visuals/chatroom skills deleted; workflow-gate reads declared_level_skills from installed auri.json and is_app_session from WIGLEY_SESSION_ROW, checklist halves removed; py_compile + check_manifests pass; its pytest suites wait for the test gate (no pytest on python3 here) · concerns: machine edits (settings.json AskUserQuestion group and workflow-gate Stop group, ask-user-question-to-forms hook, AGENTS.local.md) held in scratchpad machine-edits-14.md for the landing; once on main the old checklist gate stops until the app ships auri hooks; the gate passes every edit until the installed wigley plugin carries auri.json; Verification grep needs one more exclusion for answers.py:36; wiki/Main.md visuals link is a file path for task 17's sweep

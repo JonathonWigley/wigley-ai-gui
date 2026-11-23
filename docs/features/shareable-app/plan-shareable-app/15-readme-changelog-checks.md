@@ -1,6 +1,6 @@
 # 15 — README and changelog checks, boundary lint, package metadata
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · three checks read the repo's own structure (manifests, tool definitions, git diff), and each must fail on the break it names without failing on the tree as it stands
 Wave: 7 · Depends on: 01 (both `auri` manifests), 12 (`agent-plugin/hooks/hooks.json` entries), and every task of waves 2–6 that adds, removes or renames a plugin, tool, setting or skill (02–11, 13), since the coverage test reads the tree they leave
@@ -236,4 +236,4 @@ Commit: one commit in `ai`.
 
 ## Proof
 
-<written by wigley:make>
+Commit c15be8077 · proof: diff read; wave 7 typecheck + full lint pass: layers, styles, changelog (entry under Unreleased), boundary (2176 files clean), oxlint, oxfmt · concerns: forms-tools.golden.txt edited by hand; readme-coverage.test.mts unrun; docs/features/live-view/design.md:92 names the deleted wigley-install.ts (task 16); the exits-1 proof must first remove the branch's own Added line

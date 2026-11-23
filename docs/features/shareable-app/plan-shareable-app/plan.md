@@ -340,8 +340,8 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 - [x] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
 
 ### Wave 7
-- [ ] [Personal rules rename](14-personal-rules-rename.md) — after 01, 12, 13
-- [ ] [README and changelog checks](15-readme-changelog-checks.md) — after 01–13
+- [x] [Personal rules rename](14-personal-rules-rename.md) — after 01, 12, 13
+- [x] [README and changelog checks](15-readme-changelog-checks.md) — after 01–13
 
 ### Wave 8
 - [ ] [Repo move](17-repo-move.md) — after 01–15, 19
@@ -371,6 +371,8 @@ Review base: 35f62ddac
 - 12 · hard · 3e205f034 · diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item
 - 06 · hard · 5af2b120a c7288b4c8 · diff read: sample-auri.json, SAMPLE_AURI_FILE, SAMPLE_PLUGIN_NAME, sampleDeclared present; four plugins and shared plan-progress/plan-copies removed; wave 5 typecheck + lint pass after one fixture fix round · concerns: plan-watch-driven sample Large rows (RunLog_LargeClosed fixCycles 2, Open_SavedCountdown_RunsNone) unrun; docs/features/agent-chat/design.md:577 still says one self-test script per plugin (task 16); ~/.config/wigley-ai-gui/layouts/workflow-{large,medium,small,spike}/ left as user state
 - 13 · standard · ca20d7316 · python3 parse: key order version..liveView; workflows and planFormat equal sample-auri.json; retro/backlog/docs/liveView match the pinned values; check_manifests.py passes · concerns: none
+- 14 · hard · e03dd181d · diff read: personal files keep only additions and point at auri skills; wigley visuals/chatroom skills deleted; workflow-gate reads declared_level_skills from installed auri.json and is_app_session from WIGLEY_SESSION_ROW, checklist halves removed; py_compile + check_manifests pass; its pytest suites wait for the test gate (no pytest on python3 here) · concerns: machine edits (settings.json AskUserQuestion group and workflow-gate Stop group, ask-user-question-to-forms hook, AGENTS.local.md) held in scratchpad machine-edits-14.md for the landing; once on main the old checklist gate stops until the app ships auri hooks; the gate passes every edit until the installed wigley plugin carries auri.json; Verification grep needs one more exclusion for answers.py:36; wiki/Main.md visuals link is a file path for task 17's sweep
+- 15 · hard · c15be8077 · diff read; wave 7 typecheck + full lint pass: layers, styles, changelog (entry under Unreleased), boundary (2176 files clean), oxlint, oxfmt · concerns: forms-tools.golden.txt edited by hand; readme-coverage.test.mts unrun; docs/features/live-view/design.md:92 names the deleted wigley-install.ts (task 16); the exits-1 proof must first remove the branch's own Added line
 ### Contract changes
 ### Rulings
 - test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
@@ -400,5 +402,9 @@ Review base: 35f62ddac
 - 06: SampleDemoDeps is {showSample, addWorkflow, createDraw(workflow), planPane, runAction, openDoc}; demo page halves register no commands or keys · group 06
 - 06: sample Large main rows live in main/start.test.ts ('the sample Large'); fixtures.test-support.ts renamed sample-fixtures.test-support.ts; SessionFlow drops state · group 06
 - 06: engine behaviour now asserted: an untitled closed stage's detail is ''; {plan} actions hide while a flow has no plan dir; a template whose every variable is 0 renders '' · group 06
+- 14 (lead): machine files are not edited during the task; the edits wait for the landing · group 14
+- 14: no version bump, task 01's 3.0.0 bump covers the deleted skills · group 14
+- 15: addedEntryLines also counts entries in a version section origin/main lacks, so a branch passes after changelog:release · group 15
+- 15: sample-auri.json moves to declared/fixtures/; SAMPLE_PLUGIN_NAME and sampleQualified live in src/shared/sample-plugin.ts; check-layers lets notes main import docs' selftest-fixture.ts · group 15
 ### Review rounds
 ### Test gate
