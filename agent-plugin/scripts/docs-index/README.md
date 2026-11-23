@@ -25,12 +25,12 @@ Standard library only, Python 3.11 or later (`tomllib`).
 
 ## Commands
 
-| Command | Writes | Prints |
-|---|---|---|
-| `python3 docs_index.py build` | `~/.agents/wigley-docs/index.json` (temp file, then rename) and the loads cache | nothing |
-| `python3 docs_index.py build --stdout` | the same files | the same JSON |
-| `python3 docs_index.py context <dir>` | the loads cache | an index document for `<dir>` alone |
-| `python3 docs_index.py session <id>` | nothing | an index document for one Claude Code session |
+| Command                                | Writes                                                                          | Prints                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
+| `python3 docs_index.py build`          | `~/.agents/wigley-docs/index.json` (temp file, then rename) and the loads cache | nothing                                       |
+| `python3 docs_index.py build --stdout` | the same files                                                                  | the same JSON                                 |
+| `python3 docs_index.py context <dir>`  | the loads cache                                                                 | an index document for `<dir>` alone           |
+| `python3 docs_index.py session <id>`   | nothing                                                                         | an index document for one Claude Code session |
 
 Each command takes `--contributions <file>` before the command name
 (`docs_index.py --contributions <file> build`): the file the app writes with the global folders,
@@ -102,11 +102,20 @@ keys and no others:
 ```json
 {
   "version": 1,
-  "globalFolders": [{ "path": "~/agents", "referenceFiles": ["decisions.md"],
-                      "subfolders": ["learning", "wiki"], "skip": ["archive", "learning/archive"] }],
+  "globalFolders": [
+    {
+      "path": "~/agents",
+      "referenceFiles": ["decisions.md"],
+      "subfolders": ["learning", "wiki"],
+      "skip": ["archive", "learning/archive"]
+    }
+  ],
   "linkPrefixes": { "me:": "me@my-marketplace" },
-  "features": { "homes": ["{repo}/docs/features", "~/features/{name}"], "file": "followups.md",
-                "areaFolder": "followups" }
+  "features": {
+    "homes": ["{repo}/docs/features", "~/features/{name}"],
+    "file": "followups.md",
+    "areaFolder": "followups"
+  }
 }
 ```
 
@@ -148,25 +157,25 @@ home only `.git`, `node_modules` and `.claude/worktrees` are skipped, so a skill
 own root, so its generated folders are skipped. A skill's folder is the exception: its
 `skill-file` walk skips every generated folder above, wherever the skill sits.
 
-| Kind | Files |
-|---|---|
+| Kind           | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `instructions` | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `AGENTS.override.md`, `.claude/CLAUDE.md`, `.claude/AGENTS.md` at any depth; the same files in each ancestor of a context folder that sits in no indexed repo (`source: global`); every file an `@import` reaches outside an ignored repo; `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.codex/AGENTS.override.md`; the top-level `.md` files of each global folder but its `referenceFiles`; the root `CLAUDE.md` and `AGENTS.md` of a Claude Code plugin |
-| `reference` | each global folder's `referenceFiles`, and every `.md` below each of its `subfolders` but a `learning` one |
-| `learning` | every `.md` below a global folder's `learning` subfolder |
-| `rule` | `.claude/rules/**/*.md`, `~/.claude/rules/**/*.md` |
-| `skill` | `*/SKILL.md` under `.claude/skills/`, `.agents/skills/`, `~/.claude/skills/`, `~/.claude/skills/synced/<bucket>/`, `~/.agents/skills/`, and a plugin's `skills/` |
-| `skill-file` | every other file in a skill's folder, at any depth (references, templates, scripts), generated folders skipped, and a file holding a NUL byte in its first 8 KiB skipped; an instruction file there (`AGENTS.md` …) stays `instructions` |
-| `subagent` | `.claude/agents/*.md`, `~/.claude/agents/*.md`, a plugin's `agents/*.md` |
-| `command` | `.claude/commands/**/*.md`, `~/.claude/commands/**/*.md`, a plugin's `commands/**/*.md` |
-| `prompt` | `~/.codex/prompts/*.md` |
-| `hook` | each hook in the `hooks` object of a `settings.json` / `settings.local.json`, and of a plugin's `hooks/hooks.json` |
-| `plugin` | each Claude Code install in `~/.claude/plugins/installed_plugins.json`, and each Codex plugin in `~/.codex/config.toml` |
-| `annotation` | `.claude/annotations.*.local.md` |
-| `feature` | `<home>/<slug>/checklist.md` |
-| `task` | numbered task docs `NN-*.md` in a feature folder or a `plan-*/` folder |
-| `plan` | `<home>/<slug>/plan-*/plan.md` |
-| `feature-doc` | any other `.md` under `<home>/` |
-| `followup` | one entry per item of `<home>/<file>`, `<home>/<areaFolder>/*.md` and a repo's `docs/followups/*.md` |
+| `reference`    | each global folder's `referenceFiles`, and every `.md` below each of its `subfolders` but a `learning` one                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `learning`     | every `.md` below a global folder's `learning` subfolder                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `rule`         | `.claude/rules/**/*.md`, `~/.claude/rules/**/*.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `skill`        | `*/SKILL.md` under `.claude/skills/`, `.agents/skills/`, `~/.claude/skills/`, `~/.claude/skills/synced/<bucket>/`, `~/.agents/skills/`, and a plugin's `skills/`                                                                                                                                                                                                                                                                                                                                           |
+| `skill-file`   | every other file in a skill's folder, at any depth (references, templates, scripts), generated folders skipped, and a file holding a NUL byte in its first 8 KiB skipped; an instruction file there (`AGENTS.md` …) stays `instructions`                                                                                                                                                                                                                                                                   |
+| `subagent`     | `.claude/agents/*.md`, `~/.claude/agents/*.md`, a plugin's `agents/*.md`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `command`      | `.claude/commands/**/*.md`, `~/.claude/commands/**/*.md`, a plugin's `commands/**/*.md`                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `prompt`       | `~/.codex/prompts/*.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `hook`         | each hook in the `hooks` object of a `settings.json` / `settings.local.json`, and of a plugin's `hooks/hooks.json`                                                                                                                                                                                                                                                                                                                                                                                         |
+| `plugin`       | each Claude Code install in `~/.claude/plugins/installed_plugins.json`, and each Codex plugin in `~/.codex/config.toml`                                                                                                                                                                                                                                                                                                                                                                                    |
+| `annotation`   | `.claude/annotations.*.local.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `feature`      | `<home>/<slug>/checklist.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `task`         | numbered task docs `NN-*.md` in a feature folder or a `plan-*/` folder                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `plan`         | `<home>/<slug>/plan-*/plan.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `feature-doc`  | any other `.md` under `<home>/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `followup`     | one entry per item of `<home>/<file>`, `<home>/<areaFolder>/*.md` and a repo's `docs/followups/*.md`                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 `<home>` is a feature home (Contributions file), and `<file>` and `<areaFolder>` the `features`
 fields. Its files are `source: features` with the repo's name as `repo` (the
@@ -223,19 +232,19 @@ wherever it sits. An instruction file (`AGENTS.md`, `CLAUDE.md` …) under an in
     `## ` heading above it as its section. Title, tags and gist come from the item's first line,
     read on across its indented continuation up to the line that closes a bold title the first line
     opens (the lines joined with single spaces); the rest of the continuation is not read.
-  An item's tags are the comma-separated words of an italic span (`*…*` or `_…_`) that opens its
-  text after the title and ends in a colon (`- **Title** — *agent-ready*: gist`), read from the
-  item's Contents line for a `## ` item and from the list item's first line for a list item; the
-  span is left out of the gist. A `## ` item's Contents line is a top-level list item between
-  `**Contents**` and the first `## ` heading, its indented continuation lines read as part of it
-  (joined with single spaces): the first one whose title matches the heading,
-  backticks and strike-through removed from both for the match. A tag span on the `## ` heading or
-  in the section's body is not read. A repo's
-  `docs/followups/<topic>.md` item has no tags. An item whose text after the title, tags
-  removed, begins with `shipped`, or that is struck through (`~~` at the start of its text or
-  heading), is `done`; for a `## ` item the text after the title is the first
-  non-heading line under it. A `README.md` in a feature home's `followups/` is an index, not
-  follow-ups: it is a `feature-doc`.
+    An item's tags are the comma-separated words of an italic span (`*…*` or `_…_`) that opens its
+    text after the title and ends in a colon (`- **Title** — *agent-ready*: gist`), read from the
+    item's Contents line for a `## ` item and from the list item's first line for a list item; the
+    span is left out of the gist. A `## ` item's Contents line is a top-level list item between
+    `**Contents**` and the first `## ` heading, its indented continuation lines read as part of it
+    (joined with single spaces): the first one whose title matches the heading,
+    backticks and strike-through removed from both for the match. A tag span on the `## ` heading or
+    in the section's body is not read. A repo's
+    `docs/followups/<topic>.md` item has no tags. An item whose text after the title, tags
+    removed, begins with `shipped`, or that is struck through (`~~` at the start of its text or
+    heading), is `done`; for a `## ` item the text after the title is the first
+    non-heading line under it. A `README.md` in a feature home's `followups/` is an index, not
+    follow-ups: it is a `feature-doc`.
 
 ## The index file
 
@@ -257,7 +266,12 @@ All three commands print or write one document:
       "path": "/Users/u/dev/notes/docs/features/followups.md",
       "line": 10,
       "title": "bash-lint command splitter: redesign it or check less",
-      "meta": { "status": "open", "gist": "paren, redirect and `$(` gaps …", "section": null, "tags": ["needs a feature plan"] },
+      "meta": {
+        "status": "open",
+        "gist": "paren, redirect and `$(` gaps …",
+        "section": null,
+        "tags": ["needs a feature plan"]
+      },
       "walked": [],
       "lastLoaded": "2026-10-26T21:01:32.174Z",
       "headings": [],
@@ -271,8 +285,14 @@ All three commands print or write one document:
       "loadedPlugins": {},
       "states": {
         "/Users/u/Documents/dev/tool/AGENTS.md": {
-          "claude": { "state": "launch", "reason": "AGENTS.md in an ancestor of the folder; no CLAUDE.md above it" },
-          "codex": { "state": "launch", "reason": "AGENTS.md between the git root and the folder" }
+          "claude": {
+            "state": "launch",
+            "reason": "AGENTS.md in an ancestor of the folder; no CLAUDE.md above it"
+          },
+          "codex": {
+            "state": "launch",
+            "reason": "AGENTS.md between the git root and the folder"
+          }
         }
       }
     }
@@ -321,20 +341,20 @@ All three commands print or write one document:
   `<plugin>@<marketplace>` key for a plugin.
 - `meta` by kind:
 
-  | Kind | `meta` |
-  |---|---|
-  | `skill` | `name`, `description`, `userInvokedOnly` (`disable-model-invocation: true`), `implicitInvocation` (Codex `agents/openai.yaml`) |
-  | `subagent` | `name`, `description`, `model` |
-  | `rule` | `paths` (the `paths:` globs, `[]` when unscoped) |
-  | `instructions` | `imports` (the paths its `@import` lines resolve to) |
-  | `hook` | `event`, `matcher` (`null` when the group has none), `command` |
-  | `plugin` | `harness` (`claude` or `codex`), `version`, `enabled` (Codex only), `installs` (Claude only: `[{scope, projectPath}]`, one per distinct pair among the installs sharing this folder, across every config folder) |
-  | `feature` | `slug`, `checked`, `total` |
-  | `task` | `feature`, `plan` (the plan slug, or `null`), `status`, `checked`, `total` |
-  | `plan` | `feature`, `checked`, `total` |
-  | `followup` | `status` (`open` or `done`), `gist`, `section` (the `## ` heading above a list item, else `null`), `tags` (the item's tags in written order, `[]` when none) |
-  | `skill-file` | `skill` (the id of its skill's `SKILL.md` entry) |
-  | others | `{}` |
+  | Kind           | `meta`                                                                                                                                                                                                           |
+  | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `skill`        | `name`, `description`, `userInvokedOnly` (`disable-model-invocation: true`), `implicitInvocation` (Codex `agents/openai.yaml`)                                                                                   |
+  | `subagent`     | `name`, `description`, `model`                                                                                                                                                                                   |
+  | `rule`         | `paths` (the `paths:` globs, `[]` when unscoped)                                                                                                                                                                 |
+  | `instructions` | `imports` (the paths its `@import` lines resolve to)                                                                                                                                                             |
+  | `hook`         | `event`, `matcher` (`null` when the group has none), `command`                                                                                                                                                   |
+  | `plugin`       | `harness` (`claude` or `codex`), `version`, `enabled` (Codex only), `installs` (Claude only: `[{scope, projectPath}]`, one per distinct pair among the installs sharing this folder, across every config folder) |
+  | `feature`      | `slug`, `checked`, `total`                                                                                                                                                                                       |
+  | `task`         | `feature`, `plan` (the plan slug, or `null`), `status`, `checked`, `total`                                                                                                                                       |
+  | `plan`         | `feature`, `checked`, `total`                                                                                                                                                                                    |
+  | `followup`     | `status` (`open` or `done`), `gist`, `section` (the `## ` heading above a list item, else `null`), `tags` (the item's tags in written order, `[]` when none)                                                     |
+  | `skill-file`   | `skill` (the id of its skill's `SKILL.md` entry)                                                                                                                                                                 |
+  | others         | `{}`                                                                                                                                                                                                             |
 
   A marketplace clone's plugin file of any kind also carries `installed`: one
   `{harness, version, path}` per install folder merged into it, Claude Code's (in config folder
@@ -372,13 +392,13 @@ parser, which `scripts/check_pointers.py` imports too.
 **Which entries carry them.** An entry has a body when `line` is `null`, its kind is not `hook` or
 `plugin`, and `path` ends in `.md`.
 
-| Entry | `headings` | `links` |
-|---|---|---|
-| `mine`, with a body | parsed | parsed |
-| `third-party`, with a body | parsed | `[]` |
-| `hook`, `plugin`, a file not ending in `.md` | `[]` | `[]` |
-| a follow-up item, `#L1` of a repo's `docs/followups/<topic>.md` included | `[]` | `[]` |
-| a file that cannot be read | `[]` | `[]` |
+| Entry                                                                    | `headings` | `links` |
+| ------------------------------------------------------------------------ | ---------- | ------- |
+| `mine`, with a body                                                      | parsed     | parsed  |
+| `third-party`, with a body                                               | parsed     | `[]`    |
+| `hook`, `plugin`, a file not ending in `.md`                             | `[]`       | `[]`    |
+| a follow-up item, `#L1` of a repo's `docs/followups/<topic>.md` included | `[]`       | `[]`    |
+| a file that cannot be read                                               | `[]`       | `[]`    |
 
 So no entry holds the headings or links of a follow-up file, while a reference into one resolves,
 since its items list its path.
@@ -405,20 +425,20 @@ match, and no reference crosses it. A code span is seen one source line at a tim
    file stem) name another file the index cannot pin, and give no link.
 
 **Section target.** The text after `§ `, backticks and `*` removed, must start with a heading of the
-target at any level, as a whole word; the longest wins, and each ` › ` walks into the children of
+target at any level, as a whole word; the longest wins, and each `›` walks into the children of
 the heading before it. No match gives no link, nor does a target that does not end in `.md` or
 cannot be read. `targetLine` is the first of the deepest tied headings.
 
 **Target rules for a file token.** A candidate counts only when its real path is the `path` of a
 listed entry of a kind other than `hook` and `plugin`. First hit wins:
 
-| Token | Tried |
-|---|---|
-| `~/…` | that path |
-| `/…` | that path |
-| holds a `/` | the source's real folder, the repo root |
-| bare `name.md` | the source's real folder, the repo root, then the one `mine` path with that base name, when exactly one exists |
-| `README` | as `README.md`: the source's real folder, the repo root |
+| Token             | Tried                                                                                                                                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/…`             | that path                                                                                                                                                                                                                         |
+| `/…`              | that path                                                                                                                                                                                                                         |
+| holds a `/`       | the source's real folder, the repo root                                                                                                                                                                                           |
+| bare `name.md`    | the source's real folder, the repo root, then the one `mine` path with that base name, when exactly one exists                                                                                                                    |
+| `README`          | as `README.md`: the source's real folder, the repo root                                                                                                                                                                           |
 | `<prefix><skill>` | that skill's `SKILL.md` among `skill` entries whose `plugin` equals `linkPrefixes[<prefix>]`: the first by path with `source` `repo`, else the first by path with `source` `plugin`. A heading in a file beside it gives no link. |
 
 The repo root is the nearest one holding the source's real folder. A `source: features` entry in no
@@ -427,13 +447,13 @@ only on exactly one listed hit.
 
 **Markdown hrefs.** The href splits at its first `#`, and its path part is URL-decoded.
 
-| Href | Result |
-|---|---|
+| Href                                                                       | Result                                                         |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `<prefix><skill>`, for the longest `linkPrefixes` key the href starts with | the skill rule above, the part before `#`, `targetLine` `null` |
-| any other scheme | no link |
-| `~/…` or `/…` | that path |
-| any other path | relative to the source's real folder only |
-| `#fragment` alone | the source's own file; an unmatched fragment gives no link |
+| any other scheme                                                           | no link                                                        |
+| `~/…` or `/…`                                                              | that path                                                      |
+| any other path                                                             | relative to the source's real folder only                      |
+| `#fragment` alone                                                          | the source's own file; an unmatched fragment gives no link     |
 
 A fragment matches the target's first heading whose GitHub slug equals it (lowercase, alphanumerics,
 spaces, `-` and `_` kept, each space then a `-`). On a path href, an unmatched fragment or a target
@@ -446,13 +466,13 @@ stays out. A wrapped reference keeps its line break, read as `\n` also in a CRLF
 
 ## Load states
 
-| State | Meaning |
-|---|---|
-| `launch` | in context from the session's start |
-| `on-demand` | loads when the session touches a matching file or folder, or when the user invokes it |
-| `listed` | its name and description are in context; the body loads on use |
-| `shadowed` | would load, but another file switches it off |
-| `not-loaded` | the harness never loads it for this folder |
+| State        | Meaning                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `launch`     | in context from the session's start                                                   |
+| `on-demand`  | loads when the session touches a matching file or folder, or when the user invokes it |
+| `listed`     | its name and description are in context; the body loads on use                        |
+| `shadowed`   | would load, but another file switches it off                                          |
+| `not-loaded` | the harness never loads it for this folder                                            |
 
 `reason` names the rule in one line. A file reached through a symlink is judged at its real path and
 at each path it is linked from, each by its own owner — the real path by the entry's owner, a linked
@@ -557,16 +577,16 @@ list of loaded files and are not read.
 offset is skipped (`api-request-blob` rows repeat tool calls without a timestamp). Each of these counts
 as a load at its row's `timestamp`, kept as written:
 
-| Row | Loads |
-|---|---|
-| `instructions` attachment | each `attachment.files[].path` |
-| `nested_memory` attachment | `attachment.path` |
-| `file`, `compact_file_reference` attachment | `attachment.filename` (an `@` mention, and its re-reference after compaction) |
-| user text beginning `Base directory for this skill: <dir>` | `<dir>/SKILL.md` (a skill invoked by tool or slash command) |
-| `invoked_skills` attachment | `<dir>/SKILL.md` from the first line of each `skills[].content` (skills re-injected after compaction) |
-| assistant `tool_use` named `Read` | `input.file_path` |
-| assistant `tool_use` named `Agent` or `Task` | the subagent named `input.subagent_type` |
-| user text holding `<command-name>/<name></command-name>` | the command named `<name>` |
+| Row                                                        | Loads                                                                                                 |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `instructions` attachment                                  | each `attachment.files[].path`                                                                        |
+| `nested_memory` attachment                                 | `attachment.path`                                                                                     |
+| `file`, `compact_file_reference` attachment                | `attachment.filename` (an `@` mention, and its re-reference after compaction)                         |
+| user text beginning `Base directory for this skill: <dir>` | `<dir>/SKILL.md` (a skill invoked by tool or slash command)                                           |
+| `invoked_skills` attachment                                | `<dir>/SKILL.md` from the first line of each `skills[].content` (skills re-injected after compaction) |
+| assistant `tool_use` named `Read`                          | `input.file_path`                                                                                     |
+| assistant `tool_use` named `Agent` or `Task`               | the subagent named `input.subagent_type`                                                              |
+| user text holding `<command-name>/<name></command-name>`   | the command named `<name>`                                                                            |
 
 Rows are matched as Claude Code writes them, compact JSON with `attachment.type` first in an
 attachment row's `attachment`: a line is parsed only when it is an attachment row of a type above, or

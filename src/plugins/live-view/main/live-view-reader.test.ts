@@ -155,10 +155,7 @@ describe('liveViewReader', () => {
         'close[1].words: not a list of words',
       ),
     },
-  ])(
-    'read_AcceptsOrRefusesWithReasons_given $given',
-    ({ section, result }) => {
-      expect(liveViewReader.read(section, SOURCE)).toEqual(result);
-    },
-  );
+  ])('read_AcceptsOrRefusesWithReasons_given $given', ({ section, result }) => {
+    expect(liveViewReader.read(section, SOURCE)).toEqual(result);
+  });
 });

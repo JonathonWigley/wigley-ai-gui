@@ -60,7 +60,10 @@ function mineChildren(
   homeDir = HOME,
   paths = posixPaths,
 ): TreeNode[] {
-  return child(buildTree(entries, homeDir, paths, NO_STARS, 'followups'), 'Mine').children;
+  return child(
+    buildTree(entries, homeDir, paths, NO_STARS, 'followups'),
+    'Mine',
+  ).children;
 }
 
 function ids(nodes: readonly TreeNode[]): string[] {
@@ -230,9 +233,9 @@ describe('buildTree', () => {
   ])(
     'buildTree_OwnerRoots_OnlyOwnersWithEntries $roots',
     ({ entries, roots }) => {
-      expect(ids(buildTree(entries, HOME, posixPaths, NO_STARS, 'followups'))).toEqual(
-        roots,
-      );
+      expect(
+        ids(buildTree(entries, HOME, posixPaths, NO_STARS, 'followups')),
+      ).toEqual(roots);
     },
   );
 
@@ -343,7 +346,13 @@ describe('buildTree', () => {
   });
 
   it('buildTree_Roles_RepoClonePluginOther', () => {
-    const roots = buildTree(marketplaceRepo(), HOME, posixPaths, NO_STARS, 'followups');
+    const roots = buildTree(
+      marketplaceRepo(),
+      HOME,
+      posixPaths,
+      NO_STARS,
+      'followups',
+    );
     const repo = child(child(roots, 'Mine').children, 'm');
     const plugin = child(repo.children, 'w@m');
 
@@ -463,7 +472,13 @@ describe('buildTree', () => {
   });
 
   it('buildTree_SameIndexTwice_SameIds', () => {
-    const first = buildTree(twoClonesCarryingKey(), HOME, posixPaths, NO_STARS, 'followups');
+    const first = buildTree(
+      twoClonesCarryingKey(),
+      HOME,
+      posixPaths,
+      NO_STARS,
+      'followups',
+    );
     const second = buildTree(
       twoClonesCarryingKey(),
       HOME,
@@ -825,7 +840,13 @@ describe('buildTree', () => {
     const skill = thirdPartyPluginSkill('v@m');
     const entries = [entry({ path: '/Users/u/.claude/rules/a.md' }), skill];
 
-    const roots = buildTree(entries, HOME, posixPaths, new Set([skill.id]), 'followups');
+    const roots = buildTree(
+      entries,
+      HOME,
+      posixPaths,
+      new Set([skill.id]),
+      'followups',
+    );
 
     expect(titles(roots)).toEqual(['Starred', 'Mine', 'Third-party']);
   });
@@ -1022,17 +1043,20 @@ describe('featureSlug', () => {
       areaFolder: 'followups',
       slug: null,
     },
-  ])('featureSlug gives $slug for $given', ({ path, meta, areaFolder, slug }) => {
-    const featureEntry = entry({
-      path: `${FEATURES_ROOT}/${path}`,
-      source: 'features',
-      repo: 'r',
-      root: FEATURES_ROOT,
-      meta,
-    });
+  ])(
+    'featureSlug gives $slug for $given',
+    ({ path, meta, areaFolder, slug }) => {
+      const featureEntry = entry({
+        path: `${FEATURES_ROOT}/${path}`,
+        source: 'features',
+        repo: 'r',
+        root: FEATURES_ROOT,
+        meta,
+      });
 
-    expect(featureSlug(featureEntry, posixPaths, areaFolder)).toBe(slug);
-  });
+      expect(featureSlug(featureEntry, posixPaths, areaFolder)).toBe(slug);
+    },
+  );
 });
 
 describe('findSkillEntry', () => {

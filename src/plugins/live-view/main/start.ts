@@ -80,9 +80,7 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     const contributions = api.dependency(contributionsMainKey);
     contributions.registerFeature('liveView', liveViewReader);
     contributions.onChanged('liveView', (strategies) =>
-      applyStrategies(
-        strategies as readonly Strategy<LiveViewContribution>[],
-      ),
+      applyStrategies(strategies as readonly Strategy<LiveViewContribution>[]),
     );
     void contributions.ready.then(() =>
       applyStrategies(

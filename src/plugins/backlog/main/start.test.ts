@@ -297,6 +297,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     }),
     machineIndex: async () => index.read,
     rebuildMachineIndex: async () => index.read,
+    setFeaturesHomes: () => undefined,
     readDoc: async (path) => {
       calls.push(['readDoc', path]);
       const text = files.get(path);

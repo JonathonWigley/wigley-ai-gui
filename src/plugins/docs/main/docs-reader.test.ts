@@ -28,7 +28,10 @@ const USER_SECTION = {
   linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
 };
 
-function strategy(id: string, value: DocsContribution): Strategy<DocsContribution> {
+function strategy(
+  id: string,
+  value: DocsContribution,
+): Strategy<DocsContribution> {
   return { id, label: id, source: { ...SOURCE, pluginName: id }, value };
 }
 
@@ -127,7 +130,10 @@ describe('mergeDocs', () => {
   it('mergeDocs_PrefixClash_FirstKeptAndLogged', () => {
     const logged: string[] = [];
     const strategies = [
-      strategy('mine', { wikiMain: '~/a/Main.md', linkPrefixes: { 'w:': 'w@m' } }),
+      strategy('mine', {
+        wikiMain: '~/a/Main.md',
+        linkPrefixes: { 'w:': 'w@m' },
+      }),
       strategy('theirs', {
         wikiMain: '~/b/Main.md',
         linkPrefixes: { 'w:': 'w@other' },

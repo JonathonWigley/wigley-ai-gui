@@ -43,6 +43,7 @@ import {
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
   docsBindingSlot,
+  type DocsGlobalFolder,
   type DocsMainExports,
   type FeaturesHomes,
   type IndexDocument,
@@ -403,16 +404,12 @@ function documentWithDoc(path: string): IndexDocument {
 describe('docs main part', () => {
   it('sessionSource_RegisteredWhileConnected', async () => {
     const docs = startDocsPart();
-    docs.processes.script(
-      'python3',
-      [...RUN, 'session', 'abc'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    docs.processes.script('python3', [...RUN, 'session', 'abc'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const info: SessionInfo = {
       sessionId: 'abc',
       projectDir: '/p',
@@ -435,16 +432,12 @@ describe('docs main part', () => {
 
   it('sessionSource_HostSessionChanged_LoadsNewId', async () => {
     const docs = startDocsPart();
-    docs.processes.script(
-      'python3',
-      [...RUN, 'session', 'new-host'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    docs.processes.script('python3', [...RUN, 'session', 'new-host'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const info: SessionInfo = {
       sessionId: 'old-host',
       projectDir: '/p',
@@ -954,10 +947,7 @@ describe('docs main part lifecycle', () => {
       drive: true,
       dependencies: [
         sessions,
-        fakeDependency(
-          contributionsMainKey,
-          () => fakeContributions().exports,
-        ),
+        fakeDependency(contributionsMainKey, () => fakeContributions().exports),
       ],
       settings: { ...docsMainPart.manifest.settings, scriptPath: '/script.py' },
       services: { homeDir: '/', runMode: 'live' },
@@ -1040,16 +1030,12 @@ describe('docs main part lifecycle', () => {
     { when: 'a row and its connected event', seed: 'both' },
   ])('serves the session index of $when', async ({ seed }) => {
     const { harness } = startDocsOnHarness();
-    harness.processes.script(
-      'python3',
-      [...RUN, 'session', 'abc'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    harness.processes.script('python3', [...RUN, 'session', 'abc'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const rows = harness.state.publish(sessionsRowsSlot);
     const row = sessionRow('row-1', { hostSessionId: 'abc', projectDir: '/p' });
     rows.set('row-1', row);
@@ -1111,15 +1097,15 @@ describe('docs main part lifecycle', () => {
   });
 });
 
+const USER_FOLDER: DocsGlobalFolder = {
+  path: '~/wigley-agents',
+  referenceFiles: ['decisions.md'],
+  subfolders: ['learning', 'wiki'],
+  skip: ['archive', 'learning/archive'],
+};
+
 const USER_DOCS: DocsContribution = {
-  globalFolders: [
-    {
-      path: '~/wigley-agents',
-      referenceFiles: ['decisions.md'],
-      subfolders: ['learning', 'wiki'],
-      skip: ['archive', 'learning/archive'],
-    },
-  ],
+  globalFolders: [USER_FOLDER],
   wikiMain: '~/wigley-agents/wiki/Main.md',
   linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
 };
@@ -1198,7 +1184,7 @@ describe('docs binding', () => {
     await vi.waitFor(() => expect(builds()).toHaveLength(1));
 
     const expected = {
-      globalFolders: USER_DOCS.globalFolders ?? [],
+      globalFolders: [USER_FOLDER],
       wikiMain: '~/wigley-agents/wiki/Main.md',
       linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
       features: null,
@@ -1206,9 +1192,7 @@ describe('docs binding', () => {
     expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
       contributionsFileText(expected),
     );
-    expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(
-      expected,
-    );
+    expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(expected);
   });
 
   it('setFeaturesHomes_SelfTestMode_KeepsTheFixtureFeatures', async () => {

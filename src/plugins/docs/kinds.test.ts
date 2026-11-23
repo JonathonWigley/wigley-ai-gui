@@ -172,7 +172,14 @@ describe('placesFor', () => {
     ].map((path) => entry({ path, kind: 'instructions' }));
 
     expect(
-      placesFor('instructions', entries, HOME, posixPaths, ['.claude'], binding),
+      placesFor(
+        'instructions',
+        entries,
+        HOME,
+        posixPaths,
+        ['.claude'],
+        binding,
+      ),
     ).toEqual([
       {
         title: 'Global · ~/notes',
@@ -370,7 +377,11 @@ describe('placesFor', () => {
     { given: 'no features homes', features: null },
     {
       given: 'another follow-ups file name',
-      features: { homes: ['{repo}/docs/features'], file: 'todo.md', areaFolder: 'todo' },
+      features: {
+        homes: ['{repo}/docs/features'],
+        file: 'todo.md',
+        areaFolder: 'todo',
+      },
     },
   ])('placesFor_NoFeatures_NoFollowupPlace: $given', ({ features }) => {
     const root = '/Users/u/wigley-features/r';

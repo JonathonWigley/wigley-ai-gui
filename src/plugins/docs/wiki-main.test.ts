@@ -115,6 +115,8 @@ describe('parseWikiMain', () => {
   ])('parseWikiMain_Target: $target', ({ target, expected }) => {
     const text = `## Shelf\n[P](${target})`;
 
-    expect(parseWikiMain(text, PREFIXES)).toEqual([{ title: 'Shelf', items: expected }]);
+    expect(parseWikiMain(text, PREFIXES)).toEqual([
+      { title: 'Shelf', items: expected },
+    ]);
   });
 });

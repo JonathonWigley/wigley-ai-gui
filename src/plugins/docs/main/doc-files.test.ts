@@ -406,23 +406,26 @@ describe('write', () => {
   it.each([
     { case: 'a global folder', path: '~/notes/n.md', isWritten: true },
     { case: 'no global folder', path: '~/other/n.md', isWritten: false },
-  ])('write_InBindingGlobalFolder_Allowed: $case', async ({ path, isWritten }) => {
-    const binding: DocsBinding = {
-      ...USER_BINDING,
-      globalFolders: [
-        { path: '~/notes', referenceFiles: [], subfolders: [], skip: [] },
-      ],
-    };
-    const test = setUp({ binding });
-    await test.files.makeFolder(`${HOME}/notes`);
-    await test.files.makeFolder(`${HOME}/other`);
+  ])(
+    'write_InBindingGlobalFolder_Allowed: $case',
+    async ({ path, isWritten }) => {
+      const binding: DocsBinding = {
+        ...USER_BINDING,
+        globalFolders: [
+          { path: '~/notes', referenceFiles: [], subfolders: [], skip: [] },
+        ],
+      };
+      const test = setUp({ binding });
+      await test.files.makeFolder(`${HOME}/notes`);
+      await test.files.makeFolder(`${HOME}/other`);
 
-    const written = test.docFiles.write(path, 'n', null);
+      const written = test.docFiles.write(path, 'n', null);
 
-    await (isWritten
-      ? expect(written).resolves.toEqual({ type: 'written' })
-      : expect(written).rejects.toThrow('outside the indexed folders'));
-  });
+      await (isWritten
+        ? expect(written).resolves.toEqual({ type: 'written' })
+        : expect(written).rejects.toThrow('outside the indexed folders'));
+    },
+  );
 
   it('write_Outside_RejectsNamingPath', async () => {
     const test = setUp();
