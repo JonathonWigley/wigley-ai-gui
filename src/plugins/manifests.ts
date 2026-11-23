@@ -37,6 +37,8 @@ import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
 import { windowManifest } from './window/manifest';
 import { workManifest } from './work/manifest';
+import { workBoardManifest } from './work-board/manifest';
+import { workInboxManifest } from './work-inbox/manifest';
 import { workflowManifest } from './workflow/manifest';
 import { workflowLargeManifest } from './workflow-large/manifest';
 import { workflowMediumManifest } from './workflow-medium/manifest';
@@ -76,6 +78,8 @@ export const builtInManifests = [
   scopedAgentsManifest,
   backlogManifest,
   workManifest,
+  workInboxManifest,
+  workBoardManifest,
   notesManifest,
   practiceManifest,
   usageManifest,

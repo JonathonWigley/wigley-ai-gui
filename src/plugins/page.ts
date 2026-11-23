@@ -35,6 +35,8 @@ import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workPagePart } from './work/page/start';
+import { workBoardPagePart } from './work-board/page/start';
+import { workInboxPagePart } from './work-inbox/page/start';
 import { workflowPagePart } from './workflow/page/start';
 import { workflowLargePagePart } from './workflow-large/page/start';
 import { workflowMediumPagePart } from './workflow-medium/page/start';
@@ -78,6 +80,8 @@ export const pageParts: readonly PagePart[] = [
   scopedAgentsPagePart,
   backlogPagePart,
   workPagePart,
+  workInboxPagePart,
+  workBoardPagePart,
   practicePagePart,
   schedulingPagePart,
   chatroomPagePart,

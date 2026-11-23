@@ -22,6 +22,19 @@ describe('defaultKeymap', () => {
     expect(() => requireWellFormedChords(merged.page)).not.toThrow();
   });
 
+  // A bind straight to a `work.*` command resolves silently on a refusal; the
+  // views' own commands toast it.
+  it('defaultKeymap_WorkViews_BindNoWorkCommand', () => {
+    const viewBinds = defaultKeymap.binds.filter(({ scope }) =>
+      /^work-(inbox|board)\./.test(scope),
+    );
+
+    expect(viewBinds.length).toBeGreaterThan(0);
+    expect(viewBinds.map(({ command }) => command)).not.toContainEqual(
+      expect.stringMatching(/^work\./),
+    );
+  });
+
   it('defaultKeymap_WindowDisabled_DropsTheSummonBind', () => {
     const merged = mergeKeymap(defaultKeymap, manifests, {});
     const globalCommands = (keymap: typeof merged) =>
