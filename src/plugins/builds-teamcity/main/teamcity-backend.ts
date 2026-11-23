@@ -23,23 +23,24 @@ import {
 
 // The most detail and log calls one list runs at once.
 export const MAX_CALLS_IN_FLIGHT = 4;
-// How long a build whose detail could not be read waits before a list reads it again.
+// How long a finished build whose detail or a log could not be read waits before a list reads it again.
 export const DETAIL_RETRY_MS = 10 * 60 * 1000;
 // How long after a build finishes its deploy logs are still read for install links.
-export const LINK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const LINK_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 const VERSION_TIMEOUT_MS = 10_000;
 const LIST_TIMEOUT_MS = 30_000;
 const LOG_TIMEOUT_MS = 60_000;
 const START_TIMEOUT_MS = 60_000;
 
+// `{ "games": { "<game id>": BuildRecord[] }, "pins": { "<build id>": QueuedPin } }`.
 const CACHE_FILE = 'teamcity-finished.json';
 const RUN_LIST_FIELDS =
   'id,number,status,state,webUrl,branchName,buildTypeId,statusText,queuedDate,startDate,finishDate,waitReason,triggered.user.name';
 const QUEUE_PATH =
   '/app/rest/buildQueue?locator=count:1000&fields=build(id,buildTypeId,state,branchName,queuedDate,webUrl,waitReason,startEstimate,triggered(user(name)))';
 const DETAIL_FIELDS =
-  'id,state,status,statusText,running-info(percentageComplete,leftSeconds,currentStageText),snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))';
+  'id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))';
 
 // The `teamcity` backend kind: builds of TeamCity build chains, read and queued through the `teamcity` CLI. `config`
 // holds an optional `command` (the CLI, `~` expanded; `teamcity` when empty) and an optional `buildJobPattern` (a
@@ -135,10 +136,25 @@ function kindsByTarget(game: GameEntry): Map<string, string> {
   return kinds;
 }
 
-// What this instance queued a build with, for the rows TeamCity lists as `<default>`.
+// What this backend queued a build with, for the rows TeamCity lists as `<default>`.
 interface QueuedPin {
   branch: string;
   revision: string | null;
+}
+
+// What CACHE_FILE holds: finished builds whose detail and every log were read, by game id then build id, and what
+// this backend queued each build with, by build id, until that build is cached.
+interface StoredBuilds {
+  finished: Map<string, Map<string, BuildRecord>>;
+  pins: Map<string, QueuedPin>;
+}
+
+// A build whose detail or a log could not be read. A running build's next read waits out one list; a finished
+// build's waits DETAIL_RETRY_MS from `failedAt`.
+interface FailedRead {
+  failedAt: number;
+  isRunning: boolean;
+  record: BuildRecord | null; // what was read before a log failed; null when the detail failed
 }
 
 // A build of one list, its record, and whether it may be cached.
@@ -154,28 +170,27 @@ function createTeamcityBackend(
   buildJobPattern: RegExp | null,
   services: BackendServices,
 ): BuildBackend {
-  // Finished builds whose detail and every log were read, by game id then build id; null until the first list.
-  let finishedCache: Promise<Map<string, Map<string, BuildRecord>>> | null =
-    null;
-  let cacheWrites: Promise<void> = Promise.resolve();
-  const queuedPins = new Map<string, QueuedPin>();
-  // The time each failed detail read failed, by build id.
-  const failedDetails = new Map<string, number>();
+  // CACHE_FILE's contents; null until the first list or queue.
+  let storedBuilds: Promise<StoredBuilds> | null = null;
+  let storeWrites: Promise<void> = Promise.resolve();
+  // Each build whose last read failed, by build id.
+  const failedReads = new Map<string, FailedRead>();
 
-  const cache = () => {
-    finishedCache ??= readCacheFile(services);
-    return finishedCache;
+  const stored = () => {
+    storedBuilds ??= readCacheFile(services);
+    return storedBuilds;
   };
 
-  const writeCache = (games: Map<string, Map<string, BuildRecord>>) => {
-    cacheWrites = cacheWrites.then(async () => {
+  const writeStored = (builds: StoredBuilds) => {
+    storeWrites = storeWrites.then(async () => {
       const file = {
         games: Object.fromEntries(
-          [...games].map(([gameId, records]) => [
+          [...builds.finished].map(([gameId, records]) => [
             gameId,
             [...records.values()],
           ]),
         ),
+        pins: Object.fromEntries(builds.pins),
       };
       try {
         await services.dataFiles.write(
@@ -186,22 +201,42 @@ function createTeamcityBackend(
         services.log(`Could not write ${CACHE_FILE}: ${errorText(error)}`);
       }
     });
-    return cacheWrites;
+    return storeWrites;
   };
 
-  // The build's detail, or null after logging why it could not be read; a read that failed within DETAIL_RETRY_MS is
-  // not tried again.
+  // The failure the build's read still backs off from, or null when it may be read; it spends a running build's
+  // one-list backoff.
+  const consumeBackoff = (id: string): FailedRead | null => {
+    const failure = failedReads.get(id);
+    if (failure === undefined) {
+      return null;
+    }
+    if (failure.isRunning) {
+      failedReads.delete(id);
+      return failure;
+    }
+    return services.clock.now() < failure.failedAt + DETAIL_RETRY_MS
+      ? failure
+      : null;
+  };
+
+  const recordFailure = (
+    id: string,
+    isRunning: boolean,
+    record: BuildRecord | null,
+  ) => {
+    failedReads.set(id, {
+      failedAt: services.clock.now(),
+      isRunning,
+      record,
+    });
+  };
+
+  // The build's detail, or null after logging why it could not be read.
   const readDetail = async (
     id: string,
     limit: Limit,
   ): Promise<ChainDetail | null> => {
-    const failedAt = failedDetails.get(id);
-    if (
-      failedAt !== undefined &&
-      services.clock.now() < failedAt + DETAIL_RETRY_MS
-    ) {
-      return null;
-    }
     try {
       const text = await limit(() =>
         runTeamcity(
@@ -214,10 +249,8 @@ function createTeamcityBackend(
       if (detail === null) {
         throw new Error('the detail is not a JSON object');
       }
-      failedDetails.delete(id);
       return detail;
     } catch (error) {
-      failedDetails.set(id, services.clock.now());
       services.log(`Could not read build ${id}: ${errorText(error)}`);
       return null;
     }
@@ -258,26 +291,37 @@ function createTeamcityBackend(
     listed: ListedBuild,
     kind: string,
     cached: Map<string, BuildRecord>,
+    pin: QueuedPin | undefined,
     limit: Limit,
   ): Promise<ReadBuild> => {
-    const record = listedRecord(game, listed, kind, queuedPins.get(listed.id));
+    const record = listedRecord(game, listed, kind, pin);
     if (listed.state === 'queued') {
       return { record, isCacheable: false };
     }
     const cachedRecord = cached.get(listed.id);
     if (listed.state === 'finished' && cachedRecord !== undefined) {
-      return { record: cachedRecord, isCacheable: true };
+      return { record: { ...cachedRecord, kind }, isCacheable: true };
+    }
+    const isRunning = listed.state === 'running';
+    const failure = consumeBackoff(listed.id);
+    if (failure !== null) {
+      return {
+        record: failure.record === null ? record : { ...failure.record, kind },
+        isCacheable: false,
+      };
     }
     const detail = await readDetail(listed.id, limit);
     if (detail === null) {
+      recordFailure(listed.id, isRunning, null);
       return { record, isCacheable: false };
     }
+    failedReads.delete(listed.id);
     const withDetail = {
       ...record,
       revision: detail.revision,
       jobs: detail.jobs,
     };
-    if (listed.state === 'running') {
+    if (isRunning) {
       return {
         record: {
           ...withDetail,
@@ -295,7 +339,11 @@ function createTeamcityBackend(
       return { record: withDetail, isCacheable: true };
     }
     const { links, isComplete } = await readLinks(detail.logJobIds, limit);
-    return { record: { ...withDetail, links }, isCacheable: isComplete };
+    const withLinks = { ...withDetail, links };
+    if (!isComplete) {
+      recordFailure(listed.id, false, withLinks);
+    }
+    return { record: withLinks, isCacheable: isComplete };
   };
 
   // The game's builds of the run lists and the queue, merged by id with the queue's row winning, newest first, cut
@@ -351,12 +399,20 @@ function createTeamcityBackend(
 
     async list(game, limit) {
       const builds = await listBuilds(game, limit);
-      const games = await cache();
-      const cached = games.get(game.id) ?? new Map<string, BuildRecord>();
+      const store = await stored();
+      const cached =
+        store.finished.get(game.id) ?? new Map<string, BuildRecord>();
       const callLimit = createLimit(MAX_CALLS_IN_FLIGHT);
       const read = await Promise.all(
         builds.map(({ listed, kind }) =>
-          readBuild(game, listed, kind, cached, callLimit),
+          readBuild(
+            game,
+            listed,
+            kind,
+            cached,
+            store.pins.get(listed.id),
+            callLimit,
+          ),
         ),
       );
       const nextCached = new Map(
@@ -367,9 +423,13 @@ function createTeamcityBackend(
       const hasCacheChanged =
         nextCached.size !== cached.size ||
         [...nextCached.keys()].some((id) => !cached.has(id));
-      games.set(game.id, nextCached);
+      store.finished.set(game.id, nextCached);
+      // A cached record holds the branch its pin gave it.
+      for (const id of nextCached.keys()) {
+        store.pins.delete(id);
+      }
       if (hasCacheChanged) {
-        await writeCache(games);
+        await writeStored(store);
       }
       return read.map((each) => each.record);
     },
@@ -403,23 +463,24 @@ function createTeamcityBackend(
         throw new Error('teamcity run start gave no build id');
       }
       const id = String(answer.id);
-      queuedPins.set(id, {
+      const store = await stored();
+      store.pins.set(id, {
         branch: request.branch,
         revision: request.revision,
       });
+      await writeStored(store);
       return { id };
     },
 
     dispose() {
-      finishedCache = null;
-      queuedPins.clear();
-      failedDetails.clear();
+      storedBuilds = null;
+      failedReads.clear();
     },
   };
 }
 
 // The record of a listed build before its detail is read: no revision but a queued one, no jobs, links or progress.
-// A branch TeamCity names `<default>`, or none, is the one this instance queued on, else the game's default branch.
+// A branch TeamCity names `<default>`, or none, is the one its pin names, else the game's default branch.
 function listedRecord(
   game: GameEntry,
   listed: ListedBuild,
@@ -454,10 +515,12 @@ function listedRecord(
   };
 }
 
-// The cache file's records by game id then build id; a missing or malformed file reads as empty.
+// The cache file's finished records and pins; a missing or malformed file reads as empty, and a malformed record or
+// pin is left out.
 async function readCacheFile(
   services: BackendServices,
-): Promise<Map<string, Map<string, BuildRecord>>> {
+): Promise<StoredBuilds> {
+  const builds: StoredBuilds = { finished: new Map(), pins: new Map() };
   let text: string;
   try {
     text = await services.dataFiles.read(CACHE_FILE);
@@ -465,29 +528,106 @@ async function readCacheFile(
     if (!isMissingFile(error)) {
       services.log(`Could not read ${CACHE_FILE}: ${errorText(error)}`);
     }
-    return new Map();
+    return builds;
   }
   let file: unknown;
   try {
     file = JSON.parse(text);
   } catch {
-    return new Map();
+    return builds;
   }
-  const games = isJsonObject(file) ? file.games : undefined;
-  if (!isJsonObject(games)) {
-    return new Map();
+  if (!isJsonObject(file)) {
+    return builds;
   }
-  const cached = new Map<string, Map<string, BuildRecord>>();
+  const games = isJsonObject(file.games) ? file.games : {};
   for (const [gameId, records] of Object.entries(games)) {
     const kept = Array.isArray(records)
-      ? records.filter(
-          (record): record is BuildRecord =>
-            isJsonObject(record) && typeof record.id === 'string',
-        )
+      ? records.filter(isFinishedRecord)
       : [];
-    cached.set(gameId, new Map(kept.map((record) => [record.id, record])));
+    builds.finished.set(
+      gameId,
+      new Map(kept.map((record) => [record.id, record])),
+    );
   }
-  return cached;
+  const pins = isJsonObject(file.pins) ? file.pins : {};
+  for (const [id, pin] of Object.entries(pins)) {
+    if (isQueuedPin(pin)) {
+      builds.pins.set(id, pin);
+    }
+  }
+  return builds;
+}
+
+const RECORD_STRINGS = ['id', 'gameId', 'kind', 'branch'] as const;
+const RECORD_NULLABLE_STRINGS = [
+  'number',
+  'version',
+  'revision',
+  'result',
+  'statusText',
+  'stepText',
+  'webUrl',
+  'triggeredBy',
+] as const;
+const RECORD_NULLABLE_NUMBERS = [
+  'percent',
+  'leftSeconds',
+  'startedAt',
+  'finishedAt',
+  'startEstimate',
+] as const;
+
+// Whether a cached value is a finished build's record, every field of its type.
+function isFinishedRecord(value: unknown): value is BuildRecord {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  const hasStrings = RECORD_STRINGS.every(
+    (key) => typeof value[key] === 'string',
+  );
+  const hasNullableStrings = RECORD_NULLABLE_STRINGS.every(
+    (key) => value[key] === null || typeof value[key] === 'string',
+  );
+  const hasNullableNumbers = RECORD_NULLABLE_NUMBERS.every(
+    (key) => value[key] === null || typeof value[key] === 'number',
+  );
+  const hasLinks = Array.isArray(value.links) && value.links.every(isLink);
+  const hasJobs = Array.isArray(value.jobs) && value.jobs.every(isJob);
+  return (
+    hasStrings &&
+    hasNullableStrings &&
+    hasNullableNumbers &&
+    hasLinks &&
+    hasJobs &&
+    value.state === 'finished' &&
+    typeof value.queuedAt === 'number'
+  );
+}
+
+function isLink(value: unknown): value is BuildLink {
+  return (
+    isJsonObject(value) &&
+    typeof value.label === 'string' &&
+    typeof value.url === 'string'
+  );
+}
+
+// Whether a cached job carries the id, label and state every job has.
+function isJob(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    typeof value.id === 'string' &&
+    typeof value.label === 'string' &&
+    typeof value.state === 'string'
+  );
+}
+
+function isQueuedPin(value: unknown): value is QueuedPin {
+  return (
+    isJsonObject(value) &&
+    typeof value.branch === 'string' &&
+    (value.revision === null || typeof value.revision === 'string')
+  );
 }
 
 // Runs at most `max` calls at once; each further call waits for one to settle.

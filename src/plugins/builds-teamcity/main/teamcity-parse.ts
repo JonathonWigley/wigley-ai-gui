@@ -116,7 +116,8 @@ function listedBuild(row: JsonObject, state: unknown): ListedBuild[] {
   ];
 }
 
-// `triggered.user.name`, as both the list's `--json` fields and the queue's `triggered(user(name))` nest it.
+// `triggered.user.name`, nested as teamcity 1.7.0's `run list --json=…,triggered.user.name` was recorded emitting it,
+// and as the queue's `triggered(user(name))` nests it.
 function triggeredBy(triggered: unknown): string | null {
   const user = isJsonObject(triggered) ? triggered.user : undefined;
   return isJsonObject(user) ? stringOrNull(user.name) : null;

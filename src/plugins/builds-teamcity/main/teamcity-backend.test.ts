@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Git } from '../../../contracts/git';
 import type { ProcessResult } from '../../../contracts/processes';
 import { FakeProcesses, type FakeRun } from '../../../shared/fake-processes';
@@ -84,7 +84,7 @@ const QUEUE_ARGS = [
 function detailArgs(id: string): string[] {
   return [
     'api',
-    `/app/rest/builds/id:${id}?fields=id,state,status,statusText,running-info(percentageComplete,leftSeconds,currentStageText),snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))`,
+    `/app/rest/builds/id:${id}?fields=id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))`,
   ];
 }
 
@@ -95,6 +95,9 @@ function logArgs(jobId: string): string[] {
 function exited(stdout: string): ProcessResult {
   return { code: 0, stdout, stderr: '', timedOut: false };
 }
+
+// Runs every promise callback queued before the next turn of the event loop.
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 // The services of each test: a clock at NOW that `setNow` moves, data files stamped by that clock, the log's lines,
 // and a CLI whose `--version` check answers.
@@ -392,30 +395,72 @@ describe('list', () => {
     expect(await cachedIds(test)).toEqual(['821200', '821150']);
   });
 
-  it('reads a failed detail again after DETAIL_RETRY_MS', async () => {
+  it.each([
+    {
+      name: "a finished build's detail",
+      id: '821100',
+      fails: null,
+      times: [NOW + 1, NOW + DETAIL_RETRY_MS - 1, NOW + DETAIL_RETRY_MS],
+      reads: [false, false, true],
+    },
+    {
+      name: "a finished build's log",
+      id: '821200',
+      fails: logArgs('821196'),
+      times: [NOW + 1, NOW + DETAIL_RETRY_MS - 1, NOW + DETAIL_RETRY_MS],
+      reads: [false, false, true],
+    },
+    {
+      name: "a running build's detail",
+      id: '821339',
+      fails: detailArgs('821339'),
+      times: [NOW + 1, NOW + 2],
+      reads: [false, true],
+    },
+  ])('backs off reading $name after it fails', async (row) => {
     const test = setup();
     answerRecordedList(test);
+    if (row.fails !== null) {
+      test.answer(row.fails, new Error('HTTP 500'));
+    }
     const backend = await createBackend(test.services);
     await backend.list(GAME, 20);
 
-    test.setNow(NOW + DETAIL_RETRY_MS - 1);
-    const beforeWindowEnd = test.processes.runs.length;
-    await backend.list(GAME, 20);
+    const reads: boolean[] = [];
+    for (const time of row.times) {
+      test.setNow(time);
+      const before = test.processes.runs.length;
+      await backend.list(GAME, 20);
+      reads.push(detailIds(test.processes.runs.slice(before)).includes(row.id));
+    }
 
-    expect(detailIds(test.processes.runs.slice(beforeWindowEnd))).not.toContain(
-      '821100',
-    );
+    expect(reads).toEqual(row.reads);
+  });
 
-    test.setNow(NOW + DETAIL_RETRY_MS);
-    const atWindowEnd = test.processes.runs.length;
-    await backend.list(GAME, 20);
+  it.each([
+    {
+      name: 'a run list that rejects',
+      args: runListArgs(DEV, 20),
+      answer: new Error('HTTP 503'),
+    },
+    {
+      name: 'a run list that is not JSON',
+      args: runListArgs(DEV, 20),
+      answer: 'Showing only the first 20 results',
+    },
+    {
+      name: 'a queue that rejects',
+      args: QUEUE_ARGS,
+      answer: new Error('HTTP 503'),
+    },
+    { name: 'a queue that is not JSON', args: QUEUE_ARGS, answer: '<html>' },
+  ])('rejects over $name', async ({ args, answer }) => {
+    const test = setup();
+    answerRecordedList(test);
+    test.answer(args, answer);
+    const backend = await createBackend(test.services);
 
-    expect(
-      detailIds(test.processes.runs.slice(atWindowEnd)).filter(
-        (id) => id === '821100',
-      ),
-    ).toEqual(['821100']);
-    expect(test.logs.filter((line) => line.includes('821100'))).toHaveLength(2);
+    await expect(backend.list(GAME, 20)).rejects.toThrow();
   });
 
   it('lets the queue build win over a run-list row of the same id', async () => {
@@ -512,9 +557,24 @@ describe('list', () => {
     expect(await cachedIds(test)).toEqual(['821200']);
   });
 
-  it('lists over a cache file that is not JSON', async () => {
+  it.each([
+    { name: 'is not JSON', text: 'not json' },
+    {
+      name: 'holds records that lack fields',
+      text: JSON.stringify({
+        games: {
+          'tiki-smash': [
+            { id: '821200' },
+            { id: '821150', gameId: 'tiki-smash', state: 'finished' },
+          ],
+        },
+      }),
+    },
+  ])('reads the finished builds again over a cache file that $name', async ({
+    text,
+  }) => {
     const test = setup();
-    await test.dataFiles.write(CACHE_FILE, 'not json');
+    await test.dataFiles.write(CACHE_FILE, text);
     answerRecordedList(test);
     const backend = await createBackend(test.services);
 
@@ -523,6 +583,28 @@ describe('list', () => {
     expect(records.map((record) => record.id)).toEqual(FIRST_LIST_IDS);
     expect(detailIds(test.processes.runs)).toEqual(
       expect.arrayContaining(['821200', '821150']),
+    );
+    expect(records[2].links).toEqual([
+      { label: 'iOS', url: IOS_URL },
+      { label: 'Android', url: ANDROID_URL },
+    ]);
+  });
+
+  it('gives a cached build the kind its listing names', async () => {
+    const test = setup();
+    answerRecordedList(test);
+    const first = await (await createBackend(test.services)).list(GAME, 20);
+    const file = JSON.parse(await test.dataFiles.read(CACHE_FILE));
+    file.games['tiki-smash'][0].kind = 'qa';
+    await test.dataFiles.write(CACHE_FILE, JSON.stringify(file));
+    const fresh = await createBackend(test.services);
+    const before = test.processes.runs.length;
+
+    const records = await fresh.list(GAME, 20);
+
+    expect(records[2]).toEqual(first[2]);
+    expect(detailIds(test.processes.runs.slice(before))).not.toContain(
+      '821200',
     );
   });
 
@@ -537,28 +619,42 @@ describe('list', () => {
     expect(records[2].links).toEqual([{ label: 'iOS', url: IOS_URL }]);
     expect(await cachedIds(test)).toEqual(['821150']);
 
-    const afterFirst = test.processes.runs.length;
-    await backend.list(GAME, 20);
-    const laterRuns = test.processes.runs.slice(afterFirst);
+    const again = await backend.list(GAME, 20);
 
-    expect(detailIds(laterRuns)).toContain('821200');
-    expect(logIds(laterRuns)).toContain('821196');
+    expect(again[2]).toEqual(records[2]);
   });
 
-  it('reads no logs for a build past the link window', async () => {
+  it.each([
+    {
+      name: 'reads no logs for a build past the link window',
+      finishDate: '20261123T183412+0000',
+      logs: [],
+    },
+    {
+      name: 'reads the logs of a finished build with no finishDate',
+      finishDate: undefined,
+      logs: ['821193', '821196', '821198'],
+    },
+  ])('$name', async ({ finishDate, logs }) => {
     const test = setup();
     // `20261127T000000+0000`
     test.setNow(1795737600000);
     answerRecordedList(test);
+    test.answer(runListArgs(DEV, 20), {
+      build: runListDev.build.map((build) =>
+        build.id === 821200 ? { ...build, finishDate } : build,
+      ),
+    });
     const backend = await createBackend(test.services);
 
-    const records = await backend.list(GAME, 20);
+    await backend.list(GAME, 20);
 
-    expect(records[2].links).toEqual([]);
     const jobsOf821200 = ['821193', '821198', '821196'];
     expect(
-      logIds(test.processes.runs).filter((id) => jobsOf821200.includes(id)),
-    ).toEqual([]);
+      logIds(test.processes.runs)
+        .filter((id) => jobsOf821200.includes(id))
+        .sort(),
+    ).toEqual(logs);
   });
 
   it('never has more than MAX_CALLS_IN_FLIGHT detail and log calls running', async () => {
@@ -601,18 +697,16 @@ describe('list', () => {
 
     const listing = backend.list(GAME, 20);
 
-    await vi.waitFor(() => expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
     expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT);
 
     settleStarted(0);
-    await vi.waitFor(() =>
-      expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT + 1),
-    );
+    await settle();
+    expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT + 1);
+
     settleStarted(1);
-    await vi.waitFor(() =>
-      expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT + 2),
-    );
+    await settle();
+    expect(started()).toHaveLength(MAX_CALLS_IN_FLIGHT + 2);
     for (const index of ids.keys()) {
       settleStarted(index);
     }
@@ -659,7 +753,7 @@ describe('queue', () => {
     ]);
   });
 
-  it('shows the queued branch and revision while TeamCity reports <default>', async () => {
+  it('shows the queued branch and revision while TeamCity reports <default>, across instances', async () => {
     const test = setup();
     test.answer(runStartArgs(A), runStart);
     test.answer(runListArgs(DEV, 20), { build: [] });
@@ -682,8 +776,9 @@ describe('queue', () => {
       branch: 'feature/x',
       revision: A,
     });
+    const fresh = await createBackend(test.services);
 
-    const records = await backend.list(GAME, 20);
+    const records = await fresh.list(GAME, 20);
 
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
