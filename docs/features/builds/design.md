@@ -171,7 +171,7 @@ every parse is tested over recorded JSON.
   backend's data folder (`backends/<entry id>/` under the plugin's data folder). They are this
   backend's history. A run's log, pid file and exit-code file sit beside it under
   `runs/<game id>/<kind>/<startedAt>/`. Each call reads `runs.json` afresh, so the two instances of one
-  backend entry across a re-apply share the history. They run no calls at once, unless the 30 s drain bound passes
+  backend entry across a re-apply or a plugin restart share the history. They run no calls at once
   (§ Polling and the model).
 - **Progress**: `percent` is elapsed time over the last successful run of the same game and kind,
   capped at 99 until the exit-code file appears, and null with no earlier success. `stepText` is the
@@ -188,8 +188,8 @@ every parse is tested over recorded JSON.
 - **Cadence**: main polls each backend every 10 s while Builds mode shows or a build linked to a
   session runs, and every 2 minutes otherwise. One backend instance never has two polls in flight; a re-apply disposes the old
   instance, which then refuses new calls with "the backend was replaced; try again". The entry's new instance is created only
-  once the old instance's `list`, `queue` and `cancel` calls settle, or once `DRAIN_TIMEOUT_MS` (30 s) passes, which is
-  logged. Until then queueing answers "<label>: still starting" and the poller skips the entry. A backend
+  once the `list`, `queue` and `cancel` calls of every instance replaced over its data folder settle, a plugin restart's
+  included; past `DRAIN_TIMEOUT_MS` (30 s) it logs once that it is still waiting. Until then queueing answers "<label>: still starting" and the poller skips the entry. A backend
   with no games is not polled. Each poll lists 20 builds per game.
 - **The model** (`builds-model.ts`, pure) folds the backends' records, the session links and the
   offers into the published slots, and reports what changed since the last fold: a linked build
