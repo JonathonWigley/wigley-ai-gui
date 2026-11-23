@@ -53,6 +53,10 @@ export interface PickerRequest<T> {
   section?(item: T): string | null;
   // Runs once the picker has closed.
   picked(item: T): void;
+  // Runs once the picker has closed unpicked: on `close`, on
+  // `closeSessionBound` of a session-bound request, or on the pushed scope's
+  // base changing. Another `open` replacing the request runs neither.
+  cancelled?(): void;
 }
 
 // One opened request's place in the picker.
@@ -164,6 +168,7 @@ export function createPicker(deps: PickerDeps): Picker {
         cancelled: () => {
           shown = null;
           deps.log(`picker closed: ${next.title}`);
+          next.cancelled?.();
         },
         drawRow: (parent, item, row) =>
           drawPickerRow(deps, nextScope, parent, {

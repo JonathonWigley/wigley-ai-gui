@@ -91,7 +91,8 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel>;
 // in the page in place of sending it; each `/` completion row shows its
 // command's description through the `completionDescription` part while the
 // `chat.completionDescriptions` setting is on; the exports register more
-// commands and row draws, fill a session's box, and add parts above every
+// commands and row draws, fill a session's box, open the new-session prompt
+// with a draft waiting for the session it starts, and add parts above every
 // composer and sections to every tab's session hub, which `toggleSideParts` hides or shows in every tab and whose
 // keys (`nextSection` to `hubHalfPageUp`) walk, fold and scroll its sections; chat's own
 // Main agent section holds the activity dock, and its Session section the
@@ -395,6 +396,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
       isStopped: () => isStopped,
+      sessions: chatSessions,
+      fillComposer: (sessionId, text) => fillComposerOf(sessionId, text),
+      timers: services.timers,
     });
     completionRows.add(
       descriptionDraw({
@@ -426,6 +430,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       addSlashCommand: (command) => consumer.track(slashCommands.add(command)),
       addCompletionRow: (draw) => consumer.track(completionRows.add(draw)),
       fillComposer: fillComposerOf,
+      newSessionWithDraft: (text) => startPrompt.newSessionWithDraft(text),
       addComposerPart: (part) => consumer.track(composerParts.add(part)),
       addStatusPart: (part) => consumer.track(statusParts.add(part)),
       addSidePart: (part) => consumer.track(sideParts.add(part)),
@@ -491,7 +496,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       dispose: () => {
         isStopped = true;
         callEach<() => void>(
-          [() => view.dispose(), () => viewer.dispose()],
+          [
+            () => startPrompt.dispose(),
+            () => view.dispose(),
+            () => viewer.dispose(),
+          ],
           (step) => step(),
         );
       },

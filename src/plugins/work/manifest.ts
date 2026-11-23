@@ -8,13 +8,14 @@ import type {
 // Work: the user's Slack and Jira work, kept in `work.json` in the plugin data and published as `work.state` for the
 // Inbox and Board views. Every card action is a page command that hands its argument to main over the channel, so a
 // reporting run sees main's refusal. It names `chat` for the worker and spin-up launches and `sessions` for the rows
-// and tools, and reads `unity-pool` for the pool clones detection watches.
+// and tools, chat's page for the new-session prompt a spin-up with no mapped project opens, and reads `unity-pool` for
+// the pool clones detection watches.
 export const workManifest = definePlugin({
   id: 'work',
   label: 'Work',
   description:
     "Brings the user's Slack and Jira work into the app: the store, the worker jobs, work detection and every card action, for the Inbox and Board views.",
-  dependsOn: { main: ['chat', 'sessions'], page: [] },
+  dependsOn: { main: ['chat', 'sessions'], page: ['chat'] },
   reads: { main: ['unity-pool'], page: [] },
   commands: {
     sweep: {

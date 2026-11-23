@@ -1,8 +1,11 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
+import type { Timers } from '../../../contracts/ambient';
 import { DEMO_HARNESS_ID, DEMO_PROFILE } from '../../../contracts/demo';
+import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import type { KeyedSlotReader } from '../../../contracts/state';
 import { harnessLabel } from '../../../shared/agent-harness-label';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -13,6 +16,7 @@ import {
 import type {
   ChatChannel,
   ChatProject,
+  ChatSessionInfo,
   ProjectPastSessionRow,
   RecentFolder,
   ResumeSectionRow,
@@ -69,7 +73,18 @@ export interface StartPromptDeps {
   toast(text: string, tone: ToastTone): void;
   // True once chat's page part stopped: a reply landing later does nothing.
   isStopped(): boolean;
+  // The page's `chat.session` slot, where a draft waits for its new session's
+  // key.
+  sessions: Pick<KeyedSlotReader<ChatSessionInfo>, 'get' | 'on'>;
+  // Puts `text` in the session's box and reveals its tab, as the
+  // `fillComposer` export does.
+  fillComposer(sessionId: string, text: string): void;
+  timers: Timers;
 }
+
+// How long a draft waits, after its start resolved, for the new session's
+// `chat.session` key to reach the page.
+export const JOIN_WAIT_MS = 10_000;
 
 // `open` asks for a project — or, through `Other folder…` or with no
 // projects, a folder — then a profile of the target's harness unless the
@@ -90,12 +105,40 @@ export interface StartPromptDeps {
 // row on the demo profile is a sample that toasts and resumes nothing.
 // `openForNewSession` asks the same way but lists no sections and no saved
 // sessions, so it starts a new session once the profile is signed in.
+// `newSessionWithDraft` opens as `openForNewSession` does, and once the
+// session it starts has its `chat.session` key, fills that session's box with
+// `text`, unsent; it resolves to the row id once filled. It resolves null, and
+// never rejects, when the prompt ends with no session (Esc at a step, a
+// sign-in ending signed out, a prompt that cannot open, a failed start), when
+// the prompt opens again, at `dispose`, when the new session's key leaves
+// before the fill, and `JOIN_WAIT_MS` after the start with no key, logging
+// `newSessionWithDraft: <rowId> never reached the page`.
 // `toggleArchive` and `showArchived` act on the session step while it is open.
+// `dispose` ends a draft's wait with null, as chat's page part stops.
 export interface StartPrompt {
   open(): void;
   openForNewSession(): void;
+  newSessionWithDraft(text: string): Promise<string | null>;
   toggleArchive(): void;
   showArchived(): void;
+  dispose(): void;
+}
+
+// A `newSessionWithDraft` call while its open is current: the text, the end of
+// its promise, and its key listener and timer once its start resolved.
+interface DraftWait {
+  opened: number;
+  text: string;
+  resolve(rowId: string | null): void;
+  listening: Disposable | null;
+  timer: number | null;
+}
+
+// One open's side of its draft wait, each doing nothing for an open with no
+// draft: `started` hands it the new row, `dropped` ends it with null.
+interface DraftHooks {
+  started(rowId: string): void;
+  dropped(): void;
 }
 
 // Where the prompt starts a session: a folder, with the harness it starts on,
@@ -121,10 +164,12 @@ interface SessionStep {
 // What the prompt has gathered once its first answers arrive. `isCurrent`
 // is false once the prompt has opened again. `projects` are chat's checked
 // projects; none when they cannot be read. `profiles` are every registered
-// harness's, and `defaultHarness` is registered.
+// harness's, and `defaultHarness` is registered. Each step that ends the
+// prompt with no session calls `draft.dropped`.
 interface PromptContext {
   deps: StartPromptDeps;
   isCurrent(): boolean;
+  draft: DraftHooks;
   offersSavedSessions: boolean;
   recent: readonly RecentFolder[];
   sections: readonly ResumeSectionRows[];
@@ -147,6 +192,70 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
 
   // Counts the prompt's opens, so an answer can tell its own open is gone.
   let opens = 0;
+
+  // The draft the current open carries; null for none.
+  let draft: DraftWait | null = null;
+
+  // Ends `wait` with `rowId`, disposing its listener and timer; nothing once
+  // it has ended.
+  const endDraft = (wait: DraftWait, rowId: string | null) => {
+    if (draft !== wait) {
+      return;
+    }
+    draft = null;
+    wait.listening?.dispose();
+    if (wait.timer !== null) {
+      deps.timers.clear(wait.timer);
+    }
+    wait.resolve(rowId);
+  };
+
+  // Fills the new session's box once its `chat.session` key is on the page:
+  // at once when it is there, else on the first update holding it.
+  const awaitSessionKey = (wait: DraftWait, rowId: string) => {
+    const fill = () => {
+      deps.fillComposer(rowId, wait.text);
+      endDraft(wait, rowId);
+    };
+    if (deps.sessions.get(rowId) !== undefined) {
+      fill();
+      return;
+    }
+    wait.listening = deps.sessions.on((sessionId, info) => {
+      if (sessionId !== rowId) {
+        return;
+      }
+      if (info === undefined) {
+        log(`newSessionWithDraft: ${rowId} closed before its box filled`);
+        endDraft(wait, null);
+        return;
+      }
+      fill();
+    });
+    wait.timer = deps.timers.set(() => {
+      log(`newSessionWithDraft: ${rowId} never reached the page`);
+      endDraft(wait, null);
+    }, JOIN_WAIT_MS);
+  };
+
+  // Open `opened`'s side of the draft it carries.
+  const draftHooksOf = (opened: number): DraftHooks => {
+    const ownDraft = () => (draft?.opened === opened ? draft : null);
+    return {
+      started(rowId) {
+        const wait = ownDraft();
+        if (wait !== null) {
+          awaitSessionKey(wait, rowId);
+        }
+      },
+      dropped() {
+        const wait = ownDraft();
+        if (wait !== null) {
+          endDraft(wait, null);
+        }
+      },
+    };
+  };
 
   // True once chat's page part stopped, and, logging `what` as dropped, once
   // the prompt has opened again since the open `isCurrent` belongs to.
@@ -187,11 +296,24 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       return [];
     });
 
-  const openPrompt = (offersSavedSessions: boolean) => {
+  // Opens the prompt, dropping the earlier open's draft; `carried` is the
+  // draft this open fills, null for none.
+  const openPrompt = (
+    offersSavedSessions: boolean,
+    carried: Pick<DraftWait, 'text' | 'resolve'> | null = null,
+  ) => {
     step = null;
     opens += 1;
     const opened = opens;
     const isCurrent = () => opens === opened;
+    if (draft !== null) {
+      endDraft(draft, null);
+    }
+    draft =
+      carried === null
+        ? null
+        : { ...carried, opened, listening: null, timer: null };
+    const draftHooks = draftHooksOf(opened);
     void Promise.all([
       channel.invoke('recentFolders'),
       offersSavedSessions ? readSections() : [],
@@ -216,10 +338,12 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           const text = `No agent harness "${defaultHarness}" is registered. Set chat's defaultHarness to a registered harness.`;
           log(text);
           deps.toast(text, 'error');
+          draftHooks.dropped();
           return;
         }
         if (defaultInfo.profiles.length === 0) {
           reportNoProfiles(defaultHarness);
+          draftHooks.dropped();
           return;
         }
         for (const { title, rows } of sections) {
@@ -228,6 +352,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         const context: PromptContext = {
           deps,
           isCurrent,
+          draft: draftHooks,
           offersSavedSessions,
           recent,
           sections,
@@ -248,6 +373,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
         log(`start prompt not opened: ${errorText(error)}`);
         deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
+        draftHooks.dropped();
       },
     );
   };
@@ -279,6 +405,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           openFolderStep(context);
         }
       },
+      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -317,6 +444,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           chooseFolder(context);
         }
       },
+      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -370,6 +498,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
         log(`folder dialog failed: ${errorText(error)}`);
         deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
+        context.draft.dropped();
       },
     );
   };
@@ -389,6 +518,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         ? fixedProfileOrReport(context, target.project)
         : null;
     if (fixed === false) {
+      context.draft.dropped();
       return;
     }
     if (fixed !== null) {
@@ -397,6 +527,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     }
     if (profiles.length === 0) {
       reportNoProfiles(harness);
+      context.draft.dropped();
       return;
     }
     if (profiles.length === 1) {
@@ -410,6 +541,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
       rowInput: profileRowInput,
       selected: preselectedProfileOf(context, target, profiles),
       picked: (profile) => checkProfile(context, target, profile),
+      cancelled: () => context.draft.dropped(),
     });
   };
 
@@ -495,6 +627,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
             return;
           }
           log(`no session started: ${profile.name} is signed out`);
+          context.draft.dropped();
         });
       },
       (error: unknown) => {
@@ -638,6 +771,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           );
         }
       },
+      cancelled: () => opened.context.draft.dropped(),
     });
   };
 
@@ -713,8 +847,21 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   return {
     open: () => openPrompt(true),
     openForNewSession: () => openPrompt(false),
+    newSessionWithDraft: (text) =>
+      new Promise<string | null>((resolve) => {
+        if (deps.isStopped()) {
+          resolve(null);
+          return;
+        }
+        openPrompt(false, { text, resolve });
+      }),
     toggleArchive,
     showArchived: toggleShowArchived,
+    dispose() {
+      if (draft !== null) {
+        endDraft(draft, null);
+      }
+    },
   };
 }
 
@@ -762,7 +909,8 @@ function resumeSession(
     );
 }
 
-// Starts a session at `target`: a folder, or a project.
+// Starts a session at `target`: a folder, or a project, handing the new row to
+// the open's draft.
 function startSession(
   context: PromptContext,
   target: PromptTarget,
@@ -782,6 +930,7 @@ function startSession(
       (sessionId) => {
         if (!deps.isStopped()) {
           deps.reveal(sessionId);
+          context.draft.started(sessionId);
         }
       },
       (error: unknown) => {
@@ -790,6 +939,7 @@ function startSession(
         }
         deps.log(`session not started: ${errorText(error)}`);
         deps.toast(`Session not started: ${errorText(error)}`, 'error');
+        context.draft.dropped();
       },
     );
 }

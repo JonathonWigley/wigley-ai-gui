@@ -17,8 +17,10 @@ import {
   openPicker,
 } from '../../../shared/page/list-picker-state';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import type {
   ChatProject,
+  ChatSessionInfo,
   PastSessionRow,
   ProjectPastSessionRow,
   RecentFolder,
@@ -38,7 +40,7 @@ import {
   SESSIONS_HEADING,
   sessionTime,
 } from './resume-items';
-import { createStartPrompt } from './start-prompt';
+import { createStartPrompt, JOIN_WAIT_MS } from './start-prompt';
 import {
   CHOOSE_FOLDER_LABEL,
   FOLDERS_HEADING,
@@ -96,8 +98,10 @@ async function flush() {
 }
 
 // `profiles` are those of the one harness `claude`, unless `harnesses`
-// replaces every harness; `defaultHarness` is `claude` unless given. `stop`
-// marks chat's page part stopped.
+// replaces every harness; `defaultHarness` is `claude` unless given. The
+// prompt opens at once unless `skipOpen`. `stop` marks chat's page part
+// stopped and disposes the prompt, as chat's page part does. `setSession`
+// writes or deletes a key of the fake `chat.session` slot.
 function setUp(
   options: {
     profiles?: HarnessProfile[];
@@ -105,6 +109,7 @@ function setUp(
     defaultHarness?: string;
     recent?: RecentFolder[];
     answers?: Partial<Answers>;
+    skipOpen?: boolean;
   } = {},
 ) {
   const harnesses =
@@ -203,6 +208,12 @@ function setUp(
       >
     ]();
   };
+  const sessionKeys = new Map<string, ChatSessionInfo>();
+  const sessionListeners = new Set<
+    (sessionId: string, info: ChatSessionInfo | undefined) => void
+  >();
+  const fills: [string, string][] = [];
+  const timers = fakeTimers();
   const prompt = createStartPrompt({
     picker: picker as Picker,
     signIn: {
@@ -218,12 +229,43 @@ function setUp(
     log: (message) => logs.push(message),
     toast: (text, tone) => toasts.push({ text, tone }),
     isStopped: () => isStopped,
+    sessions: {
+      get: (sessionId) => sessionKeys.get(sessionId),
+      on: (listener) => {
+        sessionListeners.add(listener);
+        return { dispose: () => sessionListeners.delete(listener) };
+      },
+    },
+    fillComposer: (sessionId, text) => fills.push([sessionId, text]),
+    timers: timers.timers,
   });
-  prompt.open();
+  if (options.skipOpen !== true) {
+    prompt.open();
+  }
   return {
     prompt,
     stop: () => {
       isStopped = true;
+      prompt.dispose();
+    },
+    setSession: (sessionId: string, isOpen: boolean) => {
+      if (isOpen) {
+        sessionKeys.set(sessionId, { sessionId } as ChatSessionInfo);
+      } else {
+        sessionKeys.delete(sessionId);
+      }
+      for (const listener of [...sessionListeners]) {
+        listener(sessionId, sessionKeys.get(sessionId));
+      }
+    },
+    sessionListeners: () => sessionListeners.size,
+    fills,
+    timers,
+    // Closes the shown list unpicked, as Esc does.
+    cancel: () => {
+      const entry = shown;
+      shown = null;
+      entry?.request.cancelled?.();
     },
     opened,
     invoked,
@@ -1742,6 +1784,158 @@ describe('start prompt', () => {
       }
     },
   );
+});
+
+const DRAFT = 'Work on XYZ-3: Fix the crash';
+
+// The prompt with one profile, unopened until the test opens a draft.
+function setUpForDraft(options: Parameters<typeof setUp>[0] = {}) {
+  return setUp({ profiles: [work], skipOpen: true, ...options });
+}
+
+// Opens a draft and picks ~/dev/app, which starts `row-1` (one signed-in
+// profile, no saved sessions asked for), letting the prompt settle.
+async function draftStarted(run: ReturnType<typeof setUp>) {
+  const drafted = run.prompt.newSessionWithDraft(DRAFT);
+  await flush();
+  pickFolder(run.last(), '~/dev/app');
+  await flush();
+  return drafted;
+}
+
+describe('start prompt newSessionWithDraft', () => {
+  it('newSessionWithDraft — fills the new session’s box once its tab exists', async () => {
+    const run = setUpForDraft();
+    const drafted = await draftStarted(run);
+    expect(run.invoked).not.toContain('pastSessions');
+    expect(run.revealed).toEqual(['row-1']);
+    expect(run.fills).toEqual([]);
+
+    run.setSession('row-0', true);
+    expect(run.fills).toEqual([]);
+    run.setSession('row-1', true);
+
+    await expect(drafted).resolves.toBe('row-1');
+    expect(run.fills).toEqual([['row-1', DRAFT]]);
+    expect(run.sessionListeners()).toBe(0);
+    expect(run.timers.armed.size).toBe(0);
+  });
+
+  it('newSessionWithDraft — a key already on the page fills at once', async () => {
+    const run = setUpForDraft();
+    run.setSession('row-1', true);
+
+    const drafted = await draftStarted(run);
+
+    await expect(drafted).resolves.toBe('row-1');
+    expect(run.fills).toEqual([['row-1', DRAFT]]);
+    expect(run.sessionListeners()).toBe(0);
+    expect(run.timers.armed.size).toBe(0);
+  });
+
+  it('newSessionWithDraft — Esc at the first step resolves null', async () => {
+    const run = setUpForDraft();
+    const drafted = run.prompt.newSessionWithDraft(DRAFT);
+    await flush();
+    expect(run.last().title).toBe('Folder');
+
+    run.cancel();
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.started).toEqual([]);
+  });
+
+  it('newSessionWithDraft — opening the prompt again resolves the earlier one null', async () => {
+    const run = setUpForDraft();
+    const earlier = run.prompt.newSessionWithDraft(DRAFT);
+    await flush();
+
+    const later = run.prompt.newSessionWithDraft('Follow up');
+    await expect(earlier).resolves.toBeNull();
+    await flush();
+    pickFolder(run.last(), '~/dev/app');
+    await flush();
+    run.setSession('row-1', true);
+
+    await expect(later).resolves.toBe('row-1');
+    expect(run.fills).toEqual([['row-1', 'Follow up']]);
+  });
+
+  it('newSessionWithDraft — a failed start resolves null', async () => {
+    const run = setUpForDraft({
+      answers: { start: () => Promise.reject(new Error('no claude')) },
+    });
+
+    const drafted = await draftStarted(run);
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.sessionListeners()).toBe(0);
+  });
+
+  it('newSessionWithDraft — the page stopping resolves null and disposes the listener', async () => {
+    const run = setUpForDraft();
+    const drafted = await draftStarted(run);
+    expect(run.sessionListeners()).toBe(1);
+
+    run.stop();
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.sessionListeners()).toBe(0);
+    expect(run.timers.armed.size).toBe(0);
+    run.setSession('row-1', true);
+    expect(run.fills).toEqual([]);
+  });
+
+  it('newSessionWithDraft — a cancelled sign-in resolves null', async () => {
+    const run = setUpForDraft({
+      answers: {
+        accountStatus: () =>
+          Promise.resolve({ signedIn: false, account: null }),
+      },
+    });
+
+    const drafted = await draftStarted(run);
+    run.signIns[0].finished?.(false);
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.started).toEqual([]);
+  });
+
+  it('newSessionWithDraft — default harness not registered resolves null', async () => {
+    const run = setUpForDraft({ defaultHarness: 'gone' });
+
+    const drafted = run.prompt.newSessionWithDraft(DRAFT);
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.opened).toEqual([]);
+  });
+
+  it('newSessionWithDraft — the session closing before its key arrives resolves null', async () => {
+    const run = setUpForDraft();
+    const drafted = await draftStarted(run);
+
+    run.setSession('row-1', false);
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.fills).toEqual([]);
+    expect(run.sessionListeners()).toBe(0);
+    expect(run.timers.armed.size).toBe(0);
+  });
+
+  it('newSessionWithDraft — no key within JOIN_WAIT_MS resolves null and logs', async () => {
+    const run = setUpForDraft();
+    const drafted = await draftStarted(run);
+
+    run.timers.runAfter(JOIN_WAIT_MS);
+
+    await expect(drafted).resolves.toBeNull();
+    expect(run.logs).toContain(
+      'newSessionWithDraft: row-1 never reached the page',
+    );
+    expect(run.sessionListeners()).toBe(0);
+    run.setSession('row-1', true);
+    expect(run.fills).toEqual([]);
+  });
 });
 
 // The chat picker's list drawn through `createPicker`, each row's `pickerRow`

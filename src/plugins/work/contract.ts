@@ -293,6 +293,19 @@ export interface WorkStartArg {
   id: string;
 }
 
+// What a start from work gives the page: `launched`, a session chat started in a mapped project, with the toast to
+// show; `prompt`, no project fits, so the page opens chat's new-session prompt with `message` in the box and links the
+// session it starts to `cardIds`.
+export type WorkStartResult =
+  | { kind: 'launched'; toast: string }
+  | { kind: 'prompt'; message: string; cardIds: string[] };
+
+// `sessionId` is the row id, as `linkedSessionIds` holds it.
+export interface WorkLinkArg {
+  cardIds: string[];
+  sessionId: string;
+}
+
 // Sends the reply or nudge `text` on item `itemId`.
 export const workSendCommand: CommandKey<WorkSendArg, 'work.send'> = {
   id: 'work.send',
@@ -310,6 +323,7 @@ export const workStartSessionCommand: CommandKey<
 > = { id: 'work.startSession' };
 
 // One invoke per work command, under the command's name, taking the command's arg; each rejects with main's refusal.
+// `linkSession` has no command behind it: the page links the session chat's prompt started to the cards.
 export interface WorkChannel extends ChannelShape {
   invoke: {
     sweep(): Promise<void>;
@@ -322,7 +336,8 @@ export interface WorkChannel extends ChannelShape {
     acceptSuggestion(cardId: string): Promise<void>;
     notYet(cardId: string): Promise<void>;
     deleteTask(cardId: string): Promise<void>;
-    startSession(arg: WorkStartArg): Promise<void>;
+    startSession(arg: WorkStartArg): Promise<WorkStartResult>;
+    linkSession(arg: WorkLinkArg): Promise<void>;
     openJobRow(): Promise<void>;
   };
   messages: Record<never, never>;
