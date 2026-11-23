@@ -30,6 +30,9 @@ import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 import { systemStatsMainPart } from './system-stats/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
+import { buildsMainPart } from './builds/main/start';
+import { buildsTeamcityMainPart } from './builds-teamcity/main/start';
+import { buildsLocalMainPart } from './builds-local/main/start';
 import { usageMainPart } from './usage/main/start';
 import { usageTabLineMainPart } from './usage-tab-line/main/start';
 import { visualMainPart } from './visual/main/start';
@@ -78,6 +81,9 @@ export const mainParts: readonly MainPart[] = [
   workflowSmallMainPart,
   workflowMediumMainPart,
   unityPoolMainPart,
+  buildsMainPart,
+  buildsTeamcityMainPart,
+  buildsLocalMainPart,
   systemStatsMainPart,
   visualMainPart,
   schedulingMainPart,

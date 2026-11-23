@@ -1,6 +1,6 @@
 # 02 — Builds contract, manifest and model
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · adds the `builds` contract, manifests, part skeletons and model that tasks 03–08 consume
 Wave: 1 · Depends on: none

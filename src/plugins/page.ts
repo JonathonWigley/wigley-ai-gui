@@ -31,6 +31,7 @@ import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
 import { systemStatsPagePart } from './system-stats/page/start';
 import { unityPoolPagePart } from './unity-pool/page/start';
+import { buildsPagePart } from './builds/page/start';
 import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
@@ -64,6 +65,7 @@ export const pageParts: readonly PagePart[] = [
   workflowSmallPagePart,
   workflowMediumPagePart,
   unityPoolPagePart,
+  buildsPagePart,
   systemStatsPagePart,
   autoRetroPagePart,
   agentStripPagePart,

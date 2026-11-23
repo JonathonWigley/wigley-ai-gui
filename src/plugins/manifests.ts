@@ -32,6 +32,9 @@ import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { systemStatsManifest } from './system-stats/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
+import { buildsManifest } from './builds/manifest';
+import { buildsTeamcityManifest } from './builds-teamcity/manifest';
+import { buildsLocalManifest } from './builds-local/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
@@ -84,6 +87,9 @@ export const builtInManifests = [
   workflowSmallManifest,
   workflowMediumManifest,
   unityPoolManifest,
+  buildsManifest,
+  buildsTeamcityManifest,
+  buildsLocalManifest,
   systemStatsManifest,
   visualManifest,
   markdownBlocksManifest,
