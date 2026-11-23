@@ -198,6 +198,9 @@ export interface InboxView {
   pressItem(action: InboxCardAction, id: string): void;
 }
 
+// What a click on a card acts on by itself, so it does not select the card.
+const CARD_CONTROLS = 'a, button, input, textarea';
+
 export function createInboxView(deps: InboxViewDeps): InboxView {
   const { log } = deps;
   const store = createReducerStore(initialInboxState(), inboxReducer);
@@ -490,9 +493,13 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       }
       return { element: root };
     });
-    drawn.built.element.addEventListener('click', () =>
-      deps.runKey(selectItemCommand, input.id),
-    );
+    drawn.built.element.addEventListener('click', (event) => {
+      const isOnControl =
+        (event.target as Element).closest(CARD_CONTROLS) !== null;
+      if (!isOnControl) {
+        deps.runKey(selectItemCommand, input.id);
+      }
+    });
     return drawn;
   };
 

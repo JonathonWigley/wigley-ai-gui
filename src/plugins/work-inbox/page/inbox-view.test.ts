@@ -116,6 +116,7 @@ interface SetupOptions {
 // `scopes` each scope set, `logs`, `toasts` and `places` what the view wrote, `boxes` each vim box made.
 function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
+  const ranKeys: CommandId[] = [];
   const scopes: string[] = [];
   const logs: string[] = [];
   const toasts: [string, ToastTone][] = [];
@@ -171,7 +172,7 @@ function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     showMode: show,
     picked: () => undefined,
     setContext: () => undefined,
-    runKey: () => undefined,
+    runKey: (key) => ranKeys.push(key.id),
     async runFor(id, arg) {
       runs.push([id, arg]);
       const rejection = options.rejects?.[id];
@@ -194,6 +195,7 @@ function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     sheet: asFake(created.sheet),
     side: asFake(created.sideBar),
     runs,
+    ranKeys,
     scopes,
     logs,
     toasts,
@@ -427,6 +429,27 @@ describe('createInboxView', () => {
 
       expect(setup.logs).toContain(logged);
       expect(setup.runs).toEqual([]);
+    },
+  );
+
+  it.each([
+    { case: 'the card body', target: (card: FakeElement) => card, runs: 1 },
+    {
+      case: 'a button in it',
+      target: (card: FakeElement) => buttonNamed(card, 'Dismiss'),
+      runs: 0,
+    },
+  ])(
+    'a click selects the card only off its controls: $case',
+    ({ target, runs }) => {
+      const setup = inboxSetup(work([workItem('a')]));
+      const card = cards(setup)[0];
+
+      card.fire('click', { target: target(card) });
+
+      expect(
+        setup.ranKeys.filter((id) => id === 'work-inbox.selectItem'),
+      ).toHaveLength(runs);
     },
   );
 
