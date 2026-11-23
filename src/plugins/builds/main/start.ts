@@ -13,7 +13,6 @@ import {
 import {
   type BackendEntry,
   type BackendServices,
-  type BuildBackend,
   type BuildRecord,
   type BuildRef,
   BUILDS_PER_GAME,
@@ -39,13 +38,18 @@ import { createBuildsPoller, SLOW_POLL_MS } from './poller';
 import { createQueueing, type QueueingResult } from './queueing';
 import { buildsSelfTestScript } from './selftest-script';
 import { registerSessionDemoStep } from './demo-steps';
+import {
+  DRAIN_TIMEOUT_MS,
+  type TrackedBackend,
+  trackCalls,
+} from './tracked-backend';
 
 type BuildsApi = MainApi<typeof buildsManifest, BuildsChannel>;
 
 // One backend entry's instance, made by one apply: null with `problem` set when its kind is missing or its `create`
-// gave a problem or rejected, and null with no problem while `create` awaits.
+// gave a problem or rejected, and null with no problem while the replaced instance drains or `create` awaits.
 interface LiveBackend {
-  instance: BuildBackend | null;
+  instance: TrackedBackend | null;
   problem: string | null;
   hasPolled: boolean;
 }
@@ -77,8 +81,9 @@ interface EventMessage {
 // Starts with an empty snapshot and loads the session links. `ready` waits for the load and chat's restore of its
 // rows, then applies the `backends` setting, and applies it again on each settings change and each kind a backend
 // plugin adds or removes: an apply that changes the parsed backends or the kinds disposes every instance and creates
-// each entry's anew, each publishing as its own `create` settles. Polls each backend with an instance and games, folds
-// after each poll, apply and store change into `builds.snapshot` and `builds.sessions`, and tells each linked session
+// each entry's anew once the calls into its replaced instance have settled, or once `DRAIN_TIMEOUT_MS` has passed
+// (logged), each publishing as its own `create` settles. Polls each backend with an instance and games, folds after
+// each poll, apply and store change into `builds.snapshot` and `builds.sessions`, and tells each linked session
 // its build's failing job and end, and a set's end, writing the flag before the message. Exports `addBackend`; the
 // commands and the channel queue, offer, cancel and launch a set's agent through `queueing`. Registers the builds
 // layout contract and the main half of the Session builds demo step.
@@ -110,6 +115,8 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
     let appliedKey: string | null = null;
     let parsed: ParsedBackend[] = [];
     const live = new Map<string, LiveBackend>();
+    // By backend id, the wait for the calls of its replaced instances, held until it settles.
+    const drains = new Map<string, Promise<void>>();
     // By backend id, then game id; kept across applies while the game stays in its entry.
     const records = new Map<string, Map<string, GameRecords>>();
     let polledAt: number | null = null;
@@ -172,6 +179,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       generation += 1;
       const startedIn = generation;
       disposeInstances();
+      drainInstances();
       live.clear();
       parsed = next;
       keepRecordsOf(next);
@@ -203,6 +211,33 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
       }
     }
 
+    // Holds, for each entry with an instance, a wait for its calls after any wait already held for the entry.
+    function drainInstances() {
+      for (const [backendId, backend] of live) {
+        if (backend.instance === null) {
+          continue;
+        }
+        const drain = Promise.all([
+          drains.get(backendId),
+          drainOf(backendId, backend.instance),
+        ]).then(() => undefined);
+        drains.set(backendId, drain);
+        void drain.then(() => {
+          if (drains.get(backendId) === drain) {
+            drains.delete(backendId);
+          }
+        });
+      }
+    }
+
+    async function drainOf(backendId: string, instance: TrackedBackend) {
+      if (!(await instance.drained())) {
+        log(
+          `${backendId}: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; creating the new one`,
+        );
+      }
+    }
+
     // Drops the records of every game no longer in its backend's entry.
     function keepRecordsOf(next: ParsedBackend[]) {
       for (const [backendId, games] of records) {
@@ -219,6 +254,10 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
     }
 
     async function create(entry: BackendEntry, startedIn: number) {
+      await drains.get(entry.id);
+      if (startedIn !== generation || isStopped) {
+        return;
+      }
       const made = await createInstance(entry);
       if (startedIn !== generation || isStopped) {
         try {
@@ -235,7 +274,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
 
     async function createInstance(
       entry: BackendEntry,
-    ): Promise<{ instance: BuildBackend | null; problem: string | null }> {
+    ): Promise<{ instance: TrackedBackend | null; problem: string | null }> {
       const kind = registry.get(entry.kind);
       if (kind === null) {
         return {
@@ -247,7 +286,7 @@ export const buildsMainPart: MainPart<typeof buildsManifest> = {
         const made = await kind.create(entry, backendServices(entry));
         return 'problem' in made
           ? { instance: null, problem: made.problem }
-          : { instance: made, problem: null };
+          : { instance: trackCalls(made, services.timers), problem: null };
       } catch (error) {
         return {
           instance: null,

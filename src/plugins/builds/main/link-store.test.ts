@@ -172,59 +172,78 @@ describe('createLinkStore', () => {
   });
 
   const now = 10 * PRUNE_AFTER_MS;
+  const twoBuildSetRun = setRun({
+    createdAt: now - PRUNE_AFTER_MS - 1,
+    builds: [
+      { backendId: 'b1', buildId: 'x' },
+      { backendId: 'b1', buildId: 'y' },
+    ],
+  });
   it.each([
     {
       case: 'ended at the limit',
       add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS }) },
-      unlisted: false,
+      unlisted: [],
       kept: true,
     },
     {
       case: 'ended past the limit',
       add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
-      unlisted: false,
+      unlisted: [],
       kept: false,
     },
     {
       case: 'untold, listed, old',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
-      unlisted: false,
+      unlisted: [],
       kept: true,
     },
     {
       case: 'untold, unlisted, old',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
-      unlisted: true,
+      unlisted: ['x'],
       kept: false,
     },
     {
       case: 'untold, unlisted, at the limit',
       add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS }) },
-      unlisted: true,
+      unlisted: ['x'],
       kept: true,
     },
     {
       case: 'set run ended at the limit',
       add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS }) },
-      unlisted: false,
+      unlisted: [],
       kept: true,
     },
     {
       case: 'set run ended past the limit',
       add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
-      unlisted: false,
+      unlisted: [],
       kept: false,
+    },
+    {
+      case: 'set run untold, old, every build unlisted',
+      add: { setRun: twoBuildSetRun },
+      unlisted: ['x', 'y'],
+      kept: false,
+    },
+    {
+      case: 'set run untold, old, one build unlisted',
+      add: { setRun: twoBuildSetRun },
+      unlisted: ['y'],
+      kept: true,
     },
     {
       case: 'offer at the limit',
       add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS }) },
-      unlisted: false,
+      unlisted: [],
       kept: true,
     },
     {
       case: 'offer past the limit',
       add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS - 1 }) },
-      unlisted: false,
+      unlisted: [],
       kept: false,
     },
   ])('prune keeps $case: $kept', async ({ add, unlisted, kept }) => {
@@ -240,7 +259,7 @@ describe('createLinkStore', () => {
       store.setOffer('s1', add.offer);
     }
 
-    const dropped = store.prune(now, () => unlisted);
+    const dropped = store.prune(now, (ref) => unlisted.includes(ref.buildId));
 
     const held =
       store.links().length +

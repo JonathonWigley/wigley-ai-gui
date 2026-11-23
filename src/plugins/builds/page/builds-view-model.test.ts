@@ -218,8 +218,9 @@ describe('buildRowInput', () => {
 });
 
 describe('buildDetailInput', () => {
-  it('gives each job its time left in ms', () => {
+  it("carries the build's step text and gives each job its time left in ms", () => {
     const record = buildRecord({
+      stepText: 'Archiving',
       jobs: [
         buildJob({
           id: 'ios',
@@ -231,10 +232,10 @@ describe('buildDetailInput', () => {
       ],
     });
 
-    expect(buildDetailInput(record).jobs.map((job) => job.leftMs)).toEqual([
-      90_000,
-      null,
-    ]);
+    const input = buildDetailInput(record);
+
+    expect(input.stepText).toBe('Archiving');
+    expect(input.jobs.map((job) => job.leftMs)).toEqual([90_000, null]);
   });
 });
 

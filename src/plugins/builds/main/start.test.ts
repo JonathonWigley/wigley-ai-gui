@@ -13,6 +13,7 @@ import type { SessionLink, SetRun } from '../builds-model';
 import {
   type BackendKind,
   type BuildBackend,
+  type BuildRecord,
   type BuildsMainExports,
   buildsSessionsSlot,
   buildsSnapshotSlot,
@@ -28,6 +29,7 @@ import { buildsManifest } from '../manifest';
 import { LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
 import { FAST_POLL_MS, SLOW_POLL_MS } from './poller';
 import { buildsMainPart } from './start';
+import { DRAIN_TIMEOUT_MS } from './tracked-backend';
 
 const SHA = '2993a9e4c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
 const LINKS_PATH = `/data/builds/${LINKS_FILE}`;
@@ -95,6 +97,25 @@ function setRun(overrides: Partial<SetRun> = {}): SetRun {
     endedAt: null,
     ...overrides,
   };
+}
+
+// A `fixture` kind that makes a fixture backend per create, held in `instances`; the first one's lists wait on `listed`.
+function hangingFirstListKind() {
+  const listed = deferred<BuildRecord[]>();
+  const instances: FixtureBackend[] = [];
+  const kind: BackendKind = {
+    kind: 'fixture',
+    label: 'Fixture',
+    async create() {
+      const made = createFixtureBackend();
+      if (instances.length === 0) {
+        vi.spyOn(made, 'list').mockReturnValue(listed.promise);
+      }
+      instances.push(made);
+      return made;
+    },
+  };
+  return { kind, instances, listed };
 }
 
 interface StartOptions {
@@ -243,22 +264,66 @@ describe('buildsMainPart', () => {
     );
   });
 
-  it('refuses a queue while the backend is still starting', async () => {
-    const created = deferred<BuildBackend>();
-    const run = await startOnHarness({
-      backends: [backendSetting({ games: [gameSetting(), gameSetting()] })],
-      kinds: () => [
-        { kind: 'fixture', label: 'Slow', create: () => created.promise },
-      ],
-    });
-    await run.ready();
+  it.each([
+    { case: 'its create awaits', isReapplied: false },
+    { case: 'its replaced instance drains', isReapplied: true },
+  ])(
+    'refuses a queue while the backend is still starting: $case',
+    async ({ isReapplied }) => {
+      const created = deferred<BuildBackend>();
+      const games = [gameSetting(), gameSetting()];
+      const run = await startOnHarness({
+        backends: [backendSetting({ games })],
+        kinds: () => [
+          isReapplied
+            ? hangingFirstListKind().kind
+            : { kind: 'fixture', label: 'Slow', create: () => created.promise },
+        ],
+      });
+      await run.ready();
+      if (isReapplied) {
+        await run.pushBackends([
+          backendSetting({ games, config: { next: 1 } }),
+        ]);
+      }
 
-    await expect(
-      run.harness.started().commands.queue({
-        arg: { backend: 'b1', game: 'g1', kind: 'dev', branch: 'main' },
-      }),
-    ).rejects.toThrow('builds.queue: Backend: still starting');
-  });
+      await expect(
+        run.harness.started().commands.queue({
+          arg: { backend: 'b1', game: 'g1', kind: 'dev', branch: 'main' },
+        }),
+      ).rejects.toThrow('builds.queue: Backend: still starting');
+    },
+  );
+
+  it.each([
+    { case: 'the old list settles', isSettled: true, timedOut: 0 },
+    { case: 'the old list never settles', isSettled: false, timedOut: 1 },
+  ])(
+    'creates a re-applied entry once its old instance drains: $case',
+    async ({ isSettled, timedOut }) => {
+      const hanging = hangingFirstListKind();
+      const run = await startOnHarness({ kinds: () => [hanging.kind] });
+      await run.ready();
+
+      await run.pushBackends([backendSetting({ label: 'Second' })]);
+      await run.advance(DRAIN_TIMEOUT_MS - 1);
+      expect(hanging.instances).toHaveLength(1);
+      if (isSettled) {
+        hanging.listed.resolve([]);
+        await settle();
+      } else {
+        await run.advance(1);
+      }
+
+      expect(hanging.instances).toHaveLength(2);
+      expect(hanging.instances[1].listCalls).toHaveLength(1);
+      expect(
+        run.logged(
+          `b1: replaced instance still busy after ${DRAIN_TIMEOUT_MS} ms; creating the new one`,
+        ),
+      ).toBe(timedOut);
+    },
+  );
 
   it('ends no set run and prunes nothing before its game first lists', async () => {
     const pastPrune = -PRUNE_AFTER_MS - 1;

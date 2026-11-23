@@ -45,7 +45,12 @@ import type {
   SessionBuilds,
 } from '../contract';
 import { buildsSessionsSlot, buildsSnapshotSlot } from '../contract';
-import { buildOffer, buildRecord, gameEntry } from '../contract.test-support';
+import {
+  buildJob,
+  buildOffer,
+  buildRecord,
+  gameEntry,
+} from '../contract.test-support';
 import { buildsPagePart } from './start';
 
 const MODE = 'builds.main';
@@ -722,6 +727,34 @@ describe('buildsPagePart', () => {
 
     expect(marks(page)).toEqual({ cursor: [0], detail: [] });
   });
+
+  it.each([
+    { case: 'no jobs', jobs: [], showsStep: true },
+    { case: 'jobs', jobs: [buildJob()], showsStep: false },
+  ])(
+    "shows the build's step in its detail only with $case",
+    ({ jobs, showsStep }) => {
+      const page = startBuildsPage(
+        workSnapshot({
+          g1Builds: [
+            buildRecord({
+              id: '41',
+              gameId: 'g1',
+              stepText: 'Archiving',
+              jobs,
+            }),
+          ],
+        }),
+      );
+      page.showGame(G1);
+      page.run('openDetail');
+
+      const steps = findAll(page.sheet(), 'builds-detail').flatMap((detail) =>
+        findAll(detail, 'builds-step'),
+      );
+      expect(steps).toHaveLength(showsStep ? 1 : 0);
+    },
+  );
 
   it('shows All when the selected game is gone', () => {
     const page = startBuildsPage(workSnapshot());
