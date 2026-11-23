@@ -91,6 +91,27 @@
   padding: 0;
 }
 
+/* A code block's copy button sits in its top-right corner, shown while the
+   pointer is over the block, on the block's own fill so it hides the code
+   under it. */
+.md pre:has(> .md-copy) {
+  position: relative;
+}
+
+.md pre > .md-copy {
+  position: absolute;
+  top: var(--wg-space-1);
+  right: var(--wg-space-1);
+  background: var(--wg-block-background);
+  opacity: 0;
+  transition: opacity var(--wg-duration-fast) var(--wg-ease-out);
+  user-select: none;
+}
+
+.md pre:hover > .md-copy {
+  opacity: 1;
+}
+
 .md blockquote {
   border-left: var(--wg-indicator-width) solid var(--wg-border-default);
   color: var(--wg-fg-secondary);

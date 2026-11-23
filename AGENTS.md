@@ -172,8 +172,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing`, `meter`, `sparkline`, `duration` and `state`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
-                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
-                 disposes the rest; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
+                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged,
+                 disposes the rest, and puts a copy button in each plain code block, whose click the core's
+                 `src/renderer/code-copy-commands.ts` turns into `core.copyCode`; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
@@ -251,7 +252,7 @@ src/main/        core main process; main.ts is its composition root
                  but not wired in, for a Mac where the login item does not work; and a no-op for every other platform
                  and run
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, and the commit that first added a text to a file (`firstAdded`), each local and remote-tracking branch with its tip's time (`branches`), and the commits on every ref whose message matches a pattern (`commitsMatching`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
+                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, the branch heads on origin that match a pattern (`remoteHeads`, planned in `builds`) and a commit's subject (`commitSubject`, planned in `builds`), a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), each local and remote-tracking branch with its tip's time (`branches`), and the commits on every ref whose message matches a pattern (`commitsMatching`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and two commits, run through `services.processes`)
   pull-requests/ the `gh` adapter behind PullRequests: each open, merged or closed pull request of a folder's GitHub
                  repo, or null when `gh` is missing or not logged in, the folder has no GitHub remote, or the run fails
@@ -556,6 +557,22 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and hand-back entries from `chat.agentEvent`, `addMirror`, its self-test script and the `seed` drive action, `demo-rooms.ts`: the memory room a demo step holds),
                  page/ (Chatroom mode, the row badge through sessions' `addRowPart`, the row activity, the layout preview),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chatroom/design.md`
+  builds/        planned in `builds`, not built yet: manifest.ts, contract.ts (the `BuildBackend` seam, `BackendKind`,
+                 `BuildRecord`, the `builds.snapshot` and `builds.sessions` slots, `buildsMainKey`), builds-model.ts (the
+                 pure fold of backend records, session links, set runs and offers into the slots, and the builds that
+                 ended or started failing), main/ (the backend registry behind `addBackend`, the `backends` setting's
+                 parse, the poller, the session links, set runs and offers in plugin data, the finish message through
+                 chat's `send`, a set's agent through chat's `launch`, the commands, its self-test script over a fixture
+                 backend, its demo steps), page/ (Builds mode on `Space k m`, the row line through sessions'
+                 `addRowPart`, the `building` activity, the hub's Builds section through chat's `addSidePart`, the offer
+                 card through chat's `addComposerPart`), layouts/ (its Layout contract and `default` layout);
+                 `docs/features/builds/design.md`
+  builds-teamcity/ planned in `builds`, not built yet: manifest.ts, main/ (the `teamcity` backend kind through
+                 `builds`' `addBackend`, over the `teamcity` CLI: the one function that spawns it, and the parsers of its
+                 JSON) → the only place the app spawns `teamcity`
+  builds-local/  planned in `builds`, not built yet: manifest.ts, main/ (the `local` backend kind through `builds`'
+                 `addBackend`: each kind's command run detached in the game's clone, the run records in plugin data,
+                 the progress estimate, cancel)
   system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a
                  page shows the panel, folds two samples into the snapshot with rates, groups and 60 s history, joins
                  `chat.session` pids with `sessions.rows` titles into one group per session's process tree, hands its

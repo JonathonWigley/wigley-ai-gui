@@ -51,6 +51,10 @@ export function moveConnected(
 // A link the markdown renderer drew, whose click the page core opens.
 export const RENDERED_LINK = 'a.md-link[data-href]';
 
+// The copy button the markdown mount puts on a rendered code block, whose click
+// the page core copies.
+export const CODE_COPY_BUTTON = 'button.md-copy';
+
 // A button that never takes focus, so page keys still drive the page after a
 // click and Enter or Space never re-press it. A click on a rendered link inside
 // it opens the link alone.

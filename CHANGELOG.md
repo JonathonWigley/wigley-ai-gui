@@ -8,6 +8,8 @@ changes for the user.
 
 ### Added
 
+- Every code block in chat, docs, forms and practice shows a copy button in its corner on hover; a click copies
+  the block's code and toasts Copied.
 - The app ships its own agent plugin, `auri`, in `agent-plugin/`: the MCP relay, the chatroom, checklist and
   AskUserQuestion hooks, and skills for forms, visuals, chatroom, workflows and checklist, backlog format, primer,
   audio picker, live view and writing `auri.json`. App sessions load it through `--plugin-dir`; terminal and Codex
