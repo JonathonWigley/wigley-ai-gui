@@ -38,8 +38,9 @@ background watch on the build spends a subagent or a shell for nothing the app d
 ## Offering at a wrap-up
 
 When the run's change reaches players only through a build, run `builds.offer` with the same
-argument shape instead of writing a `device build` chip (the call is refused outside a session the app started, which has no calling session). The session then shows an offer card with a
-Queue button; the user's press queues it. One offer per session: a new one replaces the last.
+argument shape instead of writing a `device build` chip. Outside a session the app started there is no calling
+session, and the call is refused with `builds.offer: no calling session`. The session then shows an
+offer card with a Queue button; the user's press queues it. One offer per session: a new one replaces the last.
 
 ## Reading state
 

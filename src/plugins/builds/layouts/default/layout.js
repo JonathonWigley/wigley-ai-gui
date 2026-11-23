@@ -5,8 +5,9 @@
 // filter chips; one list row per build (kind, number and version, then branch, revision and subject, ending in its
 // state and who queued it), a set run's rows under its heading, and the open build's detail under its row (its step
 // text while it lists no job, each job with its progress and step, the status text, then its links and Open in the
-// backend); the empty states; the queue picker's rows; the line under a session row (its newest build and its state); the hub's builds
-// (each with its branch, revision, jobs and links); and the offer card with its Queue and Dismiss buttons.
+// backend); the empty states; the queue picker's rows; the line under a session row (its newest build and its
+// state); the hub's builds (each with its branch, revision, jobs and links); and the offer card with its Queue and
+// Dismiss buttons.
 
 /** @type {Record<import('../layout').EmptyInput['reason'], string>} */
 const EMPTY_TEXTS = {

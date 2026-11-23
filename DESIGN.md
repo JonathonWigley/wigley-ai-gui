@@ -439,6 +439,23 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   result (`status-error` for a failure). While a queue ticket waits long, each clone that blocks the queue takes the
   `status-attention-tint` fill and edge and shows `idle <time>`. The queue follows under a `Queue` section header, one
   row per ticket: its position, the waiting session, its branch in mono and `waited <time>`; no queue draws no header.
+- **Builds** (`docs/features/builds/design.md`): in Builds mode the side bar holds an All row, then one group per
+  backend under its `SectionHeader` (a backend's problem under it in `status-error` `text-12`), its games as `row-list`
+  rows each ending in a StatusDot for its newest build. The sheet opens on a game head, the game's name in `fg` with
+  the backend's label and the queue key hint in `fg-tertiary`, over one button per kind and per set (a set that can
+  launch an agent adds a `ghost` "with agent" button); All opens three `ghost` filter chips instead, the shown one on
+  `list-active-background`. One `row-list` row per build: its kind, number and version, then branch, short revision
+  and the commit's subject as the detail; at the row's end the state (a meter and time left while it runs, `starts in
+  <time>` or `Queued`, a result Tag: `success` Succeeded, `error` Failed, `warning` Cancelled) and who queued it in
+  `fg-tertiary`. A set run's rows sit under a `text-12` head, the set's label in medium weight and its short revision in
+  mono. `Enter` opens the build's detail under its row, a `border-subtle` edge at its start: its step text in
+  `fg-tertiary` when it lists no job, a line per job (label in medium weight, state, step text), the status text in
+  `fg-secondary`, then a button per link and a `ghost` Open in the backend. A session row's builds part is one `text-12`
+  line, the newest build's game, kind and number with its state; the hub's Builds section lists every build the session
+  queued, newest first: that line without the meter, the branch and short revision in mono under it, a line per job, a
+  button per link. The offer card sits above the composer: `Build <game> <choice>?`, the branch, short revision and
+  subject under it in `fg-tertiary`, then Queue and a `ghost` Dismiss; while its keys hold the cursor it takes
+  `focus-border`. Empty states are one line each.
 - **Chatroom:** in Chatroom mode the side bar holds one group per room under its section header, by name, padded
   `space-2` with `space-0_5` between rows; under each, its open threads as `row-list` rows, newest first, then its
   resolved threads in `fg-tertiary`. A row ends with its unread count in `text-12` `fg-secondary` and an `attention`

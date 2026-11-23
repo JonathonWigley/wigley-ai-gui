@@ -230,7 +230,7 @@ src/main/        core main process; main.ts is its composition root
                  owner pid and bounds in points: JXA over CoreGraphics; PowerShell over user32 and DWM, per-monitor-DPI
                  aware), `window-rows.ts` (their shared JSON row parser) and `unavailable-screen-capture.ts` (Linux,
                  whose list rejects); `docs/features/live-view/design.md`
-  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes (a rename
+  files/         file reads (whole as text or bytes, or the first or last bytes), modified times, atomic writes (a rename
                  EPERM or EBUSY holds is tried again), append, rename, trash, file deletes, folder lists and
                  watching, behind Files; on macOS any watch opening or closing
                  drops other watches' pending events, so each live watch hears `onMissed` and its caller rescans
