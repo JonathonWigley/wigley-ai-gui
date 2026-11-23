@@ -110,6 +110,7 @@ The Settings and keys steps show the user's own settings and keymap, read only:
 - **Auto-retro**: ignores demo sessions (the `ephemeral` key on chat's events); it never queues a
   retro for one.
 - **Chatroom**: the demo room lives in memory.
+- **Builds**: the sample snapshot lives in the view; queue, cancel, with agent and open do nothing on it.
 - **Forms**: the forms step shows sample rounds only, never the user's saved rounds.
 - **App update**: the button shows a sample status; pressing it installs nothing.
 - **Notes**: the popup shows a sample note; its follow-up actions write nothing.

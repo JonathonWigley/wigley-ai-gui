@@ -1,0 +1,41 @@
+/* Builds mode's app-owned containers: the side bar's pane holding the layout's entries, and the sheet holding the
+   main pane, whose body scrolls the shown entry's head and list. */
+.builds-side {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+.builds-entries,
+.builds-list,
+.builds-set-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The sheet is the main cell's direct child: its margins lie outside the box, so it takes the cell's height less its
+   two gutters. */
+.builds-sheet {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.shell-main > .builds-sheet {
+  height: calc(100% - var(--wg-sheet-gutter) * 2);
+}
+
+.builds-main {
+  height: 100%;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+}
+
+.builds-body {
+  display: flex;
+  flex-direction: column;
+  padding-block-end: var(--wg-space-2);
+}

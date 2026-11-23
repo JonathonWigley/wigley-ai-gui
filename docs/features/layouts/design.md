@@ -146,6 +146,7 @@ does.
 | `auto-retro` | `auto-retro.layout` | the Retro section's header part: the count of closes still queued |
 | `unity-pool` | `unity-pool.layout` | the clone badge under each session row that holds a clone or waits for one; the right-bar pool panel |
 | `chatroom` | `chatroom.layout` | Chatroom mode's side bar (`sideBar`: the rooms and their threads), the room's board with the shown thread's heading (`board`), each message of the log (`message`) and the composer (`composer`); the unread badge under each session row (`rowBadge`) |
+| `builds` | `builds.layout` | Builds mode: the side bar (All, each backend's heading and games), the game header with its queue buttons, the All feed's filter chips, the build rows, set groups and detail, the empty states and the queue picker's rows |
 | `system-stats` | `system-stats.layout` | the right-bar system stats panel: its section header, the five meter rows with their sparklines, and the process list's group and process rows |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `live-view` | `live-view.layout` | the session hub's Live section: its line and button above the stream, and the place the stream's video goes |

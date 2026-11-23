@@ -175,6 +175,7 @@ export const LIST_PICKER_SCOPES = [
   'notes.picker',
   'keys.picker',
   'scheduling.picker',
+  'builds.picker',
 ] as const;
 
 type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
@@ -277,6 +278,8 @@ export const defaultKeymap = {
         'scoped-agents.ask',
         'chatroom.threads',
         'chatroom.log',
+        'builds.games',
+        'builds.list',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -291,6 +294,8 @@ export const defaultKeymap = {
     { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>kt', scope: 'any', command: 'scheduling.showMode' },
     { keys: '<Leader>kc', scope: 'any', command: 'chatroom.showMode' },
+    { keys: '<Leader>km', scope: 'any', command: 'builds.showMode' },
+    { keys: '<Leader>mq', scope: 'any', command: 'builds.pickQueue' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
     {
       keys: '<Leader>vi',
@@ -1213,6 +1218,22 @@ export const defaultKeymap = {
       scope: 'chatroom.composer',
       command: 'chatroom.leaveComposer',
     },
+
+    // ── Builds ─────────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'builds.games', command: 'builds.gameDown' },
+    { keys: 'k', scope: 'builds.games', command: 'builds.gameUp' },
+    { keys: 'gg', scope: 'builds.games', command: 'builds.gameTop' },
+    { keys: 'G', scope: 'builds.games', command: 'builds.gameBottom' },
+    { keys: '<CR>', scope: 'builds.games', command: 'builds.openGame' },
+    { keys: 'q', scope: 'builds.games', command: 'builds.pickQueue' },
+    { keys: 'j', scope: 'builds.list', command: 'builds.listDown' },
+    { keys: 'k', scope: 'builds.list', command: 'builds.listUp' },
+    { keys: 'gg', scope: 'builds.list', command: 'builds.listTop' },
+    { keys: 'G', scope: 'builds.list', command: 'builds.listBottom' },
+    { keys: '<CR>', scope: 'builds.list', command: 'builds.openDetail' },
+    { keys: 'q', scope: 'builds.list', command: 'builds.pickQueue' },
+    { keys: 'o', scope: 'builds.list', command: 'builds.openWeb' },
+    { keys: 'x', scope: 'builds.list', command: 'builds.cancel' },
 
     // ── System stats ───────────────────────────────────────────────────────
     {
