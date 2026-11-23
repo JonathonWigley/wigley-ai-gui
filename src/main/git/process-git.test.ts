@@ -678,6 +678,112 @@ describe('createProcessGit', () => {
 
     expect((await test.git.firstAdded(ROOT, 'a.md', '--x'))?.sha).toBe(SHA_A);
   });
+
+  function branchesArgs(): string[] {
+    return git(
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname)%00%(symref)%00%(committerdate:iso-strict)',
+      'refs/heads',
+      'refs/remotes',
+    );
+  }
+
+  function matchingArgs(pattern: string, since: string | null): string[] {
+    return git(
+      'log',
+      '--exclude=refs/stash',
+      '--all',
+      '--no-show-signature',
+      '--regexp-ignore-case',
+      '--extended-regexp',
+      `--grep=${pattern}`,
+      ...(since === null ? [] : [`--since=${since}`]),
+      '--format=%x00%H%x00%cI%x00%s',
+      '-z',
+    );
+  }
+
+  it('branches_ForEachRefOutput_LocalAndRemoteWithoutSymbolicHead', async () => {
+    const test = setUp();
+    const newer = '2026-11-05T10:00:00-06:00';
+    const older = '2026-11-04T09:00:00Z';
+    test.processes.script(
+      'git',
+      branchesArgs(),
+      exited(
+        0,
+        `refs/heads/main\0\0${newer}\n` +
+          `refs/remotes/origin/PROJ-7-x\0\0${older}\n` +
+          `refs/remotes/origin/HEAD\0refs/remotes/origin/main\0${older}\n`,
+      ),
+    );
+
+    expect(await test.git.branches(ROOT)).toEqual([
+      { name: 'main', at: newer, isRemote: false },
+      { name: 'origin/PROJ-7-x', at: older, isRemote: true },
+    ]);
+  });
+
+  it('branches_ExitsNonZero_RejectsNamingTheRun', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      branchesArgs(),
+      exited(128, '', 'fatal: not a git repository'),
+    );
+
+    await expect(test.git.branches(ROOT)).rejects.toThrow(
+      'git for-each-ref exited 128',
+    );
+  });
+
+  it('commitsMatching_ScriptedOutput_ParsesRecordsWithNoPaths', async () => {
+    const test = setUp();
+    const since = '2026-11-01T00:00:00Z';
+    const newer = '2026-11-05T10:00:00-06:00';
+    const older = '2026-11-04T09:00:00Z';
+    test.processes.script(
+      'git',
+      matchingArgs('PROJ-7', since),
+      exited(
+        0,
+        `\0${SHA_A}\0${newer}\0Merge PROJ-7\0` + `\0${SHA_B}\0${older}\0fix\0`,
+      ),
+    );
+
+    expect(await test.git.commitsMatching(ROOT, 'PROJ-7', since)).toEqual([
+      { sha: SHA_A, subject: 'Merge PROJ-7', at: newer, paths: [] },
+      { sha: SHA_B, subject: 'fix', at: older, paths: [] },
+    ]);
+  });
+
+  it('commitsMatching_NullSince_NoSinceArg', async () => {
+    const test = setUp();
+    test.processes.script('git', matchingArgs('PROJ-7', null), exited(0));
+
+    expect(await test.git.commitsMatching(ROOT, 'PROJ-7', null)).toEqual([]);
+  });
+
+  it('commitsMatching_EmptyPattern_RunsNothing', async () => {
+    const test = setUp();
+
+    expect(await test.git.commitsMatching(ROOT, '', null)).toEqual([]);
+    expect(test.processes.runs).toEqual([]);
+  });
+
+  it('commitsMatching_ExitsNonZero_Rejects', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      matchingArgs('PROJ-7', null),
+      exited(128, '', 'fatal: bad\n'),
+    );
+
+    await expect(
+      test.git.commitsMatching(ROOT, 'PROJ-7', null),
+    ).rejects.toThrow('git log exited 128');
+  });
 });
 
 // The real-clone test runs the machine's git, which a machine without git on
@@ -880,6 +986,91 @@ describe('createProcessGit over a real clone', () => {
       expect(
         (await adapter.firstAdded(root, 'c.md', '### Item\n'))?.subject,
       ).toBe('short title');
+    },
+  );
+
+  // `main` with `first` and `main work`, and `side` with `side work`, not
+  // yet merged.
+  async function initMainAndSide() {
+    root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+    await run('init', '--quiet', '--initial-branch=main');
+    await run('commit', '--quiet', '--allow-empty', '-m', 'first');
+    await run('checkout', '--quiet', '-b', 'side');
+    await run('commit', '--quiet', '--allow-empty', '-m', 'side work');
+    await run('checkout', '--quiet', 'main');
+    await run('commit', '--quiet', '--allow-empty', '-m', 'main work');
+  }
+
+  it.skipIf(!gitOnPath)(
+    'commitsMatching_RealClone_MergeBodyMatchesCaseInsensitively',
+    async () => {
+      isolateGitConfig();
+      await initMainAndSide();
+      await run(
+        'merge',
+        '--quiet',
+        '--no-ff',
+        'side',
+        '-m',
+        'Merge side',
+        '-m',
+        'Closes proj-7',
+      );
+      const merge = (await run('rev-parse', 'HEAD')).trim();
+
+      const commits = await adapter.commitsMatching(root, 'PROJ-7', null);
+
+      expect(commits).toHaveLength(1);
+      expect(commits[0]).toMatchObject({
+        sha: merge,
+        subject: 'Merge side',
+        paths: [],
+      });
+      const dayAhead = new Date(Date.now() + 86_400_000).toISOString();
+      expect(await adapter.commitsMatching(root, 'PROJ-7', dayAhead)).toEqual(
+        [],
+      );
+    },
+  );
+
+  it.skipIf(!gitOnPath)('commitsMatching_RealClone_StashLeftOut', async () => {
+    isolateGitConfig();
+    root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+    await run('init', '--quiet', '--initial-branch=main');
+    writeFileSync(path.join(root, 'a.txt'), 'first\n');
+    await run('add', '--', 'a.txt');
+    await run('commit', '--quiet', '-m', 'first');
+    await run('checkout', '--quiet', '-b', 'proj-7-x');
+    writeFileSync(path.join(root, 'a.txt'), 'changed\n');
+    await run('stash', 'push', '--quiet');
+
+    expect(await adapter.commitsMatching(root, 'PROJ-7', null)).toEqual([]);
+  });
+
+  it.skipIf(!gitOnPath)(
+    'branches_RealClone_LocalAndRemoteWithDates',
+    async () => {
+      isolateGitConfig();
+      await initMainAndSide();
+      await run('update-ref', 'refs/remotes/origin/side', 'side');
+      await run(
+        'symbolic-ref',
+        'refs/remotes/origin/HEAD',
+        'refs/remotes/origin/side',
+      );
+
+      const branches = await adapter.branches(root);
+
+      const named = branches.map(
+        (branch) => `${branch.name} ${String(branch.isRemote)}`,
+      );
+      expect(new Set(named)).toEqual(
+        new Set(['main false', 'side false', 'origin/side true']),
+      );
+      expect(branches).toHaveLength(3);
+      for (const branch of branches) {
+        expect(Date.parse(branch.at)).not.toBeNaN();
+      }
     },
   );
 });
