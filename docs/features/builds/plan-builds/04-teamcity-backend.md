@@ -1,6 +1,6 @@
 # 04 — TeamCity backend
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · bounded concurrency over async CLI calls, a persisted cache and per-instance state
 Wave: 2 · Depends on: 02
@@ -490,3 +490,5 @@ tests; no drive run reaches the real server).
 Commit: one commit for the group, `CHANGELOG.md` left to task 08.
 
 ## Proof
+
+Commit 151702206 · proof: diff read: teamcityBackendKind, TeamcityCli, runTeamcity, parse* and readFirebaseLinks present; wave typecheck and lint pass · concerns: fixtures are written from the task table, not recorded; run list triggered.user.name nesting unconfirmed; concurrency test uses vi.waitFor on real timers; start.ts relies on builds' consumer.track for the addBackend Disposable

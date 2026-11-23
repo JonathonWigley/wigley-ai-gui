@@ -1,6 +1,6 @@
 # 05 — Local backend
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · detached processes that outlive an app restart, found again through pid and exit-code files, and a run history saved in plugin data
 Wave: 2 · Depends on: 01, 02
@@ -479,3 +479,5 @@ local backend).
 Commit: one commit for the group, `CHANGELOG.md` left to task 08.
 
 ## Proof
+
+Commit b414c162a · proof: diff read: localBackendKind, LocalTarget, ProgramLine, wrapperLine, aliveCheckLine, isAlive, killLine present; wave typecheck and lint pass · concerns: no-control-regex disable on the ANSI regex copied from claude-auth.ts unconfirmed as needed; one test overrides processes.run on its FakeProcesses instance

@@ -1,6 +1,6 @@
 # 03 — Builds main part
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses lifecycle (live settings, kinds that register late), async polls that must not overlap, and plugin data written before each message
 Wave: 2 · Depends on: 01, 02
@@ -611,3 +611,5 @@ message, the offer across a restart and a bad entry's problem).
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 223f644f2 · proof: diff read: buildsMainPart, FAST_POLL_MS, SLOW_POLL_MS, PRUNE_AFTER_MS, LINKS_FILE, parseBackends present; wave typecheck and lint pass · concerns: it.each union rows and spy casts in start.test.ts unchecked until the gate; start.test.ts settles with five setImmediate rounds per step; api.data files are copied per start so a files spy applies from the next start; oxlint no-useless-spread warnings in start.ts and poller.ts

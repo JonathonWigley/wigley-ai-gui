@@ -1,6 +1,6 @@
 # 06 — Builds mode, its queue picker and the `builds` layout
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the `builds` Layout contract (`layouts/layout.d.ts`) and the page part that 07 extends, with many parts (side bar, list, All feed, detail, picker)
 Wave: 2 · Depends on: 01 (`GitRemoteHead`), 02
@@ -410,3 +410,5 @@ registers the layout contract in main (`api.layouts.register({ layoutTypes })`).
 Commit: one commit for the group: `builds: Builds mode, queue picker and the builds layout`.
 
 ## Proof
+
+Commit 2863e3ce3 · proof: diff read: buildsPagePart, BuildsLayout, CompleteBuildsLayout, readBuildsLayout, every builds-view-model Produces and the builds.mode demo step present; wave typecheck and lint pass · concerns: movedKey is a fifth per-plugin copy of the clamped cursor move; <Leader>mq is bound before 07 names the <Leader>m group, so the keymap check may fail until 07; start.test.ts reads row numbers from the default layout's row text

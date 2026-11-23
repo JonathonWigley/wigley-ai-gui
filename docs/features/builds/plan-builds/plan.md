@@ -307,10 +307,10 @@ Critical path: 02 → 06 → 07 → 08 → 09
 - [x] [Builds contract, manifest and model](02-builds-contract-model.md)
 
 ### Wave 2
-- [ ] [Builds main part](03-builds-main.md) — after 01, 02
-- [ ] [TeamCity backend](04-teamcity-backend.md) — after 02
-- [ ] [Local backend](05-local-backend.md) — after 01, 02
-- [ ] [Builds mode and layout](06-builds-mode.md) — after 02
+- [x] [Builds main part](03-builds-main.md) — after 01, 02
+- [x] [TeamCity backend](04-teamcity-backend.md) — after 02
+- [x] [Local backend](05-local-backend.md) — after 01, 02
+- [x] [Builds mode and layout](06-builds-mode.md) — after 02
 
 ### Wave 3
 - [ ] [Session parts and offer card](07-session-parts.md) — after 03, 06
@@ -327,12 +327,31 @@ Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
 ### Groups
 - 01 · hard; layer fix 017e1d0e7 same rung (compile-class) · 9d73fee74 · diff read: remoteHeads, commitSubject, Files.readEnd present in contracts and adapters; wave typecheck and lint pass after 017e1d0e7 · concerns: remoteHeads returns null whenever timedOut is set; git ls-remote --heads is deprecated in git 2.46 for --branches, kept as the task names it; a whole-file readEnd drops a BOM as readStart does
 - 02 · hard · 8b8cdf96c · diff read: contract records, keys, slots, BuildsChannel, manifests and foldBuilds present; wave typecheck and lint pass (oxfmt 8efb32854) · concerns: the array setting default (backends: [] as unknown[]) is unverified against the settings schema beyond typecheck; the demo coverage check fails for builds until 06 and 07 add steps
+- 03 · deep · 223f644f2 · diff read: buildsMainPart, FAST_POLL_MS, SLOW_POLL_MS, PRUNE_AFTER_MS, LINKS_FILE, parseBackends present; wave typecheck and lint pass · concerns: it.each union rows and spy casts in start.test.ts unchecked until the gate; start.test.ts settles with five setImmediate rounds per step; api.data files are copied per start so a files spy applies from the next start; oxlint no-useless-spread warnings in start.ts and poller.ts
+- 04 · deep · 151702206 · diff read: teamcityBackendKind, TeamcityCli, runTeamcity, parse* and readFirebaseLinks present; wave typecheck and lint pass · concerns: fixtures are written from the task table, not recorded; run list triggered.user.name nesting unconfirmed; concurrency test uses vi.waitFor on real timers; start.ts relies on builds' consumer.track for the addBackend Disposable
+- 05 · deep · b414c162a · diff read: localBackendKind, LocalTarget, ProgramLine, wrapperLine, aliveCheckLine, isAlive, killLine present; wave typecheck and lint pass · concerns: no-control-regex disable on the ANSI regex copied from claude-auth.ts unconfirmed as needed; one test overrides processes.run on its FakeProcesses instance
+- 06 · hard · 2863e3ce3 · diff read: buildsPagePart, BuildsLayout, CompleteBuildsLayout, readBuildsLayout, every builds-view-model Produces and the builds.mode demo step present; wave typecheck and lint pass · concerns: movedKey is a fifth per-plugin copy of the clamped cursor move; <Leader>mq is bound before 07 names the <Leader>m group, so the keymap check may fail until 07; start.test.ts reads row numbers from the default layout's row text
 ### Contract changes
 - 02 BuildsChannel.branches: returns Promise<{name; sha}[] | {problem}> inline rather than GitRemoteHead[], as the task doc directs; shape is identical · consumers: 03, 06
+- 06 toasts: the spec's warning tone lands as info, since ToastTone (src/contracts/plugin.ts) is success | info | error · consumers: 10 (live check expects the info look)
+- 03 BackendRegistry: adds kinds() beyond the plan · consumers: none outside 03
 ### Rulings
 - 01: the memory readEnd cuts the stored bytes, so it matches the node adapter's UTF-8 boundary handling · group 01
 - 01: node-files.ts gets a file-level CORE_LAYERS entry allowing src/shared (as node-processes.ts has) for the shared withoutLeadingContinuationBytes helper; its importers name the file key · group 01
 - 02: a set run whose backend or game is gone yields no setEnded event · group 02
 - 02: set links keep notified false unless task 03 sets it · group 02
 - 02: kindLabel uses Object.hasOwn; sorts are stable; activeBackends counts set links · group 02
+- 03: BackendRegistry adds kinds(), and the apply key is {backends, kinds}, so adding or removing a kind re-applies · group 03
+- 03: a backend whose create is pending refuses queueing with '<label>: still starting' · group 03
+- 03: a links file whose links/setRuns are not lists or offers not an object rejects the load like bad JSON, and the store stops writing; bad entries inside are dropped · group 03
+- 03: every event's flags are set synchronously before any tell awaits, so concurrent folds never tell twice · group 03
+- 03: a commitSubject rejection in offer stores a null subject; a missing subject is asked again after SLOW_POLL_MS · group 03
+- 04: dependency rows missing id, type or state are dropped; a missing revisions counts as empty; a finished build with no finishDate still reads its logs · group 04
+- 04: non-JSON run list or queue output rejects list; non-JSON detail counts as a failed detail; log and cache I/O failures are logged, cache writes chained · group 04
+- 05: create checks each game in turn in the Decisions order · group 05
+- 05: a queue that rejects after its settle step leaves the ended runs marked changed for the next write; a failed final write is logged and the queue still resolves · group 05
+- 05: a run dropped past KEPT_RUNS loses its three files but its empty folder stays; BackendKind.label is 'Local' · group 05
+- 06: Esc while branches is pending cancels the empty branch list and drops the late answer · group 06
+- 06: pickQueue targets the side-bar cursor while the mode shows and builds.games has the keys, else the shown entry; all or never shown opens step 0 · group 06
+- 06: rejected invokes toast their error in tone error; the feed header draws only when the empty reason is null or noMatches · group 06
 
