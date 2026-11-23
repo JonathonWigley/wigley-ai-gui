@@ -300,18 +300,30 @@ export function startSelfTest(
 }
 
 // Each kept script as `<plugin> (<kept> of <all> groups)`, in hand-over order.
-function runsLine(
+// `runs` keeps the handed order, so each handed script claims the next run of
+// its plugin whose groups are a prefix of its own, which tells two scripts of
+// one plugin apart.
+export function runsLine(
   runs: readonly ScriptRun[],
   handed: readonly HandedScript[],
 ): string {
+  let next = 0;
   return handed
     .flatMap(({ pluginId, script }) => {
-      const run = runs.find((entry) => entry.pluginId === pluginId);
-      return run === undefined
-        ? []
-        : [
-            `${pluginId} (${run.script.groups.length} of ${script.groups.length} groups)`,
-          ];
+      const run = runs[next];
+      const isKept =
+        run !== undefined &&
+        run.pluginId === pluginId &&
+        run.script.groups.every(
+          (group, index) => group === script.groups[index],
+        );
+      if (!isKept) {
+        return [];
+      }
+      next += 1;
+      return [
+        `${pluginId} (${run.script.groups.length} of ${script.groups.length} groups)`,
+      ];
     })
     .join(', ');
 }

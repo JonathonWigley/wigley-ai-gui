@@ -334,6 +334,16 @@ describe('checkGroups', () => {
     expect(check).toThrow(/forms.*rounds/);
   });
 
+  it('throws on two scripts of one plugin with a group of one name', () => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [{ name: 'keys', why: 'first', steps: [] }]),
+        withGroups('forms', [{ name: 'keys', why: 'second', steps: [] }]),
+      ]);
+
+    expect(check).toThrow(/forms.*keys/);
+  });
+
   it('lets two scripts each have a group of one name', () => {
     const check = () =>
       checkGroups([

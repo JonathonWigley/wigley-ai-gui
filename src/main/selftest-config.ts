@@ -100,14 +100,17 @@ function pressFiles(base: string, repeatMax: number | undefined): string[] {
 }
 
 // Throws on a script whose groups the runner cannot report or run: a group
-// with a blank `name` or `why`, two groups of one script with one name, a step
+// with a blank `name` or `why`, two groups of one plugin's scripts with one name, a step
 // whose `why` or `remove` is given but blank, a `repeat` whose `max` is not a
 // whole number of at least 2 or whose `until` is blank, a `repeat` beside
 // `alsoExpect`, and a `width` that is neither `'start'` nor a positive whole
 // number.
 export function checkGroups(handed: readonly HandedScript[]): void {
+  // The filter names a group per plugin, so one plugin's scripts share a set.
+  const namesByPlugin = new Map<string, Set<string>>();
   for (const { pluginId, script } of handed) {
-    const names = new Set<string>();
+    const names = namesByPlugin.get(pluginId) ?? new Set<string>();
+    namesByPlugin.set(pluginId, names);
     for (const group of script.groups) {
       const where = `Self-test group ${pluginId}: ${group.name}`;
       if (group.name.trim() === '') {
@@ -117,7 +120,7 @@ export function checkGroups(handed: readonly HandedScript[]): void {
         throw new Error(`${where} has no why`);
       }
       if (names.has(group.name)) {
-        throw new Error(`${where} is named twice in its script`);
+        throw new Error(`${where} is named twice in its plugin`);
       }
       names.add(group.name);
       for (const step of group.steps) {

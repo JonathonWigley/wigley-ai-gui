@@ -7,7 +7,11 @@ import type { Files } from '../contracts/files';
 import type { SelfTestScript } from '../contracts/plugin';
 import type { DrivenWindow } from './drive/driven-window';
 import { fakeDrivenWindow } from './drive/fake-driven-window';
-import type { ScriptRun, SelfTestFilter } from './selftest-config';
+import type {
+  HandedScript,
+  ScriptRun,
+  SelfTestFilter,
+} from './selftest-config';
 
 const NO_FILTER: SelfTestFilter = { plugins: [], groups: [] };
 
@@ -253,6 +257,38 @@ describe('runScript', () => {
       ),
     ).rejects.toThrow('fixture failed late');
     expect(widthReads).toBe(2);
+  });
+});
+
+describe('runsLine', () => {
+  const handedScript = (pluginId: string, names: string[]): HandedScript => ({
+    pluginId,
+    script: {
+      pageBinds: [],
+      settings: {},
+      open: () => ({ shownLine: 'shown', result: Promise.resolve(null) }),
+      groups: names.map((name) => ({ name, why: 'w', steps: [] })),
+      scrollsItself: [],
+      problems: () => [],
+    },
+  });
+
+  it('counts each script of one plugin on its own and skips a script left out', async () => {
+    const { runsLine } = await import('./selftest');
+    const first = handedScript('workflow', ['a', 'b', 'c']);
+    const second = handedScript('workflow', ['d', 'e']);
+    const runs: ScriptRun[] = [
+      { ...first, checksResult: true },
+      {
+        pluginId: 'workflow',
+        script: { ...second.script, groups: second.script.groups.slice(0, 1) },
+        checksResult: false,
+      },
+    ];
+
+    const line = runsLine(runs, [first, second, handedScript('forms', ['x'])]);
+
+    expect(line).toBe('workflow (3 of 3 groups), workflow (1 of 2 groups)');
   });
 });
 
