@@ -517,6 +517,10 @@ User-facing features, those other work builds on first.
 
 Duplication and drift with no user-visible defect.
 
+- **One clamped cursor move for every list view** — *agent-ready*: `movedKey`
+  (`src/plugins/builds/page/builds-view-model.ts`) is the eighth copy of the same rule — find the cursor's key, step
+  by the delta, clamp to both ends, fall back to the first row when the key is gone. Move it to one shared page helper
+  and point each copy at it (grep the page view models and states for the clamped `findIndex` step).
 - **Saved outcomes from one list** — *agent-ready*: `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`)
   hard-codes `'open' | 'submitted' | 'cancelled'` beside the `SavedOutcome` type; derive both from one
   `SAVED_OUTCOMES` const.
