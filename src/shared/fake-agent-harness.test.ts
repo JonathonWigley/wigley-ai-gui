@@ -1822,6 +1822,7 @@ describe('createFakeAgentHarness', () => {
     expect(harness.configRoots('~/p')).toEqual({
       configDir: '~/p',
       pluginCacheDirs: ['~/p/plugins/cache'],
+      installedPluginsFile: '~/p/plugins/installed_plugins.json',
     });
     expect(await harness.installedPlugins('~/p')).toEqual([]);
 

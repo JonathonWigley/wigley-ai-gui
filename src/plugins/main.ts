@@ -5,6 +5,7 @@ import { appUpdateMainPart } from './app-update/main/start';
 import { audioPickerMainPart } from './audio-picker/main/start';
 import { agentSkillsMainPart } from './agent-skills/main/start';
 import { contextSourcesMainPart } from './context-sources/main/start';
+import { contributionsMainPart } from './contributions/main/start';
 import { agentStripMainPart } from './agent-strip/main/start';
 import { agentsMainPart } from './agents/main/start';
 import { autoCompactMainPart } from './auto-compact/main/start';
@@ -45,6 +46,7 @@ import { workflowSpikeMainPart } from './workflow-spike/main/start';
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
+  contributionsMainPart,
   // Before chat and usage, so Claude's harness is registered when they start.
   claudeCodeMainPart,
   formsMainPart,

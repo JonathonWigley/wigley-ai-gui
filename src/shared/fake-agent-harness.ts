@@ -295,7 +295,8 @@ const FAKE_IDLE_RULE: IdleRule = {
 // `request.rowId` is `rowId` and that is neither ended nor detached, and
 // resolves to its decision; it rejects when there is none. `controls` declares the starting controls a process with
 // no launch values begins with; `toolUseIdOf` reads `FAKE_TOOL_USE_ID_META_KEY`;
-// `configRoots` names `configFolder`'s folder and its `plugins/cache`.
+// `configRoots` names `configFolder`'s folder, its `plugins/cache` and its
+// `plugins/installed_plugins.json`.
 // `installedPlugins` resolves what `setInstalledPlugins` last set for the
 // profile's `configFolder`, [] before.
 export interface FakeAgentHarness extends AgentHarness {
@@ -2163,7 +2164,11 @@ export function createFakeAgentHarness(
     },
     configRoots(profileDir) {
       const configDir = configFolder(profileDir);
-      return { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] };
+      return {
+        configDir,
+        pluginCacheDirs: [`${configDir}/plugins/cache`],
+        installedPluginsFile: `${configDir}/plugins/installed_plugins.json`,
+      };
     },
     async installedPlugins(profileDir) {
       return [...(installedPlugins.get(configFolder(profileDir)) ?? [])];

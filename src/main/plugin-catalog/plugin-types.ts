@@ -1,6 +1,7 @@
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
+import { auriFileSchema } from '../../shared/contributions-schema';
 import { errorText } from '../../shared/error-text';
 import { manifestSchema } from '../../shared/plugin-catalog/manifest-schema';
 
@@ -19,6 +20,8 @@ const DECLARATION_SUFFIX = '.d.ts';
 const PLUGIN_DTS_FILE = 'plugin.d.ts';
 const PLUGIN_DTS_TEXT = "export type * from './contracts/user-plugin';\n";
 const SCHEMA_FILE = 'manifest.schema.json';
+// The schema an agent plugin's `auri.json` names with `$schema`.
+const AURI_SCHEMA_FILE = 'auri.schema.json';
 // The folder the build emits the types to, beside the app (dev) or in the
 // app's resources (packaged): `tsconfig.plugin-types.json`'s `outDir`, which
 // `packagerConfig.extraResource` copies under the same name.
@@ -26,15 +29,16 @@ const EMITTED_FOLDER = '.plugin-types';
 
 // Writes the plugin contract types to `typesFolder`, so a user plugin's plain
 // JS can type itself with `// @ts-check`: every `.d.ts` the build emitted, at
-// its path relative to `emittedFolder`, plus `plugin.d.ts` and
-// `manifest.schema.json`. From `plugins/<id>/main.js` or `page.js`:
+// its path relative to `emittedFolder`, plus `plugin.d.ts`,
+// `manifest.schema.json` and `auri.schema.json` (an agent plugin's
+// `auri.json`, `src/contracts/contributions.ts`). From `plugins/<id>/main.js` or `page.js`:
 //   /** @import { UserMainApi, UserMainStart } from '../_types/plugin' */
 //   /** @import { ChatMainExports } from '../_types/plugins/chat/contract' */
 //   /** @import { PluginManifest } from '../_types/contracts/plugin' */
 // and in `manifest.json`: "$schema": "../_types/manifest.schema.json".
 // Overwrites the files it writes and deletes none a newer build stops
 // emitting. Never rejects: a missing `emittedFolder` logs and still writes
-// the two files; any other failure logs and stops.
+// the other files; any other failure logs and stops.
 export async function writePluginTypes(deps: PluginTypesDeps): Promise<void> {
   const { files, typesFolder, emittedFolder, paths, log } = deps;
   try {
@@ -51,6 +55,10 @@ export async function writePluginTypes(deps: PluginTypesDeps): Promise<void> {
     await files.write(
       paths.join(typesFolder, SCHEMA_FILE),
       `${JSON.stringify(manifestSchema, null, 2)}\n`,
+    );
+    await files.write(
+      paths.join(typesFolder, AURI_SCHEMA_FILE),
+      `${JSON.stringify(auriFileSchema, null, 2)}\n`,
     );
   } catch (error) {
     log(LOG_SOURCE, `plugin types not written: ${errorText(error)}`);

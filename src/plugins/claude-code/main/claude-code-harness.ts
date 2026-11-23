@@ -63,7 +63,10 @@ import {
   startingControls,
   userMessage,
 } from './claude-controls';
-import { readInstalledPlugins } from './installed-plugins';
+import {
+  installedPluginsFile,
+  readInstalledPlugins,
+} from './installed-plugins';
 import {
   listPastSessions,
   listProjectFolders,
@@ -1415,6 +1418,7 @@ function configRoots(
   return {
     configDir,
     pluginCacheDirs: [deps.paths.join(configDir, 'plugins', 'cache')],
+    installedPluginsFile: installedPluginsFile(deps.paths, configDir),
   };
 }
 

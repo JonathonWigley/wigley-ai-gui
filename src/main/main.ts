@@ -54,7 +54,7 @@ import type { OsName, Platform } from '../contracts/platform';
 import type { ProcessRunner } from '../contracts/processes';
 import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
-import type { AppConfig, Settings } from '../contracts/settings';
+import type { AppConfig, ConfigProblem, Settings } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
 import type { UserConfig } from '../contracts/user-config';
@@ -1260,6 +1260,14 @@ function createWindow(
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   // Main parts reach the switch through this forwarder, made before they start.
   let pluginSwitch: PluginSwitch | null = null;
+  // Each main part's `services.configProblems` entry, served in catalog order.
+  const serviceProblems = new Map<string, readonly ConfigProblem[]>();
+  const serveServiceProblems = () =>
+    store.setServiceProblems(
+      store
+        .plugins()
+        .flatMap((entry) => serviceProblems.get(entry.manifest.id) ?? []),
+    );
   let isLaunchStartDone = false;
   // The stops a quit runs end the rows the next start restores, and a page told
   // of it would save them as gone: panes, recency.
@@ -1316,6 +1324,17 @@ function createWindow(
           pluginSwitch === null
             ? Promise.reject(new Error('The plugin switch is not ready'))
             : pluginSwitch.runDisabledForNow(),
+      },
+      configProblems: {
+        set(pluginId, problems) {
+          serviceProblems.set(pluginId, [...problems]);
+          serveServiceProblems();
+        },
+        delete(pluginId) {
+          if (serviceProblems.delete(pluginId)) {
+            serveServiceProblems();
+          }
+        },
       },
       ...windowServices,
     },

@@ -2,9 +2,9 @@ import type { PluginStatus } from '../../../contracts/core-state';
 import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PluginOrigin } from '../../../contracts/plugin-catalog';
 import type { SettingLeaf } from '../../../contracts/user-config';
+import { userValue } from '../../../shared/json';
 import { settingsManifest } from '../manifest';
 import { withSetting } from './setting-edits';
-import { userValue } from './setting-rows';
 
 // The core setting the Plugins section writes.
 export const PLUGIN_LIST_PATH = 'plugins.disabled';

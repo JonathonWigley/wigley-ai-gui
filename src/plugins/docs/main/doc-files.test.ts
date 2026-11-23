@@ -73,7 +73,11 @@ function foldersOf(
       PROFILE_DIRS.map((configDir, at) => ({
         harnessId: 'claude',
         profile: `profile-${String(at + 1)}`,
-        roots: { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] },
+        roots: {
+          configDir,
+          pluginCacheDirs: [`${configDir}/plugins/cache`],
+          installedPluginsFile: null,
+        },
       })),
     installedPlugins: async () =>
       installs.flatMap((plugins) =>
@@ -309,7 +313,11 @@ describe('write', () => {
           {
             harnessId: 'other',
             profile: 'p',
-            roots: { configDir: '~/.other', pluginCacheDirs: [] },
+            roots: {
+              configDir: '~/.other',
+              pluginCacheDirs: [],
+              installedPluginsFile: null,
+            },
           },
         ],
       },
@@ -328,7 +336,11 @@ describe('write', () => {
           {
             harnessId: 'other',
             profile: 'p',
-            roots: { configDir: 'rel/.other', pluginCacheDirs: [] },
+            roots: {
+              configDir: 'rel/.other',
+              pluginCacheDirs: [],
+              installedPluginsFile: null,
+            },
           },
         ],
       },

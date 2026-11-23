@@ -25,15 +25,20 @@ function keyLine(text: string, key: string): number | null {
   return index === -1 ? null : index + 1;
 }
 
-// Every install `<configDir>/plugins/installed_plugins.json` lists, in file
-// order: each plugin key in order, each key's installs in order. An install with
-// no `installPath` is left out. [] when the file is missing, and when it cannot
-// be read or is not JSON, which it logs; it never rejects.
+// The file that lists the installs of the profile in `configDir`.
+export function installedPluginsFile(paths: Paths, configDir: string): string {
+  return paths.join(configDir, 'plugins', 'installed_plugins.json');
+}
+
+// Every install `installedPluginsFile` lists, in file order: each plugin key in
+// order, each key's installs in order. An install with no `installPath` is
+// left out. [] when the file is missing, and when it cannot be read or is not
+// JSON, which it logs; it never rejects.
 export async function readInstalledPlugins(
   deps: { files: Files; paths: Paths; log: Log },
   configDir: string,
 ): Promise<PluginInstallRecord[]> {
-  const path = deps.paths.join(configDir, 'plugins', 'installed_plugins.json');
+  const path = installedPluginsFile(deps.paths, configDir);
   let text: string | null;
   try {
     text = await readIfPresent(deps.files, path);

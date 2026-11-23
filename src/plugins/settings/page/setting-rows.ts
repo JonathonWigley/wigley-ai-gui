@@ -2,7 +2,7 @@ import type {
   SettingLeaf,
   SettingSection,
 } from '../../../contracts/user-config';
-import { isJsonObject } from '../../../shared/json';
+import { userValue } from '../../../shared/json';
 import type { SettingControlKind } from '../contract';
 
 export interface SettingRow {
@@ -10,24 +10,6 @@ export interface SettingRow {
   // The user's value when set, else the fallback's value, else undefined (unset).
   value: unknown;
   isSet: boolean;
-}
-
-// The user's value at a dotted `path` of `layer`; `isSet` false when a key on
-// the path is missing or a step is not an object.
-export function userValue(
-  layer: Record<string, unknown> | null,
-  path: string,
-): { isSet: boolean; value: unknown } {
-  const keys = path.split('.');
-  let parent: unknown = layer;
-  for (const key of keys.slice(0, -1)) {
-    parent = isJsonObject(parent) ? parent[key] : undefined;
-  }
-  const last = keys[keys.length - 1];
-  if (!isJsonObject(parent) || !Object.hasOwn(parent, last)) {
-    return { isSet: false, value: undefined };
-  }
-  return { isSet: true, value: parent[last] };
 }
 
 // One row per leaf of `section`, in declaration order, read from the user's

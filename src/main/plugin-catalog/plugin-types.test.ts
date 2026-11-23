@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { auriFileSchema } from '../../shared/contributions-schema';
 import { manifestSchema } from '../../shared/plugin-catalog/manifest-schema';
 import { createMemoryFiles, type MemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
@@ -45,6 +46,7 @@ describe('writePluginTypes', () => {
     await writeTypes();
 
     expect(await typesFolderFiles()).toEqual([
+      'auri.schema.json',
       'contracts/plugin.d.ts',
       'manifest.schema.json',
       'plugin.d.ts',
@@ -67,6 +69,8 @@ describe('writePluginTypes', () => {
     const schemaText = await files.read(`${TYPES_FOLDER}/manifest.schema.json`);
     expect(JSON.parse(schemaText)).toEqual(manifestSchema);
     expect(schemaText.endsWith('}\n')).toBe(true);
+    const auriText = await files.read(`${TYPES_FOLDER}/auri.schema.json`);
+    expect(JSON.parse(auriText)).toEqual(auriFileSchema);
   });
 
   it('writePluginTypes_NoEmittedFolder_LogsAndStillWritesTheRest', async () => {
@@ -76,6 +80,7 @@ describe('writePluginTypes', () => {
       `[plugins] plugin types not written: ${EMITTED_FOLDER} is missing`,
     ]);
     expect(await typesFolderFiles()).toEqual([
+      'auri.schema.json',
       'manifest.schema.json',
       'plugin.d.ts',
     ]);

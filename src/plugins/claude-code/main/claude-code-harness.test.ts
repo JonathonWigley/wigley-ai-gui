@@ -617,6 +617,7 @@ describe('createClaudeCodeHarness declarations', () => {
       expect(idleHarness('/home/u').configRoots(profileDir)).toEqual({
         configDir,
         pluginCacheDirs: [`${configDir}/plugins/cache`],
+        installedPluginsFile: `${configDir}/plugins/installed_plugins.json`,
       });
     },
   );

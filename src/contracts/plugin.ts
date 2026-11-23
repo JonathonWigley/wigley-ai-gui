@@ -44,6 +44,7 @@ import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { ScreenCapture } from './screen-capture';
 import type { SessionHost } from './session-host';
+import type { ConfigProblem } from './settings';
 import type {
   JsonSlot,
   KeyedSlotKey,
@@ -1169,7 +1170,8 @@ export interface DriveHost {
 // (the resources folder when packaged, the repo folder in dev);
 // `agentPluginDir` resolves the `auri` plugin under it. `pluginSwitch` tells whether a plugin may switch off now, and runs
 // the built-in plugins the user switched off, in memory, as
-// `PluginSwitchService` says.
+// `PluginSwitchService` says. `configProblems` serves the plugin's own
+// config problems, as `ConfigProblemsService` says.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -1209,6 +1211,15 @@ export interface MainServices {
   appDir: string;
   selfTest: SelfTestHost | null;
   pluginSwitch: PluginSwitchService;
+  configProblems: ConfigProblemsService;
+}
+
+// A main part's own config problems, which the ConfigStore serves after the
+// plugin catalog's, each with its own `file` and `message`, as the title bar
+// badge and toast show any config problem. `set` replaces every problem this
+// plugin served before; the part's stop clears them.
+export interface ConfigProblemsService {
+  set(problems: readonly ConfigProblem[]): void;
 }
 
 // The part of main's plugin switch a main part reaches. `mayDisable` gives the
