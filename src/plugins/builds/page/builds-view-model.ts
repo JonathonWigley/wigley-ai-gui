@@ -132,7 +132,7 @@ export function buildRowInput(
     state: record.state,
     result: record.result,
     percent: record.percent,
-    leftMs: record.leftSeconds === null ? null : record.leftSeconds * 1000,
+    leftMs: leftMs(record.leftSeconds),
     startsInMs:
       record.startEstimate === null
         ? null
@@ -142,9 +142,15 @@ export function buildRowInput(
   };
 }
 
-// The open build's detail: its jobs' times in ms, its status text, links and backend page.
+// A time left in seconds as ms; null stays null.
+export function leftMs(seconds: number | null): number | null {
+  return seconds === null ? null : seconds * 1000;
+}
+
+// The open build's detail: its jobs' times in ms, its step and status text, links and backend page.
 export function buildDetailInput(record: BuildRecord): BuildDetailInput {
   return {
+    stepText: record.stepText,
     statusText: record.statusText,
     webUrl: record.webUrl,
     links: record.links.map((link) => ({ label: link.label, url: link.url })),
@@ -153,7 +159,7 @@ export function buildDetailInput(record: BuildRecord): BuildDetailInput {
       state: job.state,
       result: job.result,
       percent: job.percent,
-      leftMs: job.leftSeconds === null ? null : job.leftSeconds * 1000,
+      leftMs: leftMs(job.leftSeconds),
       stepText: job.stepText,
     })),
   };
@@ -301,17 +307,16 @@ export function queueChoices(game: GameEntry): QueueChoice[] {
   ];
 }
 
-// Who queued the build `key` names: the label of the session row that links it, else `triggeredBy`.
+// The label of the session row that links the build `key` names; null with no link or no such row.
 export function queuedBy(
   key: string,
-  triggeredBy: string | null,
   linked: ReadonlyMap<string, string>,
   sessionLabels: ReadonlyMap<string, string>,
 ): string | null {
   const sessionId = linked.get(key);
-  const label =
-    sessionId === undefined ? undefined : sessionLabels.get(sessionId);
-  return label ?? triggeredBy;
+  return sessionId === undefined
+    ? null
+    : (sessionLabels.get(sessionId) ?? null);
 }
 
 // The key the cursor keeps after a redraw from `before` to `after`: `key` while it is still drawn, else the nearest

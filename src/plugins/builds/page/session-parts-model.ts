@@ -14,7 +14,7 @@ import type {
   OfferCardInput,
   RowLineInput,
 } from '../layouts/layout';
-import { buildDetailInput } from './builds-view-model';
+import { buildDetailInput, leftMs } from './builds-view-model';
 
 // A session waiting on a build it queued: over a workflow stage (15) and `done` (10), under chat's `working` (20).
 export const BUILDING_ACTIVITY: RowActivity = {
@@ -56,7 +56,7 @@ export function rowLineInput(
     state: record.state,
     result: record.result,
     percent: record.percent,
-    leftMs: record.leftSeconds === null ? null : record.leftSeconds * 1000,
+    leftMs: leftMs(record.leftSeconds),
   };
 }
 

@@ -82,8 +82,8 @@ function sampleJob(
 }
 
 // The demo step's snapshot, its times relative to `now` (epoch ms): one backend `Sample CI` with two games, holding
-// a running build at 60 % with 7 minutes left, a queued build with a start estimate, a failed build with a failed
-// job, and an RC set run of two builds.
+// a running build at 60 % with 7 minutes left, a backend page and two links, a queued build with a start estimate, a
+// failed build with a failed job, and an RC set run of two builds.
 export function demoSample(now: number): BuildsSnapshot {
   return {
     polledAt: now,
@@ -137,6 +137,17 @@ export function demoSample(now: number): BuildsSnapshot {
                 stepText: 'Building the iOS player',
                 queuedAt: now - 12 * MINUTE,
                 startedAt: now - 11 * MINUTE,
+                webUrl: 'https://ci.example.com/sky-hop/105',
+                links: [
+                  {
+                    label: 'Android build',
+                    url: 'https://ci.example.com/sky-hop/105/android.apk',
+                  },
+                  {
+                    label: 'Build log',
+                    url: 'https://ci.example.com/sky-hop/105/log',
+                  },
+                ],
                 jobs: [
                   sampleJob({ id: 'android', label: 'Android' }),
                   sampleJob({

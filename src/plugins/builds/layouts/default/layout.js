@@ -3,8 +3,9 @@
 // The built-in Builds look: the side bar's All entry, each backend's heading with its problem under it and its games
 // as list rows ending in a status dot; the sheet's game head with a button per kind and set, or the All feed's three
 // filter chips; one list row per build (kind, number and version, then branch, revision and subject, ending in its
-// state and who queued it), a set run's rows under its heading, and the open build's detail under its row; the empty
-// states; the queue picker's rows; the line under a session row (its newest build and its state); the hub's builds
+// state and who queued it), a set run's rows under its heading, and the open build's detail under its row (its step
+// text while it lists no job, each job with its progress and step, the status text, then its links and Open in the
+// backend); the empty states; the queue picker's rows; the line under a session row (its newest build and its state); the hub's builds
 // (each with its branch, revision, jobs and links); and the offer card with its Queue and Dismiss buttons.
 
 /** @type {Record<import('../layout').EmptyInput['reason'], string>} */
@@ -134,6 +135,10 @@ const layout = {
   },
   buildDetail(parent, input, kit) {
     const element = kit.el(parent, 'li', 'builds-detail');
+    // A build with jobs shows its step on its running job's line.
+    if (input.stepText !== null && input.jobs.length === 0) {
+      kit.el(element, 'div', 'builds-muted builds-step', input.stepText);
+    }
     for (const job of input.jobs) {
       const line = kit.el(element, 'div', 'builds-job');
       kit.el(line, 'span', 'builds-job-label', job.label);
@@ -152,7 +157,8 @@ const layout = {
         kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
       }
       if (input.webUrl !== null) {
-        kit.button(actions, 'Open in the backend', 'builds.openWeb', {
+        kit.button(actions, 'Open in the backend', 'builds.openLink', {
+          arg: input.webUrl,
           variant: 'ghost',
         });
       }

@@ -10,6 +10,9 @@ import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part
 import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
+  asHtml,
+  type FakeElement,
+  FocusFakeElement,
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
@@ -20,12 +23,14 @@ import {
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type ChatComposerPart,
+  type ChatSidePart,
   chatPageKey,
   type ChatPageExports,
   type ComposerStop,
 } from '../../chat/contract';
 import {
   type RowActivity,
+  type SessionPart,
   type SessionsPageExports,
   sessionsPageKey,
   sessionsRowsSlot,
@@ -117,7 +122,8 @@ type Answer = (...args: unknown[]) => unknown;
 // The Builds page on the harness, drawing its layout for real, with `snapshot` published to `builds.snapshot`.
 // `answers` answers an invoke by method, else undefined; `calls` holds each invoke, `opens` each picker request,
 // `opened` each `openExternal` url. The fake sessions record each `setActivity` in `activities` and answer
-// `shownSessionId` with `shown.sessionId`; the fake chat records each composer part, and `stop()` is the offer card's.
+// `shownSessionId` with `shown.sessionId`; the fakes record each row, side and composer part, `drawPart(id, sessionId)`
+// builds one into a wrapper and returns the wrapper, and `stop()` is the offer card's stop.
 function startBuildsPage(
   snapshot: BuildsSnapshot,
   answers: Record<string, Answer> = {},
@@ -148,8 +154,13 @@ function startBuildsPage(
   const activities: [string, string, RowActivity | null][] = [];
   const shown: { sessionId: string | null } = { sessionId: null };
   const composerParts: ChatComposerPart[] = [];
+  const rowParts: SessionPart[] = [];
+  const sideParts: ChatSidePart[] = [];
   const fakeSessions = {
-    addRowPart: () => ({ dispose() {} }),
+    addRowPart(part: SessionPart) {
+      rowParts.push(part);
+      return { dispose() {} };
+    },
     setActivity(
       sessionId: string,
       sourceId: string,
@@ -161,7 +172,10 @@ function startBuildsPage(
     activate() {},
   } as Partial<SessionsPageExports> as SessionsPageExports;
   const fakeChat = {
-    addSidePart: () => ({ dispose() {} }),
+    addSidePart(part: ChatSidePart) {
+      sideParts.push(part);
+      return { dispose() {} };
+    },
     addComposerPart(part: ChatComposerPart) {
       composerParts.push(part);
       return { dispose() {} };
@@ -211,6 +225,22 @@ function startBuildsPage(
       throw new Error('no builds.offer stop');
     }
     return found;
+  };
+  const drawPart = (id: string, sessionId: string): FakeElement => {
+    const wrapper = new FocusFakeElement('div');
+    const row = rowParts.find((part) => part.id === id);
+    const side = sideParts.find((part) => part.id === id);
+    const composer = composerParts.find((part) => part.id === id);
+    if (row !== undefined) {
+      row.build(asHtml(wrapper), sessionId);
+    } else if (side !== undefined) {
+      side.build(asHtml(wrapper), sessionId, { setSummary() {} });
+    } else if (composer !== undefined) {
+      composer.build(asHtml(wrapper), sessionId);
+    } else {
+      throw new Error(`no part ${id}`);
+    }
+    return wrapper;
   };
   const enterStep = async (id: string, sessions: Record<string, string>) => {
     const step = demoSteps.list().find((held) => held.id === id);
@@ -265,6 +295,7 @@ function startBuildsPage(
     activities,
     shown,
     stop,
+    drawPart,
     enterStep,
   };
 }
@@ -597,17 +628,34 @@ describe('buildsPagePart', () => {
     expect(page.callsOf('queue')).toHaveLength(1);
   });
 
-  // The number of the row under the list cursor, and of the row the open detail sits under.
-  function marks(page: ReturnType<typeof startBuildsPage>) {
-    const cursor = findAll(page.sheet(), 'builds-row').filter((row) =>
-      row.classList.contains('is-selected'),
+  it('toasts no queue problem that lands after the part stops', async () => {
+    const answer = deferred<{ problem: string }>();
+    const page = startBuildsPage(
+      workSnapshot({ capabilities: { cancel: true, choosesBranch: false } }),
+      { queue: () => answer.promise },
     );
+    page.showGame(G1);
+    page.commands.queueButton({
+      arg: { backend: 'work', game: 'g1', kind: 'dev' },
+    });
+
+    await page.harness.stop();
+    answer.resolve(problem());
+    await settle();
+
+    expect(page.toasts()).toEqual([]);
+  });
+
+  // The list place of the row under the list cursor, and of the row the open detail sits under.
+  function marks(page: ReturnType<typeof startBuildsPage>) {
+    const rows = findAll(page.sheet(), 'builds-row');
     const details = findAll(page.sheet(), 'builds-detail');
     return {
-      cursor: cursor.map((row) => row.textContent.match(/#(\d+)/)?.[1]),
-      detail: details.map(
-        (detail) =>
-          detail.previousElementSibling?.textContent.match(/#(\d+)/)?.[1],
+      cursor: rows.flatMap((row, place) =>
+        row.classList.contains('is-selected') ? [place] : [],
+      ),
+      detail: details.map((detail) =>
+        rows.findIndex((row) => row === detail.previousElementSibling),
       ),
     };
   }
@@ -626,7 +674,40 @@ describe('buildsPagePart', () => {
       }),
     );
 
-    expect(marks(page)).toEqual({ cursor: ['40'], detail: ['40'] });
+    // 40 is the third row, under 42 and 41.
+    expect(marks(page)).toEqual({ cursor: [2], detail: [2] });
+  });
+
+  it("opens the detail's build in its backend, wherever the cursor is", async () => {
+    const page = startBuildsPage(
+      workSnapshot({
+        g1Builds: [
+          buildRecord({
+            id: '41',
+            gameId: 'g1',
+            queuedAt: 200,
+            webUrl: 'https://ci.test/41',
+          }),
+          buildRecord({
+            id: '40',
+            gameId: 'g1',
+            queuedAt: 100,
+            webUrl: 'https://ci.test/40',
+          }),
+        ],
+      }),
+    );
+    page.showGame(G1);
+    page.run('openDetail');
+    page.run('listDown');
+
+    findAll(page.sheet(), 'builds-detail')
+      .flatMap((detail) => findAll(detail, 'ui-button'))
+      .at(-1)
+      ?.click();
+    await settle();
+
+    expect(page.opened).toEqual(['https://ci.test/41']);
   });
 
   it('closes the detail when its build is gone', () => {
@@ -639,7 +720,7 @@ describe('buildsPagePart', () => {
 
     page.publish(workSnapshot({ g1Builds: [running('41', 200)] }));
 
-    expect(marks(page)).toEqual({ cursor: ['41'], detail: [] });
+    expect(marks(page)).toEqual({ cursor: [0], detail: [] });
   });
 
   it('shows All when the selected game is gone', () => {
@@ -878,6 +959,8 @@ describe('buildsPagePart session parts', () => {
 
   it('drops the hold on leave', async () => {
     const { page } = holdingS2({ queueOffer: () => ({ ok: true }) });
+    const scopeAfterEnter = page.harness.scope();
+    page.harness.changeBase('builds.list');
 
     page.stop().leave('s2');
     page.shown.sessionId = 's1';
@@ -885,7 +968,90 @@ describe('buildsPagePart session parts', () => {
     await settle();
 
     expect(page.callsOf('queueOffer')).toEqual(['s1']);
-    expect(page.harness.scope()).toBe('builds.offer');
+    // `leave` sets no scope: the one another view set after `enter` stays.
+    expect([scopeAfterEnter, page.harness.scope()]).toEqual([
+      'builds.offer',
+      'builds.list',
+    ]);
+  });
+
+  it('queues once on two quick presses', async () => {
+    const answer = deferred<{ ok: true }>();
+    const page = startBuildsPage(workSnapshot(), {
+      queueOffer: () => answer.promise,
+    });
+    page.setSession('s1', OFFERED);
+    const press = () => page.commands.queueSessionOffer({ arg: 's1' });
+
+    press();
+    press();
+    answer.resolve({ ok: true });
+    await settle();
+    press();
+
+    expect(page.callsOf('queueOffer')).toEqual(['s1', 's1']);
+  });
+
+  it('draws the row line under a session linking a running build', () => {
+    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    page.setSession('s1', linking('41'));
+
+    const wrapper = page.drawPart('builds.row', 's1');
+
+    const lines = findAll(wrapper, 'builds-row-line');
+    expect(lines.map((line) => line.textContent.includes('#41'))).toEqual([
+      true,
+    ]);
+  });
+
+  it("lists the session's builds in its hub newest first", () => {
+    const page = startBuildsPage(
+      workSnapshot({ g1Builds: [running('40', 100), running('42', 300)] }),
+    );
+    page.setSession('s1', {
+      builds: [
+        { backendId: 'work', buildId: '42' },
+        { backendId: 'work', buildId: '40' },
+      ],
+      offer: null,
+    });
+
+    const wrapper = page.drawPart('builds.hub', 's1');
+
+    expect(
+      findAll(wrapper, 'builds-hub-build').map(
+        (build) => build.textContent.match(/#(\d+)/)?.[1],
+      ),
+    ).toEqual(['42', '40']);
+  });
+
+  it('marks the offer card while its stop holds the cursor', () => {
+    const page = startBuildsPage(workSnapshot());
+    page.setSession('s1', OFFERED);
+    const wrapper = page.drawPart('builds.offer', 's1');
+    const isCursor = () =>
+      findAll(wrapper, 'builds-offer-card').map((card) =>
+        card.classList.contains('is-cursor'),
+      );
+    const before = isCursor();
+
+    page.stop().enter('s1', fakeExits());
+    const held = isCursor();
+    page.stop().leave('s1');
+
+    expect([before, held, isCursor()]).toEqual([[false], [true], [false]]);
+  });
+
+  it('drops the offer card once its offer goes', () => {
+    const page = startBuildsPage(workSnapshot());
+    page.setSession('s1', OFFERED);
+    const wrapper = page.drawPart('builds.offer', 's1');
+    const cards = () => findAll(wrapper, 'builds-offer-card').length;
+    const before = cards();
+
+    page.setSession('s1', { builds: [], offer: null });
+
+    expect([before, cards()]).toEqual([1, 0]);
   });
 
   it('queues nothing for the demo session', async () => {

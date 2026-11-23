@@ -7,18 +7,22 @@ import type {
   SessionBuilds,
   SetRunView,
 } from '../contract';
-import { buildRecord, gameEntry } from '../contract.test-support';
+import { buildJob, buildRecord, gameEntry } from '../contract.test-support';
 import {
   type BuildsEntryKey,
+  buildDetailInput,
   buildRowInput,
+  type CursorMove,
   emptyReason,
   type FeedFilter,
   feedRows,
   type GameListItem,
   gameDot,
+  gameHeaderInput,
   gameRows,
   heldKey,
   linkedBuilds,
+  movedKey,
   queueChoices,
   queuedBy,
   sideBarEntries,
@@ -213,6 +217,90 @@ describe('buildRowInput', () => {
   });
 });
 
+describe('buildDetailInput', () => {
+  it('gives each job its time left in ms', () => {
+    const record = buildRecord({
+      jobs: [
+        buildJob({ id: 'ios', state: 'running', result: null, leftSeconds: 90 }),
+        buildJob({ id: 'android', state: 'queued', result: null }),
+      ],
+    });
+
+    expect(buildDetailInput(record).jobs.map((job) => job.leftMs)).toEqual([
+      90_000,
+      null,
+    ]);
+  });
+});
+
+describe('gameHeaderInput', () => {
+  const game = gameEntry({
+    id: 'g1',
+    kinds: {
+      dev: { label: 'Dev', target: null },
+      release: { label: 'Release', target: null },
+    },
+    sets: [
+      {
+        id: 'rc',
+        label: 'RC',
+        kinds: ['dev', 'release'],
+        branches: 'releases/*',
+        agentPrompt: 'Make the RC set.',
+      },
+      {
+        id: 'qa',
+        label: 'QA',
+        kinds: ['dev'],
+        branches: 'qa/*',
+        agentPrompt: null,
+      },
+    ],
+  });
+
+  it('gives a with-agent button only to a set with an agent prompt', () => {
+    const input = gameHeaderInput(
+      backendView('a', []),
+      gameView('g1', [], { game }),
+    );
+
+    expect(
+      [...input.kinds, ...input.sets].map(({ id, withAgent }) => ({
+        id,
+        withAgent,
+      })),
+    ).toEqual([
+      { id: 'dev', withAgent: false },
+      { id: 'release', withAgent: false },
+      { id: 'rc', withAgent: true },
+      { id: 'qa', withAgent: false },
+    ]);
+  });
+
+  it.each<{
+    case: string;
+    changes: Partial<BackendView>;
+    canQueue: boolean;
+  }>([
+    {
+      case: 'a backend with no instance',
+      changes: { capabilities: null, problem: null },
+      canQueue: false,
+    },
+    {
+      case: 'a backend with an instance and a problem',
+      changes: { problem: 'the last poll failed' },
+      canQueue: true,
+    },
+  ])('$case → canQueue $canQueue', ({ changes, canQueue }) => {
+    const backend = backendView('a', [], changes);
+
+    const input = gameHeaderInput(backend, gameView('g1', [], { game }));
+
+    expect(input.canQueue).toBe(canQueue);
+  });
+});
+
 describe('gameRows', () => {
   const build = (id: string, queuedAt: number) => buildRecord({ id, queuedAt });
   it.each([
@@ -286,41 +374,28 @@ describe('queuedBy', () => {
     case: string;
     linked: [string, string][];
     labels: [string, string][];
-    triggeredBy: string | null;
     expected: string | null;
   }>([
     {
       case: 'a linked session row',
       linked: [['a/b1', 's1']],
       labels: [['s1', 'Fix jump']],
-      triggeredBy: 'ci-bot',
       expected: 'Fix jump',
     },
     {
       case: 'a link whose row is gone',
       linked: [['a/b1', 's9']],
-      labels: [],
-      triggeredBy: 'ci-bot',
-      expected: 'ci-bot',
-    },
-    {
-      case: 'no link',
-      linked: [],
-      labels: [],
-      triggeredBy: 'ci-bot',
-      expected: 'ci-bot',
-    },
-    {
-      case: 'no link and no trigger',
-      linked: [],
-      labels: [],
-      triggeredBy: null,
+      labels: [['s1', 'Fix jump']],
       expected: null,
     },
-  ])('$case', ({ linked, labels, triggeredBy, expected }) => {
-    expect(
-      queuedBy('a/b1', triggeredBy, new Map(linked), new Map(labels)),
-    ).toBe(expected);
+    {
+      case: 'another build linked',
+      linked: [['a/b2', 's1']],
+      labels: [['s1', 'Fix jump']],
+      expected: null,
+    },
+  ])('$case', ({ linked, labels, expected }) => {
+    expect(queuedBy('a/b1', new Map(linked), new Map(labels))).toBe(expected);
   });
 });
 
@@ -351,6 +426,31 @@ describe('heldKey', () => {
     '$key from $before to $after → $expected',
     ({ before, after, key, expected }) => {
       expect(heldKey(before, after, key)).toBe(expected);
+    },
+  );
+});
+
+describe('movedKey', () => {
+  const keys = ['a/1', 'a/2', 'a/3'];
+  it.each<{
+    keys: string[];
+    key: string | null;
+    move: CursorMove;
+    expected: string | null;
+  }>([
+    { keys, key: 'a/2', move: 'down', expected: 'a/3' },
+    { keys, key: 'a/2', move: 'up', expected: 'a/1' },
+    { keys, key: 'a/3', move: 'down', expected: 'a/3' },
+    { keys, key: 'a/1', move: 'up', expected: 'a/1' },
+    { keys, key: 'a/2', move: 'top', expected: 'a/1' },
+    { keys, key: 'a/2', move: 'bottom', expected: 'a/3' },
+    { keys, key: 'a/9', move: 'down', expected: 'a/1' },
+    { keys, key: null, move: 'up', expected: 'a/1' },
+    { keys: [], key: 'a/2', move: 'down', expected: null },
+  ])(
+    '$move from $key over $keys → $expected',
+    ({ keys: shown, key, move, expected }) => {
+      expect(movedKey(shown, key, move)).toBe(expected);
     },
   );
 });

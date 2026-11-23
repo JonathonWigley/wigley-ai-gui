@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import type { ListPickerCommand } from '../../../shared/list-picker-commands';
 import { element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
@@ -59,25 +60,30 @@ import {
   queuedBy,
   sideBarEntries,
 } from './builds-view-model';
+import type { BuildsDemoSample } from './demo-sample';
 import { createQueuePicker, type QueueTarget } from './queue-picker';
-import type { SessionPartsCommand } from './session-parts';
 
 // The base scopes the view sets: the side bar's game list and the sheet's build list. The picker's is pushed over
 // them.
 export type BuildsScope = 'games' | 'list';
 
-// Every page command but those the page part runs itself (`showMode`), the session parts' (`SessionPartsCommand`)
-// and the clicks, which take an arg.
-export type BuildsViewCommand = Exclude<
+// The page commands the view runs on a key: the two lists', the build's, the queue picker's and the list picker's.
+export type BuildsViewCommand = Extract<
   CommandsRunIn<typeof buildsManifest, 'page'>,
-  | SessionPartsCommand
-  | 'showMode'
-  | 'selectEntry'
-  | 'selectBuild'
-  | 'queueButton'
-  | 'withAgent'
-  | 'setFilter'
-  | 'openLink'
+  | 'pickQueue'
+  | 'openDetail'
+  | 'openWeb'
+  | 'cancel'
+  | 'listDown'
+  | 'listUp'
+  | 'listTop'
+  | 'listBottom'
+  | 'gameDown'
+  | 'gameUp'
+  | 'gameTop'
+  | 'gameBottom'
+  | 'openGame'
+  | ListPickerCommand
 >;
 
 export interface BuildsViewDeps {
@@ -108,8 +114,8 @@ export interface BuildsViewDeps {
 // picked for its part, logging under `builds`. It holds the side-bar cursor, the shown entry, the list cursor and the
 // open detail by key, each kept across a redraw while its key is still drawn: the list cursor moves to the nearest
 // row still drawn, the detail closes, and the shown entry falls back to All. A page load shows All. `showSample`
-// draws a sample snapshot in place of the slots' until it is dropped; while it shows, the queue, cancel, with-agent
-// and open commands do nothing.
+// draws a sample's snapshot and session links in place of the slots' until it is dropped; while it shows, the queue,
+// cancel, with-agent and open commands do nothing. Once disposed, it draws and toasts nothing.
 export interface BuildsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -131,7 +137,7 @@ export interface BuildsView {
   setFilter(filter: string): void;
   openLink(url: string): void;
   // Shows `sample` in place of the slots; null drops it.
-  showSample(sample: BuildsSnapshot | null): void;
+  showSample(sample: BuildsDemoSample | null): void;
   dispose(): void;
 }
 
@@ -172,7 +178,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   contentSheet.append(mainPane);
 
   // ── State ──────────────────────────────────────────────────────────────
-  let sample: BuildsSnapshot | null = null;
+  let sample: BuildsDemoSample | null = null;
   let focus: BuildsScope = 'games';
   let selected: BuildsEntryKey = 'all';
   let sideCursor: BuildsEntryKey | null = null;
@@ -190,7 +196,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   const entryRoots = new Map<BuildsEntryKey, HTMLElement>();
   const rowRoots = new Map<string, HTMLElement>();
 
-  const snapshot = (): BuildsSnapshot => sample ?? deps.snapshot();
+  const snapshot = (): BuildsSnapshot => sample?.snapshot ?? deps.snapshot();
   const kitFor = (
     scope: BuildsScope | 'picker',
     rollback: RollbackDeps,
@@ -202,7 +208,11 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   const queuePicker = createQueuePicker({
     picker,
     channel,
-    toast,
+    toast(text, tone) {
+      if (!isDisposed) {
+        deps.toast(text, tone);
+      }
+    },
     log,
     drawRow(list, title, input) {
       const drawn = parts.draw(
@@ -236,7 +246,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   };
 
   const linked = (): Map<string, string> =>
-    sample === null ? linkedBuilds(deps.sessions()) : new Map();
+    linkedBuilds(sample === null ? deps.sessions() : sample.sessions);
 
   // ── Drawing ────────────────────────────────────────────────────────────
   const drawSideBarPane = () => {
@@ -396,7 +406,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     const links = linked();
     const labels = deps.sessionLabels();
     const queuedByOf = (backendId: string, buildId: string) =>
-      queuedBy(buildKey(backendId, buildId), null, links, labels);
+      queuedBy(buildKey(backendId, buildId), links, labels);
     const now = deps.now();
     if (target !== null) {
       return gameRows(target.view, queuedByOf, now);
@@ -677,17 +687,6 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     queuePicker.pickChoice(target);
   };
 
-  const findTarget = (
-    backendId: string,
-    gameId: string,
-  ): QueueTarget | null => {
-    const backend = snapshot().backends.find((held) => held.id === backendId);
-    const view = backend?.games.find((held) => held.game.id === gameId);
-    return backend === undefined || view === undefined
-      ? null
-      : { backend, view };
-  };
-
   const commands: Record<BuildsViewCommand, () => void> = {
     pickQueue,
     openDetail() {
@@ -747,6 +746,9 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
       }
     },
     redraw() {
+      if (isDisposed) {
+        return;
+      }
       drawAll();
       picker.redraw();
     },
@@ -772,12 +774,12 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
       if (isDemoBlocked('queueButton')) {
         return;
       }
-      const target = findTarget(arg.backend, arg.game);
+      const target = lookup.games.get(gameKey(arg.backend, arg.game));
       const choice =
-        target === null
+        target === undefined
           ? undefined
           : queueChoices(target.view.game).find((held) => held.id === arg.kind);
-      if (target === null || choice === undefined) {
+      if (target === undefined || choice === undefined) {
         log(`no ${arg.kind} in ${arg.backend}/${arg.game}`);
         return;
       }
@@ -807,10 +809,13 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     },
     showSample(next) {
       sample = next;
-      drawSnapshot();
+      if (!isDisposed) {
+        drawSnapshot();
+      }
     },
     dispose() {
       isDisposed = true;
+      queuePicker.dropPending();
       const draws = [...entryDraws, ...bodyDraws];
       entryDraws = [];
       bodyDraws = [];

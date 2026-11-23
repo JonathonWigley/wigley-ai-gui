@@ -54,9 +54,9 @@ export type SessionPartsCommand = Extract<
   | 'offerAppendBox'
 >;
 
-export const ROW_PART = 'builds.row';
-export const HUB_PART = 'builds.hub';
-export const OFFER_PART = 'builds.offer';
+const ROW_PART = 'builds.row';
+const HUB_PART = 'builds.hub';
+const OFFER_PART = 'builds.offer';
 const ACTIVITY_SOURCE = 'builds';
 const NO_OFFER = 'No build offer in this session';
 
@@ -121,7 +121,8 @@ interface Source {
 // whose stop takes the entry cursor while the session has an offer. Each part redraws into its own wrapper on each
 // `changed`. The hold ends when the held session's offer goes, the cursor going back to the entries. While a sample
 // shows, the sample's sessions draw and set their activity from it, every other session's activity stays as it was,
-// and queueing or dismissing a sample session's offer logs `demo: <command> does nothing`.
+// and queueing or dismissing a sample session's offer logs `demo: <command> does nothing`. While a session's
+// `queueOffer` waits for its answer, a further queue of its offer does nothing.
 export function startSessionParts(deps: SessionPartsDeps): SessionParts {
   const { channel, log, parts } = deps;
   const rowsHeld = new Map<string, Held>();
@@ -129,6 +130,8 @@ export function startSessionParts(deps: SessionPartsDeps): SessionParts {
   const cardsHeld = new Map<string, Set<Held>>();
   // The activity each session was last set, by session id; a session never set holds no key.
   const activities = new Map<string, RowActivity>();
+  // The sessions whose `queueOffer` waits for its answer.
+  const queueingOffers = new Set<string>();
   let hold: Hold | null = null;
   let isDisposed = false;
 
@@ -328,21 +331,27 @@ export function startSessionParts(deps: SessionPartsDeps): SessionParts {
 
   const queueOfferOf = (target: string | null) => {
     const sessionId = offerSession('queueOffer', target);
-    if (sessionId === null) {
+    if (sessionId === null || queueingOffers.has(sessionId)) {
       return;
     }
-    channel.invoke('queueOffer', sessionId).then(
-      (answer) => {
-        if ('problem' in answer) {
-          if (!isDisposed) {
-            deps.toast(answer.problem, 'error');
+    queueingOffers.add(sessionId);
+    channel
+      .invoke('queueOffer', sessionId)
+      .then(
+        (answer) => {
+          if ('problem' in answer) {
+            if (!isDisposed) {
+              deps.toast(answer.problem, 'error');
+            }
+            return;
           }
-          return;
-        }
-        log(`queued the build offer in ${labelOf(sessionId)}`);
-      },
-      (error: unknown) => toastFailure('queueOffer', error),
-    );
+          log(`queued the build offer in ${labelOf(sessionId)}`);
+        },
+        (error: unknown) => toastFailure('queueOffer', error),
+      )
+      .finally(() => {
+        queueingOffers.delete(sessionId);
+      });
   };
 
   const dismissOfferOf = (target: string | null) => {

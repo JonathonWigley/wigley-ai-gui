@@ -141,8 +141,10 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
 
     const showSample = (next: BuildsDemoSample | null) => {
       sample = next;
-      view.showSample(next?.snapshot ?? null);
-      sessionParts.changed();
+      if (!isDisposed) {
+        view.showSample(next);
+        sessionParts.changed();
+      }
     };
 
     const listeners = [

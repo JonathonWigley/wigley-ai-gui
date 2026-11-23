@@ -106,9 +106,12 @@ export interface SetGroupInput {
   shortRevision: string | null;
 }
 
-// The open build's detail: each job with its own progress, the status text, the links (each a `kit.button` running
-// `builds.openLink` with its `url`) and, while `webUrl` is not null, Open in the backend (`builds.openWeb`).
+// The open build's detail: each job with its own progress, `stepText` (what the build does now as the backend reads
+// it, null when it reads none), the status text, the links (each a `kit.button` running `builds.openLink` with its
+// `url`) and, while `webUrl` is not null, Open in the backend (a `kit.button` running `builds.openLink` with
+// `webUrl`).
 export interface BuildDetailInput {
+  stepText: string | null;
   statusText: string | null;
   webUrl: string | null;
   links: { label: string; url: string }[];

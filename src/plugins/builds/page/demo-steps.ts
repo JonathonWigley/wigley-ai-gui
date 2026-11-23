@@ -2,6 +2,7 @@ import { MODES_SHOW } from '../../../contracts/commands';
 import type { DemoStage } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices, PluginCommands } from '../../../contracts/plugin';
+import { createRegistrations } from '../../../shared/registrations';
 import type { ChatPageExports } from '../../chat/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
 import {
@@ -27,8 +28,9 @@ export interface BuildsDemoPageDeps {
 export function registerDemoSteps(
   services: PageServices,
   deps: BuildsDemoPageDeps,
-): Disposable[] {
-  return [
+): Disposable {
+  const registrations = createRegistrations();
+  registrations.track(
     services.demoSteps.register({
       id: 'builds.mode',
       section: 'modes',
@@ -44,6 +46,8 @@ export function registerDemoSteps(
       ],
       enter: async () => buildsStage(deps, services.clock.now()),
     }),
+  );
+  registrations.track(
     services.demoSteps.register({
       id: 'builds.session',
       section: 'sessions',
@@ -65,7 +69,8 @@ export function registerDemoSteps(
         return sessionStage(deps, services.clock.now(), rowId);
       },
     }),
-  ];
+  );
+  return registrations;
 }
 
 function buildsStage(deps: BuildsDemoPageDeps, now: number): DemoStage {
