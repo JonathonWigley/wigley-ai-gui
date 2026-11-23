@@ -58,7 +58,7 @@ and does not blank the others.
       "id": "work",
       "kind": "teamcity",
       "label": "TeamCity",
-      "config": { "command": "" },
+      "config": { "command": "", "buildJobPattern": "_Build(IOS|Android)_" },
       "games": [
         {
           "id": "tiki-smash",
@@ -114,7 +114,7 @@ for one backend entry.
     `BuildRecord`
   - `queue(game, request)` — queues one kind on a branch and revision, and returns the new
     build's id
-  - `cancel(buildId)` — present only when `capabilities.cancel` is true
+  - `cancel(game, buildId)` — present only when `capabilities.cancel` is true
   - `dispose()`
 - **`BuildRecord`**: `id` (unique within the backend), `gameId`, `kind`, `number`, `version`,
   `branch`, `revision`, `state` (`queued`, `running`, `finished`), `result` (`success`,
@@ -133,14 +133,19 @@ with given arguments and parses its JSON. It is the only place the plugin spawns
 every parse is tested over recorded JSON.
 
 - **List**: `run list --job <target> --limit <n> --json=<fields>` per kind of the game, merged
-  newest first. A running or queued build then reads its progress and jobs through
+  newest first with the build queue by id. A running or queued build, and a finished build once,
+  then reads its progress and jobs through
   `teamcity api "/app/rest/builds/id:<id>?fields=…"`: `running-info(percentageComplete,
   leftSeconds,estimatedTotalSeconds,currentStageText)` and the chain's
   `snapshot-dependencies(build(id,buildTypeId,state,status,percentageComplete,running-info(…),
   revisions(revision(version))))`. A queued build reads `startEstimate` and `waitReason` from
   `/app/rest/buildQueue`.
-- **Revision**: a chain has no VCS root. The revision is the first Build job's
-  `revisions.revision[0].version` among the snapshot dependencies.
+- **Build jobs**: nothing in a chain marks a job as a Build job, so the optional
+  `config.buildJobPattern` (a regex tested against each snapshot dependency's `buildTypeId`) names
+  them. With no pattern, every dependency that carries a revision counts as a Build job.
+- **Revision**: a chain has no VCS root. The revision is the most common
+  `revisions.revision[0].version` among the Build jobs, ties going to the earliest: a job of another
+  VCS root can come first.
 - **Progress**: a chain's `percent` is the mean of its Build jobs' percents, and `leftSeconds` the
   largest of theirs. Each job keeps its own values in `jobs`.
 - **Links**: once a chain finishes, the deploy jobs' logs are read once each for Firebase App
@@ -148,7 +153,8 @@ every parse is tested over recorded JSON.
   labelled by its platform. A finished build's record is cached, so a log is read only once per
   build.
 - **Queue**: `run start <target> --branch <branch> --revision <sha> --no-push --json`. `--no-push`
-  is always passed, since without it the CLI pushes the branch.
+  is always passed, since without it the CLI pushes the branch. Its answer names the branch as
+  `<default>` while TeamCity checks for changes, so the backend keeps the branch it queued on.
 - **Capabilities**: `choosesBranch` true, `cancel` false: the account cannot cancel runs.
 - **Dates**: TeamCity writes `20261123T191020+0000`; the parser turns it into epoch milliseconds.
 
@@ -162,7 +168,7 @@ every parse is tested over recorded JSON.
   live in `runs.json` in the plugin's data folder. They are this backend's history.
 - **Progress**: `percent` is elapsed time over the last successful run of the same game and kind,
   capped at 99 until the exit-code file appears, and null with no earlier success. `stepText` is the
-  log's last non-empty line.
+  log's last non-empty line, read from the log's end through the files service's `readEnd`.
 - **Result**: exit code 0 is `success`, any other is `failure`, a cancel is `cancelled`. A run whose
   pid is gone with no exit-code file is a `failure` with the status text "ended without an exit
   code".
