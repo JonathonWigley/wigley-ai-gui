@@ -52,9 +52,7 @@ function setUp(result: ProcessResult | Error) {
 
 describe('createGhPullRequests', () => {
   it('forRepo_GhOutput_MapsEachRecord', async () => {
-    const test = setUp(
-      exited(0, JSON.stringify([OPEN_RECORD, MERGED_RECORD])),
-    );
+    const test = setUp(exited(0, JSON.stringify([OPEN_RECORD, MERGED_RECORD])));
 
     expect(await test.pullRequests.forRepo(FOLDER)).toEqual([
       {
@@ -125,10 +123,7 @@ describe('createGhPullRequests', () => {
       ),
     ],
     ['gh cannot start', new Error('Could not run gh: ENOENT')],
-    [
-      'timed out',
-      { code: -1, stdout: '', stderr: '', timedOut: true },
-    ],
+    ['timed out', { code: -1, stdout: '', stderr: '', timedOut: true }],
     ['stdout not json', exited(0, 'not json')],
     ['stdout an object', exited(0, '{}')],
   ])('forRepo_GhCannotAnswer_Null: %s', async (_name, result) => {

@@ -766,9 +766,14 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: ['node:'],
   },
-  'src/main/pull-requests': { layers: ['src/contracts', 'src/shared'] },
+  'src/main/pull-requests': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  // Over the shared FakeProcesses.
   'src/main/pull-requests/gh-pull-requests.test.ts': {
     layers: ['src/contracts', 'src/shared', 'src/main/pull-requests'],
+    packages: [],
   },
   'src/main/data-protocol': {
     layers: ['src/contracts', 'src/shared'],
