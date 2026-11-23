@@ -32,6 +32,7 @@ import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import {
+  docsBindingSlot,
   type DocsChannel,
   type DocsPageEvents,
   type DocsPageExports,
@@ -39,6 +40,7 @@ import {
   docsPlaceSlot,
   type DocsViewHandle,
   MACHINE_SOURCE_ID,
+  NO_DOCS_BINDING,
   sessionIdOfSource,
   sessionSourceId,
 } from '../contract';
@@ -135,6 +137,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const rows = api.state.read(sessionsRowsSlot);
     const harnesses = api.state.read(coreAgentHarnessesSlot);
     const placeWriter = api.state.publish(docsPlaceSlot);
+    const bindingReader = api.state.read(docsBindingSlot);
     // A session source whose row ended while no page ran leaves a place no
     // view takes; the prune waits for the restore window to settle, so the
     // rows chat's restore reopens are in the page mirror first.
@@ -238,6 +241,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             ),
           ),
         ],
+        binding: () => bindingReader.get() ?? NO_DOCS_BINDING,
         toast: services.toast,
         openExternal: services.openExternal,
         runKey: keyRunner(api.commands, log),

@@ -128,12 +128,14 @@ export const THIRD_PARTY_ROOT_ID = 'owner:third-party';
 // (its kind groups, then Installed only), then Features. A root with no
 // entries is left out. Inside every group, docs sort newest loaded first,
 // then the never-loaded ones in the group's own order; a skill group sorts by
-// its newest file.
+// its newest file. `areaFolder` is the features homes' folder of per-area
+// follow-up files, which names no feature (null: none).
 export function buildTree(
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
   starred: ReadonlySet<string>,
+  areaFolder: string | null,
 ): TreeNode[] {
   const roots: TreeNode[] = [];
   const starredEntries = entries.filter((entry) => starred.has(entry.id));
@@ -147,7 +149,7 @@ export function buildTree(
         MINE_ROOT_ID,
         'Mine',
         mine,
-        mineChildren(mine, homeDir, paths),
+        mineChildren(mine, homeDir, paths, areaFolder),
         paths,
       ),
     );
@@ -197,6 +199,7 @@ function mineChildren(
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
+  areaFolder: string | null,
 ): TreeNode[] {
   const children: TreeNode[] = [];
   const global = entries.filter((entry) => entry.source === 'global');
@@ -240,7 +243,9 @@ function mineChildren(
   );
   const repoOwned = entries.filter((entry) => ownsRoot(entry));
   for (const [name, repoEntries] of groupedBy(repoOwned, (e) => e.repo ?? '')) {
-    children.push(repoNode(name, repoEntries, unclaimed, homeDir, paths));
+    children.push(
+      repoNode(name, repoEntries, unclaimed, homeDir, paths, areaFolder),
+    );
   }
   const unknownSourced = entries.filter(
     (entry) => !isKnownSource(entry.source),
@@ -502,6 +507,7 @@ function repoNode(
   unclaimed: Map<string, IndexEntry[]>,
   homeDir: string,
   paths: Paths,
+  areaFolder: string | null,
 ): TreeGroup {
   const id = `repo:${name}`;
   const cloneEntries = entries.filter((entry) => entry.source === 'repo');
@@ -512,7 +518,7 @@ function repoNode(
       ? cloneNodes(id, clones, unclaimed, homeDir, paths)
       : cloneChildren(id, cloneEntries, unclaimed, paths);
   if (featureEntries.length > 0) {
-    children.push(featuresNode(id, featureEntries, paths));
+    children.push(featuresNode(id, featureEntries, paths, areaFolder));
   }
   const clone = clones.length === 1 ? clones[0][0] : null;
   return group(id, name, entries, children, paths, { type: 'repo', clone });
@@ -601,17 +607,18 @@ function featuresNode(
   repoId: string,
   entries: readonly IndexEntry[],
   paths: Paths,
+  areaFolder: string | null,
 ): TreeGroup {
   const id = `${repoId}/features`;
   const withSlug = entries.filter(
-    (entry) => featureSlug(entry, paths) !== null,
+    (entry) => featureSlug(entry, paths, areaFolder) !== null,
   );
   const withoutSlug = entries.filter(
-    (entry) => featureSlug(entry, paths) === null,
+    (entry) => featureSlug(entry, paths, areaFolder) === null,
   );
   const slugNodes = groupedBy(
     withSlug,
-    (entry) => featureSlug(entry, paths) ?? '',
+    (entry) => featureSlug(entry, paths, areaFolder) ?? '',
   ).map(([slug, slugEntries]) => {
     const leaves = [...slugEntries].sort(byLoaded(byKindThenTitle)).map(leaf);
     return group(`${id}/feature:${slug}`, slug, slugEntries, leaves, paths);
@@ -640,8 +647,12 @@ function kindRank(kind: string): number {
 }
 
 // `meta.feature` (task, plan), else `meta.slug` (feature), else the first
-// folder below the home's root other than `followups`.
-function featureSlug(entry: IndexEntry, paths: Paths): string | null {
+// folder below the home's root other than `areaFolder`.
+export function featureSlug(
+  entry: IndexEntry,
+  paths: Paths,
+  areaFolder: string | null,
+): string | null {
   const named = metaString(entry, 'feature') ?? metaString(entry, 'slug');
   if (named !== null) {
     return named;
@@ -653,7 +664,7 @@ function featureSlug(entry: IndexEntry, paths: Paths): string | null {
   }
   // A file directly in the root has one segment below it.
   const inSubfolder = below.length > 1;
-  return inSubfolder && below[0] !== 'followups' ? below[0] : null;
+  return inSubfolder && below[0] !== areaFolder ? below[0] : null;
 }
 
 // One root group per shelf of `Main.md`, in file order, an empty one included,
@@ -662,13 +673,15 @@ function featureSlug(entry: IndexEntry, paths: Paths): string | null {
 // `<shelfId>/label:<index>`, a link `<shelfId>/link:<index>`. A page the index
 // lists is a leaf titled the link's text, id `entry:<entryId>` for the entry's
 // first leaf, as `buildTree` names it, and `<shelfId>/<index>/entry:<entryId>`
-// for a later one.
+// for a later one. `linkPrefixes` map a skill target's prefix to its plugin
+// key.
 export function buildWikiTree(
   shelves: readonly WikiShelf[],
   entries: readonly IndexEntry[],
   mainFolder: string,
   homeDir: string,
   paths: Paths,
+  linkPrefixes: Readonly<Record<string, string>>,
 ): TreeNode[] {
   const mainFile = paths.join(mainFolder, 'Main.md');
   const shelfIds = new Set<string>();
@@ -682,7 +695,14 @@ export function buildWikiTree(
         const id = `${shelfId}/label:${index}`;
         return { type: 'wikiLabel', id, title: item.title };
       }
-      const page = pageEntry(item, entries, mainFile, homeDir, paths);
+      const page = pageEntry(
+        item,
+        entries,
+        mainFile,
+        homeDir,
+        paths,
+        linkPrefixes,
+      );
       if (page === null) {
         return wikiLink(item, `${shelfId}/link:${index}`, entries);
       }
@@ -729,12 +749,16 @@ function pageEntry(
   mainFile: string,
   homeDir: string,
   paths: Paths,
+  linkPrefixes: Readonly<Record<string, string>>,
 ): IndexEntry | null {
   if (target.type === 'path') {
     return pathEntry(target.path, entries, mainFile, homeDir, paths);
   }
   if (target.type === 'skill') {
-    return findSkillEntry(target.name, entries);
+    const pluginKey = linkPrefixes[target.prefix];
+    return pluginKey === undefined
+      ? null
+      : findSkillEntry(target.name, pluginKey, entries);
   }
   return null;
 }
@@ -762,11 +786,11 @@ function pathEntry(
   return preferredEntry(atPath.length > 0 ? atPath : walkedThrough);
 }
 
-const WIKI_SKILL_PLUGIN_PREFIX = 'wigley@';
-
-// The skill titled `name` in the plugin the `wigley:` link form names.
+// The skill titled `name` in the plugin `pluginKey` (`<plugin>@<marketplace>`),
+// as a skill link's prefix maps it.
 export function findSkillEntry(
   name: string,
+  pluginKey: string,
   entries: readonly IndexEntry[],
 ): IndexEntry | null {
   return preferredEntry(
@@ -774,7 +798,7 @@ export function findSkillEntry(
       (entry) =>
         entry.kind === 'skill' &&
         entry.title === name &&
-        entry.plugin?.startsWith(WIKI_SKILL_PLUGIN_PREFIX) === true,
+        entry.plugin === pluginKey,
     ),
   );
 }
@@ -823,7 +847,8 @@ export function buildWikiFilterTree(
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
+  areaFolder: string | null,
 ): TreeNode[] {
   const mine = entries.filter((entry) => entry.owner === 'mine');
-  return buildTree(mine, homeDir, paths, new Set());
+  return buildTree(mine, homeDir, paths, new Set(), areaFolder);
 }

@@ -171,7 +171,7 @@ export interface DocViewDeps {
   listRowClicked(entryId: string): void;
   // A click on the empty Main page's `create it` offer.
   mainOfferClicked(): void;
-  // Acts on a `wiki:` or `wigley:` link in the rendered body with the link's
+  // Acts on a `wiki:` or skill link in the rendered body with the link's
   // text; false when it is no link this view acts on.
   followWikiLink(href: string, title: string): boolean;
   // The right column left sight after being in sight, or was cleared while
@@ -273,7 +273,7 @@ export interface DocView {
   editSectionAt(anchor: string): void;
   // Follows `link` from the shown doc as its click asks: an external link
   // opens in the browser, a heading or a place in the shown file moves within
-  // it, another file opens, and a `wiki:` or `wigley:` link goes to
+  // it, another file opens, and a `wiki:` or skill link goes to
   // `followWikiLink`; logs and does nothing while no doc shows.
   followLink(link: DocLink): void;
   // Goes to `at` as a section link or an On this page or Linked from row asks:

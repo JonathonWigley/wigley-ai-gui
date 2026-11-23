@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 import type { CommandArg, CommandId } from '../../../contracts/commands';
 import type { ShownLayouts } from '../../../contracts/plugin';
-import type { IndexEntry } from '../contract';
+import { type IndexEntry, NO_DOCS_BINDING } from '../contract';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   USER_LAYOUT,
@@ -93,6 +93,7 @@ function dialogsOver(
     pushScope: fakePushedScope,
     entries: () => [],
     projectConfigFolders: () => ['.claude'],
+    binding: () => NO_DOCS_BINDING,
     changed: () => undefined,
     openInEditor: async () => undefined,
     dialogClosed: () => undefined,

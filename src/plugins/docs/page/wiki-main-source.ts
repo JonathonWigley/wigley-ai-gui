@@ -8,6 +8,8 @@ export interface WikiMainSourceDeps {
   viewId: string;
   channel: PageChannel<DocsChannel>;
   log: PluginLog;
+  // The binding's skill link prefixes, read at each parse.
+  linkPrefixes(): Readonly<Record<string, string>>;
   // Hears the first settled read, a rejection included, and each read after it
   // that says another thing of the file than the last answer did.
   changed(): void;
@@ -18,6 +20,7 @@ export interface WikiMainSourceDeps {
 
 // What the newest settled read says of `Main.md`: `unreadable` is a rejected read
 // or no path from main, which says nothing of whether the file is there.
+// `absent` is also main's answer that no contribution names a wiki page.
 export type MainFileState = 'exists' | 'absent' | 'unreadable';
 
 // What the reads that answered say of the file. A rejection answers nothing.
@@ -33,7 +36,8 @@ export interface WikiMainSource {
   // Finds the path, watches it, then reads it. Resolves once the first read
   // settles and never rejects; a second call returns the same promise.
   start(): Promise<void>;
-  // The real path of `Main.md`; null until main has given it.
+  // The real path of `Main.md`; null until main has given it, and while main
+  // answers that no contribution names one.
   path(): string | null;
   shelves(): readonly WikiShelf[];
   // Whether a first read has settled, present, absent or rejected.
@@ -53,6 +57,8 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const { channel, log } = deps;
   const watchId = `${deps.viewId}:main`;
   let mainPath: string | null = null;
+  // True while main's latest answer is that no contribution names a page.
+  let isUnnamed = false;
   let known: KnownFile = { type: 'neverKnown' };
   // True from a rejection until a read answers.
   let isUnreadable = false;
@@ -95,7 +101,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
       return;
     }
     known = { type: 'text', text };
-    shelves = parseWikiMain(text);
+    shelves = parseWikiMain(text, deps.linkPrefixes());
     log(`read Main.md: ${shelves.length} shelves`);
     deps.changed();
   };
@@ -115,6 +121,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const findPath = async () => {
     try {
       mainPath = await channel.invoke('wikiMainPath');
+      isUnnamed = mainPath === null;
     } catch (error) {
       settleUnreadable(errorText(error));
     }
@@ -159,10 +166,14 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     }
   };
 
+  // A page no contribution names reads as an absent file, asked again at
+  // each read.
   const connectAndRead = async () => {
     await connectOnce();
     if (mainPath !== null && !isDisposed) {
       await read(mainPath);
+    } else if (isUnnamed) {
+      settleAnswer(null);
     }
   };
 

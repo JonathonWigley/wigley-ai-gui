@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { parseWikiMain, type WikiItem, type WikiTarget } from './wiki-main';
 
 const FENCE = '```';
+// Two skill link prefixes, one inside the other, so the longest must win.
+const PREFIXES = { 'wigley:': 'wigley@m', 'wigley:dev:': 'wigley-dev@m' };
 
 function pathPage(title: string, path: string): WikiItem {
   return { type: 'page', title, target: { type: 'path', path } };
@@ -31,7 +33,7 @@ describe('parseWikiMain', () => {
       '- [Six](f.md)',
     ].join('\n');
 
-    expect(parseWikiMain(text)).toEqual([
+    expect(parseWikiMain(text, PREFIXES)).toEqual([
       {
         title: 'Shelf A',
         items: [
@@ -56,7 +58,7 @@ describe('parseWikiMain', () => {
       'see `x` [Two](b.md)',
     ].join('\n');
 
-    expect(parseWikiMain(text)[0].items).toEqual([
+    expect(parseWikiMain(text, PREFIXES)[0].items).toEqual([
       pathPage('`code`', 'a.md'),
       pathPage('Two', 'b.md'),
     ]);
@@ -76,7 +78,15 @@ describe('parseWikiMain', () => {
     },
     {
       target: 'wigley:make',
-      expected: pageTo({ type: 'skill', name: 'make' }),
+      expected: pageTo({ type: 'skill', prefix: 'wigley:', name: 'make' }),
+    },
+    {
+      target: 'wigley:dev:make',
+      expected: pageTo({ type: 'skill', prefix: 'wigley:dev:', name: 'make' }),
+    },
+    {
+      target: 'other:make',
+      expected: pageTo({ type: 'path', path: 'other:make' }),
     },
     {
       target: 'wigley:a/b',
@@ -105,6 +115,6 @@ describe('parseWikiMain', () => {
   ])('parseWikiMain_Target: $target', ({ target, expected }) => {
     const text = `## Shelf\n[P](${target})`;
 
-    expect(parseWikiMain(text)).toEqual([{ title: 'Shelf', items: expected }]);
+    expect(parseWikiMain(text, PREFIXES)).toEqual([{ title: 'Shelf', items: expected }]);
   });
 });

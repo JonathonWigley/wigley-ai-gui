@@ -21,6 +21,7 @@ import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import { listPickerCommands } from '../../../shared/page/list-picker';
 import {
+  type DocsBinding,
   type DocsChannel,
   docsCreateMainCommand,
   docsFollowLinkCommand,
@@ -335,6 +336,9 @@ export interface DocsViewDeps {
   // Each registered harness's project config folder name, in registration
   // order, each once; read at each create.
   projectConfigFolders(): readonly string[];
+  // The docs binding now (`docsBindingSlot`), read at each tree build, link
+  // click and create.
+  binding(): DocsBinding;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
   // Whether the tree shows now as this view's own pane, beside the doc; false
@@ -635,6 +639,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         viewId: deps.viewId,
         channel: deps.channel,
         log,
+        linkPrefixes: () => deps.binding().linkPrefixes,
         changed: () => wikiMainChanged(),
         answered: () => {
           void firstRead.promise.then(showOwedMain);
@@ -1072,6 +1077,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     pushScope: (scope) => deps.pushScope(scope),
     entries: () => document?.entries ?? [],
     projectConfigFolders: () => deps.projectConfigFolders(),
+    binding: () => deps.binding(),
     changed: (record, selectPath) => applyDocChange(record, selectPath),
     openInEditor,
     dialogClosed: restoreFocus,
@@ -1120,6 +1126,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         deps.homeDir,
         deps.paths,
         deps.starred.ids(),
+        areaFolder(),
       ),
       (entryId) => {
         return entriesById.get(entryId)?.path ?? '';
@@ -1136,6 +1143,10 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     doc.setEntries(next?.entries ?? []);
     doc.refreshChips();
   };
+
+  // The features homes' folder of per-area follow-up files, which names no
+  // feature in the tree.
+  const areaFolder = () => deps.binding().features?.areaFolder ?? null;
 
   // Rebuilds the wiki's trees. No shelves show until both the index and
   // `Main.md` have been read, so no row dangles over an empty entry list.
@@ -1154,10 +1165,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
             deps.paths.parent(mainPath),
             deps.homeDir,
             deps.paths,
+            deps.binding().linkPrefixes,
           );
     tree.setWikiTree(
       wikiTree,
-      buildWikiFilterTree(entries, deps.homeDir, deps.paths),
+      buildWikiFilterTree(entries, deps.homeDir, deps.paths, areaFolder()),
       document !== null && wikiMain.isRead(),
     );
   };
@@ -1224,15 +1236,20 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     return opened;
   };
 
-  // A `wiki:` or `wigley:` link in a rendered body acts as its sidebar row does.
+  // A `wiki:` or skill link in a rendered body acts as its sidebar row does.
   const followWikiLink = (href: string, title: string): boolean => {
     if (!isMachine) {
       return false;
     }
-    const target = parseWikiTarget(href);
+    const { linkPrefixes } = deps.binding();
+    const target = parseWikiTarget(href, linkPrefixes);
     switch (target?.type) {
       case 'skill': {
-        const entry = findSkillEntry(target.name, document?.entries ?? []);
+        const entry = findSkillEntry(
+          target.name,
+          linkPrefixes[target.prefix],
+          document?.entries ?? [],
+        );
         if (entry === null) {
           refuseMissingPage(title);
         } else {

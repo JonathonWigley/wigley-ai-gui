@@ -1,5 +1,6 @@
-// The docs index document (schema 5), as `docs_index.py` writes it (the
-// marketplace's `plugins/wigley/scripts/docs-index/README.md` is its schema),
+// The docs index document (schema 5), as `docs_index.py` writes it (the app's
+// `agent-plugin/scripts/docs-index/README.md` is its schema), the binding the
+// installed plugins' `docs` contributions and Backlog's features homes give,
 // and the docs plugin's channel between its main and page parts.
 
 import type { CommandKey } from '../../contracts/commands';
@@ -9,7 +10,7 @@ import type {
   DependencyKey,
   EventShape,
 } from '../../contracts/plugin';
-import type { KeyedSlotKey } from '../../contracts/state';
+import type { KeyedSlotKey, SlotKey } from '../../contracts/state';
 
 // The kinds and sources the app knows; an index entry may name others, which
 // still load (`isKnownKind`, `isKnownSource`).
@@ -142,12 +143,65 @@ export type CreateKind =
   | 'feature-doc'
   | 'followup';
 
-// A folder a doc of some kind may be created in.
+// A folder a doc of some kind may be created in. `repo` is the entry's repo
+// the place came from, null for one with none.
 export interface CreatePlace {
   title: string;
   folder: string;
   source: DocSource;
+  repo: string | null;
 }
+
+// Where feature homes sit, as Backlog hands them to Docs: each of `homes` is
+// an in-repo template `{repo}/<folder>` or an out-of-repo one
+// `<folder>/{name}` (`features-homes.ts`). `file` is a home's follow-ups file
+// and `areaFolder` its folder of per-area follow-up files, null for none.
+export type FeaturesHomes = {
+  homes: string[];
+  file: string;
+  areaFolder: string | null;
+};
+
+// A folder of the global layer, its path `~` or absolute as the contribution
+// wrote it: its top-level `.md` files are instructions, except
+// `referenceFiles`, which are reference; each of `subfolders` is walked in
+// full, one named `learning` as learning and any other as reference; each of
+// `skip` is left out.
+export type DocsGlobalFolder = {
+  path: string;
+  referenceFiles: string[];
+  subfolders: string[];
+  skip: string[];
+};
+
+// What Docs indexes and links beyond the harness folders: the merged `docs`
+// contributions' global folders, wiki page and skill link prefixes
+// (`<prefix>` → the plugin key whose skill `<prefix><name>` names), and
+// Backlog's features homes, null until Backlog hands them.
+export interface DocsBinding {
+  globalFolders: DocsGlobalFolder[];
+  wikiMain: string | null;
+  linkPrefixes: Record<string, string>;
+  features: FeaturesHomes | null;
+}
+
+// The binding with no contribution and no features homes: the harness
+// folders alone, no wiki page and no skill link.
+export const NO_DOCS_BINDING: DocsBinding = {
+  globalFolders: [],
+  wikiMain: null,
+  linkPrefixes: {},
+  features: null,
+};
+
+// The binding the docs main part works with, set before the machine index's
+// first run and again on each change; the page reads `NO_DOCS_BINDING` until
+// it is set.
+export const docsBindingSlot: SlotKey<DocsBinding, 'main', 'docs'> = {
+  id: 'docs.binding',
+  process: 'main',
+  kind: 'value',
+};
 
 // One entry of a folder's one-level listing.
 export interface FolderEntry {
@@ -246,6 +300,10 @@ export interface DocsMainExports {
   // Calls `changed` after the file at `path` changes or is replaced, until
   // `dispose`.
   watchDoc(path: string, changed: () => void): Promise<Disposable>;
+  // Replaces the binding's `features` (Backlog's pick), then rewrites the
+  // contributions file and rebuilds the machine index; a value equal to the
+  // current one does nothing. Outside the `live` run mode it does nothing.
+  setFeaturesHomes(homes: FeaturesHomes | null): void;
 }
 
 export const docsMainKey: DependencyKey<DocsMainExports, 'main', 'docs'> = {
@@ -438,8 +496,9 @@ export interface DocsChannel extends ChannelShape {
     readDoc(path: string): Promise<string>;
     // `readDoc`, null when nothing is at `path`; any other failure rejects.
     readDocIfPresent(path: string): Promise<string | null>;
-    // The wiki's `Main.md` with every link resolved, whether or not it exists.
-    wikiMainPath(): Promise<string>;
+    // The binding's `wikiMain` with every link resolved, whether or not it
+    // exists; null when no contribution names one.
+    wikiMainPath(): Promise<string | null>;
     // `expectedText` null overwrites whatever is on disk.
     writeDoc(
       path: string,

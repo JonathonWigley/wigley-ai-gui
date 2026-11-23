@@ -520,6 +520,6 @@ describe('createRecentReader', () => {
 
 describe('MAIN_STARTER_TEXT', () => {
   it('MAIN_STARTER_TEXT_NamesNoShelf', () => {
-    expect(parseWikiMain(MAIN_STARTER_TEXT)).toEqual([]);
+    expect(parseWikiMain(MAIN_STARTER_TEXT, {})).toEqual([]);
   });
 });

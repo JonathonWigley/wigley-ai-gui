@@ -3,16 +3,18 @@ import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import { FAKE_HARNESS_ID } from '../../../shared/fake-agent-harness';
 import type {
+  DocsBinding,
   IndexContext,
   IndexDocument,
   IndexEntry,
   LoadStateRecord,
 } from '../contract';
-import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
-// Starts `wigley@`, so the `wigley:vendored` link finds the plugin's skill.
+const FIXTURE_WIGLEY_KEY = 'wigley@wigley-ai-marketplace';
+// The fixture binding's `wigley:` prefix maps to it, so the `wigley:vendored`
+// link finds the plugin's skill.
 const VENDOR_PLUGIN_KEY = 'wigley@vendor-market';
 // Makes CLAUDE.md several pages long, rendered and in the editor, so a
 // half-page scroll moves it.
@@ -74,6 +76,28 @@ ${'More closing text.\n\n'.repeat(40)}`;
 const WIKI_TARGET_FILE = 'wigley-features/selftest-repo/wiki-fixture/target.md';
 const WIKI_TARGET_TEXT =
   '# Fixture target\n\nText above.\n\n## Target part\n\nText below.\n';
+
+// The binding every run mode but `live` works with, its paths under the
+// fixture's home: the fixture's `wigley-agents` folder as the one global
+// folder, its wiki page, the `wigley:` prefix over the vendored plugin and
+// the features homes Backlog's fixture strategy names too.
+export const DOCS_FIXTURE_BINDING: DocsBinding = {
+  globalFolders: [
+    {
+      path: '~/wigley-agents',
+      referenceFiles: ['decisions.md'],
+      subfolders: ['learning', 'wiki'],
+      skip: [],
+    },
+  ],
+  wikiMain: `~/${WIKI_MAIN_FILE}`,
+  linkPrefixes: { 'wigley:': VENDOR_PLUGIN_KEY },
+  features: {
+    homes: ['{repo}/docs/features', '~/wigley-features/{name}'],
+    file: 'followups.md',
+    areaFolder: 'followups',
+  },
+};
 
 export interface DocsFixtureOptions {
   // Adds the `LOAD_STATE_DOCS` docs under `.claude/load-states/` and their
@@ -221,6 +245,13 @@ function fixturePaths(home: string, paths: Paths) {
   };
 }
 
+// The folder whose `scripts/docs-index/docs_index.py` is the fixture's
+// stand-in, which every run mode but `live` runs in place of the app's agent
+// plugin's copy.
+export function docsFixturePluginDir(home: string, paths: Paths): string {
+  return fixturePaths(home, paths).wigleyInstall;
+}
+
 // The installs the fixture's `installed_plugins.json` lists, as a harness's
 // `installedPlugins` gives them: what a run on the fake harness hands it for
 // each profile, since the fake reads no file.
@@ -231,7 +262,7 @@ export function docsFixtureInstalls(
   const fixture = fixturePaths(home, paths);
   return [
     {
-      key: WIGLEY_PLUGIN_KEY,
+      key: FIXTURE_WIGLEY_KEY,
       installDir: fixture.wigleyInstall,
       version: '0.0.0',
       listedAt: { path: fixture.installedPlugins, line: 2 },
@@ -251,7 +282,7 @@ function installedPluginsText(fixture: FixturePaths): string {
     `[{"scope":"user","installPath":${JSON.stringify(installPath)}}]`;
   return (
     '{"version":2,"plugins":{\n' +
-    `"${WIGLEY_PLUGIN_KEY}":${install(fixture.wigleyInstall)},\n` +
+    `"${FIXTURE_WIGLEY_KEY}":${install(fixture.wigleyInstall)},\n` +
     `"${FIXTURE_PLUGIN_KEY}":${install(fixture.pluginRoot)}\n` +
     '}}\n'
   );
@@ -606,7 +637,9 @@ function json(document: IndexDocument): string {
 
 // `build` drops entries whose file is gone and lists each new `.md` in the
 // rules folder as a global rule, so the self-test's changes there survive a
-// background build. It never reads HOME: the temp home is a literal.
+// background build. It never reads HOME: the temp home is a literal. It skips
+// a leading `--contributions <file>`: the fixed index holds what the file
+// would give.
 function standInScript(home: string, indexDelayMs: number): string {
   return `import json, os, sys, time
 HOME = ${JSON.stringify(home)}
@@ -628,7 +661,10 @@ def built_index():
                 "meta": {"paths": []}, "walked": [], "headings": [], "links": [], "lastLoaded": None})
     doc["entries"].sort(key=lambda entry: entry["id"])
     return json.dumps(doc, indent=2)
-command = sys.argv[1] if len(sys.argv) > 1 else ""
+args = sys.argv[1:]
+if args[:1] == ["--contributions"]:
+    args = args[2:]
+command = args[0] if args else ""
 time.sleep(DELAY_SECONDS)
 if command == "build":
     target = os.path.join(HOME, ".agents", "wigley-docs", "index.json")

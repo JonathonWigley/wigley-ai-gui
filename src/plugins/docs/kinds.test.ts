@@ -2,10 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { parseFollowups } from '../../shared/followups/followup-file';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
-import type { CreatePlace, IndexEntry } from './contract';
+import type {
+  CreateKind,
+  CreatePlace,
+  DocsBinding,
+  IndexEntry,
+} from './contract';
 import { createTarget, nameProblem, placesFor, skillFolder } from './kinds';
 
 const HOME = '/Users/u';
+
+// The user's binding: `~/wigley-agents` as the one global folder, and the
+// features homes with their `followups.md` file.
+const USER_BINDING: Pick<DocsBinding, 'globalFolders' | 'features'> = {
+  globalFolders: [
+    {
+      path: '~/wigley-agents',
+      referenceFiles: ['decisions.md'],
+      subfolders: ['learning', 'wiki'],
+      skip: [],
+    },
+  ],
+  features: {
+    homes: ['{repo}/docs/features', '~/wigley-features/{name}'],
+    file: 'followups.md',
+    areaFolder: 'followups',
+  },
+};
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   return {
@@ -27,8 +50,12 @@ function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   };
 }
 
-function place(folder: string, source: CreatePlace['source']): CreatePlace {
-  return { title: folder, folder, source };
+function place(
+  folder: string,
+  source: CreatePlace['source'],
+  repo: string | null = null,
+): CreatePlace {
+  return { title: folder, folder, source, repo };
 }
 
 function itemFields(text: string, title: string) {
@@ -39,9 +66,10 @@ function itemFields(text: string, title: string) {
 function followupTarget(name: string) {
   return createTarget(
     'followup',
-    place('/Users/u/wigley-features/r', 'features'),
+    place('/Users/u/wigley-features/r', 'features', 'r'),
     name,
     posixPaths,
+    USER_BINDING,
   );
 }
 
@@ -59,16 +87,20 @@ describe('placesFor', () => {
       entry({ path: '/Users/u/.claude/skills/b/SKILL.md', kind: 'skill' }),
     ];
 
-    expect(placesFor('skill', entries, HOME, posixPaths, ['.claude'])).toEqual([
+    expect(
+      placesFor('skill', entries, HOME, posixPaths, ['.claude'], USER_BINDING),
+    ).toEqual([
       {
         title: 'Global · ~/.claude/skills',
         folder: '/Users/u/.claude/skills',
         source: 'global',
+        repo: null,
       },
       {
         title: 'r · ~/dev/r/.claude/skills',
         folder: '/Users/u/dev/r/.claude/skills',
         source: 'repo',
+        repo: 'r',
       },
     ]);
   });
@@ -83,16 +115,19 @@ describe('placesFor', () => {
       entry({ path: '/Users/u/.claude/skills/a/SKILL.md', kind: 'skill' }),
     ];
 
-    expect(placesFor('skill', entries, HOME, posixPaths, ['.claude'])).toEqual([
+    expect(
+      placesFor('skill', entries, HOME, posixPaths, ['.claude'], USER_BINDING),
+    ).toEqual([
       {
         title: 'Global · ~/.claude/skills',
         folder: '/Users/u/.claude/skills',
         source: 'global',
+        repo: null,
       },
     ]);
   });
 
-  it('placesFor_GlobalInstructions_OnlyWigleyAgentsFolder', () => {
+  it('placesFor_GlobalInstructions_OnlyGlobalFolderTop', () => {
     const entries = [
       '/Users/u/.claude/CLAUDE.md',
       '/Users/u/.claude-personal/CLAUDE.md',
@@ -102,20 +137,57 @@ describe('placesFor', () => {
       '/Users/u/notes/imported.md',
       '/Users/u/wigley-agents/AGENTS.md',
       '/Users/u/wigley-agents/Unity.md',
+      '/Users/u/wigley-agents/wiki/Main.md',
     ].map((path) => entry({ path, kind: 'instructions' }));
 
     expect(
-      placesFor('instructions', entries, HOME, posixPaths, ['.claude']),
+      placesFor(
+        'instructions',
+        entries,
+        HOME,
+        posixPaths,
+        ['.claude'],
+        USER_BINDING,
+      ),
     ).toEqual([
       {
         title: 'Global · ~/wigley-agents',
         folder: '/Users/u/wigley-agents',
         source: 'global',
+        repo: null,
       },
     ]);
   });
 
-  it.each([
+  it('placesFor_GlobalFolderNotNamedWigleyAgents_IsAPlace', () => {
+    const binding = {
+      ...USER_BINDING,
+      globalFolders: [
+        { path: '~/notes', referenceFiles: [], subfolders: [], skip: [] },
+      ],
+    };
+    const entries = [
+      '/Users/u/notes/AGENTS.md',
+      '/Users/u/wigley-agents/AGENTS.md',
+    ].map((path) => entry({ path, kind: 'instructions' }));
+
+    expect(
+      placesFor('instructions', entries, HOME, posixPaths, ['.claude'], binding),
+    ).toEqual([
+      {
+        title: 'Global · ~/notes',
+        folder: '/Users/u/notes',
+        source: 'global',
+        repo: null,
+      },
+    ]);
+  });
+
+  it.each<{
+    given: string;
+    kind: CreateKind;
+    fields: Partial<IndexEntry> & { path: string };
+  }>([
     {
       given: 'a global reference in wigley-agents',
       kind: 'reference',
@@ -124,7 +196,10 @@ describe('placesFor', () => {
     {
       given: 'a global reference in a linked clone',
       kind: 'reference',
-      fields: { path: '/Users/u/dev/personal/wigley-agents/decisions.md' },
+      fields: {
+        path: '/Users/u/dev/personal/wigley-agents/decisions.md',
+        walked: ['/Users/u/wigley-agents/decisions.md'],
+      },
     },
     {
       given: 'a plugin entry',
@@ -145,10 +220,12 @@ describe('placesFor', () => {
         root: '/Users/u/scratch',
       },
     },
-  ] as const)('placesFor $given offers no place', ({ kind, fields }) => {
+  ])('placesFor $given offers no place', ({ kind, fields }) => {
     const entries = [entry({ ...fields, kind })];
 
-    expect(placesFor(kind, entries, HOME, posixPaths, ['.claude'])).toEqual([]);
+    expect(
+      placesFor(kind, entries, HOME, posixPaths, ['.claude'], USER_BINDING),
+    ).toEqual([]);
   });
 
   it('placesFor_ProjectReference_EntryFolder', () => {
@@ -163,12 +240,20 @@ describe('placesFor', () => {
     ];
 
     expect(
-      placesFor('reference', entries, HOME, posixPaths, ['.claude']),
+      placesFor(
+        'reference',
+        entries,
+        HOME,
+        posixPaths,
+        ['.claude'],
+        USER_BINDING,
+      ),
     ).toEqual([
       {
         title: 'r · ~/dev/r/docs',
         folder: '/Users/u/dev/r/docs',
         source: 'repo',
+        repo: 'r',
       },
     ]);
   });
@@ -178,13 +263,19 @@ describe('placesFor', () => {
       entry({
         path: '/Users/u/dev/personal/wigley-agents/AGENTS.md',
         kind: 'instructions',
+        walked: ['/Users/u/wigley-agents/AGENTS.md'],
       }),
     ];
 
     expect(
-      placesFor('instructions', entries, HOME, posixPaths, ['.claude']).map(
-        (p) => p.folder,
-      ),
+      placesFor(
+        'instructions',
+        entries,
+        HOME,
+        posixPaths,
+        ['.claude'],
+        USER_BINDING,
+      ).map((p) => p.folder),
     ).toEqual(['/Users/u/dev/personal/wigley-agents']);
   });
 
@@ -227,6 +318,7 @@ describe('placesFor', () => {
           HOME,
           posixPaths,
           projectConfigFolders,
+          USER_BINDING,
         ).map((p) => p.folder),
       ).toEqual([folder]);
     },
@@ -256,14 +348,50 @@ describe('placesFor', () => {
     ];
 
     expect(
-      placesFor('followup', entries, HOME, posixPaths, ['.claude']),
+      placesFor(
+        'followup',
+        entries,
+        HOME,
+        posixPaths,
+        ['.claude'],
+        USER_BINDING,
+      ),
     ).toEqual([
       {
         title: 'r features · ~/wigley-features/r',
         folder: root,
         source: 'features',
+        repo: 'r',
       },
     ]);
+  });
+
+  it.each([
+    { given: 'no features homes', features: null },
+    {
+      given: 'another follow-ups file name',
+      features: { homes: ['{repo}/docs/features'], file: 'todo.md', areaFolder: 'todo' },
+    },
+  ])('placesFor_NoFeatures_NoFollowupPlace: $given', ({ features }) => {
+    const root = '/Users/u/wigley-features/r';
+    const entries = [
+      entry({
+        kind: 'followup',
+        source: 'features',
+        repo: 'r',
+        root,
+        path: `${root}/followups.md`,
+        id: `${root}/followups.md#L3`,
+        line: 3,
+      }),
+    ];
+
+    expect(
+      placesFor('followup', entries, HOME, posixPaths, ['.claude'], {
+        ...USER_BINDING,
+        features,
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -284,12 +412,14 @@ describe('createTarget', () => {
       place('/Users/u/wigley-agents', 'global'),
       'Unity',
       posixPaths,
+      USER_BINDING,
     );
     const repo = createTarget(
       'instructions',
-      place('/Users/u/dev/r', 'repo'),
+      place('/Users/u/dev/r', 'repo', 'r'),
       'web',
       posixPaths,
+      USER_BINDING,
     );
 
     expect(global.path).toBe('/Users/u/wigley-agents/Unity.md');
@@ -334,6 +464,36 @@ describe('createTarget', () => {
     expect(target.appends).toBe(true);
   });
 
+  it('createTarget_FollowupBindingFile_WritesThatFile', () => {
+    const target = createTarget(
+      'followup',
+      place('/Users/u/dev/r/docs/todo', 'features', 'r'),
+      'new',
+      posixPaths,
+      {
+        features: {
+          homes: ['{repo}/docs/todo'],
+          file: 'todo.md',
+          areaFolder: 'todo',
+        },
+      },
+    );
+
+    expect(target.path).toBe('/Users/u/dev/r/docs/todo/todo.md');
+  });
+
+  it('createTarget_FollowupNoFeatures_Throws', () => {
+    expect(() =>
+      createTarget(
+        'followup',
+        place('/Users/u/wigley-features/r', 'features', 'r'),
+        'new',
+        posixPaths,
+        { features: null },
+      ),
+    ).toThrow('No features home takes follow-ups');
+  });
+
   it('createTarget_FollowupListFile_AppendsItem', () => {
     const target = followupTarget('new');
 
@@ -352,7 +512,7 @@ describe('createTarget', () => {
     expect(itemFields(listed, 'new')).toEqual({ oneLine: '', tags: [] });
   });
 
-  it('createTarget_FollowupMissingFile_StartsNewFileNamedForFolder', () => {
+  it('createTarget_FollowupMissingFile_StartsNewFileNamedForRepo', () => {
     const target = followupTarget('new');
 
     const created = target.contents(null);
@@ -367,18 +527,25 @@ describe('createTarget', () => {
     expect(target.contents('\n  \n')).toEqual(created);
   });
 
-  it('createTarget_FollowupMissingInRepoFile_NamesFileForClone', () => {
-    const target = createTarget(
-      'followup',
-      place('/Users/u/dev/game/docs/features', 'features'),
-      'new',
-      posixPaths,
-    );
+  it.each([
+    { given: 'a place with its repo', repo: 'game', title: 'game' },
+    { given: 'a place with no repo', repo: null, title: 'features' },
+  ])(
+    'createTarget_FollowupMissingInRepoFile_NamesFile: $given',
+    ({ repo, title }) => {
+      const target = createTarget(
+        'followup',
+        place('/Users/u/dev/game/docs/features', 'features', repo),
+        'new',
+        posixPaths,
+        USER_BINDING,
+      );
 
-    expect(target.contents(null).text.split('\n')[0]).toBe(
-      '# Follow-ups — game',
-    );
-  });
+      expect(target.contents(null).text.split('\n')[0]).toBe(
+        `# Follow-ups — ${title}`,
+      );
+    },
+  );
 
   it('createTarget_FollowupTitleTaken_Throws', () => {
     const target = followupTarget('Old');
@@ -411,9 +578,10 @@ describe('kinds on Windows', () => {
   it('createTarget_WindowsSkill_NativePath', () => {
     const target = createTarget(
       'skill',
-      place('C:\\Users\\u\\dev\\r\\.claude\\skills', 'repo'),
+      place('C:\\Users\\u\\dev\\r\\.claude\\skills', 'repo', 'r'),
       'demo',
       windowsPaths,
+      USER_BINDING,
     );
 
     expect(target.path).toBe(
@@ -440,14 +608,20 @@ describe('kinds on Windows', () => {
     ];
 
     expect(
-      placesFor('instructions', entries, 'C:\\Users\\u', windowsPaths, [
-        '.claude',
-      ]),
+      placesFor(
+        'instructions',
+        entries,
+        'C:\\Users\\u',
+        windowsPaths,
+        ['.claude'],
+        USER_BINDING,
+      ),
     ).toEqual([
       {
         title: 'Global · ~\\wigley-agents',
         folder: 'C:\\Users\\u\\wigley-agents',
         source: 'global',
+        repo: null,
       },
     ]);
   });

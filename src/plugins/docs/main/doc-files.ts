@@ -10,18 +10,15 @@ import { errorText } from '../../../shared/error-text';
 import type {
   CreatedDoc,
   CreateRequest,
+  DocsBinding,
+  DocsGlobalFolder,
   FolderEntry,
   IndexEntry,
   IndexHarness,
   TrashResult,
   WriteResult,
 } from '../contract';
-import {
-  createTarget,
-  nameProblem,
-  skillFolder,
-  WIGLEY_AGENTS_FOLDER,
-} from '../kinds';
+import { createTarget, nameProblem, skillFolder } from '../kinds';
 import { changeRefusal, type GuardFolders } from '../path-guard';
 import type { HarnessFolders } from '../../../shared/harness-folders';
 
@@ -36,6 +33,8 @@ export interface DocFilesDeps {
   // Every loaded view's entries (the machine index's and each session's), for
   // the guard.
   entries(): readonly IndexEntry[];
+  // The docs binding now, read at each guard, create and wiki page lookup.
+  binding(): DocsBinding;
 }
 
 // Every path is `~` expanded and normalized first, and one that is not
@@ -51,8 +50,9 @@ export interface DocFiles {
   read(path: string): Promise<string>;
   // `read`, null when nothing is at `path`; any other failure rejects.
   readIfPresent(path: string): Promise<string | null>;
-  // The wiki's `Main.md` with every link resolved, whether or not it exists.
-  wikiMainPath(): Promise<string>;
+  // The binding's `wikiMain`, `~` expanded, with every link resolved, whether
+  // or not it exists; null when the binding names none.
+  wikiMainPath(): Promise<string | null>;
   // `expectedText` non-null: writes only while the disk (missing reads as
   // '') still holds it, else returns what the disk holds.
   write(
@@ -97,7 +97,13 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
 
   // `target`, once the guard allows a change there.
   async function allowed(target: string): Promise<string> {
-    const guarded = await guardFolders(files, homeDir, folders, paths);
+    const guarded = await guardFolders(
+      files,
+      homeDir,
+      folders,
+      deps.binding().globalFolders,
+      paths,
+    );
     const refusal = changeRefusal(target, deps.entries(), guarded, paths);
     if (refusal !== null) {
       throw new Error(refusal);
@@ -161,6 +167,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       request.place,
       request.name.trim(),
       paths,
+      deps.binding(),
     );
     const path = absolute(target.path);
     const real = await writeTarget(path);
@@ -348,12 +355,12 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
   return {
     read: async (path) => files.read(absolute(path)),
     readIfPresent: async (path) => readIfPresent(files, absolute(path)),
-    wikiMainPath: () =>
-      realTarget(
-        files,
-        paths.join(homeDir, WIGLEY_AGENTS_FOLDER, 'wiki', 'Main.md'),
-        paths,
-      ),
+    wikiMainPath: async () => {
+      const { wikiMain } = deps.binding();
+      return wikiMain === null
+        ? null
+        : realTarget(files, paths.expandTilde(wikiMain, homeDir), paths);
+    },
     write,
     writeBytes,
     create,
@@ -463,7 +470,7 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
 }
 
 // The folders the index walks for global docs (each registered profile's
-// config folder, `~/.agents` and `~/wigley-agents`), the plugin caches each
+// config folder, `~/.agents` and each global folder), the plugin caches each
 // profile's harness declares and the synced skill folders (each config
 // folder's `skills/synced`), all real. Each declared folder is `~` expanded
 // and normalized, and one that is not absolute then is dropped. A docs folder
@@ -473,6 +480,7 @@ async function guardFolders(
   files: Files,
   homeDir: string,
   folders: Pick<HarnessFolders, 'roots'>,
+  globalFolders: readonly DocsGlobalFolder[],
   paths: Paths,
 ): Promise<GuardFolders> {
   const declared = (folder: string): string[] => {
@@ -484,7 +492,7 @@ async function guardFolders(
   const docFolders = [
     ...configDirs,
     paths.join(homeDir, '.agents'),
-    paths.join(homeDir, WIGLEY_AGENTS_FOLDER),
+    ...globalFolders.flatMap((folder) => declared(folder.path)),
   ];
   const caches = roots.flatMap((root) =>
     root.pluginCacheDirs.flatMap((folder) => declared(folder)),

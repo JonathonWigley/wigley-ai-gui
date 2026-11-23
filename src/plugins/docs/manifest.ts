@@ -4,16 +4,17 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // Browses and edits every agent doc on the machine through the docs index:
 // Docs mode over the machine's index, and an index source per session that
 // an `addView` caller shows (the `docs-session-tab` plugin). `scriptPath`
-// names the `docs_index.py` to run; empty, the script is found through the
-// wigley plugin's install in each Claude config folder. The page reads the
-// session rows so a session source's place leaves with its row.
+// names the `docs_index.py` to run; empty, the copy in the app's agent plugin
+// runs. Main reads the `docs` section other plugins contribute through the
+// contributions registry. The page reads the session rows so a session
+// source's place leaves with its row.
 // `recentChangesLimit` caps the commits the Main page's Recent changes lists.
 export const docsManifest = definePlugin({
   id: 'docs',
   label: 'Docs',
   description:
     'Adds Docs mode, to browse and edit every agent doc on the machine.',
-  dependsOn: { main: ['sessions'], page: [] },
+  dependsOn: { main: ['sessions', 'contributions'], page: [] },
   reads: { main: [], page: ['sessions'] },
   commands: {
     showMode: {
@@ -219,7 +220,7 @@ export const docsManifest = definePlugin({
     scriptPath: {
       label: 'Docs index script',
       description:
-        "The path to `docs_index.py`; empty finds the installed wigley plugin's copy. `~` is the home folder.",
+        "The path to `docs_index.py`; empty runs the copy in the app's agent plugin. `~` is the home folder.",
     },
     layout: {
       label: 'Docs layout',

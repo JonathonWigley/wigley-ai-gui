@@ -21,6 +21,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import {
   type CreateKind,
   type CreatePlace,
+  type DocsBinding,
   type DocsChannel,
   docsAnswerConfirmCommand,
   type FolderEntry,
@@ -477,6 +478,9 @@ export interface DocsDialogsDeps {
   entries(): readonly IndexEntry[];
   // Each registered harness's project config folder name, read at each create.
   projectConfigFolders(): readonly string[];
+  // The docs binding now, whose global folders and features homes give the
+  // places; read at each create.
+  binding(): DocsBinding;
   // Applies a change main made; `selectPath` names the doc to select after
   // a rename.
   changed(record: DocChangeRecord, selectPath: string | null): void;
@@ -596,6 +600,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       deps.homeDir,
       paths,
       deps.projectConfigFolders(),
+      deps.binding(),
     );
     if (places.length === 0) {
       toast(noPlaceText(kindTitle), 'info');

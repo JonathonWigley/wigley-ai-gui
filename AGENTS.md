@@ -32,8 +32,8 @@ An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over th
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `auri`
 tools, receiving agents' review rounds, feature primers and audio pickers and showing each in a popup
 over its agent session's tabs for the user to answer; and it
-browses and edits every agent doc on the machine through the docs index, as a wiki over the user's own pages and as a tree of all of them (`docs_index.py`, `plugins/wigley/scripts/docs-index/`
-in wigley-ai-marketplace, whose README states the index schema). It also starts Claude Code sessions itself and
+browses and edits every agent doc on the machine through the docs index, as a wiki over the user's own pages and as a tree of all of them (`docs_index.py`, in the app's agent plugin at `agent-plugin/scripts/docs-index/`,
+whose README states the index schema). It also starts Claude Code sessions itself and
 chats with them in each session's Chat tab, a round from that session sliding up over the chat in a popup that hides and shows
 (`docs/features/agent-chat/design.md`, `docs/features/session-popups/design.md`).
 
@@ -401,7 +401,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files, the log behind Recent changes, `addSampleDocs`: a sample docs home, `SAMPLE_HOME_FOLDER` in a scratch folder registered as the `SAMPLE_SOURCE_ID` source until disposed, the demo's Docs steps show), page/ (one docs view per source — the machine view's wiki sidebar built
-                 from `~/wigley-agents/wiki/Main.md`, its Main and list pages, and the tree under Starred, Mine and
+                 from the `wikiMain` page the `docs` contributions name, its Main and list pages, and the tree under Starred, Mine and
                  Third-party roots by the index's `owner`, the only sidebar of a session's docs view, rendered page with its status chips, right column and section editing, document editor (takes dropped and pasted files as relative links) —
                  shown as Docs mode over the machine's index, its sidebar in the side
                  bar, and as a split of tree and page in each view `addView` hands out, the `docs-session-tab` plugin's
