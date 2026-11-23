@@ -8,6 +8,14 @@ export interface GitCommit {
   paths: string[];
 }
 
+// One branch head on a remote.
+export interface GitRemoteHead {
+  // The branch name, without `refs/heads/`.
+  name: string;
+  // The full commit sha the head points at.
+  sha: string;
+}
+
 // One checkout of a clone: the main tree or a linked worktree.
 export interface GitWorktree {
   // The checkout's top folder.
@@ -22,9 +30,10 @@ export interface GitWorktree {
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
 // to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
-// `currentBranch`, `hasUpstream`, `fetch` and `lastFetch`
-// rejects `git <name> exited <code>: <stderr>` on a failed run; every method
-// but `fetch` and `lastFetch` rejects when git cannot start.
+// `currentBranch`, `hasUpstream`, `fetch`, `lastFetch`, `remoteHeads` and
+// `commitSubject` rejects `git <name> exited <code>: <stderr>` on a failed run;
+// every method but `fetch`, `lastFetch` and `remoteHeads` rejects when git
+// cannot start.
 export interface Git {
   // The clone's top folder holding `folder`, a full path; null when `folder`
   // is in no clone.
@@ -89,4 +98,15 @@ export interface Git {
     path: string,
     text: string,
   ): Promise<GitCommit | null>;
+  // The branch heads on `origin` whose names match `pattern` (a `git ls-remote
+  // --heads` pattern, such as `releases/physics-fun/*` or a full branch name),
+  // each with its full sha, names without `refs/heads/`, in git's order. The
+  // pattern is matched from the start of the name, so `main` does not match
+  // `feature/main`. Null when the command fails, times out or git cannot
+  // start. Never rejects.
+  remoteHeads(root: string, pattern: string): Promise<GitRemoteHead[] | null>;
+  // The one-line subject of `sha` in the clone at `root`; null when the clone
+  // lacks it, also null for a `sha` that is not 4 to 40 hex characters
+  // (nothing runs) and on any other non-zero exit.
+  commitSubject(root: string, sha: string): Promise<string | null>;
 }

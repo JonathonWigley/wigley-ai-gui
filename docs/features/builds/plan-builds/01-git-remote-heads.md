@@ -1,6 +1,6 @@
 # 01 — Git remote heads and commit subjects, and Files' readEnd
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · adds two `Git` members, `GitRemoteHead` and `Files.readEnd`, which tasks 03 and 05 consume
 Wave: 1 · Depends on: none

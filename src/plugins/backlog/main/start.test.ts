@@ -191,6 +191,8 @@ function fakeGit() {
     fileAtHead: vi.fn<Git['fileAtHead']>(async () => null),
     log: vi.fn<Git['log']>(async () => []),
     firstAdded: vi.fn<Git['firstAdded']>(async () => null),
+    remoteHeads: vi.fn<Git['remoteHeads']>(async () => null),
+    commitSubject: vi.fn<Git['commitSubject']>(async () => null),
   } satisfies Git;
 }
 

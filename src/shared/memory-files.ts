@@ -1,6 +1,7 @@
 import type { Clock } from '../contracts/ambient';
 import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
+import { withoutLeadingContinuationBytes } from './utf8-cut';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
 // `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report
@@ -189,6 +190,14 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       // `stream` holds back a multi-byte character the cut splits instead of
       // emitting U+FFFD.
       return new TextDecoder('utf-8').decode(bytes, { stream: true });
+    },
+    readEnd: async (path, maxBytes) => {
+      const stored = bytesOf(path);
+      const start = Math.max(0, stored.length - maxBytes);
+      const bytes = stored.slice(start);
+      return new TextDecoder('utf-8').decode(
+        start > 0 ? withoutLeadingContinuationBytes(bytes) : bytes,
+      );
     },
     write: async (path, text) => store(path, text),
     // A copy, so the caller may reuse its buffer.

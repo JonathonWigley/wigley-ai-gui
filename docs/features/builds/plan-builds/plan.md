@@ -323,3 +323,5 @@ Critical path: 02 → 06 → 07 → 08 → 09
 - [ ] [Final verification](10-final-verification.md)
 
 ## Run log
+Review base: 4e46c96b296201df9f75d2fc2681bfa011acb8a3
+

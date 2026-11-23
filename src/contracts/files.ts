@@ -32,8 +32,8 @@ export interface WatchOptions {
   onMissed?(): void;
 }
 
-// UTF-8 text files read whole or by their first bytes, written whole or
-// appended to, any file read or written whole as bytes, and the folders that
+// UTF-8 text files read whole or by their first or last bytes, written whole
+// or appended to, any file read or written whole as bytes, and the folders that
 // hold them.
 export interface Files {
   // Rejects when the file is missing with an error naming the path, which
@@ -46,6 +46,10 @@ export interface Files {
   // left out; the whole file when shorter. Rejects when the file is missing,
   // naming the path.
   readStart(path: string, maxBytes: number): Promise<string>;
+  // The file's last `maxBytes` bytes as UTF-8, a character the cut splits at
+  // the start left out; the whole file when shorter. Rejects when the file is
+  // missing, naming the path.
+  readEnd(path: string, maxBytes: number): Promise<string>;
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
   // renames it over the target, creating missing parent folders first. The
   // Node adapter tries a rename that fails with EPERM or EBUSY (a file another

@@ -58,6 +58,11 @@ describe('scopedFiles', () => {
       call: (scoped: Files) => scoped.readStart('../z', 4),
     },
     {
+      method: 'readEnd',
+      path: '../e',
+      call: (scoped: Files) => scoped.readEnd('../e', 4),
+    },
+    {
       method: 'readBytes',
       path: '../w.png',
       call: (scoped: Files) => scoped.readBytes('../w.png'),
@@ -226,6 +231,10 @@ function recordingCalls(calls: string[]): MemoryFiles {
     readStart: async (path, maxBytes) => {
       calls.push(path);
       return inner.readStart(path, maxBytes);
+    },
+    readEnd: async (path, maxBytes) => {
+      calls.push(path);
+      return inner.readEnd(path, maxBytes);
     },
     readBytes: async (path) => {
       calls.push(path);
