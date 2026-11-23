@@ -252,7 +252,7 @@ src/main/        core main process; main.ts is its composition root
                  but not wired in, for a Mac where the login item does not work; and a no-op for every other platform
                  and run
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, the branch heads on origin that match a pattern (`remoteHeads`, planned in `builds`) and a commit's subject (`commitSubject`, planned in `builds`), a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), each local and remote-tracking branch with its tip's time (`branches`), and the commits on every ref whose message matches a pattern (`commitsMatching`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
+                 upstream and its blobs, fetch and last fetch, a ref's commit and whether one commit is an ancestor of another, a file's text at HEAD, a clone's origin repo name, the branch heads on origin that match a pattern (`remoteHeads`) and a commit's subject (`commitSubject`), a clone's worktrees (`worktrees`: each checkout's path, branch and whether it is the main tree) and its shared git folder (`commonDir`), a log over named paths, the commit that first added a text to a file (`firstAdded`), each local and remote-tracking branch with its tip's time (`branches`), and the commits on every ref whose message matches a pattern (`commitsMatching`) → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and two commits, run through `services.processes`)
   pull-requests/ the `gh` adapter behind PullRequests: each open, merged or closed pull request of a folder's GitHub
                  repo, or null when `gh` is missing or not logged in, the folder has no GitHub remote, or the run fails
@@ -557,7 +557,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and hand-back entries from `chat.agentEvent`, `addMirror`, its self-test script and the `seed` drive action, `demo-rooms.ts`: the memory room a demo step holds),
                  page/ (Chatroom mode, the row badge through sessions' `addRowPart`, the row activity, the layout preview),
                  layouts/ (its Layout contract and `default` layout); `docs/features/chatroom/design.md`
-  builds/        planned in `builds`, not built yet: manifest.ts, contract.ts (the `BuildBackend` seam, `BackendKind`,
+  builds/        manifest.ts, contract.ts (the `BuildBackend` seam, `BackendKind`,
                  `BuildRecord`, the `builds.snapshot` and `builds.sessions` slots, `buildsMainKey`), builds-model.ts (the
                  pure fold of backend records, session links, set runs and offers into the slots, and the builds that
                  ended or started failing), main/ (the backend registry behind `addBackend`, the `backends` setting's
@@ -567,10 +567,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `addRowPart`, the `building` activity, the hub's Builds section through chat's `addSidePart`, the offer
                  card through chat's `addComposerPart`), layouts/ (its Layout contract and `default` layout);
                  `docs/features/builds/design.md`
-  builds-teamcity/ planned in `builds`, not built yet: manifest.ts, main/ (the `teamcity` backend kind through
+  builds-teamcity/ manifest.ts, main/ (the `teamcity` backend kind through
                  `builds`' `addBackend`, over the `teamcity` CLI: the one function that spawns it, and the parsers of its
                  JSON) → the only place the app spawns `teamcity`
-  builds-local/  planned in `builds`, not built yet: manifest.ts, main/ (the `local` backend kind through `builds`'
+  builds-local/  manifest.ts, main/ (the `local` backend kind through `builds`'
                  `addBackend`: each kind's command run detached in the game's clone, the run records in plugin data,
                  the progress estimate, cancel)
   system-stats/  manifest.ts, contract.ts (the `system-stats.snapshot` slot), main/ (polls `services.systemStats` while a

@@ -1,6 +1,6 @@
 # Builds — design
 
-Planned in `builds`, not built yet: everything below.
+Built in the `builds` plan: everything below describes the landed code.
 
 **Contents**
 
@@ -91,7 +91,7 @@ and does not blank the others.
   and `target`), `sets` (optional). A set's `kinds` name kinds of the same game, `branches` is a
   git ref pattern under `refs/heads/`, and `agentPrompt` is optional.
 - **Backend fields**, parsed by the backend: `config`, and each kind's `target`. TeamCity: `config`
-  holds an optional `command` (empty means `teamcity` on PATH), and a `target` is a build
+  holds an optional `command` (a path, `~` expanded; empty means `teamcity` on PATH), and a `target` is a build
   configuration id. Local: `config` is `{}`, and a `target` is `{ "command": string, "args":
   string[] }`, run in the game's `clone`, which a local game must name.
 - Ids are unique within their list. A duplicate is a problem on that backend's heading.
@@ -210,8 +210,10 @@ every parse is tested over recorded JSON.
   sets, then (when the backend `choosesBranch`) its branches, with the game's `defaultBranch`
   first, or for a set only the branches its pattern matches. The branch's origin head, read from
   the game's clone, is the pinned revision. Enter queues. A user's queue needs no confirm.
-- **Keys** in the mode's list scope: `j`/`k` move, `Enter` opens the detail, `q` queues, `o` opens
-  the build in the backend, `x` cancels where the backend can. `<Leader>mq` opens the queue picker
+- **Keys**: the game list scope (`builds.games`) takes `j`/`k`, `gg`/`G`, `Enter` to show the game
+  and `q` to queue. The build list scope (`builds.list`) takes `j`/`k`, `gg`/`G`, `Enter` to open the
+  detail, `q` to queue, `o` to open the build in the backend and `x` to cancel where the backend can.
+  The queue picker's scope (`builds.picker`) takes the shared list picker's keys. `<Leader>mq` opens the queue picker
   from anywhere.
 
 ## Sessions
@@ -272,7 +274,12 @@ every parse is tested over recorded JSON.
 | `builds.dismissOffer` | page | none | `<Leader>mx` |
 | `builds.pickQueue` | page | none | the queue picker; `<Leader>mq`, `q` in the mode |
 | `builds.launchSetAgent` | main | `{ backend, game, set }` | the set's "with agent" button |
-| `builds.openDetail`, `builds.openWeb`, `builds.cancel` | page | none | the mode's `Enter`, `o`, `x` |
+| `builds.openDetail`, `builds.openWeb`, `builds.cancel` | page | none | the build list's `Enter`, `o`, `x` |
+| `builds.listDown`, `listUp`, `listTop`, `listBottom` | page | none | the build list's `j`, `k`, `gg`, `G` |
+| `builds.gameDown`, `gameUp`, `gameTop`, `gameBottom`, `openGame` | page | none | the game list's `j`, `k`, `gg`, `G`, `Enter` |
+| `builds.selectEntry`, `selectBuild`, `queueButton`, `withAgent`, `setFilter`, `openLink` | page | one value or object | clicks; no key |
+| `builds.queueSessionOffer`, `dismissSessionOffer` | page | a session id | the offer card's buttons |
+| `builds.leaveOffer`, `offerFocusBox`, `offerAppendBox` | page | none | the offer card's `k` or `Esc`, `i`, `a` |
 
 The page reaches main's queue, branches, cancel and shown state over the plugin's own channel. An
 agent reads `builds.snapshot` with the `read_state` tool.

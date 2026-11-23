@@ -3,8 +3,6 @@ name: builds
 description: "Queueing and tracking CI and local builds through the Auri app's Builds plugin: the `builds.queue` and `builds.offer` commands run through `run_command`, the `builds.snapshot` state, and adding a tracked game to the `builds.backends` setting. Use when asked to make, run, kick off or check a build or a build set (such as an RC set) of a game from a session the app started, when a wrap-up's change reaches players only through a build, or when asked to track a game's builds."
 ---
 
-Planned in `builds`, not built yet: every command, setting and state named below.
-
 **Contents**
 
 - **Intent** — the app tracks the build; the agent queues and stops.
@@ -29,15 +27,18 @@ background watch on the build spends a subagent or a shell for nothing the app d
   one revision.
 - The command is risky: the user's Allow in the app is the yes. The user's own ask to build is
   still needed before the call, since a queue spends shared build machines and reaches testers.
-- The app pins the revision to the branch's origin head, read from the game's clone. Work that is
-  not pushed is not in the build: check the branch on origin holds the work before queueing.
+- For a backend that chooses the branch (TeamCity), the app pins the revision to the branch's origin
+  head, read from the game's clone, and refuses a branch origin does not hold; for a set the branch
+  must match the set's `branches` pattern. Work that is not pushed is not in the build: check the
+  branch on origin holds the work before queueing. A local backend builds the clone as it stands.
+- A queue the app refuses comes back as the `run_command` error with the reason.
 - Report on start: the game, the kind, the branch, the short revision, and the build's link from
   `builds.snapshot`. Then end the turn.
 
 ## Offering at a wrap-up
 
 When the run's change reaches players only through a build, run `builds.offer` with the same
-argument shape instead of writing a `device build` chip. The session then shows an offer card with a
+argument shape instead of writing a `device build` chip (the call is refused outside a session the app started, which has no calling session). The session then shows an offer card with a
 Queue button; the user's press queues it. One offer per session: a new one replaces the last.
 
 ## Reading state
@@ -49,7 +50,7 @@ answer "how did the build go" or "what is running" before reaching for a backend
 ## Tracking a game
 
 On the user's ask to track a game, look the game up with the backend's own tools, then add an
-entry under that backend's `games` in `~/.config/wigley-ai-gui/settings.json`, in the shape the
+entry under that backend's `games` in the `builds.backends` setting of `~/.config/wigley-ai-gui/settings.json`, in the shape the
 app's Builds design gives (`docs/features/builds/design.md` § Configuration in the app's repo): an
 `id`, `label`, `clone`, `defaultBranch`, `kinds` (each with a `label` and a `target`), and `sets`
 when the game has build sets. The app reloads the setting at once and shows any problem with the
