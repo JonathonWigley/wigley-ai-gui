@@ -11,7 +11,9 @@ export interface ChecklistHookReply {
   items: ChecklistItem[];
 }
 
-export function checklistHookReply(flow: SessionFlow | null): ChecklistHookReply {
+export function checklistHookReply(
+  flow: SessionFlow | null,
+): ChecklistHookReply {
   if (flow === null) {
     return { reported: false, open: 0, items: [] };
   }

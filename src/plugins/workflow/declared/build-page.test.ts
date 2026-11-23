@@ -161,7 +161,11 @@ describe('buildPageWorkflow › Large', () => {
   });
 
   it.each([
-    { name: 'a countdown running', fields: { countdownEndsAt: 9 }, shown: true },
+    {
+      name: 'a countdown running',
+      fields: { countdownEndsAt: 9 },
+      shown: true,
+    },
     { name: 'no countdown', fields: {}, shown: false },
   ])('Cancel with $name is shown: $shown', ({ fields, shown }) => {
     const { page } = buildPage(LARGE);
@@ -175,15 +179,18 @@ describe('buildPageWorkflow › Large', () => {
     { action: 'wigley-large-openPlan', dir: SAMPLE_PLAN_DIR, shown: true },
     { action: 'wigley-large-clearAndMake', dir: null, shown: false },
     { action: 'wigley-large-clearAndMake', dir: SAMPLE_PLAN_DIR, shown: true },
-  ])('$action with plan dir $dir is shown: $shown', ({ action, dir, shown }) => {
-    const { page } = buildPage(LARGE);
-    const spec = stageOf(page, 'planReady').actions?.find(
-      ({ command }) => command === action,
-    );
-    const flow = largeFlow({ plan: samplePlan({ tasks: [] }, { dir }) });
+  ])(
+    '$action with plan dir $dir is shown: $shown',
+    ({ action, dir, shown }) => {
+      const { page } = buildPage(LARGE);
+      const spec = stageOf(page, 'planReady').actions?.find(
+        ({ command }) => command === action,
+      );
+      const flow = largeFlow({ plan: samplePlan({ tasks: [] }, { dir }) });
 
-    expect(spec?.available(flow)).toBe(shown);
-  });
+      expect(spec?.available(flow)).toBe(shown);
+    },
+  );
 
   it('ResumeMake_IsKeyOnly_AndEnabledOnlyIdle', () => {
     const { page } = buildPage(LARGE);
@@ -291,7 +298,11 @@ describe('buildPageWorkflow › runAction', () => {
     const { page, opened } = buildPage(LARGE);
 
     await expect(
-      page.runAction?.('s1', 'wigley-large-openPlan', largeFlow({ plan: null })),
+      page.runAction?.(
+        's1',
+        'wigley-large-openPlan',
+        largeFlow({ plan: null }),
+      ),
     ).rejects.toThrow('the session has no plan');
     expect(opened).toEqual([]);
   });

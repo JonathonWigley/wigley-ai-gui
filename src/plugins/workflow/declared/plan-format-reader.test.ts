@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DESIGN_PLAN_FORMAT,
-  DESIGN_SOURCE,
-} from './fixtures.test-support';
+import { DESIGN_PLAN_FORMAT, DESIGN_SOURCE } from './fixtures.test-support';
 import { planFormatReader } from './plan-format-reader';
 
 // The design's `planFormat` with `fields` over it.

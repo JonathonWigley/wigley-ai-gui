@@ -8,11 +8,7 @@ import type {
 } from '../contract';
 import { foldFlow, newFlow } from '../flow';
 import { buildMainWorkflow } from './build-main';
-import {
-  designDeclared,
-  samplePlan,
-  taskLine,
-} from './fixtures.test-support';
+import { designDeclared, samplePlan, taskLine } from './fixtures.test-support';
 import type { PlanFold } from './plan-fold';
 import { renderTemplate } from './templates';
 import { holds } from './triggers';

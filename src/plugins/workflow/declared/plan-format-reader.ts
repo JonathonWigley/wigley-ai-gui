@@ -3,7 +3,11 @@
 // reader of plans applies the defaults.
 
 import type { PlanFormat } from '../../../contracts/contributions';
-import { isJsonObject, isStringArray, type JsonObject } from '../../../shared/json';
+import {
+  isJsonObject,
+  isStringArray,
+  type JsonObject,
+} from '../../../shared/json';
 import type { FeatureReader } from '../../contributions/contract';
 
 const STRING_KNOBS = ['folder', 'file', 'tasksSection', 'titleSuffix'] as const;

@@ -48,7 +48,9 @@ export function planCounterOf(name: string): string | null {
 // variable is empty or 0 renders `''`; one with no variable renders as written.
 export function renderTemplate(template: string, flow: SessionFlow): string {
   const names = templateVariables(template);
-  const values = new Map(names.map((name) => [name, variableValue(name, flow)]));
+  const values = new Map(
+    names.map((name) => [name, variableValue(name, flow)]),
+  );
   const isAllEmpty =
     names.length > 0 &&
     [...values.values()].every((value) => value === '' || value === 0);

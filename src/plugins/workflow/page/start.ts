@@ -209,9 +209,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       sideTitle: entry.decl.sidePane.title,
       badgeColor: entry.decl.badgeColor ?? DEFAULT_BADGE_COLOR,
     });
-    const buildDeps = (
-      draw: PageBuildDeps['draw'],
-    ): PageBuildDeps => ({
+    const buildDeps = (draw: PageBuildDeps['draw']): PageBuildDeps => ({
       draw,
       planPane: NO_PLAN_PANE,
       runAction: (sessionId, action) =>
@@ -288,8 +286,14 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
 
     const declared = api.state.read(workflowDeclaredSlot);
-    const declaredHalves = new Map<string, { json: string; half: Disposable }>();
-    const syncDeclaredHalf = (id: string, entry: DeclaredWorkflow | undefined) => {
+    const declaredHalves = new Map<
+      string,
+      { json: string; half: Disposable }
+    >();
+    const syncDeclaredHalf = (
+      id: string,
+      entry: DeclaredWorkflow | undefined,
+    ) => {
       const held = declaredHalves.get(id);
       const json = entry === undefined ? null : JSON.stringify(entry);
       if (held?.json === json) {
@@ -325,7 +329,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     addWorkflow(
       buildPageWorkflow(
         checklistEntry,
-        buildDeps(createWorkflowDraw(drawDeps, api, drawOptions(checklistEntry))),
+        buildDeps(
+          createWorkflowDraw(drawDeps, api, drawOptions(checklistEntry)),
+        ),
       ),
     );
 

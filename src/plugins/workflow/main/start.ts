@@ -171,7 +171,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       }
       for (const entry of list) {
         const held = declaredSlot.get(entry.id);
-        if (held === undefined || JSON.stringify(held) !== JSON.stringify(entry)) {
+        if (
+          held === undefined ||
+          JSON.stringify(held) !== JSON.stringify(entry)
+        ) {
           declaredSlot.set(entry.id, entry);
         }
       }
@@ -209,7 +212,9 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     );
     // The flows loaded and the first enabled set registered, so no signal folds
     // before the declared workflows can claim it.
-    const ready = Promise.all([flowsLoaded, declaredRead]).then(() => undefined);
+    const ready = Promise.all([flowsLoaded, declaredRead]).then(
+      () => undefined,
+    );
     // Runs `work` once the flows load, unless the part stopped by then;
     // resolves to its result, else to `onceStopped`.
     const whenReady = <T>(work: () => T, onceStopped: T): Promise<T> =>
@@ -503,7 +508,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     );
     sessions.addHookHandler(
       CHECKLIST_HOOK,
-      checklistHookHandler({ ready, flowOf: (sessionId) => store.get(sessionId) }),
+      checklistHookHandler({
+        ready,
+        flowOf: (sessionId) => store.get(sessionId),
+      }),
     );
     api.layouts.register({ layoutTypes });
     api.onSettingsChanged(() => {

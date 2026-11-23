@@ -1,7 +1,10 @@
 // The four example declarations of docs/features/feature-contributions/design.md
 // § Example and its `planFormat`, as test data.
 
-import type { PlanFormat, WorkflowDecl } from '../../../contracts/contributions';
+import type {
+  PlanFormat,
+  WorkflowDecl,
+} from '../../../contracts/contributions';
 import type {
   ContributionSource,
   Strategy,

@@ -35,7 +35,7 @@ export function createEnabledWorkflows(): EnabledWorkflows & {
       if (isSame) {
         return;
       }
-      for (const listener of [...listeners]) {
+      for (const listener of listeners) {
         listener(current);
       }
     },

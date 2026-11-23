@@ -68,7 +68,8 @@ export function autoStartSettingsLine(
   autoStart: readonly AutoStartSetting[],
 ): string {
   const entries = autoStart.map(
-    ({ workflow, seconds }) => `${workflow} ${String(autoStartSeconds(seconds))}s`,
+    ({ workflow, seconds }) =>
+      `${workflow} ${String(autoStartSeconds(seconds))}s`,
   );
   return `settings: autoStart ${entries.length === 0 ? 'none' : entries.join(', ')}`;
 }
@@ -238,7 +239,7 @@ export function createAutoStart(deps: AutoStartDeps): AutoStart {
       }
     },
     stop() {
-      for (const sessionId of [...sessionIds]) {
+      for (const sessionId of sessionIds) {
         forget(sessionId);
       }
     },

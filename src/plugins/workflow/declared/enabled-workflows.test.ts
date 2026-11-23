@@ -32,10 +32,7 @@ describe('createEnabledWorkflows', () => {
     enabled.set([designDeclared('small')]);
     enabled.set([designDeclared('small'), designDeclared('large')]);
 
-    expect(heard).toEqual([
-      ['wigley:small'],
-      ['wigley:small', 'wigley:large'],
-    ]);
+    expect(heard).toEqual([['wigley:small'], ['wigley:small', 'wigley:large']]);
   });
 
   it('OnWorkflowsChanged_Disposed_HearsNoMore', () => {

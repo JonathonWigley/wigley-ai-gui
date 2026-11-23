@@ -38,7 +38,11 @@ export interface PageBuildDeps {
   draw: WorkflowDraw;
   planPane: PlanPane;
   // Runs an action in main, by its short id or `cancelCountdown`.
-  runAction(sessionId: string, action: string, flow: SessionFlow): Promise<void>;
+  runAction(
+    sessionId: string,
+    action: string,
+    flow: SessionFlow,
+  ): Promise<void>;
   // Opens a file in Docs mode, for `openPlan`.
   openDoc(path: string): void;
   paths: Pick<Paths, 'join'>;
@@ -89,7 +93,10 @@ export function buildPageWorkflow(
     progressText: (flow) =>
       isPlanPane ? planProgressText(flow, planCounter) : checklistCount(flow),
     ...(isPlanPane
-      ? { hasPlan: (flow: SessionFlow) => (flow.plan?.progress ?? null) !== null }
+      ? {
+          hasPlan: (flow: SessionFlow) =>
+            (flow.plan?.progress ?? null) !== null,
+        }
       : {}),
     previewFlows: (sessionId, now) =>
       previewFlows(workflow, sessionId, now, deps.paths),
@@ -114,7 +121,9 @@ function pageStage(
     status: statusOf(stage.status),
     ...(progress === undefined
       ? {}
-      : { statusProgress: (flow: SessionFlow) => renderTemplate(progress, flow) }),
+      : {
+          statusProgress: (flow: SessionFlow) => renderTemplate(progress, flow),
+        }),
     ...(chipProgress === undefined
       ? {}
       : {

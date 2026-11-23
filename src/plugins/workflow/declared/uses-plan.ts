@@ -34,7 +34,11 @@ export function usesPlan(decl: WorkflowDecl): boolean {
 }
 
 function stageUsesPlan(stage: StageDecl): boolean {
-  const templates = [stage.progress, stage.chipProgress, ...(stage.detail ?? [])];
+  const templates = [
+    stage.progress,
+    stage.chipProgress,
+    ...(stage.detail ?? []),
+  ];
   return (
     stage.records !== undefined ||
     templates.some(namesPlan) ||

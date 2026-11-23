@@ -718,7 +718,9 @@ describe('workflow page part › declared workflows', () => {
     declared.set('wigley:small', smallWithKey('<Leader>wt'));
 
     expect(workflowLines(harness, / not bound: /)).toEqual([
-      expect.stringMatching(/^workflow wigley:small: key <Leader>wt not bound: /),
+      expect.stringMatching(
+        /^workflow wigley:small: key <Leader>wt not bound: /,
+      ),
     ]);
     expect(runtimeOf(harness).commands).toEqual(
       expect.arrayContaining([RETRO, 'workflow.wigley-small-go']),

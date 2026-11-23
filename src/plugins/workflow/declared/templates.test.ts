@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanState, SessionFlow } from '../contract';
 import { newFlow } from '../flow';
-import {
-  SAMPLE_PLAN_DIR,
-  samplePlan,
-  taskLine,
-} from './fixtures.test-support';
+import { SAMPLE_PLAN_DIR, samplePlan, taskLine } from './fixtures.test-support';
 import { isTemplateVariable, renderDetail, renderTemplate } from './templates';
 
 // Two built boxes of three checked, and the open verification task.

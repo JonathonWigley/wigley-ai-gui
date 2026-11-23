@@ -9,7 +9,11 @@ import {
   qualifiedWorkflowId,
   type WorkflowDecl,
 } from '../../../contracts/contributions';
-import { isJsonObject, isStringArray, type JsonObject } from '../../../shared/json';
+import {
+  isJsonObject,
+  isStringArray,
+  type JsonObject,
+} from '../../../shared/json';
 import type { FeatureReader, Strategy } from '../../contributions/contract';
 import type { DeclaredWorkflow } from '../contract';
 import { isTemplateVariable, templateVariables } from './templates';
@@ -270,7 +274,10 @@ function checkFixCycles(
     }
     return;
   }
-  if (typeof fixCycles.planCounter !== 'string' || fixCycles.planCounter === '') {
+  if (
+    typeof fixCycles.planCounter !== 'string' ||
+    fixCycles.planCounter === ''
+  ) {
     reasons.push(`${fixPath}: names neither a counter nor a planCounter`);
   }
 }
@@ -362,7 +369,12 @@ function checkStage(
       checkNonEmptyString(stage[field], `${path}.${field}`, reasons);
     }
   }
-  for (const field of ['inStepper', 'runsTasks', 'finishes', 'reopens'] as const) {
+  for (const field of [
+    'inStepper',
+    'runsTasks',
+    'finishes',
+    'reopens',
+  ] as const) {
     if (stage[field] !== undefined && typeof stage[field] !== 'boolean') {
       reasons.push(`${path}.${field}: not a boolean`);
     }

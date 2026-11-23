@@ -50,6 +50,7 @@ import {
   CHECKLIST_HOOK,
   CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
+  type DeclaredWorkflow,
   type FoldEvent,
   type MainStage,
   type MainWorkflow,
@@ -1737,7 +1738,9 @@ describe('workflowMainPart', () => {
 });
 
 // The steps `set_workflow_step` offers now, none when the tool is gone.
-function stepsOffered(workflow: ReturnType<typeof startWorkflowPart>): string[] {
+function stepsOffered(
+  workflow: ReturnType<typeof startWorkflowPart>,
+): string[] {
   const definition = workflow.contributions
     .flatMap(({ tools }) => tools)
     .find((tool) => tool.name === SET_WORKFLOW_STEP_TOOL);
@@ -1749,9 +1752,19 @@ function stepsOffered(workflow: ReturnType<typeof startWorkflowPart>): string[] 
 
 // The ids `workflow.declared` holds, in its order.
 function declaredIds(workflow: ReturnType<typeof startWorkflowPart>): string[] {
-  return [
-    ...workflow.store.read(workflowDeclaredSlot, 'test').all().keys(),
-  ];
+  return [...workflow.store.read(workflowDeclaredSlot, 'test').all().keys()];
+}
+
+// `declared` added through the self-test hooks of a part started with them.
+function addDeclared(
+  workflow: ReturnType<typeof startWorkflowPart>,
+  declared: DeclaredWorkflow,
+) {
+  const hooks = workflow.exported().selfTestHooks;
+  if (hooks === null) {
+    throw new Error('the part was started without selfTest');
+  }
+  return hooks.addDeclared(declared);
 }
 
 // The part over a contributions fake holding `decls` from the design plugin,
@@ -1801,14 +1814,14 @@ describe('workflowMainPart › declared workflows', () => {
   });
 
   it('addDeclared_AnIdThatIsOff_PublishesIt_AndDisposeRemovesIt', async () => {
-    const workflow = startWorkflowPart();
+    const workflow = startWorkflowPart({ selfTest: true });
     await workflow.pushSettings({
       off: ['wigley:small'],
       autoStart: [],
       layout: 'default',
     });
 
-    const added = workflow.exported().addDeclared(designDeclared('small'));
+    const added = addDeclared(workflow, designDeclared('small'));
     const whileAdded = declaredIds(workflow);
     const stepsWhileAdded = stepsOffered(workflow);
     added.dispose();
@@ -1836,8 +1849,8 @@ describe('workflowMainPart › declared workflows', () => {
   });
 
   it('ClaimFromTheChecklistFlow_MetersTheRunFromTheClaim', async () => {
-    const workflow = startWorkflowPart();
-    workflow.exported().addDeclared(designDeclared('small'));
+    const workflow = startWorkflowPart({ selfTest: true });
+    addDeclared(workflow, designDeclared('small'));
     await workflow.openS1();
     await workflow.callChecklistTool('s1', [{ text: 'a', done: false }]);
     workflow.setActiveTime(activeFor(3000));

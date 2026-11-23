@@ -12,7 +12,11 @@ import {
   type WorkflowSignal,
 } from '../contract';
 import type { PlanFold } from './plan-fold';
-import { matchTrigger, startsPlanFromArgs, type TriggerMatch } from './triggers';
+import {
+  matchTrigger,
+  startsPlanFromArgs,
+  type TriggerMatch,
+} from './triggers';
 
 // `planFold` keeps the flow's plan; an engine with no plan capability passes
 // `NO_PLAN_FOLD`.
@@ -95,9 +99,7 @@ function claimResetCounters(
   workflow: DeclaredWorkflow,
 ): Record<string, number> {
   const reset = { ...counters };
-  for (const [name, counter] of Object.entries(
-    workflow.decl.counters ?? {},
-  )) {
+  for (const [name, counter] of Object.entries(workflow.decl.counters ?? {})) {
     if (counter.resetOn === 'claim') {
       reset[name] = 0;
     }
@@ -147,9 +149,7 @@ function countedInto(
   workflow: DeclaredWorkflow,
 ): Record<string, number> {
   const counted = { ...counters };
-  for (const [name, counter] of Object.entries(
-    workflow.decl.counters ?? {},
-  )) {
+  for (const [name, counter] of Object.entries(workflow.decl.counters ?? {})) {
     if (counter.counts === stage) {
       counted[name] = (counted[name] ?? 0) + 1;
     }
