@@ -136,7 +136,7 @@ export interface BoardViewDeps {
   timers: Pick<Timers, 'set' | 'clear'>;
   // Epoch milliseconds, for the status line's age.
   now(): number;
-  setScope(scope: string): void;
+  setScope(scope: typeof BOARD_SCOPE): void;
   setFocusTarget(target: FocusTarget | null): void;
   setResizeTarget(target: ResizeTarget | null): void;
   isShown(): boolean;

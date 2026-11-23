@@ -221,6 +221,13 @@ function buttonIn(root: FakeElement, label: string): FakeElement | undefined {
   );
 }
 
+function isDisabled(root: FakeElement, label: string): boolean | undefined {
+  const button = buttonIn(root, label) as unknown as
+    | HTMLButtonElement
+    | undefined;
+  return button?.disabled;
+}
+
 function pressButton(root: FakeElement, label: string) {
   const button = buttonIn(root, label);
   if (button === undefined) {
@@ -398,8 +405,8 @@ describe('createBoardView', () => {
 
     const card = cardTitled(each, 'Ticket M-1');
     expect(card.textContent).toContain('Moving to In QA in Jira…');
-    expect(buttonIn(card, '◀')?.disabled).toBe(true);
-    expect(buttonIn(card, '▶')?.disabled).toBe(true);
+    expect(isDisabled(card, '◀')).toBe(true);
+    expect(isDisabled(card, '▶')).toBe(true);
     expect(drags.items).toEqual([]);
   });
 
@@ -409,8 +416,8 @@ describe('createBoardView', () => {
     const other = findAll(each.sheet, 'work-board-column').at(-1);
     expect(other?.textContent).toContain(OTHER_COLUMN);
     const card = cardTitled(each, 'Task local-9');
-    expect(buttonIn(card, '◀')?.disabled).toBe(true);
-    expect(buttonIn(card, '▶')?.disabled).toBe(true);
+    expect(isDisabled(card, '◀')).toBe(true);
+    expect(isDisabled(card, '▶')).toBe(true);
     expect(buttonIn(card, 'Delete')).toBeDefined();
   });
 
