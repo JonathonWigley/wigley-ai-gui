@@ -875,24 +875,24 @@ describe('queue', () => {
     {
       name: 'its build is cached',
       later: NOW + 1,
-      then: 'list',
+      next: 'list',
       pins: [],
     },
     {
       name: 'a queue at the link window',
       later: NOW + LINK_WINDOW_MS,
-      then: 'queue',
+      next: 'queue',
       pins: ['821200', '821400'],
     },
     {
       name: 'a queue past the link window',
       later: NOW + LINK_WINDOW_MS + 1,
-      then: 'queue',
+      next: 'queue',
       pins: ['821400'],
     },
   ])(
     "the file's pins of 821200 and a later build after $name",
-    async ({ later, then, pins }) => {
+    async ({ later, next, pins }) => {
       const test = setup();
       test.answer(runStartArgs(A), { id: 821200 });
       const backend = await createBackend(test.services);
@@ -903,7 +903,7 @@ describe('queue', () => {
       });
 
       test.setNow(later);
-      if (then === 'list') {
+      if (next === 'list') {
         answerRecordedList(test);
         await backend.list(GAME, 20);
       } else {

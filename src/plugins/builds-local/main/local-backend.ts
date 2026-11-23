@@ -39,7 +39,7 @@ const CHECK_TIMEOUT_MS = 5_000;
 // A game id or kind key, each a folder name under `runs/`.
 const FOLDER_NAME = /^[A-Za-z0-9._-]+$/;
 // oxlint-disable-next-line no-control-regex
-const ANSI_ESCAPE = /\x1b\[[0-?]*[ -\/]*[@-~]/g;
+const ANSI_ESCAPE = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const LINE_BREAK = /[\r\n]/;
 
 // One build this backend started, as `runs.json` keeps it. `id` is `<game id>/<kind>/<startedAt>`, which is also

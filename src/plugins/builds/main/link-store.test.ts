@@ -179,7 +179,16 @@ describe('createLinkStore', () => {
       { backendId: 'b1', buildId: 'y' },
     ],
   });
-  it.each([
+  it.each<{
+    case: string;
+    add: {
+      link?: SessionLink;
+      setRun?: SetRun;
+      offer?: ReturnType<typeof buildOffer>;
+    };
+    unlisted: string[];
+    kept: boolean;
+  }>([
     {
       case: 'ended at the limit',
       add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS }) },
