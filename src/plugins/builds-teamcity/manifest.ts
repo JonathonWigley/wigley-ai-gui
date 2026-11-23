@@ -6,7 +6,7 @@ export const buildsTeamcityManifest = definePlugin({
   label: 'TeamCity builds',
   description:
     'Adds the teamcity backend kind to Builds, over the teamcity CLI.',
-  demoSkip: 'It adds a backend kind to Builds and draws nothing of its own.',
+  demoSkip: 'Its builds show in the Builds steps, which draw sample data.',
   dependsOn: { main: ['builds'], page: [] },
   reads: { main: [], page: [] },
   commands: {},

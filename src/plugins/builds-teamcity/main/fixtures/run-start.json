@@ -1,0 +1,11 @@
+{
+  "id": 821339,
+  "buildTypeId": "vggt_BashBest_Dev_BuildChain",
+  "state": "queued",
+  "branchName": "<default>",
+  "defaultBranch": true,
+  "href": "/app/rest/buildQueue/id:821339",
+  "webUrl": "https://peoplefun.teamcity.com/build/821339",
+  "queuedDate": "20261123T191020+0000",
+  "waitReason": "Checking for changes is in progress"
+}
