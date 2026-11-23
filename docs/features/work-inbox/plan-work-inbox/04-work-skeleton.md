@@ -1,6 +1,6 @@
 # 04 — Work plugin skeleton, contract and store
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · adds the persisted `work.json` format, its parse, and an atomic serial write chain that never overwrites a bad file, which every later work task builds on
 Wave: 1 · Depends on: none
@@ -263,3 +263,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 23d8904d9 · proof: diff read: manifest (12 commands, settings), contract (types, columnForStatus, ticketKeysIn, readColumns, readProjects, statusLine, workStateSlot, WorkChannel, 3 CommandKeys), store (parseWorkFile, buildWorkState, createWorkStore), main and page starts, registered after backlog; wave 1 typecheck + lint clean · concerns: hand formatting passed oxfmt; readColumns/readProjects carry as-string casts on an any entry; start_emptySlot and columnForStatus default rows read the manifest defaults

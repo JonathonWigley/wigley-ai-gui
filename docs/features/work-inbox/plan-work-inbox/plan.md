@@ -230,10 +230,10 @@ Boundary rules:
 Critical path: 04 → 07 → 09 → 13
 
 ### Wave 1
-- [ ] [Git branch listing and key search](01-git-branches-and-key-search.md)
-- [ ] [Pull-request service over gh](02-pull-request-service.md)
-- [ ] [Role-based permissive launch](03-permissive-launch.md)
-- [ ] [Work plugin skeleton, contract and store](04-work-skeleton.md)
+- [x] [Git branch listing and key search](01-git-branches-and-key-search.md)
+- [x] [Pull-request service over gh](02-pull-request-service.md)
+- [x] [Role-based permissive launch](03-permissive-launch.md)
+- [x] [Work plugin skeleton, contract and store](04-work-skeleton.md)
 
 ### Wave 2
 - [ ] [Job queue and runner](05-job-queue-and-runner.md) — after 03, 04
@@ -256,7 +256,21 @@ Critical path: 04 → 07 → 09 → 13
 Review base: 5459b99a5c62268ba8196ce3bdf814dd214ad5cc
 
 ### Groups
+- 01 · hard (compile fix ee14df69b on the same rung) · 2b1f4f3d7 · diff read: GitBranch, branches, commitsMatching in git.ts and process-git.ts; wave 1 typecheck + lint clean after the plugin-status.test.ts fake fix · concerns: AGENTS.md git/ layout entry lacks the two members (task 13 step 2); missed a second Git fake in docs plugin-status.test.ts, fixed
+- 02 · hard (compile fix 1441de573 on the same rung) · 385a0c52b · diff read: PullRequestInfo, PullRequests, createGhPullRequests, PR_LIST_LIMIT, PR_LIST_TIMEOUT_MS, MainServices.pullRequests, MAX_GH_RUNS, notFaked harness entry, CORE_LAYERS; wave 1 typecheck + lint clean after the packages fix · concerns: CORE_LAYERS entries lacked required packages (fixed); test pins literals 100 and 15000 rather than the constants
+- 03 · deep · ae6e9e16e · diff read: LaunchRequest.permissions, AgentStart.permissions, launchMode/startingControls on Pick<AgentStart,'controls'|'permissions'>, BYPASS_MODE, SKIP_PERMISSIONS_FLAG, BYPASS_CHOICE; wave 1 typecheck + lint clean · concerns: fake-agent-harness ignores permissions, so permissive Mode choices are pinned only in claude-controls and session-fold tests; startingControls_PermissiveStart test names interpolate an object; edited agent-chat/design.md outside its Files list (kept: stale-doc fix)
+- 04 · deep · 23d8904d9 · diff read: manifest (12 commands, settings), contract (types, columnForStatus, ticketKeysIn, readColumns, readProjects, statusLine, workStateSlot, WorkChannel, 3 CommandKeys), store (parseWorkFile, buildWorkState, createWorkStore), main and page starts, registered after backlog; wave 1 typecheck + lint clean · concerns: hand formatting passed oxfmt; readColumns/readProjects carry as-string casts on an any entry; start_emptySlot and columnForStatus default rows read the manifest defaults
 ### Contract changes
+- 02: CORE_LAYERS 'src/main/pull-requests' layers ['src/contracts'] → ['src/contracts','src/shared'], packages [] · why: the mapper uses isJsonObject from src/shared/json · consumers: none
 ### Rulings
+- 01: branches strips refs/heads/ or refs/remotes/ by one regex; any other ref prefix keeps its full name (none can appear) · group 01
+- 02: a run with code 0 but timedOut resolves null · group 02
+- 02: MainServices' doc comment names pullRequests beside git · group 02
+- 03: chat's permissions fields are typed AgentStart['permissions']; resume, resumed attach, adopted runs and the user's start open 'default' · group 03
+- 03: agent-chat/design.md updated for permissions (launch diagram, saved fields, process start) since no task owned it · group 03
+- 04: work contract may import src/shared (PLUGIN_EXTRAS), for isJsonObject/isStringArray · group 04
+- 04: contract.test-support.ts holds workItem/jiraCard/localCard fixtures for later tasks · group 04
+- 04: an update before load() starts the load; settled() waits for load and chain; save, then tell listeners, then resolve · group 04
+- 04: parseWorkFile checks enum values too; statusLine ages floor to just now / Nm / Nh (<48h) / Nd · group 04
 ### Review rounds
 ### Test gate

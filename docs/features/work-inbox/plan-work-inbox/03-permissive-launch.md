@@ -1,6 +1,6 @@
 # 03 — Role-based permissive launch
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses chat's saved-session format (`open-sessions.json`) and the process lifecycle (start, restart, relaunch restore, resume) into the claude-code harness's launch
 Wave: 1 · Depends on: none
@@ -196,3 +196,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit ae6e9e16e · proof: diff read: LaunchRequest.permissions, AgentStart.permissions, launchMode/startingControls on Pick<AgentStart,'controls'|'permissions'>, BYPASS_MODE, SKIP_PERMISSIONS_FLAG, BYPASS_CHOICE; wave 1 typecheck + lint clean · concerns: fake-agent-harness ignores permissions, so permissive Mode choices are pinned only in claude-controls and session-fold tests; startingControls_PermissiveStart test names interpolate an object; edited agent-chat/design.md outside its Files list (kept: stale-doc fix)

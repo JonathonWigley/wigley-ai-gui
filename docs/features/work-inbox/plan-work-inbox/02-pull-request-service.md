@@ -1,6 +1,6 @@
 # 02 — Pull-request service over gh
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `PullRequests` contract and `MainServices.pullRequests`, which 07 consumes
 Wave: 1 · Depends on: none
@@ -139,3 +139,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 385a0c52b · proof: diff read: PullRequestInfo, PullRequests, createGhPullRequests, PR_LIST_LIMIT, PR_LIST_TIMEOUT_MS, MainServices.pullRequests, MAX_GH_RUNS, notFaked harness entry, CORE_LAYERS; wave 1 typecheck + lint clean after the packages fix · concerns: CORE_LAYERS entries lacked required packages (fixed); test pins literals 100 and 15000 rather than the constants

@@ -1,6 +1,6 @@
 # 01 — Git branch listing and key search
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `Git.branches` and `Git.commitsMatching`, which 07 consumes
 Wave: 1 · Depends on: none
@@ -131,3 +131,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2b1f4f3d7 · proof: diff read: GitBranch, branches, commitsMatching in git.ts and process-git.ts; wave 1 typecheck + lint clean after the plugin-status.test.ts fake fix · concerns: AGENTS.md git/ layout entry lacks the two members (task 13 step 2); missed a second Git fake in docs plugin-status.test.ts, fixed
