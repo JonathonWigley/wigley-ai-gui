@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DemoMainStep } from '../../../contracts/demo';
-import type { OsName } from '../../../contracts/platform';
 import { createDemoStepRegistry } from '../../../shared/demo-step-registry';
-import { fakePlatform } from '../../../shared/platform.test-support';
 import {
   fakeDependency,
   noCounts,
@@ -29,10 +27,10 @@ import { unityPoolMainPart } from './start';
 
 // The fake chat records each provider `addPoolProvider` registers, counts each registration's dispose, and records
 // the self-test pool's folders as the provider gave them at each `changed()`. `enterDemoStep` enters the registered
-// `unity-pool.pool` step, its demo session `row-demo` in `/scratch`.
+// `unity-pool.pool` step, its demo session `row-demo` in `/scratch`. The `scriptPath` setting is `CLI_SCRIPT`, a
+// path with no file, unless `options.scriptPath` names another.
 function startOnHarness(
-  os: OsName = 'macos',
-  options: { registrationRefusesDispose?: boolean } = {},
+  options: { registrationRefusesDispose?: boolean; scriptPath?: string } = {},
 ) {
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const providers: PoolProvider[] = [];
@@ -55,8 +53,11 @@ function startOnHarness(
     },
   };
   const harness = startMainPart(unityPoolMainPart, {
-    settings: { ...unityPoolManifest.settings, scriptPath: '' },
-    services: { platform: fakePlatform(os), demoSteps },
+    settings: {
+      ...unityPoolManifest.settings,
+      scriptPath: options.scriptPath ?? CLI_SCRIPT,
+    },
+    services: { demoSteps },
     dependencies: [
       fakeDependency(chatMainKey, () => chat as unknown as ChatMainExports),
       fakeDependency(
@@ -101,8 +102,7 @@ const DEMO_REFUSAL = {
   error: 'demo',
   message: 'A demo clone: nothing runs.',
 };
-// The harness's home is `/home`.
-const MACOS_CLI = '/home/.local/bin/unity-pool';
+const CLI_SCRIPT = '/s/unity-pool';
 
 describe('unityPoolMainPart', () => {
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -116,9 +116,7 @@ describe('unityPoolMainPart', () => {
 
   // Breaks if a provider registration that throws on dispose skips the watch's.
   it('a provider registration that throws on dispose still lets the watch stop, and the stop rejects', async () => {
-    const harness = startOnHarness('macos', {
-      registrationRefusesDispose: true,
-    });
+    const harness = startOnHarness({ registrationRefusesDispose: true });
     await vi.waitFor(() => expect(harness.counts().timers).toBe(1));
 
     await expect(harness.stop()).rejects.toThrow('registration refused');
@@ -151,21 +149,25 @@ describe('unityPoolMainPart', () => {
     );
   });
 
-  // The harness's home is `/home`.
-  it.each([
-    ['windows', '/home/wigley-agents/tools/unity-pool/unity-pool'],
-    ['macos', '/home/.local/bin/unity-pool'],
-  ] as const)(
-    'run_EmptyScriptPath_LooksUpPlatformDefault: %s',
-    async (platform, script) => {
-      const harness = startOnHarness(platform);
-      const stat = vi.spyOn(harness.files, 'stat');
+  // Breaks if an empty setting falls back to a default script path again.
+  it('run_EmptyScriptPath_AnswersNoCliWithoutStat', async () => {
+    const harness = startOnHarness({ scriptPath: '' });
+    const stat = vi.spyOn(harness.files, 'stat');
 
-      await harness.invoke('run', 'hold', 'pool', 1);
+    const result = await harness.invoke('run', 'hold', 'pool', 1);
 
-      expect(stat).toHaveBeenCalledWith(script);
-    },
-  );
+    expect(result).toEqual({
+      ok: false,
+      error: 'no-cli',
+      message:
+        'No unity-pool script is set: set unity-pool.scriptPath in Settings.',
+    });
+    // The watch's rescan after a run stats its state folder; nothing else is statted.
+    const statted = stat.mock.calls.map(([path]) => path);
+    expect(
+      statted.filter((path) => !path.startsWith('/home/.local/state/')),
+    ).toEqual([]);
+  });
 
   it('start_RegistersThePoolProvider_StopDisposesIt', async () => {
     const harness = startOnHarness();
@@ -205,7 +207,7 @@ describe('unityPoolMainPart', () => {
     const result = await harness.invoke('run', 'hold', DEMO_POOL, 1);
 
     expect(result).toEqual(DEMO_REFUSAL);
-    expect(stat).not.toHaveBeenCalledWith(MACOS_CLI);
+    expect(stat).not.toHaveBeenCalledWith(CLI_SCRIPT);
     stage.dispose();
     expect(slot.get()?.pools).toEqual([]);
   });
@@ -245,6 +247,6 @@ describe('unityPoolMainPart', () => {
     const result = await harness.invoke('run', 'hold', DEMO_POOL, 1);
 
     expect(result).toEqual(DEMO_REFUSAL);
-    expect(stat).not.toHaveBeenCalledWith(MACOS_CLI);
+    expect(stat).not.toHaveBeenCalledWith(CLI_SCRIPT);
   });
 });

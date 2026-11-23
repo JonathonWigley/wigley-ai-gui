@@ -27,15 +27,21 @@ import type { AnyEntryKind, EntryBuilder, EntryInput } from './layouts/layout';
 // The layout preview's row host session id; no harness holds a session by it.
 export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
 
+// The sentence every headless note ends on: what an auto-answered pick can
+// never approve. forms' auto-answered round result ends on it too.
+export const AUTO_ANSWER_GATE_CLAUSE =
+  'An auto-answered pick never approves an action that needs the ' +
+  "user's own yes (an install, a step that deletes the user's data, a push, " +
+  "or any action the user's rules gate): name what it needs in the reply " +
+  'and end the turn.';
+
 // The note a headless row's agent starts with, and the line that tells it the
 // row is headless no longer.
 export const HEADLESS_NOTE =
   'This session is headless until a tool result says the session is no ' +
   'longer headless: nobody answers forms rounds. Build no round: take each ' +
   "item's recommended pick and list every pick as a Decided notice in your " +
-  'reply. An auto-answered pick never approves a hard-gated action ' +
-  '(third-party code, destroying user state, a push): name what the gate ' +
-  'needs in the reply and end the turn.';
+  `reply. ${AUTO_ANSWER_GATE_CLAUSE}`;
 export const HEADLESS_OFF_NOTE =
   'This session is no longer headless: send each round to the form again.';
 

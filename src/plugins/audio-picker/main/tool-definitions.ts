@@ -16,8 +16,9 @@ import {
 
 const OPEN_AUDIO_PICKER_DESCRIPTION =
   "Open the audio picker in the wigley-ai-gui app's picker popup and wait " +
-  "for the user's picks, as on a forms round. Call it once the " +
-  'audio-sourcing skill has a shortlist, before wiring any sound: one picker ' +
+  "for the user's picks, as on a forms round. Call it once you have a " +
+  'shortlist of candidate sounds, before wiring any sound; the ' +
+  'auri:audio-picker skill holds the steps. One picker ' +
   'covers every moment of the feature. Each moment lists 1 to ' +
   `${MAX_CANDIDATES} candidates (aim for 2 to ${MAX_CANDIDATES}) and ` +
   "'recommend', the 1-based candidate you would pick. Every file is an " +

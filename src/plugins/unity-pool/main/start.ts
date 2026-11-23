@@ -12,7 +12,7 @@ import {
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { unityPoolManifest } from '../manifest';
 import { DEMO_POOL, registerDemoSteps } from './demo-steps';
-import { resolveScriptPath, runPoolCommand } from './pool-cli';
+import { runPoolCommand } from './pool-cli';
 import { createPoolProvider } from './pool-provider';
 import { createPoolWatch } from './pool-watch';
 import { unityPoolSelfTestScript } from './selftest-script';
@@ -46,10 +46,7 @@ export const unityPoolMainPart: MainPart<typeof unityPoolManifest> = {
         files: services.files,
         paths: services.paths,
         homeDir: services.homeDir,
-        scriptPath: resolveScriptPath(
-          scriptPath,
-          services.platform.os === 'windows',
-        ),
+        scriptPath,
       };
     };
     // The demo step's pool, published beside the watch's while the step is entered.

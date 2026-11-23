@@ -7,13 +7,13 @@ import {
 } from '../contract';
 
 const OPEN_PRIMER_DESCRIPTION =
-  "Open the feature-primer form in the wigley-ai-gui app's primer popup, " +
+  "Open the primer form in the wigley-ai-gui app's primer popup, " +
   "pre-filled with the agent's triage, and wait for the user's answers. " +
-  "Send the primer rows (group 'primer') and then the standing " +
-  "tasks (group 'standing') other than the edge-case sweep, which the agent " +
-  'writes straight into the feature folder; each entry carries its work ' +
-  "items. The form lets the user set each task's need, tick items, " +
-  'comment, and add tasks and items; the result carries the edited feature ' +
+  "Send the primer rows (group 'primer') and then any standing tasks " +
+  "(group 'standing'); each entry carries its work items. The auri:primer " +
+  'skill holds the steps. The form lets the user set ' +
+  "each task's need, tick items, comment, and add tasks and items; the " +
+  'result carries the edited feature ' +
   'and entries. Re-sending a primer is safe: the same primer re-attaches to ' +
   'the one still open, returns the answers of the primer just submitted, or ' +
   "opens pre-filled with the user's saved answers. When the result carries " +
@@ -90,8 +90,7 @@ export const PRIMER_TOOLS: ToolDefinition[] = [
             slug: {
               type: 'string',
               pattern: PRIMER_SLUG_PATTERN.source,
-              description:
-                'Lowercase kebab-case; names <features home>/<slug>/.',
+              description: "Lowercase kebab-case; names the feature's folder.",
             },
             spec: { type: 'string', description: "The spec's path or link." },
             summary: {

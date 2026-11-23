@@ -19,6 +19,10 @@ const RUN_TIMEOUT_MS: Record<PoolAction, number> = {
 
 type CliFailure = { ok: false; error: string; message: string };
 
+// The `no-cli` answer's message while the `scriptPath` setting is empty.
+const NO_SCRIPT_MESSAGE =
+  'No unity-pool script is set: set unity-pool.scriptPath in Settings.';
+
 // The CLI and the runner whose `resolveProgram('python')` runs it, answering `no-python` when it finds none;
 // `scriptPath` is the raw setting, `~` not yet expanded.
 export interface CliDeps {
@@ -81,22 +85,10 @@ function failureOf(answer: unknown, result: ProcessResult): CliFailure {
   };
 }
 
-// The script the `scriptPath` setting names, the setting itself when set. Empty, it is `~/.local/bin/unity-pool`,
-// where macOS and Linux link the tool; a Windows install writes launchers there, not a symlink a Python can run, so
-// Windows runs the tool from its own folder.
-export function resolveScriptPath(setting: string, windows: boolean): string {
-  if (setting !== '') {
-    return setting;
-  }
-  return windows
-    ? '~/wigley-agents/tools/unity-pool/unity-pool'
-    : '~/.local/bin/unity-pool';
-}
-
 // Runs `<python> -X utf8 <script> <action> <pool> <clone> --json` with the Python `resolveProgram('python')` gives,
 // its own args leading, `scriptPath` being the raw setting with `~` not yet expanded, without any session's identity
-// in its environment, so the CLI takes the run as the user's. A script missing from its path runs nothing and answers
-// `no-cli`; no Python found runs nothing and answers `no-python`.
+// in its environment, so the CLI takes the run as the user's. An empty `scriptPath`, or a script missing from its
+// path, runs nothing and answers `no-cli`; no Python found runs nothing and answers `no-python`.
 export async function runPoolCommand(
   deps: CliDeps,
   action: PoolAction,
@@ -127,9 +119,16 @@ export async function runPoolCommand(
   }
 }
 
-// The script the deps name with `~` expanded, `no-cli` when no file is there, or `cli-failed` when the stat itself
-// fails.
+// The script the deps name with `~` expanded; `no-cli` when none is set, with no stat, or when no file is there; or
+// `cli-failed` when the stat itself fails.
 async function findScript(deps: CliDeps): Promise<string | CliFailure> {
+  if (deps.scriptPath === '') {
+    return {
+      ok: false,
+      error: 'no-cli',
+      message: NO_SCRIPT_MESSAGE,
+    };
+  }
   const script = deps.paths.expandTilde(deps.scriptPath, deps.homeDir);
   try {
     if ((await deps.files.stat(script)) === null) {

@@ -799,8 +799,9 @@ const PAYLOAD_ROWS: PayloadRow[] = [
         'no longer headless: the app showed no form and answered every item ' +
         'with its recommendation. Build no more rounds, and list every pick ' +
         'as a Decided notice in your reply. An auto-answered pick never ' +
-        'approves a hard-gated action (third-party code, destroying user ' +
-        'state, a push): name what the gate needs in the reply and end the ' +
+        "approves an action that needs the user's own yes (an install, a " +
+        "step that deletes the user's data, a push, or any action the " +
+        "user's rules gate): name what it needs in the reply and end the " +
         'turn.',
       answers: [
         {
