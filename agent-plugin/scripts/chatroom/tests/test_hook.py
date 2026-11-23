@@ -3,11 +3,9 @@ fake app on a temp Unix socket under the deadline, git calls cut to the deadline
 
 import io
 import json
-import queue
-import socket
 import subprocess
+import sys
 import tempfile
-import threading
 import time
 import unittest
 from pathlib import Path
@@ -15,15 +13,24 @@ from unittest import mock
 
 import hook
 
-WAIT_SECONDS = 5.0
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "relay" / "tests"))
+
+from fake_hook_app import FakeHookApp  # noqa: E402
+
 TEST_DEADLINE_SECONDS = 0.5
 DEADLINE_MARGIN_SECONDS = 0.4
-DRIP_SECONDS = 0.2
 
 TEXT = ("Chatroom: src/a.ts is claimed by Shop Revamp (refactor; 12 min left) — ask them in the room before you "
         "change it.")
 HELLO = {"protocol": 2, "session_id": "session-1", "project_dir": "/w", "harness": "claude", "config_dir": None,
          "row_id": "row-7", "hook": "chatroom.pre"}
+APP_BEHAVIOUR = {
+    "text": ("answer", {"ok": True, "reply": {"text": TEXT}}),
+    "refuse": ("answer", {"ok": False, "error": "no live session"}),
+    "silent": ("silent", None),
+    "drip": ("drip", None),
+    "close": ("close", None),
+}
 REQUEST = {"tool": "edit", "paths": ["/w/src/a.ts"], "agentId": None, "cwd": "/w"}
 
 
@@ -51,68 +58,6 @@ class FakeGit:
         return None if tuple(args) in self._failing else self.ANSWERS.get(tuple(args))
 
 
-class FakeHookApp:
-    """The app's side of a hook call on a Unix socket: reads the hello and request lines, records them, then answers
-    as `mode` says — text, refuse, silent, drip (one byte per DRIP_SECONDS, no newline) — or, for close, closes on
-    accept."""
-
-    def __init__(self, path: str, mode: str):
-        self.received = queue.Queue()
-        self._mode = mode
-        self._connections = []
-        self._stopped = threading.Event()
-        self._listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._listener.bind(path)
-        self._listener.listen()
-        self._listener.settimeout(0.05)
-        threading.Thread(target=self._accept, daemon=True).start()
-
-    def _accept(self) -> None:
-        while not self._stopped.is_set():
-            try:
-                connection, _ = self._listener.accept()
-            except socket.timeout:
-                continue
-            except OSError:
-                return
-            connection.settimeout(None)
-            self._connections.append(connection)
-            threading.Thread(target=self._talk, args=(connection,), daemon=True).start()
-
-    def _talk(self, connection: socket.socket) -> None:
-        try:
-            if self._mode == "close":
-                connection.close()
-                return
-            reader = connection.makefile("rb")
-            self.received.put((json.loads(reader.readline()), json.loads(reader.readline())))
-            if self._mode == "text":
-                connection.sendall(json.dumps({"ok": True, "reply": {"text": TEXT}}).encode() + b"\n")
-            elif self._mode == "refuse":
-                connection.sendall(json.dumps({"ok": False, "error": "no live session"}).encode() + b"\n")
-            elif self._mode == "silent":
-                self._stopped.wait(WAIT_SECONDS)
-            elif self._mode == "drip":
-                connection.sendall(b"{")
-                while not self._stopped.wait(DRIP_SECONDS):
-                    connection.sendall(b" ")
-            connection.close()
-        except (OSError, ValueError):
-            return
-
-    def next_received(self):
-        return self.received.get(timeout=WAIT_SECONDS)
-
-    def stop(self) -> None:
-        self._stopped.set()
-        self._listener.close()
-        for connection in self._connections:
-            try:
-                connection.close()
-            except OSError:
-                pass
-
-
 class HookTestCase(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
@@ -121,7 +66,7 @@ class HookTestCase(unittest.TestCase):
 
     def start_app(self, mode: str) -> tuple[str, FakeHookApp]:
         channel = str(self.dir / f"{mode}.sock")
-        app = FakeHookApp(channel, mode)
+        app = FakeHookApp(channel, *APP_BEHAVIOUR[mode])
         self.addCleanup(app.stop)
         return channel, app
 

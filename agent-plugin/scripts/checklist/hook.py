@@ -29,7 +29,7 @@ CHECKLIST_DENIAL = (
     "edit again."
 )
 CHECKLIST_REMINDER = (
-    "auri: this turn is ending with {open} open items on this session's task list. If an item finished, send the list "
+    "auri: this turn is ending with {open} open {noun} on this session's task list. If an item finished, send the list "
     "again with set_workflow_checklist, each finished item done. If the work waits on the user or a later turn, leave "
     "the list as it is and end the turn."
 )
@@ -49,8 +49,10 @@ def decide(mode: str, hook_input: dict, env, reply: dict | None) -> dict | None:
     if mode == "edit":
         return None if reply["reported"] else _deny(CHECKLIST_DENIAL)
     if mode == "stop":
-        has_open_items = reply["reported"] and reply["open"] > 0
-        return _context("Stop", CHECKLIST_REMINDER.format(open=reply["open"])) if has_open_items else None
+        if not (reply["reported"] and reply["open"] > 0):
+            return None
+        noun = "item" if reply["open"] == 1 else "items"
+        return _context("Stop", CHECKLIST_REMINDER.format(open=reply["open"], noun=noun))
     text = compact_list(reply["items"]) if reply["reported"] else COMPACT_NONE
     return _context("SessionStart", text)
 

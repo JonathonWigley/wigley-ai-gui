@@ -34,7 +34,9 @@ COMPACT_NONE = ("auri: this session has sent no task list yet. Send it with set_
 
 ITEMS = [{"text": "Read the relay", "done": True}, {"text": "Write the hook", "done": False, "running": True},
          {"text": "Run the tests", "done": False}]
+REMINDER_ONE_OPEN = REMINDER_TWO_OPEN.replace("2 open items", "1 open item")
 REPORTED = {"reported": True, "open": 2, "items": ITEMS}
+REPORTED_ONE_OPEN = {"reported": True, "open": 1, "items": ITEMS[:2]}
 NOT_REPORTED = {"reported": False, "open": 0, "items": []}
 REPORTED_ALL_DONE = {"reported": True, "open": 0, "items": [{"text": "Read the relay", "done": True}]}
 
@@ -60,6 +62,7 @@ class DecideTests(unittest.TestCase):
             ("edit, no list sent", "edit", EDIT_INPUT, ROW_ENV, NOT_REPORTED, deny(DENIAL)),
             ("edit, list sent", "edit", EDIT_INPUT, ROW_ENV, REPORTED, None),
             ("stop, 2 open", "stop", STOP_INPUT, ROW_ENV, REPORTED, context("Stop", REMINDER_TWO_OPEN)),
+            ("stop, 1 open", "stop", STOP_INPUT, ROW_ENV, REPORTED_ONE_OPEN, context("Stop", REMINDER_ONE_OPEN)),
             ("stop, all done", "stop", STOP_INPUT, ROW_ENV, REPORTED_ALL_DONE, None),
             ("stop, no list sent", "stop", STOP_INPUT, ROW_ENV, NOT_REPORTED, None),
             ("compact, list sent", "compact", COMPACT_INPUT, ROW_ENV, REPORTED, context("SessionStart", COMPACT_LIST)),
