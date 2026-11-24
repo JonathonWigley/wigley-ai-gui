@@ -1,6 +1,6 @@
 # 08 — Demo, self-test and README
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · the self-test steps run against a fixture that changes on each poll, so their order and lines are a timing choice no pattern settles
 Wave: 4 · Depends on: 07
@@ -205,3 +205,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 58e1dca1 · proof: diff read: Sample CI saveLog true, sky-104 download and file, sky-105 five jobs, selectBuild beat; fixture saveLog and three-job moving build, loaded in drive runs; graph, saves and narrow self-test groups; README and CHANGELOG; writeHomeFile and selectBuild Produces present; wave 4 typecheck and full npm run lint pass (changelog and boundary included) · concerns: self-test steps assume view behaviour not run yet (keys after Enter, default cursors) — the filtered self-test settles them; design.md:150 still calls the fixture self-test only (task 10's doc)

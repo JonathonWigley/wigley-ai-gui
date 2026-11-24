@@ -219,7 +219,7 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 - [x] [Detail pane, graph view and keys](07-builds-page.md) — after 05, 06
 
 ### Wave 4
-- [ ] [Demo, self-test and README](08-demo-selftest.md) — after 07
+- [x] [Demo, self-test and README](08-demo-selftest.md) — after 07
 
 ### Wave 5
 - [ ] [Tiki Smash download paths](09-tiki-settings.md) — after 02
@@ -240,6 +240,7 @@ Review base: a9161d1a
 - 06 · hard · cdb2b1c3 · diff read: JobEdge, JobGraph, GraphMove, jobGraph, defaultJob, movedJob in plan shape; three it.each tables; wave 2 typecheck passes · concerns: design.md:285 says arrows run from a job to its prerequisites, 07 draws them prerequisite to dependent
 - 05 · deep · 8183fa1d · diff read: downloads.ts exports filledFiles, savedLogName, createDownloads, DOWNLOAD_KEEP_MS, FILE_CHECK_TIMEOUT_MS; start.ts wires checkFiles, filesOf, forgetGame, dispose and the saveLog/download handlers with refusals; Files: line between Links: and Open:; wave 2 typecheck and oxlint pass; oxfmt applied by the lead to build-messages.ts and downloads.test.ts · concerns: settings-change test reads the snapshot right after pushSettings with no settle
 - 07 · deep · 0e2453f2 · diff read: BuildsPlace and buildsPlaceSlot, the six view-model functions, BuildsScope, BuildsView and BuildsViewDeps members present in the task's shape; openDetail, buildDetail and BuildDetailInput gone; wave 3 typecheck and oxlint pass; oxfmt applied by the lead to six files · concerns: restore of entry 'all' on an empty first snapshot overwrites the saved build with null; a pending place holds writes until a named move (a removed game keeps writes blocked); setFilter drops no pending place; job boxes carry ui-row--action; requestAnimationFrame stubbed in tests so arrows are live-only; divergence: part harness gains focusTarget(), view model exports fileBaseName
+- 08 · hard · 58e1dca1 · diff read: Sample CI saveLog true, sky-104 download and file, sky-105 five jobs, selectBuild beat; fixture saveLog and three-job moving build, loaded in drive runs; graph, saves and narrow self-test groups; README and CHANGELOG; writeHomeFile and selectBuild Produces present; wave 4 typecheck and full npm run lint pass (changelog and boundary included) · concerns: self-test steps assume view behaviour not run yet (keys after Enter, default cursors) — the filtered self-test settles them; design.md:150 still calls the fixture self-test only (task 10's doc)
 ### Contract changes
 ### Rulings
 - Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01

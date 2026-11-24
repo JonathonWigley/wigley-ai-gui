@@ -1,6 +1,6 @@
 # 09 — Tiki Smash download paths
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · a settings edit in the shape design.md § Configuration gives; no code
 Wave: 5 · Depends on: 02 (its parser reads a kind's `downloads`)
