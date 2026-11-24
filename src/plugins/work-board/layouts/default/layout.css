@@ -181,6 +181,14 @@
   margin: 0;
 }
 
+/* The no-detail line's text, then its sweep hint, apart. */
+[data-layout-owner='work-board'] .work-board-detail-missing {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
 /* The ticket's fields: a label column and a value column. */
 [data-layout-owner='work-board'] .work-board-detail-fields {
   column-gap: var(--wg-space-3);
