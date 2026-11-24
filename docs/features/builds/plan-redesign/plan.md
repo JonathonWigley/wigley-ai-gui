@@ -226,7 +226,7 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 - [x] [Doc re-read](10-doc-re-read.md) — after 03, 04, 06, 08
 
 ### Wave 6
-- [ ] [Final verification](11-final-verification.md) — after 10
+- [x] [Final verification](11-final-verification.md) — after 10
 
 ## Run log
 
@@ -243,6 +243,7 @@ Review base: a9161d1a
 - 08 · hard · 58e1dca1 · diff read: Sample CI saveLog true, sky-104 download and file, sky-105 five jobs, selectBuild beat; fixture saveLog and three-job moving build, loaded in drive runs; graph, saves and narrow self-test groups; README and CHANGELOG; writeHomeFile and selectBuild Produces present; wave 4 typecheck and full npm run lint pass (changelog and boundary included) · concerns: self-test steps assume view behaviour not run yet (keys after Enter, default cursors) — the filtered self-test settles them; design.md:150 still calls the fixture self-test only (task 10's doc)
 - 09 · standard · none (user settings.json, outside the repo) · grep of settings.json: dev, qa and release kinds of tiki-smash each hold label, target and the task's downloads path; json.load passes · concerns: the shared bash best folder still needs a My Drive shortcut before the paths exist (wrap-up note)
 - 10 · standard · 0094c0e2 · diff read: design.md arrow direction, fixture in drive runs, Enter/Alt+l and no-job s/o lines match keymap.ts, start.ts and fixture-backend.ts; other docs checked unchanged · concerns: machine skill teamcity-builds line-56 planned mark drops in an ai worktree after the app lands (close step); Drive fetch-on-copy and DESIGN.md fg-tertiary step text unverified
+- 11 · low (live session); fix on hard · e18895dd · Live session: checks 2-11 pass; check 1 failed on 640 px job boxes (space-8 read as 8 px), fixed in e18895dd and re-run: three boxes and both arrows fit the 360 px pane, arrows join box edges exactly; saved place returns after a page reload and a builds plugin restart (core.restartPlugin), All and game entries · concerns: S3 empty s/o hints under --user-config come from the user's keys.showHints false, not the app; check 11 draws the transitive reduction of the TeamCity tree, by task 03's design
 ### Contract changes
 - Review fix b7dd1da7: GameView gains listed: boolean (true once the entry's current instance listed the game); GameState.hasListed renamed listed; Downloads gains checksSettled
 ### Rulings
@@ -260,10 +261,12 @@ Review base: a9161d1a
 - showBuild moves keys to list before showing, so a hub Open in Builds logs no 'gone' · group 07
 - Review fix: trackCalls refuses saveLog after dispose but leaves it out of drained (overrides 02's 'drained waits for it'); the saved place restores only once its game (All: every game) is listed, and a saved game gone from a polled snapshot drops the hold
 - Repeat (saved All place restores early): mechanism is BackendView.problem, a joined heading text, used as the will-not-list state; fixes stacked 4aaa350d, b7dd1da7, 3ea8b304. Stepped back to one never-lists signal that excludes a backend with a live or starting instance; Leave it once fixed.
+- A full app restart drops the saved place: slots outlive an owner's restart and a page reload, not an app restart (AGENTS.md); no change · group 11
 ### Review rounds
 - Round 1 (a9161d1a..43060941, 5 lanes): NEEDS FIXES — 3 Important, 19 Minor, 8 recommendations, all taken per repo § Review. Lead-applied 9445a61f (docs/comments). Fix range 992fd4cf, 4aaa350d, b7dd1da7 — risk Medium (restore rule, drain membership, end-message timing, download resolution change behaviour across main and page) → correctness re-review
 - Re-review 1 (9445a61f..b7dd1da7, correctness): NEEDS FIXES — 1 Important (repeat of R1#2: All restore waits on a backend that never lists), 4 Minor, 1 pre-existing; lead-applied ff78daba. Repeat stepped back to the cause: the restore rules read BackendView.problem as the 'will not list' signal (repo § Review takes the recommendation)
 - Cycle 2 fix range 3ea8b304, 0927df9c — risk Medium (restore settle rule, checksSettled re-check, cache file shape) → correctness re-review 2 (last cycle)
 - Re-review 2 (ff78daba..0927df9c, correctness): NEEDS FIXES — 1 Important repeat (All restore reads the joined heading problem as never-lists), 2 Minor (drop rule, same proxy; a wait row that cannot fail). Cycles used up; settled per repo § Review: all three Fix now in the last fix round, with one never-lists signal.
+- Last fix round 31884a82 (never-lists signal): Medium, covered by the test gate and live session per 8.1. Live fix e18895dd (job box width, no-target hints): Low, layout CSS and hint marks, re-checked live.
 ### Test gate
 - e92de61d: vitest over the 16 changed test files and their folders (node-files, builds-local, builds-teamcity, builds, scoped-files) 760/760 pass after fixing 5 tests red since tasks 05 and 07 (both test-side: a check read before the save reserved its name; a marks helper read the whole build head); npm run selftest -- --plugin builds all passed (5 of 5 groups); typecheck and lint clean.

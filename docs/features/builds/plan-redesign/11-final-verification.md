@@ -1,6 +1,6 @@
 # 11 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 10 (it checks the landed code after the doc re-read; every code task is behind 10)
 Plan: [plan.md](plan.md)
@@ -145,3 +145,4 @@ Commit:    none, unless a check's fix changes code (then one commit per fix, wit
 
 ## Proof
 
+Commit e18895dd · proof: Live session: checks 2-11 pass; check 1 failed on 640 px job boxes (space-8 read as 8 px), fixed in e18895dd and re-run: three boxes and both arrows fit the 360 px pane, arrows join box edges exactly; saved place returns after a page reload and a builds plugin restart (core.restartPlugin), All and game entries · concerns: S3 empty s/o hints under --user-config come from the user's keys.showHints false, not the app; check 11 draws the transitive reduction of the TeamCity tree, by task 03's design
