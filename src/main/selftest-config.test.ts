@@ -344,7 +344,7 @@ describe('checkGroups', () => {
     expect(check).toThrow(/forms.*keys/);
   });
 
-  it('lets two scripts each have a group of one name', () => {
+  it("lets two plugins' scripts each have a group of one name", () => {
     const check = () =>
       checkGroups([
         withGroups('forms', [{ name: 'keys', why: 'forms keys', steps: [] }]),

@@ -19,13 +19,16 @@ import { createRegistrations } from '../../../shared/registrations';
 import { sessionsRowsSlot } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
+  docsBindingSlot,
   type DocsEdits,
   type DocsPageExports,
   type DocsPlace,
   docsPlaceSlot,
   MACHINE_SOURCE_ID,
+  NO_DOCS_BINDING,
   sessionSourceId,
 } from '../contract';
+import { NO_WIKI_PAGE_TEXT } from './docs-state';
 import type {
   DocumentEditorEvents,
   EditorHost,
@@ -1876,3 +1879,95 @@ async function createMainOnceRead(page: DocsPage, invoked: readonly string[]) {
   await new Promise((resolve) => setTimeout(resolve, 0));
   page.harness.started().commands.createMain({ arg: { viewId: 'machine' } });
 }
+
+// Main's side over an empty index whose `wikiMainPath` answers `mainPath`;
+// `invoked` holds each method asked.
+function wikiMainServing(mainPath: string | null) {
+  const invoked: string[] = [];
+  const serving = servingIndexOf([], []);
+  const invoke = async (method: string, ...args: unknown[]) => {
+    invoked.push(method);
+    return method === 'wikiMainPath' ? mainPath : serving(method, ...args);
+  };
+  return { invoked, invoke };
+}
+
+describe('docs binding on the page', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Breaks: a folders or homes change asking main for the Main page again, or
+  // a wiki page or link prefixes change not asking.
+  it.each([
+    {
+      given: 'folders and features homes only',
+      next: {
+        ...NO_DOCS_BINDING,
+        globalFolders: [
+          { path: '~/notes', referenceFiles: [], subfolders: [], skip: [] },
+        ],
+        features: {
+          homes: ['{repo}/docs/features'],
+          file: 'f.md',
+          areaFolder: null,
+        },
+      },
+      asks: 1,
+    },
+    {
+      given: 'its wiki page',
+      next: { ...NO_DOCS_BINDING, wikiMain: '~/wiki/Main.md' },
+      asks: 2,
+    },
+    {
+      given: 'its link prefixes',
+      next: { ...NO_DOCS_BINDING, linkPrefixes: { 'w:': 'w@market' } },
+      asks: 2,
+    },
+  ])(
+    'bindingChanged_$given: AsksForTheMainPage$asks',
+    async ({ next, asks }) => {
+      const main = wikiMainServing('/p/wiki/Main.md');
+      const page = startDocsPage(main.invoke);
+      showDocsMode(page);
+      await vi.waitFor(() =>
+        expect(main.invoked).toContain('readDocIfPresent'),
+      );
+      const writer = page.harness.state.publish(docsBindingSlot);
+
+      writer.set(next);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(
+        main.invoked.filter((method) => method === 'wikiMainPath'),
+      ).toHaveLength(asks);
+      writer.dispose();
+      await page.harness.stop();
+    },
+  );
+
+  // Breaks: the Main key opening nothing in silence, or the wiki tree showing
+  // its no-pages line, while no installed plugin names a wiki page.
+  it('openMain_NoPageNamed_ToastsAndTheTreeLineSaysSo', async () => {
+    const main = wikiMainServing(null);
+    const page = startDocsPage(main.invoke);
+    const { harness } = page;
+    showDocsMode(page);
+    await vi.waitFor(() => expect(main.invoked).toContain('wikiMainPath'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    harness.started().commands.openMain({ arg: undefined });
+    await vi.waitFor(() =>
+      expect(harness.logs.map(({ message }) => message)).toContain(
+        `toast info: ${NO_WIKI_PAGE_TEXT}`,
+      ),
+    );
+
+    const { sideBar } = harness.mode('docs.docs');
+    const [line] = findAll(asFake(sideBar as HTMLElement), 'docs-line-slot');
+    expect(line.textContent).toContain(NO_WIKI_PAGE_TEXT);
+    await harness.stop();
+  });
+});

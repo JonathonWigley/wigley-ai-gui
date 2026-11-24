@@ -302,10 +302,10 @@ export interface DocsMainExports {
   // `dispose`.
   watchDoc(path: string, changed: () => void): Promise<Disposable>;
   // Replaces the binding's `features` (Backlog's pick, null for none), then
-  // rewrites the contributions file and, once an index run has read the file,
-  // rebuilds the machine index; before that run, the run reads the new file. A
-  // value equal to the one handed last does nothing. Outside the `live` run
-  // mode it does nothing.
+  // rewrites the contributions file and, when its text differs from the text
+  // the last machine index build used (the file on disk at launch until an
+  // index run reads it), rebuilds the machine index. A value equal to the one
+  // handed last does nothing. Outside the `live` run mode it does nothing.
   setFeaturesHomes(homes: FeaturesHomes | null): void;
 }
 

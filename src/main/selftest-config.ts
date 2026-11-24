@@ -100,11 +100,11 @@ function pressFiles(base: string, repeatMax: number | undefined): string[] {
 }
 
 // Throws on a script whose groups the runner cannot report or run: a group
-// with a blank `name` or `why`, two groups of one plugin's scripts with one name, a step
-// whose `why` or `remove` is given but blank, a `repeat` whose `max` is not a
-// whole number of at least 2 or whose `until` is blank, a `repeat` beside
-// `alsoExpect`, and a `width` that is neither `'start'` nor a positive whole
-// number.
+// with a blank `name` or `why`, two groups of one plugin's scripts with one
+// name, a step whose `why` or `remove` is given but blank, a `repeat` whose
+// `max` is not a whole number of at least 2 or whose `until` is blank, a
+// `repeat` beside `alsoExpect`, and a `width` that is neither `'start'` nor a
+// positive whole number.
 export function checkGroups(handed: readonly HandedScript[]): void {
   // The filter names a group per plugin, so one plugin's scripts share a set.
   const namesByPlugin = new Map<string, Set<string>>();

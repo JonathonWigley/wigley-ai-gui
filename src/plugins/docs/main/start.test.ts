@@ -310,6 +310,7 @@ function startDocsPart() {
       appDir: '/app',
     },
     data: {
+      read: (path: string) => files.read(`/data/docs/${path}`),
       write: (path: string, text: string) =>
         files.write(`/data/docs/${path}`, text),
     },
@@ -1147,6 +1148,7 @@ describe('createDocsBinding', () => {
     const holder = createDocsBinding({
       contributions: contributions.exports,
       isLive: true,
+      readFile: () => Promise.reject(new Error('missing')),
       writeFile: (text) => {
         attempts += 1;
         if (attempts === 1) {
@@ -1167,6 +1169,73 @@ describe('createDocsBinding', () => {
 
     expect(writes).toEqual([contributionsFileText(NO_DOCS_BINDING)]);
   });
+
+  // Breaks: a rewrite before any index run left unbuilt though the cached
+  // index was built from other text, a rewrite back to the launch file's text
+  // rebuilt for nothing, or a run's text not replacing the launch file's.
+  it.each([
+    {
+      given: 'before any run, the same as the launch file',
+      launch: { ...NO_DOCS_BINDING, features: USER_HOMES },
+      hasRun: false,
+      rebuilds: 0,
+    },
+    {
+      given: 'before any run, differing from the launch file',
+      launch: NO_DOCS_BINDING,
+      hasRun: false,
+      rebuilds: 1,
+    },
+    {
+      given: 'after a run, differing from its text',
+      launch: NO_DOCS_BINDING,
+      hasRun: true,
+      rebuilds: 1,
+    },
+    {
+      given: "after a run, the same as the launch file but not the run's",
+      launch: { ...NO_DOCS_BINDING, features: USER_HOMES },
+      hasRun: true,
+      rebuilds: 1,
+    },
+  ])(
+    'setFeaturesHomes_SameValueTwice_$given: RewritesTheFileAndRebuilds$rebuilds',
+    async ({ launch, hasRun, rebuilds }) => {
+      const writes: string[] = [];
+      let builds = 0;
+      const holder = createDocsBinding({
+        contributions: fakeContributions().exports,
+        isLive: true,
+        readFile: () => Promise.resolve(contributionsFileText(launch)),
+        writeFile: (text) => {
+          writes.push(text);
+          return Promise.resolve();
+        },
+        filePath: CONTRIBUTIONS_PATH,
+        publish: () => undefined,
+        rebuildMachineIndex: () => {
+          builds += 1;
+        },
+        log: () => undefined,
+      });
+      if (hasRun) {
+        await holder.file();
+      }
+      await settled();
+
+      holder.setFeaturesHomes(USER_HOMES);
+      holder.setFeaturesHomes({ ...USER_HOMES });
+      await holder.file();
+
+      expect({ last: writes.at(-1), builds }).toEqual({
+        last: contributionsFileText({
+          ...NO_DOCS_BINDING,
+          features: USER_HOMES,
+        }),
+        builds: rebuilds,
+      });
+    },
+  );
 });
 
 describe('docs binding', () => {
@@ -1197,32 +1266,38 @@ describe('docs binding', () => {
     expect(builds()).toEqual([]);
   });
 
-  // Before any index run reads the file, as Backlog's first homes come at
-  // launch, the next run reads the new file, so nothing rebuilds.
-  it.each([
-    { given: 'before any index run', hasRun: false, rebuilds: 0 },
-    { given: 'after an index run', hasRun: true, rebuilds: 1 },
-  ])(
-    'setFeaturesHomes_SameValueTwice_$given: RewritesTheFileAndRebuilds$rebuilds',
-    async ({ hasRun, rebuilds }) => {
-      const { harness, exports, builds } = await startBound();
-      if (hasRun) {
-        await exports.rebuildMachineIndex();
-      }
-      const runsBefore = builds().length;
+  // Breaks: the launch file left unread from the data folder, so Backlog's
+  // first homes at a relaunch rebuild though the last launch's file matches.
+  it('setFeaturesHomes_RelaunchWithTheLastLaunchsHomes_RebuildsNothing', async () => {
+    const { harness, exports, builds } = await startBound();
+    exports.setFeaturesHomes(USER_HOMES);
+    const withHomes = contributionsFileText({
+      ...NO_DOCS_BINDING,
+      features: USER_HOMES,
+    });
+    await vi.waitFor(async () =>
+      expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(withHomes),
+    );
+    await harness.restart();
+    const relaunched = harness
+      .started()
+      .exports?.(createRegistrations()) as DocsMainExports;
+    // The relaunch's first binding, before Backlog hands its homes.
+    await vi.waitFor(async () =>
+      expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
+        contributionsFileText(NO_DOCS_BINDING),
+      ),
+    );
+    const runsBefore = builds().length;
 
-      exports.setFeaturesHomes(USER_HOMES);
-      exports.setFeaturesHomes({ ...USER_HOMES });
-      await vi.waitFor(async () =>
-        expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
-          contributionsFileText({ ...NO_DOCS_BINDING, features: USER_HOMES }),
-        ),
-      );
-      await settled();
+    relaunched.setFeaturesHomes(USER_HOMES);
+    await vi.waitFor(async () =>
+      expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(withHomes),
+    );
+    await settled();
 
-      expect(builds().length - runsBefore).toBe(rebuilds);
-    },
-  );
+    expect(builds().length - runsBefore).toBe(0);
+  });
 
   it('docsStrategyChanged_AfterAnIndexRun_RewritesTheFileAndRebuilds', async () => {
     const contributions = fakeContributions();

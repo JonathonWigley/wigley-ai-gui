@@ -3,7 +3,7 @@ import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { DocsContribution } from '../../../contracts/contributions';
 import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Files } from '../../../contracts/files';
+import { type Files, isMissingFile } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type {
   DriveHost,
@@ -192,12 +192,14 @@ export async function startDocs(
 // index. A live run merges the `docs` strategies after `contributions.ready`
 // and on each change of them, with Backlog's latest features homes (none
 // until Backlog hands them, and while it hands none); every other run keeps
-// `DOCS_FIXTURE_BINDING`. The file is written once the first binding is set,
-// and again on each binding whose file text differs, each such change then
-// rebuilding the machine index once an index run has asked for the file: a
-// change before the first run, such as Backlog's first homes, reaches the
-// index through that run. `file()` waits for every write queued so far, so no
-// index run starts while one is in flight.
+// `DOCS_FIXTURE_BINDING`. The file on disk at launch is read first, then
+// written once the first binding is set, and again on each binding whose file
+// text differs. Each such later change rebuilds the machine index when its text
+// differs from the text the last build used: the launch file's text, which the
+// cached index was built from, until an index run asks for the file, then the
+// text that run read. A change that comes back to that text, such as Backlog's
+// first homes matching the last launch's, rebuilds nothing. `file()` waits for
+// every write queued so far, so no index run starts while one is in flight.
 interface DocsBindingHolder extends Disposable {
   binding(): DocsBinding;
   setFeaturesHomes(homes: FeaturesHomes | null): void;
@@ -210,6 +212,8 @@ interface DocsBindingDeps {
     'strategies' | 'onChanged' | 'ready'
   >;
   isLive: boolean;
+  // Reads `CONTRIBUTIONS_JSON` in the data folder; rejects when it is missing.
+  readFile(): Promise<string>;
   // Writes the file's text to `CONTRIBUTIONS_JSON` in the data folder.
   writeFile(text: string): Promise<void>;
   filePath: string;
@@ -228,11 +232,24 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
     ? { ...NO_DOCS_BINDING, features }
     : DOCS_FIXTURE_BINDING;
   let isBound = false;
-  // Set as the first index run asks for the file: before it, no index was
-  // built from an older file, so a rewrite rebuilds nothing.
-  let isFileAsked = false;
+  // The text last queued, the text on disk, and the text the last build used:
+  // the launch file's until an index run asks for the file. Null for none, or
+  // for a file that could not be read, which no text equals.
   let writtenText: string | null = null;
+  let diskText: string | null = null;
+  let builtText: string | null = null;
   let fileWrite: Promise<void> = Promise.resolve();
+  const launchRead = deps.readFile().then(
+    (text) => {
+      diskText = text;
+      builtText = text;
+    },
+    (error: unknown) => {
+      if (!isMissingFile(error)) {
+        log(`contributions file not read: ${errorText(error)}`);
+      }
+    },
+  );
 
   // True when `next` queued a write: its file text differs from the last.
   const bind = (next: DocsBinding): boolean => {
@@ -245,6 +262,9 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
     writtenText = text;
     fileWrite = fileWrite
       .then(() => deps.writeFile(text))
+      .then(() => {
+        diskText = text;
+      })
       .catch((error: unknown) => {
         // A failed write leaves the file stale, so the same text is written
         // again at the next binding.
@@ -263,14 +283,16 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
         }
       : DOCS_FIXTURE_BINDING;
   const rebind = () => {
-    if (isBound && bind(merged()) && isFileAsked) {
+    if (isBound && bind(merged()) && writtenText !== builtText) {
       deps.rebuildMachineIndex();
     }
   };
-  const firstBinding = contributions.ready.then(() => {
-    bind(merged());
-    isBound = true;
-  });
+  const firstBinding = Promise.all([contributions.ready, launchRead]).then(
+    () => {
+      bind(merged());
+      isBound = true;
+    },
+  );
   const changes = isLive ? contributions.onChanged('docs', rebind) : null;
   return {
     binding: () => binding,
@@ -285,9 +307,9 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
       rebind();
     },
     async file() {
-      isFileAsked = true;
       await firstBinding;
       await fileWrite;
+      builtText = diskText;
       return deps.filePath;
     },
     dispose() {
@@ -471,6 +493,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     const binding = createDocsBinding({
       contributions,
       isLive: services.runMode === 'live',
+      readFile: () => api.data.read(CONTRIBUTIONS_JSON),
       writeFile: (text) => api.data.write(CONTRIBUTIONS_JSON, text),
       filePath: services.paths.join(api.dataFolder, CONTRIBUTIONS_JSON),
       publish: (next) => bindingWriter.set(next),
