@@ -1,6 +1,10 @@
 import { isMissingFile } from '../../../contracts/files';
 import { errorText } from '../../../shared/error-text';
-import { isJsonObject, type JsonObject } from '../../../shared/json';
+import {
+  isJsonObject,
+  isStringArray,
+  type JsonObject,
+} from '../../../shared/json';
 import type {
   BackendEntry,
   BackendKind,
@@ -34,6 +38,8 @@ const VERSION_TIMEOUT_MS = 10_000;
 const LIST_TIMEOUT_MS = 30_000;
 const LOG_TIMEOUT_MS = 60_000;
 const START_TIMEOUT_MS = 60_000;
+// One Android build job's log was 22 MB, which the CLI prints whole.
+const SAVE_LOG_TIMEOUT_MS = 300_000;
 
 // `{ "games": { "<game id>": BuildRecord[] }, "pins": { "<build id>": QueuedPin } }`.
 const CACHE_FILE = 'teamcity-finished.json';
@@ -42,7 +48,7 @@ const RUN_LIST_FIELDS =
 const QUEUE_PATH =
   '/app/rest/buildQueue?locator=count:1000&fields=build(id,buildTypeId,state,branchName,queuedDate,webUrl,waitReason,startEstimate,triggered(user(name)))';
 const DETAIL_FIELDS =
-  'id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))';
+  'id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,webUrl,startDate,finishDate,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version)),snapshot-dependencies(build(id))))';
 
 // The `teamcity` backend kind: builds of TeamCity build chains, read and queued through the `teamcity` CLI. `config`
 // holds an optional `command` (the CLI, `~` expanded; `teamcity` when empty) and an optional `buildJobPattern` (a
@@ -400,7 +406,7 @@ function createTeamcityBackend(
   };
 
   return {
-    capabilities: { cancel: false, choosesBranch: true, saveLog: false },
+    capabilities: { cancel: false, choosesBranch: true, saveLog: true },
 
     async list(game, limit) {
       const builds = await listBuilds(game, limit);
@@ -476,6 +482,15 @@ function createTeamcityBackend(
       });
       await writeStored(store);
       return { id };
+    },
+
+    async saveLog(_game, buildId, jobId, path) {
+      const log = await runTeamcity(
+        cli,
+        ['api', `/downloadBuildLog.html?buildId=${jobId ?? buildId}`],
+        SAVE_LOG_TIMEOUT_MS,
+      );
+      await services.files.write(path, log);
     },
 
     dispose() {
@@ -590,8 +605,13 @@ const RECORD_NULLABLE_NUMBERS = [
 ] as const;
 
 const JOB_STRINGS = ['id', 'label', 'state'] as const;
-const JOB_NULLABLE_STRINGS = ['result', 'stepText'] as const;
-const JOB_NULLABLE_NUMBERS = ['percent', 'leftSeconds'] as const;
+const JOB_NULLABLE_STRINGS = ['result', 'stepText', 'webUrl'] as const;
+const JOB_NULLABLE_NUMBERS = [
+  'percent',
+  'leftSeconds',
+  'startedAt',
+  'finishedAt',
+] as const;
 
 // Whether a cached value is a finished build's record, every field of its type.
 function isFinishedRecord(value: unknown): value is BuildRecord {
@@ -632,7 +652,8 @@ function isJob(value: unknown): value is BuildJob {
       JOB_STRINGS,
       JOB_NULLABLE_STRINGS,
       JOB_NULLABLE_NUMBERS,
-    )
+    ) &&
+    isStringArray(value.dependsOn)
   );
 }
 
