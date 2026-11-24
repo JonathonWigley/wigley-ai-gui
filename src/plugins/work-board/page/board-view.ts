@@ -333,10 +333,10 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       .querySelector('.is-cursor')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
+  // The board pane's width at the last observation, null before the first.
+  let boardPaneWidth: number | null = null;
   // The board pane narrows as the detail pane opens, its divider moves or the window narrows, which can leave the
   // cursor card behind the detail pane; a widen or a height change leaves the columns where the user scrolled them.
-  // The width at the last observation, null before the first.
-  let boardPaneWidth: number | null = null;
   const boardPaneSize = new ResizeObserver((entries) => {
     const entry = entries.at(-1);
     if (entry === undefined) {
