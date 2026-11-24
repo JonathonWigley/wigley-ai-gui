@@ -11,7 +11,7 @@ const SHA = '2993a9e4c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
 const game = gameEntry({
   id: 'tiki',
   label: 'Tiki Smash',
-  kinds: { dev: { label: 'Dev', target: 'dev-target' } },
+  kinds: { dev: { label: 'Dev', target: 'dev-target', downloads: [] } },
 });
 
 const success331 = buildRecord({

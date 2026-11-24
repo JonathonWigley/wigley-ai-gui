@@ -449,7 +449,7 @@ function createLocalBackend(
   };
 
   return {
-    capabilities: { cancel: true, choosesBranch: false },
+    capabilities: { cancel: true, choosesBranch: false, saveLog: false },
     list: (game, limit) => chain.run(() => list(game, limit)),
     queue: (game, request) => chain.run(() => queue(game, request)),
     cancel: (game, buildId) => chain.run(() => cancel(game, buildId)),

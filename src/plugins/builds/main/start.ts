@@ -487,6 +487,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
               game,
               builds: gameRecords?.builds ?? [],
               subjects: gameRecords?.subjects ?? {},
+              files: {},
               hasListed: gameRecords?.hasListed ?? false,
             };
           }),

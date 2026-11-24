@@ -48,6 +48,10 @@ export function buildJob(overrides: Partial<BuildJob> = {}): BuildJob {
     percent: null,
     leftSeconds: null,
     stepText: null,
+    webUrl: null,
+    startedAt: null,
+    finishedAt: null,
+    dependsOn: [],
     ...overrides,
   };
 }
@@ -59,7 +63,7 @@ export function gameEntry(overrides: Partial<GameEntry> = {}): GameEntry {
     label: 'Game',
     clone: null,
     defaultBranch: 'main',
-    kinds: { dev: { label: 'Dev', target: 'dev-target' } },
+    kinds: { dev: { label: 'Dev', target: 'dev-target', downloads: [] } },
     sets: [],
     ...overrides,
   };
@@ -98,25 +102,41 @@ export interface FixtureBackend extends BuildBackend {
   readonly listCalls: { gameId: string; limit: number }[];
   readonly queued: { gameId: string; request: QueueRequest }[];
   readonly cancelled: { gameId: string; buildId: string }[];
+  readonly savedLogs: {
+    gameId: string;
+    buildId: string;
+    jobId: string | null;
+    path: string;
+  }[];
   readonly disposed: boolean;
   // The builds `list` gives for game `gameId` from now on.
   setBuilds(gameId: string, builds: BuildRecord[]): void;
   // `list` rejects with `error` from now on; null lists again.
   failLists(error: Error | null): void;
+  // `saveLog` rejects with `error` from now on; null resolves again.
+  failSaveLogs(error: Error | null): void;
 }
 
-// A fixture backend that can cancel and chooses branches unless `capabilities` says otherwise. `list` gives the
-// builds set for the game, `[]` by default, cut to `limit`; `queue` gives the ids `queued-1`, `queued-2`, ….
+// A fixture backend that can cancel, chooses branches and cannot save logs unless `capabilities` says otherwise.
+// `list` gives the builds set for the game, `[]` by default, cut to `limit`; `queue` gives the ids `queued-1`,
+// `queued-2`, …. `saveLog`, present only when `capabilities.saveLog` is true, records the call and writes no file.
 export function createFixtureBackend(
   options: { capabilities?: BackendCapabilities } = {},
 ): FixtureBackend {
   const builds = new Map<string, BuildRecord[]>();
   let listError: Error | null = null;
+  let saveLogError: Error | null = null;
+  const capabilities = options.capabilities ?? {
+    cancel: true,
+    choosesBranch: true,
+    saveLog: false,
+  };
   const backend: FixtureBackend = {
-    capabilities: options.capabilities ?? { cancel: true, choosesBranch: true },
+    capabilities,
     listCalls: [],
     queued: [],
     cancelled: [],
+    savedLogs: [],
     disposed: false,
     async list(game, limit) {
       backend.listCalls.push({ gameId: game.id, limit });
@@ -132,6 +152,21 @@ export function createFixtureBackend(
     async cancel(game, buildId) {
       backend.cancelled.push({ gameId: game.id, buildId });
     },
+    ...(capabilities.saveLog
+      ? {
+          async saveLog(
+            game: GameEntry,
+            buildId: string,
+            jobId: string | null,
+            path: string,
+          ) {
+            backend.savedLogs.push({ gameId: game.id, buildId, jobId, path });
+            if (saveLogError) {
+              throw saveLogError;
+            }
+          },
+        }
+      : {}),
     dispose() {
       (backend as { disposed: boolean }).disposed = true;
     },
@@ -140,6 +175,9 @@ export function createFixtureBackend(
     },
     failLists(error) {
       listError = error;
+    },
+    failSaveLogs(error) {
+      saveLogError = error;
     },
   };
   return backend;

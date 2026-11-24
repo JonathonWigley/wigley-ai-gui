@@ -51,8 +51,8 @@ const GAME: GameEntry = gameEntry({
   clone: null,
   defaultBranch: 'protos/physics-fun',
   kinds: {
-    dev: { label: 'Dev', target: DEV },
-    release: { label: 'Release', target: RELEASE },
+    dev: { label: 'Dev', target: DEV, downloads: [] },
+    release: { label: 'Release', target: RELEASE, downloads: [] },
   },
   sets: [],
 });
@@ -261,6 +261,7 @@ describe('teamcityBackendKind.create', () => {
     expect(backend.capabilities).toEqual({
       cancel: false,
       choosesBranch: true,
+      saveLog: false,
     });
     expect(backend.cancel).toBeUndefined();
   });

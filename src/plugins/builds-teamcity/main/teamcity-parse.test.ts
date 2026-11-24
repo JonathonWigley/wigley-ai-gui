@@ -210,6 +210,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821332',
@@ -219,6 +223,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821333',
@@ -228,6 +236,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821337',
@@ -237,6 +249,10 @@ describe('parseChainDetail', () => {
         percent: 40,
         leftSeconds: 900,
         stepText: 'Step 3/8: Build player',
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821335',
@@ -246,6 +262,10 @@ describe('parseChainDetail', () => {
         percent: 60,
         leftSeconds: 0,
         stepText: 'Step 5/8: Gradle',
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821338',
@@ -255,6 +275,10 @@ describe('parseChainDetail', () => {
         percent: 0,
         leftSeconds: null,
         stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
       {
         id: '821336',
@@ -264,6 +288,10 @@ describe('parseChainDetail', () => {
         percent: 0,
         leftSeconds: null,
         stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       },
     ]);
   });

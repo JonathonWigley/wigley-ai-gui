@@ -9,7 +9,7 @@ export interface TrackedBackend extends BuildBackend {
   drained(): Promise<void>;
 }
 
-// `backend` with its `list`, `queue` and `cancel` calls tracked; `dispose` disposes `backend`.
+// `backend` with its `list`, `queue`, `cancel` and `saveLog` calls tracked; `dispose` disposes `backend`.
 export function trackCalls(backend: BuildBackend): TrackedBackend {
   const pending = new Set<Promise<void>>();
   let isDisposed = false;
@@ -29,6 +29,7 @@ export function trackCalls(backend: BuildBackend): TrackedBackend {
   }
 
   const cancel = backend.cancel?.bind(backend);
+  const saveLog = backend.saveLog?.bind(backend);
   return {
     capabilities: backend.capabilities,
     list: (game, limit) => track(() => backend.list(game, limit)),
@@ -36,6 +37,14 @@ export function trackCalls(backend: BuildBackend): TrackedBackend {
     ...(cancel && {
       cancel: (game: GameEntry, buildId: string) =>
         track(() => cancel(game, buildId)),
+    }),
+    ...(saveLog && {
+      saveLog: (
+        game: GameEntry,
+        buildId: string,
+        jobId: string | null,
+        path: string,
+      ) => track(() => saveLog(game, buildId, jobId, path)),
     }),
     dispose() {
       isDisposed = true;

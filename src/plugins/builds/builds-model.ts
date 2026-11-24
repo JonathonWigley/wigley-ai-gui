@@ -1,5 +1,6 @@
 import type {
   BackendCapabilities,
+  BuildFile,
   BuildJob,
   BuildOffer,
   BuildRecord,
@@ -52,6 +53,7 @@ export interface GameState {
   game: GameEntry;
   builds: BuildRecord[];
   subjects: Record<string, string>;
+  files: Record<string, BuildFile[]>; // build id → its files that exist
   hasListed: boolean;
 }
 
@@ -215,6 +217,7 @@ function gameView(
     builds: state.builds,
     subjects: state.subjects,
     setRuns: views,
+    files: state.files,
   };
 }
 

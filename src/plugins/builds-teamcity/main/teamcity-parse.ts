@@ -227,6 +227,10 @@ function buildJobOf(
     label: stringOrNull(buildType.name) ?? buildTypeId,
     state,
     result,
+    webUrl: null,
+    startedAt: null,
+    finishedAt: null,
+    dependsOn: [],
   };
   switch (state) {
     case 'queued':

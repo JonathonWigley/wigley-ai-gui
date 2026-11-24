@@ -23,6 +23,10 @@ export interface BuildJob {
   percent: number | null; // 0–100
   leftSeconds: number | null;
   stepText: string | null; // the job's current step, or its last log line
+  webUrl: string | null; // the job's own page in the backend
+  startedAt: number | null; // epoch ms
+  finishedAt: number | null; // epoch ms
+  dependsOn: string[]; // ids of the jobs in the same build this job directly waits on
 }
 
 // A link a build carries, such as an install link.
@@ -57,10 +61,18 @@ export interface BuildRecord {
   triggeredBy: string | null; // who queued it, as the backend names them
 }
 
+// path: a full path, `~` expanded; `{version}` and `{number}` are filled per build
+export interface BuildDownloadEntry {
+  label: string;
+  path: string;
+}
+
 // A build kind of a game: `target` is parsed by the backend (a TeamCity build configuration id, a local command).
+// `downloads` lists the files each build of the kind can have.
 export interface BuildKindEntry {
   label: string;
   target: unknown;
+  downloads: BuildDownloadEntry[];
 }
 
 // A set of kinds queued together on one branch and revision, such as an RC set.
@@ -100,10 +112,12 @@ export interface QueueRequest {
 }
 
 // `cancel`: the backend can cancel a running build. `choosesBranch`: a queue takes a branch and a pinned revision;
-// false for a backend that builds a folder as it stands.
+// false for a backend that builds a folder as it stands. `saveLog`: the backend can save a job's or a build's whole
+// log to a file.
 export interface BackendCapabilities {
   cancel: boolean;
   choosesBranch: boolean;
+  saveLog: boolean;
 }
 
 // One backend entry's instance, made by its kind's `create`.
@@ -115,6 +129,13 @@ export interface BuildBackend {
   queue(game: GameEntry, request: QueueRequest): Promise<{ id: string }>;
   // Present only when `capabilities.cancel` is true.
   cancel?(game: GameEntry, buildId: string): Promise<void>;
+  // Present only when capabilities.saveLog is true. Saves the job's whole log to the full path `path`; `jobId` null saves the build's own log.
+  saveLog?(
+    game: GameEntry,
+    buildId: string,
+    jobId: string | null,
+    path: string,
+  ): Promise<void>;
   dispose(): void;
 }
 
@@ -173,12 +194,20 @@ export interface SetRunView {
   revision: string | null;
 }
 
+// a filled path that exists on disk; entry: its index in the kind's `downloads`
+export interface BuildFile {
+  label: string;
+  path: string;
+  entry: number;
+}
+
 export interface GameView {
   backendId: string;
   game: GameEntry;
   builds: BuildRecord[]; // newest first
   subjects: Record<string, string>; // revision sha → commit subject
   setRuns: SetRunView[]; // newest first
+  files: Record<string, BuildFile[]>; // build id → its files that exist
 }
 
 // One backend entry: `problem` names what is wrong with its entry or its last poll, null when nothing is;
@@ -229,10 +258,34 @@ export const buildsSessionsSlot: KeyedSlotKey<SessionBuilds, 'main', 'builds'> =
     kind: 'keyed',
   };
 
+// One log save or file download into the Downloads folder.
+export interface BuildDownload {
+  id: string; // `<backend id>/<build id>/log` (the build's own log), `<backend id>/<build id>/log/<job id>`, or `<backend id>/<build id>/file/<entry>`
+  backendId: string;
+  buildId: string;
+  label: string; // the job's label for a log, the file's label for a file
+  state: 'running' | 'saved' | 'failed';
+  path: string | null; // the saved file, once saved
+  problem: string | null; // why it failed
+  startedAt: number; // epoch ms
+}
+
+// id 'builds.downloads', keyed by BuildDownload.id
+export const buildsDownloadsSlot: KeyedSlotKey<
+  BuildDownload,
+  'main',
+  'builds'
+> = {
+  id: 'builds.downloads',
+  process: 'main',
+  kind: 'keyed',
+};
+
 // The page's calls into main. `setShown` reports whether Builds mode shows, which speeds polling; the last report
 // wins. `branches` lists a game's origin branch heads, those matching the set's pattern when `set` names one. `queue`
 // queues a kind or a set, linked to `sessionId` when set. `queueOffer` and `dismissOffer` act on the session's offer;
-// a `queueOffer` while one for the session is in flight is refused.
+// a `queueOffer` while one for the session is in flight is refused. `saveLog` and `download` start a save into the
+// Downloads folder and answer once it is in `builds.downloads`; a refusal answers `{ problem }` and starts nothing.
 export interface BuildsChannel extends ChannelShape {
   invoke: {
     setShown(shown: boolean): void;
@@ -259,6 +312,19 @@ export interface BuildsChannel extends ChannelShape {
       backend: string;
       game: string;
       set: string;
+    }): Promise<{ ok: true } | { problem: string }>;
+    saveLog(arg: {
+      backend: string;
+      game: string;
+      build: string;
+      job: string | null;
+    }): Promise<{ ok: true } | { problem: string }>;
+    // file: a BuildFile.entry
+    download(arg: {
+      backend: string;
+      game: string;
+      build: string;
+      file: number;
     }): Promise<{ ok: true } | { problem: string }>;
   };
   messages: Record<never, never>;

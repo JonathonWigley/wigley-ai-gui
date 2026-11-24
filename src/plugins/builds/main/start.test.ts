@@ -228,7 +228,7 @@ describe('buildsMainPart', () => {
     expect(run.backendView()).toMatchObject({
       id: 'b1',
       problem: null,
-      capabilities: { cancel: true, choosesBranch: true },
+      capabilities: { cancel: true, choosesBranch: true, saveLog: false },
     });
   });
 

@@ -44,8 +44,8 @@ function backend(
     kind: 'fixture',
     label: `Backend ${id}`,
     problem: null,
-    capabilities: { cancel: true, choosesBranch: true },
-    games: [{ game, builds, subjects: {}, hasListed }],
+    capabilities: { cancel: true, choosesBranch: true, saveLog: false },
+    games: [{ game, builds, subjects: {}, files: {}, hasListed }],
   };
 }
 
@@ -469,6 +469,9 @@ describe('foldBuilds', () => {
   it('publishes each backend in order, with its set runs newest first', () => {
     const b2 = backend('b2', [record('w')]);
     b2.games[0].subjects = { abc: 'Fix the thing' };
+    b2.games[0].files = {
+      'b-1': [{ label: 'Zip', path: '/z/a.zip', entry: 0 }],
+    };
 
     const fold = foldBuilds(
       input({
@@ -506,6 +509,7 @@ describe('foldBuilds', () => {
           revision: null,
         },
       ],
+      files: { 'b-1': [{ label: 'Zip', path: '/z/a.zip', entry: 0 }] },
     });
     expect(fold.snapshot.polledAt).toBe(1234);
   });

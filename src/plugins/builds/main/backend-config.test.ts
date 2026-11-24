@@ -49,6 +49,13 @@ function withSet(overrides: Record<string, unknown>): unknown[] {
   return withGame1({ sets: [validSet(overrides)] });
 }
 
+// The setting with `g1`'s kind `dev` given `downloads`.
+function withDownloads(downloads: unknown): unknown[] {
+  return withGame1({
+    kinds: { dev: { label: 'Dev', target: 'dev-target', downloads } },
+  });
+}
+
 describe('parseBackends', () => {
   it.each([
     {
@@ -155,6 +162,48 @@ describe('parseBackends', () => {
       level: 'game',
     },
     {
+      case: 'downloads not a list',
+      input: withDownloads('x'),
+      problem: 'game g1: kind dev: downloads is not a list',
+      level: 'game',
+    },
+    {
+      case: 'download with no path',
+      input: withDownloads([{ label: 'Zip' }]),
+      problem: 'game g1: kind dev: download 1 needs a label and a path',
+      level: 'game',
+    },
+    {
+      case: 'download with an empty label',
+      input: withDownloads([{ label: '', path: '/p' }]),
+      problem: 'game g1: kind dev: download 1 needs a label and a path',
+      level: 'game',
+    },
+    {
+      case: 'download not an object',
+      input: withDownloads(['x']),
+      problem: 'game g1: kind dev: download 1 needs a label and a path',
+      level: 'game',
+    },
+    {
+      case: 'download null',
+      input: withDownloads([null]),
+      problem: 'game g1: kind dev: download 1 needs a label and a path',
+      level: 'game',
+    },
+    {
+      case: 'download with an empty path',
+      input: withDownloads([{ label: 'Zip', path: '' }]),
+      problem: 'game g1: kind dev: download 1 needs a label and a path',
+      level: 'game',
+    },
+    {
+      case: 'second download with no path',
+      input: withDownloads([{ label: 'A', path: '/a' }, { label: 'B' }]),
+      problem: 'game g1: kind dev: download 2 needs a label and a path',
+      level: 'game',
+    },
+    {
       case: 'sets not a list',
       input: withGame1({ sets: 'rc' }),
       problem: 'game g1: sets is not a list',
@@ -258,6 +307,7 @@ describe('parseBackends', () => {
 
   it('expands ~ in clone and fills the optional fields', () => {
     const target = { command: 'make', args: [] };
+    const zip = { label: 'Android zip', path: '~/d/{version}.zip', extra: 1 };
     const [parsed] = parseBackends(
       [
         validBackend({
@@ -265,7 +315,10 @@ describe('parseBackends', () => {
           games: [
             validGame('g1', {
               clone: '~/dev/game',
-              kinds: { dev: { label: 'Dev', target } },
+              kinds: {
+                dev: { label: 'Dev', target, downloads: [zip] },
+                qa: { label: 'QA', target: 'qa-target', downloads: null },
+              },
               sets: undefined,
             }),
             validGame('g2', {
@@ -290,7 +343,14 @@ describe('parseBackends', () => {
           clone: '/home/u/dev/game',
           defaultBranch: 'main',
           kinds: {
-            dev: { label: 'Dev', target: { command: 'make', args: [] } },
+            dev: {
+              label: 'Dev',
+              target: { command: 'make', args: [] },
+              downloads: [
+                { label: 'Android zip', path: '/home/u/d/{version}.zip' },
+              ],
+            },
+            qa: { label: 'QA', target: 'qa-target', downloads: [] },
           },
           sets: [],
         },
@@ -299,7 +359,7 @@ describe('parseBackends', () => {
           label: 'Game g2',
           clone: null,
           defaultBranch: 'main',
-          kinds: { dev: { label: 'Dev', target: 'dev-target' } },
+          kinds: { dev: { label: 'Dev', target: 'dev-target', downloads: [] } },
           sets: [
             {
               id: 'rc',

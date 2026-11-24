@@ -15,7 +15,7 @@ const GAME_A = {
   id: 'game-a',
   label: 'Game A',
   defaultBranch: 'main',
-  kinds: { dev: { label: 'Dev', target: 'dev' } },
+  kinds: { dev: { label: 'Dev', target: 'dev', downloads: [] } },
 };
 // One fast poll is 10 s.
 const ENDING_TIMEOUT_MS = 15_000;

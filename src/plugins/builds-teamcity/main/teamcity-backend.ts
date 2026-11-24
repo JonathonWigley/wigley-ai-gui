@@ -400,7 +400,7 @@ function createTeamcityBackend(
   };
 
   return {
-    capabilities: { cancel: false, choosesBranch: true },
+    capabilities: { cancel: false, choosesBranch: true, saveLog: false },
 
     async list(game, limit) {
       const builds = await listBuilds(game, limit);

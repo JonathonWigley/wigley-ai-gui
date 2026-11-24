@@ -12,8 +12,8 @@ const ROCKET = gameEntry({
   id: 'rocket',
   label: 'Rocket Run',
   kinds: {
-    dev: { label: 'Dev', target: null },
-    release: { label: 'Release', target: null },
+    dev: { label: 'Dev', target: null, downloads: [] },
+    release: { label: 'Release', target: null, downloads: [] },
   },
   sets: [
     {
@@ -36,7 +36,7 @@ function snapshotOf(builds: BuildRecord[]): BuildsSnapshot {
         kind: 'fixture',
         label: 'Work',
         problem: null,
-        capabilities: { cancel: true, choosesBranch: true },
+        capabilities: { cancel: true, choosesBranch: true, saveLog: false },
         games: [
           {
             backendId: 'work',
@@ -44,6 +44,7 @@ function snapshotOf(builds: BuildRecord[]): BuildsSnapshot {
             builds,
             subjects: {},
             setRuns: [],
+            files: {},
           },
         ],
       },

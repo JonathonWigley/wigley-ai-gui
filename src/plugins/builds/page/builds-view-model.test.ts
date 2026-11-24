@@ -41,6 +41,7 @@ function gameView(
     builds,
     subjects: {},
     setRuns: [],
+    files: {},
     ...changes,
   };
 }
@@ -55,7 +56,7 @@ function backendView(
     kind: 'fixture',
     label: id.toUpperCase(),
     problem: null,
-    capabilities: { cancel: true, choosesBranch: false },
+    capabilities: { cancel: true, choosesBranch: false, saveLog: false },
     games,
     ...changes,
   };
@@ -243,8 +244,8 @@ describe('gameHeaderInput', () => {
   const game = gameEntry({
     id: 'g1',
     kinds: {
-      dev: { label: 'Dev', target: null },
-      release: { label: 'Release', target: null },
+      dev: { label: 'Dev', target: null, downloads: [] },
+      release: { label: 'Release', target: null, downloads: [] },
     },
     sets: [
       {
@@ -525,8 +526,8 @@ describe('queueChoices', () => {
   it('lists the kinds in key order, then the sets', () => {
     const game = gameEntry({
       kinds: {
-        dev: { label: 'Dev', target: null },
-        release: { label: 'Release', target: null },
+        dev: { label: 'Dev', target: null, downloads: [] },
+        release: { label: 'Release', target: null, downloads: [] },
       },
       sets: [
         {

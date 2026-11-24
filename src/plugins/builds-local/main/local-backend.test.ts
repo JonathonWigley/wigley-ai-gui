@@ -31,8 +31,13 @@ const KINDS: GameEntry['kinds'] = {
   ok: {
     label: 'OK',
     target: { command: './build.sh', args: ['--env', 'dev'] },
+    downloads: [],
   },
-  bad: { label: 'Bad', target: { command: './fail.sh', args: [] } },
+  bad: {
+    label: 'Bad',
+    target: { command: './fail.sh', args: [] },
+    downloads: [],
+  },
 };
 
 function result(fields: Partial<ProcessResult>): ProcessResult {
@@ -187,7 +192,12 @@ describe('localBackendKind.create', () => {
     },
     {
       name: 'a target with no command',
-      game: { kinds: { ...KINDS, ok: { label: 'OK', target: { args: [] } } } },
+      game: {
+        kinds: {
+          ...KINDS,
+          ok: { label: 'OK', target: { args: [] }, downloads: [] },
+        },
+      },
       contains: ['demo', 'ok'],
     },
     {
@@ -195,7 +205,11 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          ok: { label: 'OK', target: { command: '', args: [] } },
+          ok: {
+            label: 'OK',
+            target: { command: '', args: [] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'ok'],
@@ -205,14 +219,23 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          bad: { label: 'Bad', target: { command: './fail.sh', args: [1] } },
+          bad: {
+            label: 'Bad',
+            target: { command: './fail.sh', args: [1] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'bad'],
     },
     {
       name: 'a target that is a string',
-      game: { kinds: { ...KINDS, bad: { label: 'Bad', target: './fail.sh' } } },
+      game: {
+        kinds: {
+          ...KINDS,
+          bad: { label: 'Bad', target: './fail.sh', downloads: [] },
+        },
+      },
       contains: ['demo', 'bad'],
     },
     { name: 'a game id with a slash', game: { id: 'a/b' }, contains: ['a/b'] },
@@ -240,6 +263,7 @@ describe('localBackendKind.create', () => {
           ok: {
             label: 'OK',
             target: { command: './build.sh', args: ['--env\ndev'] },
+            downloads: [],
           },
         },
       },
@@ -250,7 +274,11 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          ok: { label: 'OK', target: { command: './build.sh\r', args: [] } },
+          ok: {
+            label: 'OK',
+            target: { command: './build.sh\r', args: [] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'ok'],
@@ -287,6 +315,7 @@ describe('localBackendKind.create', () => {
     expect(backend.capabilities).toEqual({
       cancel: true,
       choosesBranch: false,
+      saveLog: false,
     });
   });
 });

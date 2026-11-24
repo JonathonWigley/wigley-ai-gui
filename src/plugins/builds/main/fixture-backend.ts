@@ -25,7 +25,7 @@ function selfTestBackend(clock: Clock): BuildBackend {
   const listCalls = new Map<string, number>();
   const queued = new Map<string, BuildRecord[]>();
   return {
-    capabilities: { cancel: true, choosesBranch: false },
+    capabilities: { cancel: true, choosesBranch: false, saveLog: false },
     async list(game, limit) {
       const call = (listCalls.get(game.id) ?? 0) + 1;
       listCalls.set(game.id, call);
@@ -91,6 +91,10 @@ function movingBuild(
     percent: null,
     leftSeconds: null,
     stepText: null,
+    webUrl: null,
+    startedAt: null,
+    finishedAt: null,
+    dependsOn: [],
     ...overrides,
   });
   const base = {

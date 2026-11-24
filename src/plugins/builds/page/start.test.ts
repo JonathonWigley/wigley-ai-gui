@@ -72,8 +72,8 @@ function g1View(fixture: Fixture): GameView {
       defaultBranch: 'protos/game',
       clone: fixture.clone === undefined ? '/clones/g1' : fixture.clone,
       kinds: {
-        dev: { label: 'Dev', target: null },
-        release: { label: 'Release', target: null },
+        dev: { label: 'Dev', target: null, downloads: [] },
+        release: { label: 'Release', target: null, downloads: [] },
       },
       sets: [
         {
@@ -88,6 +88,7 @@ function g1View(fixture: Fixture): GameView {
     builds: fixture.g1Builds ?? [],
     subjects: {},
     setRuns: [],
+    files: {},
   };
 }
 
@@ -104,7 +105,7 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
         problem: null,
         capabilities:
           fixture.capabilities === undefined
-            ? { cancel: true, choosesBranch: true }
+            ? { cancel: true, choosesBranch: true, saveLog: false }
             : fixture.capabilities,
         games: [
           g1View(fixture),
@@ -114,6 +115,7 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
             builds: [],
             subjects: {},
             setRuns: [],
+            files: {},
           },
         ],
       },
@@ -373,7 +375,9 @@ describe('buildsPagePart', () => {
     },
     {
       choice: 'a kind on a backend that builds as it stands',
-      fixture: { capabilities: { cancel: true, choosesBranch: false } },
+      fixture: {
+        capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+      },
       down: 0,
       branches: [],
       queue: { kind: 'dev', branch: 'protos/game' },
@@ -428,7 +432,7 @@ describe('buildsPagePart', () => {
   it.each([
     {
       state: 'running, on a backend that cannot cancel',
-      capabilities: { cancel: false, choosesBranch: true },
+      capabilities: { cancel: false, choosesBranch: true, saveLog: false },
       record: running('41'),
       cancels: [],
       toast: 'toast info: Work cannot cancel builds',
@@ -442,14 +446,14 @@ describe('buildsPagePart', () => {
     },
     {
       state: 'finished',
-      capabilities: { cancel: true, choosesBranch: true },
+      capabilities: { cancel: true, choosesBranch: true, saveLog: false },
       record: buildRecord({ id: '41', gameId: 'g1' }),
       cancels: [],
       toast: 'toast info: The build has ended',
     },
     {
       state: 'running',
-      capabilities: { cancel: true, choosesBranch: true },
+      capabilities: { cancel: true, choosesBranch: true, saveLog: false },
       record: running('41'),
       cancels: [{ backend: 'work', game: 'g1', build: '41' }],
       toast: null,
@@ -496,7 +500,9 @@ describe('buildsPagePart', () => {
     },
     {
       method: 'queue',
-      fixture: { capabilities: { cancel: true, choosesBranch: false } },
+      fixture: {
+        capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+      },
       press: (page: ReturnType<typeof startBuildsPage>) =>
         page.commands.queueButton({
           arg: { backend: 'work', game: 'g1', kind: 'dev' },
@@ -560,6 +566,7 @@ describe('buildsPagePart', () => {
           builds: [],
           subjects: {},
           setRuns: [],
+          files: {},
         },
       ],
     };
@@ -616,7 +623,9 @@ describe('buildsPagePart', () => {
   it('queues once on two quick presses', async () => {
     const answer = deferred<{ ok: true }>();
     const page = startBuildsPage(
-      workSnapshot({ capabilities: { cancel: true, choosesBranch: false } }),
+      workSnapshot({
+        capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+      }),
       { queue: () => answer.promise },
     );
     page.showGame(G1);
@@ -636,7 +645,9 @@ describe('buildsPagePart', () => {
   it('toasts no queue problem that lands after the part stops', async () => {
     const answer = deferred<{ problem: string }>();
     const page = startBuildsPage(
-      workSnapshot({ capabilities: { cancel: true, choosesBranch: false } }),
+      workSnapshot({
+        capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+      }),
       { queue: () => answer.promise },
     );
     page.showGame(G1);

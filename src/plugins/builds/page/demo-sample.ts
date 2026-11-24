@@ -15,8 +15,8 @@ const SKY_HOP: GameEntry = {
   clone: null,
   defaultBranch: 'main',
   kinds: {
-    dev: { label: 'Dev', target: null },
-    release: { label: 'Release', target: null },
+    dev: { label: 'Dev', target: null, downloads: [] },
+    release: { label: 'Release', target: null, downloads: [] },
   },
   sets: [
     {
@@ -34,7 +34,7 @@ const WORD_GARDEN: GameEntry = {
   label: 'Word Garden',
   clone: null,
   defaultBranch: 'main',
-  kinds: { dev: { label: 'Dev', target: null } },
+  kinds: { dev: { label: 'Dev', target: null, downloads: [] } },
   sets: [],
 };
 
@@ -77,6 +77,10 @@ function sampleJob(
     percent: null,
     leftSeconds: null,
     stepText: null,
+    webUrl: null,
+    startedAt: null,
+    finishedAt: null,
+    dependsOn: [],
     ...fields,
   };
 }
@@ -93,7 +97,7 @@ export function demoSample(now: number): BuildsSnapshot {
         kind: 'sample',
         label: 'Sample CI',
         problem: null,
-        capabilities: { cancel: true, choosesBranch: true },
+        capabilities: { cancel: true, choosesBranch: true, saveLog: false },
         games: [
           {
             backendId: BACKEND,
@@ -102,6 +106,7 @@ export function demoSample(now: number): BuildsSnapshot {
               [MAIN_REVISION]: 'Tune the jump arc',
               [RC_REVISION]: 'Release 1.4',
             },
+            files: {},
             setRuns: [
               {
                 id: 'run-1',
@@ -188,6 +193,7 @@ export function demoSample(now: number): BuildsSnapshot {
             backendId: BACKEND,
             game: WORD_GARDEN,
             subjects: {},
+            files: {},
             setRuns: [],
             builds: [
               sampleBuild({

@@ -1,6 +1,7 @@
 import { isJsonObject, type JsonObject } from '../../../shared/json';
 import type {
   BackendEntry,
+  BuildDownloadEntry,
   BuildKindEntry,
   BuildSetEntry,
   GameEntry,
@@ -20,8 +21,8 @@ export interface ParsedBackend {
 
 const VALID_ID = /^[A-Za-z0-9._-]+$/;
 
-// Parses the `backends` setting. Each backend, game, kind and set gives only its first failing check. A `clone` is
-// passed through `expandTilde`; `config` and each kind's `target` pass through unread.
+// Parses the `backends` setting. Each backend, game, kind and set gives only its first failing check. A `clone` and
+// each kind's `downloads` path are passed through `expandTilde`; `config` and each kind's `target` pass through unread.
 export function parseBackends(
   value: readonly unknown[],
   expandTilde: (text: string) => string,
@@ -130,9 +131,9 @@ function parseGame(
   if (!isJsonObject(game.kinds) || Object.keys(game.kinds).length === 0) {
     return `game ${id} has no kinds`;
   }
-  const kinds = parseKinds(game.kinds);
+  const kinds = parseKinds(id, game.kinds, expandTilde);
   if (typeof kinds === 'string') {
-    return `game ${id}: kind ${kinds} needs a label and a target`;
+    return kinds;
   }
   const sets = game.sets === undefined ? [] : parseSets(game.sets, kinds);
   if (typeof sets === 'string') {
@@ -148,9 +149,12 @@ function parseGame(
   };
 }
 
-// The kinds, or the id of the first kind that is not an object with a string `label` and a `target` key.
+// The kinds of game `gameId`, or the text of the first failing check: a kind that is not an object with a string
+// `label` and a `target` key, or a bad `downloads`.
 function parseKinds(
+  gameId: string,
   kinds: JsonObject,
+  expandTilde: (text: string) => string,
 ): Record<string, BuildKindEntry> | string {
   const parsed: Record<string, BuildKindEntry> = {};
   for (const [kindId, kind] of Object.entries(kinds)) {
@@ -159,9 +163,47 @@ function parseKinds(
       typeof kind.label === 'string' &&
       Object.hasOwn(kind, 'target');
     if (!isKind) {
-      return kindId;
+      return `game ${gameId}: kind ${kindId} needs a label and a target`;
     }
-    parsed[kindId] = { label: kind.label as string, target: kind.target };
+    const downloads = parseDownloads(kind.downloads, expandTilde);
+    if (typeof downloads === 'string') {
+      return `game ${gameId}: kind ${kindId}: ${downloads}`;
+    }
+    parsed[kindId] = {
+      label: kind.label as string,
+      target: kind.target,
+      downloads,
+    };
+  }
+  return parsed;
+}
+
+// A kind's `downloads`, `[]` when absent or null, or the first failing check's text without its `game <id>: kind
+// <kind>: ` lead. Keys of an element other than `label` and `path` are left out.
+function parseDownloads(
+  downloads: unknown,
+  expandTilde: (text: string) => string,
+): BuildDownloadEntry[] | string {
+  if (downloads === undefined || downloads === null) {
+    return [];
+  }
+  if (!Array.isArray(downloads)) {
+    return 'downloads is not a list';
+  }
+  const parsed: BuildDownloadEntry[] = [];
+  for (const [index, download] of downloads.entries()) {
+    const element = download as unknown;
+    const isDownload =
+      isJsonObject(element) &&
+      isFilledText(element.label) &&
+      isFilledText(element.path);
+    if (!isDownload) {
+      return `download ${index + 1} needs a label and a path`;
+    }
+    parsed.push({
+      label: element.label as string,
+      path: expandTilde(element.path as string),
+    });
   }
   return parsed;
 }
