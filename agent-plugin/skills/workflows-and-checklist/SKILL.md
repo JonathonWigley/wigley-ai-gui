@@ -39,8 +39,9 @@ work's focus clearly changes.
   checklist, then make the edit again. A subagent's edits pass, and so does every edit when the app is not reachable.
 - **Turn end.** While the checklist holds open items, the hook reminds the agent once at the end of a turn: tick what
   finished, or leave the list as it is when the work waits on the user or a later turn.
-- **After a compaction**, the hook shows the last step and checklist again. Report the step and checklist that match
-  the work in hand in the same message as the next call.
+- **After a compaction**, the hook shows the last step and checklist again: the step when the session is on a stage
+  `set_workflow_step` names, and the checklist (or the plan's tasks) when one was sent. Report the step and checklist
+  that match the work in hand in the same message as the next call.
 
 The hook recognises an app session by the `WIGLEY_SESSION_ROW` environment variable the app sets. A terminal session
 has no gate.

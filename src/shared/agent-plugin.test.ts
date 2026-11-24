@@ -100,6 +100,8 @@ describe('the agent plugin folder', () => {
   });
 
   // Each hook the plugin ships; `mode` is the script's one argument, '' for none.
+  // Every command ends `|| true`: a script missing from a live session's copy
+  // of the plugin exits 2, which would block that session's calls.
   const HOOK_ROWS = [
     {
       event: 'PreToolUse',
@@ -160,7 +162,7 @@ describe('the agent plugin folder', () => {
     const expected = HOOK_ROWS.map((row) => ({
       event: row.event,
       matcher: row.matcher,
-      command: `python3 "\${CLAUDE_PLUGIN_ROOT}/${row.script}"${row.mode ? ` ${row.mode}` : ''}`,
+      command: `python3 "\${CLAUDE_PLUGIN_ROOT}/${row.script}"${row.mode ? ` ${row.mode}` : ''} || true`,
       timeout: row.timeout,
     }));
 

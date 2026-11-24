@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/chatroom/hook.py\" pre",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/chatroom/hook.py\" pre || true",
             "timeout": 5
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" edit",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" edit || true",
             "timeout": 5
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/ask-user-question/hook.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/ask-user-question/hook.py\" || true",
             "timeout": 5
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/chatroom/hook.py\" post",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/chatroom/hook.py\" post || true",
             "timeout": 5
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" stop",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" stop || true",
             "timeout": 5
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" compact",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/checklist/hook.py\" compact || true",
             "timeout": 5
           }
         ]

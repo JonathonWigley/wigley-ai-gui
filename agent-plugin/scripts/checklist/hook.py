@@ -1,7 +1,7 @@
 """The task-list hook for app sessions: `hook.py edit` denies an edit until the session has sent a task list,
-`hook.py stop` reminds the agent at a turn end while items are open, and `hook.py compact` shows the list again after a
-compaction. It asks the app's `workflow.checklist` hook handler over the relay's hook protocol, prints one JSON line or
-nothing, and always exits 0; a session with no app row, a subagent, and a session whose app is away or does not answer
+`hook.py stop` reminds the agent at a turn end while items are open, and `hook.py compact` shows the workflow step and
+the list again after a compaction. It asks the app's `workflow.checklist` hook handler over the relay's hook protocol,
+prints one JSON line or nothing, and always exits 0; a session with no app row, a subagent, and a session whose app is away or does not answer
 within HOOK_DEADLINE_SECONDS get nothing. relay/README.md § The relay holds the wire. Standard library only.
 """
 
@@ -33,8 +33,13 @@ CHECKLIST_REMINDER = (
     "again with set_workflow_checklist, each finished item done. If the work waits on the user or a later turn, leave "
     "the list as it is and end the turn."
 )
+COMPACT_STEP = "auri: this session's workflow step before the compaction: {step}."
 COMPACT_LIST_HEADER = "auri: this session's task list before the compaction:"
 COMPACT_LIST_FOOTER = "Send set_workflow_checklist again when the list no longer matches the work in hand."
+COMPACT_STEP_FOOTER = (
+    "Report the step and checklist that match the work in hand now, with set_workflow_step and set_workflow_checklist, "
+    "in the same message as the next call."
+)
 COMPACT_LIST_CUT = "…"
 COMPACT_NONE = (
     "auri: this session has sent no task list yet. Send it with set_workflow_checklist before your first edit."
@@ -53,8 +58,7 @@ def decide(mode: str, hook_input: dict, env, reply: dict | None) -> dict | None:
             return None
         noun = "item" if reply["open"] == 1 else "items"
         return _context("Stop", CHECKLIST_REMINDER.format(open=reply["open"], noun=noun))
-    text = compact_list(reply["items"]) if reply["reported"] else COMPACT_NONE
-    return _context("SessionStart", text)
+    return _context("SessionStart", compact_text(reply))
 
 
 def is_gated(mode: str, hook_input: dict, env) -> bool:
@@ -67,15 +71,25 @@ def is_gated(mode: str, hook_input: dict, env) -> bool:
     return is_app_session and not is_subagent and not is_repeated_stop and not is_other_session_start
 
 
-def compact_list(items: list[dict]) -> str:
-    """The compaction reminder for `items`, within CONTEXT_CAP: items dropped from the end and the text closed by one
-    COMPACT_LIST_CUT line when the whole list would pass it."""
+def compact_text(reply: dict) -> str:
+    """The compaction reminder for a well-formed `reply`: the step line when the session is on a reportable step,
+    then the task list, or COMPACT_NONE when none was sent."""
+    step = reply.get("step")
+    opening = [COMPACT_STEP.format(step=step)] if step is not None else []
+    if not reply["reported"]:
+        return "\n".join([*opening, COMPACT_NONE])
+    return compact_list(reply["items"], opening, COMPACT_LIST_FOOTER if step is None else COMPACT_STEP_FOOTER)
+
+
+def compact_list(items: list[dict], opening: list[str], footer: str) -> str:
+    """The `opening` lines, the list of `items` and `footer`, within CONTEXT_CAP: items dropped from the end and the
+    text closed by one COMPACT_LIST_CUT line in place of the footer when the whole text would pass it."""
     lines = [f"- [{'x' if item['done'] else ' '}] {item['text']}" for item in items]
-    whole = "\n".join([COMPACT_LIST_HEADER, *lines, COMPACT_LIST_FOOTER])
+    whole = "\n".join([*opening, COMPACT_LIST_HEADER, *lines, footer])
     if len(whole) <= CONTEXT_CAP:
         return whole
-    kept = [COMPACT_LIST_HEADER]
-    length = len(COMPACT_LIST_HEADER) + 1 + len(COMPACT_LIST_CUT)
+    kept = [*opening, COMPACT_LIST_HEADER]
+    length = len("\n".join(kept)) + 1 + len(COMPACT_LIST_CUT)
     for line in lines:
         if length + len(line) + 1 > CONTEXT_CAP:
             break
@@ -117,15 +131,16 @@ def _hook_output(argv: list[str], stdin, env, deadline: float) -> dict | None:
 
 
 def _is_checklist_reply(reply) -> bool:
-    """Whether `reply` holds a bool `reported`, an int `open` and a list of items each with a str `text` and a bool
-    `done`."""
+    """Whether `reply` holds a bool `reported`, an int `open`, a list of items each with a str `text` and a bool
+    `done`, and a `step` that is a str or None (an app from before `step` sends none)."""
     if not isinstance(reply, dict):
         return False
     open_count = reply.get("open")
     items = reply.get("items")
     is_open_count = isinstance(open_count, int) and not isinstance(open_count, bool)
     is_item_list = isinstance(items, list) and all(_is_item(item) for item in items)
-    return isinstance(reply.get("reported"), bool) and is_open_count and is_item_list
+    is_step = reply.get("step") is None or isinstance(reply.get("step"), str)
+    return isinstance(reply.get("reported"), bool) and is_open_count and is_item_list and is_step
 
 
 def _is_item(item) -> bool:
