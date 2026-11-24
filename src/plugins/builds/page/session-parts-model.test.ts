@@ -160,20 +160,28 @@ describe('hubBuildInputs', () => {
     );
 
     expect(
-      inputs.map(({ number, branch, shortRevision, state }) => ({
-        number,
-        branch,
-        shortRevision,
-        state,
-      })),
+      inputs.map(
+        ({ backendId, buildId, number, branch, shortRevision, state }) => ({
+          backendId,
+          buildId,
+          number,
+          branch,
+          shortRevision,
+          state,
+        }),
+      ),
     ).toEqual([
       {
+        backendId: 'work',
+        buildId: 'b3',
         number: 'b3',
         branch: 'protos/rocket',
         shortRevision: null,
         state: 'running',
       },
       {
+        backendId: 'work',
+        buildId: 'b1',
         number: 'b1',
         branch: 'main',
         shortRevision: '12345678',

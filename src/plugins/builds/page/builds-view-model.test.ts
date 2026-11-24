@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   BackendView,
+  BuildDownload,
   BuildRecord,
   BuildsSnapshot,
   GameView,
@@ -10,9 +11,10 @@ import type {
 import { buildJob, buildRecord, gameEntry } from '../contract.test-support';
 import {
   type BuildsEntryKey,
-  buildDetailInput,
+  buildHeaderInput,
   buildRowInput,
   type CursorMove,
+  downloadId,
   emptyReason,
   type FeedFilter,
   feedRows,
@@ -21,6 +23,9 @@ import {
   gameHeaderInput,
   gameRows,
   heldKey,
+  jobGraphInput,
+  jobLineInputs,
+  jobPanelInput,
   linkedBuilds,
   movedKey,
   queueChoices,
@@ -77,6 +82,30 @@ function setRun(id: string, buildIds: string[]): SetRunView {
 }
 
 const noQueuedBy = () => null;
+
+// A running save `id` of build `a/b1`, with `changes` over its fields.
+function buildDownload(
+  id: string,
+  changes: Partial<BuildDownload> = {},
+): BuildDownload {
+  return {
+    id,
+    backendId: 'a',
+    buildId: 'b1',
+    label: 'Save',
+    state: 'running',
+    path: null,
+    problem: null,
+    startedAt: 0,
+    ...changes,
+  };
+}
+
+function downloadsOf(
+  ...downloads: BuildDownload[]
+): ReadonlyMap<string, BuildDownload> {
+  return new Map(downloads.map((download) => [download.id, download]));
+}
 
 // Each item as `set <label> [ids]` or the build's id.
 function itemIds(items: GameListItem[]): unknown[] {
@@ -218,10 +247,9 @@ describe('buildRowInput', () => {
   });
 });
 
-describe('buildDetailInput', () => {
-  it("carries the build's step text and gives each job its time left in ms", () => {
+describe('jobLineInputs', () => {
+  it('gives each job its time left in ms', () => {
     const record = buildRecord({
-      stepText: 'Archiving',
       jobs: [
         buildJob({
           id: 'ios',
@@ -233,10 +261,316 @@ describe('buildDetailInput', () => {
       ],
     });
 
-    const input = buildDetailInput(record);
+    expect(jobLineInputs(record).map((job) => job.leftMs)).toEqual([
+      90_000,
+      null,
+    ]);
+  });
+});
 
-    expect(input.stepText).toBe('Archiving');
-    expect(input.jobs.map((job) => job.leftMs)).toEqual([90_000, null]);
+describe('downloadId', () => {
+  it.each<{
+    target: { log: string | null } | { file: number };
+    expected: string;
+  }>([
+    { target: { log: 'ios' }, expected: 'a/b1/log/ios' },
+    { target: { log: null }, expected: 'a/b1/log' },
+    { target: { file: 2 }, expected: 'a/b1/file/2' },
+  ])('$target → $expected', ({ target, expected }) => {
+    expect(downloadId('a', 'b1', target)).toBe(expected);
+  });
+});
+
+describe('jobGraphInput', () => {
+  it("lays each job's box in the graph's columns with its times", () => {
+    const record = buildRecord({
+      id: 'b1',
+      jobs: [
+        buildJob({ id: 'a', startedAt: 1_000_000, finishedAt: 1_300_000 }),
+        buildJob({ id: 'b', startedAt: 2_000, finishedAt: 1_000 }),
+        buildJob({
+          id: 'c',
+          state: 'running',
+          result: null,
+          leftSeconds: 90,
+          dependsOn: ['a'],
+        }),
+      ],
+    });
+    const graph = {
+      columns: [['b', 'a'], ['c']],
+      edges: [{ from: 'a', to: 'c' }],
+    };
+
+    const input = jobGraphInput(record, graph);
+
+    expect(
+      input.columns.map((boxes) =>
+        boxes.map(({ id, durationMs, leftMs }) => ({ id, durationMs, leftMs })),
+      ),
+    ).toEqual([
+      [
+        { id: 'b', durationMs: 0, leftMs: null },
+        { id: 'a', durationMs: 300_000, leftMs: null },
+      ],
+      [{ id: 'c', durationMs: null, leftMs: 90_000 }],
+    ]);
+    expect(input.edges).toEqual([{ from: 'a', to: 'c' }]);
+  });
+});
+
+describe('buildHeaderInput', () => {
+  const files = {
+    b1: [
+      { label: 'APK', path: '/builds/game-a.apk', entry: 0 },
+      { label: 'Zip', path: '/builds/game-a.zip', entry: 2 },
+    ],
+  };
+  it.each<{
+    case: string;
+    record: BuildRecord;
+    view?: Partial<GameView>;
+    backend?: Partial<BackendView>;
+    downloads?: BuildDownload[];
+    now?: number;
+    expected: object;
+  }>([
+    {
+      case: 'files keep their entries and read their downloads',
+      record: buildRecord({ id: 'b1' }),
+      view: { files },
+      downloads: [
+        buildDownload('a/b1/file/2', {
+          state: 'saved',
+          path: '/home/u/Downloads/game-a-1.zip',
+        }),
+      ],
+      expected: {
+        files: [
+          { entry: 0, label: 'APK', download: null },
+          {
+            entry: 2,
+            label: 'Zip',
+            download: {
+              state: 'saved',
+              fileName: 'game-a-1.zip',
+              problem: null,
+            },
+          },
+        ],
+      },
+    },
+    {
+      case: 'a Windows path names the same file',
+      record: buildRecord({ id: 'b1' }),
+      view: { files },
+      downloads: [
+        buildDownload('a/b1/file/0', {
+          state: 'saved',
+          path: 'C:\\Users\\u\\Downloads\\game-a-1.zip',
+        }),
+      ],
+      expected: {
+        files: [
+          {
+            entry: 0,
+            download: { state: 'saved', fileName: 'game-a-1.zip' },
+          },
+          { entry: 2, download: null },
+        ],
+      },
+    },
+    {
+      case: 'a build the files lack',
+      record: buildRecord({ id: 'b9' }),
+      view: { files },
+      expected: { files: [] },
+    },
+    {
+      case: 'a build with no jobs',
+      record: buildRecord({ id: 'b1', stepText: 'Archiving' }),
+      expected: { stepText: 'Archiving' },
+    },
+    {
+      case: 'a build with jobs',
+      record: buildRecord({
+        id: 'b1',
+        stepText: 'Archiving',
+        jobs: [buildJob()],
+      }),
+      expected: { stepText: null },
+    },
+    {
+      case: 'a finished build on a backend that cancels',
+      record: buildRecord({ id: 'b1' }),
+      expected: { canCancel: true },
+    },
+    {
+      case: 'a backend that cannot cancel',
+      record: buildRecord({ id: 'b1' }),
+      backend: {
+        capabilities: { cancel: false, choosesBranch: false, saveLog: false },
+      },
+      expected: { canCancel: false },
+    },
+    {
+      case: 'a start estimate ahead',
+      record: buildRecord({
+        id: 'b1',
+        state: 'queued',
+        result: null,
+        startEstimate: 61_000,
+      }),
+      now: 1_000,
+      expected: { startsInMs: 60_000 },
+    },
+    {
+      case: 'a start estimate past',
+      record: buildRecord({
+        id: 'b1',
+        state: 'queued',
+        result: null,
+        startEstimate: 500,
+      }),
+      now: 1_000,
+      expected: { startsInMs: 0 },
+    },
+    {
+      case: 'no start estimate',
+      record: buildRecord({ id: 'b1', state: 'queued', result: null }),
+      expected: { startsInMs: null },
+    },
+    {
+      case: 'a revision with a subject',
+      record: buildRecord({ id: 'b1', revision: '2993a9e4c1' }),
+      view: { subjects: { '2993a9e4c1': 'Fix the jump' } },
+      expected: { subject: 'Fix the jump' },
+    },
+  ])(
+    '$case',
+    ({ record, view, backend, downloads = [], now = NOW, expected }) => {
+      const shown = gameView('g1', [record], view);
+
+      const input = buildHeaderInput(
+        record,
+        shown,
+        backendView('a', [shown], backend),
+        downloadsOf(...downloads),
+        now,
+      );
+
+      expect(input).toMatchObject(expected);
+    },
+  );
+});
+
+describe('jobPanelInput', () => {
+  const ios = buildJob({
+    id: 'ios',
+    label: 'iOS',
+    state: 'running',
+    result: null,
+    percent: 40,
+    leftSeconds: 30,
+    stepText: 'Compiling',
+    webUrl: 'https://ci.test/ios',
+  });
+  const withJobs = buildRecord({
+    id: 'b1',
+    webUrl: 'https://ci.test/b1',
+    jobs: [ios],
+  });
+  const noJobs = buildRecord({
+    id: 'b1',
+    stepText: 'Archiving',
+    webUrl: 'https://ci.test/b1',
+  });
+  it.each<{
+    case: string;
+    record: BuildRecord;
+    jobId: string | null;
+    backend?: Partial<BackendView>;
+    downloads?: BuildDownload[];
+    expected: object;
+  }>([
+    {
+      case: 'a job',
+      record: withJobs,
+      jobId: 'ios',
+      expected: {
+        label: 'iOS',
+        isBuild: false,
+        stepText: 'Compiling',
+        percent: 40,
+        leftMs: 30_000,
+        webUrl: 'https://ci.test/ios',
+        log: null,
+      },
+    },
+    {
+      case: 'a build with no jobs',
+      record: noJobs,
+      jobId: null,
+      expected: {
+        label: 'Dev',
+        isBuild: true,
+        stepText: 'Archiving',
+        webUrl: 'https://ci.test/b1',
+      },
+    },
+    {
+      case: 'a backend that saves logs',
+      record: withJobs,
+      jobId: 'ios',
+      backend: {
+        capabilities: { cancel: true, choosesBranch: false, saveLog: true },
+      },
+      expected: { canSaveLog: true },
+    },
+    {
+      case: 'a backend that cannot save logs',
+      record: withJobs,
+      jobId: 'ios',
+      expected: { canSaveLog: false },
+    },
+    {
+      case: "a job's failed save",
+      record: withJobs,
+      jobId: 'ios',
+      downloads: [
+        buildDownload('a/b1/log/ios', {
+          state: 'failed',
+          problem: 'disk full',
+        }),
+      ],
+      expected: {
+        log: { state: 'failed', fileName: null, problem: 'disk full' },
+      },
+    },
+    {
+      case: "the build's own save",
+      record: noJobs,
+      jobId: null,
+      downloads: [
+        buildDownload('a/b1/log', {
+          state: 'saved',
+          path: '/home/u/Downloads/b1.log',
+        }),
+      ],
+      expected: { log: { state: 'saved', fileName: 'b1.log', problem: null } },
+    },
+  ])('$case', ({ record, jobId, backend, downloads = [], expected }) => {
+    const view = gameView('g1', [record]);
+
+    const input = jobPanelInput(
+      record,
+      jobId,
+      view,
+      backendView('a', [view], backend),
+      downloadsOf(...downloads),
+    );
+
+    expect(input).toMatchObject(expected);
   });
 });
 

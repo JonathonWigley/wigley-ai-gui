@@ -1,5 +1,6 @@
 /* Builds mode's app-owned containers: the side bar's pane holding the layout's entries, and the sheet holding the
-   main pane, whose body scrolls the shown entry's head and list. */
+   split of the main pane, whose body scrolls the shown entry's head and list, and the detail pane's holder, whose body
+   holds the shown build's head, job graph and job panel. */
 .builds-side {
   height: 100%;
   min-height: 0;
@@ -27,14 +28,33 @@
   height: calc(100% - var(--wg-sheet-gutter) * 2);
 }
 
-.builds-main {
+.builds-split {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Stacked, the list and the detail share the height evenly; the `.ui-split` prefix outranks the shared split's
+   stacked rows whatever order the sheets load in. */
+.ui-split.builds-split.is-stacked {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+@media (max-width: 640px) {
+  .ui-split.builds-split {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.builds-main,
+.builds-detail-holder {
   height: 100%;
   min-height: 0;
   outline: none;
   overflow-y: auto;
 }
 
-.builds-body {
+.builds-body,
+.builds-detail-body {
   display: flex;
   flex-direction: column;
   padding-block-end: var(--wg-space-2);

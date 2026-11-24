@@ -281,6 +281,20 @@ export const buildsDownloadsSlot: KeyedSlotKey<
   kind: 'keyed',
 };
 
+// What a page reload puts back in Builds mode: `entry` the shown side-bar entry (`all` or `<backendId>/<gameId>`),
+// `build` the list cursor's build key `<backendId>/<buildId>` and `job` the job cursor's job id, each null with none.
+export interface BuildsPlace {
+  entry: string;
+  build: string | null;
+  job: string | null;
+}
+
+export const buildsPlaceSlot: SlotKey<BuildsPlace, 'page', 'builds'> = {
+  id: 'builds.place',
+  process: 'page',
+  kind: 'value',
+};
+
 // The page's calls into main. `setShown` reports whether Builds mode shows, which speeds polling; the last report
 // wins. `branches` lists a game's origin branch heads, those matching the set's pattern when `set` names one. `queue`
 // queues a kind or a set, linked to `sessionId` when set. `queueOffer` and `dismissOffer` act on the session's offer;

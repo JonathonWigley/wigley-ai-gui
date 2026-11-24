@@ -39,12 +39,21 @@ import { sessionRow } from '../../sessions/contract.test-support';
 import type {
   BackendCapabilities,
   BackendView,
+  BuildDownload,
+  BuildFile,
+  BuildJob,
   BuildRecord,
+  BuildsPlace,
   BuildsSnapshot,
   GameView,
   SessionBuilds,
 } from '../contract';
-import { buildsSessionsSlot, buildsSnapshotSlot } from '../contract';
+import {
+  buildsDownloadsSlot,
+  buildsPlaceSlot,
+  buildsSessionsSlot,
+  buildsSnapshotSlot,
+} from '../contract';
 import {
   buildJob,
   buildOffer,
@@ -60,6 +69,8 @@ interface Fixture {
   capabilities?: BackendCapabilities | null;
   clone?: string | null;
   g1Builds?: BuildRecord[];
+  g1Files?: Record<string, BuildFile[]>;
+  g2Builds?: BuildRecord[];
   extraBackends?: BackendView[];
 }
 
@@ -88,7 +99,7 @@ function g1View(fixture: Fixture): GameView {
     builds: fixture.g1Builds ?? [],
     subjects: {},
     setRuns: [],
-    files: {},
+    files: fixture.g1Files ?? {},
   };
 }
 
@@ -112,7 +123,7 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
           {
             backendId: 'work',
             game: gameEntry({ id: 'g2', label: 'Game Two' }),
-            builds: [],
+            builds: fixture.g2Builds ?? [],
             subjects: {},
             setRuns: [],
             files: {},
@@ -126,16 +137,20 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
 
 type Answer = (...args: unknown[]) => unknown;
 
-// The Builds page on the harness, drawing its layout for real, with `snapshot` published to `builds.snapshot`.
-// `answers` answers an invoke by method, else undefined; `calls` holds each invoke, `opens` each picker request,
-// `opened` each `openExternal` url. The fake sessions record each `setActivity` in `activities` and answer
+// The Builds page on the harness, drawing its layout for real, with `snapshot` published to `builds.snapshot` (none
+// for null) and `seed.place` in `builds.place` as the last page wrote it. `answers` answers an invoke by method, else
+// undefined; `calls` holds each invoke, `opens` each picker request, `opened` each `openExternal` url. `putDownload`
+// writes `builds.downloads`, `place` reads `builds.place`, and `focusTarget` is the focus target the view set last. The fake sessions record each `setActivity` in `activities` and answer
 // `shownSessionId` with `shown.sessionId`; the fakes record each row, side and composer part, `drawPart(id, sessionId)`
 // builds one into a wrapper and returns the wrapper, and `stop()` is the offer card's stop.
 function startBuildsPage(
-  snapshot: BuildsSnapshot,
+  snapshot: BuildsSnapshot | null,
   answers: Record<string, Answer> = {},
+  seed: { place?: BuildsPlace } = {},
 ) {
   installFocusFakeDom(vi.stubGlobal);
+  // The job graph draws its arrows in an animation frame, which the fake DOM lacks; the frame never comes.
+  vi.stubGlobal('requestAnimationFrame', () => 0);
   const calls: { method: string; args: unknown[] }[] = [];
   const opens: ListPickerRequest<unknown>[] = [];
   const opened: string[] = [];
@@ -155,8 +170,16 @@ function startBuildsPage(
   const demoSteps = createDemoStepRegistry<DemoStep>();
   const state = createSlotStore(() => undefined);
   const snapshotWriter = state.publish(buildsSnapshotSlot);
-  snapshotWriter.set(snapshot);
+  if (snapshot !== null) {
+    snapshotWriter.set(snapshot);
+  }
   const sessionsWriter = state.publish(buildsSessionsSlot);
+  const downloadsWriter = state.publish(buildsDownloadsSlot);
+  if (seed.place !== undefined) {
+    const lastPage = state.publish(buildsPlaceSlot);
+    lastPage.set(seed.place);
+    lastPage.dispose();
+  }
   const rowsWriter = state.publish(sessionsRowsSlot);
   const activities: [string, string, RowActivity | null][] = [];
   const shown: { sessionId: string | null } = { sessionId: null };
@@ -216,6 +239,9 @@ function startBuildsPage(
       keyof typeof commands,
       | 'selectEntry'
       | 'selectBuild'
+      | 'selectJob'
+      | 'downloadFile'
+      | 'showBuild'
       | 'queueButton'
       | 'withAgent'
       | 'setFilter'
@@ -294,6 +320,10 @@ function startBuildsPage(
     showGame,
     demoSteps,
     publish: (next: BuildsSnapshot) => snapshotWriter.set(next),
+    putDownload: (download: BuildDownload) =>
+      downloadsWriter.set(download.id, download),
+    place: () => state.read(buildsPlaceSlot, 'test').get(),
+    focusTarget: () => harness.focusTarget(),
     setSession: (sessionId: string, builds: SessionBuilds) =>
       sessionsWriter.set(sessionId, builds),
     dropSession: (sessionId: string) => sessionsWriter.delete(sessionId),
@@ -306,6 +336,8 @@ function startBuildsPage(
     enterStep,
   };
 }
+
+type Page = ReturnType<typeof startBuildsPage>;
 
 async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -323,6 +355,55 @@ const running = (id: string, queuedAt = 100) =>
     result: null,
     queuedAt,
   });
+
+const job = (id: string, changes: Partial<BuildJob> = {}) =>
+  buildJob({ id, label: id.toUpperCase(), ...changes });
+const runningJob = (id: string, changes: Partial<BuildJob> = {}) =>
+  job(id, { state: 'running', result: null, ...changes });
+
+// Running build `id` of game `g1` listing `jobs`.
+const withJobs = (id: string, queuedAt: number, jobs: BuildJob[]) =>
+  buildRecord({
+    id,
+    gameId: 'g1',
+    number: id,
+    state: 'running',
+    result: null,
+    queuedAt,
+    jobs,
+  });
+
+const ONE_JOB: Fixture = { g1Builds: [withJobs('41', 100, [runningJob('a')])] };
+const SAVES_LOGS: BackendCapabilities = {
+  cancel: true,
+  choosesBranch: true,
+  saveLog: true,
+};
+
+// The list place of the row under the list cursor, and the number the detail pane's build head names.
+function marks(page: Page) {
+  const rows = findAll(page.sheet(), 'builds-row');
+  return {
+    cursor: rows.flatMap((row, place) =>
+      row.classList.contains('is-selected') ? [place] : [],
+    ),
+    detail: findAll(page.sheet(), 'builds-build-header').map(
+      (header) => header.textContent.match(/#(\w+)/)?.[1] ?? null,
+    ),
+  };
+}
+
+// The job id of each graph box under the job cursor.
+function selectedJobs(page: Page): (string | undefined)[] {
+  return findAll(page.sheet(), 'builds-job-box')
+    .filter((box) => box.classList.contains('is-selected'))
+    .map((box) => box.dataset.jobId);
+}
+
+// Gives the build list the keys, from the side bar where showing the mode leaves them.
+function toList(page: Page): void {
+  page.focusTarget()?.move('right');
+}
 
 describe('buildsPagePart', () => {
   afterEach(() => {
@@ -662,27 +743,12 @@ describe('buildsPagePart', () => {
     expect(page.toasts()).toEqual([]);
   });
 
-  // The list place of the row under the list cursor, and of the row the open detail sits under.
-  function marks(page: ReturnType<typeof startBuildsPage>) {
-    const rows = findAll(page.sheet(), 'builds-row');
-    const details = findAll(page.sheet(), 'builds-detail');
-    return {
-      cursor: rows.flatMap((row, place) =>
-        row.classList.contains('is-selected') ? [place] : [],
-      ),
-      detail: details.map((detail) =>
-        rows.findIndex((row) => row === detail.previousElementSibling),
-      ),
-    };
-  }
-
-  it('keeps the cursor and the detail on their build across a poll', () => {
+  it('keeps the cursor and the detail pane on their build across a poll', () => {
     const page = startBuildsPage(
       workSnapshot({ g1Builds: [running('41', 200), running('40', 100)] }),
     );
     page.showGame(G1);
     page.run('listDown');
-    page.run('openDetail');
 
     page.publish(
       workSnapshot({
@@ -691,79 +757,519 @@ describe('buildsPagePart', () => {
     );
 
     // 40 is the third row, under 42 and 41.
-    expect(marks(page)).toEqual({ cursor: [2], detail: [2] });
+    expect(marks(page)).toEqual({ cursor: [2], detail: ['40'] });
   });
 
-  it("opens the detail's build in its backend, wherever the cursor is", async () => {
-    const page = startBuildsPage(
-      workSnapshot({
-        g1Builds: [
-          buildRecord({
-            id: '41',
-            gameId: 'g1',
-            queuedAt: 200,
-            webUrl: 'https://ci.test/41',
-          }),
-          buildRecord({
-            id: '40',
-            gameId: 'g1',
-            queuedAt: 100,
-            webUrl: 'https://ci.test/40',
-          }),
-        ],
-      }),
-    );
-    page.showGame(G1);
-    page.run('openDetail');
-    page.run('listDown');
-
-    findAll(page.sheet(), 'builds-detail')
-      .flatMap((detail) => findAll(detail, 'ui-button'))
-      .at(-1)
-      ?.click();
-    await settle();
-
-    expect(page.opened).toEqual(['https://ci.test/41']);
-  });
-
-  it('closes the detail when its build is gone', () => {
+  it('shows the new cursor build when the shown build is gone', () => {
     const page = startBuildsPage(
       workSnapshot({ g1Builds: [running('41', 200), running('40', 100)] }),
     );
     page.showGame(G1);
     page.run('listDown');
-    page.run('openDetail');
 
     page.publish(workSnapshot({ g1Builds: [running('41', 200)] }));
 
-    expect(marks(page)).toEqual({ cursor: [0], detail: [] });
+    expect(marks(page)).toEqual({ cursor: [0], detail: ['41'] });
   });
 
-  it.each([
-    { case: 'no jobs', jobs: [], showsStep: true },
-    { case: 'jobs', jobs: [buildJob()], showsStep: false },
+  it("shows the list cursor's build in the detail pane", () => {
+    const page = startBuildsPage(
+      workSnapshot({ g1Builds: [running('41', 200), running('40', 100)] }),
+    );
+    page.showGame(G1);
+    const first = marks(page).detail;
+
+    page.run('listDown');
+    const second = marks(page).detail;
+    page.commands.selectEntry({ arg: 'work/g2' });
+
+    expect([first, second, marks(page).detail]).toEqual([['41'], ['40'], []]);
+    expect(
+      findAll(page.sheet(), 'builds-detail-body').map((body) =>
+        body.textContent.includes('Pick a build to see its jobs.'),
+      ),
+    ).toEqual([true]);
+  });
+
+  it('keeps the job cursor on its job across a poll', () => {
+    const jobs = (a: number, b: number) => [
+      runningJob('a', { percent: a }),
+      runningJob('b', { percent: b }),
+    ];
+    const page = startBuildsPage(
+      workSnapshot({ g1Builds: [withJobs('41', 100, jobs(10, 20))] }),
+    );
+    page.showGame(G1);
+    page.run('graphDown');
+
+    page.publish(
+      workSnapshot({ g1Builds: [withJobs('41', 100, jobs(50, 60))] }),
+    );
+
+    const panelPercents = findAll(page.sheet(), 'builds-job-panel')
+      .flatMap((panel) => findAll(panel, 'ui-meter'))
+      .map((meter) => meter.getAttribute('aria-valuenow'));
+    expect({ selected: selectedJobs(page), panelPercents }).toEqual({
+      selected: ['b'],
+      panelPercents: ['60'],
+    });
+  });
+
+  it("keeps the graph's scroll across a poll", () => {
+    const snapshotAt = (percent: number) =>
+      workSnapshot({
+        g1Builds: [withJobs('41', 100, [runningJob('a', { percent })])],
+      });
+    const page = startBuildsPage(snapshotAt(10));
+    page.showGame(G1);
+    const before = findAll(page.sheet(), 'builds-graph')[0];
+    (before as unknown as { scrollLeft: number }).scrollLeft = 40;
+
+    page.publish(snapshotAt(70));
+
+    const after = findAll(page.sheet(), 'builds-graph');
+    expect(after).toHaveLength(1);
+    expect(after[0]).not.toBe(before);
+    expect((after[0] as unknown as { scrollLeft: number }).scrollLeft).toBe(40);
+  });
+
+  it.each<{
+    case: string;
+    fixture: Fixture;
+    act: (page: Page) => unknown;
+    scope: string;
+    moved: boolean | null;
+    logs: string[];
+  }>([
+    {
+      case: 'Enter in the list enters the graph',
+      fixture: ONE_JOB,
+      act: (page) => {
+        toList(page);
+        page.run('focusGraph');
+      },
+      scope: 'builds.graph',
+      moved: null,
+      logs: ['focus graph', 'graph on work/41 job a'],
+    },
+    {
+      case: 'Esc in the graph gives the keys back to the list',
+      fixture: ONE_JOB,
+      act: (page) => {
+        toList(page);
+        page.run('focusGraph');
+        page.run('leaveGraph');
+      },
+      scope: 'builds.list',
+      moved: null,
+      logs: [],
+    },
+    {
+      case: 'Enter on an empty list stays in the list',
+      fixture: {},
+      act: (page) => {
+        toList(page);
+        page.run('focusGraph');
+      },
+      scope: 'builds.list',
+      moved: null,
+      logs: ['no build under the cursor'],
+    },
+    {
+      case: 'Alt+j side by side goes on to the core',
+      fixture: ONE_JOB,
+      act: (page) => {
+        toList(page);
+        return page.focusTarget()?.move('down');
+      },
+      scope: 'builds.list',
+      moved: false,
+      logs: [],
+    },
+    {
+      case: 'Alt+j while the split stacks enters the graph',
+      fixture: ONE_JOB,
+      act: (page) => {
+        toList(page);
+        // The fake DOM reports no width, so the test stacks the split by hand.
+        findAll(page.sheet(), 'builds-split')[0].classList.add('is-stacked');
+        return page.focusTarget()?.move('down');
+      },
+      scope: 'builds.graph',
+      moved: true,
+      logs: [],
+    },
+    {
+      case: 'main takes the keys back to the graph',
+      fixture: ONE_JOB,
+      act: (page) => {
+        toList(page);
+        page.run('focusGraph');
+        page.harness.mode(MODE).focusSideBar?.();
+        page.harness.mode(MODE).focusMain();
+      },
+      scope: 'builds.graph',
+      moved: null,
+      logs: [],
+    },
   ])(
-    "shows the build's step in its detail only with $case",
-    ({ jobs, showsStep }) => {
+    'moves the keys between the list and the graph: $case',
+    ({ fixture, act, scope, moved, logs }) => {
+      const page = startBuildsPage(workSnapshot(fixture));
+      page.showGame(G1);
+
+      const result = act(page);
+
+      expect(page.harness.scope()).toBe(scope);
+      expect(result ?? null).toBe(moved);
+      expect(page.logged().filter((line) => logs.includes(line))).toEqual(logs);
+    },
+  );
+
+  it('gives the keys to the list when the shown build goes', () => {
+    const page = startBuildsPage(workSnapshot(ONE_JOB));
+    page.showGame(G1);
+    toList(page);
+    page.run('focusGraph');
+
+    page.publish(workSnapshot());
+
+    expect(page.harness.scope()).toBe('builds.list');
+    expect(page.logged()).toContain('build work/41 gone');
+  });
+
+  it.each<{
+    case: string;
+    capabilities?: BackendCapabilities;
+    jobs: BuildJob[];
+    answer: Answer;
+    saves: unknown[];
+    graphs: number;
+    toasts: string[];
+  }>([
+    {
+      case: 'the cursor job',
+      capabilities: SAVES_LOGS,
+      jobs: [runningJob('a')],
+      answer: () => ({ ok: true }),
+      saves: [{ backend: 'work', game: 'g1', build: '41', job: 'a' }],
+      graphs: 1,
+      toasts: [],
+    },
+    {
+      case: 'a build with no jobs',
+      capabilities: SAVES_LOGS,
+      jobs: [],
+      answer: () => ({ ok: true }),
+      saves: [{ backend: 'work', game: 'g1', build: '41', job: null }],
+      graphs: 0,
+      toasts: [],
+    },
+    {
+      case: 'a backend that cannot save logs',
+      jobs: [runningJob('a')],
+      answer: () => ({ ok: true }),
+      saves: [],
+      graphs: 1,
+      toasts: ['toast info: Work cannot save logs'],
+    },
+    {
+      case: 'a problem answer',
+      capabilities: SAVES_LOGS,
+      jobs: [runningJob('a')],
+      answer: () => ({ problem: 'x' }),
+      saves: [{ backend: 'work', game: 'g1', build: '41', job: 'a' }],
+      graphs: 1,
+      toasts: ['toast error: x'],
+    },
+    {
+      case: 'a rejection',
+      capabilities: SAVES_LOGS,
+      jobs: [runningJob('a')],
+      answer: () => Promise.reject(new Error('boom')),
+      saves: [{ backend: 'work', game: 'g1', build: '41', job: 'a' }],
+      graphs: 1,
+      toasts: ['toast error: boom'],
+    },
+  ])(
+    'saves a log: $case',
+    async ({ capabilities, jobs, answer, saves, graphs, toasts }) => {
+      const page = startBuildsPage(
+        workSnapshot({ capabilities, g1Builds: [withJobs('41', 100, jobs)] }),
+        { saveLog: answer },
+      );
+      page.showGame(G1);
+
+      page.run('saveLog');
+      await settle();
+
+      expect(page.callsOf('saveLog')).toEqual(saves);
+      expect(findAll(page.sheet(), 'builds-graph')).toHaveLength(graphs);
+      expect(page.toasts()).toEqual(toasts);
+    },
+  );
+
+  const APK: BuildFile = { label: 'APK', path: '/builds/41.apk', entry: 1 };
+  const IPA: BuildFile = { label: 'IPA', path: '/builds/41.ipa', entry: 3 };
+  it.each<{
+    case: string;
+    files: BuildFile[];
+    picksSecond: boolean;
+    title: string | null;
+    rows: string[];
+    downloads: number[];
+    toasts: string[];
+  }>([
+    {
+      case: 'the only file',
+      files: [APK],
+      picksSecond: false,
+      title: null,
+      rows: [],
+      downloads: [1],
+      toasts: [],
+    },
+    {
+      case: 'the second of two files',
+      files: [APK, IPA],
+      picksSecond: true,
+      title: 'Download a file',
+      rows: ['APK', 'IPA'],
+      downloads: [3],
+      toasts: [],
+    },
+    {
+      case: 'no file',
+      files: [],
+      picksSecond: false,
+      title: null,
+      rows: [],
+      downloads: [],
+      toasts: ['toast info: This build has no files to download'],
+    },
+  ])(
+    'downloads the only file and picks among several: $case',
+    async ({ files, picksSecond, title, rows, downloads, toasts }) => {
+      const page = startBuildsPage(
+        workSnapshot({ g1Builds: [running('41')], g1Files: { '41': files } }),
+        { download: () => ({ ok: true }) },
+      );
+      page.showGame(G1);
+
+      page.run('download');
+      const opened = {
+        title: page.lastOpen()?.title ?? null,
+        rows: page.rows(),
+      };
+      if (picksSecond) {
+        page.run('pickerDown');
+        page.run('pickerChoose');
+      }
+      await settle();
+
+      expect(opened).toEqual({ title, rows });
+      expect(page.callsOf('download')).toEqual(
+        downloads.map((file) => ({
+          backend: 'work',
+          game: 'g1',
+          build: '41',
+          file,
+        })),
+      );
+      expect(page.toasts()).toEqual(toasts);
+    },
+  );
+
+  it('logs each download state it hears', () => {
+    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    const saving: BuildDownload = {
+      id: 'work/41/log/a',
+      backendId: 'work',
+      buildId: '41',
+      label: 'A',
+      state: 'running',
+      path: null,
+      problem: null,
+      startedAt: 0,
+    };
+
+    page.putDownload(saving);
+    page.putDownload({
+      ...saving,
+      state: 'saved',
+      path: '/home/Downloads/x.log',
+    });
+
+    expect(
+      page.logged().filter((line) => line.startsWith('download work/')),
+    ).toEqual([
+      'download work/41/log/a running',
+      'download work/41/log/a saved x.log',
+    ]);
+  });
+
+  it.each<{
+    case: string;
+    jobs: BuildJob[];
+    opened: string[];
+    toasts: string[];
+  }>([
+    {
+      case: 'a job with a link',
+      jobs: [job('a', { webUrl: 'https://ci.test/a' })],
+      opened: ['https://ci.test/a'],
+      toasts: [],
+    },
+    {
+      case: 'a job with no link',
+      jobs: [job('a')],
+      opened: [],
+      toasts: ['toast info: This job has no link in the backend'],
+    },
+    {
+      case: 'a build with no jobs',
+      jobs: [],
+      opened: ['https://ci.test/41'],
+      toasts: [],
+    },
+  ])(
+    'opens a link with o in the graph: $case',
+    async ({ jobs, opened, toasts }) => {
       const page = startBuildsPage(
         workSnapshot({
           g1Builds: [
             buildRecord({
               id: '41',
               gameId: 'g1',
-              stepText: 'Archiving',
+              webUrl: 'https://ci.test/41',
               jobs,
             }),
           ],
         }),
       );
       page.showGame(G1);
-      page.run('openDetail');
 
-      const steps = findAll(page.sheet(), 'builds-detail').flatMap((detail) =>
-        findAll(detail, 'builds-step'),
+      page.run('openJob');
+      await settle();
+
+      expect(page.opened).toEqual(opened);
+      expect(page.toasts()).toEqual(toasts);
+    },
+  );
+
+  it.each([
+    {
+      case: 'a job the build lists',
+      id: 'b',
+      scope: 'builds.graph',
+      log: 'job cursor on b',
+      selected: ['b'],
+    },
+    {
+      case: 'a job the build lacks',
+      id: 'z',
+      scope: 'builds.games',
+      log: 'no job z',
+      selected: ['a'],
+    },
+  ])('selects a job by id: $case', ({ id, scope, log, selected }) => {
+    const page = startBuildsPage(
+      workSnapshot({
+        g1Builds: [withJobs('41', 100, [runningJob('a'), job('b')])],
+      }),
+    );
+    page.showGame(G1);
+
+    page.commands.selectJob({ arg: id });
+
+    expect(page.harness.scope()).toBe(scope);
+    expect(page.logged()).toContain(log);
+    expect(selectedJobs(page)).toEqual(selected);
+  });
+
+  it('shows a build from the hub', () => {
+    const page = startBuildsPage(
+      workSnapshot({
+        g1Builds: [running('41')],
+        g2Builds: [buildRecord({ id: '50', gameId: 'g2', number: '50' })],
+      }),
+    );
+
+    page.commands.showBuild({ arg: { backend: 'work', build: '50' } });
+    const sideBar = asFake(page.harness.mode(MODE).sideBar as HTMLElement);
+    const shown = {
+      setShown: page.callsOf('setShown'),
+      entry: findAll(sideBar, 'is-selected').map((entry) =>
+        entry.textContent.includes('Game Two'),
+      ),
+      marks: marks(page),
+      scope: page.harness.scope(),
+    };
+    page.harness.mode(MODE).hidden();
+    page.harness.mode(MODE).shown();
+
+    expect(shown).toEqual({
+      setShown: [true],
+      entry: [true],
+      marks: { cursor: [0], detail: ['50'] },
+      scope: 'builds.list',
+    });
+    expect(page.harness.scope()).toBe('builds.games');
+  });
+
+  it('shows no mode for a build the snapshot lacks', () => {
+    const page = startBuildsPage(workSnapshot());
+
+    page.commands.showBuild({ arg: { backend: 'work', build: '99' } });
+
+    expect(page.toasts()).toEqual([
+      'toast info: The build is no longer listed',
+    ]);
+    expect(page.callsOf('setShown')).toEqual([]);
+  });
+
+  const SAVED: BuildsPlace = { entry: G1, build: 'work/40', job: 'b' };
+  it.each<{
+    case: string;
+    movesFirst: boolean;
+    expected: BuildsPlace;
+    jobs: string[];
+  }>([
+    {
+      case: 'the snapshot that holds it puts it back',
+      movesFirst: false,
+      expected: SAVED,
+      jobs: ['b'],
+    },
+    {
+      case: 'a move before it drops it',
+      movesFirst: true,
+      expected: { entry: 'all', build: 'work/41', job: null },
+      jobs: [],
+    },
+  ])(
+    'keeps the saved place until the restore: $case',
+    ({ movesFirst, expected, jobs }) => {
+      const page = startBuildsPage(null, {}, { place: SAVED });
+      page.publish({ backends: [], polledAt: 0 });
+      const held = page.place();
+      if (movesFirst) {
+        page.run('listDown');
+      }
+
+      // Job a runs, so the default job of 40 is a, not the saved b.
+      page.publish(
+        workSnapshot({
+          g1Builds: [
+            running('41', 200),
+            withJobs('40', 100, [runningJob('a'), job('b')]),
+          ],
+        }),
       );
-      expect(steps).toHaveLength(showsStep ? 1 : 0);
+
+      expect(held).toEqual(SAVED);
+      expect(page.place()).toEqual(expected);
+      expect(selectedJobs(page)).toEqual(jobs);
     },
   );
 
