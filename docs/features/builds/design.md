@@ -147,7 +147,8 @@ for one backend entry.
   job's own page in the backend), `startedAt`, `finishedAt`, and `dependsOn`: the ids of the jobs of the same build
   that this job directly waits on. A job's prerequisites through another prerequisite are not listed.
 
-Three adapters stand behind the seam: TeamCity, local, and the self-test's fixture backend.
+Three adapters stand behind the seam: TeamCity, local, and the `fixture` backend. `fixture` loads in the self-test and in
+a drive run (`runMode` `'drive'`); only the self-test hands over its script.
 
 ## The TeamCity backend
 
@@ -282,8 +283,8 @@ every parse is tested over recorded JSON.
 - **Detail pane**: the selected build, updated live as each poll lands: the status text, the links, Open in the
   backend (`webUrl`), a button per file the build has (§ Logs and files), and its jobs as a graph. A build that lists
   no job, as a local build, shows its step text and a Log button for the build's own log instead of the graph.
-- **Job graph**: one box per job, in columns left to right, with an arrow from each job's box to each of its direct
-  prerequisites (`dependsOn`). A job's column is the length of its longest chain of prerequisites, so a job with none
+- **Job graph**: one box per job, in columns left to right, with an arrow from each prerequisite's box to the box of
+  each job that directly waits on it (`dependsOn`), the arrowhead at the dependent's end. A job's column is the length of its longest chain of prerequisites, so a job with none
   sits in column 0. Inside a column, jobs keep their order in `BuildRecord.jobs`. A box shows the job's label, its
   state with a progress bar while it runs, and how long it ran once finished. Boxes keep their size, and the graph
   scrolls sideways when the pane is narrower. Opening a build selects its first running job, else its first failed
@@ -300,9 +301,10 @@ every parse is tested over recorded JSON.
 - **Keys**: the game list scope (`builds.games`) takes `j`/`k`, `gg`/`G`, `Enter` to show the game
   and `q` to queue. The build list scope (`builds.list`) takes `j`/`k`, `gg`/`G`, `q` to queue, `o` to open the
   build in the backend, `s` to download the build's file (the list picker chooses when it has several), `x` to cancel
-  where the backend can, and `Alt+l` or `Enter` to move into the job graph. The graph's scope (`builds.graph`) takes
+  where the backend can, and `Enter` (`builds.focusGraph`) or the pane move `Alt+l` (`Alt+j` while the split stacks) to move into the job graph. The graph's scope (`builds.graph`) takes
   `h`/`l` to step between columns and `j`/`k` within one, `s` to save the selected job's log, `o` to open its
-  TeamCity page and `Esc` to go back to the list.
+  backend page and `Esc` to go back to the list. A build with no jobs has no job cursor: `s` saves the build's own log
+  and `o` opens the build's page.
   The queue picker's scope (`builds.picker`) takes the shared list picker's keys. `<Leader>mq` opens the queue picker
   from anywhere. The offer card's scope (`builds.offer`) takes `Enter` to queue, `x` to dismiss, `k` or
   `Esc` to leave the card, and `i` and `a` to focus the chat box.
