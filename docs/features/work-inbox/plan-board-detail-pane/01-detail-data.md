@@ -1,6 +1,6 @@
 # 01 — Detail records, slot and sweep
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · adds a `work.json` section, a keyed slot and two tool schemas, and 02, 03 and 04 consume them
 Wave: 1 · Depends on: none
@@ -174,3 +174,5 @@ Done when: `npm run typecheck` passes; the four test files above pass; `npm run 
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 648283a9 · proof: diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files

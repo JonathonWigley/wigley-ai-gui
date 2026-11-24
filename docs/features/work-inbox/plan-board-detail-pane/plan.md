@@ -210,7 +210,7 @@ Boundary rules:
 Critical path: 01 → 02 → 03 → 04 → 05 → 06
 
 ### Wave 1
-- [ ] [Detail records, slot and sweep](01-detail-data.md)
+- [x] [Detail records, slot and sweep](01-detail-data.md)
 
 ### Wave 2
 - [ ] [Comment job](02-comment-job.md) — after 01
@@ -233,8 +233,11 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 Review base: 0eab07e6
 
 ### Groups
+- 01 · deep · 648283a9 · diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files
 ### Contract changes
 ### Rulings
 - Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead
+- Sweep text's Detail numbers come from detailCaps, matching what the reader keeps — one truth — a raw setting would disagree with the stored cap · group 01 · group 01
+- A detail-less ticket whose status and priority are unchanged keeps its stored record by reference, so the slot's identity skip holds — avoids resending — none · group 01 · group 01
 ### Review rounds
 ### Test gate

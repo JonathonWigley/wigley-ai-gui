@@ -1,6 +1,6 @@
 # 02 — Comment job
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · adds a stored `work.json` card field, a persisted queue job kind, a restart-time stale-mark rule and a job-end write to stored detail; it follows the Move job at each place a job kind is listed, and adds the comment contract that 03 consumes
 Wave: 2 · Depends on: 01 (shares contract.ts, store.ts, work-tools.ts, job-text.ts, manifest.ts, main/start.ts)
