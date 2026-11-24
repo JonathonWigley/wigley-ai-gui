@@ -94,13 +94,13 @@ type WorkflowApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Folds each owned Chat-tab session's agent events and session events into
-// its flow through the registered workflows, keeps the flows in `flows.json`
-// keyed by host session id, opens at start each row chat already holds as its
-// open events would have, folds a re-attach's replay only past the flow's last
-// save, marks a live turn with agent work on the Checklist flow as unclaimed
-// work while a registered workflow `flagsUnclaimedWork`, tells each observer
-// every fold, open, close and replay, contributes `set_workflow_step` while a
+// Folds each owned Chat-tab session's agent events and session events into its
+// flow through the registered workflows, keeps the flows in `flows.json` keyed
+// by host session id, opens at start each row chat already holds as its open
+// events would have, folds a re-attach's replay only past the flow's last save,
+// marks a live turn with agent work on the Checklist flow as unclaimed work
+// while a registered workflow `flagsUnclaimedWork`, tells each observer every
+// fold, open, close and replay, contributes `set_workflow_step` while a
 // workflow has a reportable stage, which lists every workflow's stages'
 // `reportedAs` and moves a flow only by its own workflow's, and
 // `set_workflow_checklist`, hands chat the session note naming both, meters
@@ -109,11 +109,10 @@ type WorkflowApi = MainApi<
 // flow to `workflow.flows`, and offers a drive run the two tools' reports as
 // drive actions. A demo session (an ephemeral open, or a row on the demo
 // harness) opens no flow, so nothing of it reaches `flows.json`; registers the
-// main halves of the `workflow.engine` demo step and the four sample
-// workflows' steps. Exports
-// `addWorkflow`, `signal`, `observe`, and `stageFinishes` for whether a flow
-// sits in a stage that finishes its run. Under the self-test, hands the four
-// sample workflows' scripts, each adding its sample declaration.
+// main halves of the `workflow.engine` demo step and the four sample workflows'
+// steps. Exports `addWorkflow`, `signal`, `observe`, and `stageFinishes` for
+// whether a flow sits in a stage that finishes its run. Under the self-test,
+// hands the four sample workflows' scripts, each adding its sample declaration.
 // Registers the `workflows` and `planFormat` readers with contributions, runs
 // the built-in Checklist flow and every declared workflow `workflow.off` leaves
 // on (published in `workflow.declared`), answers the `workflow.checklist`

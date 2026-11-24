@@ -46,15 +46,16 @@ import {
   TOGGLE_HEADLESS,
 } from './layout/workflow-kit';
 
-// `workflows` holds each workflow's page half, its stages in stage order. `flowOf`
-// is the flow a session draws (the preview's sample or a demo sample while one
-// shows, else the slot's flow or a new one); `nameOf` names the session in the
-// log; `isPreview` is whether the session shows either sample, which runs nothing. `setRowActivity` sets
-// what the session's row says for its stage, null for nothing. `isWorking` is
-// whether the session's row holds a running activity, which the row's title line
-// leaves to the chip's `Working` tag. `isHeadless` is whether the session is
-// headless, and `setHeadless` turns that on or off. `activeSessionId` is the
-// session the user is viewing, null for none.
+// `workflows` holds each workflow's page half, its stages in stage order.
+// `flowOf` is the flow a session draws (the preview's sample or a demo sample
+// while one shows, else the slot's flow or a new one); `nameOf` names the
+// session in the log; `isPreview` is whether the session shows either sample,
+// which runs nothing. `setRowActivity` sets what the session's row says for its
+// stage, null for nothing. `isWorking` is whether the session's row holds a
+// running activity, which the row's title line leaves to the chip's `Working`
+// tag. `isHeadless` is whether the session is headless, and `setHeadless` turns
+// that on or off. `activeSessionId` is the session the user is viewing, null
+// for none.
 export interface WorkflowViewDeps {
   log: PluginLog;
   clock: Clock;
@@ -79,29 +80,30 @@ export interface WorkflowViewDeps {
 // unclaimed work; a workflow or stage with no page half does the same and logs
 // its name once. While the session `isWorking`, the chip ends on a running
 // `Working` tag unless its stage is running, which its stage tag already says.
-// While the session `isHeadless`, the chip ends on an accent `Headless` tag
-// in every stage, and the strip input says so.
+// While the session `isHeadless`, the chip ends on an accent `Headless` tag in
+// every stage, and the strip input says so.
 // `activityChanged` draws the session's chip again. A turn that ends in a stage
-// with an `unseenActivity` while another session is active sets that activity on
-// the row until `activeChanged` names the session or its flow is busy again.
-// `headlessChanged` draws the session's parts again when its headless value differs from the one they last
-// drew; `undefined`, a closed session, drops that value and draws nothing.
-// Every held part draws again on `setFlow` for its session and on `redraw`,
-// and each second while it shows a countdown, the side pane aside. `setFlow`, and
-// `redraw` for each session with a chip, also set the session's row activity. Each
-// side pane draw sets the section's summary: `<checked>/<total>` while it draws a
-// checklist with items, else null. The side pane's list keeps its scroll across
-// those draws, and while the pane has no layout box. `setFlow` also logs the
-// session's level, trail, stage, progress and countdown, and unclaimed work,
-// when each changes; `forget` drops what it logged for a session that left and its
-// finished groups' fold.
+// with an `unseenActivity` while another session is active sets that activity
+// on the row until `activeChanged` names the session or its flow is busy again.
+// `headlessChanged` draws the session's parts again when its headless value
+// differs from the one they last drew; `undefined`, a closed session, drops
+// that value and draws nothing.
+// Every held part draws again on `setFlow` for its session and on `redraw`, and
+// each second while it shows a countdown, the side pane aside. `setFlow`, and
+// `redraw` for each session with a chip, also set the session's row activity.
+// Each side pane draw sets the section's summary: `<checked>/<total>` while it
+// draws a checklist with items, else null. The side pane's list keeps its
+// scroll across those draws, and while the pane has no layout box. `setFlow`
+// also logs the session's level, trail, stage, progress and countdown, and
+// unclaimed work, when each changes; `forget` drops what it logged for a
+// session that left and its finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
 // `toggleFinishedWaves` opens or folds one session's finished groups, which
-// show open until it folds them, logging
-// `nothing to run` and changing nothing while the input holds no finished group.
+// show open until it folds them, logging `nothing to run` and changing nothing
+// while the input holds no finished group.
 // `mainAction` is the spec the main action runs, and `runFor` the one path that
-// runs a stage action for a session, which `workflow.stageAction` runs, through the
-// flow's `runAction`; only `toggleFinishedWaves` runs in the preview.
+// runs a stage action for a session, which `workflow.stageAction` runs, through
+// the flow's `runAction`; only `toggleFinishedWaves` runs in the preview.
 // `toggleHeadless` runs in any stage, with or without a workflow, and sets the
 // session's headless flag to the opposite of `isHeadless`. Each part's buttons
 // run `workflow.stageAction` for the session the part draws.

@@ -1,7 +1,7 @@
 // The auto-start countdown of a declared workflow's `auto` stage: started when
 // a live or observed fold enters the stage (a replayed one starts none) and
-// `workflow.autoStart` lists the workflow, held in the flow's `countdownEndsAt`,
-// and run through the stage's `auto` action when it fires.
+// `workflow.autoStart` lists the workflow, held in the flow's
+// `countdownEndsAt`, and run through the stage's `auto` action when it fires.
 
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { PluginLog } from '../../../contracts/log';

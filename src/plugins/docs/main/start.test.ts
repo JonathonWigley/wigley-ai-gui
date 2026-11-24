@@ -1162,45 +1162,52 @@ describe('createDocsBinding', () => {
       rebuildMachineIndex: () => undefined,
       log: () => undefined,
     });
-    await holder.file();
+    await holder.file(true);
 
     contributions.change([]);
-    await holder.file();
+    await holder.file(true);
 
     expect(writes).toEqual([contributionsFileText(NO_DOCS_BINDING)]);
   });
 
-  // Breaks: a rewrite before any index run left unbuilt though the cached
-  // index was built from other text, a rewrite back to the launch file's text
-  // rebuilt for nothing, or a run's text not replacing the launch file's.
+  // Breaks: a rewrite before any build left unbuilt though the cached index
+  // was built from other text, a rewrite back to the launch file's text
+  // rebuilt for nothing, a build's text not replacing the launch file's, or a
+  // session run's text replacing it though that run rewrote no index.
   it.each([
     {
       given: 'before any run, the same as the launch file',
       launch: { ...NO_DOCS_BINDING, features: USER_HOMES },
-      hasRun: false,
+      run: null,
       rebuilds: 0,
     },
     {
       given: 'before any run, differing from the launch file',
       launch: NO_DOCS_BINDING,
-      hasRun: false,
+      run: null,
       rebuilds: 1,
     },
     {
-      given: 'after a run, differing from its text',
+      given: 'after a build, differing from its text',
       launch: NO_DOCS_BINDING,
-      hasRun: true,
+      run: 'build',
       rebuilds: 1,
     },
     {
-      given: "after a run, the same as the launch file but not the run's",
+      given: "after a build, the same as the launch file but not the build's",
       launch: { ...NO_DOCS_BINDING, features: USER_HOMES },
-      hasRun: true,
+      run: 'build',
       rebuilds: 1,
+    },
+    {
+      given: 'after a session run, the same as the launch file',
+      launch: { ...NO_DOCS_BINDING, features: USER_HOMES },
+      run: 'session',
+      rebuilds: 0,
     },
   ])(
     'setFeaturesHomes_SameValueTwice_$given: RewritesTheFileAndRebuilds$rebuilds',
-    async ({ launch, hasRun, rebuilds }) => {
+    async ({ launch, run, rebuilds }) => {
       const writes: string[] = [];
       let builds = 0;
       const holder = createDocsBinding({
@@ -1218,14 +1225,14 @@ describe('createDocsBinding', () => {
         },
         log: () => undefined,
       });
-      if (hasRun) {
-        await holder.file();
+      if (run !== null) {
+        await holder.file(run === 'build');
       }
       await settled();
 
       holder.setFeaturesHomes(USER_HOMES);
       holder.setFeaturesHomes({ ...USER_HOMES });
-      await holder.file();
+      await holder.file(false);
 
       expect({ last: writes.at(-1), builds }).toEqual({
         last: contributionsFileText({

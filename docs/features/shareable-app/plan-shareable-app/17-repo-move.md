@@ -277,14 +277,15 @@ Settled while drafting (Decided notices for the run):
      copy and its source cannot share a commit, so reword it to one commit per repo, each landing with its own side.
 10. **Remove `ai`'s copy.** First restart every app session started before step 8's install, the dev app's and the
     installed app's (review finding 6): each launched with `--plugin-dir ~/Documents/ai/wigley-ai-gui/agent-plugin`,
-    and once that folder is gone each `auri` hook's bare `python3 <script>` fails on the missing script: a session started before
-    `51f9de6a1` is blocked (exit 2), and a later one fails open silently and loses the gates. Quit the dev app started from `~/Documents/ai/wigley-ai-gui` and the installed app, start
-    them again (the dev app from `~/Documents/wigley-ai-gui`), and restart their sessions. Peers' sessions and this
-    one are the user's to restart: ask in a forms round, one choice per way to restart, and wait for the answer. Then,
-    in an `ai` worktree: run the freeze check (Decisions), then `git rm -r -q wigley-ai-gui`
-    and commit with the sweep's `ai` edits ("Move wigley-ai-gui to its own repo, JonathonWigley/wigley-ai-gui, …");
-    `wigley-land` it. Then delete what is left of `~/Documents/ai/wigley-ai-gui/` (the regenerated folders), and
-    report it. Post a chatroom `result` lifting the freeze and naming the new clone.
+    and once that folder is gone each `auri` hook's bare `python3 <script>` fails on the missing script: a session
+    started before `51f9de6a1` is blocked (exit 2), and a later one fails open silently and loses the gates. Quit the
+    dev app started from `~/Documents/ai/wigley-ai-gui` and the installed app, start them again (the dev app from
+    `~/Documents/wigley-ai-gui`), and restart their sessions. Peers' sessions and this one are the user's to restart:
+    ask in a forms round, one choice per way to restart, and wait for the answer. Then, in an `ai` worktree: run the
+    freeze check (Decisions), then `git rm -r -q wigley-ai-gui` and commit with the sweep's `ai` edits ("Move
+    wigley-ai-gui to its own repo, JonathonWigley/wigley-ai-gui, …"); `wigley-land` it. Then delete what is left of
+    `~/Documents/ai/wigley-ai-gui/` (the regenerated folders), and report it. Post a chatroom `result` lifting the
+    freeze and naming the new clone.
 11. **Land in the new clone.** Before the first app-repo landing, confirm the `auri` marketplace from the new clone
     is added (step 8; `known_marketplaces.json`'s `auri` `path` is `/Users/jonathonwigley/Documents/wigley-ai-gui`), and
     run `wigley-land`'s pinned argv by hand once in the new clone:

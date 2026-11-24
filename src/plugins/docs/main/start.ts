@@ -116,13 +116,13 @@ async function hasDocsFixture(
 // What `startDocs` reads beyond the services: `scriptPath` at each index run,
 // `entries` at each doc change, `infos` (`core.agentHarnesses`) at each guard
 // and lookup, `binding` at each guard, create and wiki page lookup, and
-// `contributionsFile` before each index run.
+// `contributionsFile` before each index run, told whether the run is a build.
 export interface StartDocsDeps {
   scriptPath(): string;
   entries(): readonly IndexEntry[];
   infos(): ReadonlyMap<string, AgentHarnessInfo>;
   binding(): DocsBinding;
-  contributionsFile(): Promise<string>;
+  contributionsFile(isBuild: boolean): Promise<string>;
 }
 
 // The index uses real paths, so the home folder every `~` expands to is the
@@ -196,14 +196,16 @@ export async function startDocs(
 // written once the first binding is set, and again on each binding whose file
 // text differs. Each such later change rebuilds the machine index when its text
 // differs from the text the last build used: the launch file's text, which the
-// cached index was built from, until an index run asks for the file, then the
-// text that run read. A change that comes back to that text, such as Backlog's
-// first homes matching the last launch's, rebuilds nothing. `file()` waits for
-// every write queued so far, so no index run starts while one is in flight.
+// cached index was built from, until a build asks for the file, then the text
+// that build read. A session or context run reads the file too but rewrites no
+// index, so it leaves that text alone. A change that comes back to that text,
+// such as Backlog's first homes matching the last launch's, rebuilds nothing.
+// `file(isBuild)` waits for every write queued so far, so no index run starts
+// while one is in flight.
 interface DocsBindingHolder extends Disposable {
   binding(): DocsBinding;
   setFeaturesHomes(homes: FeaturesHomes | null): void;
-  file(): Promise<string>;
+  file(isBuild: boolean): Promise<string>;
 }
 
 interface DocsBindingDeps {
@@ -233,7 +235,7 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
     : DOCS_FIXTURE_BINDING;
   let isBound = false;
   // The text last queued, the text on disk, and the text the last build used:
-  // the launch file's until an index run asks for the file. Null for none, or
+  // the launch file's until a build asks for the file. Null for none, or
   // for a file that could not be read, which no text equals.
   let writtenText: string | null = null;
   let diskText: string | null = null;
@@ -306,10 +308,12 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
       features = homes;
       rebind();
     },
-    async file() {
+    async file(isBuild) {
       await firstBinding;
       await fileWrite;
-      builtText = diskText;
+      if (isBuild) {
+        builtText = diskText;
+      }
       return deps.filePath;
     },
     dispose() {
@@ -511,7 +515,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       entries: () => registry.loadedEntries(),
       infos: () => harnessInfos.all(),
       binding: () => binding.binding(),
-      contributionsFile: () => binding.file(),
+      contributionsFile: (isBuild) => binding.file(isBuild),
     });
     docs.catch((error: unknown) =>
       services.log(`docs not started: ${errorText(error)}`),

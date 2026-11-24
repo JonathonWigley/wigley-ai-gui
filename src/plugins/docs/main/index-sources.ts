@@ -44,8 +44,8 @@ export interface IndexSourcesDeps {
   // `scriptPath` runs.
   pluginDir: string;
   // Settles the contributions file's queued write and gives its path, at each
-  // index run, before the run starts.
-  contributionsFile(): Promise<string>;
+  // index run, before the run starts; `isBuild` is true for a `build` run.
+  contributionsFile(isBuild: boolean): Promise<string>;
   log: PluginLog;
   paths: Paths;
 }
@@ -306,7 +306,7 @@ async function runScript(
       deps.log(`docs_index.py ${command} not run: ${message}`);
       return { ok: false, message, isUnrunnable: true };
     }
-    const contributionsFile = await deps.contributionsFile();
+    const contributionsFile = await deps.contributionsFile(command === 'build');
     result = await deps.processes.run(python.command, [
       ...python.args,
       '-X',

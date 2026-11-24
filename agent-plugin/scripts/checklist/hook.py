@@ -1,8 +1,9 @@
 """The task-list hook for app sessions: `hook.py edit` denies an edit until the session has sent a task list,
 `hook.py stop` reminds the agent at a turn end while items are open, and `hook.py compact` shows the workflow step and
 the list again after a compaction. It asks the app's `workflow.checklist` hook handler over the relay's hook protocol,
-prints one JSON line or nothing, and always exits 0; a session with no app row, a subagent, and a session whose
-app is away or does not answer within HOOK_DEADLINE_SECONDS get nothing. relay/README.md § The relay holds the wire. Standard library only.
+prints one JSON line or nothing, and always exits 0; a session with no app row, a subagent, and a session whose app is
+away or does not answer within HOOK_DEADLINE_SECONDS get nothing. relay/README.md § The relay holds the wire. Standard
+library only.
 """
 
 from __future__ import annotations

@@ -367,6 +367,11 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   answer was missing from the result, and nothing told the user. The round view hides a departed kind's items and
   keeps its draft entries only in the body (`rederiveRound`, `src/plugins/forms/page/round-draft.ts`). Options: name
   the held items in the send confirmation, or refuse to send while a round holds an answered item whose kind is gone.
+- **Should Docs' feature tree depend on Backlog's features-home pick?** — *needs a decision*: Docs indexes the
+  features homes Backlog hands it (`docs.setFeaturesHomes`, called from `syncBinding` in
+  `src/plugins/backlog/main/start.ts`), so with Backlog off, or no backlog strategy picked, Docs indexes no features
+  home. Open: keep Docs' feature tree tied to Backlog's pick, or let Docs read the homes from the `backlog` section of
+  `auri.json` itself, so the tree shows with Backlog off. Source: the shareable-app cycle-2 re-review.
 
 ## Features
 
@@ -888,3 +893,10 @@ because the earlier items rewrite many of these tests anyway.
   that opens, even one where the user never opens Docs. The chat self-test log shows `Docs tab shown` then `session
   index read` for each of its 4 sessions. This may be intended. Options: defer the first load until the Docs tab is
   shown by the user, or keep it and confirm the cost is fine.
+- **Docs' first binding at launch never rebuilds the machine index** — *needs a feature plan*: `createDocsBinding`
+  (`src/plugins/docs/main/start.ts`) writes the contributions file at its first binding but rebuilds nothing, since the
+  launch file is the text the cached index was built from and Backlog's homes come after. A later rewrite whose text
+  differs from that launch text rebuilds. A `docs` strategy changed while the app was closed (a plugin update) leaves
+  `index.json` built from the old file until a rescan when no later rewrite comes: Backlog hands homes equal to the
+  first binding's, and no strategy changes. Options: compare the file with the built text at Backlog's first homes
+  handing, rewrite or not, or after a short settle once the app starts. Source: the shareable-app cycle-2 re-review.
