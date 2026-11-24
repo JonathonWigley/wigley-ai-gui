@@ -48,7 +48,8 @@ export interface SetRun {
 }
 
 // A tracked game's last listed builds, newest first, and the commit subjects read for their revisions. `listed` is
-// set once a list of the game succeeded; until then no build of it counts as unlisted.
+// set once a list of the game succeeded on the entry's current instance, and cleared by each re-apply; until then no
+// build of it counts as unlisted.
 export interface GameState {
   game: GameEntry;
   builds: BuildRecord[];
