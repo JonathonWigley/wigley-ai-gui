@@ -96,6 +96,7 @@ export type WorkCard =
       jiraStatus: string;
       priority: string | null;
       reachableStatuses: string[] | null; // null: not read yet
+      commenting: readonly string[]; // the texts of queued or running comments on the card, oldest first
     })
   | (WorkCardBase & { kind: 'local'; sourceItemId: string | null });
 
@@ -111,13 +112,14 @@ export interface WorkSuggestion {
   state: 'suggested' | 'done';
 }
 
-export type WorkJobKind = 'sweep' | 'send' | 'move' | 'nudge';
+export type WorkJobKind = 'sweep' | 'send' | 'move' | 'nudge' | 'comment';
 
 export type WorkJob =
   | { kind: 'sweep' }
   | { kind: 'send'; itemId: string; text: string }
   | { kind: 'nudge'; itemId: string; text: string }
-  | { kind: 'move'; key: string; column: string };
+  | { kind: 'move'; key: string; column: string }
+  | { kind: 'comment'; key: string; text: string };
 
 export interface WorkJobStatus {
   kind: WorkJobKind;
@@ -246,6 +248,7 @@ const KIND_WORDS: Record<WorkJobKind, string> = {
   send: 'Send',
   move: 'Move',
   nudge: 'Nudge',
+  comment: 'Comment',
 };
 
 const TONES: Record<WorkJobStatus['state'], WorkStatusLine['tone']> = {
@@ -362,6 +365,11 @@ export interface WorkMoveArg {
   column: string;
 }
 
+export interface WorkCommentArg {
+  readonly cardId: string;
+  readonly text: string;
+}
+
 // `source` is 'item' or 'card'.
 export interface WorkStartArg {
   source: string;
@@ -391,6 +399,11 @@ export const workMoveCardCommand: CommandKey<WorkMoveArg, 'work.moveCard'> = {
   id: 'work.moveCard',
 };
 
+// Posts the comment `text` on the Jira ticket of card `cardId`.
+export const workCommentCommand: CommandKey<WorkCommentArg, 'work.comment'> = {
+  id: 'work.comment',
+};
+
 // Starts a session from the item or card `id` names.
 export const workStartSessionCommand: CommandKey<
   WorkStartArg,
@@ -408,6 +421,7 @@ export interface WorkChannel extends ChannelShape {
     snooze(itemId: string): Promise<void>;
     addToBoard(itemId: string): Promise<void>;
     moveCard(arg: WorkMoveArg): Promise<void>;
+    comment(arg: WorkCommentArg): Promise<void>;
     acceptSuggestion(cardId: string): Promise<void>;
     notYet(cardId: string): Promise<void>;
     deleteTask(cardId: string): Promise<void>;

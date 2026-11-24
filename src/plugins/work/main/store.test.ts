@@ -84,6 +84,10 @@ describe('createWorkStore', () => {
   const withDetails = (details: Record<string, unknown>) =>
     JSON.stringify({ ...EMPTY_WORK_FILE, details });
   it.each([
+    JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      cards: [{ ...jiraCard('WS-1', 'To Do'), commenting: 'A' }],
+    }),
     '{}',
     '{"items":[{"id":1}]}',
     '[]',
@@ -200,6 +204,7 @@ describe('createWorkStore', () => {
           reachableStatuses: ['Done'],
           linkedSessionIds: ['row-1'],
           movingTo: 'Done',
+          commenting: ['A'],
         }),
         localCard('local-1', 'Todo', { sourceItemId: 'a', note: 'failed' }),
       ],
@@ -231,11 +236,11 @@ describe('createWorkStore', () => {
           note: null,
         },
         last: {
-          kind: 'move',
+          kind: 'comment',
           state: 'failed',
           rowId: 'row-9',
           at: '2026-11-23T11:00:00.000Z',
-          note: 'No such status',
+          note: 'No such ticket',
         },
       },
       lastSweepAt: '2026-11-23T11:00:00.000Z',
@@ -294,6 +299,22 @@ describe('createWorkStore', () => {
 
     expect(parsed.suggestions).toEqual([{ ...entry, rowId: null }]);
     expect(parsed.notYet).toEqual([{ ...mark, rowId: null }]);
+  });
+
+  it('parse_savedWithoutCommenting_readsEmpty', () => {
+    const { commenting: _commenting, ...saved } = jiraCard('WS-1', 'To Do');
+    const text = JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      cards: [saved, localCard('local-1', 'Todo')],
+    });
+
+    const parsed = parseWorkFile(text);
+
+    expect(text).not.toContain('commenting');
+    expect(parsed.cards).toEqual([
+      jiraCard('WS-1', 'To Do', { commenting: [] }),
+      localCard('local-1', 'Todo'),
+    ]);
   });
 
   it('parse_savedWithoutDetails_readsEmptyDetails', () => {

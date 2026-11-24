@@ -635,6 +635,11 @@ describe('workMainPart', () => {
       refused: 'No card nope',
     },
     {
+      method: 'comment',
+      arg: { cardId: 'nope', text: 'Hi' },
+      refused: 'No card nope',
+    },
+    {
       method: 'acceptSuggestion',
       arg: 'nope',
       refused: 'No suggestion for nope',
@@ -700,6 +705,17 @@ describe('workMainPart', () => {
         return { movingTo: card?.movingTo, note: card?.note };
       },
       expected: { movingTo: null, note: 'Not queued: x' },
+    },
+    {
+      method: 'comment',
+      arg: { cardId: 'WS-1', text: 'Hi' },
+      read: (harness) => {
+        const card = cardOf(harness, 'WS-1');
+        return card?.kind === 'jira'
+          ? { commenting: card.commenting, note: card.note }
+          : card;
+      },
+      expected: { commenting: [], note: 'Comment failed: Not queued: x' },
     },
   ])(
     "commands — a rejected enqueue logs and clears the press's mark with Not queued ($method)",

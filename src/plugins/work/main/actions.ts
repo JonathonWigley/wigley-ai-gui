@@ -5,13 +5,19 @@ import {
   OTHER_COLUMN,
   type WorkCard,
   type WorkColumnSetting,
+  type WorkCommentArg,
   type WorkItem,
   type WorkJiraCard,
   type WorkJob,
   type WorkMoveArg,
   type WorkSendArg,
 } from '../contract';
-import type { SavedSuggestion, WorkFile } from './store';
+import {
+  type DetailCaps,
+  newestMessages,
+  type SavedSuggestion,
+  type WorkFile,
+} from './store';
 
 // A press the store applies: the new file, the job it queues (null for none) and the line logged under `[work]`.
 export interface ActionResult {
@@ -309,6 +315,33 @@ export function moveCard(
   );
 }
 
+// Marks a Jira card commenting `arg.text` and queues its comment job; a card in Other or moving takes one too.
+export function comment(
+  file: WorkFile,
+  arg: WorkCommentArg,
+): ActionResult | Refusal {
+  const card = file.cards.find((candidate) => candidate.id === arg.cardId);
+  if (card === undefined) {
+    return refuse(`No card ${arg.cardId}`);
+  }
+  if (card.kind !== 'jira') {
+    return refuse('Only a Jira ticket takes a comment');
+  }
+  if (arg.text.trim() === '') {
+    return refuse('Nothing to post');
+  }
+  const marked: WorkJiraCard = {
+    ...card,
+    commenting: [...card.commenting, arg.text],
+    note: null,
+  };
+  return done(
+    withCard(file, marked),
+    { kind: 'comment', key: card.key, text: arg.text },
+    `comment queued ${card.key}`,
+  );
+}
+
 // The card's entry in `file.suggestions` that a press may act on, or its refusal: none, or a `done` entry.
 function actionableSuggestion(
   file: WorkFile,
@@ -406,14 +439,59 @@ function moveEnded(file: WorkFile, key: string, end: JobEnd): WorkFile {
   return withCard(file, { ...card, movingTo: null, note });
 }
 
+type WorkCommentJob = Extract<WorkJob, { kind: 'comment' }>;
+
+// The card's first `commenting` entry equal to the job's text goes; on success the stored ticket detail, when there is
+// one, gains the comment as the user's, kept to the newest `caps.comments`.
+function commentEnded(
+  file: WorkFile,
+  job: WorkCommentJob,
+  end: JobEnd,
+  now: number,
+  caps: DetailCaps,
+): WorkFile {
+  const card = file.cards.find(
+    (candidate): candidate is WorkJiraCard =>
+      candidate.kind === 'jira' && candidate.key === job.key,
+  );
+  if (card === undefined) {
+    return file;
+  }
+  const index = card.commenting.indexOf(job.text);
+  const commenting =
+    index === -1
+      ? card.commenting
+      : card.commenting.filter((_, at) => at !== index);
+  if (!end.ok) {
+    const note =
+      end.note === null ? 'Comment failed' : `Comment failed: ${end.note}`;
+    return withCard(file, { ...card, commenting, note });
+  }
+  const posted = withCard(file, { ...card, commenting, note: null });
+  const stored = file.details[job.key];
+  if (stored?.kind !== 'ticket') {
+    return posted;
+  }
+  const comments = newestMessages(
+    [...stored.comments, { author: 'You', at: isoAt(now), text: job.text }],
+    caps.comments,
+  );
+  return {
+    ...posted,
+    details: { ...posted.details, [job.key]: { ...stored, comments } },
+  };
+}
+
 // The store side of a job's end, at `now` (epoch ms): a send or nudge clears its item's `sending` (clearing the item
-// on success, noting the failure otherwise), a move clears its card's `movingTo`, a sweep expires snoozes. The same
-// object when its item or card is gone.
+// on success, noting the failure otherwise), a move clears its card's `movingTo`, a comment drops its text from its
+// card's `commenting` (adding it to the stored ticket detail within `caps` on success, noting the failure otherwise),
+// a sweep expires snoozes. The same object when its item or card is gone.
 export function jobEnded(
   file: WorkFile,
   job: WorkJob,
   end: JobEnd,
   now: number,
+  caps: DetailCaps,
 ): WorkFile {
   switch (job.kind) {
     case 'send':
@@ -421,24 +499,51 @@ export function jobEnded(
       return sendEnded(file, job.itemId, end);
     case 'move':
       return moveEnded(file, job.key, end);
+    case 'comment':
+      return commentEnded(file, job, end, now, caps);
     case 'sweep':
       return expireSnoozes(file, now);
   }
 }
 
-// Clears each `sending` and `movingTo` mark no job in `pending` (the runner's running job, then its queued ones)
-// holds, noting the job lost; the same object when every mark has its job.
+// The entries of `commenting` that each have a text of their own in `jobTexts`, in order; `commenting` itself when
+// every entry has one.
+function commentingWithJobs(
+  commenting: readonly string[],
+  jobTexts: readonly string[],
+): readonly string[] {
+  const unmatched = [...jobTexts];
+  const kept = commenting.filter((text) => {
+    const index = unmatched.indexOf(text);
+    if (index === -1) {
+      return false;
+    }
+    unmatched.splice(index, 1);
+    return true;
+  });
+  return kept.length === commenting.length ? commenting : kept;
+}
+
+// Clears each `sending` and `movingTo` mark, and each `commenting` entry, that no job in `pending` (the runner's
+// running job, then its queued ones) holds, noting the job lost; a comment's note wins over a move's on one card. Two
+// equal comment texts need two jobs. The same object when every mark has its job.
 export function clearStaleMarks(
   file: WorkFile,
   pending: readonly WorkJob[],
 ): WorkFile {
   const sendingIds = new Set<string>();
   const movingKeys = new Set<string>();
+  const commentTexts = new Map<string, string[]>();
   for (const job of pending) {
     if (job.kind === 'send' || job.kind === 'nudge') {
       sendingIds.add(job.itemId);
     } else if (job.kind === 'move') {
       movingKeys.add(job.key);
+    } else if (job.kind === 'comment') {
+      commentTexts.set(job.key, [
+        ...(commentTexts.get(job.key) ?? []),
+        job.text,
+      ]);
     }
   }
   const isStaleSend = (item: WorkItem) =>
@@ -446,22 +551,29 @@ export function clearStaleMarks(
   const isStaleMove = (card: WorkCard) =>
     card.movingTo !== null &&
     !(card.kind === 'jira' && movingKeys.has(card.key));
-  const hasStaleMark =
-    file.items.some(isStaleSend) || file.cards.some(isStaleMove);
-  if (!hasStaleMark) {
-    return file;
-  }
-  return {
-    ...file,
-    items: file.items.map((item) =>
-      isStaleSend(item)
-        ? { ...item, sending: null, note: `Send failed: ${LOST_JOB_NOTE}` }
-        : item,
-    ),
-    cards: file.cards.map((card) =>
-      isStaleMove(card)
-        ? { ...card, movingTo: null, note: LOST_JOB_NOTE }
-        : card,
-    ),
+  const clearedCard = (card: WorkCard): WorkCard => {
+    const moved: WorkCard = isStaleMove(card)
+      ? { ...card, movingTo: null, note: LOST_JOB_NOTE }
+      : card;
+    if (moved.kind !== 'jira') {
+      return moved;
+    }
+    const commenting = commentingWithJobs(
+      moved.commenting,
+      commentTexts.get(moved.key) ?? [],
+    );
+    return commenting === moved.commenting
+      ? moved
+      : { ...moved, commenting, note: `Comment failed: ${LOST_JOB_NOTE}` };
   };
+  const items = file.items.map((item) =>
+    isStaleSend(item)
+      ? { ...item, sending: null, note: `Send failed: ${LOST_JOB_NOTE}` }
+      : item,
+  );
+  const cards = file.cards.map(clearedCard);
+  const isUnchanged =
+    items.every((item, index) => item === file.items[index]) &&
+    cards.every((card, index) => card === file.cards[index]);
+  return isUnchanged ? file : { ...file, items, cards };
 }

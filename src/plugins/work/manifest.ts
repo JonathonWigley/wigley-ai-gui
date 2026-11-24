@@ -59,6 +59,12 @@ export const workManifest = definePlugin({
       runsIn: 'page',
       arg: { cardId: 'string', column: 'string' },
     },
+    comment: {
+      label: 'post a comment on the Jira ticket',
+      group: 'work',
+      runsIn: 'page',
+      arg: { cardId: 'string', text: 'string' },
+    },
     acceptSuggestion: {
       label: 'accept the suggested move',
       group: 'work',

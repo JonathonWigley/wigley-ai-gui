@@ -30,6 +30,7 @@ function jira(
     jiraStatus: column,
     priority: null,
     reachableStatuses: null,
+    commenting: [],
     movingTo: null,
     note: null,
     linkedSessionIds: [],

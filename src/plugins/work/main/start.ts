@@ -34,6 +34,7 @@ import {
   acceptSuggestion,
   addToBoard,
   clearStaleMarks,
+  comment,
   deleteTask,
   dismiss,
   expireSnoozes,
@@ -218,7 +219,9 @@ export const workMainPart: MainPart<typeof workManifest> = {
       runner.enqueue(job).catch((error: unknown) => {
         log(`job not queued: ${errorText(error)}`);
         const end = { ok: false, note: `Not queued: ${errorText(error)}` };
-        void store.update((file) => jobEnded(file, job, end, clock.now()));
+        void store.update((file) =>
+          jobEnded(file, job, end, clock.now(), caps()),
+        );
       });
     };
 
@@ -297,7 +300,10 @@ export const workMainPart: MainPart<typeof workManifest> = {
 
     const onJobEnded = (job: WorkJob, outcome: JobOutcome) => {
       void store.update((file) =>
-        withKeptLastRow(jobEnded(file, job, outcome, clock.now()), jobRows),
+        withKeptLastRow(
+          jobEnded(file, job, outcome, clock.now(), caps()),
+          jobRows,
+        ),
       );
       if (job.kind === 'sweep') {
         sweepTimer.sweepEnded();
@@ -470,6 +476,9 @@ export const workMainPart: MainPart<typeof workManifest> = {
     });
     channel.handle('moveCard', (arg) =>
       press('moveCard', (file) => moveCard(file, arg, columns(), clock.now())),
+    );
+    channel.handle('comment', (arg) =>
+      press('comment', (file) => comment(file, arg)),
     );
     channel.handle('acceptSuggestion', (cardId) =>
       press('acceptSuggestion', (file) =>

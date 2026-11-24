@@ -177,6 +177,7 @@ function jiraCard(
     jiraStatus,
     priority,
     reachableStatuses: null,
+    commenting: [],
   };
 }
 

@@ -39,6 +39,7 @@ export const workPagePart: PagePart<typeof workManifest> = {
         snooze: ({ arg }) => channel.invoke('snooze', arg),
         addToBoard: ({ arg }) => channel.invoke('addToBoard', arg),
         moveCard: ({ arg }) => channel.invoke('moveCard', arg),
+        comment: ({ arg }) => channel.invoke('comment', arg),
         acceptSuggestion: ({ arg }) => channel.invoke('acceptSuggestion', arg),
         notYet: ({ arg }) => channel.invoke('notYet', arg),
         deleteTask: ({ arg }) => channel.invoke('deleteTask', arg),

@@ -29,6 +29,11 @@ const move = (key: string, column = 'Todo'): WorkJob => ({
   key,
   column,
 });
+const comment = (key: string, text: string): WorkJob => ({
+  kind: 'comment',
+  key,
+  text,
+});
 
 const queueOf = (
   queued: WorkJob[],
@@ -122,6 +127,24 @@ describe('nextJobQueue', () => {
         [move('K', 'Done')],
         runningOf(move('K', 'Todo'), launchedH1),
       ),
+    },
+    {
+      case: 'comment behind a queued comment on the same key',
+      start: queueOf([comment('K', 'first'), SWEEP]),
+      event: enqueued(comment('K', 'second')),
+      after: queueOf([comment('K', 'first'), comment('K', 'second'), SWEEP]),
+    },
+    {
+      case: 'comment keeps a queued move on the same key',
+      start: queueOf([move('K', 'Done')]),
+      event: enqueued(comment('K', 'first')),
+      after: queueOf([move('K', 'Done'), comment('K', 'first')]),
+    },
+    {
+      case: 'comment before sweep',
+      start: queueOf([SWEEP]),
+      event: enqueued(comment('K', 'first')),
+      after: queueOf([comment('K', 'first'), SWEEP]),
     },
     {
       case: 'launching takes head',
@@ -313,7 +336,13 @@ describe('nextJobQueue', () => {
 
 describe('parseJobQueue', () => {
   const FULL: JobQueue = queueOf(
-    [send('A', 'x'), nudge('B', 'ping'), move('K', 'Done'), SWEEP],
+    [
+      send('A', 'x'),
+      nudge('B', 'ping'),
+      move('K', 'Done'),
+      comment('K', 'Hi'),
+      SWEEP,
+    ],
     runningOf(SWEEP, { ...launchedH1, result: { ok: false, note: 'slow' } }),
   );
 
@@ -332,6 +361,13 @@ describe('parseJobQueue', () => {
       text: JSON.stringify({
         ...FULL,
         queued: [{ job: { kind: 'wave' }, queuedAt: QUEUED_AT }],
+      }),
+    },
+    {
+      case: 'a comment job with no text',
+      text: JSON.stringify({
+        ...FULL,
+        queued: [{ job: { kind: 'comment', key: 'K' }, queuedAt: QUEUED_AT }],
       }),
     },
     {

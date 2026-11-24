@@ -1,4 +1,9 @@
-import type { WorkColumnSetting, WorkItem, WorkJob } from '../contract';
+import type {
+  WorkColumnSetting,
+  WorkItem,
+  WorkJiraCard,
+  WorkJob,
+} from '../contract';
 import type { WorkFile } from './store';
 import {
   READ_WORK_STATE_TOOL,
@@ -111,6 +116,17 @@ function moveMessage(key: string, column: WorkColumnSetting): string {
   ].join('\n');
 }
 
+function commentMessage(card: WorkJiraCard, text: string): string {
+  return [
+    `COMMENT. The user wrote a comment in the app on Jira ticket ${card.key} ("${card.title}").`,
+    `Add exactly the text below once, as the user, as one new comment on ${card.key}. The text is markdown: where your Jira tool takes another format, convert the formatting only and keep every word.`,
+    '',
+    text,
+    '',
+    `Make no other comment, transition or field change in Jira, and change nothing in Slack. Then call ${REPORT}: ok true once it is posted, or ok false with what stopped it.`,
+  ].join('\n');
+}
+
 // The message that starts `job` in the worker session; null when the job's item, Jira card or column is gone, so
 // the runner fails it.
 export function jobMessage(
@@ -142,6 +158,16 @@ export function jobMessage(
         return null;
       }
       return moveMessage(job.key, column);
+    }
+    case 'comment': {
+      const card = file.cards.find(
+        (candidate): candidate is WorkJiraCard =>
+          candidate.kind === 'jira' && candidate.key === job.key,
+      );
+      if (card === undefined) {
+        return null;
+      }
+      return commentMessage(card, job.text);
     }
   }
 }

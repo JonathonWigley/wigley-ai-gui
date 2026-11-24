@@ -55,6 +55,7 @@ export function jiraCard(
     jiraStatus,
     priority: null,
     reachableStatuses: null,
+    commenting: [],
     ...overrides,
   };
 }

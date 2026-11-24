@@ -42,6 +42,7 @@ const bind = (key: string, command: string, arg?: CommandArg): PageBind => ({
 });
 
 const SEND_TEXT = "Yes, I'll take a look today.";
+const COMMENT_TEXT = 'Picked this up today.';
 
 const PAGE_BINDS: PageBind[] = [
   bind('d', 'work.dismiss', FIXTURE_ITEM_IDS.needsYou),
@@ -59,6 +60,8 @@ const PAGE_BINDS: PageBind[] = [
   }),
   bind('n', 'work.notYet', 'WRK-2'),
   bind('y', 'work.acceptSuggestion', 'WRK-3'),
+  bind('c', 'work.comment', { cardId: 'WRK-1', text: COMMENT_TEXT }),
+  bind('C', 'work.comment', { cardId: FIXTURE_TASK_ID, text: COMMENT_TEXT }),
   bind('x', 'work.deleteTask', FIXTURE_TASK_ID),
   bind('X', 'work.deleteTask', 'WRK-1'),
   bind('w', 'work.sweep'),
@@ -113,7 +116,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'board',
-    why: 'A local task moves at once, Not yet hides a suggestion, Accept queues a Jira move, and a Jira card refuses delete.',
+    why: 'A local task moves at once, Not yet hides a suggestion, Accept queues a Jira move, a Jira card queues a comment that a local task refuses, and a Jira card refuses delete.',
     steps: [
       reseedStep('board'),
       press('a', `added ${FIXTURE_ITEM_IDS.myThread} to the board`),
@@ -121,6 +124,8 @@ const GROUPS: SelfTestGroup[] = [
       press('m', `moved ${FIXTURE_TASK_ID} to In Progress`),
       press('n', 'not yet WRK-2'),
       press('y', 'moving WRK-3 to In QA'),
+      press('c', 'comment queued WRK-1'),
+      press('C', 'refused comment: Only a Jira ticket takes a comment'),
       press('x', `deleted ${FIXTURE_TASK_ID}`),
       press('X', 'refused deleteTask: Only a local task can be deleted'),
     ],

@@ -144,6 +144,8 @@ function rowTitle(job: WorkJob): string {
       return 'Work nudge';
     case 'move':
       return `Work move ${job.key}`;
+    case 'comment':
+      return `Work comment ${job.key}`;
   }
 }
 

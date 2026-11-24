@@ -557,6 +557,24 @@ describe('read_work_state', () => {
     });
   });
 
+  it('readState_commentJob_leavesTextOut', async () => {
+    const text = 'Picked this up today.';
+    const tools = toolsFor(
+      { kind: 'comment', key: 'WS-1', text },
+      fileWith({
+        cards: [jiraCard('WS-1', 'To Do', { commenting: [text] })],
+      }),
+    );
+
+    const result = await tools.call(READ_WORK_STATE_TOOL.name, {});
+
+    expect(JSON.parse(onlyText(result)).job).toEqual({
+      kind: 'comment',
+      key: 'WS-1',
+    });
+    expect(onlyText(result)).not.toContain(text);
+  });
+
   it('readState_closedItemsBounded', async () => {
     const tools = toolsFor(
       SWEEP,
@@ -839,6 +857,15 @@ describe('mergeRecordedTickets', () => {
       stored: [jiraCard('WS-1', 'To Do', { reachableStatuses: ['Done'] })],
       record: ticket('WS-1', 'To Do', { reachableStatuses: null }),
       expected: jiraCard('WS-1', 'To Do', { reachableStatuses: ['Done'] }),
+    },
+    {
+      name: 'a recorded ticket keeps the stored commenting',
+      stored: [jiraCard('WS-1', 'To Do', { commenting: ['A', 'B'] })],
+      record: ticket('WS-1', 'In Review'),
+      expected: jiraCard('WS-1', 'In Review', {
+        commenting: ['A', 'B'],
+        movedAt: NOW,
+      }),
     },
   ])('$name', ({ stored, record, expected }) => {
     const merged = mergeRecordedTickets(

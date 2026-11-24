@@ -70,6 +70,11 @@ describe('workPagePart', () => {
       arg: { cardId: 'WS-1', column: 'Done' },
       args: [{ cardId: 'WS-1', column: 'Done' }],
     },
+    {
+      command: 'comment',
+      arg: { cardId: 'WS-1', text: 'Hi' },
+      args: [{ cardId: 'WS-1', text: 'Hi' }],
+    },
     { command: 'acceptSuggestion', arg: 'WS-2', args: ['WS-2'] },
     { command: 'notYet', arg: 'WS-3', args: ['WS-3'] },
     { command: 'deleteTask', arg: 'local-1', args: ['local-1'] },

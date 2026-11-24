@@ -48,6 +48,7 @@ const JOBS: WorkJob[] = [
   { kind: 'send', itemId: 'a', text: TEXT },
   { kind: 'nudge', itemId: 'a', text: TEXT },
   { kind: 'move', key: 'WS-12', column: 'In QA' },
+  { kind: 'comment', key: 'WS-12', text: TEXT },
 ];
 
 function messageOf(
@@ -126,7 +127,7 @@ describe('sweep message', () => {
   });
 });
 
-describe('send and move messages', () => {
+describe('send, move and comment messages', () => {
   it.each([
     ['send', 'SEND', 'a reply'],
     ['nudge', 'NUDGE', 'a nudge'],
@@ -149,8 +150,20 @@ describe('send and move messages', () => {
     );
   });
 
+  it('comment_postsTextOnce', () => {
+    const message = messageOf({ kind: 'comment', key: 'WS-12', text: TEXT });
+
+    expect(message.startsWith('COMMENT. ')).toBe(true);
+    expect(message).toContain('on Jira ticket WS-12 ("Ticket WS-12").');
+    expect(message).toContain(`\n\n${TEXT}\n\n`);
+  });
+
   it.each<[string, WorkJob]>([
     ['a send for a missing item', { kind: 'send', itemId: 'gone', text: TEXT }],
+    [
+      'a comment for a key with no Jira card',
+      { kind: 'comment', key: 'WS-99', text: TEXT },
+    ],
     [
       'a move for a key with no Jira card',
       { kind: 'move', key: 'WS-99', column: 'In QA' },

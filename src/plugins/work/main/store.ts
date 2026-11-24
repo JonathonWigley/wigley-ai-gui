@@ -19,8 +19,10 @@ import {
   type WorkDetail,
   type WorkItem,
   type WorkItemState,
+  type WorkJiraCard,
   type WorkJobKind,
   type WorkJobStatus,
+  type WorkLocalCard,
   type WorkSignal,
   type WorkState,
   type WorkSuggestion,
@@ -105,7 +107,13 @@ const ITEM_STATES: readonly WorkItemState[] = [
   'dismissed',
   'snoozed',
 ];
-const JOB_KINDS: readonly WorkJobKind[] = ['sweep', 'send', 'move', 'nudge'];
+const JOB_KINDS: readonly WorkJobKind[] = [
+  'sweep',
+  'send',
+  'move',
+  'nudge',
+  'comment',
+];
 const JOB_STATES: readonly WorkJobStatus['state'][] = [
   'queued',
   'running',
@@ -173,7 +181,18 @@ function isWorkItem(value: unknown): value is WorkItem {
   );
 }
 
-function isWorkCard(value: unknown): value is WorkCard {
+// A Jira card saved before it had `commenting` may leave it out.
+type SavedWorkCard =
+  | WorkLocalCard
+  | (Omit<WorkJiraCard, 'commenting'> & { commenting?: readonly string[] });
+
+const isCommentingOrAbsent = (record: JsonObject) =>
+  record.commenting === undefined || isStringArray(record.commenting);
+
+const withCommenting = (card: SavedWorkCard): WorkCard =>
+  card.kind === 'jira' ? { ...card, commenting: card.commenting ?? [] } : card;
+
+function isWorkCard(value: unknown): value is SavedWorkCard {
   const hasBase =
     isJsonObject(value) &&
     areStrings(value, ['id', 'title', 'column']) &&
@@ -188,7 +207,8 @@ function isWorkCard(value: unknown): value is WorkCard {
         areStrings(value, ['key', 'jiraStatus']) &&
         isNullableString(value.priority) &&
         (value.reachableStatuses === null ||
-          isStringArray(value.reachableStatuses))
+          isStringArray(value.reachableStatuses)) &&
+        isCommentingOrAbsent(value)
       );
     case 'local':
       return isNullableString(value.sourceItemId);
@@ -290,7 +310,11 @@ function isDetailsOrAbsent(value: unknown): boolean {
   );
 }
 
-type SavedWorkFile = Omit<WorkFile, 'suggestions' | 'notYet' | 'details'> & {
+type SavedWorkFile = Omit<
+  WorkFile,
+  'cards' | 'suggestions' | 'notYet' | 'details'
+> & {
+  cards: SavedWorkCard[];
   suggestions: MaybeWithoutRowId<SavedSuggestion>[];
   notYet: MaybeWithoutRowId<WorkNotYet>[];
   details?: Record<string, WorkDetail>;
@@ -312,9 +336,9 @@ function isWorkFile(value: unknown): value is SavedWorkFile {
 }
 
 // The work `work.json` holds, without the top-level keys it does not read, a suggestion or mark saved with no `rowId`
-// given a null one, and a file saved with no `details` given `{}`; throws `work.json is not a work file` for text that
-// is not JSON, any key or element whose fields are not of their kinds, or a detail record filed under a key other than
-// its `id`.
+// given a null one, a Jira card saved with no `commenting` given `[]`, and a file saved with no `details` given `{}`;
+// throws `work.json is not a work file` for text that is not JSON, any key or element whose fields are not of their
+// kinds, or a detail record filed under a key other than its `id`.
 export function parseWorkFile(text: string): WorkFile {
   const notAWorkFile = new Error('work.json is not a work file');
   let parsed: unknown;
@@ -330,7 +354,7 @@ export function parseWorkFile(text: string): WorkFile {
     parsed;
   return {
     items,
-    cards,
+    cards: cards.map(withCommenting),
     suggestions: suggestions.map((entry) => withRowId<SavedSuggestion>(entry)),
     notYet: notYet.map((mark) => withRowId<WorkNotYet>(mark)),
     job: { running: job.running, last: job.last },

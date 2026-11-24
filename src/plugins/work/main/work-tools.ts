@@ -520,6 +520,7 @@ function mergedCard(
       linkedSessionIds: [],
       movedAt: null,
       reachableStatuses: ticket.reachableStatuses,
+      commenting: [],
     };
   }
   const isStatusChanged = stored.jiraStatus !== ticket.status;
@@ -531,6 +532,7 @@ function mergedCard(
     linkedSessionIds: stored.linkedSessionIds,
     movedAt: isStatusChanged ? now : stored.movedAt,
     reachableStatuses: ticket.reachableStatuses ?? stored.reachableStatuses,
+    commenting: stored.commenting,
   };
 }
 
@@ -867,7 +869,7 @@ function workStateText(deps: WorkToolsDeps, job: WorkJob): string {
   return JSON.stringify(view, null, 1);
 }
 
-// The running job as `read_work_state` shows it: a send's or nudge's text left out.
+// The running job as `read_work_state` shows it: a send's, nudge's or comment's text left out.
 function jobView(job: WorkJob): {
   kind: WorkJob['kind'];
   itemId?: string;
@@ -882,6 +884,8 @@ function jobView(job: WorkJob): {
       return { kind: job.kind, itemId: job.itemId };
     case 'move':
       return { kind: job.kind, key: job.key, column: job.column };
+    case 'comment':
+      return { kind: job.kind, key: job.key };
   }
 }
 

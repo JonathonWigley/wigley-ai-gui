@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  DetailMessage,
   WorkCard,
   WorkColumnSetting,
   WorkItem,
   WorkJob,
 } from '../contract';
-import { jiraCard, localCard, workItem } from '../contract.test-support';
+import {
+  jiraCard,
+  localCard,
+  ticketDetail,
+  workItem,
+} from '../contract.test-support';
 import {
   type ActionResult,
   acceptSuggestion,
   addToBoard,
   clearStaleMarks,
+  comment,
   deleteTask,
   dismiss,
   expireSnoozes,
@@ -25,10 +32,17 @@ import {
   send,
   snooze,
 } from './actions';
-import { EMPTY_WORK_FILE, type SavedSuggestion, type WorkFile } from './store';
+import {
+  type DetailCaps,
+  EMPTY_WORK_FILE,
+  type SavedSuggestion,
+  type WorkFile,
+} from './store';
 
 const NOW = Date.parse('2026-11-23T12:00:00.123Z');
 const NOW_ISO = '2026-11-23T12:00:00.123Z';
+const CAPS: DetailCaps = { comments: 2, replies: 3 };
+const COMMENT_LOST_NOTE = `Comment failed: ${LOST_JOB_NOTE}`;
 
 const COLUMNS: WorkColumnSetting[] = [
   { name: 'Backlog', jiraStatuses: ['Backlog'] },
@@ -512,6 +526,88 @@ describe('moveCard', () => {
   });
 });
 
+describe('comment', () => {
+  const job = (text: string): WorkJob => ({
+    kind: 'comment',
+    key: 'ABC-12',
+    text,
+  });
+
+  it.each<{
+    name: string;
+    card: WorkCard;
+    id?: string;
+    text: string;
+    expected: ActionResult | Refusal;
+  }>([
+    {
+      name: 'a Jira card queues the comment as given',
+      card: jiraCard('ABC-12', 'To Do', {
+        commenting: ['First'],
+        note: 'Comment failed',
+      }),
+      text: '  Looks good\n',
+      expected: result(
+        ofCards(
+          jiraCard('ABC-12', 'To Do', {
+            commenting: ['First', '  Looks good\n'],
+          }),
+        ),
+        job('  Looks good\n'),
+        'comment queued ABC-12',
+      ),
+    },
+    {
+      name: 'a card in Other',
+      card: jiraCard('ABC-12', 'Won’t Do'),
+      text: 'Hi',
+      expected: result(
+        ofCards(jiraCard('ABC-12', 'Won’t Do', { commenting: ['Hi'] })),
+        job('Hi'),
+        'comment queued ABC-12',
+      ),
+    },
+    {
+      name: 'a moving card',
+      card: jiraCard('ABC-12', 'To Do', { movingTo: 'In QA' }),
+      text: 'Hi',
+      expected: result(
+        ofCards(
+          jiraCard('ABC-12', 'To Do', {
+            movingTo: 'In QA',
+            commenting: ['Hi'],
+          }),
+        ),
+        job('Hi'),
+        'comment queued ABC-12',
+      ),
+    },
+    {
+      name: 'an unknown card',
+      card: jiraCard('XYZ-1', 'To Do'),
+      id: 'ABC-12',
+      text: 'Hi',
+      expected: refused('No card ABC-12'),
+    },
+    {
+      name: 'a local task, before its blank text',
+      card: localCard('ABC-12', 'Todo'),
+      text: '  \n',
+      expected: refused('Only a Jira ticket takes a comment'),
+    },
+    {
+      name: 'blank text',
+      card: jiraCard('ABC-12', 'To Do'),
+      text: '  \n',
+      expected: refused('Nothing to post'),
+    },
+  ])('comment ($name)', ({ card, id, text, expected }) => {
+    expect(comment(ofCards(card), { cardId: id ?? card.id, text })).toEqual(
+      expected,
+    );
+  });
+});
+
 describe('acceptSuggestion', () => {
   const kept = suggestion('XYZ-1');
 
@@ -734,6 +830,23 @@ describe('jobEnded', () => {
     movingTo: 'In QA',
     note: 'Move failed',
   });
+  const commentJob = (text: string): WorkJob => ({
+    kind: 'comment',
+    key: 'ABC-12',
+    text,
+  });
+  const commenting = (...texts: string[]) =>
+    jiraCard('ABC-12', 'To Do', { commenting: texts, note: 'Comment failed' });
+  const message = (at: string, text: string): DetailMessage => ({
+    author: 'Bo',
+    at,
+    text,
+  });
+  const older = message('2026-11-23T09:00:00.000Z', 'Seen it.');
+  const newer = message('2026-11-23T10:00:00.000Z', 'On it.');
+  const detailOf = (...comments: DetailMessage[]) => ({
+    'ABC-12': ticketDetail('ABC-12', { comments }),
+  });
 
   it.each<{
     name: string;
@@ -805,6 +918,62 @@ describe('jobEnded', () => {
       expected: ofCards(jiraCard('ABC-12', 'In QA', { note: 'Move failed' })),
     },
     {
+      name: 'comment ok adds the comment to the stored detail, newest within the cap',
+      file: fileWith({
+        cards: [commenting('A')],
+        details: detailOf(newer, older),
+      }),
+      job: commentJob('A'),
+      end: { ok: true, note: null },
+      expected: fileWith({
+        cards: [jiraCard('ABC-12', 'To Do')],
+        details: detailOf(newer, { author: 'You', at: NOW_ISO, text: 'A' }),
+      }),
+    },
+    {
+      name: 'comment ok with no stored detail leaves details',
+      file: fileWith({
+        cards: [commenting('A')],
+        details: { 'XYZ-1': ticketDetail('XYZ-1') },
+      }),
+      job: commentJob('A'),
+      end: { ok: true, note: null },
+      expected: fileWith({
+        cards: [jiraCard('ABC-12', 'To Do')],
+        details: { 'XYZ-1': ticketDetail('XYZ-1') },
+      }),
+    },
+    {
+      name: 'comment ok removes its own text only',
+      file: ofCards(commenting('A', 'B')),
+      job: commentJob('B'),
+      end: { ok: true, note: null },
+      expected: ofCards(jiraCard('ABC-12', 'To Do', { commenting: ['A'] })),
+    },
+    {
+      name: 'comment failed keeps the stored detail',
+      file: fileWith({ cards: [commenting('A')], details: detailOf(older) }),
+      job: commentJob('A'),
+      end: { ok: false, note: 'No such ticket' },
+      expected: fileWith({
+        cards: [
+          jiraCard('ABC-12', 'To Do', {
+            note: 'Comment failed: No such ticket',
+          }),
+        ],
+        details: detailOf(older),
+      }),
+    },
+    {
+      name: 'comment failed with a null note',
+      file: ofCards({ ...commenting('A'), note: null }),
+      job: commentJob('A'),
+      end: { ok: false, note: null },
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', { note: 'Comment failed' }),
+      ),
+    },
+    {
       name: 'sweep expires a snooze',
       file: ofItems(p1({ state: 'snoozed', snoozedUntil: NOW_ISO })),
       job: { kind: 'sweep' },
@@ -812,7 +981,7 @@ describe('jobEnded', () => {
       expected: ofItems(p1()),
     },
   ])('jobEnded ($name)', ({ file, job, end, expected }) => {
-    expect(jobEnded(file, job, end, NOW)).toEqual(expected);
+    expect(jobEnded(file, job, end, NOW, CAPS)).toEqual(expected);
   });
 
   it.each<{ name: string; job: WorkJob }>([
@@ -821,10 +990,14 @@ describe('jobEnded', () => {
       name: 'a gone card',
       job: { kind: 'move', key: 'ABC-99', column: 'In QA' },
     },
+    {
+      name: 'a gone ticket',
+      job: { kind: 'comment', key: 'ABC-99', text: 'A' },
+    },
   ])('jobEnded gives the same object for $name', ({ job }) => {
     const file = fileWith({ items: [sending], cards: [moving] });
 
-    expect(jobEnded(file, job, { ok: false, note: 'x' }, NOW)).toBe(file);
+    expect(jobEnded(file, job, { ok: false, note: 'x' }, NOW, CAPS)).toBe(file);
   });
 });
 
@@ -855,6 +1028,41 @@ describe('clearStaleMarks', () => {
       pending: [{ kind: 'move', key: 'XYZ-1', column: 'In QA' }],
       expected: ofCards(jiraCard('ABC-12', 'To Do', { note: LOST_JOB_NOTE })),
     },
+    {
+      name: 'a comment with no pending comment',
+      file: ofCards(jiraCard('ABC-12', 'To Do', { commenting: ['A', 'B'] })),
+      pending: [
+        { kind: 'comment', key: 'ABC-12', text: 'B' },
+        { kind: 'comment', key: 'XYZ-1', text: 'A' },
+      ],
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', {
+          commenting: ['B'],
+          note: COMMENT_LOST_NOTE,
+        }),
+      ),
+    },
+    {
+      name: 'one of two equal comments with one job',
+      file: ofCards(jiraCard('ABC-12', 'To Do', { commenting: ['A', 'A'] })),
+      pending: [{ kind: 'comment', key: 'ABC-12', text: 'A' }],
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', {
+          commenting: ['A'],
+          note: COMMENT_LOST_NOTE,
+        }),
+      ),
+    },
+    {
+      name: 'a stale move and a stale comment, the comment noted',
+      file: ofCards(
+        jiraCard('ABC-12', 'To Do', { movingTo: 'In QA', commenting: ['A'] }),
+      ),
+      pending: [],
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', { note: COMMENT_LOST_NOTE }),
+      ),
+    },
   ])('clearStaleMarks clears $name', ({ file, pending, expected }) => {
     expect(clearStaleMarks(file, pending)).toEqual(expected);
   });
@@ -869,6 +1077,14 @@ describe('clearStaleMarks', () => {
       name: 'a pending move for its key',
       file: ofCards(moving),
       pending: [{ kind: 'move', key: 'ABC-12', column: 'In QA' }],
+    },
+    {
+      name: 'a pending comment for its key and text',
+      file: ofCards(jiraCard('ABC-12', 'To Do', { commenting: ['A'] })),
+      pending: [
+        { kind: 'comment', key: 'XYZ-1', text: 'B' },
+        { kind: 'comment', key: 'ABC-12', text: 'A' },
+      ],
     },
     {
       name: 'no marks',
@@ -908,9 +1124,10 @@ describe('actions', () => {
         ],
         cards: [
           jiraCard('ABC-12', 'To Do', { movingTo: 'In QA' }),
-          jiraCard('XYZ-2', 'To Do'),
+          jiraCard('XYZ-2', 'To Do', { commenting: ['A'] }),
           localCard('local-1', 'Todo'),
         ],
+        details: { 'XYZ-2': ticketDetail('XYZ-2') },
         suggestions: [suggestion('XYZ-2'), suggestion('local-1')],
         notYet: [
           { cardId: 'local-1', signal: 'branch', at: NOW_ISO, rowId: null },
@@ -929,6 +1146,7 @@ describe('actions', () => {
       () =>
         moveCard(file, { cardId: 'local-1', column: 'In QA' }, COLUMNS, NOW),
       () => acceptSuggestion(file, 'XYZ-2', COLUMNS, NOW),
+      () => comment(file, { cardId: 'XYZ-2', text: 'Hi' }),
       () => notYet(file, 'local-1'),
       () => deleteTask(file, 'local-1'),
       () =>
@@ -937,6 +1155,7 @@ describe('actions', () => {
           { kind: 'send', itemId: 'p3', text: 'On it' },
           { ok: true, note: null },
           NOW,
+          CAPS,
         ),
       () =>
         jobEnded(
@@ -944,6 +1163,15 @@ describe('actions', () => {
           { kind: 'move', key: 'ABC-12', column: 'In QA' },
           { ok: false, note: null },
           NOW,
+          CAPS,
+        ),
+      () =>
+        jobEnded(
+          file,
+          { kind: 'comment', key: 'XYZ-2', text: 'A' },
+          { ok: true, note: null },
+          NOW,
+          CAPS,
         ),
       () => clearStaleMarks(file, []),
     ];

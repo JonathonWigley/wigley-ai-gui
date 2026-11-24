@@ -63,6 +63,8 @@ function jobText(job: WorkJob): string {
       return 'sweep';
     case 'move':
       return `move ${job.key}`;
+    case 'comment':
+      return `comment ${job.key}`;
     default:
       return `${job.kind} ${job.itemId}`;
   }

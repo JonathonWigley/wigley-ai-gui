@@ -116,7 +116,7 @@ function movedKey(job: WorkJob): string | null {
 }
 
 // Whether `queued` is the same press as `job` on the same target, which `job` replaces: a send or nudge on the same
-// item, or a move of the same ticket.
+// item, or a move of the same ticket. A comment replaces none and is replaced by none.
 function isSamePressTarget(queued: WorkJob, job: WorkJob): boolean {
   const itemId = postedItemId(job);
   if (itemId !== null) {
@@ -229,6 +229,8 @@ function isWorkJob(value: unknown): value is WorkJob {
       return typeof value.itemId === 'string' && typeof value.text === 'string';
     case 'move':
       return typeof value.key === 'string' && typeof value.column === 'string';
+    case 'comment':
+      return typeof value.key === 'string' && typeof value.text === 'string';
     default:
       return false;
   }
