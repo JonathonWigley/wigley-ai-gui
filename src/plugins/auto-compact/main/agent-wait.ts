@@ -1,9 +1,6 @@
 import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
 import { formatTokens } from '../../../shared/format-tokens';
-import {
-  CHECKLIST_WORKFLOW_ID,
-  type SessionFlow,
-} from '../../workflow/contract';
+import { isClaimed, type SessionFlow } from '../../workflow/contract';
 
 // Where a session's agent wait stands, by chat row id. A session absent is
 // armed: its next wait may compact. `compacting` runs from the `compact` call
@@ -33,8 +30,7 @@ export function agentWaitReason({
   if (minTokens === 0 || phase !== undefined || flow === undefined) {
     return null;
   }
-  const hasLevel =
-    flow.workflow !== null && flow.workflow !== CHECKLIST_WORKFLOW_ID;
+  const hasLevel = isClaimed(flow);
   const waitsOnSubagents =
     !flow.turnRunning && flow.runningSubagents.length > 0;
   if (!hasLevel || !waitsOnSubagents || usage === null) {

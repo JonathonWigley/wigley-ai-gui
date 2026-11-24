@@ -66,7 +66,7 @@ export function testWorkflowKit(
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
   now = 0,
   sessionId = 's1',
-  badgeColor?: string,
+  badgeColor = 'var(--wg-test-badge)',
 ): {
   kit: WorkflowKit;
   anchors: RecordedAnchor[];

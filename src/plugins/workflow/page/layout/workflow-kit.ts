@@ -78,15 +78,14 @@ export function stageTagElement(
 // names is recorded in `rollback`. Each status mark, stage tag and running step
 // carries `clock`'s time, which places its pulse. A short name the manifest
 // lacks names the plugin's command registered at runtime under it, as a
-// declared action's is. The badge takes `badgeColor`; left out, the owner's
-// `badge` theme token.
+// declared action's is. The badge takes `badgeColor`.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
   sessionId: string,
   clock: Clock,
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
-  badgeColor?: string,
+  badgeColor: string,
 ): WorkflowKit {
   const manifestCommandNamed = commandNamedIn(manifest);
   const base = createBaseKit({
@@ -142,10 +141,7 @@ export function createWorkflowKit(
     badge(parent, letter, label) {
       const badge = appended(parent, element('span', 'workflow-badge', letter));
       badge.title = label;
-      badge.style.setProperty(
-        '--workflow-badge-color',
-        badgeColor ?? `var(--wg-${manifest.id}-badge)`,
-      );
+      badge.style.setProperty('--workflow-badge-color', badgeColor);
       return badge;
     },
     stageTag(parent, label, status) {

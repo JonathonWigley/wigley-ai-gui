@@ -74,6 +74,7 @@ import {
 } from '../declared/sample-workflows';
 import { newFlow } from '../flow';
 import type { workflowManifest } from '../manifest';
+import { SET_WORKFLOW_PLAN_TOOL } from '../plan/plan-tool';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
 import {
   FAKE_CHAT,
@@ -416,6 +417,8 @@ function startWorkflowPart(
       callTool(SET_WORKFLOW_STEP_TOOL, id, { step }),
     callChecklistTool: (id: string, items: unknown) =>
       callTool(SET_WORKFLOW_CHECKLIST_TOOL, id, { items }),
+    callPlanTool: (id: string, folder: string) =>
+      callTool(SET_WORKFLOW_PLAN_TOOL, id, { folder }),
   };
 }
 
@@ -1839,6 +1842,25 @@ describe('workflowMainPart › declared workflows', () => {
     expect(stepsOffered(workflow)).not.toContain('answered');
   });
 
+  it('addDeclared_AnIdAlreadyEnabled_LeavesTheContributedEntry', async () => {
+    const contributions = fakeContributions();
+    contributions.set('workflows', [
+      strategyOf(SAMPLE_PLUGIN_NAME, [SAMPLE_SMALL]),
+    ]);
+    const workflow = startWorkflowPart({ contributions, selfTest: true });
+    workflow.contributionsFake.resolveReady();
+    await settled();
+    const changed = sampleDeclared('small');
+    changed.decl.label = 'Changed label';
+
+    addDeclared(workflow, changed);
+
+    const held = workflow.store
+      .read(workflowDeclaredSlot, 'test')
+      .get('wigley:small');
+    expect(held?.decl.label).toBe(SAMPLE_SMALL.label);
+  });
+
   it('SkillStartedBeforeContributionsReady_FoldsAfter_AndClaims', async () => {
     const workflow = startWithContributed([SAMPLE_SMALL]);
     await workflow.openS1();
@@ -2025,6 +2047,38 @@ describe('workflowMainPart › the sample Large', () => {
     workflow.time.advance(10_000);
     await settled();
     expect(workflow.chatCalls).toEqual([]);
+  });
+
+  it('PlanTool_AFlowReopenedOnTheLargeWorkflow_FoldsPlanReported', async () => {
+    const workflow = startWorkflowPart({
+      selfTest: true,
+      data: await savedFlowData({ workflow: LARGE_ID, stage: 'explore' }),
+    });
+    addDeclared(workflow, sampleDeclared('large'));
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    const result = await workflow.callPlanTool('s1', PLAN_DIR);
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toBe(`Plan folder set to ${PLAN_DIR}.`);
+    expect(largeFieldsOf(workflow.lastFlow())).toMatchObject({
+      planDir: PLAN_DIR,
+      total: 3,
+    });
+  });
+
+  it('PlanTool_ASessionWithNoFlow_AnswersIgnored', async () => {
+    const workflow = startWithLarge();
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    const result = await workflow.callPlanTool('unknown', PLAN_DIR);
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toBe(
+      "Ignored: this session's workflow keeps no plan.",
+    );
   });
 
   it('StepTool_Large', async () => {

@@ -14,6 +14,7 @@ import type {
   ToolSession,
 } from '../../sessions/contract';
 import {
+  CHECKLIST_DECLARED,
   CHECKLIST_WORKFLOW,
   CHECKLIST_WORKFLOW_ID,
   type DeclaredWorkflow,
@@ -74,13 +75,6 @@ const OTHER_WORKFLOW: DeclaredWorkflow = {
     order: 10,
     claims: ['test:other'],
   },
-};
-
-const CHECKLIST_DECLARED: DeclaredWorkflow = {
-  id: CHECKLIST_WORKFLOW_ID,
-  pluginName: '',
-  decl: CHECKLIST_WORKFLOW,
-  planFormat: null,
 };
 
 function skill(name: string, argsPath: string | null): WorkflowSignal {
@@ -506,6 +500,59 @@ describe('startPlanCapability', () => {
         .slice(signalsBefore)
         .filter(([, origin]) => origin === 'observed'),
     ).toEqual([]);
+  });
+
+  // Breaks if a switch-off leaves the held flow's watch reading the plan.
+  it('PlanWorkflowSwitchedOff_StopsTheHeldFlowsWatch', async () => {
+    const subject = await startInMake();
+    subject.setWorkflows([OTHER_WORKFLOW]);
+    subject.projectReads.length = 0;
+
+    await subject.project.write(PLAN_FILE, PLAN_TICKED);
+    await settled();
+    await settled();
+
+    expect(subject.projectReads).toEqual([]);
+  });
+
+  // Breaks if a switch-on leaves a held flow of the workflow unwatched.
+  it('PlanWorkflowSwitchedOn_FollowsTheHeldFlowsPlan', async () => {
+    const project = createMemoryFiles();
+    await project.write(PLAN_FILE, PLAN);
+    const subject = startCapability({
+      workflows: [OTHER_WORKFLOW],
+      held: [
+        {
+          ...newFlow('s1', '/r'),
+          workflow: PLAN_WORKFLOW_ID,
+          stage: 'make',
+          plan: planHeld({ dir: PLAN_DIR }),
+        },
+      ],
+      project,
+    });
+    await settled();
+    expect(subject.projectReads).toEqual([]);
+
+    subject.setWorkflows([planWorkflowFixture(), OTHER_WORKFLOW]);
+    await settled();
+    await settled();
+
+    expect(subject.lastFlow()?.plan?.progress).toEqual(progressOf(PLAN));
+  });
+
+  // Breaks if a changed `planFormat` keeps the watch reading the old file.
+  it('PlanFormatChanged_HeldFlowReadsInTheNewFormat', async () => {
+    const subject = await startInMake();
+    const renamed = planWorkflowFixture();
+    renamed.planFormat = { ...USER_PLAN_FORMAT, file: 'renamed.md' };
+    await subject.project.write(`${PLAN_DIR}/renamed.md`, PLAN_TICKED);
+
+    subject.setWorkflows([renamed, OTHER_WORKFLOW]);
+    await settled();
+    await settled();
+
+    expect(subject.projectReads).toContain(`${PLAN_DIR}/renamed.md`);
   });
 
   it('dispose_StopsTheWatchAndTheTool', async () => {

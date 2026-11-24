@@ -1,6 +1,6 @@
 /* The workflow parts the kit draws: the stepper's trail of step words, the status
    marks, the side pane's list and the fold over it, the countdown and the level's
-   badge, whose colour the kit sets from the drawing plugin's token, the stage
+   badge, whose colour the kit sets from the declaration's `badgeColor`, the stage
    tag, the Headless chip, and the row wrapper around a chip. Each workflow plugin's default layout styles its own chip,
    strip and side pane in its `layout.css`. */
 

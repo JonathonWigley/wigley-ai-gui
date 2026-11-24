@@ -74,7 +74,7 @@ export const CHECKLIST_WORKFLOW: WorkflowDecl = {
 };
 
 // The short command id of a declared action: the workflow id with each `:`
-// as `-`, then `-<action id>` (`wigley-large-clearAndMake`).
+// as `-`, then `-<action id>` (`my-plugin-large-clearAndMake`).
 export function actionCommandShortId(
   workflowId: string,
   actionId: string,
@@ -89,6 +89,20 @@ export interface DeclaredWorkflow {
   pluginName: string;
   decl: WorkflowDecl;
   planFormat: PlanFormat | null;
+}
+
+// The Checklist flow as a declaration: main and page register it before any
+// contributed one.
+export const CHECKLIST_DECLARED: DeclaredWorkflow = {
+  id: CHECKLIST_WORKFLOW_ID,
+  pluginName: '',
+  decl: CHECKLIST_WORKFLOW,
+  planFormat: null,
+};
+
+// Whether a workflow other than the Checklist flow holds `flow`.
+export function isClaimed(flow: SessionFlow): boolean {
+  return flow.workflow !== null && flow.workflow !== CHECKLIST_WORKFLOW_ID;
 }
 
 // One entry of `workflow.autoStart`: the qualified workflow whose `auto`
@@ -144,7 +158,9 @@ export interface ChecklistItem {
 export interface SessionFlow {
   sessionId: string;
   projectDir: string;
-  // A new flow's is the Checklist flow's; null only in a flow saved before it.
+  // A new flow's is the Checklist flow's; null only in a saved file written
+  // before it, which the loader maps to the Checklist flow, so a held flow
+  // never has null.
   workflow: WorkflowId | null;
   movedUpFrom: WorkflowId | null;
   stage: StageId;
@@ -217,8 +233,7 @@ export interface MainStage {
 
 export interface MainWorkflow {
   id: WorkflowId;
-  // Small 10, medium 20, large 30, spike 40. The lowest order's claim wins a skill two
-  // workflows claim.
+  // The lowest order's claim wins a skill two workflows claim.
   order: number;
   claims(signal: WorkflowSignal): boolean;
   firstStage: StageId;
@@ -629,14 +644,14 @@ export type PagePluginApi = Pick<
 
 // `manifest` names the owner of the plugin's layouts and its commands' key hints;
 // `userLayout` reads the plugin's `layout` setting. `badgeColor` is the badge's
-// CSS color; left out, the owner's `badge` theme token.
+// CSS color, from the declaration's `badgeColor`.
 export interface WorkflowDrawOptions {
   manifest: Pick<PluginManifest, 'id' | 'commands'>;
   defaultLayout: CompleteLayout;
   defaultStylesheet: string;
   userLayout(): string;
   sideTitle: string;
-  badgeColor?: string;
+  badgeColor: string;
 }
 
 // `addWorkflow` throws on an id already added. `createWorkflowDraw` shows the

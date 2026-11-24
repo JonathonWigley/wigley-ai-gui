@@ -31,17 +31,37 @@ export const FEATURE_KEYS: readonly FeatureKey[] = [
 
 // The tones a row's activity shows in, the members of the page kit's
 // `DotStatus`.
-export type ActivityTone =
-  | 'idle'
-  | 'running'
-  | 'success'
-  | 'warning'
-  | 'attention'
-  | 'error';
+export const ACTIVITY_TONES = [
+  'idle',
+  'running',
+  'success',
+  'warning',
+  'attention',
+  'error',
+] as const;
+export type ActivityTone = (typeof ACTIVITY_TONES)[number];
 
 // How a row catches the eye: `raised` for a state the user may come to when
 // ready, `urgent` for one blocked on the user.
-export type RowEmphasis = 'raised' | 'urgent';
+export const ROW_EMPHASES = ['raised', 'urgent'] as const;
+export type RowEmphasis = (typeof ROW_EMPHASES)[number];
+
+export const STAGE_STATUSES = ['busy', 'finishing', 'ready', 'none'] as const;
+export const NAMED_PREDICATES = [
+  'idle',
+  'busy',
+  'planRead',
+  'planHasTasks',
+  'planOpen',
+] as const;
+export const ACTION_KINDS = [
+  'send',
+  'clearAndSend',
+  'launch',
+  'openPlan',
+  'event',
+] as const;
+export const SIDE_PANE_KINDS = ['checklist', 'plan'] as const;
 
 export interface AuriFile {
   $schema?: string;
@@ -64,7 +84,7 @@ export interface WorkflowDecl {
   groups?: Record<string, string[]>;
   counters?: Record<string, CounterDecl>;
   fixCycles?: { counter: string } | { planCounter: string };
-  sidePane: { kind: 'checklist' | 'plan'; title: string };
+  sidePane: { kind: (typeof SIDE_PANE_KINDS)[number]; title: string };
   actions?: Record<string, ActionDecl>;
   stages: StageDecl[];
 }
@@ -76,7 +96,7 @@ export interface StageDecl {
   inStepper?: boolean;
   slot?: string;
   runsTasks?: boolean;
-  status: 'busy' | 'finishing' | 'ready' | 'none';
+  status: (typeof STAGE_STATUSES)[number];
   finishes?: boolean;
   reopens?: boolean;
   records?: string[];
@@ -107,11 +127,7 @@ export type TriggerDecl =
     };
 
 export type PredicateDecl =
-  | 'idle'
-  | 'busy'
-  | 'planRead'
-  | 'planHasTasks'
-  | 'planOpen'
+  | (typeof NAMED_PREDICATES)[number]
   | { counterRose: string };
 
 export interface CounterDecl {
@@ -126,7 +142,7 @@ export interface ActivityDecl {
 }
 
 export interface ActionDecl {
-  kind: 'send' | 'clearAndSend' | 'launch' | 'openPlan' | 'event';
+  kind: (typeof ACTION_KINDS)[number];
   label: string;
   text?: string;
   event?: string;

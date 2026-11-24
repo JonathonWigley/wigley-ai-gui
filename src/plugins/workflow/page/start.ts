@@ -22,8 +22,7 @@ import {
 } from '../../sessions/contract';
 import {
   actionCommandShortId,
-  CHECKLIST_WORKFLOW,
-  CHECKLIST_WORKFLOW_ID,
+  CHECKLIST_DECLARED,
   type DeclaredWorkflow,
   type PageWorkflow,
   type SessionFlow,
@@ -37,6 +36,7 @@ import {
 } from '../contract';
 import { CANCEL_COUNTDOWN_ACTION } from '../declared/actions';
 import { buildPageWorkflow, type PageBuildDeps } from '../declared/build-page';
+import { createDeclaredRegistry } from '../declared/declared-set';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -294,25 +294,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
 
     const declared = api.state.read(workflowDeclaredSlot);
-    const declaredHalves = new Map<
-      string,
-      { json: string; half: Disposable }
-    >();
-    const syncDeclaredHalf = (
-      id: string,
-      entry: DeclaredWorkflow | undefined,
-    ) => {
-      const held = declaredHalves.get(id);
-      const json = entry === undefined ? null : JSON.stringify(entry);
-      if (held?.json === json) {
-        return;
-      }
-      held?.half.dispose();
-      declaredHalves.delete(id);
-      if (entry !== undefined && json !== null) {
-        declaredHalves.set(id, { json, half: addDeclaredHalf(entry) });
-      }
-    };
+    const declaredHalves = createDeclaredRegistry(addDeclaredHalf);
 
     // A flow whose draw throws is logged, so the rest of the catch-up still draws.
     const drawFlow = (flow: SessionFlow) => {
@@ -328,17 +310,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
 
     // The built-in Checklist flow's page half, before any declared one.
-    const checklistEntry: DeclaredWorkflow = {
-      id: CHECKLIST_WORKFLOW_ID,
-      pluginName: '',
-      decl: CHECKLIST_WORKFLOW,
-      planFormat: null,
-    };
     addWorkflow(
       buildPageWorkflow(
-        checklistEntry,
+        CHECKLIST_DECLARED,
         buildDeps(
-          createWorkflowDraw(drawDeps, api, drawOptions(checklistEntry)),
+          createWorkflowDraw(drawDeps, api, drawOptions(CHECKLIST_DECLARED)),
         ),
       ),
     );
@@ -459,9 +435,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         chatSessions.on((sessionId, info) =>
           view.headlessChanged(sessionId, info?.headless),
         );
-        declared.on((id, entry) => syncDeclaredHalf(id, entry));
+        declared.on((id, entry) => declaredHalves.sync(id, entry));
         for (const [id, entry] of declared.all()) {
-          syncDeclaredHalf(id, entry);
+          declaredHalves.sync(id, entry);
         }
         for (const flow of flows.all().values()) {
           drawFlow(flow);

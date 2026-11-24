@@ -215,7 +215,18 @@ export function startPlanCapability(deps: PlanCapabilityDeps): Disposable {
     }
   };
   syncPlanInputs(deps.enabledWorkflows());
-  const workflowsListener = deps.onWorkflowsChanged(syncPlanInputs);
+  // A switch-on, a switch-off or a changed `planFormat` changes which held
+  // flows keep a plan and in what format, so each held flow follows again.
+  const workflowsListener = deps.onWorkflowsChanged((workflows) => {
+    syncPlanInputs(workflows);
+    for (const flow of deps.flows()) {
+      if (planWorkflowHolding(flow) === null) {
+        stopSession(flow.sessionId);
+      } else {
+        follow(flow);
+      }
+    }
+  });
 
   return {
     dispose() {

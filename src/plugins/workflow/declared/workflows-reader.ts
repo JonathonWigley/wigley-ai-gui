@@ -3,10 +3,16 @@
 // enabled declared workflows built from the accepted sections.
 
 import {
+  ACTION_KINDS,
   type ActionDecl,
+  ACTIVITY_TONES,
   type ActivityTone,
+  NAMED_PREDICATES,
   type PlanFormat,
   qualifiedWorkflowId,
+  ROW_EMPHASES,
+  SIDE_PANE_KINDS,
+  STAGE_STATUSES,
   type WorkflowDecl,
 } from '../../../contracts/contributions';
 import {
@@ -15,39 +21,21 @@ import {
   type JsonObject,
 } from '../../../shared/json';
 import type { FeatureReader, Strategy } from '../../contributions/contract';
-import type { DeclaredWorkflow } from '../contract';
+import { CHECKLIST_WORKFLOW, type DeclaredWorkflow } from '../contract';
 import { isTemplateVariable, templateVariables } from './templates';
 
 // A workflow or action id: it travels in a command's short id.
 const ID_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
 
 // The Checklist flow's order; every declared workflow sorts before it.
-const CHECKLIST_ORDER = 1000;
+const CHECKLIST_ORDER = CHECKLIST_WORKFLOW.order;
 
-const STATUSES: readonly string[] = ['busy', 'finishing', 'ready', 'none'];
-const TONES: readonly ActivityTone[] = [
-  'idle',
-  'running',
-  'success',
-  'warning',
-  'attention',
-  'error',
-];
-const EMPHASES: readonly string[] = ['raised', 'urgent'];
-const NAMED_PREDICATES: readonly string[] = [
-  'idle',
-  'busy',
-  'planRead',
-  'planHasTasks',
-  'planOpen',
-];
-const ACTION_KINDS: readonly ActionDecl['kind'][] = [
-  'send',
-  'clearAndSend',
-  'launch',
-  'openPlan',
-  'event',
-];
+// The declared values, widened to strings to test a parsed value against.
+const STATUSES: readonly string[] = STAGE_STATUSES;
+const TONES: readonly string[] = ACTIVITY_TONES;
+const EMPHASES: readonly string[] = ROW_EMPHASES;
+const PREDICATE_NAMES: readonly string[] = NAMED_PREDICATES;
+const KINDS: readonly string[] = ACTION_KINDS;
 // The kinds main runs, so the countdown can run them.
 const AUTO_KINDS: readonly ActionDecl['kind'][] = [
   'send',
@@ -60,7 +48,7 @@ const TEXT_KINDS: readonly ActionDecl['kind'][] = [
   'clearAndSend',
   'launch',
 ];
-const SIDE_PANE_KINDS: readonly string[] = ['checklist', 'plan'];
+const PANE_KINDS: readonly string[] = SIDE_PANE_KINDS;
 
 // Each reason starts with its path in the section: `[2].stages[4].enter[0]: …`.
 // One reason refuses the whole section.
@@ -287,7 +275,7 @@ function checkSidePane(sidePane: unknown, path: string, reasons: string[]) {
     reasons.push(`${path}: not an object`);
     return;
   }
-  if (!SIDE_PANE_KINDS.includes(sidePane.kind as string)) {
+  if (!PANE_KINDS.includes(sidePane.kind as string)) {
     reasons.push(`${path}.kind: not checklist or plan`);
   }
   checkNonEmptyString(sidePane.title, `${path}.title`, reasons);
@@ -326,8 +314,8 @@ function checkActions(
 
 function checkAction(action: JsonObject, path: string, reasons: string[]) {
   const kind = action.kind as ActionDecl['kind'];
-  if (!ACTION_KINDS.includes(kind)) {
-    reasons.push(`${path}.kind: not one of ${ACTION_KINDS.join(', ')}`);
+  if (!KINDS.includes(kind)) {
+    reasons.push(`${path}.kind: not one of ${KINDS.join(', ')}`);
   }
   checkNonEmptyString(action.label, `${path}.label`, reasons);
   if (TEXT_KINDS.includes(kind)) {
@@ -543,7 +531,7 @@ function checkPredicates(predicates: unknown, path: string, reasons: string[]) {
   }
   predicates.forEach((predicate, index) => {
     const isNamed =
-      typeof predicate === 'string' && NAMED_PREDICATES.includes(predicate);
+      typeof predicate === 'string' && PREDICATE_NAMES.includes(predicate);
     const isCounterRose =
       isJsonObject(predicate) &&
       Object.keys(predicate).length === 1 &&

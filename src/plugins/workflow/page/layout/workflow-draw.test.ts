@@ -51,6 +51,7 @@ function setUp() {
     defaultStylesheet: 'small.css',
     userLayout: () => 'mine',
     sideTitle: 'List',
+    badgeColor: 'var(--wg-test-badge)',
   };
   const redraw = vi.fn();
   const draw = createWorkflowDraw(

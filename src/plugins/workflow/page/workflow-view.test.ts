@@ -989,8 +989,8 @@ describe('workflow kit', () => {
     expect(mark.style['--workflow-mark-clock']).toBe(`${NOW}ms`);
   });
 
-  it('badge_TakesTheColourOfTheDrawingPluginsToken', () => {
-    const { kit } = smallKit();
+  it('badge_TakesThePassedColour', () => {
+    const { kit } = testWorkflowKit(SMALL, NOW, 'b', 'var(--wg-accent)');
     const parent = new FakeElement('div');
 
     kit.badge(asHtml(parent), 'S', 'Small');
@@ -998,9 +998,7 @@ describe('workflow kit', () => {
     const [badge] = findAll(parent, 'workflow-badge');
     expect(badge.textContent).toBe('S');
     expect(badge.title).toBe('Small');
-    expect(badge.style['--workflow-badge-color']).toBe(
-      'var(--wg-workflow-small-badge)',
-    );
+    expect(badge.style['--workflow-badge-color']).toBe('var(--wg-accent)');
   });
 
   it.each([

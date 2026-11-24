@@ -25,11 +25,12 @@ import {
 } from '../../sessions/contract';
 import {
   CHECKLIST_HOOK,
-  CHECKLIST_WORKFLOW,
+  CHECKLIST_DECLARED,
   CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
   type DeclaredWorkflow,
   type FoldEvent,
+  isClaimed,
   type MainWorkflow,
   type SessionFlow,
   type SignalOrigin,
@@ -46,6 +47,11 @@ import { createDeclaredActions } from '../declared/actions';
 import { buildMainWorkflow } from '../declared/build-main';
 import { checklistHookHandler } from '../declared/checklist-hook';
 import { autoStartSettingsLine, createAutoStart } from '../declared/countdown';
+import {
+  createDeclaredRegistry,
+  mergeDeclared,
+  publishDeclared,
+} from '../declared/declared-set';
 import { createEnabledWorkflows } from '../declared/enabled-workflows';
 import { planFormatReader } from '../declared/plan-format-reader';
 import {
@@ -93,7 +99,7 @@ type WorkflowApi = MainApi<
 // flow through the registered workflows, keeps the flows in `flows.json` keyed by
 // host session id, opens at start each row chat already holds as its open events
 // would have, folds a re-attach's replay only past the flow's last save,
-// marks a live turn with agent work and no workflow as a missed level, tells each
+// marks a live turn with agent work on the Checklist flow as a missed level, tells each
 // observer every fold, open, close and replay, contributes `set_workflow_step`
 // while a workflow has a reportable stage, which lists every workflow's stages'
 // `reportedAs` and moves a flow only by its own workflow's, and
@@ -141,74 +147,27 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const declaredSlot = api.state.publish(workflowDeclaredSlot);
     // Every `addDeclared` entry, in call order.
     const addedDeclared: DeclaredWorkflow[] = [];
-    // Each enabled declared workflow's registration, by qualified id.
-    const declaredRegistrations = new Map<
-      string,
-      { json: string; registration: Disposable }
-    >();
+    const declaredRegistry = createDeclaredRegistry((entry) =>
+      addWorkflow(buildMainWorkflow(entry, planFold)),
+    );
     // The enabled set again: the contributed declarations `workflow.off`
-    // leaves on, then each `addDeclared` one, an id already listed left out.
-    // Publishes it, hands it to `enabled`, and registers each changed entry.
+    // leaves on, then each `addDeclared` one. Publishes it, hands it to
+    // `enabled`, and registers each changed entry.
     const syncDeclared = () => {
       if (isStopped) {
         return;
       }
-      const list: DeclaredWorkflow[] = [];
-      for (const entry of [
-        ...declaredWorkflows(
+      const list = mergeDeclared(
+        declaredWorkflows(
           contributions.strategies('workflows'),
           contributions.strategies('planFormat'),
           api.settings().off,
         ),
-        ...addedDeclared,
-      ]) {
-        if (!list.some((held) => held.id === entry.id)) {
-          list.push(entry);
-        }
-      }
-      publishDeclared(list);
+        addedDeclared,
+      );
+      publishDeclared(declaredSlot, list);
       enabled.set(list);
-      registerDeclared(list);
-    };
-    const publishDeclared = (list: readonly DeclaredWorkflow[]) => {
-      const keys = [...declaredSlot.all().keys()];
-      const isSameOrder =
-        keys.length === list.length &&
-        keys.every((key, index) => key === list[index].id);
-      if (!isSameOrder) {
-        for (const key of keys) {
-          declaredSlot.delete(key);
-        }
-      }
-      for (const entry of list) {
-        const held = declaredSlot.get(entry.id);
-        if (
-          held === undefined ||
-          JSON.stringify(held) !== JSON.stringify(entry)
-        ) {
-          declaredSlot.set(entry.id, entry);
-        }
-      }
-    };
-    const registerDeclared = (list: readonly DeclaredWorkflow[]) => {
-      for (const [id, { registration }] of declaredRegistrations) {
-        if (!list.some((entry) => entry.id === id)) {
-          registration.dispose();
-          declaredRegistrations.delete(id);
-        }
-      }
-      for (const entry of list) {
-        const json = JSON.stringify(entry);
-        const held = declaredRegistrations.get(entry.id);
-        if (held?.json === json) {
-          continue;
-        }
-        held?.registration.dispose();
-        declaredRegistrations.set(entry.id, {
-          json,
-          registration: addWorkflow(buildMainWorkflow(entry, planFold)),
-        });
-      }
+      declaredRegistry.syncList(list);
     };
     const flowsLoaded = store.load().catch((error: unknown) => {
       log(`flows.json not read: ${errorText(error)}; starting with no flows`);
@@ -255,8 +214,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const tellFolded = (event: FoldEvent) =>
       tellObservers((observer) => observer.folded(event));
 
-    // The registered workflow holding `flow`; undefined with no flow, a null
-    // workflow, or a workflow no plugin holds.
+    // The registered workflow holding `flow`; undefined with no flow or a
+    // workflow no plugin holds.
     const workflowOf = (flow: SessionFlow | null) =>
       workflows.all().find((held) => held.id === flow?.workflow);
 
@@ -300,11 +259,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       const after = foldFlow(before, signal, workflows.all());
       if (after !== before) {
         putFlow(after, origin);
-        const wasUnclaimed =
-          before.workflow === null || before.workflow === CHECKLIST_WORKFLOW_ID;
-        const isClaimed =
-          after.workflow !== null && after.workflow !== CHECKLIST_WORKFLOW_ID;
-        if (wasUnclaimed && isClaimed) {
+        if (!isClaimed(before) && isClaimed(after)) {
           runMeter.claimed(sessionId);
         }
         logFinishedRun(before, after);
@@ -462,17 +417,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       };
     };
 
-    addWorkflow(
-      buildMainWorkflow(
-        {
-          id: CHECKLIST_WORKFLOW_ID,
-          pluginName: '',
-          decl: CHECKLIST_WORKFLOW,
-          planFormat: null,
-        },
-        planFold,
-      ),
-    );
+    addWorkflow(buildMainWorkflow(CHECKLIST_DECLARED, planFold));
     contributions.onChanged('workflows', syncDeclared);
     contributions.onChanged('planFormat', syncDeclared);
 

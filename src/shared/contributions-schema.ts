@@ -1,4 +1,12 @@
-import type { JsonValue } from '../contracts/contributions';
+import {
+  ACTION_KINDS,
+  ACTIVITY_TONES,
+  type JsonValue,
+  NAMED_PREDICATES,
+  ROW_EMPHASES,
+  SIDE_PANE_KINDS,
+  STAGE_STATUSES,
+} from '../contracts/contributions';
 import { CONTRIBUTIONS_VERSION } from './agent-plugin';
 
 const STRING = { type: 'string' };
@@ -24,7 +32,7 @@ const ref = (name: string): JsonValue => ({ $ref: `#/$defs/${name}` });
 
 const PREDICATE = {
   anyOf: [
-    { enum: ['idle', 'busy', 'planRead', 'planHasTasks', 'planOpen'] },
+    { enum: [...NAMED_PREDICATES] },
     record({ counterRose: STRING }, ['counterRose']),
   ],
 };
@@ -46,17 +54,15 @@ const TRIGGER = {
 const ACTIVITY = record(
   {
     word: STRING,
-    tone: {
-      enum: ['idle', 'running', 'success', 'warning', 'attention', 'error'],
-    },
-    emphasis: { enum: ['raised', 'urgent'] },
+    tone: { enum: [...ACTIVITY_TONES] },
+    emphasis: { enum: [...ROW_EMPHASES] },
   },
   ['word', 'tone'],
 );
 
 const ACTION = record(
   {
-    kind: { enum: ['send', 'clearAndSend', 'launch', 'openPlan', 'event'] },
+    kind: { enum: [...ACTION_KINDS] },
     label: STRING,
     text: STRING,
     event: STRING,
@@ -78,7 +84,7 @@ const STAGE = record(
     inStepper: BOOLEAN,
     slot: STRING,
     runsTasks: BOOLEAN,
-    status: { enum: ['busy', 'finishing', 'ready', 'none'] },
+    status: { enum: [...STAGE_STATUSES] },
     finishes: BOOLEAN,
     reopens: BOOLEAN,
     records: STRINGS,
@@ -116,7 +122,7 @@ const WORKFLOW = record(
         record({ planCounter: STRING }, ['planCounter']),
       ],
     },
-    sidePane: record({ kind: { enum: ['checklist', 'plan'] }, title: STRING }, [
+    sidePane: record({ kind: { enum: [...SIDE_PANE_KINDS] }, title: STRING }, [
       'kind',
       'title',
     ]),
