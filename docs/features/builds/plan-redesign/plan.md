@@ -206,8 +206,8 @@ scan, `AGENTS.md` § README, changelog and boundary): the Drive path lives only 
 Critical path: 02 → 05 → 07 → 08 → 10 → 11
 
 ### Wave 1
-- [ ] [Files copy, Downloads folder and reveal](01-core-services.md)
-- [ ] [Builds contract and config](02-builds-contract.md)
+- [x] [Files copy, Downloads folder and reveal](01-core-services.md)
+- [x] [Builds contract and config](02-builds-contract.md)
 
 ### Wave 2
 - [ ] [TeamCity jobs and log saves](03-teamcity-backend.md) — after 02
@@ -230,10 +230,15 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: a9161d1a
 
 ### Groups
+- 01 · hard · 53f0c0d3 · diff read against the task: Files.copy in contract, Node, memory, scoped and counting adapters; downloadsDir/revealPath on MainServices and both main.ts run kinds; wave 1 typecheck passes · concerns: Windows EPERM retry ~150ms on copy onto a folder; two long comments
+- 02 · hard · 0eab3b94 · diff read: every Produces in plan.md's shape, parseDownloads texts, trackCalls saveLog, fixture savedLogs; fallout sites in teamcity-parse/backend tests, local-backend tests, page tests, queueing, build-messages, start tests; wave 1 typecheck passes; oxfmt applied to contract.ts by the lead · concerns: teamcity cache isJob does not check new job fields until 03; channel handlers for saveLog/download wait for 05
 ### Contract changes
 ### Rulings
+- Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01
+- buildJobOf puts the four new fields in its shared base object, which 03 fills per row — one site — none · group 02
+- fixture/test literals left untyped JSON (gameSetting, validGame) keep downloads optional — they feed parseBackends — none · group 02
 ### Review rounds
 ### Test gate

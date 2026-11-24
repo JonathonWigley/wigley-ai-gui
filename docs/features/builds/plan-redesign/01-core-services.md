@@ -1,6 +1,6 @@
 # 01 — Files copy, Downloads folder and reveal
 
-Status: not started
+Status: done
 Type: Batch
 Rung: hard · adds `Files.copy` and two `MainServices` members that 04 and 05 consume
 Wave: 1 · Depends on: none
@@ -115,3 +115,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 53f0c0d3 · proof: diff read against the task: Files.copy in contract, Node, memory, scoped and counting adapters; downloadsDir/revealPath on MainServices and both main.ts run kinds; wave 1 typecheck passes · concerns: Windows EPERM retry ~150ms on copy onto a folder; two long comments

@@ -1,6 +1,6 @@
 # 02 — Builds contract and config
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the contract fields, the `saveLog` seam, the downloads slot and the channel calls that 03–08 consume
 Wave: 1 · Depends on: none
@@ -129,3 +129,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 0eab3b94 · proof: diff read: every Produces in plan.md's shape, parseDownloads texts, trackCalls saveLog, fixture savedLogs; fallout sites in teamcity-parse/backend tests, local-backend tests, page tests, queueing, build-messages, start tests; wave 1 typecheck passes; oxfmt applied to contract.ts by the lead · concerns: teamcity cache isJob does not check new job fields until 03; channel handlers for saveLog/download wait for 05
