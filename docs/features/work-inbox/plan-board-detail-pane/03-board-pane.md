@@ -1,6 +1,6 @@
 # 03 — Board detail pane
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the Board's `detail` layout part and the page commands that 05 binds
 Wave: 3 · Depends on: 01, 02
@@ -341,3 +341,5 @@ Rows in existing tests where the rule lives; one new `describe` where the rule i
 Commit: one commit for the group
 
 ## Proof
+
+Commit 83922156 · proof: diff read: every Produces signature present; typecheck clean; work-board tests 115/115 and keymap-checks pass (worker run plus lead); drive capture board-detail-pane.png shows columns left and ABC-12 pane right with fields, description, comments, subtasks, links, thread, comment box and Posting block · concerns: LIVE: .work-board-detail grows to content and its parent .ui-split-end scrolls, so the pane scroll commands and the scrollTop reset on a cursor move hit a non-scrolling element (tests faked scroll sizes on .work-board-detail) -- determined fix for review; send sends untrimmed text as the Inbox does; selectCard keep-box branch unreachable by a real click

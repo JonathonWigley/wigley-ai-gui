@@ -216,7 +216,7 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 - [x] [Comment job](02-comment-job.md) — after 01
 
 ### Wave 3
-- [ ] [Board detail pane](03-board-pane.md) — after 01, 02
+- [x] [Board detail pane](03-board-pane.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Inbox detail pane](04-inbox-pane.md) — after 01, 03 (look sign-off)
@@ -235,10 +235,12 @@ Review base: 0eab07e6
 ### Groups
 - 01 · deep · 648283a9 · diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files
 - 02 · deep · eda7d05b · diff read: every Produces signature present (comment job, commenting, WorkCommentArg, workCommentCommand, WorkChannel.comment, actions.comment, jobEnded caps); wave typecheck clean after one test-file compile fix on the same rung · concerns: commentMessage kept private like sibling builders; clearStaleMarks rewritten to build lists first and return the same object when unchanged; Jira card saved without commenting parses as []
+- 03 · hard · 83922156 · diff read: every Produces signature present; typecheck clean; work-board tests 115/115 and keymap-checks pass (worker run plus lead); drive capture board-detail-pane.png shows columns left and ABC-12 pane right with fields, description, comments, subtasks, links, thread, comment box and Posting block · concerns: LIVE: .work-board-detail grows to content and its parent .ui-split-end scrolls, so the pane scroll commands and the scrollTop reset on a cursor move hit a non-scrolling element (tests faked scroll sizes on .work-board-detail) -- determined fix for review; send sends untrimmed text as the Inbox does; selectCard keep-box branch unreachable by a real click
 ### Contract changes
 ### Rulings
 - Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead
 - Sweep text's Detail numbers come from detailCaps, matching what the reader keeps — one truth — a raw setting would disagree with the stored cap · group 01 · group 01
 - A detail-less ticket whose status and priority are unchanged keeps its stored record by reference, so the slot's identity skip holds — avoids resending — none · group 01 · group 01
+- 03: restore takes the whole WorkBoardPlace; a click-out returns DOM focus to the board pane only when focus has not gone elsewhere; the sample end forces focus board; the start test restores paneOpen but no draft (board-state rows cover drafts) · group 03
 ### Review rounds
 ### Test gate
