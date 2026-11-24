@@ -615,6 +615,12 @@ an open primer; audio-picker: an open picker), since main, not the page, decides
 first: a tab or popup that `closesAtOnce` has the guard's `cancelHold` cancel the round, then the close goes through
 with no prompt. The review's Cancel prompt is a different act: it cancels the round and leaves the session open.
 
+The `auri` plugin's hooks (`agent-plugin/hooks/hooks.json`) run from the plugin folder a session started with, so a
+session started before a change still calls the old script paths. Each hook command ends `|| true`: Python exits 2 on
+a missing script, and a hook's exit 2 blocks the session's tool call or turn end. `agentPluginHooks_CommandsNameExistingScripts`
+in `src/shared/agent-plugin.test.ts` pins that shape. A change that moves or renames a hook script leaves a stub at the
+old path for one release, a script that exits 0 and prints nothing, and the next release removes it.
+
 - **A plugin** is a folder in `src/plugins/<id>/`: `manifest.ts` declares its commands (each with a label, a group
   and the process it runs in), key scopes (each with the title help shows over its keys), settings (and
   `settingControls`, which binds a setting to its control kind: A setting), an optional `keys` field (binds and
@@ -1272,8 +1278,9 @@ stay true on every change:
 - **Version heading on landing.** Landing on `main` runs `npm run changelog:release` in the branch before the merge:
   it moves the `## Unreleased` entries under `## <version> — <YYYY-MM-DD>` and bumps the version in `package.json`,
   `agent-plugin/.claude-plugin/plugin.json` and `agent-plugin/.codex-plugin/plugin.json` together, MINOR when Added,
-  Changed or Removed hold entries and PATCH when only Fixed does. The landing session runs it and commits the result
-  before `wigley-land`, which neither settles nor checks the version.
+  Changed or Removed hold entries and PATCH when only Fixed does. `wigley-land` runs it after rebasing the branch
+  onto `main` and commits what it wrote as `Release auri <version>`, the branch's last commit before the secrets
+  scan (`~/wigley-agents/tools/wigley-land/README.md` § Steps); the landing session neither runs nor commits it.
   `npm run lint:changelog` fails when the three versions disagree.
 
 **Boundary.** The app works for anyone, so no code names one user's setup: every personal binding comes from a

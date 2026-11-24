@@ -73,7 +73,9 @@ And the personal tools the plan changed:
 
 - `git ls-remote git@github-personal:JonathonWigley/wigley-ai-gui.git` shows `main` equal to
   `git -C ~/Documents/wigley-ai-gui rev-parse origin/main`, and no `7a18ac69…`. Expected.
-- `betterleaks git ~/Documents/wigley-ai-gui --include=merges` reports nothing. Expected.
+- `betterleaks git ~/Documents/wigley-ai-gui "--log-opts=--all --diff-merges=remerge" --redact --no-banner` exits 0
+  with `no leaks found`, offline (no `--validation`; 1.10.1 has no `--include=merges`, and the remerge diff covers
+  what merges changed). Expected.
 - 17's stale-reference proof, run again: prints nothing. Expected.
 
 ### Live, through the installed app

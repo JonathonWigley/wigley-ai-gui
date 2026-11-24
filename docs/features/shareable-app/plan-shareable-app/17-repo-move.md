@@ -169,9 +169,8 @@ Settled while drafting (Decided notices for the run):
    empty; the branch count above.
 2. **Installs (per-run ask).** A forms round, one question per tool, asking the user to run its `brew install` and
    recommending yes. Then `command -v trufflehog betterleaks git-filter-repo` prints three paths.
-3. **Land and freeze.** In the run worktree's `wigley-ai-gui/`, run `npm run changelog:release` and commit
-   `CHANGELOG.md`, `package.json` and both `auri` manifests (the first heading, `1.1.0`; task 15). Then
-   `wigley-land <run worktree>`; re-report the plan folder; chatroom `heads-up` freezing `ai`'s `wigley-ai-gui/`, to the
+3. **Land and freeze.** `wigley-land <run worktree>`: its `release` stage runs `npm run changelog:release` in the
+   worktree's `wigley-ai-gui/` and commits the first heading, `1.1.0` (task 15; review finding 16); re-report the plan folder; chatroom `heads-up` freezing `ai`'s `wigley-ai-gui/`, to the
    thread and to each peer session named in Decisions › Peer sessions' work. Record `ai`'s `main` sha as
    `<split base>`.
 4. **Split.** `git -C ~/Documents/ai subtree split --prefix=wigley-ai-gui main -b split/main` (the page's synopsis:
@@ -182,16 +181,21 @@ Settled while drafting (Decided notices for the run):
    made those branches and they leave `ai` as they came. Check: `git -C <scratch>/split.git ls-tree --name-only main`
    lists `package.json` and `agent-plugin` at the root.
 5. **Scan.** Mirror the old GitHub `main`: `git clone --mirror git@github-personal:JonathonWigley/wigley-ai-gui.git <scratch>/old.git`.
-   For each of `split.git` and `old.git`:
-   - `trufflehog git file://<scratch>/<repo> --results=verified,unknown --json --no-update > <scratch>/trufflehog-<repo>.json`
-     (TruffleHog README: verification runs by default; `--results` takes `verified,unknown,unverified,filtered_unverified`;
+   For each of `split.git` and `old.git`, both scanners offline (no credential leaves the machine):
+   - `trufflehog git file://<scratch>/<repo> --no-verification --no-update --json > <scratch>/trufflehog-<repo>.json`
+     (`trufflehog git --help`, 3.100.1: `--no-verification` skips the live check, so every result is unverified;
      `--no-update` skips its update check);
-   - `betterleaks git <scratch>/<repo> --include=merges --validate -o <scratch>/betterleaks-<repo>.json`
-     (`-v`/`--validate` checks whether a credential is live; `-o` picks the format from the extension).
+   - `betterleaks git <scratch>/<repo> "--log-opts=--all --diff-merges=remerge" --no-banner -f json -r <scratch>/betterleaks-<repo>.json`
+     (`betterleaks git --help`, 1.10.1: it has no `--include=merges`, and `git log -p` shows no merge diff, so
+     `--diff-merges=remerge` adds what each merge's resolution changed; `--all` scans every ref, since custom
+     `--log-opts` replace the default; `-f` is the format and `-r` the report path; no `--validation`, so nothing
+     goes online). Exit 1 means findings, not a failure.
    Also list the user's work email in the split: `git -C <scratch>/split.git log --all -p | command grep -ac '17443783+JonathonWigley@users.noreply.github.com'`
    (one commit added or removed it at plan time: `git log --all -S'peoplefun.com' -- wigley-ai-gui`).
-6. **Findings to the user (stop).** One forms round: each finding with its file, commit, detector and whether it
-   verified, never the secret's full value (show its first four characters); per finding the choices Rewrite out
+6. **Findings to the user (stop).** One forms round: each finding with its file, commit and detector, never the
+   secret's full value (show its first four characters), plus a choice to verify it live. Only for findings the user
+   picks to verify, re-run that tool's step 5 scan with the live check on (TruffleHog without `--no-verification`,
+   Betterleaks with `--validation`) and add whether each verified to its question. Per finding the choices Rewrite out
    (recommended for any credential), Rotate and rewrite (recommended for a verified one, rotation being the user's),
    or False positive. Plus the work-email rewrite (recommended: replace with the noreply address), the carried
    branches questions (one per branch, with the peer's answer), and a notice that `old.git`'s findings are already on
@@ -268,22 +272,27 @@ Settled while drafting (Decided notices for the run):
      scripts, `wigley-harness`.
    - Features home: the app's `docs/features/` moved with it and stays in-repo (a plain root `docs/features/`); no
      `~/wigley-features/wigley-ai-gui/` exists (`ls -d ~/wigley-features/wigley-ai-gui`).
-10. **Remove `ai`'s copy.** In an `ai` worktree: run the freeze check (Decisions), then `git rm -r -q wigley-ai-gui`
+10. **Remove `ai`'s copy.** First restart every app session started before step 8's install, the dev app's and the
+    installed app's (review finding 6): each launched with `--plugin-dir ~/Documents/ai/wigley-ai-gui/agent-plugin`,
+    and once that folder is gone each `auri` hook's bare `python3 <script>` exits 2 on the missing script and blocks
+    the running session. Quit the dev app started from `~/Documents/ai/wigley-ai-gui` and the installed app, start
+    them again (the dev app from `~/Documents/wigley-ai-gui`), and restart their sessions. Peers' sessions and this
+    one are the user's to restart: ask in a forms round, one choice per way to restart, and wait for the answer. Then,
+    in an `ai` worktree: run the freeze check (Decisions), then `git rm -r -q wigley-ai-gui`
     and commit with the sweep's `ai` edits ("Move wigley-ai-gui to its own repo, JonathonWigley/wigley-ai-gui, …");
     `wigley-land` it. Then delete what is left of `~/Documents/ai/wigley-ai-gui/` (the regenerated folders), and
     report it. Post a chatroom `result` lifting the freeze and naming the new clone.
 11. **Land in the new clone.** Before the first app-repo landing, confirm the `auri` marketplace from the new clone
     is added (step 8; `known_marketplaces.json`'s `auri` `path` is `/Users/jonathonwigley/Documents/wigley-ai-gui`), and
-    run task 19's pinned argv by hand once in the new clone:
-    `betterleaks git ~/Documents/wigley-ai-gui --revision=HEAD~1..HEAD --include=merges --redact --no-banner --exit-code=10; echo $?`.
-    `--exit-code` and `--redact` come from a README mirror, not the official docs (19 § Decisions). Exit 0 confirms
-    the argv. Any other exit code (126 for an unknown flag, 1 for an error, 10 for a leak in that commit) stops this
-    task with a report naming the code and the last stderr line; 19's argv is fixed before any app-repo
-    `wigley-land`.
+    run `wigley-land`'s pinned argv by hand once in the new clone:
+    `betterleaks git ~/Documents/wigley-ai-gui "--log-opts=--diff-merges=remerge HEAD~1..HEAD" --redact --no-banner --exit-code=10; echo $?`
+    (checked against `betterleaks git --help` 1.10.1 in review finding 1). Exit 0 confirms the argv. Any other exit
+    code (126 for an unknown flag, 1 for an error, 10 for a leak in that commit) stops this task with a report naming the
+    code and the last stderr line; the tool's argv is fixed before any app-repo `wigley-land`.
     Then commit the app-side sweep and the `CHANGELOG.md` `### Changed` line there, through a
-    worktree per the new § Landing. Run `npm run changelog:release` in that worktree and commit its files (the second
-    heading). Land with `wigley-land` (19's app-repo mode), which runs Betterleaks on the range. Check its output
-    names the `secrets` stage as run, not skipped. Delete `<scratch>`'s
+    worktree per the new § Landing. Land with `wigley-land` (19's app-repo mode): its `release` stage writes and
+    commits the second heading, and it runs Betterleaks on the range. Check its output names `released auri
+    <version>` and the `secrets` stage as run, not skipped. Delete `<scratch>`'s
     repos, reports and `replace.txt`.
 
 ## GIVEN / WHEN / THEN

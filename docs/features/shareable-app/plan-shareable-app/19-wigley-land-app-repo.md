@@ -49,10 +49,14 @@ Files (ai):
     - The app's version rule is that `package.json` and `agent-plugin/.claude-plugin/plugin.json` share one version with `agent-plugin/.codex-plugin/plugin.json` (both auri manifests). The landing session runs `npm run changelog:release` and commits before calling `wigley-land` (task 15, the app's `AGENTS.md`); the changelog lint checks the three agree.
       That version bumps with each landing's `CHANGELOG.md` heading. Task 15 owns the rule and its lint, so
       `wigley-land` neither settles nor checks it.
+    - Superseded by review finding 16: `wigley-land` runs `npm run changelog:release` itself after the rebase, as
+      the branch's last commit before the secrets scan (`tools/wigley-land/README.md` § Steps, the `release` stage).
     - A rebase conflict in those files is an ordinary conflict: it stops at `merge`.
   - New **secrets** stage, after step 2 and before step 5:
     - It runs `betterleaks git <path> --revision=<range> --include=merges --redact --no-banner --exit-code=10`,
       with `<path>` and `<range>` per scan below. The tests assert this argv in full.
+    - Superseded by review finding 1: Betterleaks 1.10.1 has neither flag; the argv is
+      `betterleaks git <path> "--log-opts=--diff-merges=remerge <range>" --redact --no-banner --exit-code=10`.
     - The flags, read at plan time: `git <path>`, `--revision=A..B` ("scans the commits reachable from B but not
       from A") and `--include=merges` from the Betterleaks README and `docs/scanning.md`; `--no-banner` from
       `docs/scanning.md`; `--redact` appears in those docs' examples (`--redact=100`) without a definition, and

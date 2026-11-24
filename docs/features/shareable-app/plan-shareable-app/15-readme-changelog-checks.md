@@ -108,6 +108,8 @@ Rules modules, pure and tested (shapes; names are the interface, bodies are the 
   run, task 17 runs it twice: in the run worktree before its first `wigley-land` (step 3, the first heading
   `1.1.0`), and in the new clone's worktree before the final landing (step 11). Task 17 moves the step into the new
   repo's § Landing with the app.
+  - Superseded by review finding 16: `wigley-land` runs `npm run changelog:release` after the rebase and commits it
+    as the branch's last commit before the secrets scan; step 1b is gone (`tools/wigley-land/README.md` § Steps).
 - Today's `package.json` version `1.0.0` stays the base: the first release under this rule produces `1.1.0`. 01 sets
   both manifests to `1.0.0` to match; if 01 chose another value, set all three to `package.json`'s and report it.
 
