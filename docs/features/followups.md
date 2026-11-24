@@ -191,6 +191,11 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **No test checks that the restore sweep still finishes a row this start did not adopt** — *agent-ready*: the
   `adoptedRows` skip in `src/plugins/scheduling/main/start.ts` (`finishRestoredRuns`) has a test for the adopted row
   only. Add the non-adopted row as a case in the outcome table of `start.test.ts`.
+- **Box placeholder sits below the editor** — the placeholder of the pane's reply or comment box draws below the editor
+  instead of over it: Inbox `inbox.css` `.work-inbox-draft-placeholder` and `inbox-view.ts` near line 494, Board
+  `board.css` near line 74 and `board-view.ts` near line 595. This is a look call, so the user judges it. Fix direction:
+  placeholder and editor in one grid cell, with `pointer-events: none` on the placeholder. Source session: Claude Code
+  8fcdd4ae-9a57-46be-b14f-8983301cd442 in /Users/jonathonwigley/Documents/ai.
 
 ## Harness seams
 
@@ -538,6 +543,12 @@ Duplication and drift with no user-visible defect.
   `src/plugins/workflow/plan/` (the former `workflow-large/contract.ts:197`; re-check the line) and `src/plugins/workflow/main/flow-store.ts:278` (both `boolean`).
   Move the type guard into `src/shared/json.ts` beside `isJsonObject` and point every copy at it. Source session:
   Claude Code ae5bbb7a-62aa-4437-8d30-93cd8c0132e0 in ai.
+- **Shared detail-pane module for Board and Inbox** — *needs a feature plan*: the Board and Inbox views carry about 130
+  near-identical lines: the split's `PANE_SPLIT`, `drawDetail` with `keepFocusedBox` and `isBoxDropped` and the
+  scrollTop reset, `togglePane` and `scrollPane`, the box slot and the end-cell CSS. The scroller fix already had to
+  land twice. The board-detail-pane plan settled that the two views share no page code, so the boundary question goes to
+  the user: whether the pane code is shared at all. Proposal: `src/shared/page/detail-pane.ts`. Source session: Claude
+  Code 8fcdd4ae-9a57-46be-b14f-8983301cd442 in /Users/jonathonwigley/Documents/ai.
 
 ## Latent defects and tests
 
@@ -920,3 +931,8 @@ because the earlier items rewrite many of these tests anyway.
   `index.json` built from the old file until a rescan when no later rewrite comes: Backlog hands homes equal to the
   first binding's, and no strategy changes. Options: compare the file with the built text at Backlog's first homes
   handing, rewrite or not, or after a short settle once the app starts. Source: the shareable-app cycle-2 re-review.
+- **A press at startup can be marked lost though its job runs** — *agent-ready*: `src/plugins/work/main/start.ts` near
+  line 553 runs `clearStaleMarks(file, runner.pending())` after the startup sweep's enqueue. A press in that window has
+  its mark stored but its enqueue not yet in the queue, so it is marked lost ("…Its job was lost in a restart.") and
+  then runs. Fix: run the clear inside the runner's chain, or count unapplied enqueues in `pending()`. Source session:
+  Claude Code 8fcdd4ae-9a57-46be-b14f-8983301cd442 in /Users/jonathonwigley/Documents/ai.

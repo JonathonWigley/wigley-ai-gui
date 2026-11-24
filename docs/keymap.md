@@ -111,20 +111,21 @@ hjkl is the direction in every layer; the modifier picks the verb.
   through its focus target, a mode's side bar through the mode, and a left or right bar part through its contribution (AGENTS.md
   § Architecture), never a bind of its own. Each move takes the keyboard with it: the box or list of the pane left
   behind keeps no focus.
-- **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping
-  focus in the list (the docs tree, the Sessions list, the Settings sections, the Inbox sections, the Practice list, the Schedules list). `a` on
-  the Practice list starts an import. On the Schedules list `Enter` on the "+ New task" row opens the new-task editor
-  and `l` there does nothing; `a` new task, `i` edit, `p` pause or resume, `r` run now and `d` remove act from the list
-  and from the details, where `j`/`k`/`gg`/`G` move the history cursor and `Enter` or `l` open the run's row. In the
-  editor `j`/`k` move the field cursor, `Enter` or `i` edit the field (a box, or a list picker of its choices), `Cmd+Enter`
-  saves and `Esc` cancels. Backlog's own keys (the table's `Enter` activate, `x` mark, `c` chunk, `u` unchunk,
-  `r` rename, `s`/`S` start (`S` skips started and empty chunks), `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
-  `docs/features/backlog/design.md` § The mode. The Inbox's and the Board's own keys (`Enter` the detail pane, `gx` Jira or Slack, `i` draft (on the Board, the
-  pane's box), `Cmd+Enter` send, `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W` sweep, `gs` the last
-  job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet) are listed in
-  `docs/features/work-inbox/design.md` § Keys. The Sessions
-  list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
-  and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc` returns to the focused pane.
+- **A side-bar list** opens the cursor's item on `Enter` and moves focus into main, and opens it on `l` keeping focus in
+  the list (the docs tree, the Sessions list, the Settings sections, the Inbox sections, the Practice list, the
+  Schedules list). `a` on the Practice list starts an import. On the Schedules list `Enter` on the "+ New task" row
+  opens the new-task editor and `l` there does nothing; `a` new task, `i` edit, `p` pause or resume, `r` run now and `d`
+  remove act from the list and from the details, where `j`/`k`/`gg`/`G` move the history cursor and `Enter` or `l` open
+  the run's row. In the editor `j`/`k` move the field cursor, `Enter` or `i` edit the field (a box, or a list picker of
+  its choices), `Cmd+Enter` saves and `Esc` cancels. Backlog's own keys (the table's `Enter` activate, `x` mark, `c`
+  chunk, `u` unchunk, `r` rename, `s`/`S` start (`S` skips started and empty chunks), `H` headless, `gl` commits since,
+  `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in `docs/features/backlog/design.md` § The mode. The
+  Inbox's and the Board's own keys (`Enter` the detail pane, `gx` Jira or Slack, `i` the pane's reply or comment box,
+  `Cmd+Enter` send, `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W`
+  sweep, `gs` the last job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet) are listed in
+  `docs/features/work-inbox/design.md` § Keys. The Sessions list's cursor row also takes `s` favorite its project,
+  `J`/`K` move its project among the favorites, `r` rename and `d` close, as the docs tree's `s`, `r` and `d` do; `Esc`
+  returns to the focused pane.
 - **Every list picker** takes the same keys: `j`/`k`, `gg`/`G`, `Enter` and `l` choose, `/` filters, `Esc` closes.
 - **Every pane that scrolls or holds rows** takes vim's `gg`/`G` (top and bottom) and `j`/`k` (a row, or a line where
   the pane has no rows): the doc, the Backlog review pane, the form and its review, the primer card and its review, the

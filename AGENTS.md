@@ -431,34 +431,33 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/backlog/design.md`
   work/          manifest.ts, contract.ts (the `work.state` slot, the keyed `work.details` slot of each ticket's and
                  thread's stored detail, the work commands including `workCommentCommand` and the `comment` job
-                 (`WorkJob`, `WorkChannel.comment`), `WorkChannel`, `columnForStatus`),
-                 contract.test-support.ts (the `workItem`, `jiraCard` and `localCard` fixtures), main/ (store.ts, the
-                 `work.json` store in plugin data with its one writer and `buildWorkState`; job-queue.ts, the pure
-                 queue reducer; job-runner.ts, one unattended session per job through chat's `launch` with
-                 `permissions: 'auto'` and `owner: 'work'`; a job ends on an idle settle, on its row's process
-                 ending, on the timeout, or on a close matched by row or host id; the running job follows its row to a new host after `/clear`, and a restart claims the row by row or host id; and a
-                 launched row has a 30 s host wait; only the installed app's live run launches workers, while a
-                 drive run or the dev app queues jobs, logs each one not launched and notes it on `job.running`; job-rows.ts, the
-                 `job-rows.json` record of launched rows; sweep-timer.ts,
-                 the one-shot timer re-armed after each sweep; work-tools.ts, the `read_work_state`,
+                 (`WorkJob`, `WorkChannel.comment`), `WorkChannel`, `columnForStatus`), contract.test-support.ts (the
+                 `workItem`, `jiraCard`, `localCard`, `ticketDetail` and `threadDetail` fixtures), main/ (store.ts, the
+                 `work.json` store in plugin data with its one writer and `buildWorkState`; job-queue.ts, the pure queue
+                 reducer; job-runner.ts, one unattended session per job through chat's `launch` with `permissions:
+                 'auto'` and `owner: 'work'`; a job ends on an idle settle, on its row's process ending, on the timeout,
+                 or on a close matched by row or host id; the running job follows its row to a new host after `/clear`,
+                 and a restart claims the row by row or host id; and a launched row has a 30 s host wait; only the
+                 installed app's live run launches workers, while a drive run or the dev app queues jobs, logs each one
+                 not launched and notes it on `job.running`; job-rows.ts, the `job-rows.json` record of launched rows;
+                 sweep-timer.ts, the one-shot timer re-armed after each sweep; work-tools.ts, the `read_work_state`,
                  `record_work_items`, `record_work_tickets` and `report_work_job` tools, which answer only the running
                  job's session; job-text.ts, the worker's instructions and each job's message; detection.ts, the pure
                  suggested moves; signals.ts, its signals, read from `services.git`, `services.pullRequests`,
                  `chat.session` and `sessions.rows`; actions.ts, each card action and the clearing of closed items;
                  spin-up.ts, a session started from a card; the self-test's fixture and script, and the `work.seed`
                  drive action), page/ (runs each command through the channel, and a spin-up that needs the new-session
-                 prompt through chat's `newSessionWithDraft`);
-                 `docs/features/work-inbox/design.md`
+                 prompt through chat's `newSessionWithDraft`); `docs/features/work-inbox/design.md`
   work-inbox/    manifest.ts, contract.ts (`work-inbox.place`), main/ (registers the layouts only), page/ (Inbox mode:
                  the section nav in the side bar, and the cards and the cursor item's detail pane with its reply box in
                  the sheet's split; inbox-state.ts, the pure view state; inbox-view.ts; sample-state.ts and the demo
-                 step; layout/, the layout reader and kit; inbox.css, the containers' styles),
-                 layouts/ (the Inbox Layout contract and the built-in `default` layout);
-                 `docs/features/work-inbox/design.md`
+                 step; layout/, the layout reader and kit; inbox.css, the containers' styles), layouts/ (the Inbox
+                 Layout contract and the built-in `default` layout); `docs/features/work-inbox/design.md`
   work-board/    manifest.ts, contract.ts (`work-board.place`), main/ (registers the layouts only), page/ (Board mode:
-                 the columns and the detail pane in the sheet's split; board-state.ts, the pure view state; board-view.ts; board.css, the
-                 container's styles; sample-state.ts and the demo step; layout/, the layout reader and kit), layouts/ (the Board Layout contract and the built-in
-                 `default` layout); `docs/features/work-inbox/design.md`
+                 the columns and the detail pane in the sheet's split; board-state.ts, the pure view state;
+                 board-view.ts; board.css, the container's styles; sample-state.ts and the demo step; layout/, the
+                 layout reader and kit), layouts/ (the Board Layout contract and the built-in `default` layout);
+                 `docs/features/work-inbox/design.md`
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge
                  that compiles and runs C++ through `services.processes`, the generated driver and prelude, progress and
                  the review ladder, the `add_practice_problem` and `read_practice_state` tools, the import session

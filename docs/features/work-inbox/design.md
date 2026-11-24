@@ -98,11 +98,12 @@ each with a why), **Worth knowing** (important posts in broadcast channels, each
 seventh nav row. The side bar lists the seven as rows with their open counts (All counts every item); the shown section
 fills the sheet, newest first.
 
-A card shows its summary, participants, latest reply, Open in Slack, ticket chips and a spin-up row (Start session, Add
-to Board). Needs you cards carry an editable draft and Send, have a warning-colour edge (drawn in the layout's CSS,
-since the Card primitive has no such variant), and their count drives the Dock badge. Waiting on others cards carry an
-editable nudge, Send, Snooze 1 day and Dismiss. Every other open card has Dismiss, Start session and Add to Board. A
-ticket chip opens the Board on that ticket.
+A card shows its meta line, title, summary (only while the pane is closed), latest line, key prompts and a failed
+Send's note; the people, ticket chips, thread, draft and Buttons sit in the detail pane ([Detail pane](#detail-pane)).
+Needs you cards have a warning-colour edge (drawn in the layout's CSS, since the Card primitive has no such variant),
+and their count drives the Dock badge. Needs you cards carry an editable draft; Waiting on others cards carry an
+editable nudge, Snooze 1 day and Dismiss. Send is offered on every open item, in the pane. Every other open item has
+Dismiss, Start session and Add to Board. A ticket chip opens the Board on that ticket.
 
 - **The draft** is the user's edit, else the worker's. Edits are kept per item in `work-inbox.place` while the item is
   in `work.state`, so a reload keeps them. Send posts the draft and drops the edit; an empty draft toasts and sends
@@ -111,7 +112,7 @@ ticket chip opens the Board on that ticket.
   holding one ticket key across every section, shown as a chip reading `<key> ✕`. `Esc` in the list or a click on the
   chip clears it and returns to the section shown before.
 - **First show.** With no saved place the Inbox opens on Needs you with the cursor on its first card. Its place (section,
-  filter, cursor and drafts) is `work-inbox.place`, kept across reloads.
+  filter, cursor, drafts and whether the pane is open) is `work-inbox.place`, kept across reloads.
 
 An item clears on Send, when a sweep sees the user replied or reacted in Slack, or on Dismiss; a snoozed item returns
 when its snooze ends. Cleared and dismissed items stay under All for 90 days after their last activity, where Restore
@@ -138,22 +139,28 @@ leaves its column, the cursor keeps the same row, else the column's last card, e
 
 The Board and the Inbox each split their sheet: the cards on the left, a **detail pane** on the right that shows the
 cursor card's detail and follows the cursor. `Enter` opens and closes the pane; `gx` opens the Jira ticket or Slack
-thread instead. Focus stays on the cards, so `j`/`k` read card after card. Whether the pane is open is kept in each view's place slot; its width is the split's own UI
-state, dragged like every split. The pane heads with when the sweep last fetched that record (`Fetched 5m ago`), so a
-stale copy reads as stale; a card with no stored detail yet shows `No detail yet: the next sweep fetches it.`
+thread instead. Focus stays on the cards, so `j`/`k` read card after card. Whether the pane is open is kept in each
+view's place slot; its width is the split's own UI state, dragged like every split. The Board keeps the cursor card in
+view when its column area narrows (the pane opens, the divider moves, the window narrows). The pane heads with when
+the sweep last fetched that record (`Fetched 5m ago`, or `Fetched just now` under a minute), so a stale copy reads as
+stale. A Board card with no stored detail yet shows `No detail yet: the next sweep fetches it.`, and an Inbox item
+shows `No thread detail yet: the next sweep fetches it.` The pane keeps its scroll position across a redraw of the
+same card, and the minute age refresh waits while the box is focused or text in the pane is selected.
 
 - **A Jira ticket's pane**: key, title, type, priority, status, assignee, reporter, last updated, the description, the
   `work.detailComments` most recent comments, subtasks and linked issues, then each open Inbox thread naming the
   ticket as its summary and latest line (`t` opens them in the Inbox). A comment box closes the pane: `i` enters it,
   `Cmd+Enter` queues a **Comment job** (`work.comment`, `WorkJob` kind `comment`) that posts exactly one comment
   through the user's Jira connector, and the pane and the card show `Posting…` while it runs. A second comment queues
-  behind the first; it never replaces it.
+  behind the first; it never replaces it. A comment equal to one still posting is refused (`Already posting that
+  comment`). The open ticket pane lists its Inbox threads before its detail is fetched.
 - **A thread's pane** (the Inbox, and a local task on the Board): channel, participants, ticket chips, the worker's
   summary, the root message and the `work.threadReplies` most recent replies (author, time, text), then a reply box on
   every open thread, filled with the worker's draft where one exists; a local task whose thread is not open in the
-  Inbox shows a line saying it takes no reply from the Board. `Cmd+Enter` sends through the Send job, as before.
-- **Inbox cards slim down** while the pane is open: title, channel, author, age and the latest line. With the pane
-  closed a card also shows its summary. The draft box draws in the pane, not on the card.
+  Inbox shows a line saying it takes no reply from the Board. `Cmd+Enter` sends through the Send job, as before. A
+  Board task whose Slack thread left the Inbox reads `Its Slack thread is no longer in the Inbox.`
+- **Inbox cards slim down** while the pane is open: meta line, title and latest line. With the pane closed a card
+  also shows its summary. The draft box, people, ticket chips, thread and Buttons draw in the pane, not on the card.
 - **Where detail comes from.** Each sweep stores a detail record per ticket and per thread in its own section of
   `work.json`, published as the keyed `work.details` slot that only the panes read. `read_work_state` hands the worker
   each stored record's updated stamp, and the worker refetches only tickets and threads that moved since. Description,
@@ -222,8 +229,8 @@ list, `l` shows it keeping focus. Alt+h/l move focus between the sections and th
 | `Enter` | Open or close the detail pane |
 | `gx` | Open the thread in Slack |
 | `Ctrl+j` / `Ctrl+k` | Scroll the detail pane a line (`Ctrl+Shift+j`/`k` half a page) |
-| `i` | Edit the draft |
-| `Cmd+Enter` | Send the draft (in the draft box too; `Esc` leaves the box) |
+| `i` | Write a reply in the pane's box (opens the pane) |
+| `Cmd+Enter` | Send the reply |
 | `d` | Dismiss |
 | `z` | Snooze 1 day |
 | `u` | Restore |
@@ -258,6 +265,6 @@ list, `l` shows it keeping focus. Alt+h/l move focus between the sections and th
   in its adapter.
 - **Only while the app runs.** Scheduling has no exports for another plugin, and a closed app has no Board to show.
 - **No catch-up mode** (rejected in the ideas round); key people, muted channels and a memory are later work.
-- **Detail from the sweep, not on open.** A worker job is a whole agent session, so a
-  fetch on open would keep the pane empty for a minute; the sweep stores detail and skips what has not moved.
+- **Detail from the sweep, not on open.** A worker job is a whole agent session, so a fetch on open would keep the pane
+  empty for a minute; the sweep stores detail and skips what has not moved.
 - **Detail in its own slot.** The heavy text stays out of `work.state`, which every view redraws from.

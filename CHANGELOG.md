@@ -11,8 +11,10 @@ changes for the user.
 - A detail pane on the Board and the Inbox: the cursor card's Jira ticket (fields, description, comments, subtasks and
   linked issues) or Slack thread (root message and replies), fetched by each sweep and shown beside the cards.
 - Comments on Jira tickets from the Board pane: `i` enters the comment box, `Cmd+Enter` posts it through a worker job.
+  A comment equal to one still posting is refused.
 - A reply box on every open Inbox thread's pane, filled with the worker's draft where one exists.
-- `work.detailComments` and `work.threadReplies` settings: how many recent Jira comments and Slack replies a detail keeps.
+- `work.detailComments` and `work.threadReplies` settings: how many recent Jira comments and Slack replies a detail
+  keeps.
 
 ### Changed
 
