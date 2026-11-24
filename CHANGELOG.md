@@ -20,6 +20,12 @@ changes for the user.
 ### Changed
 
 - `Enter` on a build moves the keys into its job graph; the build's detail no longer opens under its row.
+- A layout's `buildDetail` part no longer applies: the detail pane is drawn by `detail`, `buildHeader`, `jobGraph`,
+  `jobPanel` and `detailEmpty`.
+
+### Removed
+
+- The `builds.openDetail` command: a `keymap.json` bind naming it does nothing.
 
 ## 1.2.0 — 2026-11-24
 

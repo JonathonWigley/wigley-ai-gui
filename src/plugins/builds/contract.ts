@@ -263,7 +263,7 @@ export interface BuildDownload {
   id: string; // `<backend id>/<build id>/log` (the build's own log), `<backend id>/<build id>/log/<job id>`, or `<backend id>/<build id>/file/<entry>`
   backendId: string;
   buildId: string;
-  label: string; // the job's label for a log, the file's label for a file
+  label: string; // the job's label for a log (`build` for the build's own log), the file's label for a file
   state: 'running' | 'saved' | 'failed';
   path: string | null; // the saved file, once saved
   problem: string | null; // why it failed

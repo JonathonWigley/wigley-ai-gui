@@ -37,7 +37,7 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write`, `writeBytes` and `append` stamps the file's `modified`
+// gives. Each `write`, `writeBytes`, `append` and `copy` stamps the file's `modified`
 // time with `clock.now()`, or `0` with no clock; `rename` carries a file's
 // stamp to its new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
@@ -170,8 +170,8 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       : new TextDecoder('utf-8').decode(content);
   };
 
-  // Stores `content` at `path` and reports it, as `write`, `writeBytes` and
-  // `append` all do.
+  // Stores `content` at `path` and reports it, as `write`, `writeBytes`,
+  // `append` and `copy` all do.
   const store = (path: string, content: string | Uint8Array) => {
     const file = keyOf(path);
     requireFolderCanBeMade(parentOf(file), parentOf(file));

@@ -245,15 +245,16 @@ every parse is tested over recorded JSON.
 
 - **A build's files**: after each list, main fills each build's kind `downloads` and checks each path with the
   files service's `stat`. The checks run beside the poll and never hold it: each `stat` gives up after 5 seconds and
-  keeps that file's last result, and every path is checked again each poll, so a deleted file leaves the list. The
+  keeps that file's last result, and every path is checked again each poll, except one whose last check has not
+  settled, so a deleted file leaves the list. The
   snapshot's `GameView.files` maps a build id to the files its last check found, in the kind's order, each with its
   `entry`: its index in the kind's `downloads`, which `download` takes.
 - **A log save** runs the backend's `saveLog` for a job, or for the build with no job. Its file name is
   `<game label>-<kind label>-<number>-<job label>.log`, each part with every run of characters other than ASCII
   letters and digits turned to one `-`, leading and trailing `-` dropped: `Tiki-Smash-Dev-332-Build-Android-Dev.log`.
   A build with no number has `build-<build id>` for the number, and a save with no job has `build` for the job label.
-- **A file download** copies the file through the files service's `copy`, keeping its own name. A Drive file not
-  yet on disk is fetched as it is copied.
+- **A file download** copies the file through the files service's `copy`, keeping its own name. A Drive for desktop file
+  not yet on disk is expected to be fetched as it is read for the copy; that is unchecked against Google's docs.
 - **Names**: a name the Downloads folder holds already gets ` (2)`, ` (3)` and so on before its extension, and two
   saves at once never take one name.
 - **The slot**: `builds.downloads` holds one `BuildDownload` per save, keyed by its id

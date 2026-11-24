@@ -86,7 +86,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   docs tree, doc and the doc's right column, the Backlog table, review pane and chunk strip, the Inbox sections, list and draft
   box, the Board, the Settings sections, rows
   and Leader menu panes, the gallery, a form and its review, the primer's columns, card and review, the audio picker's
-  list, the note popup, the Schedules list, details and editor, and the Practice list, problem pane, editor, console
+  list, the note popup, the Schedules list, details and editor, the Builds list and job graph, and the Practice list, problem pane, editor, console
   and the scoped-agents ask box
   (`scoped-agents.ask`, serving both Practice's interviewer and Backlog's assistant). It is bound per main view, so a
   dialog, picker or confirm keeps its own keys; a new main view adds its scope to that list in `src/plugins/keymap.ts`.
@@ -94,8 +94,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   ahead of every bind; Shift+Tab still moves to the previous box.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first between a view's
   own panes (a Docs session tab's tree and doc, the doc and its right column, the Backlog table and review pane, the primer
-  popup's tasks, items and card columns, the Practice problem pane, editor and console, and a Chat tab's transcript, box
-  and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
+  popup's tasks, items and card columns, the Practice problem pane, editor and console, the Builds list and detail pane, with Alt+j and Alt+k while the
+  split is stacked, and a Chat tab's transcript, box and session hub), then, at the view's edge, to the outer pane that way (the neighbouring chat pane in Sessions mode,
   Practice's interviewer pane under its editor and console, reached with Alt+j from the console and left with Alt+k, from the chat box after a first Alt+k to its transcript), then, at main's edge, to the shown mode's side bar on the left (the
   Sessions list, the docs tree, the Settings sections, the Inbox sections, the Schedules list from its details or editor), past it to the left bar
   (between the activity bar and the side bar; from main itself while the side bar is hidden or the mode gives it no
