@@ -398,7 +398,10 @@ function marks(page: Page) {
       row.classList.contains('is-selected') ? [place] : [],
     ),
     detail: findAll(page.sheet(), 'builds-build-header').map(
-      (header) => header.textContent.match(/#(\w+)/)?.[1] ?? null,
+      (header) =>
+        header
+          .querySelector('.builds-heading')
+          ?.textContent.match(/#(\w+)/)?.[1] ?? null,
     ),
   };
 }

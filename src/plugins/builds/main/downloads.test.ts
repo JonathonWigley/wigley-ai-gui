@@ -643,6 +643,7 @@ describe('downloads', () => {
     expect(run.downloads.saveLog(target, null, held.backend)).toEqual({
       problem: 'that download is already running',
     });
+    await settle();
     expect(held.calls).toHaveLength(1);
     held.release();
     await settle();
