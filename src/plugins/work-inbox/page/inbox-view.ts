@@ -5,7 +5,7 @@ import {
   type CommandKey,
 } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
-import type { EditorHost } from '../../../contracts/editor';
+import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { PluginLog } from '../../../contracts/log';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import type {
@@ -15,7 +15,9 @@ import type {
   ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
+import type { UiState } from '../../../contracts/ui-state';
 import { callEach } from '../../../shared/call-each';
+import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import {
@@ -34,9 +36,12 @@ import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
+import { createSplit } from '../../../shared/page/ui/split';
+import { textLineHeightPx } from '../../../shared/page/text-line';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
   statusLine,
+  type ThreadDetail,
   type WorkItem,
   type WorkState,
   workSendCommand,
@@ -47,6 +52,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type {
   CardInput,
   CompleteInboxLayout,
+  DetailInput,
   InboxLayout,
 } from '../layouts/layout';
 import type { workInboxManifest } from '../manifest';
@@ -54,6 +60,7 @@ import {
   cardActions,
   cardInput,
   cursorItem,
+  detailInput,
   draftText,
   emptyReason,
   type InboxAction,
@@ -77,6 +84,10 @@ const TITLE = 'Inbox';
 const DRAFT_FORM = 'work-inbox-draft';
 const STATUS_REDRAW_MS = 60_000;
 const PLACEHOLDER = 'Write a reply…';
+// Where the split keeps the detail pane's width, in this plugin's own uiState.
+const PANE_WIDTH_KEY = 'pane-width';
+// The detail pane's split, as the Board's: the end pane holds the width.
+const PANE_SPLIT = { initial: 420, min: 320, endMin: 480 } as const;
 
 // Run across plugins by id: work-board's page part declares it, and it may be switched off.
 const BOARD_SHOW_TICKET: CommandId = 'work-board.showTicket';
@@ -136,13 +147,17 @@ export type InboxCommand = Exclude<
 export interface InboxViewDeps {
   log: PluginLog;
   toast(text: string, tone: ToastTone): void;
-  // What a layout's kit draws with; its `keys` also anchors the draft box's hints.
+  // What a layout's kit draws with; its `keys` also anchors the draft box's hints and the split's prompt.
   kitServices: OwnerKitServices;
   // The draft's vim box.
   editor: EditorHost;
-  timers: Pick<Timers, 'set' | 'clear'>;
-  // Epoch milliseconds, for the status line's and the cards' ages.
+  // Where the split keeps the detail pane's width.
+  uiState: UiState;
+  timers: Timers;
+  // Epoch milliseconds, for the status line's, the cards' and the detail pane's ages.
   now(): number;
+  // Item `id`'s stored thread detail; null for none.
+  detailOf(id: string): ThreadDetail | null;
   setScope(scope: InboxFocus): void;
   setFocusTarget(target: FocusTarget | null): void;
   setResizeTarget(target: ResizeTarget | null): void;
@@ -163,10 +178,11 @@ export interface InboxViewDeps {
   holdPlace(): Disposable;
 }
 
-// Inbox mode's view: the section nav for the side bar, and the head and cards in the sheet, logging under
-// `work-inbox`. What shows lives in `inboxReducer`; the view draws its state over the work `stateChanged` hands it,
-// through the layout picked for each part, with `default` until the first `setLayouts`. Every work command runs
-// through one reporting run, which logs and toasts a refusal.
+// Inbox mode's view: the section nav for the side bar, and the head and cards in the sheet's split with the cursor
+// item's detail pane beside them, logging under `work-inbox`. What shows lives in `inboxReducer`; the view draws its
+// state over the work `stateChanged` hands it and the details `detailOf` reads, through the layout picked for each
+// part, with `default` until the first `setLayouts`. Every work command runs through one reporting run, which logs and
+// toasts a refusal.
 export interface InboxView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
@@ -179,9 +195,14 @@ export interface InboxView {
   // The side bar opened over main: focus moves to it.
   sideBarOpenedOver(): void;
   stateChanged(value: WorkState | undefined): void;
+  // `work.details` changed for item `id`: the open pane draws again when it shows that item.
+  detailChanged(id: string): void;
   setLayouts(shown: ShownLayouts<InboxLayout>): void;
-  // Draws `state` in place of `work.state` until the returned dispose, holding the place meanwhile.
-  showSample(state: WorkState): Disposable;
+  // Draws `state` and `details` in place of `work.state` and `work.details` until the returned dispose, holding the
+  // place meanwhile; the sample starts with the pane closed, and the dispose puts back the pane as it was.
+  showSample(state: WorkState, details: readonly ThreadDetail[]): Disposable;
+  // Opens the detail pane; does nothing while it is open.
+  openPane(): void;
   dispose(): void;
   commands: Record<InboxCommand, () => void>;
   // Shows the mode with the open threads holding `key`, the list focused.
@@ -210,11 +231,17 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   let realWork: WorkState | undefined;
   let sample: WorkState | null = null;
   const shownWork = (): WorkState => sample ?? realWork ?? EMPTY_WORK;
+  // The demo sample's thread details by item id, read in place of `detailOf` while the sample shows.
+  let sampleDetails: ReadonlyMap<string, ThreadDetail> | null = null;
+  const shownDetail = (id: string): ThreadDetail | null =>
+    sampleDetails === null
+      ? deps.detailOf(id)
+      : (sampleDetails.get(id) ?? null);
   // Whether the first state has landed, which puts back the saved place; no place is written before it.
   let isPlaceRestored = false;
   let isDisposed = false;
-  // Set while the cards redraw, when a released box's blur is the redraw's own.
-  let isRedrawingCards = false;
+  // Set while the cards or the detail pane redraw, when a released box's blur is the redraw's own.
+  let isRedrawing = false;
 
   // ── Layouts ────────────────────────────────────────────────────────────
   const parts = createLayoutParts<InboxLayout, CompleteInboxLayout>({
@@ -245,24 +272,36 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   // A box left by a click elsewhere gives the keys back to the list.
   boxes.onChange(() => {
     const isBoxLeft =
-      !isRedrawingCards &&
-      boxes.active() === null &&
-      store.get().focus === 'box';
+      !isRedrawing && boxes.active() === null && store.get().focus === 'box';
     if (isBoxLeft) {
       changeFocus('list', false);
     }
   });
 
   // ── Elements ───────────────────────────────────────────────────────────
-  // The containers stay app-owned; the panes draw inside them and place the slots below.
+  // The containers stay app-owned; the panes draw inside them and place the slots below, and the detail part draws
+  // into the split's end pane, which the keys never focus.
   const sidePane = element('div', 'work-inbox-side');
   sidePane.tabIndex = -1;
   const sectionsList = element('ol', 'work-inbox-sections');
   const mainPane = element('div', 'work-inbox-main');
   mainPane.tabIndex = -1;
+  const detailPane = element('div', 'work-inbox-detail');
+  const split = createSplit({
+    ...PANE_SPLIT,
+    sizedPane: 'end',
+    stateKey: PANE_WIDTH_KEY,
+    uiState: deps.uiState,
+    anchor: deps.kitServices.keys.anchor,
+    timers: deps.timers,
+  });
+  split.element.classList.add('work-inbox-split');
+  split.start.append(mainPane);
+  split.end.append(detailPane);
+  split.setEndHidden(true);
   const contentSheet = sheet();
   contentSheet.classList.add('work-inbox-sheet');
-  contentSheet.append(mainPane);
+  contentSheet.append(split.element);
   const statusSlot = element('div', 'work-inbox-status-slot');
   const filterSlot = element('div', 'work-inbox-filter-slot');
   const cardsList = element('ol', 'work-inbox-cards');
@@ -272,13 +311,18 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   let statusDraws: DrawnRoot[] = [];
   let filterDraw: DrawnRoot | null = null;
   let cardDraws: DrawnRoot[] = [];
+  let detailDraw: DrawnRoot | null = null;
   // What each part was drawn from; null to draw again.
   let drawnSectionsKey: string | null = null;
   let drawnStatusKey: string | null = null;
   let drawnFilterKey: string | null = null;
   let drawnCardsKey: string | null = null;
+  let drawnDetailKey: string | null = null;
+  // The item the detail pane last drew, null for none.
+  let drawnDetailItem: string | null = null;
   let shownFocus: InboxFocus | null = null;
   let shownScope: InboxFocus | null = null;
+  let shownPaneOpen: boolean | null = null;
   let shownContext: string | null = null;
   // What was last logged while shown; undefined before the first.
   let loggedFilter: string | null | undefined;
@@ -421,12 +465,12 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     }
   };
 
-  // A card kit's `draftBox`: the cursor card's draft area, the vim box with the draft, or the sending text
+  // The detail kit's `draftBox`: the cursor item's reply box, the vim box with the draft, or the sending text
   // read-only, with the box's key hints; released with the draw.
-  const draftBoxSlot = (input: CardInput, rollback: RollbackDeps) => {
+  const draftBoxSlot = (input: DetailInput, rollback: RollbackDeps) => {
     let isPlaced = false;
     const place = (parent: HTMLElement): HTMLElement => {
-      if (!input.isCursor || input.draft === null) {
+      if (input.draft === null) {
         throw new Error('no draft box');
       }
       if (isPlaced) {
@@ -478,21 +522,13 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   };
 
   const drawCard = (input: CardInput): DrawnRoot => {
-    const drawn = parts.draw('card', cardsList, (card, into, rollback) => {
-      const draftBox = draftBoxSlot(input, rollback);
-      const root = requireElementIn(
+    const drawn = parts.draw('card', cardsList, (card, into, rollback) => ({
+      element: requireElementIn(
         into,
-        card(into, input, {
-          ...kitFor('list', rollback),
-          draftBox: draftBox.place,
-        }),
+        card(into, input, kitFor('list', rollback)),
         'card',
-      );
-      if (input.isCursor && input.draft !== null && !draftBox.isPlaced()) {
-        draftBox.place(root);
-      }
-      return { element: root };
-    });
+      ),
+    }));
     drawn.built.element.addEventListener('click', (event) => {
       const isOnControl =
         (event.target as Element).closest(CARD_CONTROLS) !== null;
@@ -503,54 +539,44 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     return drawn;
   };
 
-  // Draws the cards; true when the redraw dropped the focused draft box without placing it again.
-  const drawCards = (state: InboxViewState, work: WorkState): boolean => {
-    let isBoxDropped = false;
+  // Draws the cards; no card holds a box, so the redraw leaves the reply box alone.
+  const drawCards = (state: InboxViewState, work: WorkState) => {
     const items = shownItems(work, state);
     const now = deps.now();
     const inputs = items.map((item) => cardInput(item, state, now));
-    // The cursor box's own text is left out, so typing never redraws its card.
     const key = JSON.stringify([
-      inputs.map((input) =>
-        input.isCursor && !input.isSending && input.draft !== null
-          ? { ...input, draft: '' }
-          : input,
-      ),
+      inputs,
       items.length === 0 ? emptyReason(work, state) : null,
       listTitle(state),
     ]);
     if (key !== drawnCardsKey) {
       drawnCardsKey = key;
-      const wasBoxFocused = boxes.active() !== null;
-      isRedrawingCards = true;
+      isRedrawing = true;
       try {
-        keepFocusedBox(boxes, DRAFT_FORM, () => {
-          const held = cardDraws;
-          cardDraws = [];
-          disposeDraws(held);
-          cardsList.replaceChildren();
-          if (items.length === 0) {
-            cardDraws.push(
-              parts.draw('empty', cardsList, (empty, into, rollback) => ({
-                element: empty(
-                  into,
-                  {
-                    reason: emptyReason(work, state),
-                    section: SECTION_TITLES[state.section],
-                    ticketKey: state.ticketFilter,
-                  },
-                  kitFor('list', rollback),
-                ),
-              })),
-            );
-            return;
-          }
+        const held = cardDraws;
+        cardDraws = [];
+        disposeDraws(held);
+        cardsList.replaceChildren();
+        if (items.length === 0) {
+          cardDraws.push(
+            parts.draw('empty', cardsList, (empty, into, rollback) => ({
+              element: empty(
+                into,
+                {
+                  reason: emptyReason(work, state),
+                  section: SECTION_TITLES[state.section],
+                  ticketKey: state.ticketFilter,
+                },
+                kitFor('list', rollback),
+              ),
+            })),
+          );
+        } else {
           cardDraws = inputs.map(drawCard);
-        });
+        }
       } finally {
-        isRedrawingCards = false;
+        isRedrawing = false;
       }
-      isBoxDropped = wasBoxFocused && boxes.active() === null;
     }
     inputs.forEach((input, index) => {
       const root = cardDraws[index]?.built.element;
@@ -561,11 +587,81 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       );
       root?.classList.toggle('is-direct', input.isDirect);
     });
-    const cursor = items.find((item) => item.id === state.cursorId);
-    if (cursor !== undefined && cursor.sending === null) {
-      const text = draftText(cursor, state);
-      boxes.setText(cursor.id, text);
-      cardsList
+  };
+
+  const drawDetailPart = (input: DetailInput): DrawnRoot =>
+    parts.draw('detail', detailPane, (detail, into, rollback) => {
+      const draftBox = draftBoxSlot(input, rollback);
+      const root = requireElementIn(
+        into,
+        detail(into, input, {
+          ...kitFor('list', rollback),
+          draftBox: draftBox.place,
+        }),
+        'detail',
+      );
+      if (input.draft !== null && !draftBox.isPlaced()) {
+        draftBox.place(root);
+      }
+      return { element: root };
+    });
+
+  const drawDetailEmpty = (): DrawnRoot =>
+    parts.draw('detailEmpty', detailPane, (empty, into, rollback) => ({
+      element: requireElementIn(
+        into,
+        empty(into, kitFor('list', rollback)),
+        'detailEmpty',
+      ),
+    }));
+
+  // Draws the detail pane while it is open: the cursor item's detail, or the empty part with none; while it is closed,
+  // empties it. True when the redraw dropped the focused reply box without placing it again.
+  const drawDetail = (state: InboxViewState, work: WorkState): boolean => {
+    split.setEndHidden(!state.paneOpen);
+    const item = state.paneOpen ? cursorItem(work, state) : null;
+    const input =
+      item === null
+        ? null
+        : detailInput(item, state, shownDetail(item.id), deps.now());
+    // The box's own text is left out while it is editable, so typing never redraws the pane.
+    const isEditable =
+      input !== null && input.draft !== null && !input.isSending;
+    const key = JSON.stringify([
+      state.paneOpen,
+      isEditable ? { ...input, draft: '' } : input,
+    ]);
+    let isBoxDropped = false;
+    if (key !== drawnDetailKey) {
+      drawnDetailKey = key;
+      const wasBoxFocused = boxes.active() !== null;
+      isRedrawing = true;
+      try {
+        keepFocusedBox(boxes, DRAFT_FORM, () => {
+          const held = detailDraw;
+          detailDraw = null;
+          held?.dispose();
+          detailPane.replaceChildren();
+          if (!state.paneOpen) {
+            return;
+          }
+          detailDraw =
+            input === null ? drawDetailEmpty() : drawDetailPart(input);
+        });
+      } finally {
+        isRedrawing = false;
+      }
+      isBoxDropped = wasBoxFocused && boxes.active() === null;
+      const shownItem = item?.id ?? null;
+      if (shownItem !== drawnDetailItem) {
+        drawnDetailItem = shownItem;
+        detailPane.scrollTop = 0;
+      }
+    }
+    if (item !== null && isEditable) {
+      const text = draftText(item, state);
+      boxes.setText(item.id, text);
+      detailPane
         .querySelector('.work-inbox-draft')
         ?.classList.toggle('is-empty', text === '');
     }
@@ -627,6 +723,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       ticketFilter: state.ticketFilter,
       cursorId: state.cursorId,
       drafts: state.drafts,
+      paneOpen: state.paneOpen,
     });
   };
 
@@ -643,14 +740,18 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     return true;
   };
 
-  // Sets the scope and drops the targets, when the focus changed or `always`: the sheet has no split.
+  // Sets the scope and the targets when the focus or whether the pane shows changed, or `always`: the split resizes
+  // while the pane shows, and the DOM focus stays in the sections, the list or the box.
   const syncTargets = (state: InboxViewState, always: boolean) => {
-    if (!deps.isShown() || (!always && state.focus === shownScope)) {
+    const isChanged =
+      state.focus !== shownScope || state.paneOpen !== shownPaneOpen;
+    if (!deps.isShown() || (!always && !isChanged)) {
       return;
     }
     shownScope = state.focus;
+    shownPaneOpen = state.paneOpen;
     deps.setScope(state.focus);
-    deps.setResizeTarget(null);
+    deps.setResizeTarget(state.paneOpen ? split : null);
     deps.setFocusTarget(null);
   };
 
@@ -684,7 +785,8 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     drawSections(state, work);
     drawStatus(work);
     drawFilter(state);
-    if (drawCards(state, work) && state.focus === 'box') {
+    drawCards(state, work);
+    if (drawDetail(state, work) && state.focus === 'box') {
       // The keys go back to the list, which renders again through the store.
       changeFocus('list', true);
       return;
@@ -702,10 +804,15 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   drawMainPane();
   store.subscribe(() => render());
 
-  // The status line's age, again once a minute.
+  // The status line's and the detail pane's ages, again once a minute.
   let statusTimer: number | null = null;
   const redrawStatus = () => {
-    drawStatus(shownWork());
+    const state = store.get();
+    const work = shownWork();
+    drawStatus(work);
+    if (drawDetail(state, work) && state.focus === 'box') {
+      changeFocus('list', true);
+    }
     statusTimer = deps.timers.set(redrawStatus, STATUS_REDRAW_MS);
   };
   statusTimer = deps.timers.set(redrawStatus, STATUS_REDRAW_MS);
@@ -826,14 +933,36 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     }
   };
 
+  // Opens the pane when it is closed, which places the reply box, then hands the box the keys.
   const editDraft = onCursor((item) => {
-    const input = cardInput(item, store.get(), deps.now());
-    if (input.draft === null || input.isSending) {
+    if (item.state !== 'open' || item.sending !== null) {
       log(`no editDraft for ${item.id}`);
       return;
     }
+    dispatch({ type: 'pane', open: true });
     setFocus('box');
   });
+
+  const togglePane = () => {
+    const open = !store.get().paneOpen;
+    dispatch({ type: 'pane', open });
+    log(open ? 'pane open' : 'pane closed');
+  };
+
+  // Scrolls the detail pane by `step`; logs `no pane` while it is closed. Focus stays where it is.
+  const scrollPane = (step: ScrollStep, direction: 1 | -1) => () => {
+    if (!store.get().paneOpen) {
+      log('no pane');
+      return;
+    }
+    const scroll = scrollContent(
+      detailPane,
+      step,
+      direction,
+      textLineHeightPx(detailPane),
+    );
+    log(scrollText('the detail', step, direction, scroll));
+  };
 
   const ticketOnBoard = onCursor((item) => {
     const [key] = item.ticketKeys;
@@ -880,6 +1009,11 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     },
     sweep: () => void runWork('work.sweep'),
     showJobRow: () => void runWork('work.openJobRow'),
+    togglePane,
+    paneLineDown: scrollPane('line', 1),
+    paneLineUp: scrollPane('line', -1),
+    paneHalfPageDown: scrollPane('halfPage', 1),
+    paneHalfPageUp: scrollPane('halfPage', -1),
   };
 
   return {
@@ -911,6 +1045,13 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       }
       render();
     },
+    detailChanged(id) {
+      if (sampleDetails !== null || id !== store.get().cursorId) {
+        return;
+      }
+      drawnDetailKey = null;
+      render();
+    },
     setLayouts(next) {
       parts.setLayouts(next);
       drawSidePane();
@@ -919,17 +1060,20 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       drawnStatusKey = null;
       drawnFilterKey = null;
       drawnCardsKey = null;
+      drawnDetailKey = null;
       // A focused box keeps its focus; focus the redraw dropped goes back to the pane holding the keys.
       const isFocusLost =
         document.activeElement === null ||
         document.activeElement === document.body;
       render(isFocusLost);
     },
-    showSample(state) {
+    showSample(state, details) {
       const hold = deps.holdPlace();
       const before = shownWork();
       const viewBefore = store.get();
       sample = state;
+      sampleDetails = new Map(details.map((detail) => [detail.id, detail]));
+      dispatch({ type: 'pane', open: false });
       dispatch({ type: 'workChanged', before, after: state });
       render();
       let isEnded = false;
@@ -940,6 +1084,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
           }
           isEnded = true;
           sample = null;
+          sampleDetails = null;
           dispatch({ type: 'reset', state: viewBefore });
           // The real work may have changed, or first landed, while the sample showed.
           if (!restoreFirstPlace()) {
@@ -961,15 +1106,18 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
         ...statusDraws,
         ...cardDraws,
         ...(filterDraw === null ? [] : [filterDraw]),
+        ...(detailDraw === null ? [] : [detailDraw]),
       ];
       sectionDraws = [];
       statusDraws = [];
       cardDraws = [];
       filterDraw = null;
+      detailDraw = null;
       callEach<() => void>(
         [
           () => disposeDraws(draws),
           () => boxes.destroyForm(DRAFT_FORM),
+          () => split.dispose(),
           () => parts.dispose(),
         ],
         (step) => step(),
@@ -1011,5 +1159,6 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     },
     openTicket,
     pressItem,
+    openPane: () => dispatch({ type: 'pane', open: true }),
   };
 }

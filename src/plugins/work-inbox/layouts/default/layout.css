@@ -1,5 +1,6 @@
 /* The default layout's look: the side bar's sections; the sheet's head (title, filter chip, status line) and its
-   cards, each with its draft area, buttons and cursor prompt. */
+   cards, each with its cursor prompt; and the detail pane: the thread's head, the thread, the reply box and the
+   buttons. */
 
 /* The side bar: its head over the section rows, which scroll. */
 .work-inbox-side-pane[data-layout-owner='work-inbox'] {
@@ -76,7 +77,7 @@
   font-family: var(--wg-font-mono);
 }
 
-/* A card: its lines, then its draft, buttons and prompt. */
+/* A card: its lines, then its prompt and note. */
 .work-inbox-card[data-layout-owner='work-inbox'] {
   display: grid;
   gap: var(--wg-space-1_5);
@@ -111,36 +112,93 @@
 
 [data-layout-owner='work-inbox'] .work-inbox-card-summary,
 [data-layout-owner='work-inbox'] .work-inbox-card-latest,
-[data-layout-owner='work-inbox'] .work-inbox-card-people,
-[data-layout-owner='work-inbox'] .work-inbox-card-why,
-[data-layout-owner='work-inbox'] .work-inbox-card-draft,
 [data-layout-owner='work-inbox'] .work-inbox-card-note {
   margin: 0;
   overflow-wrap: anywhere;
 }
 
-[data-layout-owner='work-inbox'] .work-inbox-card-latest,
-[data-layout-owner='work-inbox'] .work-inbox-card-people,
-[data-layout-owner='work-inbox'] .work-inbox-card-why {
+[data-layout-owner='work-inbox'] .work-inbox-card-latest {
   color: var(--wg-fg-secondary);
 }
 
-[data-layout-owner='work-inbox'] .work-inbox-card-draft {
-  color: var(--wg-fg-secondary);
-  white-space: pre-wrap;
-}
-
-[data-layout-owner='work-inbox'] .work-inbox-card-note {
+[data-layout-owner='work-inbox'] .work-inbox-card-note,
+[data-layout-owner='work-inbox'] .work-inbox-detail-note {
   color: var(--wg-status-error);
 }
 
-[data-layout-owner='work-inbox'] .work-inbox-card-tickets,
-[data-layout-owner='work-inbox'] .work-inbox-card-actions,
+[data-layout-owner='work-inbox'] .work-inbox-detail-tickets,
+[data-layout-owner='work-inbox'] .work-inbox-detail-actions,
 [data-layout-owner='work-inbox'] .work-inbox-card-prompt {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
+}
+
+/* The detail pane: the thread's head, then its lines, the thread, the reply box and the buttons one under another. */
+.work-inbox-detail-pane[data-layout-owner='work-inbox'] {
+  display: grid;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-head {
+  display: grid;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-title {
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-fetched {
+  color: var(--wg-fg-tertiary);
+  margin: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-people,
+[data-layout-owner='work-inbox'] .work-inbox-detail-missing,
+[data-layout-owner='work-inbox'] .work-inbox-detail-count,
+[data-layout-owner='work-inbox'] .work-inbox-detail-message-head {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-summary,
+[data-layout-owner='work-inbox'] .work-inbox-detail-why {
+  font-size: var(--wg-text-prose);
+  line-height: var(--wg-leading-prose);
+  margin: 0;
+  max-width: var(--wg-prose-measure);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-why {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-thread,
+[data-layout-owner='work-inbox'] .work-inbox-detail-message {
+  display: grid;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-thread {
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 [data-layout-owner='work-inbox'] .work-inbox-ticket {

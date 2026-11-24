@@ -12,7 +12,11 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 import { placeWrites } from '../../../shared/page/place-slot';
-import { workStateSlot } from '../../work/contract';
+import {
+  type ThreadDetail,
+  workDetailsSlot,
+  workStateSlot,
+} from '../../work/contract';
 import { type WorkInboxPlace, workInboxPlaceSlot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -25,10 +29,11 @@ import { readInboxLayout } from './layout/read-layout';
 type WorkInboxApi = PageApi<typeof workInboxManifest, ChannelShape>;
 
 // Inbox mode: the section nav in the side bar, and the head and cards of the shown section or ticket filter in the
-// sheet, drawn with the layout the `layout` setting names. It draws each value of `work.state` and acts only through
-// work's commands. `showMode` shows the mode, and does nothing while it shows. The place (section, filter, cursor,
-// unsent drafts) goes to `work-inbox.place` on each change, and a page load puts the last page's back once the first
-// state lands. Registers the Inbox demo step.
+// sheet beside the cursor item's detail pane, drawn with the layout the `layout` setting names. It draws each value of
+// `work.state` with the threads `work.details` holds, and acts only through work's commands. `showMode` shows the
+// mode, and does nothing while it shows. The place (section, filter, cursor, unsent drafts, whether the pane is open)
+// goes to `work-inbox.place` on each change, and a page load puts the last page's back once the first state lands.
+// Registers the Inbox demo step.
 export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
   manifest: workInboxManifest,
   start(api: WorkInboxApi) {
@@ -49,6 +54,13 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
       }
     };
 
+    const details = api.state.read(workDetailsSlot);
+    // A thread's record; a ticket record under the same id is not one.
+    const detailOf = (id: string): ThreadDetail | null => {
+      const detail = details.get(id);
+      return detail?.kind === 'thread' ? detail : null;
+    };
+
     const view = createInboxView({
       log: services.log,
       toast: services.toast,
@@ -60,8 +72,10 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
         state: api.state.forLayouts,
       },
       editor: services.editor,
+      uiState: services.uiState,
       timers: services.timers,
       now: () => services.clock.now(),
+      detailOf,
       setScope: (scope) => api.keys.setScope(scope),
       setFocusTarget: (target) => api.panes.setFocusTarget(target),
       setResizeTarget: (target) => api.panes.setResizeTarget(target),
@@ -116,9 +130,12 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
     const state = api.state.read(workStateSlot);
     const stateListener = state.on((value) => view.stateChanged(value));
     view.stateChanged(state.get());
+    const detailsListener = details.on((key) => view.detailChanged(key));
     const demoStep = registerDemoSteps(services, {
       commands: api.commands,
-      showSample: (sample) => view.showSample(sample),
+      showSample: (sample, sampleDetails) =>
+        view.showSample(sample, sampleDetails),
+      openPane: () => view.openPane(),
       selectSection: (id) => view.selectSection(id),
       now: () => services.clock.now(),
     });
@@ -142,6 +159,7 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
         callEach<() => void>(
           [
             () => stateListener.dispose(),
+            () => detailsListener.dispose(),
             () => demoStep.dispose(),
             () => view.dispose(),
           ],

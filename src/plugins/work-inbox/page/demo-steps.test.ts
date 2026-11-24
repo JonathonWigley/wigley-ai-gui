@@ -24,6 +24,7 @@ describe('inbox demo step', () => {
   it('the Inbox step registers and its beats enter and dispose without throwing', async () => {
     const events: string[] = [];
     let sample: WorkState | null = null;
+    let detailIds: string[] = [];
     const step = registeredStep((services) =>
       registerDemoSteps(services, {
         commands: {
@@ -31,11 +32,13 @@ describe('inbox demo step', () => {
             events.push(`run ${String(args[1])}`);
           },
         } as never,
-        showSample(state) {
+        showSample(state, details) {
           sample = state;
+          detailIds = details.map((detail) => detail.id);
           events.push('sample');
           return { dispose: () => events.push('sample ended') };
         },
+        openPane: () => events.push('pane'),
         selectSection: (id) => events.push(`section ${id}`),
         now: () => Date.parse('2026-11-23T12:00:00.000Z'),
       }),
@@ -49,10 +52,22 @@ describe('inbox demo step', () => {
 
     expect(step.id).toBe('work-inbox.mode');
     expect(sample).not.toBeNull();
+    expect(stage.beats.map((beat) => beat.name)).toEqual([
+      'needs you',
+      'detail',
+      'waiting',
+      'all',
+    ]);
+    expect(detailIds).toEqual([
+      'sample-review',
+      'sample-nudge',
+      'sample-thread',
+    ]);
     expect(events).toEqual([
       'sample',
       'run work-inbox.main',
       'section needs_you',
+      'pane',
       'section waiting',
       'section all',
       'sample ended',

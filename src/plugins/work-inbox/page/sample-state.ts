@@ -1,6 +1,68 @@
-import type { WorkItem, WorkState } from '../../work/contract';
+import type {
+  DetailMessage,
+  ThreadDetail,
+  WorkItem,
+  WorkState,
+} from '../../work/contract';
 
 const MINUTE_MS = 60_000;
+
+// The Inbox demo's stored threads, their times counted back from `now` (epoch ms), each fetched 3 minutes ago: the
+// review ask showing 2 of its 4 replies, the schema nudge with no reply yet, and the flaky test thread with both its
+// replies. The DM and the dismissed ask have none, so the pane shows its missing line.
+export function sampleInboxDetails(now: number): ThreadDetail[] {
+  const ago = (minutes: number) =>
+    new Date(now - minutes * MINUTE_MS).toISOString();
+  const message = (
+    author: string,
+    minutes: number,
+    text: string,
+  ): DetailMessage => ({ author, at: ago(minutes), text });
+  const thread = (
+    id: string,
+    root: DetailMessage,
+    replies: DetailMessage[],
+    replyCount: number,
+  ): ThreadDetail => ({
+    kind: 'thread',
+    id: `sample-${id}`,
+    fetchedAt: ago(3),
+    stamp: (replies.at(-1) ?? root).at,
+    root,
+    replies,
+    replyCount,
+  });
+  return [
+    thread(
+      'review',
+      message(
+        'Ann',
+        60,
+        'Could someone review the sync retry change before Friday? The diff is in **PR 482**.',
+      ),
+      [
+        message('Bo', 30, 'I can look tomorrow if nobody gets to it.'),
+        message('Ann', 6, 'any chance today?'),
+      ],
+      4,
+    ),
+    thread(
+      'nudge',
+      message('You', 2880, 'Does the schema change look right to you, Dee?'),
+      [],
+      0,
+    ),
+    thread(
+      'thread',
+      message('You', 420, 'The upload test fails about one run in five on CI.'),
+      [
+        message('Eli', 320, 'reproduced it on CI'),
+        message('Fay', 300, 'same on my machine with `--repeat 20`'),
+      ],
+      2,
+    ),
+  ];
+}
 
 // The Inbox demo's work state, its times counted back from `now` (epoch ms). Newest first: the dismissed item, so All
 // opens on it; the Needs you item with a ticket key and a worker draft; a second Needs you item; then one item in each

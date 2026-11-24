@@ -448,8 +448,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  prompt through chat's `newSessionWithDraft`);
                  `docs/features/work-inbox/design.md`
   work-inbox/    manifest.ts, contract.ts (`work-inbox.place`), main/ (registers the layouts only), page/ (Inbox mode:
-                 the section nav in the side bar and the card list in the sheet; inbox-state.ts, the pure view state;
-                 inbox-view.ts; sample-state.ts and the demo step; layout/, the layout reader and kit; inbox.css),
+                 the section nav in the side bar, and the cards and the cursor item's detail pane with its reply box in
+                 the sheet's split; inbox-state.ts, the pure view state; inbox-view.ts; sample-state.ts and the demo
+                 step; layout/, the layout reader and kit; inbox.css, the containers' styles),
                  layouts/ (the Inbox Layout contract and the built-in `default` layout);
                  `docs/features/work-inbox/design.md`
   work-board/    manifest.ts, contract.ts (`work-board.place`), main/ (registers the layouts only), page/ (Board mode:

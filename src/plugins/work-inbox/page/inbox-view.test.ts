@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { ToastTone } from '../../../contracts/plugin';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -12,8 +14,13 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
-import type { WorkItem, WorkJobStatus, WorkState } from '../../work/contract';
-import { workItem } from '../../work/contract.test-support';
+import type {
+  ThreadDetail,
+  WorkItem,
+  WorkJobStatus,
+  WorkState,
+} from '../../work/contract';
+import { threadDetail, workItem } from '../../work/contract.test-support';
 import type { WorkInboxPlace } from '../contract';
 import { workInboxManifest } from '../manifest';
 import type { InboxCardAction } from './inbox-state';
@@ -110,17 +117,25 @@ interface SetupOptions {
   savedPlace?: WorkInboxPlace;
   // The rejection text of each command id whose run fails.
   rejects?: Record<string, string>;
+  // The stored thread details `detailOf` reads.
+  details?: ThreadDetail[];
 }
 
 // An Inbox view over `state` (none landed yet when undefined), shown unless `isShown` is false. `runs` holds each reporting run as `[id, arg]`,
-// `scopes` each scope set, `logs`, `toasts` and `places` what the view wrote, `boxes` each vim box made.
+// `scopes` each scope set, `resizeTargets` each resize target set, `logs`, `toasts` and `places` what the view wrote,
+// `boxes` each vim box made; `details` is what `detailOf` reads, and `clock.ms` what `now` reads.
 function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
   const ranKeys: CommandId[] = [];
   const scopes: string[] = [];
+  const resizeTargets: (ResizeTarget | null)[] = [];
   const logs: string[] = [];
   const toasts: [string, ToastTone][] = [];
   const places: WorkInboxPlace[] = [];
+  const details = new Map(
+    (options.details ?? []).map((detail) => [detail.id, detail]),
+  );
+  const clock = { ms: NOW };
   const editors = fakeEditors();
   const mode = { isShown: false };
   const { keys } = recordingAnchors();
@@ -163,11 +178,16 @@ function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
       state: noLayoutState,
     },
     editor: editors.host,
-    timers: { set: () => 0, clear: () => undefined },
-    now: () => NOW,
+    uiState: uiStateOver(new Map()),
+    timers: {
+      set: (run, ms) => setTimeout(run, ms) as unknown as number,
+      clear: (handle) => clearTimeout(handle),
+    },
+    now: () => clock.ms,
+    detailOf: (id) => details.get(id) ?? null,
     setScope: (scope) => scopes.push(scope),
     setFocusTarget: () => undefined,
-    setResizeTarget: () => undefined,
+    setResizeTarget: (target) => resizeTargets.push(target),
     isShown: () => mode.isShown,
     showMode: show,
     picked: () => undefined,
@@ -197,9 +217,12 @@ function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     runs,
     ranKeys,
     scopes,
+    resizeTargets,
     logs,
     toasts,
     places,
+    details,
+    clock,
     boxes: editors.boxes,
     show,
   };
@@ -213,6 +236,23 @@ async function settle() {
 
 function cards(setup: Setup): FakeElement[] {
   return findAll(setup.sheet, 'work-inbox-card');
+}
+
+// The app-owned detail scroller in the split's end pane.
+function paneOf(setup: Setup): FakeElement {
+  return findAll(setup.sheet, 'work-inbox-detail')[0];
+}
+
+function splitOf(setup: Setup): FakeElement {
+  return findAll(setup.sheet, 'work-inbox-split')[0];
+}
+
+// The thread detail of item `id`, fetched 3 minutes before `NOW`.
+function fetchedDetail(id: string): ThreadDetail {
+  return threadDetail(id, {
+    fetchedAt: new Date(NOW - 3 * 60_000).toISOString(),
+    root: { author: 'Ann', at: '2026-11-23T11:00:00.000Z', text: 'Root text' },
+  });
 }
 
 function buttonNamed(root: FakeElement, label: string): FakeElement {
@@ -236,31 +276,43 @@ describe('createInboxView', () => {
 
   it.each<{
     case: string;
+    section: WorkItem['section'];
     rejects: Record<string, string>;
     drafts: Record<string, string>;
     boxText: string;
   }>([
     {
       case: 'main takes the text: the edit is dropped',
+      section: 'needs_you',
       rejects: {},
       drafts: {},
       boxText: 'worker text',
     },
     {
       case: 'main refuses: the edit is kept',
+      section: 'needs_you',
       rejects: { 'work.send': 'a is sending' },
       drafts: { a: 'my text' },
       boxText: 'my text',
     },
+    {
+      case: 'a My threads item',
+      section: 'my_threads',
+      rejects: {},
+      drafts: {},
+      boxText: 'worker text',
+    },
   ])(
     'send runs work.send with the edited text: $case',
-    async ({ rejects, drafts, boxText }) => {
+    async ({ section, rejects, drafts, boxText }) => {
       const setup = inboxSetup(
-        work([workItem('a', { draft: 'worker text' })]),
+        work([workItem('a', { section, draft: 'worker text' })]),
         {
           rejects,
         },
       );
+      setup.view.selectSection(section);
+      setup.view.commands.togglePane();
       setup.view.commands.editDraft();
       setup.boxes[0].type('my text');
 
@@ -284,17 +336,18 @@ describe('createInboxView', () => {
     expect(setup.runs).toEqual([]);
   });
 
-  it('a sending card reads Sending…, disables Send and keeps its section', () => {
+  it('a sending item reads Sending…, disables Send and keeps its section', () => {
     const setup = inboxSetup(
       work([workItem('a', { draft: 'worker text', sending: 'on its way' })]),
     );
-    const [card] = cards(setup);
+    setup.view.commands.togglePane();
+    const pane = paneOf(setup);
 
     setup.view.commands.send();
 
-    const send = buttonNamed(card, 'Sending…') as unknown as HTMLButtonElement;
+    const send = buttonNamed(pane, 'Sending…') as unknown as HTMLButtonElement;
     expect(send.disabled).toBe(true);
-    expect(findAll(card, 'is-read-only')[0]?.textContent).toBe('on its way');
+    expect(findAll(pane, 'is-read-only')[0]?.textContent).toBe('on its way');
     expect(setup.boxes).toEqual([]);
     expect(setup.logs).toContain('no send for a');
     expect(setup.runs).toEqual([]);
@@ -306,6 +359,7 @@ describe('createInboxView', () => {
         workItem('a', { at: '2026-11-23T11:00:00.000Z', draft: 'worker' }),
       ]),
     );
+    setup.view.commands.togglePane();
     setup.view.commands.editDraft();
     setup.boxes[0].type('mine');
 
@@ -338,6 +392,7 @@ describe('createInboxView', () => {
     'a redraw that drops the focused draft box hands the keys to the list: $case',
     async ({ next }) => {
       const setup = inboxSetup(work([workItem('a', { draft: 'worker text' })]));
+      setup.view.commands.togglePane();
       setup.view.commands.editDraft();
       setup.boxes[0].type('my text');
       setup.view.commands.send();
@@ -355,7 +410,10 @@ describe('createInboxView', () => {
   it.each([
     {
       case: 'the Dismiss button',
-      press: (setup: Setup) => buttonNamed(cards(setup)[0], 'Dismiss').click(),
+      press: (setup: Setup) => {
+        setup.view.commands.togglePane();
+        buttonNamed(paneOf(setup), 'Dismiss').click();
+      },
       id: 'work.dismiss',
     },
     {
@@ -405,9 +463,9 @@ describe('createInboxView', () => {
       logged: 'no snooze for a',
     },
     {
-      case: 'i on an Around card',
-      item: workItem('a', { section: 'around', draft: 'unused' }),
-      section: 'around',
+      case: 'i on a dismissed card',
+      item: workItem('a', { state: 'dismissed', draft: 'unused' }),
+      section: 'all',
       press: (view: InboxView) => view.commands.editDraft(),
       logged: 'no editDraft for a',
     },
@@ -433,19 +491,23 @@ describe('createInboxView', () => {
   );
 
   it.each([
-    { case: 'the card body', target: (card: FakeElement) => card, runs: 1 },
     {
-      case: 'a button in it',
-      target: (card: FakeElement) => buttonNamed(card, 'Dismiss'),
+      case: 'the card body',
+      target: (setup: Setup) => cards(setup)[0],
+      runs: 1,
+    },
+    {
+      case: 'a button in the pane',
+      target: (setup: Setup) => buttonNamed(paneOf(setup), 'Dismiss'),
       runs: 0,
     },
   ])(
     'a click selects the card only off its controls: $case',
     ({ target, runs }) => {
       const setup = inboxSetup(work([workItem('a')]));
-      const card = cards(setup)[0];
+      setup.view.commands.togglePane();
 
-      card.fire('click', { target: target(card) });
+      target(setup).fire('click', { target: target(setup) });
 
       expect(
         setup.ranKeys.filter((id) => id === 'work-inbox.selectItem'),
@@ -499,9 +561,10 @@ describe('createInboxView', () => {
       ticketFilter: null,
       cursorId: 'older',
       drafts: {},
+      paneOpen: true,
     };
     const setup = inboxSetup(undefined, { savedPlace: saved });
-    const shown = setup.view.showSample(work([workItem('sample')]));
+    const shown = setup.view.showSample(work([workItem('sample')]), []);
 
     setup.view.stateChanged(
       work([
@@ -598,6 +661,7 @@ describe('createInboxView', () => {
 
   it('each focus change sets its scope and logs it', () => {
     const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    setup.view.commands.togglePane();
     setup.scopes.length = 0;
     setup.logs.length = 0;
 
@@ -627,5 +691,172 @@ describe('createInboxView', () => {
     expect(
       cards(setup).map((card) => card.classList.contains('is-direct')),
     ).toEqual([true, false]);
+  });
+
+  it.each([
+    {
+      case: 'open',
+      presses: 1,
+      isHidden: false,
+      hasTarget: true,
+      logged: 'pane open',
+    },
+    {
+      case: 'closed',
+      presses: 2,
+      isHidden: true,
+      hasTarget: false,
+      logged: 'pane closed',
+    },
+  ])(
+    'togglePane opens and closes the detail pane: $case',
+    ({ presses, isHidden, hasTarget, logged }) => {
+      const setup = inboxSetup(work([workItem('a')]));
+
+      for (let press = 0; press < presses; press += 1) {
+        setup.view.commands.togglePane();
+      }
+
+      expect(splitOf(setup).classList.contains('is-end-hidden')).toBe(isHidden);
+      const target = setup.resizeTargets.at(-1) ?? null;
+      expect(target === null ? null : typeof target.nudge).toBe(
+        hasTarget ? 'function' : null,
+      );
+      expect(setup.places.at(-1)?.paneOpen).toBe(!isHidden);
+      expect(setup.logs.at(-1)).toBe(logged);
+    },
+  );
+
+  it.each([
+    {
+      case: 'an open item with the pane closed',
+      item: workItem('a', { section: 'my_threads' }),
+      section: 'my_threads',
+      scope: 'box',
+      paneOpen: true,
+      boxTexts: [''],
+    },
+    {
+      case: 'a dismissed item',
+      item: workItem('a', { state: 'dismissed' }),
+      section: 'all',
+      scope: 'list',
+      paneOpen: false,
+      boxTexts: [],
+    },
+  ])(
+    'editDraft opens the pane on the reply box: $case',
+    ({ item, section, scope, paneOpen, boxTexts }) => {
+      const setup = inboxSetup(work([item]));
+      setup.view.selectSection(section);
+
+      setup.view.commands.editDraft();
+
+      expect(setup.scopes.at(-1)).toBe(scope);
+      expect(setup.places.at(-1)?.paneOpen).toBe(paneOpen);
+      expect(setup.boxes.map((box) => box.text)).toEqual(boxTexts);
+    },
+  );
+
+  it.each([
+    { case: 'the cursor item', id: 'a', draws: true },
+    { case: 'another item', id: 'b', draws: false },
+  ])(
+    'detailChanged redraws the open pane only for the cursor item: $case',
+    ({ id, draws }) => {
+      const setup = inboxSetup(
+        work([
+          workItem('a', { at: '2026-11-23T11:00:00.000Z' }),
+          workItem('b'),
+        ]),
+      );
+      setup.view.commands.togglePane();
+      const drawn = findAll(paneOf(setup), 'work-inbox-detail-pane')[0];
+      setup.details.set(id, fetchedDetail(id));
+
+      setup.view.detailChanged(id);
+
+      const now = findAll(paneOf(setup), 'work-inbox-detail-pane')[0];
+      expect(now !== drawn).toBe(draws);
+      expect(paneOf(setup).textContent.includes('Fetched 3m ago')).toBe(draws);
+    },
+  );
+
+  it('the scroll commands log no pane while it is closed, and scroll the open pane', () => {
+    const setup = inboxSetup(work([workItem('a')]));
+
+    setup.view.commands.paneLineDown();
+    expect(setup.logs.at(-1)).toBe('no pane');
+
+    setup.view.commands.togglePane();
+    const pane = paneOf(setup);
+    Object.defineProperty(pane, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(pane, 'clientHeight', { value: 200 });
+    vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '20px' }));
+    setup.view.commands.paneLineDown();
+
+    expect(setup.logs.at(-1)).toBe('scrolled the detail down a line');
+  });
+
+  it('togglePane from a focused box ends in the list with no held editor', () => {
+    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    setup.view.commands.editDraft();
+
+    setup.view.commands.togglePane();
+
+    expect(setup.scopes.at(-1)).toBe('list');
+    expect(setup.boxes[0].isDestroyed).toBe(true);
+    expect(findAll(paneOf(setup), 'work-inbox-draft')).toEqual([]);
+  });
+
+  it('Esc in the box leaves the pane open', () => {
+    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    setup.view.commands.editDraft();
+
+    setup.view.commands.leaveBox();
+
+    expect(setup.scopes.at(-1)).toBe('list');
+    expect(splitOf(setup).classList.contains('is-end-hidden')).toBe(false);
+  });
+
+  it('showSample starts with the pane closed and its dispose puts the pane back', () => {
+    const setup = inboxSetup(work([workItem('a')]));
+    setup.view.commands.togglePane();
+
+    const shown = setup.view.showSample(work([workItem('sample')]), []);
+    const isHiddenInSample = splitOf(setup).classList.contains('is-end-hidden');
+    shown.dispose();
+
+    expect(isHiddenInSample).toBe(true);
+    expect(splitOf(setup).classList.contains('is-end-hidden')).toBe(false);
+  });
+
+  it('typing in the box never redraws the pane', () => {
+    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    setup.view.commands.editDraft();
+    const drawn = findAll(paneOf(setup), 'work-inbox-detail-pane')[0];
+
+    setup.boxes[0].type('mine');
+
+    expect(findAll(paneOf(setup), 'work-inbox-detail-pane')[0]).toBe(drawn);
+    expect(setup.boxes).toHaveLength(1);
+  });
+
+  it("the pane's ages redraw once a minute", () => {
+    vi.useFakeTimers();
+    try {
+      const setup = inboxSetup(work([workItem('a')]), {
+        details: [fetchedDetail('a')],
+      });
+      setup.view.commands.togglePane();
+      expect(paneOf(setup).textContent).toContain('Fetched 3m ago');
+
+      setup.clock.ms += 60_000;
+      vi.advanceTimersByTime(60_000);
+
+      expect(paneOf(setup).textContent).toContain('Fetched 4m ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

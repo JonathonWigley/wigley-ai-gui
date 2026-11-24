@@ -2,6 +2,8 @@ import type { PromptActionInput } from '../../../shared/page/layout-host/kit';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
   ageText,
+  type DetailMessage,
+  type ThreadDetail,
   WORK_SECTIONS,
   type WorkItem,
   type WorkState,
@@ -9,6 +11,8 @@ import {
 import type { InboxSectionId, WorkInboxPlace } from '../contract';
 import type {
   CardInput,
+  DetailInput,
+  DetailMessageInput,
   InboxCardAction,
   InboxEmptyReason,
 } from '../layouts/layout';
@@ -40,7 +44,8 @@ export type Move = 'down' | 'up' | 'top' | 'bottom';
 
 // The view's own draw state; the work it draws stays in `work.state`. `section` is the section shown, or the one
 // shown before the filter while `ticketFilter` is set; `cursorId` the cursor card's item id, null for none;
-// `sectionCursor` the side bar's cursor row; `drafts` the user's edits by item id.
+// `sectionCursor` the side bar's cursor row; `drafts` the user's edits by item id; `paneOpen` whether the detail pane
+// is open.
 export interface InboxViewState {
   section: InboxSectionId;
   ticketFilter: string | null;
@@ -48,6 +53,7 @@ export interface InboxViewState {
   focus: InboxFocus;
   sectionCursor: InboxSectionId;
   drafts: Record<string, string>;
+  paneOpen: boolean;
 }
 
 export function initialInboxState(): InboxViewState {
@@ -58,6 +64,7 @@ export function initialInboxState(): InboxViewState {
     focus: 'list',
     sectionCursor: 'needs_you',
     drafts: {},
+    paneOpen: false,
   };
 }
 
@@ -75,6 +82,7 @@ export type InboxAction =
   | { type: 'focus'; focus: InboxFocus }
   | { type: 'draftEdited'; id: string; text: string }
   | { type: 'draftDropped'; id: string }
+  | { type: 'pane'; open: boolean }
   | { type: 'placed'; place: WorkInboxPlace; work: WorkState }
   | { type: 'reset'; state: InboxViewState };
 
@@ -154,14 +162,20 @@ export function inboxReducer(
       delete drafts[action.id];
       return { ...state, drafts };
     }
+    case 'pane':
+      return state.paneOpen === action.open
+        ? state
+        : { ...state, paneOpen: action.open };
     case 'placed': {
       const { place, work } = action;
+      // A place saved before the pane existed has no `paneOpen`, and reads as closed.
       const placed: InboxViewState = {
         ...state,
         section: place.section,
         sectionCursor: place.section,
         ticketFilter: place.ticketFilter,
         drafts: prunedDrafts(place.drafts, work),
+        paneOpen: place.paneOpen === true,
       };
       const ids = shownItems(work, placed).map((item) => item.id);
       const cursorId =
@@ -266,9 +280,9 @@ export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
   return work.items.filter(isShown).sort(newestFirst);
 }
 
-// The card's buttons in draw order. An open Needs you or Waiting on others card sends its draft (a Waiting draft is
-// the nudge), a Waiting card also snoozes, every open card dismisses and spins up a session or a Board task, and a
-// card that is not open only restores.
+// The detail pane's buttons in draw order. Every open item sends its reply (a Waiting on others reply is the nudge), a
+// Waiting item also snoozes, every open item dismisses and spins up a session or a Board task, and an item that is not
+// open only restores.
 export function cardActions(
   item: WorkItem,
   _view: InboxViewState,
@@ -276,9 +290,8 @@ export function cardActions(
   if (item.state !== 'open') {
     return ['restore'];
   }
-  const sends = item.section === 'needs_you' || item.section === 'waiting';
   return [
-    ...(sends ? (['send'] as const) : []),
+    'send',
     ...(item.section === 'waiting' ? (['snooze'] as const) : []),
     'dismiss',
     'startSession',
@@ -403,40 +416,89 @@ function cardPrompt(
   return prompt;
 }
 
+// Its section's name while the list mixes sections (All, or a ticket filter), else null.
+function sectionTitleOf(item: WorkItem, view: InboxViewState): string | null {
+  const isMixed = view.ticketFilter !== null || view.section === 'all';
+  return isMixed ? SECTION_TITLES[item.section] : null;
+}
+
 // What the `card` part draws for `item`, aged against `now`.
 export function cardInput(
   item: WorkItem,
   view: InboxViewState,
   now: number,
 ): CardInput {
-  const actions = cardActions(item, view);
   const isCursor = item.id === view.cursorId;
-  const isSending = item.sending !== null;
-  const hasDraftArea = actions.includes('send');
-  const isMixed = view.ticketFilter !== null || view.section === 'all';
-  const draft = isSending ? item.sending : draftText(item, view);
   return {
     id: item.id,
     section: item.section,
-    sectionTitle: isMixed ? SECTION_TITLES[item.section] : null,
+    sectionTitle: sectionTitleOf(item, view),
     channel: item.channel,
     author: item.author,
     age: cardAge(item.at, now),
     title: item.title,
-    summary: item.summary,
+    summary: view.paneOpen ? null : item.summary,
     latest: item.latest,
-    participants: item.participants,
-    why: item.why,
-    tickets: item.ticketKeys.map((key) => ({ key, reason: item.linkReason })),
     state: item.state,
     stateTag: stateTag(item),
-    draft: hasDraftArea ? draft : null,
-    isSending,
+    isSending: item.sending !== null,
     isDirect: item.section === 'needs_you',
     isCursor,
     note: item.note,
+    prompt: isCursor ? cardPrompt(item, cardActions(item, view)) : [],
+  };
+}
+
+// `Fetched just now` under a minute, else `Fetched <age> ago`.
+function fetchedText(fetchedAt: string, now: number): string {
+  const age = cardAge(fetchedAt, now);
+  return age === 'now' ? 'Fetched just now' : `Fetched ${age} ago`;
+}
+
+function messageInput(message: DetailMessage, now: number): DetailMessageInput {
+  return {
+    author: message.author,
+    age: cardAge(message.at, now),
+    text: message.text,
+  };
+}
+
+// What the `detail` part draws for `item` with its stored thread `detail` (null for none), aged against `now`.
+export function detailInput(
+  item: WorkItem,
+  view: InboxViewState,
+  detail: ThreadDetail | null,
+  now: number,
+): DetailInput {
+  const replies =
+    detail === null
+      ? []
+      : detail.replies.map((reply) => messageInput(reply, now));
+  const hasHiddenReplies =
+    detail !== null && detail.replyCount > replies.length;
+  return {
+    id: item.id,
+    channel: item.channel,
+    author: item.author,
+    age: cardAge(item.at, now),
+    title: item.title,
+    sectionTitle: sectionTitleOf(item, view),
+    stateTag: stateTag(item),
+    fetched: detail === null ? null : fetchedText(detail.fetchedAt, now),
+    participants: item.participants,
+    tickets: item.ticketKeys.map((key) => ({ key, reason: item.linkReason })),
+    summary: item.summary,
+    why: item.why,
+    root: detail === null ? null : messageInput(detail.root, now),
+    replies,
+    replyCountText: hasHiddenReplies
+      ? `${replies.length} of ${detail.replyCount} replies`
+      : null,
+    draft:
+      item.state === 'open' ? (item.sending ?? draftText(item, view)) : null,
+    isSending: item.sending !== null,
+    note: item.note,
     url: item.url,
-    actions: [...actions],
-    prompt: isCursor ? cardPrompt(item, actions) : [],
+    actions: [...cardActions(item, view)],
   };
 }

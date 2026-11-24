@@ -18,12 +18,14 @@ import type {
 //   and empties it otherwise.
 // - `cards` → `ol.work-inbox-cards`; the app draws one `card` per shown item into it, newest first, or the `empty`
 //   part when none shows.
-// - `draftBox` (a card's kit) appends the cursor card's draft area to `parent` and returns it: the vim box holding
-//   the draft, or the sending text read-only while `isSending`, with the box's key hints. The app gives the cursor card
-//   alone a `draftBox`, and only while its `draft` is not null; on every other card it throws `no draft box`, so draw
-//   their `draft` as text.
+// - `draftBox` (the detail kit) appends the cursor item's reply box to `parent` and returns it: the vim box holding
+//   the draft, or the sending text read-only while `isSending`, with the box's key hints. It throws `no draft box`
+//   while the detail's `draft` is null.
 // Each slot places once per draw: a slot called twice throws `<slot> placed twice`, which fails the part, so it draws
 // with `default`. A slot the part leaves out the app appends at the end of the part's root.
+// The detail pane: the sheet splits into the cards and the app-owned `div.work-inbox-detail` beside them, which
+// scrolls. While the pane is open the app draws into it the `detail` part for the cursor item, or `detailEmpty` while
+// the list has no cursor item; while it is closed the app draws neither and hides the pane.
 // The app sets the click on each `sectionRow` root (it shows the section) and each `card` root (it puts the cursor
 // there), and toggles there `is-selected` (the shown section; the cursor card) and `is-cursor` (the same while its
 // pane has the keys); a `card` root also carries `is-direct` while it is a Needs you card. A row gives `kit.row` no
@@ -77,15 +79,11 @@ export interface CardTicket {
   reason: string | null;
 }
 
-// One Slack thread. `sectionTitle` is its section's name under All and under a ticket filter, else null; `age` reads
-// `now`, `5m`, `3h` or `2d`; `latest` is empty for none; `why` is null for none; `stateTag` is `cleared`,
-// `dismissed` or `snoozed until <MMM d>` when the item is not open, else null; `draft` is the text the draft area
-// shows (the user's edit, else the worker's draft, else empty; the sending text while `isSending`), null when the card
-// has no draft area; `isDirect` is true on a Needs you card; `note` is the last failed Send's, null for none; `url`
-// opens the thread in Slack (`core.openLink`). `actions` are the card's buttons in order, each running its
-// `work-inbox` command with the card's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`,
-// `restore` `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. `prompt` is the cursor
-// card's key prompts, empty off the cursor card. A ticket chip runs `work-inbox.openTicket` with its key.
+// One Slack thread's card in the list. `sectionTitle` is its section's name under All and under a ticket filter, else
+// null; `age` reads `now`, `5m`, `3h` or `2d`; `summary` is null while the detail pane is open, which shows it;
+// `latest` is empty for none; `stateTag` is `cleared`, `dismissed` or `snoozed until <MMM d>` when the item is not
+// open, else null; `isSending` is true while a reply is being sent; `isDirect` is true on a Needs you card; `note` is
+// the last failed Send's, null for none. `prompt` is the cursor card's key prompts, empty off the cursor card.
 export interface CardInput {
   id: string;
   section: string;
@@ -94,21 +92,55 @@ export interface CardInput {
   author: string;
   age: string;
   title: string;
-  summary: string;
+  summary: string | null;
   latest: string;
-  participants: string[];
-  why: string | null;
-  tickets: CardTicket[];
   state: 'open' | 'cleared' | 'dismissed' | 'snoozed';
   stateTag: string | null;
-  draft: string | null;
   isSending: boolean;
   isDirect: boolean;
   isCursor: boolean;
   note: string | null;
+  prompt: PromptActionInput[];
+}
+
+// One message of a thread: `age` reads as a card's does; `text` is markdown.
+export interface DetailMessageInput {
+  author: string;
+  age: string;
+  text: string;
+}
+
+// The cursor item's detail pane. `channel`, `author`, `age`, `title`, `sectionTitle`, `stateTag` and `note` read as
+// the card's do; `fetched` reads `Fetched just now` or `Fetched 5m ago`, null while the thread has no stored detail;
+// `participants` are the thread's people; `why` is null for none. `root` is the thread's first message, null while it
+// has no stored detail; `replies` are the shown replies, oldest first; `replyCountText` reads `2 of 4 replies` while
+// the thread holds more replies than it shows, else null. `draft` is the text the reply box shows (the user's edit,
+// else the worker's draft, else empty; the sending text while `isSending`), null when the item is not open. `url`
+// opens the thread in Slack (`core.openLink`). `actions` are the buttons in order, each running its `work-inbox`
+// command with the item's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`, `restore`
+// `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. A ticket chip runs
+// `work-inbox.openTicket` with its key.
+export interface DetailInput {
+  id: string;
+  channel: string;
+  author: string;
+  age: string;
+  title: string;
+  sectionTitle: string | null;
+  stateTag: string | null;
+  fetched: string | null;
+  participants: string[];
+  tickets: CardTicket[];
+  summary: string;
+  why: string | null;
+  root: DetailMessageInput | null;
+  replies: DetailMessageInput[];
+  replyCountText: string | null;
+  draft: string | null;
+  isSending: boolean;
+  note: string | null;
   url: string;
   actions: InboxCardAction[];
-  prompt: PromptActionInput[];
 }
 
 // Why no card shows: `never` (no job ever ran and no item exists; hint `work-inbox.sweep`), `section` (the section
@@ -132,16 +164,17 @@ export interface MainKit extends InboxKit {
   filter(parent: HTMLElement): HTMLElement;
   cards(parent: HTMLElement): HTMLElement;
 }
-export interface CardKit extends InboxKit {
-  // The cursor card's draft area; throws `no draft box` on any other card and `draftBox placed twice` on a second
+export interface DetailKit extends InboxKit {
+  // The cursor item's reply box; throws `no draft box` while `draft` is null and `draftBox placed twice` on a second
   // call, so the part draws with `default`.
   draftBox(parent: HTMLElement): HTMLElement;
 }
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `sideBar` and `main` panes are drawn
-// into app-owned containers once per layout set; the rows, `status`, `problem`, `filter`, `card` and `empty` on
-// every render that changes what they show, one call per item. Kit scopes: `sideBar` and `sectionRow`
-// `work-inbox.sections`; every other part `work-inbox.list`. The `draftBox`'s own hints fire in `work-inbox.box`.
+// into app-owned containers once per layout set; the rows, `status`, `problem`, `filter`, `card`, `empty`, `detail`
+// and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes: `sideBar` and
+// `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty` included, `work-inbox.list`. The
+// `draftBox`'s own hints fire in `work-inbox.box`.
 export interface InboxLayout {
   sideBar?(parent: HTMLElement, kit: SideBarKit): InboxPane;
   sectionRow?(
@@ -165,12 +198,14 @@ export interface InboxLayout {
     input: InboxFilterInput,
     kit: InboxKit,
   ): HTMLElement;
-  card?(parent: HTMLElement, input: CardInput, kit: CardKit): HTMLElement;
+  card?(parent: HTMLElement, input: CardInput, kit: InboxKit): HTMLElement;
   empty?(
     parent: HTMLElement,
     input: InboxEmptyInput,
     kit: InboxKit,
   ): HTMLElement;
+  detail?(parent: HTMLElement, input: DetailInput, kit: DetailKit): HTMLElement;
+  detailEmpty?(parent: HTMLElement, kit: InboxKit): HTMLElement;
 }
 
 // A layout with every part defined, as `default` is.

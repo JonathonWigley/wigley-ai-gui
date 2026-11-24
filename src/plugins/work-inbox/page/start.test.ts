@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { coreModeSlot } from '../../../contracts/core-state';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
-import { installFocusFakeDom } from '../../../shared/page/test-dom';
+import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
+import {
+  asFake,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
 import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
-import { type WorkState, workStateSlot } from '../../work/contract';
-import { workItem } from '../../work/contract.test-support';
+import {
+  type WorkDetail,
+  type WorkState,
+  workDetailsSlot,
+  workStateSlot,
+} from '../../work/contract';
+import { ticketDetail, workItem } from '../../work/contract.test-support';
 import { workInboxPlaceSlot } from '../contract';
 import { workInboxPagePart } from './start';
 
@@ -24,20 +34,31 @@ const STATE: WorkState = {
   problem: null,
 };
 
-// The Inbox page on the harness, drawing its layout for real, with `STATE` published to `work.state`.
-function startInboxPage() {
+// The Inbox page on the harness, drawing its layout for real, with `STATE` published to `work.state` and each of
+// `details` to `work.details`.
+function startInboxPage(details: readonly WorkDetail[] = []) {
   installFocusFakeDom(vi.stubGlobal);
   const store = createSlotStore(() => undefined);
   store.publish(workStateSlot).set(STATE);
+  const detailsWriter = store.publish(workDetailsSlot);
+  for (const detail of details) {
+    detailsWriter.set(detail.id, detail);
+  }
   return startDrawingPagePart(workInboxPagePart, {
     firstModeTaken: true,
     state: store,
-    services: { editor: countingEditors().host },
+    services: { editor: countingEditors().host, markdown: PLAIN_MARKDOWN },
   });
 }
 
-function messages(harness: ReturnType<typeof startInboxPage>): string[] {
+type Harness = ReturnType<typeof startInboxPage>;
+
+function messages(harness: Harness): string[] {
   return harness.logs.map((line) => line.message);
+}
+
+function inboxSheet(harness: Harness) {
+  return asFake(harness.mode('work-inbox.main').element);
 }
 
 describe('workInboxPagePart', () => {
@@ -65,6 +86,7 @@ describe('workInboxPagePart', () => {
     const { commands } = harness.started();
     commands.showMode({ arg: undefined });
     commands.selectSection({ arg: 'waiting' });
+    commands.togglePane({ arg: undefined });
     const saved = harness.state.read(workInboxPlaceSlot, 'test').get();
 
     await harness.restart();
@@ -75,12 +97,27 @@ describe('workInboxPagePart', () => {
       ticketFilter: null,
       cursorId: 'older',
       drafts: {},
+      paneOpen: true,
     });
     expect(harness.state.read(workInboxPlaceSlot, 'test').get()).toEqual(saved);
     expect(harness.modeContext('work-inbox.main')).toEqual({
       title: 'Inbox',
       detail: 'Waiting on others',
     });
+    const split = findAll(inboxSheet(harness), 'work-inbox-split')[0];
+    expect(split.classList.contains('is-end-hidden')).toBe(false);
+  });
+
+  it('detailOf reads a ticket record stored under a thread id as no thread detail', () => {
+    const harness = startInboxPage([ticketDetail('newer')]);
+    const { commands } = harness.started();
+    commands.showMode({ arg: undefined });
+
+    commands.togglePane({ arg: undefined });
+
+    expect(
+      findAll(inboxSheet(harness), 'work-inbox-detail')[0].textContent,
+    ).toContain('No thread detail yet');
   });
 
   it('filterTicket shows the mode filtered with the list focused', () => {

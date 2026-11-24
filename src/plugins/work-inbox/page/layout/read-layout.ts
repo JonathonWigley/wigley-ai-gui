@@ -11,6 +11,8 @@ const LAYOUT_PARTS: Record<keyof InboxLayout, true> = {
   filter: true,
   card: true,
   empty: true,
+  detail: true,
+  detailEmpty: true,
 };
 
 // The Inbox layout a user's `layout.js` module exports as its default. A layout defines only the parts it changes;

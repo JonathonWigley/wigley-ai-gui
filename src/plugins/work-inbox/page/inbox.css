@@ -34,6 +34,26 @@
   height: calc(100% - var(--wg-sheet-gutter) * 2);
 }
 
+/* The sheet's split: the cards, then the detail pane. Its one row holds the sheet's height, so the end pane takes
+   that height and the detail scrolls itself rather than growing. */
+.work-inbox-split {
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+}
+
+.work-inbox-split > .ui-split-end {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.work-inbox-detail {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-2) var(--wg-space-4);
+}
+
 .work-inbox-draft {
   display: grid;
   gap: var(--wg-space-1);
