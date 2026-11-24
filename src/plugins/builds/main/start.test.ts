@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { FileStat } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
 import {
   deferred,
@@ -15,6 +16,7 @@ import {
   type BuildBackend,
   type BuildRecord,
   type BuildsMainExports,
+  buildsDownloadsSlot,
   buildsSessionsSlot,
   buildsSnapshotSlot,
 } from '../contract';
@@ -26,6 +28,7 @@ import {
   fixtureBackendKind,
 } from '../contract.test-support';
 import { buildsManifest } from '../manifest';
+import { FILE_CHECK_TIMEOUT_MS } from './downloads';
 import { LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
 import { FAST_POLL_MS, SLOW_POLL_MS } from './poller';
 import { createBuildsMainPart } from './start';
@@ -129,6 +132,7 @@ interface StartOptions {
   restored?: Promise<void>;
   rows?: string[];
   git?: Partial<Git>;
+  revealPath?: (path: string) => void;
 }
 
 // A new part under test, so no drain outlives its test, with one fixture backend `b1` of game `g1`, a fake chat, and
@@ -151,7 +155,10 @@ async function startOnHarness(options: StartOptions = {}) {
       fakeDependency(chatMainKey, () => chat as unknown as ChatMainExports),
     ],
     settings: settingsWith(options.backends ?? [backendSetting()]),
-    ...(options.git && { services: { git: options.git as Git } }),
+    services: {
+      ...(options.git && { git: options.git as Git }),
+      ...(options.revealPath && { revealPath: options.revealPath }),
+    },
   });
   const rows = harness.state.publish(sessionsRowsSlot);
   for (const sessionId of options.rows ?? ['s1']) {
@@ -218,6 +225,29 @@ const finishedX = buildRecord({
   finishedAt: 50,
 });
 
+// Game `g1` whose `dev` kind has one download, `Android zip` at `path`.
+function gameWithDownload(path = '/d/{number}.zip') {
+  return gameSetting({
+    kinds: {
+      dev: {
+        label: 'Dev',
+        target: 'dev',
+        downloads: [{ label: 'Android zip', path }],
+      },
+    },
+  });
+}
+
+const numberedX = buildRecord({ ...finishedX, number: '332' });
+const listedX = { backend: 'b1', game: 'g1', build: 'x' };
+
+// A kind `slow` whose `create` never settles, so its entry never gets an instance.
+const SLOW_KIND: BackendKind = {
+  kind: 'slow',
+  label: 'Slow',
+  create: () => new Promise<BuildBackend>(() => undefined),
+};
+
 describe('buildsMainPart', () => {
   it('applies the setting at ready, after a kind added at start', async () => {
     const run = await startOnHarness();
@@ -228,7 +258,7 @@ describe('buildsMainPart', () => {
     expect(run.backendView()).toMatchObject({
       id: 'b1',
       problem: null,
-      capabilities: { cancel: true, choosesBranch: true },
+      capabilities: { cancel: true, choosesBranch: true, saveLog: false },
     });
   });
 
@@ -354,6 +384,25 @@ describe('buildsMainPart', () => {
     },
   );
 
+  it("marks a game listed once the entry's current instance lists it", async () => {
+    const run = await startOnHarness();
+    const listed = () => run.snapshot()?.backends[0]?.games[0]?.listed;
+    const firstList = deferred<BuildRecord[]>();
+    const list = vi
+      .spyOn(run.fixture, 'list')
+      .mockImplementationOnce(() => firstList.promise);
+
+    await run.ready();
+    expect(listed()).toBe(false);
+    firstList.resolve([]);
+    await settle();
+    expect(listed()).toBe(true);
+    list.mockImplementationOnce(() => new Promise(() => undefined));
+    await run.pushBackends([backendSetting({ label: 'Second' })]);
+
+    expect(listed()).toBe(false);
+  });
+
   it('ends no set run and prunes nothing before its game first lists', async () => {
     const pastPrune = -PRUNE_AFTER_MS - 1;
     const run = await startOnHarness({
@@ -391,6 +440,75 @@ describe('buildsMainPart', () => {
     expect(run.chat.send.mock.calls[0][1].text).toMatch(/^Build ended:/);
     expect(notifiedAtSend).toEqual([true]);
   });
+
+  it.each([
+    {
+      case: 'a build',
+      link: sessionLink(),
+      setRuns: [],
+      heading: /^Build ended:/,
+      isStalled: false,
+    },
+    {
+      case: 'a set',
+      link: sessionLink({ setRunId: 'r1' }),
+      setRuns: [setRun({ builds: [{ backendId: 'b1', buildId: 'x' }] })],
+      heading: /^Set ended:/,
+      isStalled: false,
+    },
+    {
+      case: 'a check that never settles, sent past the bound without the file',
+      link: sessionLink(),
+      setRuns: [],
+      heading: /^Build ended:/,
+      isStalled: true,
+    },
+  ])(
+    'waits for the file check of the poll an end message comes from: $case',
+    async ({ link, setRuns, heading, isStalled }) => {
+      const zipPath = '/d/332.zip';
+      const run = await startOnHarness({
+        backends: [backendSetting({ games: [gameWithDownload()] })],
+        linksFile: { links: [link], setRuns },
+      });
+      run.fixture.setBuilds('g1', [
+        { ...numberedX, state: 'running', result: null, finishedAt: null },
+      ]);
+      await run.ready();
+      const { files } = run.harness;
+      const realStat = files.stat.bind(files);
+      const held = deferred<FileStat | null>();
+      let zipStats = 0;
+      // The zip's first `stat` from here waits on `held`, or every one never settles when stalled.
+      vi.spyOn(files, 'stat').mockImplementation((path) => {
+        if (path !== zipPath) {
+          return realStat(path);
+        }
+        zipStats += 1;
+        if (isStalled) {
+          return new Promise<FileStat | null>(() => undefined);
+        }
+        return zipStats === 1 ? held.promise : realStat(path);
+      });
+      run.fixture.setBuilds('g1', [numberedX]);
+      await files.write(zipPath, 'zip');
+
+      await run.advance(FAST_POLL_MS);
+      if (isStalled) {
+        // The poll's check gives up, then the fresh check the wait starts.
+        await run.advance(FILE_CHECK_TIMEOUT_MS);
+        await run.advance(FILE_CHECK_TIMEOUT_MS);
+      } else {
+        held.resolve({ isFolder: false, isLink: false });
+        await settle();
+      }
+
+      expect(run.chat.send).toHaveBeenCalledTimes(1);
+      const { text } = run.chat.send.mock.calls[0][1];
+      expect(text).toMatch(heading);
+      expect(text.includes(`Files: Android zip ${zipPath}`)).toBe(!isStalled);
+    },
+  );
 
   it('sends nothing when the flag write fails', async () => {
     const run = await startOnHarness({
@@ -692,6 +810,53 @@ describe('buildsMainPart', () => {
     },
   );
 
+  it.each([
+    {
+      case: 'a live instance with a parse problem and a list failure',
+      setting: backendSetting({ games: [gameSetting(), gameSetting()] }),
+      kind: null,
+      neverLists: false,
+    },
+    {
+      case: 'an instance still starting',
+      setting: backendSetting({ kind: 'slow' }),
+      kind: SLOW_KIND,
+      neverLists: false,
+    },
+    {
+      case: 'a create that answers a problem',
+      setting: backendSetting(),
+      kind: {
+        kind: 'fixture',
+        label: 'Fixture',
+        create: () => Promise.resolve({ problem: 'no cli' }),
+      },
+      neverLists: true,
+    },
+    {
+      case: 'a kind that is off',
+      setting: backendSetting({ kind: 'off' }),
+      kind: null,
+      neverLists: true,
+    },
+    {
+      case: 'an entry that does not parse',
+      setting: backendSetting({ id: 5 }),
+      kind: null,
+      neverLists: true,
+    },
+  ])('never lists: $case', async ({ setting, kind, neverLists }) => {
+    const run = await startOnHarness({
+      backends: [setting],
+      kinds: (fixture) => [kind ?? fixtureBackendKind('fixture', fixture)],
+    });
+    run.fixture.failLists(new Error('offline'));
+
+    await run.ready();
+
+    expect(run.backendView()?.neverLists).toBe(neverLists);
+  });
+
   it('tells a failing build once, writing the flag first', async () => {
     const run = await startOnHarness({
       linksFile: { links: [sessionLink()] },
@@ -789,5 +954,148 @@ describe('buildsMainPart', () => {
     await expect(queue({ arg: { ...arg, game: 'nope' } })).rejects.toThrow(
       'builds.queue: no game "nope" in Backend',
     );
+  });
+
+  it('checks, downloads and reveals a build file through the channel', async () => {
+    const revealed: string[] = [];
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameWithDownload()] })],
+      revealPath: (path) => revealed.push(path),
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.harness.files.write('/d/332.zip', 'zip');
+
+    await run.ready();
+    expect(run.snapshot()?.backends[0]?.games[0]?.files).toEqual({
+      x: [{ label: 'Android zip', path: '/d/332.zip', entry: 0 }],
+    });
+    await expect(
+      run.harness.invoke('download', {
+        backend: 'b1',
+        game: 'g1',
+        build: 'x',
+        file: 0,
+      }),
+    ).resolves.toEqual({ ok: true });
+    await settle();
+
+    expect(
+      run.harness.state.read(buildsDownloadsSlot, 'test').get('b1/x/file/0'),
+    ).toMatchObject({ state: 'saved', path: '/home/Downloads/332.zip' });
+    expect(revealed).toEqual(['/home/Downloads/332.zip']);
+  });
+
+  it('downloads a listed file while its backend has no instance', async () => {
+    const backends = [backendSetting({ games: [gameWithDownload()] })];
+    const run = await startOnHarness({
+      backends,
+      kinds: (fixture) => [fixtureBackendKind('fixture', fixture), SLOW_KIND],
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.harness.files.write('/d/332.zip', 'zip');
+    await run.ready();
+    await run.pushBackends([
+      backendSetting({ kind: 'slow', games: [gameWithDownload()] }),
+    ]);
+
+    await expect(
+      run.harness.invoke('download', { ...listedX, file: 0 }),
+    ).resolves.toEqual({ ok: true });
+    await settle();
+
+    expect(
+      run.harness.state.read(buildsDownloadsSlot, 'test').get('b1/x/file/0'),
+    ).toMatchObject({ state: 'saved', path: '/home/Downloads/332.zip' });
+  });
+
+  it('refreshes the files after a settings change', async () => {
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameWithDownload()] })],
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.harness.files.write('/d/332.zip', 'zip');
+    await run.harness.files.write('/d/332-new.zip', 'zip');
+    await run.ready();
+    const files = () => run.snapshot()?.backends[0]?.games[0]?.files;
+
+    run.harness.pushSettings(
+      settingsWith([
+        backendSetting({ games: [gameWithDownload('/d/{number}-new.zip')] }),
+      ]),
+    );
+    expect(files()).toEqual({});
+    await settle();
+
+    expect(files()).toEqual({
+      x: [{ label: 'Android zip', path: '/d/332-new.zip', entry: 0 }],
+    });
+  });
+
+  it.each([
+    {
+      case: 'an unknown backend',
+      method: 'saveLog',
+      arg: { ...listedX, backend: 'nope', job: null },
+      expected: 'no backend nope',
+    },
+    {
+      case: 'a backend whose instance is not created yet',
+      method: 'saveLog',
+      arg: { ...listedX, job: null },
+      isStarting: true,
+      expected: 'Backend: still starting',
+    },
+    {
+      case: 'an unknown game',
+      method: 'download',
+      arg: { ...listedX, game: 'nope', file: 0 },
+      expected: 'no game nope in Backend',
+    },
+    {
+      case: 'an unknown build',
+      method: 'download',
+      arg: { ...listedX, build: 'nope', file: 0 },
+      expected: 'no build nope in Game',
+    },
+    {
+      case: 'an unknown job',
+      method: 'saveLog',
+      arg: { ...listedX, job: 'nope' },
+      expected: 'no job nope in build x',
+    },
+    {
+      case: 'an entry the last check did not find',
+      method: 'download',
+      arg: { ...listedX, file: 0 },
+      expected: 'no file 0 for build x',
+    },
+    {
+      case: "an entry past the kind's downloads",
+      method: 'download',
+      arg: { ...listedX, file: 5 },
+      expected: 'no file 5 for build x',
+    },
+    {
+      case: 'a log save on a backend that cannot save logs',
+      method: 'saveLog',
+      arg: { ...listedX, job: null },
+      expected: 'this backend cannot save logs',
+    },
+  ])('refuses $case', async ({ method, arg, isStarting, expected }) => {
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameWithDownload()] })],
+      kinds: (fixture) => [fixtureBackendKind('fixture', fixture), SLOW_KIND],
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.ready();
+    if (isStarting) {
+      await run.pushBackends([
+        backendSetting({ kind: 'slow', games: [gameWithDownload()] }),
+      ]);
+    }
+
+    await expect(run.harness.invoke(method, arg)).resolves.toEqual({
+      problem: expected,
+    });
   });
 });

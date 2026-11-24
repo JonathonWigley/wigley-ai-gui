@@ -14,7 +14,7 @@ import type {
   OfferCardInput,
   RowLineInput,
 } from '../layouts/layout';
-import { buildDetailInput, leftMs } from './builds-view-model';
+import { jobLineInputs, leftMs } from './builds-view-model';
 
 // A session waiting on a build it queued: over a workflow stage (15) and `done` (10), under chat's `working` (20).
 export const BUILDING_ACTIVITY: RowActivity = {
@@ -82,9 +82,10 @@ export function hubBuildInputs(
       return [];
     }
     const { record, view } = found;
-    const detail = buildDetailInput(record);
     return [
       {
+        backendId: view.backendId,
+        buildId: record.id,
         gameLabel: view.game.label,
         kindLabel: choiceLabel(view.game, record.kind),
         number: record.number,
@@ -93,8 +94,11 @@ export function hubBuildInputs(
           record.revision === null ? null : shortRevision(record.revision),
         state: record.state,
         result: record.result,
-        jobs: detail.jobs,
-        links: detail.links,
+        jobs: jobLineInputs(record),
+        links: record.links.map((link) => ({
+          label: link.label,
+          url: link.url,
+        })),
       },
     ];
   });

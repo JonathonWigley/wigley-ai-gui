@@ -210,6 +210,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821331',
+        startedAt: Date.UTC(2026, 10, 23, 19, 0, 0),
+        finishedAt: Date.UTC(2026, 10, 23, 19, 1, 0),
+        dependsOn: [],
       },
       {
         id: '821332',
@@ -219,6 +223,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821332',
+        startedAt: Date.UTC(2026, 10, 23, 19, 1, 10),
+        finishedAt: Date.UTC(2026, 10, 23, 19, 2, 0),
+        dependsOn: ['821331'],
       },
       {
         id: '821333',
@@ -228,6 +236,10 @@ describe('parseChainDetail', () => {
         percent: 100,
         leftSeconds: 0,
         stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821333',
+        startedAt: Date.UTC(2026, 10, 23, 19, 2, 10),
+        finishedAt: Date.UTC(2026, 10, 23, 19, 3, 0),
+        dependsOn: ['821332'],
       },
       {
         id: '821337',
@@ -237,6 +249,10 @@ describe('parseChainDetail', () => {
         percent: 40,
         leftSeconds: 900,
         stepText: 'Step 3/8: Build player',
+        webUrl: 'https://peoplefun.teamcity.com/build/821337',
+        startedAt: Date.UTC(2026, 10, 23, 19, 3, 10),
+        finishedAt: null,
+        dependsOn: ['821333'],
       },
       {
         id: '821335',
@@ -246,6 +262,10 @@ describe('parseChainDetail', () => {
         percent: 60,
         leftSeconds: 0,
         stepText: 'Step 5/8: Gradle',
+        webUrl: 'https://peoplefun.teamcity.com/build/821335',
+        startedAt: Date.UTC(2026, 10, 23, 19, 3, 10),
+        finishedAt: null,
+        dependsOn: ['821333'],
       },
       {
         id: '821338',
@@ -255,6 +275,10 @@ describe('parseChainDetail', () => {
         percent: 0,
         leftSeconds: null,
         stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821338',
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: ['821337'],
       },
       {
         id: '821336',
@@ -264,27 +288,143 @@ describe('parseChainDetail', () => {
         percent: 0,
         leftSeconds: null,
         stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821336',
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: ['821335'],
       },
     ]);
   });
+
+  // `buildJobRow(id)` with `snapshot-dependencies` listing `prerequisites`, or none when it is empty.
+  const rowWithPrerequisites = (id: number, prerequisites: number[]) => ({
+    ...buildJobRow(id, A),
+    ...(prerequisites.length === 0
+      ? {}
+      : {
+          'snapshot-dependencies': {
+            build: prerequisites.map((each) => ({ id: each })),
+          },
+        }),
+  });
+
+  it.each([
+    {
+      case: 'transitive sets',
+      rows: [
+        [1, []],
+        [2, [1]],
+        [3, [1, 2]],
+      ],
+      dependsOn: { 1: [], 2: ['1'], 3: ['2'] },
+    },
+    {
+      case: 'direct sets only',
+      rows: [
+        [1, []],
+        [2, [1]],
+        [3, [2]],
+      ],
+      dependsOn: { 1: [], 2: ['1'], 3: ['2'] },
+    },
+    {
+      case: 'diamond',
+      rows: [
+        [1, []],
+        [2, [1]],
+        [3, [1]],
+        [4, [3, 1, 2]],
+      ],
+      dependsOn: { 1: [], 2: ['1'], 3: ['1'], 4: ['2', '3'] },
+    },
+    {
+      case: 'an id outside the chain',
+      rows: [
+        [1, []],
+        [2, [1, 99]],
+      ],
+      dependsOn: { 1: [], 2: ['1'] },
+    },
+    {
+      case: 'a cycle',
+      rows: [
+        [1, [2]],
+        [2, [1]],
+      ],
+      dependsOn: { 1: ['2'], 2: ['1'] },
+    },
+  ] satisfies {
+    case: string;
+    rows: [number, number[]][];
+    dependsOn: Record<string, string[]>;
+  }[])(
+    'dependsOn keeps only direct prerequisites: $case',
+    ({ rows, dependsOn }) => {
+      const detail = {
+        state: 'running',
+        'snapshot-dependencies': {
+          build: rows.map(([id, prerequisites]) =>
+            rowWithPrerequisites(id, prerequisites),
+          ),
+        },
+      };
+
+      const jobs = parseChainDetail(detail, null)?.jobs ?? [];
+
+      expect(
+        Object.fromEntries(jobs.map((job) => [job.id, job.dependsOn])),
+      ).toEqual(dependsOn);
+    },
+  );
 
   it('maps a failed and a cancelled job', () => {
     const jobs = parseChainDetail(chainFailed, null)?.jobs ?? [];
 
     expect(
-      jobs.map(({ id, result, stepText }) => ({ id, result, stepText })),
+      jobs.map(({ id, result, stepText, dependsOn }) => ({
+        id,
+        result,
+        stepText,
+        dependsOn,
+      })),
     ).toEqual([
-      { id: '821141', result: 'success', stepText: null },
-      { id: '821143', result: 'success', stepText: null },
-      { id: '821144', result: 'success', stepText: null },
+      { id: '821141', result: 'success', stepText: null, dependsOn: [] },
+      {
+        id: '821143',
+        result: 'success',
+        stepText: null,
+        dependsOn: ['821141'],
+      },
+      {
+        id: '821144',
+        result: 'success',
+        stepText: null,
+        dependsOn: ['821143'],
+      },
       {
         id: '821148',
         result: 'failure',
         stepText: 'Exit code 65 (Step: Build Xcode project)',
+        dependsOn: ['821144'],
       },
-      { id: '821145', result: 'success', stepText: null },
-      { id: '821149', result: 'cancelled', stepText: null },
-      { id: '821146', result: 'success', stepText: null },
+      {
+        id: '821145',
+        result: 'success',
+        stepText: null,
+        dependsOn: ['821144'],
+      },
+      {
+        id: '821149',
+        result: 'cancelled',
+        stepText: null,
+        dependsOn: ['821148'],
+      },
+      {
+        id: '821146',
+        result: 'success',
+        stepText: null,
+        dependsOn: ['821145'],
+      },
     ]);
   });
 

@@ -123,8 +123,8 @@ function triggeredBy(triggered: unknown): string | null {
   return isJsonObject(user) ? stringOrNull(user.name) : null;
 }
 
-// A chain's detail: its revision and progress over its Build jobs, every snapshot dependency as a job, and the jobs
-// whose logs hold install links.
+// A chain's detail: its revision and progress over its Build jobs, every snapshot dependency as a job with its direct
+// prerequisites, and the jobs whose logs hold install links.
 export interface ChainDetail {
   revision: string | null;
   percent: number | null;
@@ -140,6 +140,7 @@ interface Dependency {
   isBuildJob: boolean;
   revision: string | null; // its first revision's version
   hasRevisions: boolean;
+  listedPrerequisites: string[]; // the ids of its own snapshot dependencies, direct or not, in the chain or not
 }
 
 // The detail of a chain from `/app/rest/builds/id:<id>`, null when `json` is not an object. A Build job is a dependency
@@ -165,7 +166,7 @@ export function parseChainDetail(
     leftSeconds: largest(buildJobs.map((job) => job.leftSeconds)),
     stepText:
       buildJobs.find((job) => job.state === 'running')?.stepText ?? null,
-    jobs: dependencies.map((each) => each.job),
+    jobs: withDirectPrerequisites(dependencies),
     logJobIds: isChainFinished
       ? dependencies
           .filter((each) => !each.hasRevisions && each.job.result === 'success')
@@ -174,8 +175,9 @@ export function parseChainDetail(
   };
 }
 
-function dependencyRows(detail: JsonObject): JsonObject[] {
-  const dependencies = detail['snapshot-dependencies'];
+// The `snapshot-dependencies.build[]` objects of a chain or of one of its dependencies.
+function dependencyRows(build: JsonObject): JsonObject[] {
+  const dependencies = build['snapshot-dependencies'];
   const rows = isJsonObject(dependencies) ? dependencies.build : undefined;
   return Array.isArray(rows) ? rows.filter(isJsonObject) : [];
 }
@@ -198,8 +200,59 @@ function dependency(row: JsonObject, buildJob: RegExp | null): Dependency[] {
       isBuildJob: buildJob === null ? hasRevisions : buildJob.test(buildTypeId),
       revision: versions[0] ?? null,
       hasRevisions,
+      listedPrerequisites: dependencyRows(row).flatMap((each) =>
+        typeof each.id === 'number' ? [String(each.id)] : [],
+      ),
     },
   ];
+}
+
+// Each dependency's job with `dependsOn` set: the ids its row lists that are jobs of the chain, other than itself and
+// other than one another listed job already reaches, in job order. It holds for transitive and for direct lists.
+function withDirectPrerequisites(dependencies: Dependency[]): BuildJob[] {
+  const jobIds = dependencies.map((each) => each.job.id);
+  const chainIds = new Set(jobIds);
+  const listed = new Map(
+    dependencies.map(({ job, listedPrerequisites }) => [
+      job.id,
+      [...new Set(listedPrerequisites)].filter(
+        (id) => chainIds.has(id) && id !== job.id,
+      ),
+    ]),
+  );
+  const reached = new Map<string, Set<string>>();
+  const reachOf = (id: string): Set<string> => {
+    let reach = reached.get(id);
+    if (reach === undefined) {
+      reach = reachableFrom(id, listed);
+      reached.set(id, reach);
+    }
+    return reach;
+  };
+  return dependencies.map(({ job }) => {
+    const own = listed.get(job.id) ?? [];
+    const direct = own.filter(
+      (m) => !own.some((k) => k !== m && reachOf(k).has(m)),
+    );
+    return { ...job, dependsOn: jobIds.filter((id) => direct.includes(id)) };
+  });
+}
+
+// Every id reachable from `start` through `prerequisites`, `start` excluded; a cycle ends at an id already seen.
+function reachableFrom(
+  start: string,
+  prerequisites: Map<string, string[]>,
+): Set<string> {
+  const seen = new Set<string>();
+  const pending = [...(prerequisites.get(start) ?? [])];
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      pending.push(...(prerequisites.get(id) ?? []));
+    }
+  }
+  seen.delete(start);
+  return seen;
 }
 
 // Each `revisions.revision[].version`; an absent list reads as empty.
@@ -227,6 +280,10 @@ function buildJobOf(
     label: stringOrNull(buildType.name) ?? buildTypeId,
     state,
     result,
+    webUrl: stringOrNull(row.webUrl),
+    startedAt: parseTeamcityDate(row.startDate),
+    finishedAt: parseTeamcityDate(row.finishDate),
+    dependsOn: [], // parseChainDetail sets it once every dependency is read
   };
   switch (state) {
     case 'queued':

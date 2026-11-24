@@ -1,5 +1,6 @@
 import type {
   BackendCapabilities,
+  BuildFile,
   BuildJob,
   BuildOffer,
   BuildRecord,
@@ -46,13 +47,15 @@ export interface SetRun {
   endedAt: number | null;
 }
 
-// A tracked game's last listed builds, newest first, and the commit subjects read for their revisions. `hasListed` is
-// set once a list of the game succeeded; until then no build of it counts as unlisted.
+// A tracked game's last listed builds, newest first, and the commit subjects read for their revisions. `listed` is
+// set once a list of the game succeeded on the entry's current instance, and cleared by each re-apply; until then no
+// build of it counts as unlisted.
 export interface GameState {
   game: GameEntry;
   builds: BuildRecord[];
   subjects: Record<string, string>;
-  hasListed: boolean;
+  files: Record<string, BuildFile[]>; // build id → its files that exist
+  listed: boolean;
 }
 
 // A backend entry as the poller holds it: `capabilities` is null while it has no instance.
@@ -62,6 +65,7 @@ export interface BackendState {
   label: string;
   problem: string | null;
   capabilities: BackendCapabilities | null;
+  neverLists: boolean;
   games: GameState[];
 }
 
@@ -128,6 +132,7 @@ export function foldBuilds(input: BuildsModelInput): BuildsFold {
         label: backend.label,
         problem: backend.problem,
         capabilities: backend.capabilities,
+        neverLists: backend.neverLists,
         games: backend.games.map((state) =>
           gameView(backend.id, state, input.setRuns),
         ),
@@ -182,7 +187,7 @@ function indexListedBuilds(
 // Whether every game of backend `backendId` has listed; true for a backend not in `backends`.
 function everyGameListed(backends: BackendState[], backendId: string): boolean {
   const backend = backends.find((each) => each.id === backendId);
-  return backend?.games.every((state) => state.hasListed) ?? true;
+  return backend?.games.every((state) => state.listed) ?? true;
 }
 
 function findListed(
@@ -215,6 +220,8 @@ function gameView(
     builds: state.builds,
     subjects: state.subjects,
     setRuns: views,
+    files: state.files,
+    listed: state.listed,
   };
 }
 
@@ -306,7 +313,7 @@ function setEndedEvents(
       continue;
     }
     const isUnlistedEnded =
-      state.hasListed && now - setRun.createdAt >= UNLISTED_ACTIVE_MS;
+      state.listed && now - setRun.createdAt >= UNLISTED_ACTIVE_MS;
     const found = setRun.builds.map((ref) => findListed(listed, ref));
     const everyBuildEnded = found.every((entry) =>
       entry ? entry.build.state === 'finished' : isUnlistedEnded,

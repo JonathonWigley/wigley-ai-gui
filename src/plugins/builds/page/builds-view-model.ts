@@ -1,6 +1,9 @@
 import { kindLabel, shortRevision } from '../builds-model';
 import type {
   BackendView,
+  BuildDownload,
+  BuildFile,
+  BuildJob,
   BuildRecord,
   BuildSetEntry,
   BuildsSnapshot,
@@ -9,13 +12,19 @@ import type {
   SessionBuilds,
 } from '../contract';
 import type {
-  BuildDetailInput,
+  BuildHeaderInput,
   BuildRowInput,
   DotStatus,
+  DownloadStateInput,
   EmptyInput,
   GameHeaderInput,
+  JobBoxInput,
+  JobGraphInput,
+  JobLineInput,
+  JobPanelInput,
   SetGroupInput,
 } from '../layouts/layout';
+import type { JobGraph } from './job-graph';
 
 // A side-bar entry: `all`, or `<backendId>/<gameId>`.
 export type BuildsEntryKey = 'all' | `${string}/${string}`;
@@ -147,21 +156,166 @@ export function leftMs(seconds: number | null): number | null {
   return seconds === null ? null : seconds * 1000;
 }
 
-// The open build's detail: its jobs' times in ms, its step and status text, links and backend page.
-export function buildDetailInput(record: BuildRecord): BuildDetailInput {
+// The part of `path` after its last `/` or `\`.
+export function fileBaseName(path: string): string {
+  return path.slice(
+    Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1,
+  );
+}
+
+// Each job of the build as a hub line: its time left in ms.
+export function jobLineInputs(record: BuildRecord): JobLineInput[] {
+  return record.jobs.map((job) => ({
+    label: job.label,
+    state: job.state,
+    result: job.result,
+    percent: job.percent,
+    leftMs: leftMs(job.leftSeconds),
+    stepText: job.stepText,
+  }));
+}
+
+// The id `builds.downloads` holds a save under: the build's own log for `{ log: null }`, a job's log, or the file
+// whose `BuildFile.entry` is `file`.
+export function downloadId(
+  backendId: string,
+  buildId: string,
+  target: { log: string | null } | { file: number },
+): string {
+  const build = buildKey(backendId, buildId);
+  if ('file' in target) {
+    return `${build}/file/${target.file}`;
+  }
+  return target.log === null ? `${build}/log` : `${build}/log/${target.log}`;
+}
+
+// A save's state as a layout draws it; null with no save.
+export function downloadStateInput(
+  download: BuildDownload | undefined,
+): DownloadStateInput | null {
+  if (download === undefined) {
+    return null;
+  }
   return {
-    stepText: record.stepText,
+    state: download.state,
+    fileName: download.path === null ? null : fileBaseName(download.path),
+    problem: download.problem,
+  };
+}
+
+// The files the last check found for the build `buildId` of `view`.
+export function buildFiles(view: GameView, buildId: string): BuildFile[] {
+  return Object.hasOwn(view.files, buildId) ? view.files[buildId] : [];
+}
+
+// The shown build's head: the row's fields, its step text while it lists no job, its status text, links, backend
+// page, the files the last check found with each one's download, and whether the backend cancels. `now` is epoch ms.
+export function buildHeaderInput(
+  record: BuildRecord,
+  view: GameView,
+  backend: BackendView,
+  downloads: ReadonlyMap<string, BuildDownload>,
+  now: number,
+): BuildHeaderInput {
+  const row = buildRowInput(record, view, null, now);
+  const files = buildFiles(view, record.id);
+  return {
+    gameLabel: row.gameLabel,
+    kindLabel: row.kindLabel,
+    number: row.number,
+    version: row.version,
+    branch: row.branch,
+    shortRevision: row.shortRevision,
+    subject: row.subject,
+    state: row.state,
+    result: row.result,
+    percent: row.percent,
+    leftMs: row.leftMs,
+    startsInMs: row.startsInMs,
+    stepText: record.jobs.length === 0 ? record.stepText : null,
     statusText: record.statusText,
+    backendLabel: backend.label,
     webUrl: record.webUrl,
     links: record.links.map((link) => ({ label: link.label, url: link.url })),
-    jobs: record.jobs.map((job) => ({
-      label: job.label,
-      state: job.state,
-      result: job.result,
-      percent: job.percent,
-      leftMs: leftMs(job.leftSeconds),
-      stepText: job.stepText,
+    files: files.map((file) => ({
+      entry: file.entry,
+      label: file.label,
+      download: downloadStateInput(
+        downloads.get(downloadId(backend.id, record.id, { file: file.entry })),
+      ),
     })),
+    canCancel: backend.capabilities?.cancel === true,
+  };
+}
+
+// The build's job graph as boxes in `graph`'s columns and order, with its edges.
+export function jobGraphInput(
+  record: BuildRecord,
+  graph: JobGraph,
+): JobGraphInput {
+  const byId = new Map<string, BuildJob>();
+  for (const job of record.jobs) {
+    if (!byId.has(job.id)) {
+      byId.set(job.id, job);
+    }
+  }
+  return {
+    columns: graph.columns.map((ids) =>
+      ids.flatMap((id) => {
+        const job = byId.get(id);
+        return job === undefined ? [] : [jobBoxInput(job)];
+      }),
+    ),
+    edges: graph.edges.map((edge) => ({ from: edge.from, to: edge.to })),
+  };
+}
+
+// The panel under the graph: the job `jobId` names, or the build itself for null or an id the build lacks, with the
+// state of its log's save.
+export function jobPanelInput(
+  record: BuildRecord,
+  jobId: string | null,
+  view: GameView,
+  backend: BackendView,
+  downloads: ReadonlyMap<string, BuildDownload>,
+): JobPanelInput {
+  const job =
+    jobId === null ? undefined : record.jobs.find((held) => held.id === jobId);
+  const shared = {
+    canSaveLog: backend.capabilities?.saveLog === true,
+    backendLabel: backend.label,
+  };
+  if (job === undefined) {
+    return {
+      ...shared,
+      label: kindLabel(view.game, record.kind),
+      isBuild: true,
+      stepText: record.stepText,
+      state: record.state,
+      result: record.result,
+      percent: record.percent,
+      leftMs: leftMs(record.leftSeconds),
+      durationMs: ranMs(record.startedAt, record.finishedAt),
+      log: downloadStateInput(
+        downloads.get(downloadId(backend.id, record.id, { log: null })),
+      ),
+      webUrl: record.webUrl,
+    };
+  }
+  return {
+    ...shared,
+    label: job.label,
+    isBuild: false,
+    stepText: job.stepText,
+    state: job.state,
+    result: job.result,
+    percent: job.percent,
+    leftMs: leftMs(job.leftSeconds),
+    durationMs: ranMs(job.startedAt, job.finishedAt),
+    log: downloadStateInput(
+      downloads.get(downloadId(backend.id, record.id, { log: job.id })),
+    ),
+    webUrl: job.webUrl,
   };
 }
 
@@ -398,4 +552,26 @@ function newestFirst(builds: readonly BuildRecord[]): BuildRecord[] {
 
 function newestBuild(builds: readonly BuildRecord[]): BuildRecord | null {
   return newestFirst(builds)[0] ?? null;
+}
+
+function jobBoxInput(job: BuildJob): JobBoxInput {
+  return {
+    id: job.id,
+    label: job.label,
+    state: job.state,
+    result: job.result,
+    percent: job.percent,
+    leftMs: leftMs(job.leftSeconds),
+    durationMs: ranMs(job.startedAt, job.finishedAt),
+  };
+}
+
+// How long a job or build ran, in ms, once it has both times; a clock skew gives 0.
+function ranMs(
+  startedAt: number | null,
+  finishedAt: number | null,
+): number | null {
+  return startedAt === null || finishedAt === null
+    ? null
+    : Math.max(0, finishedAt - startedAt);
 }

@@ -11,7 +11,7 @@ const SHA = '2993a9e4c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
 const game = gameEntry({
   id: 'tiki',
   label: 'Tiki Smash',
-  kinds: { dev: { label: 'Dev', target: 'dev-target' } },
+  kinds: { dev: { label: 'Dev', target: 'dev-target', downloads: [] } },
 });
 
 const success331 = buildRecord({
@@ -66,12 +66,22 @@ describe('build messages', () => {
   it.each([
     {
       case: 'success, every field',
-      text: () => endedMessage(game, success331),
+      text: () => endedMessage(game, success331, []),
       expected: block331,
     },
     {
+      case: 'success with files',
+      text: () =>
+        endedMessage(game, success331, [
+          { label: 'Android zip', path: '/d/a.zip', entry: 0 },
+          { label: 'iOS ipa', path: '/d/b.ipa', entry: 1 },
+        ]),
+      expected:
+        'Build ended: Tiki Smash Dev #331 (0.12.0) — success\nBranch protos/physics-fun @ 2993a9e4\nLinks: iOS https://a/ios · Android https://a/and\nFiles: Android zip /d/a.zip · iOS ipa /d/b.ipa\nOpen: https://ci/331',
+    },
+    {
       case: 'failure, one failed job',
-      text: () => endedMessage(game, failure332),
+      text: () => endedMessage(game, failure332, []),
       expected: block332,
     },
     {
@@ -84,6 +94,7 @@ describe('build messages', () => {
             result: 'failure',
             statusText: 'exit code 3',
           }),
+          [],
         ),
       expected:
         'Build ended: Tiki Smash Dev — failure\nBranch main\nFailed: Dev (run-7) — exit code 3',
@@ -91,7 +102,11 @@ describe('build messages', () => {
     {
       case: 'cancelled',
       text: () =>
-        endedMessage(game, buildRecord({ number: '5', result: 'cancelled' })),
+        endedMessage(
+          game,
+          buildRecord({ number: '5', result: 'cancelled' }),
+          [],
+        ),
       expected: 'Build ended: Tiki Smash Dev #5 — cancelled\nBranch main',
     },
     {
@@ -116,21 +131,35 @@ describe('build messages', () => {
     {
       case: 'set ended',
       text: () =>
-        setEndedMessage(game, setRun(['tiki-1', 'tiki-2']), [
-          success331,
-          failure332,
-        ]),
+        setEndedMessage(
+          game,
+          setRun(['tiki-1', 'tiki-2']),
+          [success331, failure332],
+          {},
+        ),
       expected: `Set ended: Tiki Smash RC set — 1 of 2 succeeded\n\n${block331}\n\n${block332}`,
+    },
+    {
+      case: 'set ended, each build with its own files',
+      text: () =>
+        setEndedMessage(
+          game,
+          setRun(['tiki-1', 'tiki-2']),
+          [success331, failure332],
+          { 'tiki-2': [{ label: 'Android zip', path: '/d/c.zip', entry: 0 }] },
+        ),
+      expected: `Set ended: Tiki Smash RC set — 1 of 2 succeeded\n\n${block331}\n\n${block332}\nFiles: Android zip /d/c.zip`,
     },
     {
       case: 'set ref unlisted',
       text: () =>
-        setEndedMessage(game, setRun(['tiki-1', 'tiki-2']), [success331]),
+        setEndedMessage(game, setRun(['tiki-1', 'tiki-2']), [success331], {}),
       expected: `Set ended: Tiki Smash RC set — 1 of 2 succeeded\n\n${block331}\n\nBuild tiki-2: no longer listed`,
     },
     {
       case: 'kind not in the game',
-      text: () => endedMessage(game, buildRecord({ kind: 'qa', number: '5' })),
+      text: () =>
+        endedMessage(game, buildRecord({ kind: 'qa', number: '5' }), []),
       expected: 'Build ended: Tiki Smash qa #5 — success\nBranch main',
     },
     {
@@ -145,6 +174,7 @@ describe('build messages', () => {
               buildJob({ id: 'ios', label: 'iOS build', result: 'failure' }),
             ],
           }),
+          [],
         ),
       expected:
         'Build ended: Tiki Smash Dev #332 — failure\nBranch main\nFailed: iOS build (ios)',
@@ -155,6 +185,7 @@ describe('build messages', () => {
         endedMessage(
           game,
           buildRecord({ id: 'run-8', number: '6', result: null }),
+          [],
         ),
       expected:
         'Build ended: Tiki Smash Dev #6 — failure\nBranch main\nFailed: Dev (run-8)',

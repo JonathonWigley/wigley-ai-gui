@@ -17,6 +17,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821331",
+        "startDate": "20261123T190000+0000",
+        "finishDate": "20261123T190100+0000",
         "buildType": {
           "name": "Embedded Shell Script Artifacts"
         },
@@ -35,12 +38,22 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821332",
+        "startDate": "20261123T190110+0000",
+        "finishDate": "20261123T190200+0000",
         "buildType": {
           "name": "Build Parameters Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            }
+          ]
         }
       },
       {
@@ -49,6 +62,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821333",
+        "startDate": "20261123T190210+0000",
+        "finishDate": "20261123T190300+0000",
         "buildType": {
           "name": "App Version"
         },
@@ -57,6 +73,16 @@
           "revision": [
             {
               "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
+            }
+          ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            },
+            {
+              "id": 821332
             }
           ]
         }
@@ -68,6 +94,8 @@
         "status": "SUCCESS",
         "statusText": "Step 3/8: Build player",
         "percentageComplete": 40,
+        "webUrl": "https://peoplefun.teamcity.com/build/821337",
+        "startDate": "20261123T190310+0000",
         "buildType": {
           "name": "Build iOS Dev"
         },
@@ -83,6 +111,19 @@
               "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
             }
           ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            },
+            {
+              "id": 821332
+            },
+            {
+              "id": 821333
+            }
+          ]
         }
       },
       {
@@ -91,6 +132,8 @@
         "state": "running",
         "status": "SUCCESS",
         "statusText": "Step 5/8: Gradle",
+        "webUrl": "https://peoplefun.teamcity.com/build/821335",
+        "startDate": "20261123T190310+0000",
         "buildType": {
           "name": "Build Android Dev"
         },
@@ -106,30 +149,77 @@
               "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
             }
           ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            },
+            {
+              "id": 821332
+            },
+            {
+              "id": 821333
+            }
+          ]
         }
       },
       {
         "id": 821338,
         "buildTypeId": "vggt_BashBest_DeployIOS_Dev",
         "state": "queued",
+        "webUrl": "https://peoplefun.teamcity.com/build/821338",
         "buildType": {
           "name": "Deploy iOS Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            },
+            {
+              "id": 821332
+            },
+            {
+              "id": 821333
+            },
+            {
+              "id": 821337
+            }
+          ]
         }
       },
       {
         "id": 821336,
         "buildTypeId": "vggt_BashBest_DeployAndroid_Dev",
         "state": "queued",
+        "webUrl": "https://peoplefun.teamcity.com/build/821336",
         "buildType": {
           "name": "Deploy Android Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821331
+            },
+            {
+              "id": 821332
+            },
+            {
+              "id": 821333
+            },
+            {
+              "id": 821335
+            }
+          ]
         }
       }
     ]

@@ -27,7 +27,7 @@ import type {
 import { blockNameProblem } from '../contracts/markdown';
 import type { Log } from '../contracts/log';
 import type { MarkupEditor } from '../contracts/markup';
-import type { OuterPanes } from '../contracts/panes';
+import type { FocusTarget, OuterPanes } from '../contracts/panes';
 import type { PullRequests } from '../contracts/pull-requests';
 import type {
   AreaName,
@@ -264,6 +264,8 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   scope(): string;
   // The outer panes `panes.setOuterPanes` set last, null for none.
   outerPanes(): OuterPanes | null;
+  // The focus target `panes.setFocusTarget` set last, null for none.
+  focusTarget(): FocusTarget | null;
 }
 
 // `services` replaces the named default services, and a replaced service counts
@@ -905,6 +907,7 @@ function countingWatches(files: Files, counts: PartCounts): Files {
     realPath: (...args) => files.realPath(...args),
     makeFolder: (...args) => files.makeFolder(...args),
     rename: (...args) => files.rename(...args),
+    copy: (...args) => files.copy(...args),
     trash: (...args) => files.trash(...args),
     deleteFile: (...args) => files.deleteFile(...args),
     watch: (...args) => countedHandle(files.watch(...args), counts),
@@ -1075,6 +1078,8 @@ function fakeMainApi(
           Promise.reject(new Error('part harness: no window to capture')),
       },
       openExternal: gateExternalLinks(async () => undefined),
+      downloadsDir: '/home/Downloads',
+      revealPath() {},
       git: notFaked<Git>('git'),
       pullRequests: notFaked<PullRequests>('pullRequests'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
@@ -1241,6 +1246,8 @@ interface PageWorld extends HarnessWorld {
   isSideBarShown: boolean;
   // The outer panes `panes.setOuterPanes` set last.
   outerPanes: OuterPanes | null;
+  // The focus target `panes.setFocusTarget` set last.
+  focusTarget: FocusTarget | null;
   fences: FenceContribution[];
   blocks: BlockContribution[];
   anchors: HarnessAnchor[];
@@ -1306,6 +1313,7 @@ function createPageWorld(
     baseListeners: createListeners(),
     isSideBarShown: false,
     outerPanes: null,
+    focusTarget: null,
     fences: [],
     blocks: [],
     anchors: [],
@@ -1634,7 +1642,9 @@ function fakePageApi(
     },
     panes: {
       setResizeTarget() {},
-      setFocusTarget() {},
+      setFocusTarget(target) {
+        world.focusTarget = target;
+      },
       setOuterPanes(outer) {
         world.outerPanes = outer;
       },
@@ -1965,6 +1975,7 @@ export function startPagePart<M extends PluginManifest>(
     },
     scope: () => world.scope,
     outerPanes: () => world.outerPanes,
+    focusTarget: () => world.focusTarget,
     send(message, data) {
       record.channelListeners.get(message)?.tell(data);
     },

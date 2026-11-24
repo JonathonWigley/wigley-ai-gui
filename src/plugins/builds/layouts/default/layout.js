@@ -1,13 +1,24 @@
 // @ts-check
 
-// The built-in Builds look: the side bar's All entry, each backend's heading with its problem under it and its games
-// as list rows ending in a status dot; the sheet's game head with a button per kind and set, or the All feed's three
-// filter chips; one list row per build (kind, number and version, then branch, revision and subject, ending in its
-// state and who queued it), a set run's rows under its heading, and the open build's detail under its row (its step
-// text while it lists no job, each job with its progress and step, the status text, then its links and Open in the
-// backend); the empty states; the queue picker's rows; the line under a session row (its newest build and its
-// state); the hub's builds (each with its branch, revision, jobs and links); and the offer card with its Queue and
-// Dismiss buttons.
+// The built-in Builds look: the side bar's queue hint, All entry, each backend's heading with its problem under it
+// and its games as list rows ending in a status dot; the list pane's game head with a button per kind and set, or the
+// All feed's three filter chips; one list row per build (kind, number and version, then branch, revision and subject,
+// ending in its state and who queued it), and a set run's rows under its heading; the detail pane's build head (its
+// title, where it was built from, its state, step and status text, then its links, its backend page and a button per
+// file with each file's download), its job graph (a box per job in columns left to right, joined by curved arrows from
+// each prerequisite to the jobs that wait on it, scrolling sideways), and the selected job's panel (its state, how
+// long it ran, its step, then Log ↓ with the log's save and its backend page); the empty states; the pickers' rows;
+// the line under a session row (its newest build and its state); the hub's builds (each with its branch, revision,
+// jobs, links and Open in Builds); and the offer card with its Queue and Dismiss buttons.
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
+// Each drawn graph's arrowhead marker gets its own id, so two graphs on a page never share one.
+let markerCount = 0;
+
+// Each drawn graph's arrow observer by the observer, holding the graph's root.
+/** @type {Map<ResizeObserver, HTMLElement>} */
+const arrowObservers = new Map();
 
 /** @type {Record<import('../layout').EmptyInput['reason'], string>} */
 const EMPTY_TEXTS = {
@@ -35,11 +46,20 @@ const RESULTS = {
 const layout = {
   sideBar(parent, kit) {
     const element = kit.el(parent, 'div', 'builds-side-bar');
+    kit.keyHint(element, 'pickQueue', {
+      label: true,
+      className: 'builds-hint',
+    });
     kit.entries(element);
     return { element };
   },
   main(parent, kit) {
     const element = kit.el(parent, 'div', 'builds-main-pane');
+    kit.body(element);
+    return { element };
+  },
+  detail(parent, kit) {
+    const element = kit.el(parent, 'div', 'builds-detail-pane');
     kit.body(element);
     return { element };
   },
@@ -134,40 +154,107 @@ const layout = {
     }
     return row;
   },
-  buildDetail(parent, input, kit) {
-    const element = kit.el(parent, 'li', 'builds-detail');
-    // A build with jobs shows its step on its running job's line.
-    if (input.stepText !== null && input.jobs.length === 0) {
+  empty(parent, input, kit) {
+    return kit.emptyState(parent, EMPTY_TEXTS[input.reason]);
+  },
+  buildHeader(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'builds-build-header');
+    kit.el(element, 'h2', 'builds-heading', headerLabel(input));
+    kit.el(element, 'div', 'builds-muted', rowDetail(input));
+    const state = kit.el(element, 'div', 'builds-state-line');
+    drawState(state, input, kit);
+    if (input.stepText !== null) {
       kit.el(element, 'div', 'builds-muted builds-step', input.stepText);
-    }
-    for (const job of input.jobs) {
-      const line = kit.el(element, 'div', 'builds-job');
-      kit.el(line, 'span', 'builds-job-label', job.label);
-      drawState(line, { ...job, startsInMs: null }, kit);
-      if (job.stepText !== null) {
-        kit.el(line, 'span', 'builds-muted builds-step', job.stepText);
-      }
     }
     if (input.statusText !== null) {
       kit.el(element, 'p', 'builds-status', input.statusText);
     }
-    const hasActions = input.links.length > 0 || input.webUrl !== null;
-    if (hasActions) {
-      const actions = kit.el(element, 'div', 'builds-actions');
-      for (const link of input.links) {
-        kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
-      }
-      if (input.webUrl !== null) {
-        kit.button(actions, 'Open in the backend', 'builds.openLink', {
-          arg: input.webUrl,
-          variant: 'ghost',
-        });
-      }
+    const actions = kit.el(element, 'div', 'builds-actions');
+    for (const link of input.links) {
+      kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
+    }
+    if (input.webUrl !== null) {
+      kit.button(actions, `${input.backendLabel} ↗`, 'builds.openLink', {
+        arg: input.webUrl,
+        variant: 'ghost',
+      });
+    }
+    kit
+      .keyHint(actions, 'openWeb')
+      .classList.toggle('is-no-target', input.webUrl === null);
+    if (input.canCancel) {
+      kit
+        .keyHint(actions, 'cancel', { label: true })
+        .classList.toggle('is-no-target', input.state === 'finished');
+    }
+    for (const file of input.files) {
+      const button = kit.button(
+        actions,
+        `${file.label} ↓`,
+        'builds.downloadFile',
+        { arg: file.entry },
+      );
+      button.classList.add('builds-file-button');
+      button.dataset.entry = String(file.entry);
+      drawDownload(actions, file.download, kit);
+    }
+    if (input.files.length > 0) {
+      kit.keyHint(actions, 'download');
     }
     return element;
   },
-  empty(parent, input, kit) {
-    return kit.emptyState(parent, EMPTY_TEXTS[input.reason]);
+  jobGraph(parent, input, kit) {
+    const root = kit.el(parent, 'div', 'builds-graph');
+    const grid = kit.el(root, 'div', 'builds-graph-grid');
+    /** @type {Map<string, HTMLElement>} */
+    const boxes = new Map();
+    input.columns.forEach((column, columnIndex) => {
+      column.forEach((job, rowIndex) => {
+        const box = kit.el(grid, 'div', 'builds-job-box');
+        box.dataset.jobId = job.id;
+        box.style.gridColumn = String(columnIndex + 1);
+        box.style.gridRow = String(rowIndex + 1);
+        const label = kit.el(box, 'span', 'builds-job-label', job.label);
+        label.title = job.label;
+        const state = kit.el(box, 'div', 'builds-state-line');
+        drawState(state, { ...job, startsInMs: null }, kit);
+        drawRan(state, job, kit);
+        boxes.set(job.id, box);
+      });
+    });
+    drawArrows(root, grid, boxes, input.edges);
+    return root;
+  },
+  jobPanel(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'builds-job-panel');
+    kit.el(element, 'span', 'builds-job-label', input.label);
+    const state = kit.el(element, 'div', 'builds-state-line');
+    drawState(state, { ...input, startsInMs: null }, kit);
+    drawRan(state, input, kit);
+    if (input.stepText !== null) {
+      kit.el(element, 'div', 'builds-muted builds-step', input.stepText);
+    }
+    const actions = kit.el(element, 'div', 'builds-actions');
+    if (input.canSaveLog) {
+      kit.button(actions, 'Log ↓', 'builds.saveLog');
+    }
+    kit
+      .keyHint(actions, 'saveLog')
+      .classList.toggle('is-no-target', !input.canSaveLog);
+    drawDownload(actions, input.log, kit);
+    if (input.webUrl !== null) {
+      kit.button(actions, `${input.backendLabel} ↗`, 'builds.openLink', {
+        arg: input.webUrl,
+        variant: 'ghost',
+      });
+    }
+    kit
+      .keyHint(actions, 'openJob')
+      .classList.toggle('is-no-target', input.webUrl === null);
+    return element;
+  },
+  detailEmpty(parent, _input, kit) {
+    return kit.emptyState(parent, 'Pick a build to see its jobs.');
   },
   pickerRow(parent, input, kit) {
     return kit.row(parent, {
@@ -203,12 +290,15 @@ const layout = {
       kit.el(line, 'span', 'builds-job-label', job.label);
       drawState(line, { ...job, startsInMs: null }, kit);
     }
-    if (input.links.length > 0) {
-      const actions = kit.el(element, 'div', 'builds-actions');
-      for (const link of input.links) {
-        kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
-      }
+    const actions = kit.el(element, 'div', 'builds-actions');
+    for (const link of input.links) {
+      kit.button(actions, link.label, 'builds.openLink', { arg: link.url });
     }
+    const open = kit.button(actions, 'Open in Builds', 'builds.showBuild', {
+      arg: { backend: input.backendId, build: input.buildId },
+      variant: 'ghost',
+    });
+    open.classList.add('builds-open-in-builds');
     return element;
   },
   offerCard(parent, input, kit) {
@@ -273,8 +363,24 @@ function rowLabel(input) {
 }
 
 /**
- * The row's second line: the branch, then the short revision and the commit's subject.
- * @param {import('../layout').BuildRowInput} input
+ * The build head's title: the game, the kind, `#<number>` and `(<version>)`.
+ * @param {import('../layout').BuildHeaderInput} input
+ * @returns {string}
+ */
+function headerLabel(input) {
+  const parts = [input.gameLabel, input.kindLabel];
+  if (input.number !== null) {
+    parts.push(`#${input.number}`);
+  }
+  if (input.version !== null) {
+    parts.push(`(${input.version})`);
+  }
+  return parts.join(' ');
+}
+
+/**
+ * A row's or a build head's second line: the branch, then the short revision and the commit's subject.
+ * @param {{ branch: string; shortRevision: string | null; subject: string | null }} input
  * @returns {string}
  */
 function rowDetail(input) {
@@ -330,6 +436,156 @@ function drawState(parent, input, kit) {
         kit.tag(parent, RESULTS[input.result].text, RESULTS[input.result].tone);
       }
   }
+}
+
+/**
+ * `ran <duration>` once a job or build finished with both its times.
+ * @param {HTMLElement} parent
+ * @param {{ state: 'queued' | 'running' | 'finished'; durationMs: number | null }} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function drawRan(parent, input, kit) {
+  if (input.state === 'finished' && input.durationMs !== null) {
+    kit.el(
+      parent,
+      'span',
+      'builds-muted',
+      `ran ${kit.duration(input.durationMs)}`,
+    );
+  }
+}
+
+/**
+ * A log save's or a file download's state: `Saving…`, a `Saved` Tag and the file's name, or `Failed: <problem>`.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').DownloadStateInput | null} download
+ * @param {import('../layout').BaseKit} kit
+ */
+function drawDownload(parent, download, kit) {
+  if (download === null) {
+    return;
+  }
+  switch (download.state) {
+    case 'running':
+      kit.el(parent, 'span', 'builds-muted', 'Saving…');
+      return;
+    case 'saved':
+      kit.tag(parent, 'Saved', 'success');
+      if (download.fileName !== null) {
+        kit.el(parent, 'span', 'builds-muted', download.fileName);
+      }
+      return;
+    case 'failed':
+      kit.el(
+        parent,
+        'span',
+        'builds-problem',
+        download.problem === null ? 'Failed' : `Failed: ${download.problem}`,
+      );
+  }
+}
+
+/**
+ * The graph's arrows: one `svg.builds-graph-arrows` over `grid`, a horizontal curve per edge from the middle of the
+ * prerequisite box's end edge to the middle of the dependent box's start edge, its arrowhead at the dependent's end.
+ * The paths come from the boxes as laid out: drawn in the next frame and again each time the grid's size changes,
+ * nothing while `root` is not in the page. A size change that finds `root` gone stops watching, and so does the next
+ * graph's draw, since a grid removed while hidden reports no size change.
+ * @param {HTMLElement} root
+ * @param {HTMLElement} grid
+ * @param {Map<string, HTMLElement>} boxes
+ * @param {{ from: string; to: string }[]} edges
+ */
+function drawArrows(root, grid, boxes, edges) {
+  disconnectRemovedGraphs();
+  markerCount += 1;
+  const markerId = `builds-arrowhead-${markerCount}`;
+  const svg = svgNode('svg', 'builds-graph-arrows');
+  svg.setAttribute('aria-hidden', 'true');
+  grid.append(svg);
+  const draw = () => {
+    if (!root.isConnected) {
+      return;
+    }
+    const paths = edges.flatMap((edge) => {
+      const from = boxes.get(edge.from);
+      const to = boxes.get(edge.to);
+      if (from === undefined || to === undefined) {
+        return [];
+      }
+      const startX = from.offsetLeft + from.offsetWidth;
+      const startY = from.offsetTop + from.offsetHeight / 2;
+      const endX = to.offsetLeft;
+      const endY = to.offsetTop + to.offsetHeight / 2;
+      const bend = (endX - startX) / 2;
+      const path = svgNode('path', 'builds-graph-arrow');
+      path.setAttribute(
+        'd',
+        `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`,
+      );
+      path.setAttribute('marker-end', `url(#${markerId})`);
+      return [path];
+    });
+    svg.replaceChildren(arrowhead(markerId), ...paths);
+  };
+  requestAnimationFrame(draw);
+  const observer = new ResizeObserver(() => {
+    if (!root.isConnected) {
+      observer.disconnect();
+      arrowObservers.delete(observer);
+      return;
+    }
+    draw();
+  });
+  observer.observe(grid);
+  arrowObservers.set(observer, root);
+}
+
+// Stops and forgets each arrow observer whose graph is no longer in the page. Runs before a new graph's root is
+// placed, so that root, not yet connected, is never among them.
+function disconnectRemovedGraphs() {
+  for (const [observer, root] of arrowObservers) {
+    if (!root.isConnected) {
+      observer.disconnect();
+      arrowObservers.delete(observer);
+    }
+  }
+}
+
+/**
+ * The arrowhead marker the arrows' ends name by `id`.
+ * @param {string} id
+ * @returns {SVGElement}
+ */
+function arrowhead(id) {
+  const defs = svgNode('defs', 'builds-graph-defs');
+  const marker = svgNode('marker', 'builds-graph-arrowhead');
+  marker.setAttribute('id', id);
+  marker.setAttribute('viewBox', '0 0 10 10');
+  marker.setAttribute('refX', '10');
+  marker.setAttribute('refY', '5');
+  marker.setAttribute('markerWidth', '8');
+  marker.setAttribute('markerHeight', '8');
+  marker.setAttribute('orient', 'auto');
+  const head = svgNode('path', 'builds-graph-arrowhead-path');
+  head.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+  marker.append(head);
+  defs.append(marker);
+  return defs;
+}
+
+/**
+ * An SVG element; its `className` is read-only, so its class goes on as an attribute.
+ * @param {string} tag
+ * @param {string} className
+ * @returns {SVGElement}
+ */
+function svgNode(tag, className) {
+  const node = /** @type {SVGElement} */ (
+    document.createElementNS(SVG_NAMESPACE, tag)
+  );
+  node.setAttribute('class', className);
+  return node;
 }
 
 export default layout;

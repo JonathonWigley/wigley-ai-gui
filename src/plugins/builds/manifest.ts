@@ -7,10 +7,13 @@ import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 // and reads `sessions` for the rows it messages; the page names `sessions` for the row line and activity and `chat`
 // for the hub section and the offer card. `queue` and `offer` take a kind or a set id as `kind`. `layout` names the
 // layout Builds mode and the session parts draw with. The page's commands run Builds mode (`showMode`), its queue
-// picker (`pickQueue` and the list picker's keys) and its two lists' keys, and the session's build offer
-// (`queueOffer`, `dismissOffer`, and the offer card's keys); the clicks `selectEntry` (a side-bar entry key),
-// `selectBuild` (`<backendId>/<buildId>`), `queueButton`, `withAgent`, `setFilter`, `openLink` (a URL), and the offer
-// card's `queueSessionOffer` and `dismissSessionOffer` (a session id) take an arg and have no key.
+// picker (`pickQueue` and the list picker's keys), its two lists' keys (the build list's `focusGraph` into the job
+// graph and `download` of the build's file among them), the job graph's keys in the `graph` scope (`leaveGraph`, the
+// four `graph<Direction>` moves, `graphTop`, `graphBottom`, `saveLog` and `openJob`), and the session's build offer (`queueOffer`,
+// `dismissOffer`, and the offer card's keys); the clicks `selectEntry` (a side-bar entry key), `selectBuild`
+// (`<backendId>/<buildId>`), `selectJob` (a job id), `downloadFile` (a file's entry), `showBuild` (`{ backend, build }`,
+// the hub's Open in Builds), `queueButton`, `withAgent`, `setFilter`, `openLink` (a URL), and the offer card's
+// `queueSessionOffer` and `dismissSessionOffer` (a session id) take an arg and have no key.
 export const buildsManifest = definePlugin({
   id: 'builds',
   label: 'Builds',
@@ -54,8 +57,13 @@ export const buildsManifest = definePlugin({
       runsIn: 'page',
     },
     pickQueue: { label: 'queue a build', group: 'build', runsIn: 'page' },
-    openDetail: {
-      label: "open or close the build's detail",
+    focusGraph: {
+      label: "show the build's jobs",
+      group: 'list',
+      runsIn: 'page',
+    },
+    download: {
+      label: "download the build's file",
       group: 'list',
       runsIn: 'page',
     },
@@ -87,6 +95,45 @@ export const buildsManifest = definePlugin({
     selectBuild: {
       label: 'select this build',
       group: 'list',
+      runsIn: 'page',
+      arg: 'string',
+    },
+    downloadFile: {
+      label: 'download this file',
+      group: 'list',
+      runsIn: 'page',
+      arg: 'number',
+    },
+    showBuild: {
+      label: 'show this build in Builds',
+      group: 'list',
+      runsIn: 'page',
+      arg: { backend: 'string', build: 'string' },
+    },
+    leaveGraph: { label: 'back to the builds', group: 'graph', runsIn: 'page' },
+    graphLeft: { label: 'previous column', group: 'graph', runsIn: 'page' },
+    graphRight: { label: 'next column', group: 'graph', runsIn: 'page' },
+    graphUp: { label: 'previous job', group: 'graph', runsIn: 'page' },
+    graphDown: { label: 'next job', group: 'graph', runsIn: 'page' },
+    graphTop: {
+      label: 'first job in the column',
+      group: 'graph',
+      runsIn: 'page',
+    },
+    graphBottom: {
+      label: 'last job in the column',
+      group: 'graph',
+      runsIn: 'page',
+    },
+    saveLog: { label: "save the job's log", group: 'graph', runsIn: 'page' },
+    openJob: {
+      label: 'open the job in the backend',
+      group: 'graph',
+      runsIn: 'page',
+    },
+    selectJob: {
+      label: 'select this job',
+      group: 'graph',
       runsIn: 'page',
       arg: 'string',
     },
@@ -152,6 +199,7 @@ export const buildsManifest = definePlugin({
   scopes: {
     games: 'In the Builds game list',
     list: 'In the Builds list',
+    graph: 'In the Builds job graph',
     picker: 'In the Builds queue picker',
     offer: 'On a build offer card',
   },

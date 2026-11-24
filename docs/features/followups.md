@@ -566,6 +566,12 @@ because the earlier items rewrite many of these tests anyway.
   composer part, `builds.offer` in `src/plugins/builds/page/session-parts.ts`) is clipped inside the scrolling area
   above the composer and its Dismiss button is partly hidden. Seen in the builds plan's live-fix drive run; screenshots
   were in that run's `lf2-*.png`. Find which composer-part container clips it before changing the card.
+- **A TeamCity log save holds the whole log in memory** — *agent-ready*: `saveLog` in
+  `src/plugins/builds-teamcity/main/teamcity-backend.ts` reads the whole `downloadBuildLog.html` output from the
+  `teamcity` CLI into one string, then writes it with `services.files.write`. A long build's whole log sits in main's memory
+  before it reaches disk. Stream the CLI's stdout to the file instead, which needs a streaming run on the
+  `ProcessRunner` contract and a streaming write on the files contract. Source: the builds redesign review,
+  recommendation R2.
 
 - **A file-watch test fails about one run in three** — *agent-ready*: `createNodeFiles >
   watch_TempFileEvent_ReportsItsTargetOnceWhenPresent` (`src/main/files/node-files.test.ts:332`, case "target and temp

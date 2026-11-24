@@ -57,12 +57,23 @@ app's Builds design gives (`docs/features/builds/design.md` § Configuration in 
 when the game has build sets. The app reloads the setting at once and shows any problem with the
 entry on the backend's heading in Builds mode; read it back with `read_state` and fix what it names.
 
+When a kind's builds leave a file on this machine's disk, such as a zip the pipeline uploads to a
+folder that Google Drive for desktop mounts, give the kind a `downloads` list: each element a
+`label` and a `path` template, for example
+`{ "label": "Android zip", "path": "~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/<game folder>/builds/{version}/Dev/<file>_{version}.{number}.zip" }`.
+The app fills `{version}` and `{number}` from each build and shows a button for the file, and names
+it in the `Build ended:` message, once the file exists. Find the real path in the job log that
+uploads the file, and check one filled path exists before writing the entry. Drive for desktop
+mounts only My Drive: a shared folder shows there only after the user adds it to My Drive as a
+shortcut, which only the user can do.
+
 ## When the build ends
 
 The first time a job of a running build fails, the app sends `Build failing:` with that job's label,
 id and status text: read its log then, while the other jobs run.
 
 The app sends the session one message that opens `Build ended:` (or `Set ended:` for a set), with
-the result, the branch and revision, the links and the backend's page. A failure names each failed
+the result, the branch and revision, the links, a `Files:` line with each file the build has on disk
+(by label and full path), and the backend's page. A failure names each failed
 job's label, id and status text. Answer it: report the links on success; on failure, read the
 failed job's log with the backend's own tools and report the cause.

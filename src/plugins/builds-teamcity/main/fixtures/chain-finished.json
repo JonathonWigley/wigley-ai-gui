@@ -12,6 +12,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821191",
+        "startDate": "20261122T190000+0000",
+        "finishDate": "20261122T190100+0000",
         "buildType": {
           "name": "Embedded Shell Script Artifacts"
         },
@@ -30,12 +33,22 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821193",
+        "startDate": "20261122T190110+0000",
+        "finishDate": "20261122T190200+0000",
         "buildType": {
           "name": "Build Parameters Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            }
+          ]
         }
       },
       {
@@ -44,6 +57,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821194",
+        "startDate": "20261122T190210+0000",
+        "finishDate": "20261122T190300+0000",
         "buildType": {
           "name": "App Version"
         },
@@ -54,6 +70,16 @@
               "version": "5e1f4c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f"
             }
           ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            },
+            {
+              "id": 821193
+            }
+          ]
         }
       },
       {
@@ -62,6 +88,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821197",
+        "startDate": "20261122T190310+0000",
+        "finishDate": "20261122T190400+0000",
         "buildType": {
           "name": "Build iOS Dev"
         },
@@ -72,6 +101,19 @@
               "version": "5e1f4c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f"
             }
           ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            },
+            {
+              "id": 821193
+            },
+            {
+              "id": 821194
+            }
+          ]
         }
       },
       {
@@ -80,6 +122,9 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821195",
+        "startDate": "20261122T190310+0000",
+        "finishDate": "20261122T190400+0000",
         "buildType": {
           "name": "Build Android Dev"
         },
@@ -90,6 +135,19 @@
               "version": "5e1f4c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f"
             }
           ]
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            },
+            {
+              "id": 821193
+            },
+            {
+              "id": 821194
+            }
+          ]
         }
       },
       {
@@ -98,12 +156,31 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821198",
+        "startDate": "20261122T190410+0000",
+        "finishDate": "20261122T190500+0000",
         "buildType": {
           "name": "Deploy iOS Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            },
+            {
+              "id": 821193
+            },
+            {
+              "id": 821194
+            },
+            {
+              "id": 821197
+            }
+          ]
         }
       },
       {
@@ -112,12 +189,31 @@
         "state": "finished",
         "status": "SUCCESS",
         "statusText": "Success",
+        "webUrl": "https://peoplefun.teamcity.com/build/821196",
+        "startDate": "20261122T190410+0000",
+        "finishDate": "20261122T190500+0000",
         "buildType": {
           "name": "Deploy Android Dev"
         },
         "revisions": {
           "count": 0,
           "revision": []
+        },
+        "snapshot-dependencies": {
+          "build": [
+            {
+              "id": 821191
+            },
+            {
+              "id": 821193
+            },
+            {
+              "id": 821194
+            },
+            {
+              "id": 821195
+            }
+          ]
         }
       }
     ]

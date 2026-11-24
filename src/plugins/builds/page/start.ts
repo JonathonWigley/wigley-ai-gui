@@ -8,11 +8,15 @@ import {
   type OwnerKitServices,
 } from '../../../shared/page/layout-host/base-kit';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
+import { placeWrites } from '../../../shared/page/place-slot';
 import { chatPageKey } from '../../chat/contract';
 import { sessionsPageKey, sessionsRowsSlot } from '../../sessions/contract';
 import {
   type BuildsChannel,
+  type BuildsPlace,
   type BuildsSnapshot,
+  buildsDownloadsSlot,
+  buildsPlaceSlot,
   buildsSessionsSlot,
   buildsSnapshotSlot,
 } from '../contract';
@@ -32,9 +36,11 @@ const TITLE = 'Builds';
 const NO_SNAPSHOT: BuildsSnapshot = { backends: [], polledAt: null };
 
 // Builds mode: All and each backend's tracked games in the side bar, and in the sheet the shown game's builds, or
-// every game's in the All feed, drawn with the layout the `layout` setting names; `showMode` shows the mode, or
-// toggles its side bar while it shows. Reads `builds.snapshot`, `builds.sessions` and `sessions.rows`, and redraws on
-// each change of them. Invokes `setShown(true)` as the mode shows and `setShown(false)` as it hides and as the part
+// every game's in the All feed, beside the list cursor's build, its job graph and job panel, drawn with the layout the
+// `layout` setting names; `showMode` shows the mode, or toggles its side bar while it shows, and `showBuild` shows the
+// mode on a build it finds. Reads `builds.snapshot`, `builds.sessions`, `builds.downloads` and `sessions.rows`, and
+// redraws on each change of them. Publishes `builds.place`, the shown entry and both cursors, and hands the view the
+// place the last page wrote. Invokes `setShown(true)` as the mode shows and `setShown(false)` as it hides and as the part
 // is disposed; a failed invoke logs `setShown failed: <error>`. Draws the session parts (the row line and `building`
 // activity, the hub's Builds section and the offer card) from the same slots. Holds the one demo sample both draw
 // while a demo step shows, and registers the Builds and Session builds demo steps' page halves.
@@ -47,6 +53,9 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
     const chat = api.dependency(chatPageKey);
     const snapshotSlot = api.state.read(buildsSnapshotSlot);
     const sessionsSlot = api.state.read(buildsSessionsSlot);
+    const downloadsSlot = api.state.read(buildsDownloadsSlot);
+    const placeWriter = api.state.publish(buildsPlaceSlot);
+    const place = placeWrites<BuildsPlace>((value) => placeWriter.set(value));
     const rows = api.state.read(sessionsRowsSlot);
     const kitServices: OwnerKitServices = {
       markdown: services.markdown,
@@ -80,8 +89,14 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
       kitServices,
       parts,
       picker: services.picker.create({ filter: true }),
+      uiState: services.uiState,
+      timers: services.timers,
+      anchor: api.keys.anchor,
       snapshot: () => snapshotSlot.get() ?? NO_SNAPSHOT,
       sessions: () => sessionsSlot.all(),
+      downloads: () => downloadsSlot.all(),
+      place,
+      restoredPlace: placeWriter.get() ?? null,
       sessionLabels: () =>
         new Map(
           [...rows.all()].map(([sessionId, row]) => [sessionId, row.label]),
@@ -150,6 +165,7 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
     const listeners = [
       snapshotSlot.on(changed),
       sessionsSlot.on(changed),
+      downloadsSlot.on(changed),
       rows.on(changed),
     ];
 
@@ -178,6 +194,7 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
       commands: api.commands,
       showSample,
       selectEntry: (key) => view.selectEntry(key),
+      selectBuild: (key) => view.selectBuild(key),
       activate: (sessionId) => sessions.activate(sessionId),
       showHubForNow: (sectionId) => chat.showHubForNow(sectionId),
     });
@@ -188,6 +205,13 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
         ...view.commands,
         selectEntry: ({ arg }) => view.selectEntry(arg),
         selectBuild: ({ arg }) => view.selectBuild(arg),
+        selectJob: ({ arg }) => view.selectJob(arg),
+        downloadFile: ({ arg }) => view.downloadFile(arg),
+        showBuild: ({ arg }) => {
+          if (view.showBuild(arg) && !mode.isShown()) {
+            mode.show();
+          }
+        },
         queueButton: ({ arg }) => view.queueButton(arg),
         withAgent: ({ arg }) => view.withAgent(arg),
         setFilter: ({ arg }) => view.setFilter(arg),

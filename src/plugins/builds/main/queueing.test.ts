@@ -30,8 +30,8 @@ function setup(
     label: 'Game',
     clone: '/c',
     kinds: {
-      dev: { label: 'Dev', target: 'dev' },
-      release: { label: 'Release', target: 'release' },
+      dev: { label: 'Dev', target: 'dev', downloads: [] },
+      release: { label: 'Release', target: 'release', downloads: [] },
     },
     sets: [
       {
@@ -169,7 +169,7 @@ describe('createQueueing', () => {
     },
     {
       case: 'cancel on a backend that cannot cancel',
-      capabilities: { cancel: false, choosesBranch: true },
+      capabilities: { cancel: false, choosesBranch: true, saveLog: false },
       call: (run: Run) =>
         run.queueing.cancel({ backend: 'b1', game: 'g1', build: 'x' }),
       problem: 'Backend cannot cancel builds',
@@ -292,7 +292,9 @@ describe('createQueueing', () => {
   });
 
   it('queues with no revision when the backend does not choose the branch', async () => {
-    const run = setup({ capabilities: { cancel: true, choosesBranch: false } });
+    const run = setup({
+      capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+    });
 
     await run.queueing.queue(devOnMain);
 

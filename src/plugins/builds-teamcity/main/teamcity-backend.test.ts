@@ -51,8 +51,8 @@ const GAME: GameEntry = gameEntry({
   clone: null,
   defaultBranch: 'protos/physics-fun',
   kinds: {
-    dev: { label: 'Dev', target: DEV },
-    release: { label: 'Release', target: RELEASE },
+    dev: { label: 'Dev', target: DEV, downloads: [] },
+    release: { label: 'Release', target: RELEASE, downloads: [] },
   },
   sets: [],
 });
@@ -85,7 +85,7 @@ const QUEUE_ARGS = [
 function detailArgs(id: string): string[] {
   return [
     'api',
-    `/app/rest/builds/id:${id}?fields=id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version))))`,
+    `/app/rest/builds/id:${id}?fields=id,state,snapshot-dependencies(build(id,buildTypeId,state,status,statusText,percentageComplete,webUrl,startDate,finishDate,buildType(name),running-info(percentageComplete,leftSeconds,currentStageText),revisions(revision(version)),snapshot-dependencies(build(id))))`,
   ];
 }
 
@@ -100,18 +100,19 @@ function exited(stdout: string): ProcessResult {
 // Runs every promise callback queued before the next turn of the event loop.
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-// The services of each test: a clock at NOW that `setNow` moves, data files stamped by that clock, the log's lines,
-// and a CLI whose `--version` check answers.
+// The services of each test: a clock at NOW that `setNow` moves, files, data files stamped by that clock, the log's
+// lines, and a CLI whose `--version` check answers.
 function setup() {
   let now = NOW;
   const clock = { now: () => now };
   const processes = new FakeProcesses();
   const logs: string[] = [];
   const dataFiles = createMemoryFiles(clock);
+  const files = createMemoryFiles();
   const services: BackendServices = {
     processes,
     git: {} as Git, // the backend reads no git
-    files: createMemoryFiles(),
+    files,
     dataFiles,
     dataFolder: '/data/builds/backends/work',
     paths: posixPaths,
@@ -134,6 +135,7 @@ function setup() {
   return {
     processes,
     logs,
+    files,
     dataFiles,
     services,
     answer,
@@ -192,6 +194,43 @@ function logIds(runs: FakeRun[]): string[] {
 async function cachedIds(test: Setup): Promise<string[]> {
   const file = JSON.parse(await test.dataFiles.read(CACHE_FILE));
   return file.games['tiki-smash'].map((record: { id: string }) => record.id);
+}
+
+// A cache file holding finished build 821200 with `job` as its one job and `links`, every other field of the record
+// well formed.
+function cacheFileWithJob(
+  job: Record<string, unknown>,
+  links: { label: string; url: string }[] = [],
+): string {
+  return JSON.stringify({
+    games: {
+      'tiki-smash': [
+        {
+          id: '821200',
+          gameId: 'tiki-smash',
+          kind: 'dev',
+          branch: 'protos/physics-fun',
+          number: '330',
+          version: '0.12.0',
+          revision: F,
+          result: 'success',
+          statusText: null,
+          stepText: null,
+          webUrl: null,
+          triggeredBy: null,
+          percent: null,
+          leftSeconds: null,
+          startedAt: null,
+          finishedAt: 1795458852000,
+          startEstimate: null,
+          state: 'finished',
+          queuedAt: 1795458000000,
+          links,
+          jobs: [job],
+        },
+      ],
+    },
+  });
 }
 
 function withKindTarget(kind: string, target: unknown): BackendEntry {
@@ -255,12 +294,13 @@ describe('teamcityBackendKind.create', () => {
     }
   });
 
-  it('creates a backend that chooses branches and cannot cancel', async () => {
+  it('creates a backend that chooses branches, saves logs and cannot cancel', async () => {
     const backend = await createBackend(setup().services);
 
     expect(backend.capabilities).toEqual({
       cancel: false,
       choosesBranch: true,
+      saveLog: true,
     });
     expect(backend.cancel).toBeUndefined();
   });
@@ -558,7 +598,29 @@ describe('list', () => {
     expect(await cachedIds(test)).toEqual(['821200']);
   });
 
-  it.each([
+  const LOG_LINKS = [
+    { label: 'iOS', url: IOS_URL },
+    { label: 'Android', url: ANDROID_URL },
+  ];
+  // A job as the cache shape before jobs carried webUrl, startedAt, finishedAt and dependsOn.
+  const EARLIER_JOB = {
+    id: '821193',
+    label: 'Build',
+    state: 'finished',
+    result: 'success',
+    percent: 100,
+    leftSeconds: 0,
+    stepText: null,
+  };
+
+  it.each<{
+    name: string;
+    text: string;
+    now?: number;
+    links?: { label: string; url: string }[];
+    // An instance lists first with the record's detail read failing, then the backend is created again.
+    failsFirstRead?: boolean;
+  }>([
     { name: 'is not JSON', text: 'not json' },
     {
       name: 'holds records that lack fields',
@@ -573,52 +635,62 @@ describe('list', () => {
     },
     {
       name: 'holds a record whose job lacks a field',
-      text: JSON.stringify({
-        games: {
-          'tiki-smash': [
-            {
-              id: '821200',
-              gameId: 'tiki-smash',
-              kind: 'dev',
-              branch: 'protos/physics-fun',
-              number: '330',
-              version: '0.12.0',
-              revision: F,
-              result: 'success',
-              statusText: null,
-              stepText: null,
-              webUrl: null,
-              triggeredBy: null,
-              percent: null,
-              leftSeconds: null,
-              startedAt: null,
-              finishedAt: 1795458852000,
-              startEstimate: null,
-              state: 'finished',
-              queuedAt: 1795458000000,
-              links: [],
-              jobs: [
-                {
-                  id: '821193',
-                  label: 'Build',
-                  state: 'finished',
-                  // no `percent`
-                  result: 'success',
-                  leftSeconds: null,
-                  stepText: null,
-                },
-              ],
-            },
-          ],
-        },
+      text: cacheFileWithJob({
+        id: '821193',
+        label: 'Build',
+        state: 'finished',
+        // no `percent`
+        result: 'success',
+        leftSeconds: null,
+        stepText: null,
+        webUrl: null,
+        startedAt: null,
+        finishedAt: null,
+        dependsOn: [],
       }),
+    },
+    {
+      name: 'holds a record whose job has no dependsOn',
+      text: cacheFileWithJob({
+        id: '821193',
+        label: 'Build',
+        state: 'finished',
+        result: 'success',
+        percent: 100,
+        leftSeconds: 0,
+        stepText: null,
+        webUrl: 'https://peoplefun.teamcity.com/build/821193',
+        startedAt: 1795464000000,
+        finishedAt: 1795464060000,
+      }),
+    },
+    {
+      name: 'holds an earlier-shape record with links, read past the link window',
+      text: cacheFileWithJob(EARLIER_JOB, [{ label: 'iOS', url: IOS_URL }]),
+      // `20261127T000000+0000`
+      now: 1795737600000,
+      links: [{ label: 'iOS', url: IOS_URL }],
+    },
+    {
+      name: 'holds an earlier-shape record with links, past the link window, whose first read failed before a restart',
+      text: cacheFileWithJob(EARLIER_JOB, [{ label: 'iOS', url: IOS_URL }]),
+      // `20261127T000000+0000`
+      now: 1795737600000,
+      links: [{ label: 'iOS', url: IOS_URL }],
+      failsFirstRead: true,
     },
   ])(
     'reads the finished builds again over a cache file that $name',
-    async ({ text }) => {
+    async ({ text, now = NOW, links = LOG_LINKS, failsFirstRead }) => {
       const test = setup();
+      test.setNow(now);
       await test.dataFiles.write(CACHE_FILE, text);
       answerRecordedList(test);
+      if (failsFirstRead) {
+        test.answer(detailArgs('821200'), new Error('HTTP 502'));
+        await (await createBackend(test.services)).list(GAME, 20);
+        test.answer(detailArgs('821200'), chainFinished);
+      }
       const backend = await createBackend(test.services);
 
       const records = await backend.list(GAME, 20);
@@ -627,10 +699,12 @@ describe('list', () => {
       expect(detailIds(test.processes.runs)).toEqual(
         expect.arrayContaining(['821200', '821150']),
       );
-      expect(records[2].links).toEqual([
-        { label: 'iOS', url: IOS_URL },
-        { label: 'Android', url: ANDROID_URL },
-      ]);
+      expect(records[2].links).toEqual(links);
+      const file = JSON.parse(await test.dataFiles.read(CACHE_FILE));
+      const cached = file.games['tiki-smash'].find(
+        (record: { id: string }) => record.id === '821200',
+      );
+      expect(cached.links).toEqual(links);
     },
   );
 
@@ -952,5 +1026,50 @@ describe('queue', () => {
     });
 
     expect(test.processes.runs.at(-1)?.args).not.toContain('--revision');
+  });
+});
+
+describe('saveLog', () => {
+  const logArgsOf = (id: string) => [
+    'api',
+    `/downloadBuildLog.html?buildId=${id}`,
+  ];
+
+  it.each([
+    { case: 'a job', jobId: '821432', expectedId: '821432' },
+    { case: 'the chain', jobId: null, expectedId: '821436' },
+  ])('saves the log of $case', async ({ jobId, expectedId }) => {
+    const test = setup();
+    test.answer(logArgsOf(expectedId), 'LOG');
+    const backend = await createBackend(test.services);
+
+    await backend.saveLog?.(GAME, '821436', jobId, '/dl/x.log');
+
+    expect(test.processes.runs.at(-1)?.args).toEqual([
+      ...logArgsOf(expectedId),
+      '--no-input',
+    ]);
+    expect(await test.files.read('/dl/x.log')).toBe('LOG');
+  });
+
+  it('rejects and writes nothing when the CLI fails', async () => {
+    const test = setup();
+    test.answer(
+      logArgsOf('821432'),
+      Promise.resolve<ProcessResult>({
+        code: 1,
+        stdout: '',
+        stderr: 'no access',
+        timedOut: false,
+      }),
+    );
+    const backend = await createBackend(test.services);
+
+    await expect(
+      backend.saveLog?.(GAME, '821436', '821432', '/dl/x.log'),
+    ).rejects.toThrow(
+      'teamcity api /downloadBuildLog.html?buildId=821432 exited 1: no access',
+    );
+    expect(await test.files.stat('/dl/x.log')).toBeNull();
   });
 });

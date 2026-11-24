@@ -281,6 +281,8 @@ interface ModeServices {
     | 'alerts'
     | 'window'
     | 'openExternal'
+    | 'downloadsDir'
+    | 'revealPath'
     | 'systemStats'
     | 'screenCapture'
     | 'agentHomeDir'
@@ -363,6 +365,8 @@ function liveServices(): ModeServices {
       agentHomeDir: homeDir,
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
+      downloadsDir: app.getPath('downloads'),
+      revealPath: (file) => shell.showItemInFolder(file),
       systemStats: systemStatsFor(platform.os, processes),
       screenCapture: screenCaptureFor(platform.os, processes),
     }),
@@ -372,8 +376,8 @@ function liveServices(): ModeServices {
 // A run beside the user's app, the self-test or a drive run: every file sits
 // in the run's own home, so trash deletes for good and the user's Trash
 // collects nothing; alerts are silent, the window stays offscreen and shows no
-// dialog, and no link takes the user's foreground. `runName` names the run in
-// the line a window not shown or a link not opened logs; sessions run over the
+// dialog, and no link or reveal takes the user's foreground. `runName` names the run in
+// the line a window not shown, a link not opened or a path not revealed logs; sessions run over the
 // harnesses `agents` builds for the run's home, as the home it names, and
 // plugins read the machine `systemStats` builds and the windows `screenCapture`
 // builds.
@@ -392,6 +396,9 @@ function offscreenRunServices(
       openExternal: gateExternalLinks(async (url) =>
         context.log('main', `external link not opened in ${runName}: ${url}`),
       ),
+      downloadsDir: path.join(context.homeDir, 'Downloads'),
+      revealPath: (file) =>
+        context.log('main', `path not revealed in ${runName}: ${file}`),
       systemStats: systemStats(),
       screenCapture: screenCapture(),
     }),

@@ -23,6 +23,30 @@ changes for the user.
 - Inbox cards no longer carry the draft box or buttons, which moved into the detail pane, and hide their summary while
   the pane is open.
 
+## 1.4.0 — 2026-11-24
+
+### Added
+
+- Builds mode shows the selected build beside the list: its links, its files and its jobs as boxes with arrows from
+  each job's prerequisites. `Alt+l` or `Enter` moves into the graph, `h`/`j`/`k`/`l` step between the jobs, `gg`/`G`
+  go to a column's first and last job, `s` saves the job's log to Downloads and `o` opens the job's own page in the
+  backend.
+- A tracked game's kinds take `downloads`: files such as a build's Android zip in a synced Drive folder. Each shows as
+  a button once it exists, and `s` on a build copies it to Downloads and shows it in Finder or Explorer.
+- Local builds save their log too.
+- A build's finish message names the path of each file the build has ready.
+- Each build in the session hub has an Open in Builds button.
+
+### Changed
+
+- `Enter` on a build moves the keys into its job graph; the build's detail no longer opens under its row.
+- A layout's `buildDetail` part no longer applies: the detail pane is drawn by `detail`, `buildHeader`, `jobGraph`,
+  `jobPanel` and `detailEmpty`.
+
+### Removed
+
+- The `builds.openDetail` command: a `keymap.json` bind naming it does nothing.
+
 ## 1.3.0 — 2026-11-24
 
 ### Changed

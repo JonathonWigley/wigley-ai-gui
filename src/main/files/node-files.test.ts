@@ -222,6 +222,27 @@ describe('createNodeFiles', () => {
     },
   );
 
+  // A rename failing EPERM stands in for Windows, where a rename onto a
+  // folder fails EPERM and would be retried.
+  it('copy_OntoFolder_RejectsWithEisdirNamingItBeforeAnyRename', async () => {
+    const from = path.join(root, 'a.txt');
+    const to = path.join(root, 'd');
+    writeFileSync(from, 'new');
+    mkdirSync(to);
+    let renames = 0;
+    renameStandIn.current = async () => {
+      renames += 1;
+      throw Object.assign(new Error('rename failed: EPERM'), { code: 'EPERM' });
+    };
+
+    const error = await files.copy(from, to).catch((caught: unknown) => caught);
+
+    expect(errorCode(error)).toBe('EISDIR');
+    expect((error as Error).message).toContain(to);
+    expect(renames).toBe(0);
+    expect(delays).toEqual([]);
+  });
+
   it('readBytes_FileWrittenToDisk_ReturnsTheSameBytes', async () => {
     const file = path.join(root, 'shot.png');
     writeFileSync(file, Buffer.from([0, 255, 137]));

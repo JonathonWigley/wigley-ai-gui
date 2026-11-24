@@ -31,8 +31,13 @@ const KINDS: GameEntry['kinds'] = {
   ok: {
     label: 'OK',
     target: { command: './build.sh', args: ['--env', 'dev'] },
+    downloads: [],
   },
-  bad: { label: 'Bad', target: { command: './fail.sh', args: [] } },
+  bad: {
+    label: 'Bad',
+    target: { command: './fail.sh', args: [] },
+    downloads: [],
+  },
 };
 
 function result(fields: Partial<ProcessResult>): ProcessResult {
@@ -187,7 +192,12 @@ describe('localBackendKind.create', () => {
     },
     {
       name: 'a target with no command',
-      game: { kinds: { ...KINDS, ok: { label: 'OK', target: { args: [] } } } },
+      game: {
+        kinds: {
+          ...KINDS,
+          ok: { label: 'OK', target: { args: [] }, downloads: [] },
+        },
+      },
       contains: ['demo', 'ok'],
     },
     {
@@ -195,7 +205,11 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          ok: { label: 'OK', target: { command: '', args: [] } },
+          ok: {
+            label: 'OK',
+            target: { command: '', args: [] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'ok'],
@@ -205,14 +219,23 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          bad: { label: 'Bad', target: { command: './fail.sh', args: [1] } },
+          bad: {
+            label: 'Bad',
+            target: { command: './fail.sh', args: [1] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'bad'],
     },
     {
       name: 'a target that is a string',
-      game: { kinds: { ...KINDS, bad: { label: 'Bad', target: './fail.sh' } } },
+      game: {
+        kinds: {
+          ...KINDS,
+          bad: { label: 'Bad', target: './fail.sh', downloads: [] },
+        },
+      },
       contains: ['demo', 'bad'],
     },
     { name: 'a game id with a slash', game: { id: 'a/b' }, contains: ['a/b'] },
@@ -240,6 +263,7 @@ describe('localBackendKind.create', () => {
           ok: {
             label: 'OK',
             target: { command: './build.sh', args: ['--env\ndev'] },
+            downloads: [],
           },
         },
       },
@@ -250,7 +274,11 @@ describe('localBackendKind.create', () => {
       game: {
         kinds: {
           ...KINDS,
-          ok: { label: 'OK', target: { command: './build.sh\r', args: [] } },
+          ok: {
+            label: 'OK',
+            target: { command: './build.sh\r', args: [] },
+            downloads: [],
+          },
         },
       },
       contains: ['demo', 'ok'],
@@ -287,6 +315,7 @@ describe('localBackendKind.create', () => {
     expect(backend.capabilities).toEqual({
       cancel: true,
       choosesBranch: false,
+      saveLog: true,
     });
   });
 });
@@ -1212,5 +1241,93 @@ describe('cancel', () => {
       result: 'cancelled',
       statusText: 'Cancelled',
     });
+  });
+});
+
+describe('saveLog', () => {
+  const LOG_PATH = '/data/runs/demo/ok/1000000/log.txt';
+
+  it.each([
+    {
+      case: "copies the run's log",
+      log: 'line 1\nline 2\n' as string | null,
+      buildId: FIRST_ID,
+      jobId: null as string | null,
+      rejects: null as string | null,
+      savesRuns: true,
+    },
+    {
+      case: 'copies the log of a run whose runs.json write failed',
+      log: 'line 1\n',
+      buildId: FIRST_ID,
+      jobId: null,
+      rejects: null,
+      savesRuns: false,
+    },
+    {
+      case: 'names the missing log',
+      log: null,
+      buildId: FIRST_ID,
+      jobId: null,
+      rejects: `The build demo/ok/1000000 wrote no log at ${LOG_PATH}`,
+      savesRuns: true,
+    },
+    {
+      case: 'refuses an unknown build',
+      log: null,
+      buildId: 'demo/dev/1',
+      jobId: null,
+      rejects: 'No local build demo/dev/1',
+      savesRuns: true,
+    },
+    {
+      case: 'refuses a job',
+      log: null,
+      buildId: FIRST_ID,
+      jobId: 'x',
+      rejects: 'A local build has no jobs',
+      savesRuns: true,
+    },
+    {
+      case: 'looks the build up before the job',
+      log: null,
+      buildId: 'demo/dev/1',
+      jobId: 'x',
+      rejects: 'No local build demo/dev/1',
+      savesRuns: true,
+    },
+  ])('$case', async ({ log, buildId, jobId, rejects, savesRuns }) => {
+    const t = setup();
+    if (!savesRuns) {
+      const write = t.dataFiles.write.bind(t.dataFiles);
+      t.dataFiles.write = async (path, text) =>
+        path === 'runs.json'
+          ? Promise.reject(new Error('disk full'))
+          : write(path, text);
+    }
+    const backend = await t.startFirstRun(ALIVE);
+    if (log !== null) {
+      await t.services.files.write(LOG_PATH, log);
+    }
+
+    const saved = backend.saveLog?.(t.game, buildId, jobId, '/dl/x.log');
+
+    if (rejects === null) {
+      await saved;
+      expect(await t.services.files.read('/dl/x.log')).toBe(log);
+    } else {
+      await expect(saved).rejects.toThrow(rejects);
+    }
+  });
+
+  it("rethrows the copy's own error", async () => {
+    const t = setup();
+    const backend = await t.startFirstRun(ALIVE);
+    t.services.files.copy = vi.fn().mockRejectedValue(new Error('disk full'));
+
+    const saved = backend.saveLog?.(t.game, FIRST_ID, null, '/dl/x.log');
+
+    await expect(saved).rejects.toThrow('disk full');
+    await expect(saved).rejects.not.toThrow('wrote no log');
   });
 });

@@ -448,11 +448,41 @@ function createLocalBackend(
     await writeRuns();
   };
 
+  // Copies the run's log as it stands to `path`, finding the run among the runs a list would see. Outside `chain`: a
+  // copy of a long log must not hold up a list, and the lookup changes no state.
+  const saveLog = async (
+    game: GameEntry,
+    buildId: string,
+    jobId: string | null,
+    path: string,
+  ) => {
+    const known = mergedRuns(await readRuns(dataFiles), changedRuns());
+    const run = known.find(
+      (candidate) => candidate.id === buildId && candidate.gameId === game.id,
+    );
+    if (run === undefined) {
+      throw new Error(`No local build ${buildId}`);
+    }
+    if (jobId !== null) {
+      throw new Error('A local build has no jobs');
+    }
+    const logPath = fullPath(run, LOG_FILE);
+    try {
+      await services.files.copy(logPath, path);
+    } catch (error) {
+      if (isMissingFile(error)) {
+        throw new Error(`The build ${buildId} wrote no log at ${logPath}`);
+      }
+      throw error;
+    }
+  };
+
   return {
-    capabilities: { cancel: true, choosesBranch: false },
+    capabilities: { cancel: true, choosesBranch: false, saveLog: true },
     list: (game, limit) => chain.run(() => list(game, limit)),
     queue: (game, request) => chain.run(() => queue(game, request)),
     cancel: (game, buildId) => chain.run(() => cancel(game, buildId)),
+    saveLog,
     // A write in flight finishes on its own, and running builds outlive the app.
     dispose() {},
   };

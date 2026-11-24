@@ -1,5 +1,5 @@
 /* The default Builds look: the side bar's entries and backend headings, the game head and its buttons, the feed's
-   filter chips, the build rows, set groups and detail. */
+   filter chips, the build rows and set groups, and the detail pane's build head, job graph and job panel. */
 
 [data-layout-owner='builds'][data-layout='default'].builds-side-bar {
   display: flex;
@@ -127,13 +127,125 @@
   font-family: var(--wg-font-mono);
 }
 
-[data-layout-owner='builds'][data-layout='default'].builds-detail {
+/* The detail pane: the build head, the job graph and the selected job's panel. */
+
+[data-layout-owner='builds'][data-layout='default'].builds-detail-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-build-header,
+[data-layout-owner='builds'][data-layout='default'].builds-job-panel {
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-1);
-  margin: 0 var(--wg-space-4) var(--wg-space-2);
+  padding: var(--wg-space-3) var(--wg-space-4);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-build-header {
+  border-block-end: 1px solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-job-panel {
+  border-block-start: 1px solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-state-line {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-actions {
+  align-items: center;
+}
+
+/* A hint with nothing to act on takes no space, so the buttons after it keep their place in the row. */
+[data-layout-owner='builds'][data-layout='default']
+  .builds-actions
+  .is-no-target {
+  display: none;
+}
+
+/* The graph scrolls sideways; its boxes keep their width. */
+[data-layout-owner='builds'][data-layout='default'].builds-graph {
+  overflow-x: auto;
+  padding: var(--wg-space-3) var(--wg-space-4);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-graph-grid {
+  position: relative;
+  display: grid;
+  grid-auto-columns: calc(var(--wg-space-8) * 4.5);
+  column-gap: var(--wg-space-8);
+  row-gap: var(--wg-space-2);
+  align-items: start;
+  width: max-content;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-job-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  min-width: 0;
   padding: var(--wg-space-2) var(--wg-space-3);
-  border-inline-start: var(--wg-indicator-width) solid var(--wg-border-subtle);
+  border: 1px solid var(--wg-border-subtle);
+  border-radius: var(--wg-radius-md);
+  background: var(--wg-block-background);
+}
+
+/* A narrow box moves its duration to a line of its own rather than splitting it. */
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box
+  .builds-state-line {
+  flex-wrap: wrap;
+  row-gap: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box
+  .builds-muted {
+  white-space: nowrap;
+}
+
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box
+  .builds-job-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box.is-selected {
+  background: var(--wg-list-active-background);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-job-box.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-graph-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-graph-arrow {
+  fill: none;
+  stroke: var(--wg-border-strong);
+  stroke-width: 1;
+}
+
+[data-layout-owner='builds'][data-layout='default']
+  .builds-graph-arrowhead-path {
+  fill: var(--wg-border-strong);
 }
 
 [data-layout-owner='builds'][data-layout='default'] .builds-job-label {

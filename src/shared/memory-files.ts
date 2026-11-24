@@ -8,7 +8,7 @@ import {
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report
+// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile` and `remove` report
 // each changed file's and folder's path to the watches over it at once, with no
 // debounce, so a test drives a save by writing; a rename reports each moved
 // file's and folder's old path and its new one. A watch with
@@ -37,7 +37,7 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write`, `writeBytes` and `append` stamps the file's `modified`
+// gives. Each `write`, `writeBytes`, `append` and `copy` stamps the file's `modified`
 // time with `clock.now()`, or `0` with no clock; `rename` carries a file's
 // stamp to its new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
@@ -170,8 +170,8 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       : new TextDecoder('utf-8').decode(content);
   };
 
-  // Stores `content` at `path` and reports it, as `write`, `writeBytes` and
-  // `append` all do.
+  // Stores `content` at `path` and reports it, as `write`, `writeBytes`,
+  // `append` and `copy` all do.
   const store = (path: string, content: string | Uint8Array) => {
     const file = keyOf(path);
     requireFolderCanBeMade(parentOf(file), parentOf(file));
@@ -289,6 +289,13 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         ...movedFolders.flatMap((folder) => [folder, moved(folder)]),
         ...movedContents.flatMap(([file]) => [file, moved(file)]),
       ]);
+    },
+    // Both checks on `from` run before `store` writes anything.
+    copy: async (from, to) => {
+      if (isFolder(keyOf(from))) {
+        throw codedError(`${from} is a folder`, 'EISDIR');
+      }
+      store(to, bytesOf(from));
     },
     trash: async (path) => {
       const key = keyOf(path);

@@ -1,5 +1,5 @@
 import { kindLabel, type SetRun, shortRevision } from '../builds-model';
-import type { BuildJob, BuildRecord, GameEntry } from '../contract';
+import type { BuildFile, BuildJob, BuildRecord, GameEntry } from '../contract';
 
 // The messages a session gets about its builds; agents read them, so each line keeps its form.
 
@@ -17,8 +17,13 @@ export function failingMessage(
   return `Build failing: ${head(game, build, false)} — ${clauses.join('; ')}`;
 }
 
-// `Build ended:` with the result, branch, each failed job of a failure, the links and the build's page.
-export function endedMessage(game: GameEntry, build: BuildRecord): string {
+// `Build ended:` with the result, branch, each failed job of a failure, the links, the files on disk by full path and
+// the build's page.
+export function endedMessage(
+  game: GameEntry,
+  build: BuildRecord,
+  files: readonly BuildFile[],
+): string {
   const result = build.result ?? 'failure';
   const lines = [
     `Build ended: ${head(game, build, true)} — ${result}`,
@@ -33,6 +38,10 @@ export function endedMessage(game: GameEntry, build: BuildRecord): string {
     const links = build.links.map((link) => `${link.label} ${link.url}`);
     lines.push(`Links: ${links.join(' · ')}`);
   }
+  if (files.length > 0) {
+    const named = files.map((file) => `${file.label} ${file.path}`);
+    lines.push(`Files: ${named.join(' · ')}`);
+  }
   if (build.webUrl !== null) {
     lines.push(`Open: ${build.webUrl}`);
   }
@@ -40,18 +49,19 @@ export function endedMessage(game: GameEntry, build: BuildRecord): string {
 }
 
 // `Set ended:` with how many succeeded, then each build's `Build ended:` block in set order, or a line for a build no
-// longer listed.
+// longer listed. `files` holds each build's files by build id.
 export function setEndedMessage(
   game: GameEntry,
   setRun: SetRun,
   builds: BuildRecord[],
+  files: Record<string, BuildFile[]>,
 ): string {
   const succeeded = builds.filter((build) => build.result === 'success').length;
   const blocks = setRun.builds.map((ref) => {
     const build = builds.find((listed) => listed.id === ref.buildId);
     return build === undefined
       ? `Build ${ref.buildId}: no longer listed`
-      : endedMessage(game, build);
+      : endedMessage(game, build, files[build.id] ?? []);
   });
   return [
     `Set ended: ${game.label} ${setRun.label} — ${succeeded} of ${setRun.builds.length} succeeded`,
