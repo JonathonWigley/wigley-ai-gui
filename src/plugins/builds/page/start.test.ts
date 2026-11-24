@@ -975,6 +975,7 @@ describe('buildsPagePart session parts', () => {
     await settle();
 
     expect(page.toasts()).toEqual(['toast error: Local has a problem']);
+    expect(page.logged()).toContain('queueOffer refused: Local has a problem');
     expect(exits.toEntries).not.toHaveBeenCalled();
   });
 

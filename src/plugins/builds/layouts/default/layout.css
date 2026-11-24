@@ -87,6 +87,23 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A narrow list gives way from the branch and subject first; the kind keeps up to half the row, and the state and
+   time left keep one line. */
+[data-layout-owner='builds'][data-layout='default'].builds-row .ui-row-label {
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row .ui-row-detail {
+  flex: 1 1 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row
+  .ui-row-trailing {
+  flex: none;
+  white-space: nowrap;
+}
+
 [data-layout-owner='builds'][data-layout='default'].builds-set-group {
   display: flex;
   flex-direction: column;

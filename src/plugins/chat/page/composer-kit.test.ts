@@ -109,6 +109,7 @@ function rootIn(parent: HTMLElement): HTMLElement {
 function recordingPart(id: string, record: string[]): ChatComposerPart {
   return {
     id,
+    order: 10,
     build(_parent, sessionId) {
       record.push(`build:${id}:${sessionId}`);
       return { dispose: () => record.push(`dispose:${id}:${sessionId}`) };

@@ -442,6 +442,7 @@ describe('chat page part', () => {
       .exports?.(createRegistrations()) as ChatPageExports;
     view.addComposerPart({
       id: 'part',
+      order: 10,
       build: () => ({}),
       stop: { enter: () => true, leave },
     });
@@ -455,6 +456,40 @@ describe('chat page part', () => {
     isTabVisible = false;
     scope.set('another.view');
     expect(leave).toHaveBeenCalledOnce();
+    await harness.stop();
+  });
+
+  it('start_ComposerStops_OfferedInPartOrderNotAddOrder', async () => {
+    const harness = startChatPage(
+      () => undefined,
+      () => true,
+    );
+    const entered: string[] = [];
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as ChatPageExports;
+    for (const [id, order] of [
+      ['strip', 20],
+      ['offer', 10],
+    ] as const) {
+      view.addComposerPart({
+        id,
+        order,
+        build: () => ({}),
+        stop: {
+          enter: () => {
+            entered.push(id);
+            return true;
+          },
+          leave: () => undefined,
+        },
+      });
+    }
+    loadSessions(harness, [SESSION]);
+
+    harness.started().commands.nextEntry({ arg: undefined });
+
+    expect(entered).toEqual(['offer']);
     await harness.stop();
   });
 
@@ -607,7 +642,7 @@ describe('chat page part', () => {
     {
       member: 'addComposerPart',
       add: (view: ChatPageExports) =>
-        view.addComposerPart({ id: 'same', build: () => ({}) }),
+        view.addComposerPart({ id: 'same', order: 10, build: () => ({}) }),
     },
     {
       member: 'addStatusPart',

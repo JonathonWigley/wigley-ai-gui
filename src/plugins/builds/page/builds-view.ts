@@ -619,11 +619,17 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     });
   };
 
-  const toastProblem = (answer: { ok: true } | { problem: string }) => {
-    if (!isDisposed && 'problem' in answer) {
-      toast(answer.problem, 'error');
-    }
-  };
+  const toastProblem =
+    (method: 'cancel' | 'launchSetAgent') =>
+    (answer: { ok: true } | { problem: string }) => {
+      if (!('problem' in answer)) {
+        return;
+      }
+      log(`${method} refused: ${answer.problem}`);
+      if (!isDisposed) {
+        toast(answer.problem, 'error');
+      }
+    };
   const toastFailure = (error: unknown) => {
     if (!isDisposed) {
       toast(errorText(error), 'error');
@@ -654,7 +660,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
         game: target.view.game.id,
         build: record.id,
       })
-      .then(toastProblem, toastFailure);
+      .then(toastProblem('cancel'), toastFailure);
   };
 
   const openWeb = () => {
@@ -790,7 +796,9 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
         return;
       }
       queuePicker.dropPending();
-      channel.invoke('launchSetAgent', arg).then(toastProblem, toastFailure);
+      channel
+        .invoke('launchSetAgent', arg)
+        .then(toastProblem('launchSetAgent'), toastFailure);
     },
     setFilter(next) {
       if (!isFeedFilter(next)) {

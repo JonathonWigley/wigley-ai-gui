@@ -134,6 +134,8 @@ interface Selection {
 }
 
 const TICK_MS = 1000;
+// Under the build offer (10), so an offer's stop comes first; over the context line (30).
+const COMPOSER_PART_ORDER = 20;
 const RECENT_TOOLS = 3;
 const SELECTION_LOG_CHARS = 80;
 const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
@@ -646,6 +648,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     rosterUpdated,
     part: {
       id: 'agent-strip.strip',
+      order: COMPOSER_PART_ORDER,
       build(wrapper, sessionId) {
         const earlier = held.get(sessionId);
         const holder: HeldWrapper = {

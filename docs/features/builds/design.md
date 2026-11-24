@@ -236,7 +236,8 @@ every parse is tested over recorded JSON.
 - **Row line**: under a session's row, through sessions' `addRowPart`: the session's newest build
   — game, kind, number, a progress bar and time left while it runs; its result after it ends —
   until the session's next build replaces it.
-- **Activity**: the row's activity reads `building` while a build linked to it runs.
+- **Activity**: the row's activity reads `building` while a build linked to it runs. A running activity draws no row
+  label; the workflow chip's running tag reads it (`Building`), and chat's working outranks it.
 - **Hub section**: a Builds section in the session hub, through chat's `addSidePart`, listing every
   build the session queued, newest first: branch, short revision, per-job progress, links.
 - **Finish message**: when a build linked to a session ends, or the last build of a set it queued,
@@ -269,7 +270,8 @@ every parse is tested over recorded JSON.
 - The session shows an offer card above its chat box, through chat's `addComposerPart`: the game,
   the kind or set, the branch, the branch's origin head and its subject, a Queue button and a
   Dismiss button. Queue (`<Leader>mm`, or `Enter` on the card's stop) queues it linked to the
-  session; Dismiss (`<Leader>mx`, or `x` on the stop) drops it.
+  session; Dismiss (`<Leader>mx`, or `x` on the stop) drops it. The card is the first composer part (order 10), over
+  the agent strip, so its stop takes `j` from the last entry first; once the offer goes, `j` reaches the strip again.
 - An offer outlives a page reload and an app restart, and goes when queued or dismissed.
 
 ## Sets and RCs

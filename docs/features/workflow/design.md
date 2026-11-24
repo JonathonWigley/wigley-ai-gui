@@ -323,8 +323,9 @@ plugin's own `layout` setting. The layout preview is on `Space z l w`. One excep
   progress and the main action's button, which the chip's input carries. Idle draws no stage. A session in no workflow
   draws the **`No workflow`** tag, an error Tag in `--wg-status-error`, once a live turn with agent work has ended with no
   level skill started, and nothing before. While the session's row holds a running activity (chat's
-  working, which counts background tasks too), the chip ends on a running `Working` tag, pulsing, unless its stage tag
-  is already running: so a busy session with no stage, or at a done or ready stage, still says it works.
+  working, which counts background tasks too, or builds' building while a linked build runs), the chip ends on a
+  running tag reading the highest-ranked running activity's word (`Working`, `Building`), pulsing, unless its stage tag
+  is already running: so a busy session with no stage, or at a done or ready stage, still says what it does.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the trail, the countdown, the main
   action and last the Headless chip, a toggle Tag reading `Headless` (accent while on, muted while off) that runs
   `workflow.toggleHeadless` (`Space w h`) on its session. While the session is headless its row's chip ends on an accent

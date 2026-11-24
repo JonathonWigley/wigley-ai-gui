@@ -90,6 +90,7 @@ export function createQueuePicker(deps: QueuePickerDeps): QueuePicker {
       .then(
         (answer) => {
           if ('problem' in answer) {
+            log(`queue refused: ${answer.problem}`);
             toast(answer.problem, 'error');
             return;
           }
@@ -148,6 +149,7 @@ export function createQueuePicker(deps: QueuePickerDeps): QueuePicker {
           }
           if ('problem' in answer) {
             picker.close();
+            log(`branches refused: ${answer.problem}`);
             toast(answer.problem, 'error');
             return;
           }

@@ -57,6 +57,8 @@ export type SessionPartsCommand = Extract<
 const ROW_PART = 'builds.row';
 const HUB_PART = 'builds.hub';
 const OFFER_PART = 'builds.offer';
+// The top composer part, over the agent strip (20): the offer's stop takes the cursor first.
+const OFFER_PART_ORDER = 10;
 const ACTIVITY_SOURCE = 'builds';
 const NO_OFFER = 'No build offer in this session';
 
@@ -340,6 +342,7 @@ export function startSessionParts(deps: SessionPartsDeps): SessionParts {
       .then(
         (answer) => {
           if ('problem' in answer) {
+            log(`queueOffer refused: ${answer.problem}`);
             if (!isDisposed) {
               deps.toast(answer.problem, 'error');
             }
@@ -424,6 +427,7 @@ export function startSessionParts(deps: SessionPartsDeps): SessionParts {
     }),
     deps.chat.addComposerPart({
       id: OFFER_PART,
+      order: OFFER_PART_ORDER,
       build(wrapper, sessionId) {
         const held: Held = { parent: wrapper, draws: [] };
         const added = addTo(cardsHeld, sessionId, held);

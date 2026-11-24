@@ -262,7 +262,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       reasonBox.cancel();
       confirm.keep();
     };
-    const composerParts = createPartStore<ChatComposerPart>();
+    const composerParts = createPartStore<ChatComposerPart>(
+      (a, b) => a.order - b.order,
+    );
     const statusParts = createPartStore<ChatStatusPart>();
     const sideParts = createPartStore<ChatSidePart>();
     const sideSections = createSideSections({

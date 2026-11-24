@@ -11,7 +11,11 @@ import type {
   ChatSidePart,
   ChatSideSection,
 } from '../../chat/contract';
-import type { RowActivity, SessionPart } from '../../sessions/contract';
+import type {
+  RowActivity,
+  RowActivitySource,
+  SessionPart,
+} from '../../sessions/contract';
 import {
   type ActionInput,
   type ChecklistGroup,
@@ -49,9 +53,10 @@ import {
 // is the flow a session draws (the preview's sample or a demo sample while one
 // shows, else the slot's flow or a new one); `nameOf` names the session in the
 // log; `isPreview` is whether the session shows either sample, which runs nothing. `setRowActivity` sets
-// what the session's row says for its stage, null for nothing. `isWorking` is
-// whether the session's row holds a running activity, which the row's title line
-// leaves to the chip's `Working` tag. `isHeadless` is whether the session is
+// what the session's row says for its stage, null for nothing. `runningActivity`
+// is the highest-ranked running activity the session's row holds, the latest set
+// winning a tie, null for none: the row's title line leaves it to the chip's
+// running tag. `isHeadless` is whether the session is
 // headless, and `setHeadless` turns that on or off. `activeSessionId` is the
 // session the user is viewing, null for none.
 export interface WorkflowViewDeps {
@@ -64,7 +69,7 @@ export interface WorkflowViewDeps {
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
   setRowActivity(sessionId: string, activity: RowActivity | null): void;
-  isWorking(sessionId: string): boolean;
+  runningActivity(sessionId: string): RowActivity | null;
   isHeadless(sessionId: string): boolean;
   setHeadless(sessionId: string, headless: boolean): Promise<void>;
   activeSessionId(): string | null;
@@ -76,8 +81,9 @@ export interface WorkflowViewDeps {
 // session's side pane only while its flow is of that workflow. A flow with no
 // stage to draw draws nothing, but for the chip's `No workflow` tag after a
 // missed level; a workflow or stage with no page half does the same and logs its
-// name once. While the session `isWorking`, the chip ends on a running `Working`
-// tag unless its stage is running, which its stage tag already says. While the
+// name once. While the session has a `runningActivity`, the chip ends on a
+// running tag reading its word (`Working`, `Building`) unless its stage is
+// running, which its stage tag already says. While the
 // session `isHeadless`, the chip ends on an accent `Headless` tag in every
 // stage, and the strip input says so.
 // `activityChanged` draws the session's chip again. A turn that ends in a stage
@@ -140,11 +146,27 @@ interface HeldPart {
 
 const TICK_MS = 1000;
 const SIDE_PART_ORDER = 20;
+// Under the build offer (10), the agent strip (20) and the context line (30).
+const STRIP_PART_ORDER = 40;
 const NO_WORKFLOW_TEXT = 'No workflow';
-const WORKING_TEXT = 'Working';
 const HEADLESS_TEXT = 'Headless';
 const ROW_HEADLESS_CLASS = 'workflow-row-headless';
 const PENDING: MarkState = 'pending';
+
+// Of a session's activities in last-set order, the highest-ranked running one, the latest set winning a tie; null
+// for none.
+export function topRunningActivity(
+  sources: readonly RowActivitySource[],
+): RowActivity | null {
+  let top: RowActivity | null = null;
+  for (const { activity } of sources) {
+    const outranks = top === null || activity.rank >= top.rank;
+    if (activity.tone === 'running' && outranks) {
+      top = activity;
+    }
+  }
+  return top;
+}
 
 // Each wrapper outlives none of its builds: a row redraw or a composer draw
 // builds and disposes a part many times, so the session's flow is read on
@@ -362,13 +384,13 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
     switch (part.kind) {
       case 'chip': {
-        const isWorking = deps.isWorking(part.sessionId);
+        const running = deps.runningActivity(part.sessionId);
         if (!drawsStage) {
           if (flow.workflow === null && flow.missedLevel) {
             part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
           }
-          if (isWorking) {
-            part.wrapper.append(workingTag(clock));
+          if (running !== null) {
+            part.wrapper.append(runningTag(running, clock));
           }
           if (isHeadless) {
             part.wrapper.append(headlessTag());
@@ -377,8 +399,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         }
         const input = chipInput(workflow, stage, flow);
         part.drawn = workflow.draw.chip(part.wrapper, input, sessionId);
-        if (isWorking && input.status !== 'running') {
-          part.wrapper.append(workingTag(clock));
+        if (running !== null && input.status !== 'running') {
+          part.wrapper.append(runningTag(running, clock));
         }
         if (isHeadless) {
           part.wrapper.append(headlessTag());
@@ -585,6 +607,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
     stripPart: {
       id: 'workflow.strip',
+      order: STRIP_PART_ORDER,
       build: (wrapper, sessionId) => hold('strip', wrapper, sessionId, null),
     },
     sidePartFor: (workflow) => ({
@@ -709,8 +732,10 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   return view;
 }
 
-function workingTag(clock: Clock): HTMLElement {
-  return stageTagElement(WORKING_TEXT, 'running', clock);
+// The running activity's word with its first letter raised, as the row draws a label.
+function runningTag(activity: RowActivity, clock: Clock): HTMLElement {
+  const text = activity.word.charAt(0).toUpperCase() + activity.word.slice(1);
+  return stageTagElement(text, 'running', clock);
 }
 
 function headlessTag(): HTMLElement {
