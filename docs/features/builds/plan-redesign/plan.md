@@ -244,6 +244,7 @@ Review base: a9161d1a
 - 09 · standard · none (user settings.json, outside the repo) · grep of settings.json: dev, qa and release kinds of tiki-smash each hold label, target and the task's downloads path; json.load passes · concerns: the shared bash best folder still needs a My Drive shortcut before the paths exist (wrap-up note)
 - 10 · standard · 0094c0e2 · diff read: design.md arrow direction, fixture in drive runs, Enter/Alt+l and no-job s/o lines match keymap.ts, start.ts and fixture-backend.ts; other docs checked unchanged · concerns: machine skill teamcity-builds line-56 planned mark drops in an ai worktree after the app lands (close step); Drive fetch-on-copy and DESIGN.md fg-tertiary step text unverified
 ### Contract changes
+- Review fix b7dd1da7: GameView gains listed: boolean (true once the entry's current instance listed the game); GameState.hasListed renamed listed; Downloads gains checksSettled
 ### Rulings
 - Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01
 - buildJobOf puts the four new fields in its shared base object, which 03 fills per row — one site — none · group 02
@@ -257,5 +258,7 @@ Review base: a9161d1a
 - Stacked split shares height evenly (minmax(0,1fr) twice) instead of the shared fit-content(40%) 1fr, so a long list does not press the graph · group 07
 - download drops the pending branch picker before opening the file picker · group 07
 - showBuild moves keys to list before showing, so a hub Open in Builds logs no 'gone' · group 07
+- Review fix: trackCalls refuses saveLog after dispose but leaves it out of drained (overrides 02's 'drained waits for it'); the saved place restores only once its game (All: every game) is listed, and a saved game gone from a polled snapshot drops the hold
 ### Review rounds
+- Round 1 (a9161d1a..43060941, 5 lanes): NEEDS FIXES — 3 Important, 19 Minor, 8 recommendations, all taken per repo § Review. Lead-applied 9445a61f (docs/comments). Fix range 992fd4cf, 4aaa350d, b7dd1da7 — risk Medium (restore rule, drain membership, end-message timing, download resolution change behaviour across main and page) → correctness re-review
 ### Test gate
