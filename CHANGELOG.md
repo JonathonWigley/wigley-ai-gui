@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.2.0 — 2026-11-24
+
 ### Changed
 
 - The app moved out of the `ai` repo into its own repo, `JonathonWigley/wigley-ai-gui`, with its history: clone it on
