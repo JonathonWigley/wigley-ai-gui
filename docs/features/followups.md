@@ -507,6 +507,17 @@ User-facing features, those other work builds on first.
   OpenClaw 2026.11.10-beta.2 side questions
   (https://github.com/openclaw/openclaw/releases/tag/v2026.11.10-beta.2). Accepted in harness watch 2026-11-23
   (`~/harness-watch/decisions.md`).
+- **Work continues while a forms round waits** — *needs a feature plan*: an agent that sends a round waits on it.
+  An exploration. `ask_round` blocks until its deadline, and `auri:forms` § Outcomes tells the agent to call
+  `collect_last_round` again after every `draft`, so the session sits idle while the user answers, even when part
+  of the work does not depend on the round. OpenAI's GPT-6.2 prompting guidance (approx. 2026-11-17, undated;
+  https://developers.openai.com/codex) asks questions asynchronously (`request_user_input_async`) while working on
+  other parts, and stops only for scope changes, blockers, user decisions or destructive actions. Proposed shape:
+  `auri:forms` names when an agent may work between collects: work no open question can change, never an edit an
+  answer could undo. The wake already tells the session when the user submits. Test: run three Medium sessions
+  whose rounds leave independent work, and compare their wall time and any work an answer undid against runs that
+  wait. Adopt it when the time saved holds and nothing needs redoing. Accepted in planning-execution watch
+  2026-11-24 (`~/planning-execution-watch/decisions.md`).
 
 ## Code cleanup
 
