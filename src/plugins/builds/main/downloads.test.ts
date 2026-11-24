@@ -310,6 +310,20 @@ describe('downloads', () => {
     expect(run.statsOf(FILE_PATH)).toBe(3);
   });
 
+  it('re-checks a path in checksSettled whose check began before the call', async () => {
+    const run = setup();
+    const held = deferred<FileStat | null>();
+    run.stat.mockImplementationOnce(() => held.promise);
+    await run.check();
+    await run.memory.write(FILE_PATH, 'zip');
+
+    const settled = run.downloads.checksSettled('work', game, [build]);
+    held.resolve(null);
+    await settled;
+
+    expect(run.shown()).toEqual({ [build.id]: [fileAt(FILE_PATH)] });
+  });
+
   it('counts a rejecting stat as not found and logs once', async () => {
     const run = setup();
     await run.memory.write(FILE_PATH, 'zip');

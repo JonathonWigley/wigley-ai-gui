@@ -175,7 +175,8 @@ every parse is tested over recorded JSON.
   list already reaches: its direct prerequisites, in the chain's job order. The rule holds whether the list is
   transitive or direct.
 - **Job fields**: each job's `webUrl`, `startDate` and `finishDate` become its `webUrl`, `startedAt` and
-  `finishedAt`. A finished build's cached record carries them; a record cached without them is read again once.
+  `finishedAt`. A finished build's cached record carries them; a record cached without them is read again once, and
+  its install links stay in the cache file, across restarts, until that read caches the build.
 - **Revision**: a chain has no VCS root. The revision is the most common
   `revisions.revision[0].version` among the Build jobs, ties going to the earliest: a job of another
   VCS root can come first.
@@ -252,8 +253,9 @@ every parse is tested over recorded JSON.
   settled, so a deleted file leaves the list. The
   snapshot's `GameView.files` maps a build id to the files its last check found, in the kind's order, each with its
   `entry`: its index in the kind's `downloads`, which `download` takes. A build's end message, and a set's, waits for
-  the ended builds' checks in flight, each bounded by the same 5 seconds, so it names a file that landed since the last
-  poll.
+  the ended builds' checks in flight, then checks each of those paths again, since its `stat` may have begun before
+  the file landed; each check is bounded by the same 5 seconds, so the message waits at most 10 seconds and names a
+  file that landed since the last poll.
 - **A log save** runs the backend's `saveLog` for a job, or for the build with no job. Its file name is
   `<game label>-<kind label>-<number>-<job label>.log`, each part with every run of characters other than ASCII
   letters and digits turned to one `-`, leading and trailing `-` dropped: `Tiki-Smash-Dev-332-Build-Android-Dev.log`.

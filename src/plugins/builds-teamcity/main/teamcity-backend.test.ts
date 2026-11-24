@@ -618,6 +618,8 @@ describe('list', () => {
     text: string;
     now?: number;
     links?: { label: string; url: string }[];
+    // An instance lists first with the record's detail read failing, then the backend is created again.
+    failsFirstRead?: boolean;
   }>([
     { name: 'is not JSON', text: 'not json' },
     {
@@ -669,13 +671,26 @@ describe('list', () => {
       now: 1795737600000,
       links: [{ label: 'iOS', url: IOS_URL }],
     },
+    {
+      name: 'holds an earlier-shape record with links, past the link window, whose first read failed before a restart',
+      text: cacheFileWithJob(EARLIER_JOB, [{ label: 'iOS', url: IOS_URL }]),
+      // `20261127T000000+0000`
+      now: 1795737600000,
+      links: [{ label: 'iOS', url: IOS_URL }],
+      failsFirstRead: true,
+    },
   ])(
     'reads the finished builds again over a cache file that $name',
-    async ({ text, now = NOW, links = LOG_LINKS }) => {
+    async ({ text, now = NOW, links = LOG_LINKS, failsFirstRead }) => {
       const test = setup();
       test.setNow(now);
       await test.dataFiles.write(CACHE_FILE, text);
       answerRecordedList(test);
+      if (failsFirstRead) {
+        test.answer(detailArgs('821200'), new Error('HTTP 502'));
+        await (await createBackend(test.services)).list(GAME, 20);
+        test.answer(detailArgs('821200'), chainFinished);
+      }
       const backend = await createBackend(test.services);
 
       const records = await backend.list(GAME, 20);

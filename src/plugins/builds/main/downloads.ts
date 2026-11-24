@@ -75,9 +75,10 @@ export interface DownloadTarget {
 // each path not already being checked, which gives up after `FILE_CHECK_TIMEOUT_MS` keeping the path's last result.
 // A finished check that flips a file's found state calls `filesChanged`. `filesOf` reads the last results only, per
 // build id the found files of the game's current kind in the kind's order, a build with none left out.
-// `checksSettled` resolves once every check of `builds`' files in flight has settled or given up. A path's failed or
-// given-up check is logged once, until the path's next check that settles in time with no failure, or until no
-// checked file holds the path.
+// `checksSettled` resolves once every check of `builds`' files in flight at the call has settled or given up, then once
+// a fresh check of each such path has too, since its `stat` may have begun before the file landed: at most twice
+// `FILE_CHECK_TIMEOUT_MS`. A path's failed or given-up check is logged once, until the path's next check that settles
+// in time with no failure, or until no checked file holds the path.
 //
 // `saveLog` and `download` answer `{ ok: true }` once the save is in the slot as `running`, or a `{ problem }` that
 // starts nothing: a backend without `saveLog`, or a save of the same id still running. The save then picks a free name
@@ -132,10 +133,12 @@ interface KeyedFile {
 export function createDownloads(deps: DownloadsDeps): Downloads {
   // By file key, the file's path and whether the key's last finished check found it.
   const known = new Map<string, { path: string; isFound: boolean }>();
-  // File keys whose `stat` has not settled.
-  const checking = new Set<string>();
-  // By file key, a wait that settles when the key's check in flight settles or gives up.
-  const inFlight = new Map<string, Promise<void>>();
+  // By file key, the order of the check whose `stat` has not settled.
+  const checking = new Map<string, number>();
+  // By file key, the key's check in flight: its order, and a wait that settles when it settles or gives up.
+  const inFlight = new Map<string, { order: number; settled: Promise<void> }>();
+  // How many checks have started; a check's order is this count once it starts.
+  let checksStarted = 0;
   const failedPaths = new Set<string>();
   const gaveUpPaths = new Set<string>();
   // The full paths of saves in flight.
@@ -187,21 +190,45 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
     }
   }
 
-  function startCheck(key: string, path: string) {
+  function startCheck(key: string, path: string): Promise<void> {
+    checksStarted += 1;
+    const order = checksStarted;
     const settled = new Promise<void>((resolve) => {
-      void check(key, path, resolve);
+      void check(key, path, order, resolve);
     });
-    inFlight.set(key, settled);
+    inFlight.set(key, { order, settled });
     void settled.then(() => {
-      if (inFlight.get(key) === settled) {
+      if (inFlight.get(key)?.order === order) {
         inFlight.delete(key);
       }
     });
+    return settled;
+  }
+
+  // Waits for a check of `key` that started after the first `startedBefore` checks, starting one when none is in flight.
+  function checkStartedAfter(
+    key: string,
+    path: string,
+    startedBefore: number,
+  ): Promise<void> {
+    const latest = inFlight.get(key);
+    if (latest !== undefined && latest.order > startedBefore) {
+      return latest.settled;
+    }
+    if (isDisposed || !known.has(key)) {
+      return Promise.resolve();
+    }
+    return startCheck(key, path);
   }
 
   // `settled` runs once, when the `stat` settles or the check gives up, whichever comes first.
-  async function check(key: string, path: string, settled: () => void) {
-    checking.add(key);
+  async function check(
+    key: string,
+    path: string,
+    order: number,
+    settled: () => void,
+  ) {
+    checking.set(key, order);
     let hasGivenUp = false;
     const timeout = deps.timers.set(() => {
       hasGivenUp = true;
@@ -222,7 +249,9 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
     } catch (error) {
       failure = error;
     }
-    checking.delete(key);
+    if (checking.get(key) === order) {
+      checking.delete(key);
+    }
     if (hasGivenUp) {
       return;
     }
@@ -376,12 +405,21 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
       return files;
     },
     async checksSettled(backendId, game, builds) {
-      const waits = builds.flatMap((build) =>
-        keyedFilesOf(backendId, game, build).flatMap(
-          ({ key }) => inFlight.get(key) ?? [],
+      const startedBefore = checksStarted;
+      const held = builds.flatMap((build) =>
+        keyedFilesOf(backendId, game, build).flatMap(({ key, file }) => {
+          const inFlightCheck = inFlight.get(key);
+          return inFlightCheck === undefined
+            ? []
+            : [{ key, path: file.path, settled: inFlightCheck.settled }];
+        }),
+      );
+      await Promise.all(held.map(({ settled }) => settled));
+      await Promise.all(
+        held.map(({ key, path }) =>
+          checkStartedAfter(key, path, startedBefore),
         ),
       );
-      await Promise.all(waits);
     },
     forgetGame(backendId, gameId) {
       forgetKeys(gameKeyPrefix(backendId, gameId), new Set());

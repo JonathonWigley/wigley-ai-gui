@@ -28,6 +28,7 @@ import {
   fixtureBackendKind,
 } from '../contract.test-support';
 import { buildsManifest } from '../manifest';
+import { FILE_CHECK_TIMEOUT_MS } from './downloads';
 import { LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
 import { FAST_POLL_MS, SLOW_POLL_MS } from './poller';
 import { createBuildsMainPart } from './start';
@@ -440,31 +441,74 @@ describe('buildsMainPart', () => {
     expect(notifiedAtSend).toEqual([true]);
   });
 
-  it('names a file that landed since the last poll in the ended message', async () => {
-    const run = await startOnHarness({
-      backends: [backendSetting({ games: [gameWithDownload()] })],
-      linksFile: { links: [sessionLink()] },
-    });
-    run.fixture.setBuilds('g1', [
-      { ...numberedX, state: 'running', result: null, finishedAt: null },
-    ]);
-    await run.ready();
-    const checked = deferred<FileStat | null>();
-    vi.spyOn(run.harness.files, 'stat').mockImplementationOnce(
-      () => checked.promise,
-    );
-    run.fixture.setBuilds('g1', [numberedX]);
-    await run.harness.files.write('/d/332.zip', 'zip');
+  it.each([
+    {
+      case: 'a build',
+      link: sessionLink(),
+      setRuns: [],
+      heading: /^Build ended:/,
+      isStalled: false,
+    },
+    {
+      case: 'a set',
+      link: sessionLink({ setRunId: 'r1' }),
+      setRuns: [setRun({ builds: [{ backendId: 'b1', buildId: 'x' }] })],
+      heading: /^Set ended:/,
+      isStalled: false,
+    },
+    {
+      case: 'a check that never settles, sent past the bound without the file',
+      link: sessionLink(),
+      setRuns: [],
+      heading: /^Build ended:/,
+      isStalled: true,
+    },
+  ])(
+    'waits for the file check of the poll an end message comes from: $case',
+    async ({ link, setRuns, heading, isStalled }) => {
+      const zipPath = '/d/332.zip';
+      const run = await startOnHarness({
+        backends: [backendSetting({ games: [gameWithDownload()] })],
+        linksFile: { links: [link], setRuns },
+      });
+      run.fixture.setBuilds('g1', [
+        { ...numberedX, state: 'running', result: null, finishedAt: null },
+      ]);
+      await run.ready();
+      const { files } = run.harness;
+      const realStat = files.stat.bind(files);
+      const held = deferred<FileStat | null>();
+      let zipStats = 0;
+      // The zip's first `stat` from here waits on `held`, or every one never settles when stalled.
+      vi.spyOn(files, 'stat').mockImplementation((path) => {
+        if (path !== zipPath) {
+          return realStat(path);
+        }
+        zipStats += 1;
+        if (isStalled) {
+          return new Promise<FileStat | null>(() => undefined);
+        }
+        return zipStats === 1 ? held.promise : realStat(path);
+      });
+      run.fixture.setBuilds('g1', [numberedX]);
+      await files.write(zipPath, 'zip');
 
-    await run.advance(FAST_POLL_MS);
-    checked.resolve({ isFolder: false, isLink: false });
-    await settle();
+      await run.advance(FAST_POLL_MS);
+      if (isStalled) {
+        // The poll's check gives up, then the fresh check the wait starts.
+        await run.advance(FILE_CHECK_TIMEOUT_MS);
+        await run.advance(FILE_CHECK_TIMEOUT_MS);
+      } else {
+        held.resolve({ isFolder: false, isLink: false });
+        await settle();
+      }
 
-    expect(run.chat.send).toHaveBeenCalledTimes(1);
-    expect(run.chat.send.mock.calls[0][1].text).toContain(
-      'Files: Android zip /d/332.zip',
-    );
-  });
+      expect(run.chat.send).toHaveBeenCalledTimes(1);
+      const { text } = run.chat.send.mock.calls[0][1];
+      expect(text).toMatch(heading);
+      expect(text.includes(`Files: Android zip ${zipPath}`)).toBe(!isStalled);
+    },
+  );
 
   it('sends nothing when the flag write fails', async () => {
     const run = await startOnHarness({

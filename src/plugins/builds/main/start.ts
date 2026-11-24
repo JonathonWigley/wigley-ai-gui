@@ -676,8 +676,8 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         }
       }
 
-      // Waits for the file checks in flight of an ended build or set, each giving up after `FILE_CHECK_TIMEOUT_MS`, so
-      // its message names a file that landed since the last poll.
+      // Waits for the file checks in flight of an ended build or set, and a fresh check of each of those paths, each
+      // giving up after `FILE_CHECK_TIMEOUT_MS`, so its message names a file that landed since the last poll.
       async function endedFilesChecked(event: BuildsEvent) {
         if (event.kind === 'ended') {
           await downloads.checksSettled(event.ref.backendId, event.game, [

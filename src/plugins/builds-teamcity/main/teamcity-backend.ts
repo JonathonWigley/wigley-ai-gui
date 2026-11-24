@@ -41,7 +41,8 @@ const START_TIMEOUT_MS = 60_000;
 // One Android build job's log was 22 MB, which the CLI prints whole.
 const SAVE_LOG_TIMEOUT_MS = 300_000;
 
-// `{ "games": { "<game id>": BuildRecord[] }, "pins": { "<build id>": QueuedPin } }`.
+// `{ "games": { "<game id>": BuildRecord[] }, "pins": { "<build id>": QueuedPin },
+// "earlierLinks": { "<build id>": BuildLink[] } }`.
 const CACHE_FILE = 'teamcity-finished.json';
 const RUN_LIST_FIELDS =
   'id,number,status,state,webUrl,branchName,buildTypeId,statusText,queuedDate,startDate,finishDate,waitReason,triggered.user.name';
@@ -154,7 +155,7 @@ interface QueuedPin {
 // What CACHE_FILE holds: finished builds whose detail and every log were read, by game id then build id, and what
 // this backend queued each build with, by build id, until that build is cached or LINK_WINDOW_MS has passed since it
 // was queued. `earlierLinks` holds the install links of each record an earlier cache shape wrote, by build id, for its
-// read again to keep; it is never written.
+// read again to keep, until that build is cached.
 interface StoredBuilds {
   finished: Map<string, Map<string, BuildRecord>>;
   pins: Map<string, QueuedPin>;
@@ -204,6 +205,7 @@ function createTeamcityBackend(
           ]),
         ),
         pins: Object.fromEntries(builds.pins),
+        earlierLinks: Object.fromEntries(builds.earlierLinks),
       };
       try {
         await services.dataFiles.write(
@@ -547,9 +549,9 @@ function listedRecord(
   };
 }
 
-// The cache file's finished records and pins; a missing or malformed file reads as empty, and a malformed record or
-// pin, or a pin past the link window, is left out. A record well formed but for its jobs leaves its links in
-// `earlierLinks`.
+// The cache file's finished records, pins and earlier links; a missing or malformed file reads as empty, and a
+// malformed record, pin or link list, or a pin past the link window, is left out. A record well formed but for its
+// jobs adds its links to `earlierLinks`.
 async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
   const builds: StoredBuilds = {
     finished: new Map(),
@@ -573,6 +575,12 @@ async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
   }
   if (!isJsonObject(file)) {
     return builds;
+  }
+  const earlierLinks = isJsonObject(file.earlierLinks) ? file.earlierLinks : {};
+  for (const [id, links] of Object.entries(earlierLinks)) {
+    if (Array.isArray(links) && links.length > 0 && links.every(isLink)) {
+      builds.earlierLinks.set(id, links);
+    }
   }
   const games = isJsonObject(file.games) ? file.games : {};
   for (const [gameId, records] of Object.entries(games)) {
