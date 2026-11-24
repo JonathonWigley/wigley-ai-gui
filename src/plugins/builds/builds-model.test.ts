@@ -37,7 +37,7 @@ const runningJob = (id: string) =>
 function backend(
   id: string,
   builds: BuildRecord[],
-  hasListed = true,
+  listed = true,
 ): BackendState {
   return {
     id,
@@ -45,7 +45,7 @@ function backend(
     label: `Backend ${id}`,
     problem: null,
     capabilities: { cancel: true, choosesBranch: true, saveLog: false },
-    games: [{ game, builds, subjects: {}, files: {}, hasListed }],
+    games: [{ game, builds, subjects: {}, files: {}, listed }],
   };
 }
 
@@ -437,33 +437,39 @@ describe('foldBuilds', () => {
     {
       case: 'listed',
       ref: { backendId: 'b1', buildId: 'x' },
-      hasListed: true,
+      listed: true,
       unlisted: false,
     },
     {
       case: 'unlisted',
       ref: { backendId: 'b1', buildId: 'y' },
-      hasListed: true,
+      listed: true,
       unlisted: true,
     },
     {
       case: 'unlisted, game not listed yet',
       ref: { backendId: 'b1', buildId: 'y' },
-      hasListed: false,
+      listed: false,
       unlisted: false,
     },
     {
       case: 'of a backend not in the input',
       ref: { backendId: 'b9', buildId: 'y' },
-      hasListed: false,
+      listed: false,
       unlisted: true,
     },
-  ])('isUnlisted of a ref $case: $unlisted', ({ ref, hasListed, unlisted }) => {
+  ])('isUnlisted of a ref $case: $unlisted', ({ ref, listed, unlisted }) => {
     const fold = foldBuilds(
-      input({ backends: [backend('b1', [record('x')], hasListed)] }),
+      input({ backends: [backend('b1', [record('x')], listed)] }),
     );
 
     expect(fold.isUnlisted(ref)).toBe(unlisted);
+  });
+
+  it.each([true, false])('publishes a game listed %s as listed', (listed) => {
+    const fold = foldBuilds(input({ backends: [backend('b1', [], listed)] }));
+
+    expect(fold.snapshot.backends[0].games[0].listed).toBe(listed);
   });
 
   it('publishes each backend in order, with its set runs newest first', () => {
@@ -510,6 +516,7 @@ describe('foldBuilds', () => {
         },
       ],
       files: { 'b-1': [{ label: 'Zip', path: '/z/a.zip', entry: 0 }] },
+      listed: true,
     });
     expect(fold.snapshot.polledAt).toBe(1234);
   });

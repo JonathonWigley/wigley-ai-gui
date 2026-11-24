@@ -53,7 +53,7 @@ describe('trackCalls', () => {
     },
   );
 
-  it('passes a saveLog to the backend, and drained waits for it', async () => {
+  it('passes a saveLog to the backend, and drained does not wait for it', async () => {
     const fixture = createFixtureBackend({ capabilities: SAVES_LOGS });
     const held = deferred<void>();
     const backend: BuildBackend = {
@@ -75,11 +75,9 @@ describe('trackCalls', () => {
     expect(fixture.savedLogs).toEqual([
       { gameId: 'game', buildId: 'b-1', jobId: 'job-1', path: '/d/a.log' },
     ]);
-    expect(isDrained).toBe(false);
+    expect(isDrained).toBe(true);
     held.resolve();
     await saving;
-    await tracked.drained();
-    expect(isDrained).toBe(true);
   });
 
   it('gives no saveLog over a backend without one', () => {

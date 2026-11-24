@@ -322,6 +322,33 @@ describe('downloads', () => {
     expect(run.logs).toEqual([`file check failed: ${FILE_PATH}: denied`]);
   });
 
+  it.each([
+    {
+      case: 'a good check',
+      between: async (run: ReturnType<typeof setup>) => {
+        run.stat.mockResolvedValueOnce(FOUND);
+        await run.check();
+      },
+    },
+    {
+      case: 'forgetGame',
+      between: async (run: ReturnType<typeof setup>) => {
+        run.downloads.forgetGame('work', 'g1');
+      },
+    },
+  ])('logs a failing path again after $case', async ({ between }) => {
+    const run = setup();
+    const failed = `file check failed: ${FILE_PATH}: denied`;
+    run.stat.mockRejectedValueOnce(new Error('denied'));
+    await run.check();
+
+    await between(run);
+    run.stat.mockRejectedValueOnce(new Error('denied'));
+    await run.check();
+
+    expect(run.logs).toEqual([failed, failed]);
+  });
+
   it('gives no files for a kind the game does not declare', async () => {
     const run = setup();
     const qaBuild = buildRecord({ id: 'qa-1', kind: 'qa', number: '332' });
@@ -389,6 +416,22 @@ describe('downloads', () => {
     expect(running.map((entry) => entry.state)).toEqual(['running']);
     expect(run.revealed).toEqual([]);
     expect(run.changes()).toBe(0);
+  });
+
+  it('copies nothing when disposed during the free-name pick', async () => {
+    const run = setup();
+    await run.memory.write(FILE_PATH, 'zip');
+    const picked = deferred<FileStat | null>();
+    run.stat.mockImplementationOnce(() => picked.promise);
+    const copy = vi.spyOn(run.files, 'copy');
+    run.downloads.download(target, fileAt(FILE_PATH));
+    await settle();
+
+    run.downloads.dispose();
+    picked.resolve(null);
+    await settle();
+
+    expect(copy).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -658,7 +701,8 @@ describe('downloads', () => {
     expect(run.slot.get(left.id)).toEqual({
       ...left,
       state: 'failed',
-      problem: 'the builds plugin restarted during the save',
+      problem:
+        'the builds plugin restarted during the save; the file may still arrive',
     });
     run.advance(DOWNLOAD_KEEP_MS - 1);
     expect(run.slot.get('work/821436/file/0')?.state).toBe('saved');

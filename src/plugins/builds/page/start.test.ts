@@ -1253,7 +1253,11 @@ describe('buildsPagePart', () => {
 
   const SAVED: BuildsPlace = { entry: G1, build: 'work/40', job: 'b' };
   const SAVED_ALL: BuildsPlace = { entry: 'all', build: 'work/40', job: 'b' };
-  const SAVED_GONE: BuildsPlace = { entry: 'work/g9', build: 'work/40', job: 'b' };
+  const SAVED_GONE: BuildsPlace = {
+    entry: 'work/g9',
+    build: 'work/40',
+    job: 'b',
+  };
   const EMPTY_POLL: BuildsSnapshot = { backends: [], polledAt: 0 };
   const UNLISTED = workSnapshot({ listed: false });
   const MOVED: BuildsPlace = { entry: 'all', build: 'work/41', job: null };

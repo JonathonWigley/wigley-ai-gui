@@ -208,6 +208,7 @@ export interface GameView {
   subjects: Record<string, string>; // revision sha → commit subject
   setRuns: SetRunView[]; // newest first
   files: Record<string, BuildFile[]>; // build id → its files that exist
+  listed: boolean; // true once the backend has listed this game's builds
 }
 
 // One backend entry: `problem` names what is wrong with its entry or its last poll, null when nothing is;

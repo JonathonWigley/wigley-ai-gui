@@ -226,13 +226,16 @@ every parse is tested over recorded JSON.
   session runs, and every 2 minutes otherwise. One backend instance never has two polls in flight; a re-apply disposes the old
   instance, which then refuses new calls with "the backend was replaced; try again". The entry's new instance is created only
   once the `list`, `queue` and `cancel` calls of every instance replaced over its data folder settle, a plugin restart's
-  included; past `DRAIN_TIMEOUT_MS` (30 s) it logs once that it is still waiting. Until then queueing answers "<label>: still starting" and the poller skips the entry. A backend
+  included; past `DRAIN_TIMEOUT_MS` (30 s) it logs once that it is still waiting. A `saveLog` is refused after dispose
+  but not waited on, since it writes no data folder. Until then queueing answers "<label>: still starting" and the poller skips the entry. A backend
   with no games is not polled. Each poll lists 20 builds per game.
 - **The model** (`builds-model.ts`, pure) folds the backends' records, the session links and the
   offers into the published slots, and reports what changed since the last fold: a linked build
   that has a failed job while it still runs (once per build), a linked build whose state moved to
   `finished`, and a set whose last build finished. A set's build that no list holds counts as ended 10 minutes
-  after the set run was made, but only once its game has listed. It is tested by tables over built records.
+  after the set run was made, but only once its game has listed. A game's `GameView.listed` says whether the entry's
+  current instance has listed it: false at start and after each re-apply until its first good list. It is tested by
+  tables over built records.
 - **Finish detection** survives a restart: each session link carries a `failingNotified` and a
   `notified` flag in plugin data, each written before its message is sent, so nothing is told
   twice. An ending missed while the app was closed is told on the first poll after start.
@@ -248,12 +251,15 @@ every parse is tested over recorded JSON.
   keeps that file's last result, and every path is checked again each poll, except one whose last check has not
   settled, so a deleted file leaves the list. The
   snapshot's `GameView.files` maps a build id to the files its last check found, in the kind's order, each with its
-  `entry`: its index in the kind's `downloads`, which `download` takes.
+  `entry`: its index in the kind's `downloads`, which `download` takes. A build's end message, and a set's, waits for
+  the ended builds' checks in flight, each bounded by the same 5 seconds, so it names a file that landed since the last
+  poll.
 - **A log save** runs the backend's `saveLog` for a job, or for the build with no job. Its file name is
   `<game label>-<kind label>-<number>-<job label>.log`, each part with every run of characters other than ASCII
   letters and digits turned to one `-`, leading and trailing `-` dropped: `Tiki-Smash-Dev-332-Build-Android-Dev.log`.
   A build with no number has `build-<build id>` for the number, and a save with no job has `build` for the job label.
-- **A file download** copies the file through the files service's `copy`, keeping its own name. A Drive for desktop file
+- **A file download** copies the file through the files service's `copy`, keeping its own name. It needs only the
+  listed build, not the backend's instance, so it runs while the entry is still starting. A Drive for desktop file
   not yet on disk is expected to be fetched as it is read for the copy; that is unchecked against Google's docs.
 - **Names**: a name the Downloads folder holds already gets ` (2)`, ` (3)` and so on before its extension, and two
   saves at once never take one name.
@@ -262,7 +268,8 @@ every parse is tested over recorded JSON.
   `<backend id>/<build id>/file/<entry>`): its label, its state
   (`running`, `saved`, `failed`), the saved file's path, the failure's text and when it started. A save of an id
   that runs is refused (`that download is already running`). An ended save leaves the slot 10 minutes after it ends.
-  A save still running when the plugin restarts shows as failed.
+  A save still running when the plugin restarts shows as failed, with "the builds plugin restarted during the save;
+  the file may still arrive": the replaced backend may still write it.
 - **Reveal**: a saved file opens in Finder (Explorer on Windows) through `services.revealPath`. The self-test and a
   drive run save under the run's home and log the reveal instead.
 - The page starts a save over the channel's `saveLog` and `download`, each answering once the save is in the slot,
@@ -303,7 +310,7 @@ every parse is tested over recorded JSON.
   and `q` to queue. The build list scope (`builds.list`) takes `j`/`k`, `gg`/`G`, `q` to queue, `o` to open the
   build in the backend, `s` to download the build's file (the list picker chooses when it has several), `x` to cancel
   where the backend can, and `Enter` (`builds.focusGraph`) or the pane move `Alt+l` (`Alt+j` while the split stacks) to move into the job graph. The graph's scope (`builds.graph`) takes
-  `h`/`l` to step between columns and `j`/`k` within one, `s` to save the selected job's log, `o` to open its
+  `h`/`l` to step between columns, `j`/`k` within one and `gg`/`G` to its first and last job, `s` to save the selected job's log, `o` to open its
   backend page and `Esc` to go back to the list. A build with no jobs has no job cursor: `s` saves the build's own log
   and `o` opens the build's page.
   The queue picker's scope (`builds.picker`) takes the shared list picker's keys. `<Leader>mq` opens the queue picker
@@ -377,7 +384,7 @@ every parse is tested over recorded JSON.
 | `builds.pickQueue` | page | none | the queue picker; `<Leader>mq`, `q` in the mode |
 | `builds.launchSetAgent` | main | `{ backend, game, set }` | the set's "with agent" button |
 | `builds.focusGraph`, `builds.openWeb`, `builds.download`, `builds.cancel` | page | none | the build list's `Enter` (and `Alt+l`), `o`, `s`, `x`; `openWeb` opens the cursor's build |
-| `builds.graphLeft`, `graphRight`, `graphUp`, `graphDown`, `saveLog`, `openJob`, `leaveGraph` | page | none | the graph's `h`, `l`, `k`, `j`, `s`, `o`, `Esc` |
+| `builds.graphLeft`, `graphRight`, `graphUp`, `graphDown`, `graphTop`, `graphBottom`, `saveLog`, `openJob`, `leaveGraph` | page | none | the graph's `h`, `l`, `k`, `j`, `gg`, `G`, `s`, `o`, `Esc` |
 | `builds.selectJob`, `downloadFile` | page | a job id, a file index | clicks; no key |
 | `builds.listDown`, `listUp`, `listTop`, `listBottom` | page | none | the build list's `j`, `k`, `gg`, `G` |
 | `builds.gameDown`, `gameUp`, `gameTop`, `gameBottom`, `openGame` | page | none | the game list's `j`, `k`, `gg`, `G`, `Enter` |

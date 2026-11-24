@@ -19,7 +19,8 @@ export const DOWNLOAD_KEEP_MS = 10 * 60 * 1000;
 // How long a file check waits on its `stat` before it keeps the file's last result.
 export const FILE_CHECK_TIMEOUT_MS = 5000;
 
-const RESTARTED_PROBLEM = 'the builds plugin restarted during the save';
+const RESTARTED_PROBLEM =
+  'the builds plugin restarted during the save; the file may still arrive';
 
 // Every entry of the kind's `downloads` whose placeholders the build fills, in the kind's order. Not yet checked on disk.
 // A template with `{version}` or `{number}` that the build lacks gives no file; any other `{…}` stays as written.
@@ -74,6 +75,9 @@ export interface DownloadTarget {
 // each path not already being checked, which gives up after `FILE_CHECK_TIMEOUT_MS` keeping the path's last result.
 // A finished check that flips a file's found state calls `filesChanged`. `filesOf` reads the last results only, per
 // build id the found files of the game's current kind in the kind's order, a build with none left out.
+// `checksSettled` resolves once every check of `builds`' files in flight has settled or given up. A path's failed or
+// given-up check is logged once, until the path's next check that settles in time with no failure, or until no
+// checked file holds the path.
 //
 // `saveLog` and `download` answer `{ ok: true }` once the save is in the slot as `running`, or a `{ problem }` that
 // starts nothing: a backend without `saveLog`, or a save of the same id still running. The save then picks a free name
@@ -92,6 +96,11 @@ export interface Downloads {
     game: GameEntry,
     builds: readonly BuildRecord[],
   ): Record<string, BuildFile[]>;
+  checksSettled(
+    backendId: string,
+    game: GameEntry,
+    builds: readonly BuildRecord[],
+  ): Promise<void>;
   forgetGame(backendId: string, gameId: string): void;
   saveLog(
     target: DownloadTarget,
@@ -121,14 +130,16 @@ interface KeyedFile {
 }
 
 export function createDownloads(deps: DownloadsDeps): Downloads {
-  // By file key, whether the key's last finished check found the file.
-  const known = new Map<string, boolean>();
+  // By file key, the file's path and whether the key's last finished check found it.
+  const known = new Map<string, { path: string; isFound: boolean }>();
   // File keys whose `stat` has not settled.
   const checking = new Set<string>();
+  // By file key, a wait that settles when the key's check in flight settles or gives up.
+  const inFlight = new Map<string, Promise<void>>();
   const failedPaths = new Set<string>();
   const gaveUpPaths = new Set<string>();
   // The full paths of saves in flight.
-  const reserved = new Set<string>();
+  const reserved: string[] = [];
   // By download id, the timer that deletes its ended entry.
   const expiries = new Map<string, number>();
   let isDisposed = false;
@@ -161,13 +172,40 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
         known.delete(key);
       }
     }
+    pruneLoggedPaths();
   }
 
-  async function check(key: string, path: string) {
+  // Drops each logged path that no checked file holds any more.
+  function pruneLoggedPaths() {
+    const held = new Set([...known.values()].map(({ path }) => path));
+    for (const logged of [failedPaths, gaveUpPaths]) {
+      for (const path of logged) {
+        if (!held.has(path)) {
+          logged.delete(path);
+        }
+      }
+    }
+  }
+
+  function startCheck(key: string, path: string) {
+    const settled = new Promise<void>((resolve) => {
+      void check(key, path, resolve);
+    });
+    inFlight.set(key, settled);
+    void settled.then(() => {
+      if (inFlight.get(key) === settled) {
+        inFlight.delete(key);
+      }
+    });
+  }
+
+  // `settled` runs once, when the `stat` settles or the check gives up, whichever comes first.
+  async function check(key: string, path: string, settled: () => void) {
     checking.add(key);
     let hasGivenUp = false;
     const timeout = deps.timers.set(() => {
       hasGivenUp = true;
+      settled();
       if (!isDisposed) {
         logOnce(
           gaveUpPaths,
@@ -189,21 +227,25 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
       return;
     }
     deps.timers.clear(timeout);
+    settled();
     if (isDisposed) {
       return;
     }
-    if (failure !== null) {
+    if (failure === null) {
+      failedPaths.delete(path);
+      gaveUpPaths.delete(path);
+    } else {
       logOnce(
         failedPaths,
         path,
         `file check failed: ${path}: ${errorText(failure)}`,
       );
     }
-    const wasFound = known.get(key);
-    if (wasFound === undefined || wasFound === isFound) {
+    const last = known.get(key);
+    if (last === undefined || last.isFound === isFound) {
       return;
     }
-    known.set(key, isFound);
+    known.set(key, { path, isFound });
     deps.filesChanged();
   }
 
@@ -252,7 +294,7 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
       ended = { state: 'failed', path: null, problem: errorText(error) };
     } finally {
       if (path !== null) {
-        reserved.delete(path);
+        reserved.splice(reserved.indexOf(path), 1);
       }
     }
     if (isDisposed) {
@@ -270,8 +312,11 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
     for (let copy = 1; ; copy += 1) {
       const path = deps.paths.join(deps.downloadsDir, numberedName(name, copy));
       const stat = await deps.files.stat(path);
-      if (stat === null && !reserved.has(path)) {
-        reserved.add(path);
+      const isReserved = reserved.some((each) =>
+        deps.paths.samePath(each, path),
+      );
+      if (stat === null && !isReserved) {
+        reserved.push(path);
         return path;
       }
     }
@@ -311,10 +356,10 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
       );
       for (const { key, file } of checked) {
         if (!known.has(key)) {
-          known.set(key, false);
+          known.set(key, { path: file.path, isFound: false });
         }
         if (!checking.has(key)) {
-          void check(key, file.path);
+          startCheck(key, file.path);
         }
       }
     },
@@ -322,13 +367,21 @@ export function createDownloads(deps: DownloadsDeps): Downloads {
       const files: Record<string, BuildFile[]> = {};
       for (const build of builds) {
         const found = keyedFilesOf(backendId, game, build)
-          .filter(({ key }) => known.get(key) === true)
+          .filter(({ key }) => known.get(key)?.isFound === true)
           .map(({ file }) => file);
         if (found.length > 0) {
           files[build.id] = found;
         }
       }
       return files;
+    },
+    async checksSettled(backendId, game, builds) {
+      const waits = builds.flatMap((build) =>
+        keyedFilesOf(backendId, game, build).flatMap(
+          ({ key }) => inFlight.get(key) ?? [],
+        ),
+      );
+      await Promise.all(waits);
     },
     forgetGame(backendId, gameId) {
       forgetKeys(gameKeyPrefix(backendId, gameId), new Set());

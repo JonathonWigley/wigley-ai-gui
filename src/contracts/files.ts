@@ -87,8 +87,8 @@ export interface Files {
   // appears at `to` between the check and the rename is replaced.
   rename(from: string, to: string): Promise<void>;
   // Copies the file at `from` to `to` by streaming, atomic through a temp file beside `to` as `write` is, creating
-  // missing parent folders of `to`. Replaces a file at `to`. Rejects when `from` is missing (isMissingFile) and for a
-  // folder at `from`.
+  // missing parent folders of `to`. Replaces a file at `to`. Rejects when `from` is missing (isMissingFile), and with
+  // code `EISDIR` for a folder at `from` or at `to`.
   copy(from: string, to: string): Promise<void>;
   // Moves a file or a folder to the OS Trash (under the self-test the Node
   // adapter deletes it for good).

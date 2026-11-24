@@ -13,7 +13,6 @@ import {
 import {
   type BackendEntry,
   type BackendServices,
-  type BuildBackend,
   type BuildFile,
   type BuildRecord,
   type BuildRef,
@@ -64,7 +63,7 @@ interface LiveBackend {
 }
 
 // A game's last listed builds, the commit subjects read for their revisions, its last list failure until a good
-// list, and whether a list of it ever succeeded.
+// list, and whether a list of it succeeded on the backend's current instance.
 interface GameRecords {
   builds: BuildRecord[];
   subjects: Record<string, string>;
@@ -101,12 +100,13 @@ type FilesLookup = (
 // before a restart included, logging once while it still waits after `DRAIN_TIMEOUT_MS`; each publishes as its own
 // `create` settles. The stop disposes every instance and leaves the wait for its calls to the next start. Polls each
 // backend with an instance and games, starts each poll's file checks through `downloads`, folds after each poll,
-// apply, store change and file check that changed the files into `builds.snapshot` and `builds.sessions`, and tells
-// each linked session its build's failing job and end, and a set's end, with the files on disk then, writing the flag
+// apply, store change and file check that changed the files into `builds.snapshot` (each game `listed` once the
+// entry's current instance listed it) and `builds.sessions`, and tells each linked session its build's failing job and
+// end, and a set's end, with the files on disk once the ended builds' file checks in flight settle, writing the flag
 // before the message. Exports `addBackend`; the commands and the channel queue, offer, cancel and launch a set's agent
 // through `queueing`, and the channel's `saveLog` and `download` save into the Downloads folder through `downloads`,
-// published in `builds.downloads`. Registers the builds layout contract and the main half of the Session builds demo
-// step. Each part made holds its own drains, kept across its starts.
+// published in `builds.downloads`; a `download` needs no backend instance. Registers the builds layout contract and
+// the main half of the Session builds demo step. Each part made holds its own drains, kept across its starts.
 export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
   // By backend data folder, the wait for the calls of the instances replaced over it.
   const drains = createDrains();
@@ -202,23 +202,21 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         };
       }
 
-      // The listed build an arg names, with its backend's instance; else the refusal of the first of the backend, its
-      // instance, the game and the build in the game's last listed builds that does not resolve.
+      // The listed build an arg names, with its backend; else the refusal of the first of the backend, its entry, the
+      // game and the build in the game's last listed builds that does not resolve. Needs no instance.
       function downloadTargetOf(arg: {
         backend: string;
         game: string;
         build: string;
       }):
-        | { target: DownloadTarget; instance: BuildBackend }
+        | { target: DownloadTarget; backend: QueueingBackend }
         | { problem: string } {
         const backend = resolvedBackend(arg.backend);
         if (backend === null) {
           return { problem: `no backend ${arg.backend}` };
         }
-        if (backend.entry === null || backend.instance === null) {
-          return {
-            problem: `${backend.label}: ${backend.problem ?? 'still starting'}`,
-          };
+        if (backend.entry === null) {
+          return { problem: startingProblem(backend) };
         }
         const game = backend.entry.games.find((each) => each.id === arg.game);
         if (game === undefined) {
@@ -231,10 +229,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         if (build === undefined) {
           return { problem: `no build ${arg.build} in ${game.label}` };
         }
-        return {
-          target: { backendId: arg.backend, game, build },
-          instance: backend.instance,
-        };
+        return { target: { backendId: arg.backend, game, build }, backend };
       }
 
       function apply() {
@@ -307,12 +302,15 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         services.timers.clear(handle);
       }
 
-      // Drops the records and the file checks of every game no longer in its backend's entry.
+      // Drops the records and the file checks of every game no longer in its backend's entry, and marks every kept game
+      // not yet listed by the instance to come.
       function keepRecordsOf(next: ParsedBackend[]) {
         for (const [backendId, games] of records) {
           const entry = next.find((backend) => backend.id === backendId)?.entry;
-          for (const gameId of games.keys()) {
-            if (!entry?.games.some((game) => game.id === gameId)) {
+          for (const [gameId, gameRecords] of games) {
+            if (entry?.games.some((game) => game.id === gameId)) {
+              gameRecords.hasListed = false;
+            } else {
               games.delete(gameId);
               downloads.forgetGame(backendId, gameId);
             }
@@ -561,7 +559,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
               builds: gameRecords?.builds ?? [],
               subjects: gameRecords?.subjects ?? {},
               files: filesOf(backend.id, game, gameRecords?.builds ?? []),
-              hasListed: gameRecords?.hasListed ?? false,
+              listed: gameRecords?.hasListed ?? false,
             };
           }),
         }));
@@ -654,6 +652,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
 
       async function tell(event: BuildsEvent) {
         const isWritten = await store.written();
+        await endedFilesChecked(event);
         if (isStopped) {
           return;
         }
@@ -674,6 +673,22 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
           log(`${line}: sent`);
         } catch (error) {
           log(`${line}: send failed: ${errorText(error)}`);
+        }
+      }
+
+      // Waits for the file checks in flight of an ended build or set, each giving up after `FILE_CHECK_TIMEOUT_MS`, so
+      // its message names a file that landed since the last poll.
+      async function endedFilesChecked(event: BuildsEvent) {
+        if (event.kind === 'ended') {
+          await downloads.checksSettled(event.ref.backendId, event.game, [
+            event.build,
+          ]);
+        } else if (event.kind === 'setEnded') {
+          await downloads.checksSettled(
+            event.setRun.backendId,
+            event.game,
+            event.builds,
+          );
         }
       }
 
@@ -714,6 +729,10 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         if ('problem' in found) {
           return found;
         }
+        const { instance } = found.backend;
+        if (instance === null) {
+          return { problem: startingProblem(found.backend) };
+        }
         const job =
           arg.job === null
             ? null
@@ -721,7 +740,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         if (job === undefined) {
           return { problem: `no job ${arg.job} in build ${arg.build}` };
         }
-        return downloads.saveLog(found.target, job, found.instance);
+        return downloads.saveLog(found.target, job, instance);
       });
       api.channel.handle('download', async (arg) => {
         const found = downloadTargetOf(arg);
@@ -818,6 +837,11 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
 }
 
 export const buildsMainPart = createBuildsMainPart();
+
+// The refusal of a backend with no entry or no instance: its problem, else that it is still starting.
+function startingProblem(backend: QueueingBackend): string {
+  return `${backend.label}: ${backend.problem ?? 'still starting'}`;
+}
 
 // Throws a command's refusal, so an agent's `run_command` reports it.
 function refuseOnProblem(command: string, result: QueueingResult) {

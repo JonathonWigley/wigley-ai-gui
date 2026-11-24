@@ -3,22 +3,27 @@ import type { BuildBackend, GameEntry } from '../contract';
 // How long a `create` waits on a replaced instance's calls before it logs that it is still waiting.
 export const DRAIN_TIMEOUT_MS = 30_000;
 
-// A backend whose `drained` resolves once every call begun on it has settled. After `dispose`, a call rejects without
-// reaching the backend, so `drained` covers every call it gets.
+// A backend whose `drained` resolves once every `list`, `queue` and `cancel` begun on it has settled. After `dispose`, a
+// call rejects without reaching the backend, so `drained` covers every such call it gets.
 export interface TrackedBackend extends BuildBackend {
   drained(): Promise<void>;
 }
 
-// `backend` with its `list`, `queue`, `cancel` and `saveLog` calls tracked; `dispose` disposes `backend`.
+// `backend` with its `list`, `queue` and `cancel` calls tracked; a `saveLog` writes no data folder, so it is refused
+// after dispose but left out of `drained`. `dispose` disposes `backend`.
 export function trackCalls(backend: BuildBackend): TrackedBackend {
   const pending = new Set<Promise<void>>();
   let isDisposed = false;
 
-  function track<T>(call: () => Promise<T>): Promise<T> {
+  function refuseAfterDispose<T>(call: () => Promise<T>): Promise<T> {
     if (isDisposed) {
       return Promise.reject(new Error('the backend was replaced; try again'));
     }
-    const running = call();
+    return call();
+  }
+
+  function track<T>(call: () => Promise<T>): Promise<T> {
+    const running = refuseAfterDispose(call);
     const settled = running.then(
       () => undefined,
       () => undefined,
@@ -44,7 +49,7 @@ export function trackCalls(backend: BuildBackend): TrackedBackend {
         buildId: string,
         jobId: string | null,
         path: string,
-      ) => track(() => saveLog(game, buildId, jobId, path)),
+      ) => refuseAfterDispose(() => saveLog(game, buildId, jobId, path)),
     }),
     dispose() {
       isDisposed = true;
