@@ -1,6 +1,6 @@
 # 18 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 10 · Depends on: 16, 17 (it checks the moved repo, its installed app, and the docs 16 fixed)
 Plan: [plan.md](plan.md)
@@ -129,3 +129,4 @@ Proof section.
 
 ## Proof
 
+Commit 1cdb46d30 · proof: lint, typecheck, npm test (1 flaky watch test, pre-existing), 5 plugin Python suites, plugin validate x2, marketplace Done list, 3 tool suites all pass; filtered selftest (12 plugins) all passed after the self-test fix; remote main equals origin/main, no 7a18ac69; live probe: checklist gate, Small workflow step, no wigley-forms tools; terminal: auri 1.3.0 tools listed, level gate denies; reinstall 1cdb46d3 cert-signed, update check reports none · concerns: node-files watch test flakes about 1 run in 3, pre-existing, logged as a follow-up

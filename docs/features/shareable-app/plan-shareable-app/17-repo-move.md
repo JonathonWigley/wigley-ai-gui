@@ -1,6 +1,6 @@
 # 17 — Move the app to JonathonWigley/wigley-ai-gui
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · history rewrite, a force push and a sweep across two repos and the user's personal files, with an edit to `wigley-repo-files` that no existing pattern settles
 Wave: 8 · Depends on: 01–15 (the split takes the app folder as `ai`'s `main` holds it, so every app change must have landed first; 15's removal of the work email from `package.json` and its boundary lint must be in the tree the split carries), 19 (19's app-repo mode lands the new clone's work in step 11; the split takes the app folder as `ai`'s `main` holds it, so every app change must have landed first; 15's removal of the work email from `package.json` and its boundary lint must be in the tree the split carries)
@@ -368,3 +368,4 @@ Commit: one commit in `ai` (tools, docs, removal); one landing in the new clone 
 
 ## Proof
 
+Commit ac41bbcd4 · proof: split, offline scans (23 false positives cleared by the user), rewrite, force push, clone and sweep done; ai main ac41bbcd4 holds no wigley-ai-gui file; app main 1cdb46d30; wigley-land 43 and wigley-repo-files 7 tests OK; stale-reference grep prints nothing · concerns: TruffleHog needs --bare on a bare mirror; three peer app commits landed in ai after the split and were ported; wigley-land's ai-mode app_folder release is dead code now that ai holds no app
