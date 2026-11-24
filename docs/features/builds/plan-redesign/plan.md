@@ -216,7 +216,7 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 - [x] [Job graph model](06-job-graph-model.md) — after 02
 
 ### Wave 3
-- [ ] [Detail pane, graph view and keys](07-builds-page.md) — after 05, 06
+- [x] [Detail pane, graph view and keys](07-builds-page.md) — after 05, 06
 
 ### Wave 4
 - [ ] [Demo, self-test and README](08-demo-selftest.md) — after 07
@@ -239,6 +239,7 @@ Review base: a9161d1a
 - 04 · standard · 24abf5d0 · diff read: saveLog outside chain, refusal order build then job, missing log names build and path, other copy errors pass through, capabilities saveLog true; wave 2 typecheck passes · concerns: test assigns files.copy to a mock (compiles); success row relies on memory read returning the written text
 - 06 · hard · cdb2b1c3 · diff read: JobEdge, JobGraph, GraphMove, jobGraph, defaultJob, movedJob in plan shape; three it.each tables; wave 2 typecheck passes · concerns: design.md:285 says arrows run from a job to its prerequisites, 07 draws them prerequisite to dependent
 - 05 · deep · 8183fa1d · diff read: downloads.ts exports filledFiles, savedLogName, createDownloads, DOWNLOAD_KEEP_MS, FILE_CHECK_TIMEOUT_MS; start.ts wires checkFiles, filesOf, forgetGame, dispose and the saveLog/download handlers with refusals; Files: line between Links: and Open:; wave 2 typecheck and oxlint pass; oxfmt applied by the lead to build-messages.ts and downloads.test.ts · concerns: settings-change test reads the snapshot right after pushSettings with no settle
+- 07 · deep · 0e2453f2 · diff read: BuildsPlace and buildsPlaceSlot, the six view-model functions, BuildsScope, BuildsView and BuildsViewDeps members present in the task's shape; openDetail, buildDetail and BuildDetailInput gone; wave 3 typecheck and oxlint pass; oxfmt applied by the lead to six files · concerns: restore of entry 'all' on an empty first snapshot overwrites the saved build with null; a pending place holds writes until a named move (a removed game keeps writes blocked); setFilter drops no pending place; job boxes carry ui-row--action; requestAnimationFrame stubbed in tests so arrows are live-only; divergence: part harness gains focusTarget(), view model exports fileBaseName
 ### Contract changes
 ### Rulings
 - Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01
@@ -249,5 +250,9 @@ Review base: a9161d1a
 - A restarted id clears its pending expiry timer rather than checking startedAt when it fires · group 05
 - No instance refuses '<label>: <problem ?? still starting>', as queueing answers · group 05
 - A save whose name pick settles after dispose starts no backend call or copy · group 05
+- Split end pane holds div.builds-detail-holder (tabIndex -1) around the layout's builds-detail-pane; focus and is-pane-inactive act on the holder · group 07
+- Stacked split shares height evenly (minmax(0,1fr) twice) instead of the shared fit-content(40%) 1fr, so a long list does not press the graph · group 07
+- download drops the pending branch picker before opening the file picker · group 07
+- showBuild moves keys to list before showing, so a hub Open in Builds logs no 'gone' · group 07
 ### Review rounds
 ### Test gate

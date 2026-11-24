@@ -1,6 +1,6 @@
 # 07 — Detail pane, graph view and keys
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses the page reload restore (the `builds.place` slot), the async channel answers of `saveLog` and `download`, and main's `builds.downloads` slot
 Wave: 3 · Depends on: 05, 06
@@ -458,3 +458,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 0e2453f2 · proof: diff read: BuildsPlace and buildsPlaceSlot, the six view-model functions, BuildsScope, BuildsView and BuildsViewDeps members present in the task's shape; openDetail, buildDetail and BuildDetailInput gone; wave 3 typecheck and oxlint pass; oxfmt applied by the lead to six files · concerns: restore of entry 'all' on an empty first snapshot overwrites the saved build with null; a pending place holds writes until a named move (a removed game keeps writes blocked); setFilter drops no pending place; job boxes carry ui-row--action; requestAnimationFrame stubbed in tests so arrows are live-only; divergence: part harness gains focusTarget(), view model exports fileBaseName

@@ -1,6 +1,6 @@
 # 08 — Demo, self-test and README
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · the self-test steps run against a fixture that changes on each poll, so their order and lines are a timing choice no pattern settles
 Wave: 4 · Depends on: 07
