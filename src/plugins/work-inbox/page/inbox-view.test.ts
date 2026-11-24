@@ -5,13 +5,18 @@ import type { ResizeTarget } from '../../../contracts/panes';
 import type { ToastTone } from '../../../contracts/plugin';
 import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
-import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
   type FakeElement,
+  fakeWindow,
   findAll,
   installFocusFakeDom,
+  ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
 import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
 import type {
@@ -22,6 +27,8 @@ import type {
 } from '../../work/contract';
 import { threadDetail, workItem } from '../../work/contract.test-support';
 import type { WorkInboxPlace } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { InboxLayout } from '../layouts/layout';
 import { workInboxManifest } from '../manifest';
 import type { InboxCardAction } from './inbox-state';
 import { createInboxView, type InboxView } from './inbox-view';
@@ -110,6 +117,9 @@ const ITEM_ACTIONS: Record<string, InboxCardAction> = {
   'work-inbox.addItemToBoard': 'addToBoard',
   'work-inbox.startItemSession': 'startSession',
 };
+
+// Every view `inboxSetup` made, disposed after each test so no minute timer outlives it.
+const madeViews: InboxView[] = [];
 
 interface SetupOptions {
   // Whether Inbox mode shows once the first state lands; true unless given.
@@ -206,6 +216,7 @@ function inboxSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     holdPlace: () => ({ dispose: () => undefined }),
   });
   view = created;
+  madeViews.push(created);
   created.stateChanged(state);
   if (options.isShown ?? true) {
     show();
@@ -255,6 +266,30 @@ function fetchedDetail(id: string): ThreadDetail {
   });
 }
 
+// A card layout whose card holds a button, so a click on it lands on a card control.
+const BUTTON_CARD: InboxLayout = {
+  card(parent, _input, kit) {
+    const root = kit.el(parent, 'li', 'work-inbox-card');
+    kit.button(root, 'Go', 'work-inbox.sweep');
+    return root;
+  },
+};
+
+// Advances the clock and the fake timers by the minute tick.
+function tickMinute(setup: Setup) {
+  setup.clock.ms += 60_000;
+  vi.advanceTimersByTime(60_000);
+}
+
+// Makes the DOM selection run from `anchor` to `anchor`, not collapsed.
+function selectIn(anchor: FakeElement) {
+  vi.spyOn(fakeWindow(), 'getSelection').mockReturnValue({
+    isCollapsed: false,
+    anchorNode: anchor,
+    focusNode: anchor,
+  } as never);
+}
+
 function buttonNamed(root: FakeElement, label: string): FakeElement {
   const found = findAll(root, 'ui-button').find(
     (button) => button.textContent.trim() === label,
@@ -271,6 +306,11 @@ describe('createInboxView', () => {
   });
 
   afterEach(() => {
+    for (const view of madeViews.splice(0)) {
+      view.dispose();
+    }
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -493,21 +533,22 @@ describe('createInboxView', () => {
   it.each([
     {
       case: 'the card body',
-      target: (setup: Setup) => cards(setup)[0],
+      target: (card: FakeElement) => card,
       runs: 1,
     },
     {
-      case: 'a button in the pane',
-      target: (setup: Setup) => buttonNamed(paneOf(setup), 'Dismiss'),
+      case: 'a button on the card',
+      target: (card: FakeElement) => findAll(card, 'ui-button')[0],
       runs: 0,
     },
   ])(
     'a click selects the card only off its controls: $case',
     ({ target, runs }) => {
       const setup = inboxSetup(work([workItem('a')]));
-      setup.view.commands.togglePane();
+      setup.view.setLayouts(withUser(defaultLayout, BUTTON_CARD));
+      const card = cards(setup)[0];
 
-      target(setup).fire('click', { target: target(setup) });
+      card.fire('click', { target: target(card) });
 
       expect(
         setup.ranKeys.filter((id) => id === 'work-inbox.selectItem'),
@@ -842,21 +883,117 @@ describe('createInboxView', () => {
     expect(setup.boxes).toHaveLength(1);
   });
 
-  it("the pane's ages redraw once a minute", () => {
-    vi.useFakeTimers();
-    try {
+  it.each([
+    { case: 'no selection', select: null, fetched: 'Fetched 4m ago' },
+    {
+      case: 'a selection in the pane',
+      select: (setup: Setup) =>
+        findAll(paneOf(setup), 'work-inbox-detail-summary')[0],
+      fetched: 'Fetched 3m ago',
+    },
+    {
+      case: 'a selection outside the pane',
+      select: (setup: Setup) => cards(setup)[0],
+      fetched: 'Fetched 4m ago',
+    },
+  ])(
+    "the pane's ages redraw once a minute unless a selection lies in it: $case",
+    ({ select, fetched }) => {
+      vi.useFakeTimers();
       const setup = inboxSetup(work([workItem('a')]), {
         details: [fetchedDetail('a')],
       });
       setup.view.commands.togglePane();
       expect(paneOf(setup).textContent).toContain('Fetched 3m ago');
+      if (select !== null) {
+        selectIn(select(setup));
+      }
 
-      setup.clock.ms += 60_000;
-      vi.advanceTimersByTime(60_000);
+      tickMinute(setup);
 
-      expect(paneOf(setup).textContent).toContain('Fetched 4m ago');
-    } finally {
-      vi.useRealTimers();
-    }
+      expect(paneOf(setup).textContent).toContain(fetched);
+    },
+  );
+
+  it('the minute tick leaves a focused box focused, with its text and the keys', () => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]), {
+      details: [fetchedDetail('a')],
+    });
+    setup.view.commands.editDraft();
+    setup.boxes[0].type('mine');
+    const drawn = findAll(paneOf(setup), 'work-inbox-detail-pane')[0];
+
+    tickMinute(setup);
+    setup.boxes[0].type('mine too');
+
+    expect(findAll(paneOf(setup), 'work-inbox-detail-pane')[0]).toBe(drawn);
+    expect(setup.boxes).toHaveLength(1);
+    expect(setup.boxes[0]).toMatchObject({
+      text: 'mine too',
+      isFocused: true,
+      isDestroyed: false,
+    });
+    expect(setup.scopes.at(-1)).toBe('box');
+  });
+
+  it.each([
+    {
+      case: 'a detail change for the shown item',
+      act: (setup: Setup) => setup.view.detailChanged('a'),
+      scrollTop: 120,
+    },
+    {
+      case: 'the minute tick',
+      act: tickMinute,
+      scrollTop: 120,
+    },
+    {
+      case: 'listDown to another item',
+      act: (setup: Setup) => setup.view.commands.listDown(),
+      scrollTop: 0,
+    },
+  ])(
+    'the pane scrolls back to the top only when the shown item changes: $case',
+    ({ act, scrollTop }) => {
+      // Scrollers drop their scroll as their content is removed, as a browser does.
+      installFocusFakeDom(vi.stubGlobal, ShrinkingScrollerFakeElement);
+      vi.useFakeTimers();
+      const setup = inboxSetup(
+        work([
+          workItem('a', { at: '2026-11-23T11:00:00.000Z' }),
+          workItem('b'),
+        ]),
+        { details: [fetchedDetail('a'), fetchedDetail('b')] },
+      );
+      setup.view.commands.togglePane();
+      paneOf(setup).scrollTop = 120;
+
+      act(setup);
+
+      expect(paneOf(setup).scrollTop).toBe(scrollTop);
+    },
+  );
+
+  it('listDown redraws the open pane for the new cursor item', () => {
+    const setup = inboxSetup(
+      work([workItem('a', { at: '2026-11-23T11:00:00.000Z' }), workItem('b')]),
+    );
+    setup.view.commands.togglePane();
+
+    setup.view.commands.listDown();
+
+    expect(
+      findAll(paneOf(setup), 'work-inbox-detail-title')[0]?.textContent,
+    ).toBe('Thread b');
+  });
+
+  it('the open pane draws detailEmpty with no cursor item', () => {
+    const setup = inboxSetup(work([]));
+
+    setup.view.commands.togglePane();
+
+    expect(findAll(paneOf(setup), 'work-inbox-detail-empty')).toHaveLength(1);
+    expect(paneOf(setup).textContent).toContain('No thread selected.');
   });
 });

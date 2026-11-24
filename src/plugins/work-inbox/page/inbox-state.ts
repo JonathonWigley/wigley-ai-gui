@@ -37,7 +37,7 @@ export const SECTION_TITLES: Record<InboxSectionId, string> = {
   all: 'All',
 };
 
-// Where the keys act: the side bar's sections, the card list, or the cursor card's draft box.
+// Where the keys act: the side bar's sections, the card list, or the detail pane's reply box.
 export type InboxFocus = 'sections' | 'list' | 'box';
 
 export type Move = 'down' | 'up' | 'top' | 'bottom';

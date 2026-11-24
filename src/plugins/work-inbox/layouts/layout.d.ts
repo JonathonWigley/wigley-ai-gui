@@ -64,7 +64,7 @@ export interface InboxFilterInput {
   ticketKey: string;
 }
 
-// What a card's buttons do, in the order a card draws them.
+// What the detail pane's buttons do, in the order the pane draws them.
 export type InboxCardAction =
   | 'send'
   | 'snooze'
@@ -173,8 +173,9 @@ export interface DetailKit extends InboxKit {
 // A user layout defines only the parts it changes; `default` draws the rest. The `sideBar` and `main` panes are drawn
 // into app-owned containers once per layout set; the rows, `status`, `problem`, `filter`, `card`, `empty`, `detail`
 // and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes: `sideBar` and
-// `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty` included, `work-inbox.list`. The
-// `draftBox`'s own hints fire in `work-inbox.box`.
+// `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty` included, `work-inbox.list`. Of the
+// `draftBox`'s own hints, `edit` anchors in `work-inbox.list`, where it opens the box, and `send` fires in
+// `work-inbox.box`.
 export interface InboxLayout {
   sideBar?(parent: HTMLElement, kit: SideBarKit): InboxPane;
   sectionRow?(

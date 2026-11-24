@@ -109,7 +109,7 @@ export const workInboxManifest = definePlugin({
       arg: 'string',
     },
     sendItem: {
-      label: "send this card's draft",
+      label: "send this thread's reply",
       group: 'card',
       runsIn: 'page',
       arg: 'string',

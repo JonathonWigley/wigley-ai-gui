@@ -615,15 +615,36 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       ),
     }));
 
+  // Whether the user is in the detail pane: its reply box holds the focus, or a text selection lies in it.
+  const isUserInPane = (): boolean => {
+    if (boxes.active() !== null) {
+      return true;
+    }
+    const selection = window.getSelection();
+    return (
+      selection !== null &&
+      !selection.isCollapsed &&
+      (detailPane.contains(selection.anchorNode) ||
+        detailPane.contains(selection.focusNode))
+    );
+  };
+
+  // The time the detail pane's ages read. It holds while the user is in the pane, so only a change of what the pane
+  // shows redraws it, never an age moving: a redraw re-places the box and drops the selection.
+  let paneNow = deps.now();
+
   // Draws the detail pane while it is open: the cursor item's detail, or the empty part with none; while it is closed,
   // empties it. True when the redraw dropped the focused reply box without placing it again.
   const drawDetail = (state: InboxViewState, work: WorkState): boolean => {
     split.setEndHidden(!state.paneOpen);
+    if (!isUserInPane()) {
+      paneNow = deps.now();
+    }
     const item = state.paneOpen ? cursorItem(work, state) : null;
     const input =
       item === null
         ? null
-        : detailInput(item, state, shownDetail(item.id), deps.now());
+        : detailInput(item, state, shownDetail(item.id), paneNow);
     // The box's own text is left out while it is editable, so typing never redraws the pane.
     const isEditable =
       input !== null && input.draft !== null && !input.isSending;
@@ -635,6 +656,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     if (key !== drawnDetailKey) {
       drawnDetailKey = key;
       const wasBoxFocused = boxes.active() !== null;
+      const { scrollTop } = detailPane;
       isRedrawing = true;
       try {
         keepFocusedBox(boxes, DRAFT_FORM, () => {
@@ -652,11 +674,11 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
         isRedrawing = false;
       }
       isBoxDropped = wasBoxFocused && boxes.active() === null;
+      // The same item keeps its scroll across the redraw; another starts at the top.
       const shownItem = item?.id ?? null;
-      if (shownItem !== drawnDetailItem) {
-        drawnDetailItem = shownItem;
-        detailPane.scrollTop = 0;
-      }
+      const isSameItem = shownItem === drawnDetailItem;
+      drawnDetailItem = shownItem;
+      detailPane.scrollTop = isSameItem ? scrollTop : 0;
     }
     if (item !== null && isEditable) {
       const text = draftText(item, state);
@@ -804,7 +826,8 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   drawMainPane();
   store.subscribe(() => render());
 
-  // The status line's and the detail pane's ages, again once a minute.
+  // The status line's and the detail pane's ages, again once a minute; the pane's hold while the user is in it
+  // (`paneNow`).
   let statusTimer: number | null = null;
   const redrawStatus = () => {
     const state = store.get();

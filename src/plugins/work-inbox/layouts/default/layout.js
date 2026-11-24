@@ -108,7 +108,7 @@ function messageBlock(parent, message, kit) {
     'work-inbox-detail-message-head',
     `${message.author} · ${message.age}`,
   );
-  kit.markdown(root, message.text, 'work-inbox-detail-text');
+  kit.markdown(root, message.text, 'work-inbox-detail-text md');
 }
 
 /**
