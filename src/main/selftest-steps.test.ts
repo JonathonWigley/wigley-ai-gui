@@ -61,6 +61,7 @@ function runGroups(
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]> = new Map(),
   isCurrent: () => boolean = () => true,
   stepTimeoutMs?: number,
+  runScrollsItself: readonly string[] = [],
 ) {
   return runScript(
     window,
@@ -85,6 +86,7 @@ function runGroups(
     1,
     isCurrent,
     stepTimeoutMs,
+    runScrollsItself,
   );
 }
 
@@ -274,6 +276,41 @@ describe('runScript', () => {
     expect(lines.filter((line) => /PASS|FAIL/.test(line))).toEqual([
       '[selftest] PASS [t] shown',
     ]);
+  });
+
+  it('lets a fit check clip the elements every script in the run scrolls, not only its own', async () => {
+    const { window, log } = page(echo);
+    const cutOffScripts: string[] = [];
+    const watchedWindow: DrivenWindow = {
+      ...window,
+      run: <T>(script: string) => {
+        if (!script.includes('scrollsItself')) {
+          return window.run<T>(script);
+        }
+        cutOffScripts.push(script);
+        return Promise.resolve([] as T);
+      },
+    };
+
+    const failures = await runGroups(
+      watchedWindow,
+      log,
+      [
+        {
+          name: 'fit',
+          why: 'the page fits',
+          steps: [{ keys: ['a'], expect: '[t] a', checksFit: true }],
+        },
+      ],
+      new Map(),
+      () => true,
+      undefined,
+      ['.other-scroller'],
+    );
+
+    expect(failures).toBe(0);
+    expect(cutOffScripts).toHaveLength(1);
+    expect(cutOffScripts[0]).toContain('.other-scroller');
   });
 
   it('presses a repeating step until its until line and saves one file per press', async () => {

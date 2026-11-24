@@ -454,8 +454,12 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 // script at `startWidth`, the content width the self-test started on: a run
 // that opens on another (a reload interrupted a held width) resizes back first,
 // and a width a step held is restored once the result is checked. `screenshots`
-// maps each step that saves PNGs to their paths, and the fit check lets the
-// script's `scrollsItself` and the primitives' clipping parts clip. `load` is
+// maps each step that saves PNGs to their paths. The fit check lets the
+// primitives' clipping parts clip and every selector in the script's own
+// `scrollsItself` and in `runScrollsItself`, the `scrollsItself` of every
+// script in the run: such an element scrolls or clips in its own box wherever
+// it shows, so a step of one script exempts what another script's page left on
+// screen. `load` is
 // the page load the run belongs to, which the fixture opens under, and
 // `isCurrent` (`isOnLoad` of it) whether the run still owns the window.
 // Without `checksResult` the result is left unchecked, a skip line saying so,
@@ -472,6 +476,7 @@ export async function runScript(
   load: number,
   isCurrent: () => boolean,
   stepTimeoutMs = STEP_TIMEOUT_MS,
+  runScrollsItself: readonly string[] = [],
 ): Promise<number | null> {
   const mark = await markLog(window);
   // The page may have navigated while the log was read.
@@ -516,7 +521,9 @@ export async function runScript(
     report(isShown, linesReport(shownLines, missingShown));
   }
 
-  const scrollsItself = withPrimitiveClipping(script.scrollsItself);
+  const scrollsItself = withPrimitiveClipping([
+    ...new Set([...script.scrollsItself, ...runScrollsItself]),
+  ]);
   for (const group of script.groups) {
     if (!isCurrent()) {
       return null;

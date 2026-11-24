@@ -109,6 +109,7 @@ async function runAllScripts(
     return;
   }
 
+  const runScrollsItself = runs.flatMap((run) => run.script.scrollsItself);
   let failures = 0;
   for (const run of runs) {
     const scriptFailures = await runScript(
@@ -119,6 +120,8 @@ async function runAllScripts(
       startWidth,
       load,
       isCurrent,
+      undefined,
+      runScrollsItself,
     );
     if (scriptFailures === null) {
       return;

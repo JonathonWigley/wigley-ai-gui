@@ -1074,7 +1074,10 @@ export interface SelfTestGroup {
 // before the first step began would never reach that step's `alsoExpect`.
 // `scrollsItself` lists CSS selectors for the elements a fit check lets
 // scroll or clip in their own box rather than wrap, nothing inside them
-// checked either; empty when nothing does.
+// checked either; empty when nothing does. Such an element does so wherever it
+// shows, so a fit check in any script's step lets the selectors of every
+// script in the run scroll or clip, not only that script's own: one script's
+// page can stay on screen when the next script's steps run.
 // `settings` overrides plugin settings in the config main serves the page, by
 // plugin id, each holding only the settings it changes; main parts have
 // already started on their defaults.
