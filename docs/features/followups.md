@@ -510,9 +510,11 @@ User-facing features, those other work builds on first.
 - **Work continues while a forms round waits** — *needs a feature plan*: an agent that sends a round waits on it.
   An exploration. `ask_round` blocks until its deadline, and `auri:forms` § Outcomes tells the agent to call
   `collect_last_round` again after every `draft`, so the session sits idle while the user answers, even when part
-  of the work does not depend on the round. OpenAI's GPT-6.2 prompting guidance (approx. 2026-11-17, undated;
-  https://developers.openai.com/codex) asks questions asynchronously (`request_user_input_async`) while working on
-  other parts, and stops only for scope changes, blockers, user decisions or destructive actions. Proposed shape:
+  of the work does not depend on the round. The planning baseline already holds the principle: with an
+  unanswered question, do everything that doesn't depend on the answer (Prompting Claude Fable 5.1). The new part is
+  asking without blocking: OpenAI's GPT-6.2 Astra prompting guide (approx. 2026-11-17, undated) asks questions
+  asynchronously (`request_user_input_async`) while working on other parts, and stops only for scope changes,
+  blockers, user decisions or destructive actions. Proposed shape:
   `auri:forms` names when an agent may work between collects: work no open question can change, never an edit an
   answer could undo. The wake already tells the session when the user submits. Test: run three Medium sessions
   whose rounds leave independent work, and compare their wall time and any work an answer undid against runs that
