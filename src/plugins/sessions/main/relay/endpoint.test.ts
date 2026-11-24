@@ -45,7 +45,7 @@ describe('endedDriveRunLaunch', () => {
 describe('createEndpointWriter', () => {
   const endpoint: RelayEndpoint = {
     protocol: 1,
-    channel: '/Users/jon/.agents/wigley-ai-gui/app.sock',
+    channel: '/Users/u/.agents/wigley-ai-gui/app.sock',
     launch: { command: ['/opt/electron'], cwd: '/work/app' },
     pid: 4242,
   };

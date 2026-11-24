@@ -1,6 +1,7 @@
 // The changelog rules `check-changelog.mts` enforces (`AGENTS.md` § README,
 // changelog and boundary): a branch that changes app code adds an entry under
-// `## Unreleased`, and the app and its agent plugin carry one version. Pure
+// `## Unreleased` under a `###` heading, and the app and its agent plugin
+// carry one version. Pure
 // functions over paths and text, so the rules are tested without git.
 
 // Folders whose files are docs or agent instructions, which need no entry.
@@ -71,6 +72,26 @@ export function addedEntryLines(baseText: string, headText: string): string[] {
       baseCounts.set(line, left - 1);
       return false;
     });
+}
+
+// The `- ` lines under `## Unreleased` in `changelog` that sit above its first
+// `### ` heading: `changelog:release` moves only the entries under a `###`
+// heading, so these would never be released.
+export function uncategorizedEntries(changelog: string): string[] {
+  const found: string[] = [];
+  let isInUnreleased = false;
+  let isUnderHeading = false;
+  for (const line of changelog.split('\n')) {
+    if (line.startsWith('## ')) {
+      isInUnreleased = line.trim() === UNRELEASED;
+      isUnderHeading = false;
+    } else if (line.startsWith('### ')) {
+      isUnderHeading = true;
+    } else if (isInUnreleased && !isUnderHeading && line.startsWith('- ')) {
+      found.push(line);
+    }
+  }
+  return found;
 }
 
 // A reason naming each file and its version when `versions` (file → version)

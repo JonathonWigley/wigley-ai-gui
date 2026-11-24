@@ -1,6 +1,7 @@
 // Fails when the branch changes app code against `origin/main` and adds no
-// entry under `## Unreleased` in `CHANGELOG.md`, or when `package.json` and the
-// two agent-plugin manifests carry different versions (`AGENTS.md` § README,
+// entry under `## Unreleased` in `CHANGELOG.md`, when an Unreleased entry sits
+// under no `###` heading, or when `package.json` and the two agent-plugin
+// manifests carry different versions (`AGENTS.md` § README,
 // changelog and boundary). The rules live in `changelog-rules.mts`; this reads
 // git and the files and prints what they report. Run from the app's root; it
 // takes no arguments.
@@ -9,6 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import {
   addedEntryLines,
   needsEntry,
+  uncategorizedEntries,
   versionMismatch,
 } from './changelog-rules.mts';
 
@@ -96,6 +98,16 @@ function entryProblems(): string[] {
 
 const versionReason = versionProblem();
 const problems = versionReason === null ? [] : [`changelog: ${versionReason}`];
+const uncategorized = existsSync(CHANGELOG)
+  ? uncategorizedEntries(readFileSync(CHANGELOG, 'utf8'))
+  : [];
+if (uncategorized.length > 0) {
+  problems.push(
+    'changelog: entries under ## Unreleased with no ### heading, which changelog:release would not move:',
+    ...uncategorized.map((line) => `  ${line}`),
+    'put each under ### Added, ### Changed, ### Fixed or ### Removed',
+  );
+}
 if (hasOriginMain()) {
   problems.push(...entryProblems());
 } else {

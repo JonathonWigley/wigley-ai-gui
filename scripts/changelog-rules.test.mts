@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addedEntryLines,
   needsEntry,
+  uncategorizedEntries,
   versionMismatch,
 } from './changelog-rules.mts';
 
@@ -91,6 +92,35 @@ describe('addedEntryLines', () => {
     },
   ])('addedEntryLines_$name', ({ base, head, added }) => {
     expect(addedEntryLines(base, head)).toEqual(added);
+  });
+});
+
+describe('uncategorizedEntries', () => {
+  // Catches an entry `changelog:release` never moves: one above the first
+  // `###` under Unreleased. An older version's lines are not Unreleased's.
+  it.each([
+    {
+      name: 'UnderHeading_None',
+      text: changelog('### Added\n\n- A new thing.\n'),
+      found: [],
+    },
+    {
+      name: 'AboveFirstHeading_Found',
+      text: changelog('- Loose.\n\n### Fixed\n\n- A fix.\n'),
+      found: ['- Loose.'],
+    },
+    {
+      name: 'NoHeadingAtAll_Found',
+      text: changelog('- Loose.\n'),
+      found: ['- Loose.'],
+    },
+    {
+      name: 'OlderVersionWithoutHeading_None',
+      text: changelog('', '## 1.0.0 — 2026-11-01\n\n- Old loose line.\n'),
+      found: [],
+    },
+  ])('uncategorizedEntries_$name', ({ text, found }) => {
+    expect(uncategorizedEntries(text)).toEqual(found);
   });
 });
 

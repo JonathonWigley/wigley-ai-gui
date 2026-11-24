@@ -10,7 +10,7 @@ describe('readAccountStatus', () => {
       email: 'jo@example.com',
       orgName: 'Jo',
       subscriptionType: 'max',
-      configDirectory: '/Users/jo/.claude',
+      configDirectory: '/Users/u/.claude',
     });
 
     const status = readAccountStatus(`${stdout}\n`);
@@ -34,7 +34,7 @@ describe('readAccountStatus', () => {
       loggedIn: false,
       authMethod: 'none',
       apiProvider: 'firstParty',
-      configDirectory: '/Users/jo/.claude-work',
+      configDirectory: '/Users/u/.claude-work',
     });
 
     expect(readAccountStatus(stdout)).toEqual({

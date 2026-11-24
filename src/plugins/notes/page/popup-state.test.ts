@@ -16,8 +16,8 @@ import {
   toggleTag,
 } from './popup-state';
 
-const GUI_CLONE = '/Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui';
-const OTHER_CLONE = '/Users/jonathonwigley/Documents/dev/other';
+const GUI_CLONE = '/Users/u/Documents/ai-dev/wigley-ai-gui';
+const OTHER_CLONE = '/Users/u/Documents/dev/other';
 
 const A: NoteHome = {
   repo: 'wigley-ai-gui',
@@ -27,7 +27,7 @@ const A: NoteHome = {
 };
 const B: NoteHome = {
   repo: 'wigley-agents',
-  root: '/Users/jonathonwigley/wigley-features/wigley-agents',
+  root: '/Users/u/wigley-features/wigley-agents',
   folder: null,
   followups: [],
 };

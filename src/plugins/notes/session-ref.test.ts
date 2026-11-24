@@ -4,12 +4,12 @@ import { posixPaths } from '../../shared/paths/posix-paths';
 import type { NoteSession } from './contract';
 import { sessionChipText, sessionLine } from './session-ref';
 
-const HOME = '/Users/jonathonwigley';
+const HOME = '/Users/u';
 const SESSION: NoteSession = {
   sessionId: 'row-1',
   harness: 'claude',
   hostSessionId: 'a1b2c3d4-0000-4000-8000-000000000001',
-  projectDir: '/Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui',
+  projectDir: '/Users/u/Documents/ai-dev/wigley-ai-gui',
 };
 const BARE: NoteSession = { ...SESSION, harness: null, projectDir: null };
 const HARNESSES = new Map([['claude', harnessInfo({ label: 'Claude Code' })]]);

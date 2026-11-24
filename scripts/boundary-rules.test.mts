@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { BOUNDARY_NAMES, boundaryHits, isExempt } from './boundary-rules.mts';
+import {
+  BOUNDARY_NAMES,
+  boundaryHits,
+  isExempt,
+  isScanned,
+  localNames,
+} from './boundary-rules.mts';
 
 // One row per BOUNDARY_NAMES entry, so a dropped or broken pattern fails.
 const HITS = [
@@ -13,7 +19,9 @@ const HITS = [
   { text: "skill: 'wigley:small'", name: 'wigley: skill' },
   { text: "key: 'wigley@market'", name: 'wigley plugin key' },
   { text: '{ "wigley": { "on": true } }', name: 'wigley plugin key' },
+  { text: "{ 'wigley': { on: true } }", name: 'wigley plugin key' },
   { text: '"plugins": ["other", "wigley"]', name: 'wigley plugin key' },
+  { text: "plugins: ['other', 'wigley']", name: 'wigley plugin key' },
   { text: 'WigleyCapture.cs', name: 'WigleyCapture' },
   { text: 'runs capture.py first', name: 'capture.py' },
   { text: 'python3 plan.py read', name: 'plan.py' },
@@ -21,6 +29,10 @@ const HITS = [
     text: 'tools/x wigley-agents/tools/unity-pool',
     name: 'unity-pool install path',
   },
+  { text: '"email": "pat.lee@company.co"', name: 'email address' },
+  { text: 'by 123+pat@users.noreply.github.com', name: 'email address' },
+  { text: "const home = '/Users/pat/Documents';", name: 'home path' },
+  { text: "const home = '/Users/uz';", name: 'home path' },
 ];
 
 describe('boundaryHits', () => {
@@ -39,7 +51,7 @@ describe('boundaryHits', () => {
   });
 
   // Catches an over-broad pattern that fails the tree on a data folder, an env
-  // name or the app's own name.
+  // name, the app's own name, a sample path or address, or an SSH login.
   it.each([
     '~/.agents/wigley-forms/rounds/',
     '~/.local/state/unity-pool/',
@@ -48,13 +60,65 @@ describe('boundaryHits', () => {
     'wigley-ai-gui: the app',
     'unity-pool.scriptPath',
     'read_plan.py',
-    "const name = 'jonathonwigley:x';",
+    "const name = 'otherwigley:x';",
+    "exposeInMainWorld('wigley', bridge)",
+    "const SAMPLE = 'wigley';",
+    'fake@example.invalid',
+    'pat@example.com',
+    'git clone git@github.com:owner/repo.git',
+    'npm i @scope/pkg react@18.3.1',
+    "const home = '/Users/u/Documents';",
+    'path: /Users/fake/.local/bin/claude',
+    'ls /Users/<name>/',
   ])('boundaryHits_Passes: %s', (text) => {
     expect(boundaryHits('src/x.ts', text)).toEqual([]);
   });
 
   it('boundaryHits_SameTextInTestFile_Passes', () => {
     expect(boundaryHits('src/x.test.ts', "'wigley:small'")).toEqual([]);
+  });
+
+  it('boundaryHits_ExtraName_Hits', () => {
+    const extra = localNames([{ source: 'boundary.name', value: 'Acme' }]);
+    expect(boundaryHits('README.md', 'Built at ACME.', extra)).toEqual([
+      { line: 1, name: 'local name (boundary.name)' },
+    ]);
+  });
+});
+
+describe('localNames', () => {
+  // Catches a value read as a pattern (a `.` matching any character) and a
+  // short value that would hit ordinary words.
+  it.each([
+    { value: 'a.b@c.de', text: 'mail a.b@c.de now', hits: true },
+    { value: 'a.b@c.de', text: 'mail axb@c.de now', hits: false },
+    { value: '  Acme  ', text: 'acme corp', hits: true },
+    { value: 'ab', text: 'ab', hits: false },
+  ])('localNames: $value in $text hits $hits', ({ value, text, hits }) => {
+    const names = localNames([{ source: 'user.email', value }]);
+    expect(names.some(({ pattern }) => pattern.test(text))).toBe(hits);
+  });
+});
+
+describe('isScanned', () => {
+  it.each([
+    { path: 'src/plugins/x.ts', scanned: true },
+    { path: 'agent-plugin/scripts/relay/relay.py', scanned: true },
+    { path: 'scripts/check-boundary.mts', scanned: true },
+    { path: '.claude-plugin/marketplace.json', scanned: true },
+    { path: 'package.json', scanned: true },
+    { path: 'forge.config.mts', scanned: true },
+    { path: 'README.md', scanned: true },
+    { path: 'CHANGELOG.md', scanned: true },
+    { path: 'AGENTS.md', scanned: false },
+    { path: 'DESIGN.md', scanned: false },
+    { path: 'LICENSE', scanned: false },
+    { path: 'package-lock.json', scanned: false },
+    { path: 'docs/keymap.md', scanned: false },
+    { path: '.claude/skills/drive/SKILL.md', scanned: false },
+    { path: 'assets/icon.png', scanned: false },
+  ])('isScanned: $path is $scanned', ({ path, scanned }) => {
+    expect(isScanned(path)).toBe(scanned);
   });
 });
 
