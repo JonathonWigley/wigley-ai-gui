@@ -31,19 +31,21 @@ Steps:
    `board-detail-pane`" sentence into the bullet as present-tense fact. Update the Inbox card description to the slim
    card and the pane.
 4. In `docs/keymap.md`, add the Board pane and the Inbox pane to the list of views that take the `Ctrl+j`/`Ctrl+k`
-   and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll keys (the § Ctrl+hjkl bullet), and add `gx` and `i` (pane box) to the
-   Inbox and Board key list there.
+   and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll keys (the § Ctrl+hjkl bullet). In the sentence that lists "The Inbox's and
+   the Board's own keys" (about line 122 at plan time), add `Enter` the detail pane, `gx` Jira or Slack, `i` the
+   pane's box on the Board, and the pane's `Ctrl+j`/`Ctrl+k` scroll.
 5. In `README.md`, update the `record_work_tickets`, `record_work_items` and `read_work_state` rows of the tools
-   table to say what each now carries (detail, thread detail, stored detail stamps), and add `work.comment` to the
-   README's command list. In `AGENTS.md`, the line describing the work plugin's `contract.ts` names only the
-   `work.state` slot: add `work.details` and the comment contract.
-6. In `CHANGELOG.md` under `## Unreleased`, add one line each: `### Added` — the Board and Inbox detail pane;
+   table to say what each now carries (detail, thread detail, stored detail stamps). In the settings table's `work`
+   row (about line 178), add `work.detailComments` and `work.threadReplies`. In `AGENTS.md`, the line describing the
+   work plugin's `contract.ts` names only the `work.state` slot: add `work.details` and the comment contract.
+6. In `CHANGELOG.md` under `## Unreleased`, creating the `### Added` and `### Changed` headings when absent, add one
+   line per item listed: `### Added` — the Board and Inbox detail pane;
    comments on Jira tickets from the Board pane; a reply box on every Inbox thread; `work.detailComments` and
    `work.threadReplies`. `### Changed` — `Enter` opens the detail pane; `gx` opens Jira or Slack; Inbox cards slim
    down while the pane is open.
 
-Done when: `grep -rn "board-detail-pane" wigley-ai-gui/docs wigley-ai-gui/DESIGN.md` prints only lines under the
-           plan folder · `npm run lint:changelog` passes
+Done when (from `wigley-ai-gui/`): `grep -rn "board-detail-pane" docs DESIGN.md` prints only lines under the plan
+           folder · `npm run lint:changelog` passes
 Commit:    one commit for the group
 Bookkeeping: tick this task's box in `plan.md`
 

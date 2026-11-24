@@ -44,12 +44,14 @@ Decisions:
 - No other scope takes these keys. Before binding, grep `keymap.ts` for `'gx'`, `<C-j>` and `<C-S-j>` in these four
   scopes and in `any`: a clash is reported, not rebound.
 - **Self-test steps** (`selftest-script.ts`), added to the existing key groups after their last step:
-  - `board keys`: `Enter` → `boardLine('pane open')`; `<C-S-j>` → the scroll line `scrollText` gives for the pane
-    (read the exact text from `content-scroll.ts`: with the fixture's short detail the pane may not scroll, and the
-    line says so); `i` → the `focused box of WRK-2` line (the cursor is on WRK-2 after `h`); `Escape` → the Board's
-    leave-box line; `Enter` → `boardLine('pane closed')`.
-  - `inbox keys`: before the `W` step, `Enter` in the You promised list → `inboxLine('pane open')`; `<C-S-j>` → the
-    pane's scroll line; `Enter` → `inboxLine('pane closed')`.
+  - `board keys`: `Enter` → `boardLine('pane open')`; `<C-S-j>` → `boardLine('the detail did not scroll down')`;
+    `i` → the `focused box of WRK-2` line (the cursor is on WRK-2 after `h`); `Escape` → `boardLine('board
+    focused')` (03 logs it on `leaveBox`); `Enter` → `boardLine('pane closed')`.
+  - `inbox keys`: before the `W` step, `Enter` in the You promised list → `inboxLine('pane open')`; `<C-S-j>` →
+    `inboxLine('the detail did not scroll down')`; `Enter` → `inboxLine('pane closed')`.
+  - The scroll lines are pinned: the fixture holds detail only for `WRK-1`, `WRK-3`, `needsYou` and `around` (01), so
+    WRK-2's and the first You promised item's panes hold one short line and do not scroll. These steps prove the key
+    reaches the pane's command; 03's and 04's unit rows prove the scroll itself over a fake scroller.
   - Each step's `why` names what it proves in one sentence, as the steps around it do.
 
 GIVEN the Board shows with a cursor card WHEN the user presses `Enter` THEN the log reads `[work-board] pane open`
@@ -60,9 +62,9 @@ Tests: the self-test steps above are this task's test: keymap binds are data, an
 one through the real keymap. Any keymap unit test that lists the Board or Inbox `<CR>` bind is updated to the new
 command.
 
-Done when: `npm run typecheck`, `npm run lint` and `npm test` pass · `npm run selftest -- --plugin work` passes with
-the new steps · `grep -n "work-board.openCard\|work-inbox.openSlack" wigley-ai-gui/src/plugins/keymap.ts` prints only
-the `gx` lines.
+Done when (every command from `wigley-ai-gui/`): `npm run typecheck`, `npm run lint` and `npm test` pass ·
+`npm run selftest -- --plugin work` passes with the new steps · `grep -n "work-board.openCard\|work-inbox.openSlack"
+src/plugins/keymap.ts` prints only the `gx` lines.
 
 Commit: one commit for the group.
 Bookkeeping: tick this task's box in `plan.md`

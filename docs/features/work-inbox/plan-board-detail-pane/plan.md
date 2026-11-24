@@ -29,7 +29,7 @@ Nothing outside `wigley-ai-gui` changes. No third-party package is added.
 
 - The worktree's base is `main` at `72e8802b2` or later: `git -C /Users/jonathonwigley/Documents/ai log --oneline -1 main`.
 - The Board and Inbox have no split today: `grep -n "no split" wigley-ai-gui/src/plugins/work-board/page/board-view.ts wigley-ai-gui/src/plugins/work-inbox/page/inbox-view.ts` prints one line in each file.
-- `work.state` is the only `work` slot: `grep -n "SlotKey" wigley-ai-gui/src/plugins/work/contract.ts` prints only `workStateSlot` (line 299 at plan time, re-verify).
+- `work.state` is the only `work` slot: `grep -n "SlotKey" wigley-ai-gui/src/plugins/work/contract.ts` prints only the import and `workStateSlot` (lines 3 and 299 at plan time, re-verify).
 - No bind uses `gx`, `<C-d>` or `<C-u>`: `grep -n "'gx'\|<C-d>\|<C-u>" wigley-ai-gui/src/plugins/keymap.ts` prints nothing.
 - The split primitive exists with `sizedPane`: `grep -n "sizedPane" wigley-ai-gui/src/shared/page/ui/split.ts` prints at least one line.
 - Both record tools reject extra fields: `grep -n "additionalProperties: false" wigley-ai-gui/src/plugins/work/main/work-tools.ts` prints at least two lines.
@@ -101,6 +101,9 @@ Settled decisions (interview rounds 1–3 and the design review):
 - **Inbox pane.** Every open thread has a reply box, filled with the worker's draft where one exists, sent through the
   existing Send job. The draft box moves from the cursor card into the pane. While the pane is open a card shows only
   title, channel, author, age and the latest line; while it is closed the card also shows its summary.
+- **Old saved shapes.** `work.json` reads an absent `details` as `{}` and an absent `commenting` as `[]`, since a
+  refused store file stops every save for the run. A view's saved place has no such fallback (`AGENTS.md` § Intent,
+  one user): a field the place gains reads as its type's empty value only where the task says so.
 - **Layouts.** Each view adds its own detail part to its own layout contract and `default` layout. The two views share
   no page code, as today.
 - **Demo.** Both views' sample state carries detail records, and their demo steps open the pane.

@@ -2,7 +2,7 @@
 
 Status: not started
 Type: Task
-Rung: hard · follows the Move job at each place a job kind is listed, and adds the comment contract that 03 consumes
+Rung: deep · adds a stored `work.json` card field, a persisted queue job kind, a restart-time stale-mark rule and a job-end write to stored detail; it follows the Move job at each place a job kind is listed, and adds the comment contract that 03 consumes
 Wave: 2 · Depends on: 01 (shares contract.ts, store.ts, work-tools.ts, job-text.ts, manifest.ts, main/start.ts)
 Plan: [plan.md](plan.md)
 
@@ -19,7 +19,7 @@ Files:
 - modify `work/main/actions.ts` — `comment`, `jobEnded`, `clearStaleMarks`
 - modify `work/main/start.ts` — the `comment` handler, the caps passed to `jobEnded`
 - modify `work/page/start.ts` — the `comment` command
-- modify `work/main/selftest-fixture.ts` · `work/main/selftest-script.ts` · `work/contract.test-support.ts` · `work-board/page/sample-state.ts` — `commenting: []` on each Jira card they build, and the self-test binds
+- modify `work/main/selftest-fixture.ts` · `work/main/selftest-script.ts` · `work/contract.test-support.ts` · `work-board/page/sample-state.ts` · `work-board/page/board-view.test.ts` — `commenting: []` on each Jira card they build, and the self-test binds. Grep `kind: 'jira'` under `wigley-ai-gui/src` for any other literal Jira card builder and add it here too: typecheck must pass at this task's end
 - test `work/main/actions.test.ts` · `work/main/job-queue.test.ts` · `work/main/job-text.test.ts` · `work/main/work-tools.test.ts` · `work/main/store.test.ts` · `work/main/start.test.ts` · `work/page/start.test.ts`
 
 Consumes:
@@ -103,8 +103,7 @@ Decisions:
   `press('C', 'refused comment: Only a Jira ticket takes a comment')`. Both run before `x` deletes the task. The
   self-test runner never starts, so `WRK-1`'s `commenting` stays set for the rest of the group. Update the group's
   `why` to name the comment.
-- **Docs.** `README.md`'s command list and `AGENTS.md`'s `work` file list change. Task 06 writes them. Do not edit
-  them.
+- **Docs.** `AGENTS.md`'s `work` file list changes. Task 06 writes it. Do not edit it.
 
 GIVEN `WRK-1` has `commenting: ['A']` and a stored ticket detail with 10 comments, cap 10, WHEN its comment job `A`
 ends ok THEN `commenting` is `[]`, `note` is null, and the detail holds the 9 newest old comments, then
@@ -123,7 +122,8 @@ Tests:
     failed with a note; comment failed with a null note. The same-object table gains a comment for a gone card.
     Pass a `DetailCaps` to every existing call.
   - `clearStaleMarks` table gains rows: a stale comment; one of two equal texts with one job; a pending comment for
-    its key and text (same object).
+    its key and text (same object); a card with both a stale move and a stale comment, whose `note` is the comment's
+    lost-job note.
   - `never mutates its input` covers `comment`.
 - `work/main/job-queue.test.ts`: the `nextJobQueue` table gains rows: a comment behind a queued comment on the same
   key keeps both; a comment does not replace a queued move on the same key; a comment goes ahead of a queued sweep.
@@ -137,6 +137,8 @@ Tests:
   `comment`. New `parse_savedWithoutCommenting_readsEmpty`: a Jira card saved with no `commenting` parses with `[]`.
   The invalid-file table gains a Jira card whose `commenting` is a string.
 - `work/main/start.test.ts`: the refusal table gains `{ method: 'comment', arg: { cardId: 'nope', text: 'Hi' }, refused: 'No card nope' }`.
+  New row on the `enqueue` catch path, modelled on the existing not-queued test for a move or send: a comment whose
+  enqueue throws leaves `commenting` without its text and sets `note` to `Comment failed: Not queued: <error>`.
 - `work/page/start.test.ts`: the command table gains `comment` with arg `{ cardId: 'WS-1', text: 'Hi' }`.
 - No new test for `rowTitle`, `KIND_WORDS` or the manifest entry: each is copy, and the exhaustive switches and the
   `Record<WorkJobKind, …>` fail the typecheck when a case is missing.

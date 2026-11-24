@@ -61,16 +61,22 @@ Decisions:
   `stamp`; `root` a message; `replies` a list of messages; `replyCount` a number.
 - **`work.state` carries no detail.** `buildWorkState` does not read `details`.
 - **Slot publish.** `start.ts` publishes `workDetailsSlot` beside `workStateSlot`. The same `publish()` runs both. For
-  the details, `publish()` sets each entry of `file.details` whose JSON differs from `writer.get(key)` (`isSameJson`),
-  and deletes each key of `writer.all()` that `file.details` does not hold. So a store change sends only the entries
-  that changed. The slot stays unset until the load ends, as `work.state` does.
+  the details, `publish()` skips each entry of `file.details` that is the same object as the one it last published
+  (an untouched entry keeps its reference through the store's `{ ...file }` updates), sets each other entry whose JSON
+  differs from `writer.get(key)` (`isSameJson`), and deletes each key of `writer.all()` that `file.details` does not
+  hold. So a store change serialises and sends only the entries that changed. The slot stays unset until the load
+  ends, as `work.state` does.
 - **`detailCaps`.** Each setting that is a finite number gives `Math.max(0, Math.floor(value))`. Any other value
   gives its `DEFAULT_DETAIL_CAPS` value. `start.ts` passes `caps: () => detailCaps(api.settings())` to the tools, so
-  a changed setting applies at the next record.
+  a changed setting applies at the next record. A stored record is not re-capped: raising or lowering a cap shows
+  only once that ticket or thread moves and the sweep records it again (no refetch on open, no refresh key, per
+  plan.md § Out of scope).
 - **`newestMessages`.** It sorts a copy by `Date.parse(at)` ascending. The sort is stable, so equal times keep their
   input order. It returns the last `cap` entries, oldest first. Cap `0` returns `[]`.
 - **Tool input, `record_work_tickets`.** Each ticket object gains an optional `detail` object:
-  `type`, `assignee`, `reporter` (optional strings), `updated` (required, ISO), `description` (required string, `""`
+  `type`, `assignee`, `reporter` (optional strings), `updated` (required, ISO, kept verbatim: `isoTime` validates it
+  and the store never reformats it, so the stamp compares as text from sweep to sweep), `description` (required
+  string, `""`
   for none), `comments` (required list of `{ author, at, text }`), `subtasks` (required list of
   `{ key, title, status, url }`), `links` (required list of `{ key, title, status, relation, url }`). Every new object
   schema has `additionalProperties: false` and lists its required fields.
@@ -98,7 +104,7 @@ Decisions:
 - **Tool descriptions.** The worker reads these, so pin them verbatim:
   - `read_work_state`: `Read what the app's Inbox and Board hold now: the running job, the last sweep's time, the Board columns with their Jira statuses, each inbox item's id, section, state, title, time and detail stamp (cleared and dismissed items only from the last 7 days), and every card, each Jira card with its detail stamp. A stamp is null when the app holds no detail. Only the running work job's session may call it.`
   - `record_work_tickets`: keep the current text, and put this sentence before `Only the running…`:
-    `Give a ticket's detail only when Jira's updated time differs from its stamp in read_work_state; a ticket given without detail keeps its stored detail.`
+    `Give a ticket's detail only when Jira's updated time differs from its stamp in read_work_state; give updated exactly as Jira returns it, and compare it with the stamp as text; a ticket given without detail keeps its stored detail.`
   - `record_work_items`: keep the current text, and put this sentence before `Only the running…`:
     `Give an item's thread only when the Slack ts of its newest message differs from its stamp in read_work_state; an item given without thread keeps its stored thread.`
   - Write `read_work_state` in these sentences through `READ_WORK_STATE_TOOL.name`, as `job-text.ts` names tools.
@@ -159,8 +165,8 @@ Tests:
     Break: the sweep refetches every ticket or never converts markup.
 - `main/start.test.ts`
   - New `start_detailsSlot — publishes each stored detail by id, and deletes one the store drops`: load a file with
-    two records; the keyed slot holds both; an update that removes one deletes its key; an update that changes
-    nothing else leaves the other entry the same object.
+    two records; before the load ends the keyed slot holds no entry; after it the slot holds both; an update that
+    removes one deletes its key; an update that changes nothing else leaves the other entry the same object.
   - `fixture — seed gives 7 items, 7 cards, 3 suggestions and badge 1`: the seeded file holds 4 details, and the
     problems list stays empty.
 

@@ -95,12 +95,13 @@ Produces:
 - In `inbox-view.ts`:
   - `InboxViewDeps` gains `uiState: UiState` and `detailOf(id: string): ThreadDetail | null`. `timers` widens from
     `Pick<Timers, 'set' | 'clear'>` to `Timers`, because `createSplit` takes `Timers`.
-  - `InboxView` gains `detailChanged(id: string): void`.
+  - `InboxView` gains `detailChanged(id: string): void` and `openPane(): void`, idempotent as the Board's is: it
+    dispatches `{ type: 'pane', open: true }`, which the reducer ignores when the pane is already open.
   - `InboxView.showSample(state: WorkState, details: readonly ThreadDetail[]): Disposable` (was `(state)`).
   - `InboxCommand` takes the five new commands through the manifest; `commands` gets a handler for each.
 - In `sample-state.ts`: `export function sampleInboxDetails(now: number): ThreadDetail[]`.
 - In `demo-steps.ts`: `InboxDemoPageDeps.showSample(state: WorkState, details: readonly ThreadDetail[]): Disposable`
-  and `InboxDemoPageDeps.togglePane(): void`.
+  and `InboxDemoPageDeps.openPane(): void` (idempotent, as the Board's).
 
 Decisions:
 
@@ -122,13 +123,18 @@ Decisions:
 
 **Pane draw.**
 - While `paneOpen` is false, the view draws no `detail` part. It disposes the drawn one and empties
-  `div.work-inbox-detail`.
+  `div.work-inbox-detail`. Closing runs the same wrapped redraw as an open draw: empty parts inside `keepFocusedBox`,
+  then the dropped-box check. A `togglePane` run from the command palette under a focused box therefore ends in
+  scope `list` with no held editor.
 - While `paneOpen` is true, the view draws `detail` for the cursor item, or `detailEmpty` when the list has no
   cursor item.
 - The draw key is the JSON of the `DetailInput`. While the box is editable, the cursor's own draft text is left out
   of the key, as `drawCards` does today, so typing never redraws the pane.
 - The pane draws again when the key changes, on `detailChanged(id)` for the cursor item id, and on `setLayouts`.
   `detailChanged` for any other id draws nothing.
+- The view's existing minute timer (`redrawStatus`, every `STATUS_REDRAW_MS` = 60 s, through `deps.timers`) also re-runs
+  the pane draw, so `Fetched … ago` and the message ages stay true on an idle pane; the key check keeps the run free
+  when no text changed.
 - A change of the cursor item id sets `div.work-inbox-detail`'s `scrollTop` to 0, as primer's `isRowChanged` does
   (primer-view.ts `update`).
 - `detailInput` gets `deps.detailOf(item.id)`, or the sample's detail while a sample shows. `showSample` keeps
@@ -137,7 +143,8 @@ Decisions:
 **Reply box.** One box, its keys unchanged:
 - `draftBoxSlot` moves from the card draw to the detail draw. It keeps its form `work-inbox-draft`, box id = item
   id, placeholder `Write a reply…`, the read-only sending text and its two hints (`editDraft` in `list` labelled
-  `edit`, `send` in `box` labelled `send`).
+  `edit`, `send` in `box` labelled `send`). While sending, the `send` hint stays, the `edit` hint is skipped (today's
+  behaviour, as on the Board) and the Send button reads `Sending…`.
 - `keepFocusedBox(boxes, DRAFT_FORM, …)` wraps the detail redraw, not the cards redraw.
 - `isRedrawingCards` becomes `isRedrawing` and is set during both draws.
 - The dropped-box check (`isBoxDropped`, then `changeFocus('list', true)`) moves to the detail draw.
@@ -152,7 +159,8 @@ Decisions:
   `setFocus('box')`.
 - With the pane open: call `setFocus('box')` as today.
 - `Esc` in the box (`leaveBox`) leaves the pane open.
-- `togglePane` runs only in the list scope (05 binds it there), so it never closes the pane under a focused box.
+- 05 binds `togglePane` in the list scope only, but a page command also runs from the command palette in any scope: a
+  close under a focused box takes the dropped-box check (**Pane draw**) and ends in scope `list`.
 
 **`togglePane`.** Dispatch `{ type: 'pane', open: !paneOpen }`. Log `pane open` or `pane closed`.
 The pane may open on an empty list (it shows `detailEmpty`).
@@ -164,8 +172,8 @@ with `'line'` or `'halfPage'` and `1` or `-1`. They log `scrollText('the detail'
 the pane closed, they log `no pane` and scroll nothing. The model is `scrollPrimer` in
 `src/plugins/primer/page/primer-commands.ts:583-592`.
 
-**Place.** `writePlace` adds `paneOpen: state.paneOpen`. `showSample`'s `reset` puts back the `paneOpen` from before
-the sample.
+**Place.** `writePlace` adds `paneOpen: state.paneOpen`. `showSample` sets `paneOpen` to false for the sample, so the
+`needs you` beat starts closed whatever the user had, and its `reset` puts back the `paneOpen` from before the sample.
 
 **Slim card.** The default `card` draws, in order: the meta line (`channel · author`, the section Tag while
 `sectionTitle` is set, the state Tag, a `sending` Tag while `isSending`, the age at the end), the title, the summary
@@ -180,7 +188,8 @@ Send shows while the pane is closed. The cursor prompt stays on the cursor card 
    the card draws them today.
 4. The summary.
 5. `Why: <why>` while `why` is not null.
-6. The thread. With `root` null, the one line `No thread detail yet: the next sweep fetches it.` Else the root
+6. The thread. With `root` null, the one line `No thread detail yet: the next sweep fetches it.` (the Board's reads `No detail yet: …` on
+   purpose: a Board card may be a ticket). Else the root
    message, then `replyCountText` while not null, then each reply. A message is `author · age` in `fg-secondary`,
    then `kit.markdown(block, text, 'work-inbox-detail-text')`.
 7. `kit.draftBox(root)` while `draft` is not null.
@@ -212,7 +221,7 @@ and message block. The two views share no code.
 - Pass `detailOf: (id) => …` over `const details = api.state.read(workDetailsSlot)`.
 - Add a listener `details.on((key) => view.detailChanged(key))`, disposed in `dispose`'s `callEach` before the view.
 - `registerDemoSteps` gets `showSample: (sample, sampleDetails) => view.showSample(sample, sampleDetails)` and
-  `togglePane: () => view.commands.togglePane()`.
+  `openPane: () => view.openPane()`.
 
 **Sample and demo.**
 - `sampleInboxDetails(now)` returns three `ThreadDetail` records, with `fetchedAt` = 3 minutes ago and `stamp` the
@@ -225,7 +234,7 @@ and message block. The two views share no code.
     "reproduced it on CI", Fay: "same on my machine with `--repeat 20`"), `replyCount: 2`.
   - `sample-dm` and `sample-old-ask` have no record, so the demo shows the missing line.
 - `inboxStage` calls `deps.showSample(sampleInboxState(now), sampleInboxDetails(now))`.
-- Beats in order: `needs you` (as today, pane closed), `detail` (`deps.togglePane()`; the pane opens on the cursor
+- Beats in order: `needs you` (as today, pane closed), `detail` (`deps.openPane()`; the pane opens on the cursor
   card `sample-review` with its draft), `waiting` (as today; the pane follows to `sample-nudge`), `all` (as today;
   the cursor goes to `sample-old-ask`, Restore only, the missing line).
 - The step's `files` add `src/plugins/work-inbox/layouts/default/layout.css`. Its caption becomes
@@ -240,9 +249,9 @@ GIVEN the pane is open WHEN a `work.details` entry changes for an item that is n
 does not redraw.
 
 Tests:
-- `inbox-state.test.ts` › `cardActions` table: change the rows for My threads, You promised, Around Slack and Worth
-  knowing open items to `['send', 'dismiss', 'startSession', 'addToBoard']`. Keep Waiting
-  (`['send', 'snooze', 'dismiss', 'startSession', 'addToBoard']`) and a not-open item (`['restore']`).
+- `inbox-state.test.ts` › `cardActions` table: change `Around open` to `['send', 'dismiss', 'startSession', 'addToBoard']`; add
+  rows for My threads, You promised and Worth knowing with the same value. Keep `Needs you open`, `Waiting open`
+  (`['send', 'snooze', 'dismiss', 'startSession', 'addToBoard']`) and `dismissed under All` (`['restore']`).
 - `inbox-state.test.ts` › `inboxReducer` table: add rows. `pane` open from closed gives `paneOpen: true`. `pane` with
   the same value returns the same state object. `placed` with `paneOpen: true` gives true. `placed` with a place
   that has no `paneOpen` (cast) gives false.
@@ -255,10 +264,9 @@ Tests:
   - dismissed item: `draft: null` and `actions: ['restore']`
   - sending item: `draft: 'x'` and `isSending: true`
   - open My threads item with no draft: `draft: ''` and `actions[0]: 'send'`
-- `inbox-view.test.ts`, new `it.each` for `togglePane` (open, then closed). Each row asserts the end pane's
-  `hidden`, the resize target (`split` or null), the last place's `paneOpen` and the log line. Give the setup a fake
-  `uiState` and a `detailOf` fake. When the fake DOM lacks `ResizeObserver`, stub it as
-  `src/plugins/backlog/page/backlog-view.test.ts` does.
+- `inbox-view.test.ts`, new `it.each` for `togglePane` (open, then closed). Each row asserts the class `is-end-hidden` on the split root, the recorded
+  resize target (non-null with a `nudge` function, or null), the last place's `paneOpen` and the log line. Give the
+  setup a fake `uiState` and a `detailOf` fake. `installFocusFakeDom` already stubs `ResizeObserver`.
 - `inbox-view.test.ts`: `editDraft` rows. With the pane closed on an open item, the pane opens and the scope is
   `box`. On a dismissed item, the log is `no editDraft for <id>` and the pane stays closed.
 - `inbox-view.test.ts`: the existing box tests (the send table at :237, "a sending card reads Sending…" at :287,
@@ -270,13 +278,19 @@ Tests:
   chip or button in the pane and asserts no `selectItem` run.
 - `inbox-view.test.ts`: `detailChanged` rows. The cursor id redraws the pane (the root text shows). Another id draws
   no part.
-- `inbox-view.test.ts`: scroll rows. `paneLineDown` with the pane closed logs `no pane`. With the
-  pane open over a fake scroller of `scrollHeight` 1000 and `clientHeight` 200, it logs
-  `scrolled the detail down a line`.
+- `inbox-view.test.ts`: scroll rows. `paneLineDown` with the pane closed logs `no pane`. With the pane open, find
+  `.work-inbox-detail` in the sheet, define `scrollHeight` 1000 and `clientHeight` 200 on it, stub `getComputedStyle`
+  to `{ lineHeight: '20px' }` (as `chat-view.test.ts` does), and expect the log `scrolled the detail down a line`.
+- `inbox-view.test.ts`: close and focus rows. `togglePane` while the box is focused (the palette path) ends with scope
+  `list` and no held editor. `Esc` in the box leaves the pane open. `showSample` sets `paneOpen` to false for the
+  sample and its dispose restores the value from before. Typing in the box never redraws the pane (the draft text is
+  out of the draw key): the drawn detail element is the same node after a `changed` event.
+- `inbox-view.test.ts`: with fake timers, 60 s later the open pane's `Fetched 3m ago` reads `Fetched 4m ago`.
+- `start.test.ts`: `detailOf` returns null for a `TicketDetail` stored under a thread id.
 - `start.test.ts` › "a page load puts back the place": also run `togglePane` before the restart. Assert that the
   saved place has `paneOpen: true` and that the restarted view shows the end pane.
-- `demo-steps.test.ts` › the Inbox step: the beat names are `['needs you', 'detail', 'waiting', 'all']`. The events
-  include the toggle. `showSample` receives the three sample detail ids.
+- `demo-steps.test.ts` › the Inbox step: the beat names are `['needs you', 'detail', 'waiting', 'all']`. The deps
+  gain `openPane: () => events.push('pane')`, as in 03, and the events include `'pane'`. `showSample` receives the three sample detail ids.
 
 Done when: `npm run typecheck`, `npm run lint` and `npm test -- src/plugins/work-inbox` pass. `npm run selftest --
 --plugin demo` passes, and its Inbox beats draw the pane. Grep `CardKit` in `wigley-ai-gui/src` prints nothing.
