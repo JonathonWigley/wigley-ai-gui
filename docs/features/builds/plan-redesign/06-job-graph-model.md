@@ -1,6 +1,6 @@
 # 06 — Job graph model
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the `job-graph.ts` contract that 07 consumes, and its cycle rule is a choice no pattern settles
 Wave: 2 · Depends on: 02
@@ -120,3 +120,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit cdb2b1c3 · proof: diff read: JobEdge, JobGraph, GraphMove, jobGraph, defaultJob, movedJob in plan shape; three it.each tables; wave 2 typecheck passes · concerns: design.md:285 says arrows run from a job to its prerequisites, 07 draws them prerequisite to dependent

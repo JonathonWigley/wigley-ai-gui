@@ -1,6 +1,6 @@
 # 05 — Builds main: files, saves and downloads
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · async state across polls, timers and a part restart: saves in flight, the slot's expiry, file checks beside the poll
 Wave: 2 · Depends on: 01, 02
@@ -231,3 +231,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8183fa1d · proof: diff read: downloads.ts exports filledFiles, savedLogName, createDownloads, DOWNLOAD_KEEP_MS, FILE_CHECK_TIMEOUT_MS; start.ts wires checkFiles, filesOf, forgetGame, dispose and the saveLog/download handlers with refusals; Files: line between Links: and Open:; wave 2 typecheck and oxlint pass; oxfmt applied by the lead to build-messages.ts and downloads.test.ts · concerns: settings-change test reads the snapshot right after pushSettings with no settle

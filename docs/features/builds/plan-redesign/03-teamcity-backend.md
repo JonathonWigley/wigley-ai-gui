@@ -1,6 +1,6 @@
 # 03 — TeamCity jobs and log saves
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · new parse rule (the transitive reduction) and a changed cache record; neither is async or lifecycle
 Wave: 2 · Depends on: 02
@@ -131,3 +131,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 719c1032 · proof: diff read: buildJobOf fills webUrl/startedAt/finishedAt, parseChainDetail reduces listed snapshot deps to direct prerequisites, DETAIL_FIELDS verbatim, saveLog via downloadBuildLog.html (300 s), capabilities.saveLog true, isJob checks the new fields; wave 2 typecheck, oxfmt and oxlint pass · concerns: satisfies typing on the dependsOn table and saveLog?.() calls checked by the wave compile (pass)

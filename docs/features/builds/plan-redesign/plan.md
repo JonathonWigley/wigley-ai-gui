@@ -210,10 +210,10 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 - [x] [Builds contract and config](02-builds-contract.md)
 
 ### Wave 2
-- [ ] [TeamCity jobs and log saves](03-teamcity-backend.md) — after 02
-- [ ] [Local log saves](04-local-backend.md) — after 01, 02
-- [ ] [Builds main: files, saves and downloads](05-builds-main.md) — after 01, 02
-- [ ] [Job graph model](06-job-graph-model.md) — after 02
+- [x] [TeamCity jobs and log saves](03-teamcity-backend.md) — after 02
+- [x] [Local log saves](04-local-backend.md) — after 01, 02
+- [x] [Builds main: files, saves and downloads](05-builds-main.md) — after 01, 02
+- [x] [Job graph model](06-job-graph-model.md) — after 02
 
 ### Wave 3
 - [ ] [Detail pane, graph view and keys](07-builds-page.md) — after 05, 06
@@ -235,10 +235,19 @@ Review base: a9161d1a
 ### Groups
 - 01 · hard · 53f0c0d3 · diff read against the task: Files.copy in contract, Node, memory, scoped and counting adapters; downloadsDir/revealPath on MainServices and both main.ts run kinds; wave 1 typecheck passes · concerns: Windows EPERM retry ~150ms on copy onto a folder; two long comments
 - 02 · hard · 0eab3b94 · diff read: every Produces in plan.md's shape, parseDownloads texts, trackCalls saveLog, fixture savedLogs; fallout sites in teamcity-parse/backend tests, local-backend tests, page tests, queueing, build-messages, start tests; wave 1 typecheck passes; oxfmt applied to contract.ts by the lead · concerns: teamcity cache isJob does not check new job fields until 03; channel handlers for saveLog/download wait for 05
+- 03 · hard · 719c1032 · diff read: buildJobOf fills webUrl/startedAt/finishedAt, parseChainDetail reduces listed snapshot deps to direct prerequisites, DETAIL_FIELDS verbatim, saveLog via downloadBuildLog.html (300 s), capabilities.saveLog true, isJob checks the new fields; wave 2 typecheck, oxfmt and oxlint pass · concerns: satisfies typing on the dependsOn table and saveLog?.() calls checked by the wave compile (pass)
+- 04 · standard · 24abf5d0 · diff read: saveLog outside chain, refusal order build then job, missing log names build and path, other copy errors pass through, capabilities saveLog true; wave 2 typecheck passes · concerns: test assigns files.copy to a mock (compiles); success row relies on memory read returning the written text
+- 06 · hard · cdb2b1c3 · diff read: JobEdge, JobGraph, GraphMove, jobGraph, defaultJob, movedJob in plan shape; three it.each tables; wave 2 typecheck passes · concerns: design.md:285 says arrows run from a job to its prerequisites, 07 draws them prerequisite to dependent
+- 05 · deep · 8183fa1d · diff read: downloads.ts exports filledFiles, savedLogName, createDownloads, DOWNLOAD_KEEP_MS, FILE_CHECK_TIMEOUT_MS; start.ts wires checkFiles, filesOf, forgetGame, dispose and the saveLog/download handlers with refusals; Files: line between Links: and Open:; wave 2 typecheck and oxlint pass; oxfmt applied by the lead to build-messages.ts and downloads.test.ts · concerns: settings-change test reads the snapshot right after pushSettings with no settle
 ### Contract changes
 ### Rulings
 - Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01
 - buildJobOf puts the four new fields in its shared base object, which 03 fills per row — one site — none · group 02
 - fixture/test literals left untyped JSON (gameSetting, validGame) keep downloads optional — they feed parseBackends — none · group 02
+- defaultJob skips repeated job ids as jobGraph does · group 06
+- Arrow direction: 07's prerequisite-to-dependent arrowhead stands; task 10 corrects design.md:285 · group 06
+- A restarted id clears its pending expiry timer rather than checking startedAt when it fires · group 05
+- No instance refuses '<label>: <problem ?? still starting>', as queueing answers · group 05
+- A save whose name pick settles after dispose starts no backend call or copy · group 05
 ### Review rounds
 ### Test gate

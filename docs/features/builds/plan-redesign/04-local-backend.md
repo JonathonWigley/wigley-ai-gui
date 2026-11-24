@@ -1,6 +1,6 @@
 # 04 — Local log saves
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · follows `cancel`'s run lookup in `local-backend.ts`; adds no seam, and the copy is one awaited call
 Wave: 2 · Depends on: 01, 02
@@ -58,3 +58,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 24abf5d0 · proof: diff read: saveLog outside chain, refusal order build then job, missing log names build and path, other copy errors pass through, capabilities saveLog true; wave 2 typecheck passes · concerns: test assigns files.copy to a mock (compiles); success row relies on memory read returning the written text
