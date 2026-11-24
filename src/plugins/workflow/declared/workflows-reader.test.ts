@@ -129,6 +129,13 @@ describe('workflowsReader', () => {
       reason: '[0].order: not a number below 1000',
     },
     {
+      name: 'a flagsUnclaimedWork not true',
+      section: largeWith((decl) => {
+        (decl as { flagsUnclaimedWork?: unknown }).flagsUnclaimedWork = false;
+      }),
+      reason: '[0].flagsUnclaimedWork: not true',
+    },
+    {
       name: "a claimed skill's trigger with from",
       section: largeWith((decl) => {
         stage(decl, PRIMER).enter = [

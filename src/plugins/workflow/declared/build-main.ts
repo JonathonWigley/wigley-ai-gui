@@ -43,6 +43,7 @@ export function buildMainWorkflow(
     claims,
     firstStage: firstStageOf(decl.stages),
     stages,
+    flagsUnclaimedWork: decl.flagsUnclaimedWork === true,
     foldFields(flow, signal) {
       const plan = planFold.fold(
         flow,

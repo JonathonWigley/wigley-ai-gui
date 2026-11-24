@@ -9,8 +9,12 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type { DeclaredWorkflow } from '../contract';
-import { normalPlanDir, type PlanReporter } from './plan-report';
+import {
+  KEEPS_NO_PLAN_IGNORED,
+  normalPlanDir,
+  type PlanReporter,
+  type PlanWorkflowLookup,
+} from './plan-report';
 import { planFileName } from './read-plan';
 
 export const SET_WORKFLOW_PLAN_TOOL = 'set_workflow_plan';
@@ -40,13 +44,15 @@ export interface PlanToolDeps {
   files: Pick<Files, 'stat'>;
   reportPlan: PlanReporter;
   // Once flows load, the session's flow's workflow when it keeps a plan, else
-  // null.
-  planWorkflowOf(sessionId: string): Promise<DeclaredWorkflow | null>;
+  // why the report is ignored.
+  planWorkflowOf(sessionId: string): Promise<PlanWorkflowLookup>;
 }
 
-// A folder that is not absolute is an error; a session whose workflow keeps no
-// plan succeeds with text saying it was ignored; a folder that holds no plan
-// file in that workflow's format is an error naming it.
+// A folder that is not absolute is an error; a session with no plan workflow
+// succeeds with text saying which case ignored it; a folder that holds no plan
+// file in that workflow's format is an error naming it. A flow that left its
+// plan workflow before the report folds answers that its workflow keeps no
+// plan.
 async function setWorkflowPlan(
   deps: PlanToolDeps,
   sessionId: string,
@@ -56,9 +62,9 @@ async function setWorkflowPlan(
   if (typeof folder !== 'string' || !deps.paths.isAbsolute(folder)) {
     return errorResult('folder must be an absolute path.');
   }
-  const workflow = await deps.planWorkflowOf(sessionId);
+  const { workflow, ignored } = await deps.planWorkflowOf(sessionId);
   if (workflow === null) {
-    return ignored();
+    return textResult(ignored);
   }
   const planDir = normalPlanDir(deps.paths, folder);
   const fileName = planFileName(workflow.planFormat);
@@ -72,11 +78,7 @@ async function setWorkflowPlan(
   }
   return (await deps.reportPlan(sessionId, planDir))
     ? textResult(`Plan folder set to ${folder}.`)
-    : ignored();
-}
-
-function ignored(): ToolResult {
-  return textResult("Ignored: this session's workflow keeps no plan.");
+    : textResult(KEEPS_NO_PLAN_IGNORED);
 }
 
 // What `start` hands sessions' `contributeTools`: each session's calls report

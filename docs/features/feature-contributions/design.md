@@ -188,6 +188,7 @@ Every installed declared workflow is on unless the user switches it off. The `wo
 | `badgeColor` | string | A CSS color or theme token for the badge. Default `var(--wg-accent)`. |
 | `order` | number | The lowest order's claim wins a skill two workflows claim. |
 | `claims` | string[] | The skill names that start this workflow (`wigley:small`). |
+| `flagsUnclaimedWork` | `true` | While this workflow is on, a live turn with agent work that ends on the Checklist flow shows the session's `No workflow` tag: the plugin expects every working session to claim one of its workflows. Left out: no tag. |
 | `groups` | object | Named stage lists for `from`: `{ "featureRun": ["explore", …] }`. |
 | `counters` | object | Counters the engine keeps for the flow (Counters). |
 | `fixCycles` | object | The run log's fix cycles: `{ "counter": "fix" }` or `{ "planCounter": "reviewRounds" }`. Left out: 0. |
@@ -310,9 +311,10 @@ Every `{plan.…}` variable is empty until the plan is read, and `{checklist}` u
 
 ### Example: the user's workflows
 
-These four declarations are the user's workflows as today's level plugins run them, read from their stage files. They
-equal the app's sample, `src/plugins/workflow/declared/fixtures/sample-auri.json` (task 06 of shareable-app), which the `wigley`
-plugin's `auri.json` copies. Small, Medium and Spike follow one shape. Small:
+These four declarations are the user's workflows as today's level plugins run them, read from their stage files. The
+`wigley` plugin's `auri.json` holds them and is their truth; the app's sample,
+`src/plugins/workflow/declared/fixtures/sample-auri.json`, is a fixture copy of its `workflows` and `planFormat`, changed
+with it. Small, Medium and Spike follow one shape. Small:
 
 ```json
 {
@@ -602,7 +604,7 @@ Every app session keeps a task list. The engine ships one built-in workflow, `CH
 - `claims: []`, and an `order` above every declared workflow's;
 - `sidePane: { "kind": "checklist", "title": "Checklist" }`.
 
-`newFlow` starts every flow on it. A declared workflow's claimed skill replaces it as any other claim does; `movedUpFrom` stays null for a move up from the Checklist flow. `missedLevel` now means: a live turn with agent work ended while the flow was on the Checklist flow and at least one declared workflow is on.
+`newFlow` starts every flow on it. A declared workflow's claimed skill replaces it as any other claim does; `movedUpFrom` stays null for a move up from the Checklist flow. The flow's `unclaimedWork` means: a live turn with agent work ended while the flow was on the Checklist flow and a registered workflow sets `flagsUnclaimedWork`; with none, a working session on the Checklist flow is never tagged. A saved flow whose workflow no plugin declares any more (a retired id, an uninstalled plugin) opens on the Checklist flow with its checklist; one `workflow.off` switched off keeps its workflow.
 
 The agent sends its list with `set_workflow_checklist`, which the engine contributes to every session at all times. The `auri` plugin's checklist hook asks the app, over the relay's hook protocol, whether the session's row ever reported a checklist: the engine answers from the flow's `checklistReported` field, which the first `checklistReported` signal sets and no claim resets. A checklist report folds whatever the flow's workflow id, a workflow not registered (switched off, uninstalled, not loaded yet) included, so the gate never sticks shut. The hook denies an edit until then, reminds the agent at a turn end while items are open, and shows the list again after a compaction. It recognises an app session by `WIGLEY_SESSION_ROW`.
 

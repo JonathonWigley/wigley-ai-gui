@@ -176,9 +176,9 @@ export interface SessionFlow {
   enteredFrom: StageId | null;
   // When the auto-start countdown runs its action, epoch ms; null for none.
   countdownEndsAt: number | null;
-  // A live turn with agent work ended on the Checklist flow while another
-  // workflow was registered.
-  missedLevel: boolean;
+  // A live turn with agent work ended on the Checklist flow while a
+  // registered workflow `flagsUnclaimedWork`.
+  unclaimedWork: boolean;
   turnRunning: boolean;
   // Agent ids the main agent spawned that have not finished.
   runningSubagents: readonly string[];
@@ -250,6 +250,9 @@ export interface MainWorkflow {
   ): SessionFlow;
   // Review fix cycles for the run log. Left out: 0.
   fixCycles?(flow: SessionFlow): number;
+  // While this workflow is registered, a live turn with agent work that ends
+  // on the Checklist flow marks the flow's `unclaimedWork`. Left out: false.
+  flagsUnclaimedWork?: boolean;
 }
 
 // A demo sample's whole flow: each field `fields` leaves out takes a new flow's
@@ -271,7 +274,7 @@ export function sampleFlow(
     counters: {},
     enteredFrom: null,
     countdownEndsAt: null,
-    missedLevel: false,
+    unclaimedWork: false,
     turnRunning: false,
     runningSubagents: [],
     ...fields,

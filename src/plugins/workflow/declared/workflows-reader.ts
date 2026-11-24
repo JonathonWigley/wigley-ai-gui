@@ -134,6 +134,11 @@ function checkWorkflow(
     reasons.push(`${path}.order: not a number below ${CHECKLIST_ORDER}`);
   }
   checkSidePane(workflow.sidePane, `${path}.sidePane`, reasons);
+  checkTrueFlag(
+    workflow.flagsUnclaimedWork,
+    `${path}.flagsUnclaimedWork`,
+    reasons,
+  );
   if (!Array.isArray(workflow.stages) || workflow.stages.length === 0) {
     reasons.push(`${path}.stages: not a non-empty array of stages`);
     return;

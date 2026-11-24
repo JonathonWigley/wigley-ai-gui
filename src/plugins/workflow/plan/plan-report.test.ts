@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHECKLIST_WORKFLOW,
+  CHECKLIST_WORKFLOW_ID,
   type DeclaredWorkflow,
   type SessionFlow,
   type WorkflowMainExports,
   type WorkflowSignal,
 } from '../contract';
-import { planReporter } from './plan-report';
+import {
+  KEEPS_NO_PLAN_IGNORED,
+  NO_FLOW_IGNORED,
+  notEnabledIgnored,
+  planReporter,
+  planWorkflowOf,
+} from './plan-report';
 import {
   PLAN_WORKFLOW_ID,
   planWorkflowFixture,
@@ -80,4 +87,49 @@ describe('planReporter', () => {
       );
     },
   );
+});
+
+// Breaks if a report the app ignores answers with another case's reason, such
+// as a flow saved on a retired workflow answering that it keeps no plan.
+describe('planWorkflowOf', () => {
+  it.each<{ name: string; workflow: string | null; ignored: string | null }>([
+    { name: 'a plan workflow', workflow: PLAN_WORKFLOW_ID, ignored: null },
+    { name: 'no flow', workflow: null, ignored: NO_FLOW_IGNORED },
+    {
+      name: 'the Checklist flow',
+      workflow: CHECKLIST_WORKFLOW_ID,
+      ignored: KEEPS_NO_PLAN_IGNORED,
+    },
+    {
+      name: 'a workflow keeping no plan',
+      workflow: NO_PLAN_WORKFLOW.id,
+      ignored: KEEPS_NO_PLAN_IGNORED,
+    },
+    {
+      name: 'a workflow no enabled entry has',
+      workflow: 'workflow-large',
+      ignored: notEnabledIgnored('workflow-large'),
+    },
+  ])('$name answers its case', async ({ workflow, ignored }) => {
+    const enabled = [planWorkflowFixture(), NO_PLAN_WORKFLOW];
+
+    const lookup = await planWorkflowOf(
+      {
+        workflow: {
+          ready: Promise.resolve(),
+          flowOf: () =>
+            workflow === null ? null : ({ workflow } as SessionFlow),
+          signal: () => undefined,
+        },
+        workflowOf: (flow) =>
+          enabled.find((each) => each.id === flow.workflow) ?? null,
+      },
+      's1',
+    );
+
+    expect(lookup.ignored).toBe(ignored);
+    expect(lookup.workflow?.id ?? null).toBe(
+      ignored === null ? PLAN_WORKFLOW_ID : null,
+    );
+  });
 });

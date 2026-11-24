@@ -24,15 +24,13 @@ import {
   type StageStatus,
   type WorkflowDraw,
 } from '../contract';
+import { planFileName } from '../plan/read-plan';
 import { CANCEL_COUNTDOWN_ACTION } from './actions';
 import { countdownText } from './countdown-text';
 import type { PlanPane } from './plan-pane';
 import { previewFlows } from './preview';
 import { renderDetail, renderTemplate, templateVariables } from './templates';
 import { allHold } from './triggers';
-
-// The plan file a plan folder holds when the plugin's `planFormat` names none.
-const DEFAULT_PLAN_FILE = 'plan.md';
 
 export interface PageBuildDeps {
   draw: WorkflowDraw;
@@ -84,7 +82,7 @@ export function buildPageWorkflow(
       if (dir === null) {
         throw new Error('the session has no plan');
       }
-      deps.openDoc(deps.paths.join(dir, planFormat?.file ?? DEFAULT_PLAN_FILE));
+      deps.openDoc(deps.paths.join(dir, planFileName(planFormat)));
     },
     countdownText: (flow, now) =>
       flow.countdownEndsAt === null

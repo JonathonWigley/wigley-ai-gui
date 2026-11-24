@@ -39,7 +39,7 @@ export function flow(fields: Partial<SessionFlow> = {}): SessionFlow {
     counters: {},
     enteredFrom: null,
     countdownEndsAt: null,
-    missedLevel: false,
+    unclaimedWork: false,
     turnRunning: false,
     runningSubagents: [],
     ...fields,

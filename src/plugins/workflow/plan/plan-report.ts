@@ -2,10 +2,11 @@
 // report file: the folder a report names, and what a report does to the flow.
 
 import type { Paths } from '../../../contracts/paths';
-import type {
-  DeclaredWorkflow,
-  SessionFlow,
-  WorkflowMainExports,
+import {
+  CHECKLIST_WORKFLOW_ID,
+  type DeclaredWorkflow,
+  type SessionFlow,
+  type WorkflowMainExports,
 } from '../contract';
 import { usesPlan } from '../declared/uses-plan';
 
@@ -29,24 +30,54 @@ export function normalPlanDir(paths: Paths, folder: string): string {
   return paths.parent(paths.join(folder, 'plan.md'));
 }
 
-// Once flows load, the declared workflow holding the session's flow when it
-// uses the plan capability; null for a session in no flow or in a flow whose
-// workflow keeps no plan.
+// The declared workflow holding a session's flow when it uses the plan
+// capability, else why a plan report is ignored, as the tool answers it.
+export type PlanWorkflowLookup =
+  | { workflow: DeclaredWorkflow; ignored: null }
+  | { workflow: null; ignored: string };
+
+export const NO_FLOW_IGNORED =
+  'Ignored: the app holds no flow for this session.';
+export const KEEPS_NO_PLAN_IGNORED =
+  "Ignored: this session's workflow keeps no plan.";
+
+export function notEnabledIgnored(workflowId: string): string {
+  return `Ignored: this session's workflow ${workflowId} is not an enabled workflow.`;
+}
+
+const ignoredFor = (ignored: string): PlanWorkflowLookup => ({
+  workflow: null,
+  ignored,
+});
+
+// Once flows load, the session's plan workflow, or which of three cases
+// ignores its report: no flow, a workflow no enabled entry has, or a workflow
+// (the Checklist flow included) that keeps no plan.
 export async function planWorkflowOf(
   deps: PlanReporterDeps,
   sessionId: string,
-): Promise<DeclaredWorkflow | null> {
+): Promise<PlanWorkflowLookup> {
   await deps.workflow.ready;
   const flow = deps.workflow.flowOf(sessionId);
-  const declared = flow === null ? null : deps.workflowOf(flow);
-  return declared !== null && usesPlan(declared.decl) ? declared : null;
+  if (flow === null) {
+    return ignoredFor(NO_FLOW_IGNORED);
+  }
+  const declared = deps.workflowOf(flow);
+  if (declared === null) {
+    return flow.workflow === null || flow.workflow === CHECKLIST_WORKFLOW_ID
+      ? ignoredFor(KEEPS_NO_PLAN_IGNORED)
+      : ignoredFor(notEnabledIgnored(flow.workflow));
+  }
+  return usesPlan(declared.decl)
+    ? { workflow: declared, ignored: null }
+    : ignoredFor(KEEPS_NO_PLAN_IGNORED);
 }
 
 // Once flows load, signals `planReported` live when the session's flow's
 // workflow uses the plan capability; any other session is ignored.
 export function planReporter(deps: PlanReporterDeps): PlanReporter {
   return async (sessionId, planDir) => {
-    if ((await planWorkflowOf(deps, sessionId)) === null) {
+    if ((await planWorkflowOf(deps, sessionId)).workflow === null) {
       return false;
     }
     deps.workflow.signal(sessionId, { type: 'planReported', planDir }, 'live');

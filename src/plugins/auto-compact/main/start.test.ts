@@ -51,7 +51,7 @@ const WAITING_FLOW: SessionFlow = {
   counters: {},
   enteredFrom: null,
   countdownEndsAt: null,
-  missedLevel: false,
+  unclaimedWork: false,
   turnRunning: false,
   runningSubagents: ['agent-1'],
 };

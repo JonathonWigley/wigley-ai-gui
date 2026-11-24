@@ -75,8 +75,8 @@ export interface WorkflowViewDeps {
 // its Chat composer, each through the `draw` of the flow's workflow, and
 // `sidePartFor` makes one workflow's section of the session hub, which draws a
 // session's side pane only while its flow is of that workflow. A flow with no
-// stage to draw draws nothing, but for the chip's `No workflow` tag after a
-// missed level; a workflow or stage with no page half does the same and logs its
+// stage to draw draws nothing, but for the chip's `No workflow` tag on
+// unclaimed work; a workflow or stage with no page half does the same and logs its
 // name once. While the session `isWorking`, the chip ends on a running `Working`
 // tag unless its stage is running, which its stage tag already says. While the
 // session `isHeadless`, the chip ends on an accent `Headless` tag in every
@@ -92,7 +92,7 @@ export interface WorkflowViewDeps {
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
 // checklist with items, else null. The side pane's list keeps its scroll across
 // those draws, and while the pane has no layout box. `setFlow` also logs the
-// session's level, trail, stage, progress and countdown, and a missed level, when
+// session's level, trail, stage, progress and countdown, and unclaimed work, when
 // each changes; `forget` drops what it logged for a session that left and its
 // finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
@@ -365,7 +365,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       case 'chip': {
         const isWorking = deps.isWorking(part.sessionId);
         if (!drawsStage) {
-          if (flow.workflow === CHECKLIST_WORKFLOW_ID && flow.missedLevel) {
+          if (flow.workflow === CHECKLIST_WORKFLOW_ID && flow.unclaimedWork) {
             part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
           }
           if (isWorking) {
@@ -529,8 +529,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }
   };
 
-  const logMissedLevel = (flow: SessionFlow, name: string) => {
-    if (flow.workflow !== CHECKLIST_WORKFLOW_ID || !flow.missedLevel) {
+  const logUnclaimedWork = (flow: SessionFlow, name: string) => {
+    if (flow.workflow !== CHECKLIST_WORKFLOW_ID || !flow.unclaimedWork) {
       noWorkflowLogged.delete(flow.sessionId);
     } else if (!noWorkflowLogged.has(flow.sessionId)) {
       noWorkflowLogged.add(flow.sessionId);
@@ -550,7 +550,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       loggedProgress.set(flow.sessionId, progress);
       log(`${name} progress ${progress}`);
     }
-    logMissedLevel(flow, name);
+    logUnclaimedWork(flow, name);
     const hasCountdown = countdown(flow) !== null;
     if (hasCountdown && !countdownShown.has(flow.sessionId)) {
       countdownShown.add(flow.sessionId);

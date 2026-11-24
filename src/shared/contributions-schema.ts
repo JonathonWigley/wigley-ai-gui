@@ -108,6 +108,7 @@ const WORKFLOW = record(
     badgeColor: STRING,
     order: { type: 'number' },
     claims: STRINGS,
+    flagsUnclaimedWork: TRUE,
     groups: { type: 'object', additionalProperties: STRINGS },
     counters: {
       type: 'object',

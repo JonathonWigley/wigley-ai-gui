@@ -24,7 +24,7 @@ export function newFlow(sessionId: string, projectDir: string): SessionFlow {
     counters: {},
     enteredFrom: null,
     countdownEndsAt: null,
-    missedLevel: false,
+    unclaimedWork: false,
     turnRunning: false,
     runningSubagents: [],
   };
@@ -69,18 +69,15 @@ export function foldRunningState(
   return sameFlow(flow, next) ? flow : next;
 }
 
-// A copy with `missedLevel` set when the flow is on the Checklist flow while
-// `hasOtherWorkflow` (a workflow but the Checklist flow is registered);
-// otherwise `flow`.
-export function markMissedLevel(
+// A copy with `unclaimedWork` set when the flow is on the Checklist flow while
+// `isFlagged` (a registered workflow `flagsUnclaimedWork`); otherwise `flow`.
+export function markUnclaimedWork(
   flow: SessionFlow,
-  hasOtherWorkflow: boolean,
+  isFlagged: boolean,
 ): SessionFlow {
-  const isMissed =
-    flow.workflow === CHECKLIST_WORKFLOW_ID &&
-    hasOtherWorkflow &&
-    !flow.missedLevel;
-  return isMissed ? { ...flow, missedLevel: true } : flow;
+  const isUnclaimed =
+    flow.workflow === CHECKLIST_WORKFLOW_ID && isFlagged && !flow.unclaimedWork;
+  return isUnclaimed ? { ...flow, unclaimedWork: true } : flow;
 }
 
 function applyRunningState(next: SessionFlow, signal: WorkflowSignal): void {
@@ -111,7 +108,7 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
   if (signal.type === 'cleared') {
     next.turnRunning = false;
     next.runningSubagents = [];
-    next.missedLevel = false;
+    next.unclaimedWork = false;
   }
 }
 
@@ -148,7 +145,7 @@ function applyClaim(
   next.counters = {};
   next.enteredFrom = null;
   next.countdownEndsAt = null;
-  next.missedLevel = false;
+  next.unclaimedWork = false;
 }
 
 function stageFinishes(
@@ -223,7 +220,7 @@ function sameFlow(a: SessionFlow, b: SessionFlow): boolean {
     JSON.stringify(a.counters) === JSON.stringify(b.counters) &&
     a.enteredFrom === b.enteredFrom &&
     a.countdownEndsAt === b.countdownEndsAt &&
-    a.missedLevel === b.missedLevel &&
+    a.unclaimedWork === b.unclaimedWork &&
     a.turnRunning === b.turnRunning &&
     sameIds(a.runningSubagents, b.runningSubagents)
   );

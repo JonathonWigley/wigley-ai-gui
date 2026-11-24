@@ -8,6 +8,7 @@
       "badgeColor": "var(--wg-status-info)",
       "order": 10,
       "claims": ["wigley:small"],
+      "flagsUnclaimedWork": true,
       "sidePane": { "kind": "checklist", "title": "Checklist" },
       "stages": [
         {
@@ -70,6 +71,7 @@
       "claims": ["wigley:medium"],
       "counters": { "fix": { "counts": "fix", "resetOn": "claim" } },
       "fixCycles": { "counter": "fix" },
+      "flagsUnclaimedWork": true,
       "sidePane": { "kind": "checklist", "title": "Checklist" },
       "stages": [
         {
@@ -132,6 +134,7 @@
         "featureRun": ["explore", "interview", "plan", "coldRead", "planReady"]
       },
       "fixCycles": { "planCounter": "reviewRounds" },
+      "flagsUnclaimedWork": true,
       "sidePane": { "kind": "plan", "title": "Plan" },
       "actions": {
         "clearAndMake": {
@@ -340,6 +343,7 @@
       "badgeColor": "var(--wg-fg-secondary)",
       "order": 40,
       "claims": ["wigley:spike"],
+      "flagsUnclaimedWork": true,
       "sidePane": { "kind": "checklist", "title": "Checklist" },
       "stages": [
         {

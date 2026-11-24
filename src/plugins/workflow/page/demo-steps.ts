@@ -50,7 +50,7 @@ function engineStage(
         show() {
           shown.show(
             sampleFlow(sessionId, projectDir, {
-              missedLevel: true,
+              unclaimedWork: true,
               turnRunning: true,
             }),
           );

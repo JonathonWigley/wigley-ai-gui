@@ -164,15 +164,17 @@ A second claim in the session, or a claim after done, returns the flow to interv
 Small's, Medium's and Spike's entries declare no actions, so `Space w w` logs `nothing to run` there. `done` shares its trail slot with `land`, so the trail still ends at Land.
 
 A session on the Checklist flow draws nothing but the `No workflow` tag, after a live turn with agent work ends while
-no level skill has started (`flow.missedLevel`).
+no level skill has started (`flow.unclaimedWork`). The tag is the wigley plugin's choice: each of its four declarations
+sets `flagsUnclaimedWork`, and a plugin that leaves it out never tags a session.
 
 ## Declared workflows
 
 A workflow is one entry of the `workflows` array in an agent plugin's `auri.json`: its claims, stages, triggers,
 actions and templates. The schema, and every field a stage takes, are in `docs/features/feature-contributions/design.md`
 § Section: workflows. The stage tables above are the wigley plugin's own entries, in
-`wigley-ai-marketplace/plugins/wigley/auri.json`. The app also holds a sample copy of the four, as self-test and demo fixtures, in
-`src/plugins/workflow/declared/fixtures/sample-auri.json`.
+`wigley-ai-marketplace/plugins/wigley/auri.json`, the truth for the four. The app holds a fixture copy of them, for the
+self-test and demo, in `src/plugins/workflow/declared/fixtures/sample-auri.json`; a change to the plugin's file is made to
+the copy in the same commit.
 
 The engine reads the enabled declared workflows and builds two halves from each, through `src/plugins/workflow/declared/`:
 
@@ -241,7 +243,7 @@ folder and marks it reported. Make in new session and Dismiss signal `handedOff`
 `wigley:feature`, `wigley:feature-primer` and `wigley:make`, Spike `wigley:spike`. `wigley:review` and every other skill claim nothing, so they
 run inside the level. A claim by a workflow other than the flow's current one sets `movedUpFrom` to the current workflow
 (null for a session in none), sets the new workflow, its first stage, a null plan, empty counters, no countdown and a null checklist, and clears
-`missedLevel`. The engine does not check that the move is upward: moving down is the user's word, by the same skill
+`unclaimedWork`. The engine does not check that the move is upward: moving down is the user's word, by the same skill
 load. A claim by the current workflow (an own claim) nulls the checklist, so a second ask shows no old list; it changes nothing
 else on the flow's identity (`movedUpFrom` stays), and its stage rules may restart it. A claim from a stage with
 `finishes` starts a new run, so `movedUpFrom` is null for it, whichever workflow claims. When two workflows claim one

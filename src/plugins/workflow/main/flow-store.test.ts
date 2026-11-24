@@ -35,6 +35,7 @@ function flowsFile(
 async function loadStore(
   text: string | null,
   leftover: Record<string, SessionFlow> = {},
+  isKnownWorkflow: (workflowId: string) => boolean = () => true,
 ) {
   const files = createMemoryFiles();
   if (text !== null) {
@@ -52,6 +53,7 @@ async function loadStore(
     log: (line) => logs.push(line),
     paths: posixPaths,
     clock: { now: () => time.now },
+    isKnownWorkflow,
   });
   await store.load();
   const saved = async () => {
@@ -99,8 +101,8 @@ describe('createFlowStore', () => {
       flow: { ...SAVED_H1, checklist: [{ text: 1, done: true }] },
     },
     {
-      name: 'a missedLevel not a boolean',
-      flow: { ...SAVED_H1, missedLevel: 'x' },
+      name: 'an unclaimedWork not a boolean',
+      flow: { ...SAVED_H1, unclaimedWork: 'x' },
     },
     {
       name: 'the old shape',
@@ -193,6 +195,68 @@ describe('createFlowStore', () => {
 
     expect(store.open('s9', 'h1', '/r')).toMatchObject(expected);
     expect(logs).toEqual([]);
+  });
+
+  // A run saved on a retired workflow, such as an id from before declared workflows.
+  const RETIRED: SessionFlow = {
+    ...SAVED_H1,
+    workflow: 'workflow-large',
+    movedUpFrom: 'workflow-small',
+    checklistReported: true,
+    counters: { fix: 2 },
+  };
+
+  it.each<{ name: string; known: boolean; expected: SessionFlow }>([
+    {
+      name: 'a known workflow keeps its run',
+      known: true,
+      expected: {
+        ...RETIRED,
+        sessionId: 's9',
+        turnRunning: false,
+        runningSubagents: [],
+      },
+    },
+    {
+      name: 'an unknown workflow opens on the Checklist flow with its checklist',
+      known: false,
+      expected: {
+        ...newFlow('s9', '/r'),
+        checklist: RETIRED.checklist,
+        checklistReported: true,
+      },
+    },
+  ])('Open_SavedWorkflow ($name)', async ({ known, expected }) => {
+    const asked: string[] = [];
+    const { store } = await loadStore(
+      flowsFile([{ hostSessionId: 'h1', flow: RETIRED }]),
+      {},
+      (workflowId) => {
+        asked.push(workflowId);
+        return known;
+      },
+    );
+
+    expect(store.open('s9', 'h1', '/r')).toStrictEqual(expected);
+    expect(asked).toEqual(['workflow-large']);
+  });
+
+  it('Load_SavedMissedLevel_LoadsWithoutIt', async () => {
+    const { store } = await loadStore(
+      flowsFile([
+        {
+          hostSessionId: 'h1',
+          flow: { ...SAVED_H1, missedLevel: true } as SessionFlow,
+        },
+      ]),
+    );
+
+    expect(store.open('s9', 'h1', '/r')).toStrictEqual({
+      ...SAVED_H1,
+      sessionId: 's9',
+      turnRunning: false,
+      runningSubagents: [],
+    });
   });
 
   it('Load_SavedState_LoadsWithoutIt', async () => {

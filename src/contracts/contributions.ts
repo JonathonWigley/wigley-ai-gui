@@ -81,6 +81,7 @@ export interface WorkflowDecl {
   badgeColor?: string;
   order: number;
   claims: string[];
+  flagsUnclaimedWork?: true;
   groups?: Record<string, string[]>;
   counters?: Record<string, CounterDecl>;
   fixCycles?: { counter: string } | { planCounter: string };

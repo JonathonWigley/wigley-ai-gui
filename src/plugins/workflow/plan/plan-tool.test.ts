@@ -7,6 +7,11 @@ import {
   planWorkflowFixture,
   USER_PLAN_FORMAT,
 } from './plan-fixtures.test-support';
+import {
+  KEEPS_NO_PLAN_IGNORED,
+  NO_FLOW_IGNORED,
+  notEnabledIgnored,
+} from './plan-report';
 import { startPlanTool } from './plan-tool';
 
 const NO_CALL_CONTEXT: ToolCallContext = {
@@ -25,10 +30,10 @@ const TASKS_FILE_WORKFLOW: DeclaredWorkflow = {
 
 // The tool for session `s1` over memory files holding `PLAN_DIR/plan.md`,
 // `TASKS_DIR/tasks.md` and an empty `EMPTY_DIR`, recording each report; the
-// session's flow keeps `workflow`'s plan, or none when it is null, and each
-// report resolves `reportResolves`.
+// session's flow keeps `workflow`'s plan, or is ignored for the reason a
+// string gives, and each report resolves `reportResolves`.
 async function toolWith(
-  workflow: DeclaredWorkflow | null,
+  workflow: DeclaredWorkflow | string,
   reportResolves = true,
 ) {
   const files = createMemoryFiles();
@@ -43,14 +48,15 @@ async function toolWith(
       reports.push([sessionId, planDir]);
       return reportResolves;
     },
-    planWorkflowOf: async () => workflow,
+    planWorkflowOf: async () =>
+      typeof workflow === 'string'
+        ? { workflow: null, ignored: workflow }
+        : { workflow, ignored: null },
   })({ id: 's1' });
   const call = (name: string, args: unknown) =>
     tool.call(name, args, NO_CALL_CONTEXT);
   return { call, reports };
 }
-
-const IGNORED = "Ignored: this session's workflow keeps no plan.";
 
 describe('set_workflow_plan', () => {
   it.each([
@@ -104,19 +110,35 @@ describe('set_workflow_plan', () => {
     },
     {
       name: 'a plan folder in a flow keeping no plan',
-      workflow: null,
+      workflow: KEEPS_NO_PLAN_IGNORED,
       args: { folder: PLAN_DIR },
       reported: [],
       error: false,
-      text: IGNORED,
+      text: KEEPS_NO_PLAN_IGNORED,
     },
     {
       name: 'a folder with no plan file in a flow keeping no plan',
-      workflow: null,
+      workflow: KEEPS_NO_PLAN_IGNORED,
       args: { folder: EMPTY_DIR },
       reported: [],
       error: false,
-      text: IGNORED,
+      text: KEEPS_NO_PLAN_IGNORED,
+    },
+    {
+      name: 'a plan folder in no flow',
+      workflow: NO_FLOW_IGNORED,
+      args: { folder: PLAN_DIR },
+      reported: [],
+      error: false,
+      text: NO_FLOW_IGNORED,
+    },
+    {
+      name: 'a plan folder in a flow of a workflow not enabled',
+      workflow: notEnabledIgnored('workflow-large'),
+      args: { folder: PLAN_DIR },
+      reported: [],
+      error: false,
+      text: notEnabledIgnored('workflow-large'),
     },
   ])('answers $name', async ({ workflow, args, reported, error, text }) => {
     const { call, reports } = await toolWith(workflow);
@@ -134,7 +156,7 @@ describe('set_workflow_plan', () => {
     const result = await call('set_workflow_plan', { folder: PLAN_DIR });
 
     expect(reports).toEqual([['s1', PLAN_DIR]]);
-    expect(result.content[0].text).toBe(IGNORED);
+    expect(result.content[0].text).toBe(KEEPS_NO_PLAN_IGNORED);
   });
 
   it('call_AnotherToolName_Rejects', async () => {

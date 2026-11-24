@@ -267,6 +267,20 @@ describe('buildMainWorkflow › counters', () => {
   });
 });
 
+describe('buildMainWorkflow › flagsUnclaimedWork', () => {
+  it.each([
+    { name: 'a declaration that sets it', flag: true as const, flags: true },
+    { name: 'a declaration that leaves it out', flag: undefined, flags: false },
+  ])('$name flags $flags', ({ flag, flags }) => {
+    const small = sampleDeclared('small');
+    small.decl.flagsUnclaimedWork = flag;
+
+    expect(buildMainWorkflow(small, READS_PROGRESS).flagsUnclaimedWork).toBe(
+      flags,
+    );
+  });
+});
+
 describe('holds with the plan unread', () => {
   const unread = (fields: Partial<SessionFlow>): SessionFlow => ({
     ...newFlow('s1', '/r'),

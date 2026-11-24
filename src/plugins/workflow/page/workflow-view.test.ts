@@ -356,13 +356,13 @@ describe('workflow view', () => {
 
 describe('workflow view over several workflows', () => {
   it.each([
-    { missedLevel: false, isWorking: false, chip: [] },
-    { missedLevel: true, isWorking: false, chip: ['No workflow'] },
-    { missedLevel: false, isWorking: true, chip: ['Working'] },
-    { missedLevel: true, isWorking: true, chip: ['No workflow', 'Working'] },
+    { unclaimedWork: false, isWorking: false, chip: [] },
+    { unclaimedWork: true, isWorking: false, chip: ['No workflow'] },
+    { unclaimedWork: false, isWorking: true, chip: ['Working'] },
+    { unclaimedWork: true, isWorking: true, chip: ['No workflow', 'Working'] },
   ])(
-    'Draw_NullWorkflow missedLevel $missedLevel isWorking $isWorking',
-    ({ missedLevel, isWorking, chip: chipTexts }) => {
+    'Draw_NullWorkflow unclaimedWork $unclaimedWork isWorking $isWorking',
+    ({ unclaimedWork, isWorking, chip: chipTexts }) => {
       const { view, put, sidePart, rowActivities, working } = setUp();
       if (isWorking) {
         working.add('a');
@@ -375,12 +375,14 @@ describe('workflow view over several workflows', () => {
       view.stripPart.build(asHtml(strip), 'a');
       sidePart.build(asHtml(pane), 'a', section);
 
-      put({ ...newFlow('a', '/p'), missedLevel });
+      put({ ...newFlow('a', '/p'), unclaimedWork });
 
       expect(chip.children.map((child) => child.textContent)).toEqual(
         chipTexts,
       );
-      expect(findAll(chip, 'ui-tag--error')).toHaveLength(missedLevel ? 1 : 0);
+      expect(findAll(chip, 'ui-tag--error')).toHaveLength(
+        unclaimedWork ? 1 : 0,
+      );
       expect(findAll(chip, 'ui-tag--running')).toHaveLength(isWorking ? 1 : 0);
       expect(strip.children).toHaveLength(0);
       expect(pane.children).toHaveLength(0);
@@ -575,11 +577,11 @@ describe('workflow view over several workflows', () => {
     { name: 'false', pushes: [false], lines: 0 },
     { name: 'true', pushes: [true, true], lines: 1 },
     { name: 'true again', pushes: [true, false, true], lines: 2 },
-  ])('logFlow_MissedLevel_LogsNoWorkflow $name', ({ pushes, lines }) => {
+  ])('logFlow_UnclaimedWork_LogsNoWorkflow $name', ({ pushes, lines }) => {
     const { put, logged } = setUp();
 
-    for (const missedLevel of pushes) {
-      put({ ...newFlow('a', '/p'), missedLevel });
+    for (const unclaimedWork of pushes) {
+      put({ ...newFlow('a', '/p'), unclaimedWork });
     }
 
     expect(logged.filter((line) => line === 'proj no workflow')).toHaveLength(
@@ -605,7 +607,7 @@ describe('workflow view over several workflows', () => {
     expect(checklist.chips).toHaveLength(1);
   });
 
-  it('Chip_ChecklistFlowWithMissedLevel_ShowsTheNoWorkflowTag', () => {
+  it('Chip_ChecklistFlowWithUnclaimedWork_ShowsTheNoWorkflowTag', () => {
     const { view, workflows, put } = setUp();
     workflows.push(
       stubWorkflow(CHECKLIST_WORKFLOW_ID, stageOf(CHECKLIST_STAGE, 'Work', 0))
@@ -614,7 +616,7 @@ describe('workflow view over several workflows', () => {
     const chip = new FakeElement('div');
     view.chipPart.build(asHtml(chip), 'a');
 
-    put({ ...newFlow('a', '/p'), missedLevel: true });
+    put({ ...newFlow('a', '/p'), unclaimedWork: true });
 
     expect(findAll(chip, 'ui-tag--error')).toHaveLength(1);
   });
@@ -1047,7 +1049,7 @@ describe('workflow view headless', () => {
   it.each<{ given: string; flow: SessionFlow; status?: StageStatus }>([
     {
       given: 'no workflow',
-      flow: { ...newFlow('a', '/p'), missedLevel: true },
+      flow: { ...newFlow('a', '/p'), unclaimedWork: true },
     },
     { given: 'idle', flow: flowOf('w', {}, 'idle') },
     { given: 'running', flow: flowOf('w'), status: 'running' },

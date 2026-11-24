@@ -10,7 +10,7 @@ import {
   startsSkill,
   type WorkflowSignal,
 } from './contract';
-import { foldFlow, markMissedLevel, newFlow } from './flow';
+import { foldFlow, markUnclaimedWork, newFlow } from './flow';
 
 function flowWith(fields: Partial<SessionFlow>): SessionFlow {
   return { ...newFlow('s1', '/r'), ...fields };
@@ -66,14 +66,14 @@ const WORKFLOW_ROWS: {
   expected: Partial<SessionFlow> | typeof UNCHANGED;
 }[] = [
   {
-    name: 'a claim of a new flow goes to the first stage and clears missedLevel',
-    flow: flowWith({ missedLevel: true }),
+    name: 'a claim of a new flow goes to the first stage and clears unclaimedWork',
+    flow: flowWith({ unclaimedWork: true }),
     signal: skill('wigley:small'),
     expected: {
       workflow: 'small',
       stage: 'scope',
       movedUpFrom: null,
-      missedLevel: false,
+      unclaimedWork: false,
     },
   },
   {
@@ -219,10 +219,10 @@ const WORKFLOW_ROWS: {
     expected: { stage: 'build', checklist: CHECKLIST, checklistReported: true },
   },
   {
-    name: 'cleared clears missedLevel and keeps the workflow, stage and counters',
+    name: 'cleared clears unclaimedWork and keeps the workflow, stage and counters',
     flow: flowWith({
       ...SMALL_AT_BUILD,
-      missedLevel: true,
+      unclaimedWork: true,
       counters: { n: 1 },
     }),
     signal: { type: 'cleared' },
@@ -230,7 +230,7 @@ const WORKFLOW_ROWS: {
       workflow: 'small',
       stage: 'build',
       counters: { n: 1 },
-      missedLevel: false,
+      unclaimedWork: false,
     },
   },
   {
@@ -359,19 +359,19 @@ describe('foldFlow', () => {
   });
 });
 
-describe('markMissedLevel', () => {
-  it('sets the flag on the Checklist flow with another workflow registered', () => {
-    expect(markMissedLevel(flowWith({}), true).missedLevel).toBe(true);
+describe('markUnclaimedWork', () => {
+  it('sets the flag on the Checklist flow with a flagging workflow registered', () => {
+    expect(markUnclaimedWork(flowWith({}), true).unclaimedWork).toBe(true);
   });
 
   it.each([
-    { name: 'already set', fields: { missedLevel: true }, other: true },
-    { name: 'a workflow', fields: { workflow: 'small' }, other: true },
-    { name: 'no other workflow registered', fields: {}, other: false },
-  ])('keeps the same flow with $name', ({ fields, other }) => {
+    { name: 'already set', fields: { unclaimedWork: true }, flagged: true },
+    { name: 'a workflow', fields: { workflow: 'small' }, flagged: true },
+    { name: 'no flagging workflow registered', fields: {}, flagged: false },
+  ])('keeps the same flow with $name', ({ fields, flagged }) => {
     const flow = flowWith(fields);
 
-    expect(markMissedLevel(flow, other)).toBe(flow);
+    expect(markUnclaimedWork(flow, flagged)).toBe(flow);
   });
 });
 

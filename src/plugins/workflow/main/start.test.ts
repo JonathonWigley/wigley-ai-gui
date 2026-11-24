@@ -1104,6 +1104,7 @@ describe('workflowMainPart', () => {
       }
 
       await harness.restart();
+      exportsNow().addWorkflow(stubWorkflow());
       await settled();
 
       expect(exportsNow().flowOf('s1')).toEqual(
@@ -1225,29 +1226,41 @@ describe('workflowMainPart', () => {
     name: string;
     events: (AgentEvent | typeof CLEARED)[];
     replayed: boolean;
-    missedLevel: boolean;
+    unclaimedWork: boolean;
+    flagged?: boolean;
   }>([
     {
-      name: 'MissedLevel_LiveTurnWithWork_SetsAndPushes',
+      name: 'UnclaimedWork_LiveTurnWithWork_SetsAndPushes',
       events: [
         { type: 'turnStarted', at: 1 },
         USAGE,
         { type: 'turnEnded', at: 1 },
       ],
       replayed: false,
-      missedLevel: true,
+      unclaimedWork: true,
     },
     {
-      name: 'MissedLevel_LiveTurnWithNoWork_StaysFalse',
+      name: 'UnclaimedWork_NoRegisteredWorkflowFlagsIt_StaysFalse',
+      events: [
+        { type: 'turnStarted', at: 1 },
+        USAGE,
+        { type: 'turnEnded', at: 1 },
+      ],
+      replayed: false,
+      unclaimedWork: false,
+      flagged: false,
+    },
+    {
+      name: 'UnclaimedWork_LiveTurnWithNoWork_StaysFalse',
       events: [
         { type: 'turnStarted', at: 1 },
         { type: 'turnEnded', at: 1 },
       ],
       replayed: false,
-      missedLevel: false,
+      unclaimedWork: false,
     },
     {
-      name: 'MissedLevel_ClearedMidTurn_ForgetsTheWork',
+      name: 'UnclaimedWork_ClearedMidTurn_ForgetsTheWork',
       events: [
         { type: 'turnStarted', at: 1 },
         USAGE,
@@ -1255,31 +1268,33 @@ describe('workflowMainPart', () => {
         { type: 'turnEnded', at: 1 },
       ],
       replayed: false,
-      missedLevel: false,
+      unclaimedWork: false,
     },
     {
-      name: 'MissedLevel_ReplayedTurn_StaysFalse',
+      name: 'UnclaimedWork_ReplayedTurn_StaysFalse',
       events: [
         { type: 'turnStarted', at: 1 },
         USAGE,
         { type: 'turnEnded', at: 1 },
       ],
       replayed: true,
-      missedLevel: false,
+      unclaimedWork: false,
     },
     {
-      name: 'MissedLevel_SessionEnded_Sets',
+      name: 'UnclaimedWork_SessionEnded_Sets',
       events: [
         { type: 'turnStarted', at: 1 },
         USAGE,
         { type: 'sessionEnded', at: 1 },
       ],
       replayed: false,
-      missedLevel: true,
+      unclaimedWork: true,
     },
-  ])('$name', async ({ events, replayed, missedLevel }) => {
+  ])('$name', async ({ events, replayed, unclaimedWork, flagged = true }) => {
     const workflow = startWorkflowPart();
-    workflow.exported().addWorkflow(finishingWorkflow());
+    workflow
+      .exported()
+      .addWorkflow(finishingWorkflow({ flagsUnclaimedWork: flagged }));
     await workflow.openS1();
 
     let hostSessionId = 'h1';
@@ -1296,7 +1311,7 @@ describe('workflowMainPart', () => {
     }
 
     expect(workflow.lastFlow()).toMatchObject({
-      missedLevel,
+      unclaimedWork,
       workflow: CHECKLIST_WORKFLOW_ID,
     });
   });
@@ -1311,7 +1326,7 @@ describe('workflowMainPart', () => {
     await workflow.openS1();
     await workflow.agentEvent({ type: 'turnEnded', at: 1 });
 
-    expect(workflow.lastFlow()?.missedLevel).toBe(false);
+    expect(workflow.lastFlow()?.unclaimedWork).toBe(false);
   });
 
   it.each<{
@@ -1913,6 +1928,7 @@ describe('workflowMainPart › declared workflows', () => {
         { text: 'a', done: true },
         { text: 'b', done: false },
       ],
+      step: null,
     });
   });
 });
@@ -2077,8 +2093,27 @@ describe('workflowMainPart › the sample Large', () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toBe(
-      "Ignored: this session's workflow keeps no plan.",
+      'Ignored: the app holds no flow for this session.',
     );
+  });
+
+  // Breaks if a flow saved on a retired workflow id reopens on it: no stage, no
+  // plan watch, and the next claim logs it as moved up from.
+  it('Open_FlowSavedOnARetiredWorkflow_OpensOnTheChecklistFlow', async () => {
+    const workflow = startWithLarge({
+      data: await savedFlowData({ workflow: 'workflow-large', stage: 'make' }),
+    });
+    await workflow.openS1();
+
+    expect(workflow.lastFlow()).toMatchObject({
+      workflow: CHECKLIST_WORKFLOW_ID,
+      stage: CHECKLIST_STAGE,
+    });
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    expect(workflow.lastFlow()).toMatchObject({
+      workflow: LARGE_ID,
+      movedUpFrom: null,
+    });
   });
 
   it('StepTool_Large', async () => {
@@ -2218,7 +2253,7 @@ describe('workflowMainPart › the sample Large', () => {
     expect(await runLines(workflow)).toHaveLength(1);
   });
 
-  it('MissedLevel_ClaimedInTurn_StaysFalse', async () => {
+  it('UnclaimedWork_ClaimedInTurn_StaysFalse', async () => {
     const workflow = startWithLarge();
     await workflow.openS1();
 
@@ -2232,7 +2267,7 @@ describe('workflowMainPart › the sample Large', () => {
     }
 
     expect(workflow.lastFlow()).toMatchObject({
-      missedLevel: false,
+      unclaimedWork: false,
       workflow: LARGE_ID,
     });
   });

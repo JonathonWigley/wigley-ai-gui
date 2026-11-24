@@ -62,6 +62,7 @@ claimed skills loads (`workflows-and-checklist` skill).
 | `label`, `badge`, `badgeColor` | The workflow's word, the row's letter, and a CSS colour or theme token (default `var(--wg-accent)`).                                                                        |
 | `order`                        | The lowest order wins a skill two workflows claim.                                                                                                                          |
 | `claims`                       | The skills that start this workflow (`acme:small`). Each appears in exactly one stage's `skill` trigger.                                                                    |
+| `flagsUnclaimedWork`           | `true` to show a `No workflow` tag on a session whose turn did agent work without claiming any workflow, while this one is on. Left out: no tag.                            |
 | `groups`                       | Named stage lists for `from`: `{ "planning": ["explore", "plan"] }`. A group name may not equal a stage id.                                                                 |
 | `counters`                     | `{ "<name>": { "counts": "<stage id>", "resetOn": "claim" } }`: adds one each time the flow enters the stage from another; 0 when the workflow's own skill claims the flow. |
 | `fixCycles`                    | `{ "counter": "<name>" }` or `{ "planCounter": "<name>" }`: the run log's fix cycles.                                                                                       |
