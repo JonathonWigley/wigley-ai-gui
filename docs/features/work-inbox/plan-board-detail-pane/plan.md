@@ -230,7 +230,7 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 
 ## Run log
 
-Review base: 0eab07e6
+Review base: 907c34c2 (was 0eab07e6 before the rebase onto main; group SHAs below are pre-rebase)
 
 ### Groups
 - 01 · deep · 648283a9 · diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files
@@ -249,5 +249,6 @@ Review base: 0eab07e6
 - 04: detailInput.draft follows the old card rule; showSample closes the pane and restores focus to what it was (the Board's forces board); detail padding space-2 space-4 per the doc (Board's space-3 space-4); detailEmpty uses kit.emptyState · group 04
 - 05 self-test: Inbox steps reordered to start from an open pane; Board box leave presses Escape twice, matching the Inbox box. · group 05
 - 06 docs vs code: reply box only on open Inbox threads (and on the Board for a local task whose thread is not open); Inbox card carries no Buttons or draft in any state, summary hides while the pane is open; Posting… shows on the Board card and in the pane; design.md documents the Fetched-age head and the No-detail-yet line. · group 06
+- Before review: board-detail-pane rebased onto main 907c34c2 (the repo-move peer landed the 3 ported plan commits there, so git dropped the duplicates); CHANGELOG conflict resolved with this run's entries under Unreleased above 1.3.0 and 1.2.0; typecheck and changelog lint clean after the rebase — lead
 ### Review rounds
 ### Test gate
