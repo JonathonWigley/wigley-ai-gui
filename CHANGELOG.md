@@ -55,7 +55,7 @@ changes for the user.
 
 - The `auri` checklist hook shows the session's workflow step as well as its list again after a compaction.
 - A missing hook script no longer blocks a session; the hook fails open.
-- A session saved on a workflow no plugin declares any more opens on the Checklist flow with its checklist.
+- A session saved on one of the retired built-in Spike, Small, Medium or Large workflows opens on the Checklist flow with its checklist.
 
 ### Removed
 
