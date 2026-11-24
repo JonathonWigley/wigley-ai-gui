@@ -3,6 +3,7 @@
 **Contents**
 
 - **What Auri is** — the app, and the agent plugin it ships.
+- **What it looks like** — the app on a fresh install with default settings.
 - **Requirements** — the programs the app and its plugin run.
 - **Install the app** — build and install the stable app, or run the dev app.
 - **The auri agent plugin** — how app sessions get it, and installing it for terminal Claude Code and Codex.
@@ -30,6 +31,27 @@ empty state until a plugin binds it.
 
 The app shows as Auri. Its executable, bundle and every path keep the name `wigley-ai-gui`.
 
+## What it looks like
+
+These are a fresh install with default settings and no plugin bound through `auri.json`. The sessions run on the
+app's test harness, so their messages are sample text.
+
+![Sessions mode: two sessions in the side bar, one session's chat, its hub and the system stats](docs/images/sessions-chat.png)
+
+Sessions mode: each session's row in the side bar, its chat and composer, its hub, and system stats on the right.
+
+![A forms round open over a session, with its items on the left and a finding's choices on the right](docs/images/forms-round.png)
+
+A forms round an agent sent, open over its session; the row shows Needs you until it is answered.
+
+![The Space key menu open at the bottom of the window](docs/images/key-menu.png)
+
+The key menu `Space` opens: every leader action, grouped.
+
+![Settings mode on its Core section](docs/images/settings.png)
+
+Settings mode: every setting, grouped by plugin, each with its description.
+
 ## Requirements
 
 - macOS or Windows.
@@ -46,11 +68,11 @@ The app shows as Auri. Its executable, bundle and every path keep the name `wigl
 1. Clone the repo and work from its root:
 
    ```
-   git clone git@github.com:JonathonWigley/wigley-ai-gui.git
+   git clone https://github.com/JonathonWigley/wigley-ai-gui.git
    cd wigley-ai-gui
    ```
 
-   The repo may be private: a clone then needs read access from its owner.
+   The repo is public, so the clone needs no GitHub account.
 
 2. Select the Node.js version in `.nvmrc`, then run `npm ci` to install the build dependencies. On macOS and Linux,
    `nvm use` reads `.nvmrc`. On Windows, nvm-windows does not read it: run `nvm install <version>` and
@@ -187,7 +209,8 @@ By plugin:
 Settings worth setting first:
 
 - `claude-code.profiles` — the Claude Code profiles a session can start in: a name and its config folder each.
-- `chat.projects` — the projects the start prompt offers: a name and a folder each.
+- `chat.projects` — the projects the start prompt offers: a name and a folder or a `unity-pool` pool each, and an
+  optional profile every session of the project runs under.
 - `auto-retro.strategy`, `backlog.strategy` — `''` picks the one installed strategy, or shows a choice when several
   are installed.
 - `workflow.off` — qualified workflow ids (`<plugin>:<id>`) to switch off. `workflow.autoStart` lists
@@ -287,7 +310,7 @@ The `auri` server offers these tools to every session, unless the row says other
 | `record_work_tickets`       | Records the user's Jira tickets on the Board, with their statuses, the statuses their transitions reach and each ticket's detail when it moved. Answers only the running work job's session.       |
 | `report_work_job`           | Ends the job with whether it did what its message asked and a one-line note. Answers only the running work job's session.                                                                          |
 | `add_practice_problem`      | Adds or rewrites a Practice problem.                                                                                                                                                               |
-| `read_practice_state`       | Reads what the user sees in Practice.                                                                                                                                                              |
+| `read_practice_state`       | Reads what the user sees in Practice. Answers only a Practice interviewer session.                                                                                                                 |
 | `schedule_task`             | Schedules a prompt to run on a schedule.                                                                                                                                                           |
 | `list_scheduled_tasks`      | Lists the scheduled tasks.                                                                                                                                                                         |
 | `update_scheduled_task`     | Changes a scheduled task.                                                                                                                                                                          |
