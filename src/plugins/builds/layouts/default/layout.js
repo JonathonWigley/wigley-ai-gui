@@ -179,9 +179,13 @@ const layout = {
         variant: 'ghost',
       });
     }
-    kit.keyHint(actions, 'openWeb');
+    kit
+      .keyHint(actions, 'openWeb')
+      .classList.toggle('is-no-target', input.webUrl === null);
     if (input.canCancel) {
-      kit.keyHint(actions, 'cancel', { label: true });
+      kit
+        .keyHint(actions, 'cancel', { label: true })
+        .classList.toggle('is-no-target', input.state === 'finished');
     }
     for (const file of input.files) {
       const button = kit.button(
@@ -234,7 +238,9 @@ const layout = {
     if (input.canSaveLog) {
       kit.button(actions, 'Log ↓', 'builds.saveLog');
     }
-    kit.keyHint(actions, 'saveLog');
+    kit
+      .keyHint(actions, 'saveLog')
+      .classList.toggle('is-no-target', !input.canSaveLog);
     drawDownload(actions, input.log, kit);
     if (input.webUrl !== null) {
       kit.button(actions, `${input.backendLabel} ↗`, 'builds.openLink', {
@@ -242,7 +248,9 @@ const layout = {
         variant: 'ghost',
       });
     }
-    kit.keyHint(actions, 'openJob');
+    kit
+      .keyHint(actions, 'openJob')
+      .classList.toggle('is-no-target', input.webUrl === null);
     return element;
   },
   detailEmpty(parent, _input, kit) {

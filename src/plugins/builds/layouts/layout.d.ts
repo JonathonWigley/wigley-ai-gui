@@ -146,7 +146,9 @@ export interface BuildFileInput {
 // read as `buildRowInput` reads them: `subject` from `view.subjects` through `revision`, `startsInMs` null while
 // `startEstimate` is null, else `Math.max(0, startEstimate - now)`. Each link is a `kit.button` running
 // `builds.openLink` with its `url`, and so is `<backendLabel> ↗` with `webUrl` while it is not null. `canCancel` is
-// the backend's `capabilities.cancel`, whatever the build's state.
+// the backend's `capabilities.cancel`, whatever the build's state. The `openWeb` hint is drawn always and marked
+// `is-no-target` while `webUrl` is null; the `cancel` hint is drawn while `canCancel` and marked `is-no-target` once the
+// build has finished.
 export interface BuildHeaderInput {
   gameLabel: string;
   kindLabel: string;
@@ -189,7 +191,8 @@ export interface JobGraphInput {
 
 // The selected job, or the build itself while it lists no job (`isBuild` true, `label` the kind's label). `Log ↓`, a
 // `kit.button` running `builds.saveLog`, shows while `canSaveLog`; `<backendLabel> ↗` runs `builds.openLink` with
-// `webUrl` while it is not null.
+// `webUrl` while it is not null. The `saveLog` and `openJob` hints are drawn always, each marked `is-no-target` while
+// its button is not shown.
 export interface JobPanelInput {
   label: string;
   isBuild: boolean;

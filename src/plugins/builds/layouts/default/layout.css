@@ -163,6 +163,13 @@
   align-items: center;
 }
 
+/* A hint with nothing to act on takes no space, so the buttons after it keep their place in the row. */
+[data-layout-owner='builds'][data-layout='default']
+  .builds-actions
+  .is-no-target {
+  display: none;
+}
+
 /* The graph scrolls sideways; its boxes keep their width. */
 [data-layout-owner='builds'][data-layout='default'].builds-graph {
   overflow-x: auto;
@@ -172,7 +179,7 @@
 [data-layout-owner='builds'][data-layout='default'] .builds-graph-grid {
   position: relative;
   display: grid;
-  grid-auto-columns: calc(var(--wg-space-8) * 20);
+  grid-auto-columns: calc(var(--wg-space-8) * 4.5);
   column-gap: var(--wg-space-8);
   row-gap: var(--wg-space-2);
   align-items: start;
@@ -188,6 +195,20 @@
   border: 1px solid var(--wg-border-subtle);
   border-radius: var(--wg-radius-md);
   background: var(--wg-block-background);
+}
+
+/* A narrow box moves its duration to a line of its own rather than splitting it. */
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box
+  .builds-state-line {
+  flex-wrap: wrap;
+  row-gap: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default']
+  .builds-job-box
+  .builds-muted {
+  white-space: nowrap;
 }
 
 [data-layout-owner='builds'][data-layout='default']
