@@ -213,7 +213,7 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 - [x] [Detail records, slot and sweep](01-detail-data.md)
 
 ### Wave 2
-- [ ] [Comment job](02-comment-job.md) — after 01
+- [x] [Comment job](02-comment-job.md) — after 01
 
 ### Wave 3
 - [ ] [Board detail pane](03-board-pane.md) — after 01, 02
@@ -234,6 +234,7 @@ Review base: 0eab07e6
 
 ### Groups
 - 01 · deep · 648283a9 · diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files
+- 02 · deep · eda7d05b · diff read: every Produces signature present (comment job, commenting, WorkCommentArg, workCommentCommand, WorkChannel.comment, actions.comment, jobEnded caps); wave typecheck clean after one test-file compile fix on the same rung · concerns: commentMessage kept private like sibling builders; clearStaleMarks rewritten to build lists first and return the same object when unchanged; Jira card saved without commenting parses as []
 ### Contract changes
 ### Rulings
 - Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead

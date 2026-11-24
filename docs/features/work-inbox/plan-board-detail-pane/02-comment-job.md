@@ -1,6 +1,6 @@
 # 02 — Comment job
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · adds a stored `work.json` card field, a persisted queue job kind, a restart-time stale-mark rule and a job-end write to stored detail; it follows the Move job at each place a job kind is listed, and adds the comment contract that 03 consumes
 Wave: 2 · Depends on: 01 (shares contract.ts, store.ts, work-tools.ts, job-text.ts, manifest.ts, main/start.ts)
@@ -147,3 +147,5 @@ Done when: `npm run typecheck` passes; the seven test files above pass; `npm run
 Commit: one commit for the group.
 
 ## Proof
+
+Commit eda7d05b · proof: diff read: every Produces signature present (comment job, commenting, WorkCommentArg, workCommentCommand, WorkChannel.comment, actions.comment, jobEnded caps); wave typecheck clean after one test-file compile fix on the same rung · concerns: commentMessage kept private like sibling builders; clearStaleMarks rewritten to build lists first and return the same object when unchanged; Jira card saved without commenting parses as []

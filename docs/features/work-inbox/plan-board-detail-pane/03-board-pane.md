@@ -1,6 +1,6 @@
 # 03 — Board detail pane
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the Board's `detail` layout part and the page commands that 05 binds
 Wave: 3 · Depends on: 01, 02
