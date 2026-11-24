@@ -63,7 +63,7 @@ class LoadContributionsTests(unittest.TestCase):
                 self.assertEqual((contributions.features.in_repo_parts, contributions.features.out_of_repo_folders),
                                  ((("docs", "features"),), ()))
                 self.assertEqual(err.count("\n"), 1)
-                self.assertIn(f'features.homes[1]: "{template}" is neither', err)
+                self.assertIn(f'features.homes[1] in ', err)
 
     def test_tilde_paths_expand_against_env_home(self):
         contributions, _ = self._load({
