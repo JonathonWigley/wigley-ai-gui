@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.1.0 — 2026-11-24
+
 ### Added
 
 - Every code block in chat, docs, forms and practice shows a copy button in its corner on hover; a click copies
