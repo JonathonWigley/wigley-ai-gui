@@ -251,4 +251,5 @@ Review base: 907c34c2 (was 0eab07e6 before the rebase onto main; group SHAs belo
 - 06 docs vs code: reply box only on open Inbox threads (and on the Board for a local task whose thread is not open); Inbox card carries no Buttons or draft in any state, summary hides while the pane is open; Posting… shows on the Board card and in the pane; design.md documents the Fetched-age head and the No-detail-yet line. · group 06
 - Before review: board-detail-pane rebased onto main 907c34c2 (the repo-move peer landed the 3 ported plan commits there, so git dropped the duplicates); CHANGELOG conflict resolved with this run's entries under Unreleased above 1.3.0 and 1.2.0; typecheck and changelog lint clean after the rebase — lead
 ### Review rounds
+- Round 1 (review 673e121d, NEEDS FIXES, 22 findings): fix range a4a98037..db22fa68 risk tier Medium (comment refusal, pane redraw/time-hold/scroll keep, reveal on narrow, Board pane lines); a4a98037 is prose-only; re-review: correctness lane over aabff4a1^..db22fa68 — lead
 ### Test gate
