@@ -110,6 +110,8 @@ page: list ◀─j/k─▶ detail pane ─Alt+l─▶ job graph (h/j/k/l)       
   build (round 2).
 - A running download is published by main in `builds.downloads`, so a page reload keeps it (round 2).
 
+**Known risk**: a stalled Drive mount leaves each path's given-up `stat` pending (one per path, never more), and those can hold Node's four file-system threads until the mount answers; the poll and the snapshot keep running.
+
 **Out of scope**: a live log tail; a Drive API sign-in; queueing changes; Release or Play uploads; the iOS IPA (the
 pipeline uploads no iOS zip to Drive).
 
@@ -144,10 +146,10 @@ export interface BackendCapabilities { cancel: boolean; choosesBranch: boolean; 
 saveLog?(game: GameEntry, buildId: string, jobId: string | null, path: string): Promise<void>;
 export interface BuildDownloadEntry { label: string; path: string; } // path: `~` expanded, `{version}` and `{number}` filled
 export interface BuildKindEntry { label: string; target: unknown; downloads: BuildDownloadEntry[]; }
-export interface BuildFile { label: string; path: string; } // a filled path that exists on disk
+export interface BuildFile { label: string; path: string; entry: number; } // a filled path that exists on disk; entry: its index in the kind's `downloads`
 export interface GameView { /* existing fields */ files: Record<string, BuildFile[]>; } // build id → its files that exist
 export interface BuildDownload {
-  id: string;                 // `<backend id>/<build id>/log/<job id or "build">` or `<backend id>/<build id>/file/<index>`
+  id: string;                 // `<backend id>/<build id>/log` (the build's own log), `<backend id>/<build id>/log/<job id>`, or `<backend id>/<build id>/file/<entry>`
   backendId: string; buildId: string;
   label: string;              // the job's label for a log, the file's label for a file
   state: 'running' | 'saved' | 'failed';
@@ -160,7 +162,7 @@ export interface BuildsPlace { entry: string; build: string | null; job: string 
 export const buildsPlaceSlot: SlotKey<BuildsPlace, 'page', 'builds'>; // id 'builds.place': a reload keeps the shown build and job
 // on BuildsChannel.invoke
 saveLog(arg: { backend: string; game: string; build: string; job: string | null }): Promise<{ ok: true } | { problem: string }>;
-download(arg: { backend: string; game: string; build: string; file: number }): Promise<{ ok: true } | { problem: string }>;
+download(arg: { backend: string; game: string; build: string; file: number }): Promise<{ ok: true } | { problem: string }>; // file: a BuildFile.entry
 ```
 
 Pinned values:
@@ -172,8 +174,15 @@ Pinned values:
 - A name that already exists in the Downloads folder gets ` (2)`, ` (3)` and so on before its extension.
 - A `downloads` template with `{version}` or `{number}` that the build lacks (null) gives no file for that build.
 - A `BuildDownload` in state `saved` or `failed` is deleted from the slot 10 minutes after it ended.
-- Main fills `GameView.files` on every poll with only the files that exist, in the kind's `downloads` order.
-  `download`'s `file` is an index into that list as main last published it.
+- `GameView.files` holds, per build, the files whose last check found them, in the kind's `downloads` order. The
+  checks run beside the poll and never hold it: each poll starts a `stat` of every filled path not already being
+  checked, each `stat` gives up after 5 s, and a check that gives up keeps that file's last result. A file found once
+  is checked again on every poll, so a deleted file leaves the list. A finished check publishes the snapshot again
+  when it changed the list.
+- `download`'s `file` is a `BuildFile.entry`: the file's index in its kind's `downloads`, which does not move when
+  another file appears or goes. An entry whose file the last check did not find is refused.
+- Main picks a saved file's free name and reserves it in the same synchronous step, so two saves started together
+  never get one name; a reservation ends when its save ends.
 - `saveLog` and `download` answer `{ ok: true }` once the entry is in `builds.downloads` as `running`; the outcome
   shows only in the slot. A refusal's text is pinned in task 05.
 - `~` in a `downloads` path is expanded when the setting is parsed (task 02); task 05 fills `{version}` and `{number}`.
@@ -214,7 +223,7 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 
 ### Wave 5
 - [ ] [Tiki Smash download paths](09-tiki-settings.md) — after 02
-- [ ] [Doc re-read](10-doc-re-read.md) — after 08
+- [ ] [Doc re-read](10-doc-re-read.md) — after 03, 04, 06, 08
 
 ### Wave 6
 - [ ] [Final verification](11-final-verification.md) — after 10

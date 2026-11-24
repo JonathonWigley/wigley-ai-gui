@@ -44,13 +44,13 @@ Produces, in `src/plugins/builds/contract.ts`, each in exactly this shape (plan.
   `// Present only when capabilities.saveLog is true. Saves the job's whole log to the full path \`path\`; \`jobId\` null saves the build's own log.`
 - `export interface BuildDownloadEntry { label: string; path: string; }`
 - `export interface BuildKindEntry { label: string; target: unknown; downloads: BuildDownloadEntry[]; }`
-- `export interface BuildFile { label: string; path: string; }`
+- `export interface BuildFile { label: string; path: string; entry: number; }`
 - `GameView` gains `files: Record<string, BuildFile[]>; // build id → its files that exist`
 - `export interface BuildDownload` exactly as plan.md gives it.
 - `export const buildsDownloadsSlot: KeyedSlotKey<BuildDownload, 'main', 'builds'> = { id: 'builds.downloads', process: 'main', kind: 'keyed' };`
 - On `BuildsChannel.invoke`:
   `saveLog(arg: { backend: string; game: string; build: string; job: string | null }): Promise<{ ok: true } | { problem: string }>;`
-  `download(arg: { backend: string; game: string; build: string; file: number }): Promise<{ ok: true } | { problem: string }>;`
+  `download(arg: { backend: string; game: string; build: string; file: number }): Promise<{ ok: true } | { problem: string }>; // file: a BuildFile.entry`
 - In `src/plugins/builds/builds-model.ts`: `GameState` gains `files: Record<string, BuildFile[]>;`.
 - In `src/plugins/builds/contract.test-support.ts`: `FixtureBackend` gains
   `readonly savedLogs: { gameId: string; buildId: string; jobId: string | null; path: string }[];` and
@@ -58,7 +58,7 @@ Produces, in `src/plugins/builds/contract.ts`, each in exactly this shape (plan.
 
 Decisions:
 - **Comments.** `BuildDownloadEntry` is a kind's template: comment it `// path: a full path, \`~\` expanded; \`{version}\` and \`{number}\` are filled per build`.
-  `BuildFile` is comment `// a filled path that exists on disk`. The `BuildDownload` and slot comments copy plan.md's.
+  `BuildFile` gets the comment `// a filled path that exists on disk; entry: its index in the kind's \`downloads\``. The `BuildDownload` and slot comments copy plan.md's.
   The `BuildsChannel` comment above the interface gains: `saveLog` and `download` start a save into the Downloads
   folder and answer once it is in `builds.downloads`; a refusal answers `{ problem }` and starts nothing.
 - **`~` in a download path** is expanded by `parseBackends`, through the same `expandTilde` it takes for `clone`
@@ -106,17 +106,21 @@ GIVEN a backend with `saveLog` WHEN `trackCalls` wraps it and `saveLog` runs THE
 Tests:
 - `backend-config.test.ts`, rows added to the `parseBackends` problem table (line 53): `downloads: 'x'` →
   `game g1: kind dev: downloads is not a list`; `downloads: [{ label: 'Zip' }]` →
-  `game g1: kind dev: download 1 needs a label and a path`; `downloads: [{ label: '', path: '/p' }]` → the same text.
+  `game g1: kind dev: download 1 needs a label and a path`; `downloads: [{ label: '', path: '/p' }]` → the same text;
+  `downloads: ['x']` → the same text; `downloads: [null]` → the same text; `downloads: [{ label: 'Zip', path: '' }]` →
+  the same text; `downloads: [{ label: 'A', path: '/a' }, { label: 'B' }]` → `… download 2 needs a label and a path`
+  (pins the 1-based count).
   Use the ids the table's builders give (`validGame`); the ids above assume `g1` and `dev`, so match the builder.
 - `backend-config.test.ts`, `'expands ~ in clone and fills the optional fields'` (line 259): add a kind with
   `downloads: [{ label: 'Android zip', path: '~/d/{version}.zip', extra: 1 }]`, and assert the parsed kind's
-  `downloads` is `[{ label: 'Android zip', path: '<home>/d/{version}.zip' }]` (`extra` left out), and that a kind
-  with no `downloads` has `[]`.
+  `downloads` is `[{ label: 'Android zip', path: '<home>/d/{version}.zip' }]` (`extra` left out), that a kind
+  with no `downloads` has `[]`, and that a kind with `downloads: null` has `[]`.
 - `tracked-backend.test.ts`, rows added to the `trackCalls` table (line 6) for `saveLog`: a call before `dispose`
   reaches the backend and `drained()` waits for it; a call after `dispose` rejects
   `the backend was replaced; try again`; and a backend without `saveLog` gives a tracked backend without `saveLog`.
 - `builds-model.test.ts`, `'publishes each backend in order, with its set runs newest first'` (line 469): give one
-  game state `files: { 'b-1': [{ label: 'Zip', path: '/z/a.zip' }] }` and assert the game view's `files` equals it.
+  game state `files: { 'b-1': [{ label: 'Zip', path: '/z/a.zip', entry: 0 }] }` and assert the game view's `files`
+  equals it.
 - Every other test changes only for the compile.
 
 Done when: compiles (`npm run typecheck`); the test gate runs `backend-config.test.ts`, `tracked-backend.test.ts`,

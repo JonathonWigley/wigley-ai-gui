@@ -19,7 +19,10 @@ Files:
 - modify `CHANGELOG.md`
 
 Consumes:
-- `BuildJob.webUrl`, `startedAt`, `finishedAt`, `dependsOn` · `BackendCapabilities.saveLog` · `BuildBackend.saveLog?(game, buildId, jobId, path)` · `GameView.files` · `BuildKindEntry.downloads` ← 02
+- `BuildJob.webUrl`, `startedAt`, `finishedAt`, `dependsOn` · `BackendCapabilities.saveLog` · `BuildBackend.saveLog?(game, buildId, jobId, path)` · `GameView.files` · `BuildFile.entry` · `BuildKindEntry.downloads` ← 02
+- 02's compile fallout: every sample and fixture kind already has `downloads: []`, every job literal (`sampleJob`'s
+  defaults, `movingBuild`'s jobs) `webUrl: null, startedAt: null, finishedAt: null, dependsOn: []`, and every
+  capabilities literal `saveLog: false` ← 02
 - main's file checks fill `GameView.files` on each poll of a game, and main runs `saveLog` and `download` into
   `MainServices.downloadsDir`, which is `<homeDir>/Downloads` in the self-test and a drive run ← 01, 05
 - the saved log's name rule and the kept file name (plan.md Pinned values) ← 05
@@ -36,10 +39,14 @@ Produces:
 
 **Demo sample** (`page/demo-sample.ts`; AGENTS.md Intent: every feature has a demo step, and a changed look lands with
 its step updated).
-- `capabilities` of the `Sample CI` backend: `{ cancel: true, choosesBranch: true, saveLog: true }`.
-- Every sample kind gets `downloads: []`. `GameView.files` of Sky Hop: `{ 'sky-104': [{ label: 'Android zip', path:
-  '/sample/sky-hop/1.4.0/android_SkyHop_1.4.0.104.zip' }] }`; of Word Garden: `{}`.
-- `sampleJob` defaults gain `webUrl: null`, `startedAt: null`, `finishedAt: null`, `dependsOn: []`.
+This task changes only what 02's fallout left at its defaults (Consumes):
+- `capabilities` of the `Sample CI` backend: `saveLog` goes from 02's `false` to `true`
+  (`{ cancel: true, choosesBranch: true, saveLog: true }`).
+- The kind of `sky-104` gets `downloads: [{ label: 'Android zip', path:
+  '/sample/sky-hop/{version}/android_SkyHop_{version}.{number}.zip' }]` in place of 02's `[]`. `GameView.files` of Sky
+  Hop: `{ 'sky-104': [{ label: 'Android zip', path: '/sample/sky-hop/1.4.0/android_SkyHop_1.4.0.104.zip', entry: 0 }] }`;
+  of Word Garden: `{}`.
+- `sampleJob`'s defaults stay as 02 left them; the jobs below set their own fields.
 - `sky-105` (running) gets five jobs, in this order. Each `webUrl` is `https://ci.example.com/sky-hop/105/<job id>`.
 
   | id | label | state, result | percent, leftSeconds, stepText | startedAt, finishedAt | dependsOn |
@@ -64,7 +71,7 @@ its step updated).
 
 **Fixture backend** (`main/fixture-backend.ts`).
 - `create(entry, services)` passes `services.files` to the backend.
-- `capabilities`: `{ cancel: true, choosesBranch: false, saveLog: true }`.
+- `capabilities`: `{ cancel: true, choosesBranch: false, saveLog: true }` (`saveLog` from 02's `false`).
 - `saveLog(game, buildId, jobId, path)` writes `fixture log of <buildId> <jobId ?? 'build'>\n` at `path` through
   `files.write`.
 - Build `<game id>-2` (`movingBuild`) lists three jobs, in this order, on every call. Each job's `webUrl` is
@@ -82,18 +89,25 @@ its step updated).
 - The `ios` job keeps its id, label and failure text, so the endings group's lines stay as they are.
 - Update the file's header comment for the jobs, `saveLog` and the capability.
 
-**Fixture in a drive run** (`main/start.ts`). The fixture kind registers when `services.runMode !== 'live'`, so a
-drive run (task 11) gets the `fixture` kind too. The script still hands over only while `services.selfTest` is not
-null. `main/start.ts` passes `writeHomeFile: (path, text) => services.files.write(services.paths.join(services.homeDir,
+**Fixture in a drive run** (`main/start.ts`). The fixture kind (`registry.add(selfTestBackendKind(clock))`, today
+inside `if (services.selfTest !== null)`) registers when `services.selfTest !== null || services.runMode === 'drive'`,
+so a drive run (task 11) gets the `fixture` kind too. Not `runMode !== 'live'`: the part harness
+(`src/shared/plugin-part-harness.test-support.ts`, lines 1063 and 1697) starts every main part with
+`runMode: 'selfTest'` and `selfTest: null`, and `main/start.test.ts` then adds its own `fixture` kind, which
+`backend-registry.ts` refuses as already added. Under the pinned rule the harness registers nothing; a self-test
+(`selfTest` set) and a drive run (`runMode` `'drive'`, `selfTest` null: `src/main/main.ts` makes the driver only for
+`runMode === 'selfTest'`) both do. The script still hands over only while `services.selfTest` is not null. `main/start.ts` passes `writeHomeFile: (path, text) => services.files.write(services.paths.join(services.homeDir,
 path), text)` to the script.
 
 **Self-test script** (`main/selftest-script.ts`; AGENTS.md § Running and testing, the step fields).
 - `GAME_A`'s kind: `dev: { label: 'Dev', target: 'dev', downloads: [{ label: 'Android zip', path:
-  '~/fixture-drive/game-a-{number}.zip' }] }`. Build `game-a-1` (number `1`) then has one file; `game-a-2` has none,
-  since `~/fixture-drive/game-a-2.zip` is never written.
-- `open()` first writes `fixture-drive/game-a-1.zip` with the text `fixture zip\n` through `writeHomeFile`, then adds
-  the link as today, then logs `self-test link added`. The shown line waits for the write, so the file exists before
-  the setting step adds the backend.
+  '~/fixture-drive/game-a-{number}.zip' }] }` (02 gave it `downloads: []`). Build `game-a-1` (number `1`) then has one
+  file, `entry` 0; `game-a-2` has none, since `~/fixture-drive/game-a-2.zip` is never written.
+- `open()` stays synchronous and returns `{ shownLine, result }` with `result` chained on the write, as Backlog's
+  script chains its fixture (`src/plugins/backlog/main/selftest-script.ts`, `.then(() => writeBacklogFixture(...))`):
+  `result = deps.writeHomeFile('fixture-drive/game-a-1.zip', 'fixture zip\n').then(() => { const linked =
+  deps.addLinkUntilEnded({...as today}); deps.log('self-test link added'); return linked; })`. The shown line is logged
+  only after the write, so the file exists before the setting step adds the backend.
 - New groups, after `endings`, in this order. `endings` ends once `game-a-2` has finished, so the jobs hold their
   call-3 states: `build-android` success, `ios` failed, `deploy` cancelled. The graph is
   `[['build-android', 'ios'], ['deploy']]` and the default job is `ios` (no job runs; `ios` is the first failed).
@@ -124,7 +138,11 @@ path), text)` to the script.
   | `j` | `[builds] list cursor on fixture/game-a-1` | | |
   | `s` | `[builds] saving fixture/game-a-1/file/0` | `/^\[builds\] download fixture\/game-a-1\/file\/0 saved game-a-1( \(\d+\))?\.zip$/` | `file-saved` |
 
-  The ` (2)` suffix in the patterns covers a second run in one temp home (plan.md: a taken name gets ` (2)`).
+  The ` (2)` suffix in the patterns covers a second run in one temp home (plan.md: a taken name gets ` (2)`). The
+  runner saves a step's screenshot only after its `expect` and every `alsoExpect` line are logged
+  (`waitForStepLine` in `src/main/selftest-runner.ts`), and the page logs `download … saved` from the same `changed()`
+  that draws the `Saved` Tag, so `log-saved` and `file-saved` show the saved state. `game-a-1`'s file id ends `/file/0`,
+  its `entry`.
 
   Group `narrow`, why: `In a narrow window the list and the detail stack, and Alt+j and Alt+k move between them.`
 
@@ -175,11 +193,14 @@ GIVEN the demo's Builds step WHEN its `build` beat shows THEN the detail pane sh
 GIVEN a drive run WHEN `builds.backends` names a backend of kind `fixture` THEN it applies with no problem
 GIVEN the self-test WHEN group `saves` runs THEN `<home>/Downloads` holds the log and the zip, and the page logs each one saved
 
-Tests:     no Vitest test: the sample and the fixture are data. The self-test groups above are the check:
+Tests:     no new Vitest test: the sample and the fixture are data, and the existing `main/start.test.ts` must stay
+           green under the fixture's registration rule. The self-test groups above are the check:
            `npm run selftest -- --plugin builds`, filtered (AGENTS.md § Running and testing). The demo's own script
            walks the `builds.mode` step and fails on a throw: `npm run selftest -- --plugin demo`.
-Done when: compiles; the filtered `builds` and `demo` self-test runs pass; `npm run lint` passes its changelog, boundary and
-           README checks (the README coverage test is `scripts/readme-coverage.test.mts`).
+Done when: compiles; the filtered `builds` and `demo` self-test runs pass; `npm run lint` passes (its changelog and
+           boundary checks among them); the README coverage test passes, which is Vitest, not lint:
+           `npm test -- scripts/readme-coverage.test.mts`; `npm test -- src/plugins/builds/main/start.test.ts` passes,
+           since the fixture kind's new registration rule runs there.
 Commit:    one commit for the group
 
 ## Proof

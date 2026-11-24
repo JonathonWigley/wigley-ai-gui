@@ -243,8 +243,10 @@ every parse is tested over recorded JSON.
 `main/downloads.ts`, so a save outlives a page reload.
 
 - **A build's files**: after each list, main fills each build's kind `downloads` and checks each path with the
-  files service's `stat`. A file found is cached for that build and not checked again; a path not found is checked
-  again every poll. The snapshot's `GameView.files` maps a build id to its files that exist, in the kind's order.
+  files service's `stat`. The checks run beside the poll and never hold it: each `stat` gives up after 5 seconds and
+  keeps that file's last result, and every path is checked again each poll, so a deleted file leaves the list. The
+  snapshot's `GameView.files` maps a build id to the files its last check found, in the kind's order, each with its
+  `entry`: its index in the kind's `downloads`, which `download` takes.
 - **A log save** runs the backend's `saveLog` for a job, or for the build with no job. Its file name is
   `<game label>-<kind label>-<number>-<job label>.log`, each part with every run of characters other than ASCII
   letters and digits turned to one `-`, leading and trailing `-` dropped: `Tiki-Smash-Dev-332-Build-Android-Dev.log`.
@@ -254,7 +256,8 @@ every parse is tested over recorded JSON.
 - **Names**: a name the Downloads folder holds already gets ` (2)`, ` (3)` and so on before its extension, and two
   saves at once never take one name.
 - **The slot**: `builds.downloads` holds one `BuildDownload` per save, keyed by its id
-  (`<backend id>/<build id>/log/<job id or build>` or `<backend id>/<build id>/file/<index>`): its label, its state
+  (`<backend id>/<build id>/log` for the build's own log, `<backend id>/<build id>/log/<job id>`, or
+  `<backend id>/<build id>/file/<entry>`): its label, its state
   (`running`, `saved`, `failed`), the saved file's path, the failure's text and when it started. A save of an id
   that runs is refused (`that download is already running`). An ended save leaves the slot 10 minutes after it ends.
   A save still running when the plugin restarts shows as failed.

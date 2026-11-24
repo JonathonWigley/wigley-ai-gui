@@ -35,18 +35,24 @@ Produces:
   ```
 
 Decisions:
-- **Node adapter** (`createNodeFiles` in `node-files.ts`): `copy` makes the parent folders of `to`, copies `from`
-  to the same temp file name `write` uses (`.<name>.<8 hex>.tmp` beside `to`) with `node:fs/promises` `copyFile`,
-  then renames the temp file over `to` through the same retry `writeAtomically` uses (EPERM or EBUSY, waits
-  `RENAME_RETRY_DELAYS_MS`). Reuse that rename-with-retry code: extract it from `writeAtomically` into one helper both
-  call. A failed copy or rename deletes the temp file and rejects with the original error. Before the copy, `stat`
-  `from`: a folder rejects with an error naming `from` and code `EISDIR`, and nothing is written. A missing `from`
-  rejects with Node's own ENOENT error, which names the path, so `isMissingFile` is true.
+- **Node adapter** (`createNodeFiles` in `node-files.ts`): `copy` runs these steps in this order, so a refused
+  `from` leaves nothing behind, not even `to`'s parent folder:
+  1. `stat` `from`. A folder rejects with an error naming `from` and code `EISDIR`. A missing `from` rejects with
+     Node's own ENOENT error, which names the path, so `isMissingFile` is true.
+  2. Make the parent folders of `to` (`mkdir` recursive).
+  3. Copy `from` with `node:fs/promises` `copyFile` to the same temp file name `write` uses (`.<name>.<8 hex>.tmp`
+     beside `to`).
+  4. Rename the temp file over `to` through `renameRetryingHeld`, the helper `writeAtomically` already calls (EPERM or
+     EBUSY, waits `RENAME_RETRY_DELAYS_MS`). Call it; do not copy it. Its retry is pinned by the existing
+     `'$method with a rename failing $code $times times $result'` table in `node-files.test.ts`.
+  A failed step 3 or 4 deletes the temp file (`rm` with `force`) and rejects with the original error. A folder at
+  `to` fails step 4 with rename's own error (EISDIR or ENOTEMPTY), so it rejects and leaves no temp file.
 - `copyFile` reads through the OS, so a Google Drive for desktop file that is not yet on disk is fetched as it is
   read. `copy` takes no timeout.
 - **Memory adapter** (`createMemoryFiles` in `memory-files.ts`): `copy` reads the bytes of `from` and writes them to
   `to` as `writeBytes` does, so a watch on `to`'s folder reports `to`. A missing `from` rejects with the adapter's
-  `missingError` naming `from`; a folder at `from` rejects with `codedError(<message naming from>, 'EISDIR')`.
+  `missingError` naming `from`; a folder at `from` rejects with `codedError(<message naming from>, 'EISDIR')`. Both
+  checks run before any write. A folder at `to` rejects through the store's own `<to> is a folder` (`EISDIR`).
 - **Scoped view** (`scopedFiles` in `scoped-files.ts`): `copy` maps both paths through `inside`, as `rename` does.
   Update the comment above `scopedFiles` that lists every method to name `copy` (either path).
 - `trackedFiles` in `src/shared/plugin-service-views.ts` spreads `files`, so it passes `copy` through unchanged: do
@@ -68,16 +74,19 @@ Decisions:
   file in Finder or Explorer (`downloadsDir` and `revealPath`, main only)" to the list of services, before "how the
   app was started".
 - Every other object that types itself `Files` or `MainServices` fails to compile until it has the new members: fix
-  each one the compiler names. The tree holds these today: the `Files` literal in `scoped-files.test.ts` (about line
-  200, the recording fake), `createNodeFiles`, `createMemoryFiles`, `scopedFiles`; and the `MainServices` objects in
-  `main.ts` and the part harness.
+  each one the compiler names. The tree holds these today: `createNodeFiles`, `createMemoryFiles`, `scopedFiles`,
+  and `countingWatches` in `plugin-part-harness.test-support.ts` (about line 893), which forwards every method: add
+  `copy: (...args) => files.copy(...args)` beside its `rename`. The `MainServices` objects are in `main.ts` and the
+  part harness. The fakes in `scoped-files.test.ts` (`recordingCalls`, `withRealPaths`) spread `inner`, so `copy`
+  passes through them and they need no edit.
 
 GIVEN a file at `from` and nothing at `to`'s folder WHEN `copy(from, to)` runs THEN `to` holds the same bytes, its
 parent folders exist, and `from` is unchanged.
 GIVEN a file at `to` WHEN `copy(from, to)` runs THEN `to` holds `from`'s bytes.
 GIVEN no file at `from` WHEN `copy` runs THEN it rejects, `isMissingFile` is true, the message names `from`, and
 nothing is at `to`.
-GIVEN a folder at `from` WHEN `copy` runs THEN it rejects and nothing is at `to`.
+GIVEN a folder at `from` WHEN `copy` runs THEN it rejects and nothing is at `to` or its parent folder.
+GIVEN a folder at `to` WHEN `copy` runs THEN it rejects, the folder is unchanged, and no temp file is left.
 GIVEN a scoped view WHEN `copy` names a path outside its root THEN it rejects `<path> is outside <root>` before any
 I/O.
 
@@ -92,6 +101,10 @@ Tests:
     `new`.
   - `copy_Folder_RejectsAndWritesNothing` — `makeFolder(at('top/f'))`; `copy(at('top/f'), at('out/x'))` rejects;
     `stat(at('out'))` is null.
+  - `copy_MissingFile_WritesNothing` — `copy(at('none.txt'), at('out/x'))` rejects; `stat(at('out'))` is null.
+  - `copy_OntoFolder_RejectsAndLeavesNoTemp` — `a.txt` holds `new`; `d/x/keep.txt` holds `k`;
+    `copy(at('a.txt'), at('d/x'))` rejects; `list(at('d'))` is `[{ path: 'x', kind: 'folder' }]` and
+    `read(at('d/x/keep.txt'))` is `k`. On the Node adapter this is the failed-rename cleanup.
 - In `scoped-files.test.ts`, add a row for `copy` to the table of calls that reject outside the root (the table that
   holds `scoped.readEnd('../e', 4)` at about line 63): `scoped.copy('../e', 'in.txt')`.
 - No test for the `main.ts` wiring: it is Electron glue that task 11 sees in the live run.

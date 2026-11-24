@@ -21,6 +21,10 @@ Decisions:
   - `dev`: `[{ "label": "Android zip", "path": "~/Library/CloudStorage/GoogleDrive-jonathon@peoplefun.com/My Drive/bash best/builds/{version}/Dev/android_BashBest_{version}.{number}_android.zip" }]`
   - `qa`: the same with `/QA/` for `/Dev/`
   - `release`: the same with `/Release/` for `/Dev/`
+- **Where the values come from.** Only the Dev path was seen in a log (plan.md Preconditions, build 821433). The QA
+  and Release paths are inferred from that Dev path and the Deploy Android step config in TeamCity, which writes
+  `bash best/builds/%SEMANTIC_VERSION%/<Dev|QA|Release>/android_%artifactName%.zip` with only the environment folder
+  changing. Keep all three. A wrong guess shows as no file button for that kind, and costs nothing else.
 - **How.** Edit the file with a JSON-aware write (read, set the three keys, write back with the file's 2-space
   indent), so no other setting moves. The file holds other settings that may be secret: print none of them, and
   show only the three `downloads` values in the report.
@@ -39,9 +43,11 @@ and every other value of the file is unchanged.
 
 Tests:     none: this is user data, not code. The check below is the proof.
 
-Done when: `python3 -I -c` reads the file back and prints only
-`builds.backends[id=work].games[id=tiki-smash].kinds.<kind>.downloads` for the three kinds, and each equals the value
-above; and the file parses as JSON.
+Done when: one `python3 -I -c` run (it needs no app) parses the file with `json.load`, prints only
+`builds.backends[id=work].games[id=tiki-smash].kinds.<kind>.downloads` for the three kinds, and asserts, printing
+nothing else: each value equals the one above byte for byte; each of the three kinds holds exactly the keys `label`,
+`target` and `downloads`; and each `downloads` element holds exactly `label` and `path`, the keys `parseKinds` reads
+(task 02). The parse fails on a file that is not JSON, so it also proves the file still parses.
 Commit:    none: the file is outside the repo. Record the read-back in Proof.
 
 ## Proof

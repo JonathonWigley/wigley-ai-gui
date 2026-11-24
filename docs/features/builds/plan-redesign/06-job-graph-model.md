@@ -22,6 +22,9 @@ Decisions:
   job with no used prerequisite is in column 0. Otherwise its column is 1 + the largest column among its used
   prerequisites. `columns[c]` holds the ids of every job in column `c`, in their order in `jobs`. `columns` has no
   empty column, and it is `[]` for no jobs.
+- **Duplicate ids.** A job whose id an earlier job in `jobs` already has is left out of the graph: the first job with
+  an id wins, in columns, edges and lookups. The backends give unique ids; the rule only keeps a bad record from
+  drawing two boxes with one id.
 - **Used prerequisites.** For each job, walk its `dependsOn` in order. Skip an id that names no job in `jobs`. Skip
   an id that the job already listed earlier in its `dependsOn`. Skip an id that closes a cycle (next bullet). Every
   other id is a used prerequisite.
@@ -66,6 +69,7 @@ Tests:     `job-graph.test.ts`, `describe('jobGraph')`, one `it.each` table over
            | a two-job cycle | `a: ['b']`, `b: ['a']` | `[['b'],['a']]` | `b→a` |
            | a self-dependency | `a: ['a']` | `[['a']]` | none |
            | a three-job cycle | `a: ['c']`, `b: ['a']`, `c: ['b']` | `[['b'],['c'],['a']]` | `c→a`, `b→c` |
+           | a repeated job id keeps the first | `a: []`, `b: ['a']`, `a: ['b']` | `[['a'],['b']]` | `a→b` |
 
            Each edges cell is the exact array order. In the three-job cycle the walk goes `a → c → b`, and `b`'s `a` is
            the back edge: `b` column 0, `c` column 1, `a` column 2. The edges keep jobs order: `a`'s used prerequisite
@@ -82,7 +86,9 @@ Tests:     `job-graph.test.ts`, `describe('jobGraph')`, one `it.each` table over
            | a queued build | `a` queued `[]`; `b` queued `['a']` | `b` |
 
            `describe('movedJob')`, one `it.each` table over one graph built from `a: []`, `b: []`, `c: []`,
-           `d: ['b']`, `e: ['c']`: columns `[['a','b','c'], ['d','e']]`. Each row asserts the returned id.
+           `d: ['b']`, `e: ['c']`, `f: ['a']`: columns `[['a','b','c'], ['d','e','f']]`. Every edge joins rows that
+           differ, so each edge row fails on an implementation that only keeps the row (the clamped row is named in
+           its why). Each row asserts the returned id.
 
            | from | move | expected | why |
            |---|---|---|---|
@@ -90,20 +96,22 @@ Tests:     `job-graph.test.ts`, `describe('jobGraph')`, one `it.each` table over
            | `a` | `up` | `a` | held at the top |
            | `b` | `down` | `c` | |
            | `c` | `down` | `c` | held at the bottom |
-           | `b` | `right` | `d` | follows the edge `b→d` |
-           | `c` | `right` | `e` | follows the edge `c→e`, not row 1 clamped |
-           | `a` | `right` | `d` | no edge: row 0 |
-           | `e` | `left` | `c` | follows the edge `c→e` |
-           | `d` | `left` | `b` | follows the edge `b→d`, not row 0 |
+           | `b` | `right` | `d` | follows the edge `b→d`, not row 1 (`e`) |
+           | `c` | `right` | `e` | follows the edge `c→e`, not row 2 (`f`) |
+           | `a` | `right` | `f` | follows the edge `a→f`, not row 0 (`d`) |
+           | `e` | `left` | `c` | follows the edge `c→e`, not row 1 (`b`) |
+           | `d` | `left` | `b` | follows the edge `b→d`, not row 0 (`a`) |
+           | `f` | `left` | `a` | follows the edge `a→f`, not row 2 (`c`) |
            | `a` | `left` | `a` | held in column 0 |
            | `e` | `right` | `e` | held in the last column |
            | `null` | `down` | `a` | no cursor: the first job |
            | `zz` | `left` | `a` | an id the graph lacks: the first job |
 
-           The table takes its graph as a row field, so two more rows use other graphs:
+           The table takes its graph as a row field, so three more rows use other graphs:
 
            | graph | from | move | expected | why |
            |---|---|---|---|---|
+           | `a: []`, `b: []`, `x: ['a']`, `y: ['a']` | `b` | `right` | `y` | no edge from `b`: row 1 kept |
            | `a: []`, `b: []`, `c: []`, `z: ['a']` | `c` | `right` | `z` | no edge from `c`; row 2 clamps to row 0 |
            | no jobs | `null` | `down` | `null` | empty graph |
 

@@ -62,6 +62,17 @@ Decisions:
   `startDate` and `finishDate` in TeamCity's form (`20261123T191020+0000`; a queued row has neither, a running row
   has only `startDate`), and `snapshot-dependencies: { build: [{ id }, …] }` with the transitive set below. The dates
   are test data, not recorded; give each job a start after its prerequisites' finish. Keep every existing field.
+  The dates of `chain-running.json`, verbatim (every finished row of the other two chains has both dates, in the same
+  10-seconds-after pattern from `20261122T190000+0000`):
+
+  | Row | `startDate` | `finishDate` |
+  |---|---|---|
+  | 821331 | `20261123T190000+0000` | `20261123T190100+0000` |
+  | 821332 | `20261123T190110+0000` | `20261123T190200+0000` |
+  | 821333 | `20261123T190210+0000` | `20261123T190300+0000` |
+  | 821337, 821335 (running) | `20261123T190310+0000` | none |
+  | 821338, 821336 (queued) | none | none |
+
   The transitive sets, by the role of each row's `buildTypeId` (the same in all three chains):
 
   | Row | Its snapshot-dependencies | Its `dependsOn` |
@@ -91,7 +102,9 @@ GIVEN a cache file whose jobs lack `dependsOn` WHEN a list runs THEN that build'
 Tests:
 - `teamcity-parse.test.ts`, `'maps each job of the running chain'` (line 203): its expected jobs gain `webUrl`,
   `startedAt`, `finishedAt` and `dependsOn`, the last from the table above. It asserts the whole job list, so one
-  test pins the reduction and the new fields over the recorded shape.
+  test pins the reduction and the new fields over the recorded shape. Write the dates as literals:
+  821331 `startedAt: Date.UTC(2026, 10, 23, 19, 0, 0)`, `finishedAt: Date.UTC(2026, 10, 23, 19, 1, 0)`; 821337
+  `startedAt: Date.UTC(2026, 10, 23, 19, 3, 10)`, `finishedAt: null`; 821338 both null; the rest from the dates table.
 - `teamcity-parse.test.ts`, a new table `'dependsOn keeps only direct prerequisites: $case'` over rows built with
   `buildJobRow` plus a `snapshot-dependencies` list, with literal expected `dependsOn` per job:
   - `transitive sets`: A none; B {A}; C {A, B} → A `[]`, B `['A']`, C `['B']` (use numeric ids, e.g. 1, 2, 3)
@@ -99,7 +112,9 @@ Tests:
   - `diamond`: A none; B {A}; C {A}; D {A, B, C} → D `['B', 'C']` in job order
   - `an id outside the chain`: B {A, 99} with no row 99 → B `['A']`
   - `a cycle`: A {B}; B {A} → the parse ends; each keeps the other (`A ['B']`, `B ['A']`)
-- `teamcity-parse.test.ts`, `'maps a failed and a cancelled job'` (line 271): the expected jobs gain the new fields.
+- `teamcity-parse.test.ts`, `'maps a failed and a cancelled job'` (line 271): its projection
+  `({ id, result, stepText })` gains `dependsOn`, from the table above by role: 821141 `[]`, 821143 `['821141']`,
+  821144 `['821143']`, 821148 `['821144']`, 821145 `['821144']`, 821149 `['821148']`, 821146 `['821145']`.
 - `teamcity-backend.test.ts`: `detailArgs` (line 85) writes the detail path as a literal; change it to the new
   `DETAIL_FIELDS` text. `'creates a backend that chooses branches and cannot cancel'` (line 258) asserts `saveLog: true`.
 - `teamcity-backend.test.ts`, a new `describe('saveLog')` with one table `'saves the log of $case'`:
