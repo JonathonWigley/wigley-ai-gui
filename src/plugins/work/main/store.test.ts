@@ -4,12 +4,21 @@ import {
   createMemoryFiles,
   type MemoryFiles,
 } from '../../../shared/memory-files';
-import type { WorkColumnSetting, WorkState } from '../contract';
-import { jiraCard, localCard, workItem } from '../contract.test-support';
+import type { DetailMessage, WorkColumnSetting, WorkState } from '../contract';
+import {
+  jiraCard,
+  localCard,
+  threadDetail,
+  ticketDetail,
+  workItem,
+} from '../contract.test-support';
 import {
   buildWorkState,
   createWorkStore,
+  type DetailCaps,
+  detailCaps,
   EMPTY_WORK_FILE,
+  newestMessages,
   parseWorkFile,
   WORK_FILE,
   type WorkFile,
@@ -72,20 +81,31 @@ describe('createWorkStore', () => {
     expect(updated.items.map((item) => item.id)).toEqual(['a']);
   });
 
-  it.each(['{}', '{"items":[{"id":1}]}', '[]', 'not json'])(
-    'load_badShape_setsProblem (%s)',
-    async (text) => {
-      const { memory, store, writes } = storeOver();
-      await memory.write(WORK_FILE, text);
+  const withDetails = (details: Record<string, unknown>) =>
+    JSON.stringify({ ...EMPTY_WORK_FILE, details });
+  it.each([
+    '{}',
+    '{"items":[{"id":1}]}',
+    '[]',
+    'not json',
+    withDetails({ 'WS-1': ticketDetail('WS-2') }),
+    withDetails({
+      'WS-1': ticketDetail('WS-1', {
+        comments: [{ author: 'Bo', text: 'Seen it.' } as DetailMessage],
+      }),
+    }),
+    withDetails({ a: { ...threadDetail('a'), replyCount: '1' } }),
+  ])('load_badShape_setsProblem (%s)', async (text) => {
+    const { memory, store, writes } = storeOver();
+    await memory.write(WORK_FILE, text);
 
-      await store.load();
-      await store.update(withItem('a'));
+    await store.load();
+    await store.update(withItem('a'));
 
-      expect(store.problem()).toContain('work.json is not a work file');
-      expect(writes).toEqual([]);
-      expect(await memory.read(WORK_FILE)).toBe(text);
-    },
-  );
+    expect(store.problem()).toContain('work.json is not a work file');
+    expect(writes).toEqual([]);
+    expect(await memory.read(WORK_FILE)).toBe(text);
+  });
 
   it('update_backToBack_appliesInOrder', async () => {
     // The first write takes longer than the second, so only the chain keeps the second's file last on disk.
@@ -219,6 +239,30 @@ describe('createWorkStore', () => {
         },
       },
       lastSweepAt: '2026-11-23T11:00:00.000Z',
+      details: {
+        'WS-1': ticketDetail('WS-1', {
+          priority: 'High',
+          subtasks: [
+            {
+              key: 'WS-4',
+              title: 'Split',
+              status: 'To Do',
+              relation: null,
+              url: 'https://jira.example/browse/WS-4',
+            },
+          ],
+          links: [
+            {
+              key: 'WS-5',
+              title: 'Blocker',
+              status: 'Done',
+              relation: 'is blocked by',
+              url: 'https://jira.example/browse/WS-5',
+            },
+          ],
+        }),
+        a: threadDetail('a', { replyCount: 4 }),
+      },
     };
 
     await store.update(() => full);
@@ -251,6 +295,93 @@ describe('createWorkStore', () => {
     expect(parsed.suggestions).toEqual([{ ...entry, rowId: null }]);
     expect(parsed.notYet).toEqual([{ ...mark, rowId: null }]);
   });
+
+  it('parse_savedWithoutDetails_readsEmptyDetails', () => {
+    const text = JSON.stringify({ ...EMPTY_WORK_FILE, details: undefined });
+
+    const parsed = parseWorkFile(text);
+
+    expect(text).not.toContain('details');
+    expect(parsed.details).toEqual({});
+  });
+});
+
+describe('newestMessages', () => {
+  const at = (hour: number) =>
+    `2026-11-23T${String(hour).padStart(2, '0')}:00:00.000Z`;
+  const message = (text: string, hour: number): DetailMessage => ({
+    author: 'Ann',
+    at: at(hour),
+    text,
+  });
+  it.each<{
+    case: string;
+    messages: DetailMessage[];
+    cap: number;
+    expected: string[];
+  }>([
+    {
+      case: 'unsorted, cap 2: the 2 newest, oldest first',
+      messages: [message('b', 11), message('c', 12), message('a', 9)],
+      cap: 2,
+      expected: ['b', 'c'],
+    },
+    {
+      case: 'cap 0: none',
+      messages: [message('b', 11), message('a', 9)],
+      cap: 0,
+      expected: [],
+    },
+    {
+      case: 'cap past the count: all, sorted',
+      messages: [message('c', 12), message('a', 9), message('b', 11)],
+      cap: 9,
+      expected: ['a', 'b', 'c'],
+    },
+    {
+      case: 'equal times keep their input order',
+      messages: [
+        message('second', 10),
+        message('first', 8),
+        message('third', 10),
+      ],
+      cap: 3,
+      expected: ['first', 'second', 'third'],
+    },
+  ])('$case', ({ messages, cap, expected }) => {
+    expect(newestMessages(messages, cap).map((kept) => kept.text)).toEqual(
+      expected,
+    );
+  });
+});
+
+describe('detailCaps', () => {
+  it.each<{
+    detailComments: unknown;
+    threadReplies: unknown;
+    expected: DetailCaps;
+  }>([
+    {
+      detailComments: 10,
+      threadReplies: 5,
+      expected: { comments: 10, replies: 5 },
+    },
+    {
+      detailComments: -3,
+      threadReplies: 2.7,
+      expected: { comments: 0, replies: 2 },
+    },
+    {
+      detailComments: 'x',
+      threadReplies: undefined,
+      expected: { comments: 10, replies: 5 },
+    },
+  ])(
+    'detailComments $detailComments, threadReplies $threadReplies',
+    ({ detailComments, threadReplies, expected }) => {
+      expect(detailCaps({ detailComments, threadReplies })).toEqual(expected);
+    },
+  );
 });
 
 describe('buildWorkState', () => {

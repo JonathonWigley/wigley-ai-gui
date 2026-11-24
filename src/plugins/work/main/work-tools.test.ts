@@ -1,13 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentSession } from '../../sessions/contract';
 import type {
+  DetailMessage,
   WorkCard,
   WorkColumnSetting,
+  WorkDetail,
   WorkItem,
   WorkJob,
 } from '../contract';
-import { jiraCard, localCard, workItem } from '../contract.test-support';
-import { EMPTY_WORK_FILE, type WorkFile } from './store';
+import {
+  jiraCard,
+  localCard,
+  threadDetail,
+  ticketDetail,
+  workItem,
+} from '../contract.test-support';
+import {
+  DEFAULT_DETAIL_CAPS,
+  type DetailCaps,
+  EMPTY_WORK_FILE,
+  type WorkFile,
+} from './store';
 import {
   mergeRecordedItems,
   mergeRecordedTickets,
@@ -15,7 +28,9 @@ import {
   RECORD_WORK_ITEMS_TOOL,
   RECORD_WORK_TICKETS_TOOL,
   type RecordedItem,
+  type RecordedThread,
   type RecordedTicket,
+  type RecordedTicketDetail,
   REPORT_WORK_JOB_TOOL,
   startWorkTools,
 } from './work-tools';
@@ -73,6 +88,7 @@ function recorded(
     linkReason: null,
     why: null,
     draft: null,
+    thread: null,
     ...overrides,
   };
 }
@@ -89,6 +105,36 @@ function ticket(
     status,
     priority: null,
     reachableStatuses: null,
+    detail: null,
+    ...overrides,
+  };
+}
+
+const message = (author: string, at: string, text: string): DetailMessage => ({
+  author,
+  at,
+  text,
+});
+
+// A record_work_tickets detail as the worker sends it, with `overrides` laid over it.
+function detailArg(overrides: Record<string, unknown> = {}) {
+  return {
+    updated: LATER_AT,
+    description: 'Fix the board.',
+    comments: [message('Bo', STORED_AT, 'Seen it.')],
+    subtasks: [],
+    links: [],
+    ...overrides,
+  };
+}
+
+// A record_work_items thread as the worker sends it, with `overrides` laid over it.
+function threadArg(overrides: Record<string, unknown> = {}) {
+  return {
+    root: message('Ann', EARLIER, 'Any news?'),
+    replies: [message('Bo', STORED_AT, 'Soon.')],
+    reply_count: 1,
+    latest_ts: '1763892000.000100',
     ...overrides,
   };
 }
@@ -117,8 +163,12 @@ function ticketArg(key: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
-// Work tools for one session whose running job is `job`, over a store fake holding `file`.
-function toolsFor(job: WorkJob | null, file: WorkFile = EMPTY_WORK_FILE) {
+// Work tools for one session whose running job is `job`, over a store fake holding `file`, capping detail at `caps`.
+function toolsFor(
+  job: WorkJob | null,
+  file: WorkFile = EMPTY_WORK_FILE,
+  caps: DetailCaps = DEFAULT_DETAIL_CAPS,
+) {
   let current = file;
   const update = vi.fn(async (change: (file: WorkFile) => WorkFile) => {
     current = change(current);
@@ -130,6 +180,7 @@ function toolsFor(job: WorkJob | null, file: WorkFile = EMPTY_WORK_FILE) {
     report,
     store: { file: () => current, update },
     columns: () => COLUMNS,
+    caps: () => caps,
     clock: { now: () => NOW_MS },
   })(SESSION);
   return {
@@ -232,6 +283,65 @@ describe('work tool input', () => {
       { tickets: [], replace: true },
       `Refused: tickets must not be empty with replace true; call ${REPORT_WORK_JOB_TOOL.name} with ok false if Jira could not be read.`,
     ],
+    [
+      'a detail updated of yesterday',
+      RECORD_WORK_TICKETS_TOOL.name,
+      {
+        tickets: [
+          ticketArg('WS-1', { detail: detailArg({ updated: 'yesterday' }) }),
+        ],
+        replace: false,
+      },
+      'Refused: tickets[0].detail.updated must be an ISO time.',
+    ],
+    [
+      'a detail comment at of yesterday',
+      RECORD_WORK_TICKETS_TOOL.name,
+      {
+        tickets: [
+          ticketArg('WS-1', {
+            detail: detailArg({ comments: [message('Bo', 'yesterday', 'Hi')] }),
+          }),
+        ],
+        replace: false,
+      },
+      'Refused: tickets[0].detail.comments[0].at must be an ISO time.',
+    ],
+    [
+      'a detail given as a string',
+      RECORD_WORK_TICKETS_TOOL.name,
+      { tickets: [ticketArg('WS-1', { detail: 'none' })], replace: false },
+      'Refused: tickets[0].detail must be an object.',
+    ],
+    [
+      'a thread reply_count of -1',
+      RECORD_WORK_ITEMS_TOOL.name,
+      { items: [itemArg('a', { thread: threadArg({ reply_count: -1 }) })] },
+      'Refused: items[0].thread.reply_count must be a whole number.',
+    ],
+    [
+      'a detail link key ws5',
+      RECORD_WORK_TICKETS_TOOL.name,
+      {
+        tickets: [
+          ticketArg('WS-1', {
+            detail: detailArg({
+              links: [
+                {
+                  key: 'ws5',
+                  title: 'Blocker',
+                  status: 'Done',
+                  relation: 'is blocked by',
+                  url: 'https://jira.example/browse/WS-5',
+                },
+              ],
+            }),
+          }),
+        ],
+        replace: false,
+      },
+      'Refused: tickets[0].detail.links[0].key must be a Jira key like ABC-123.',
+    ],
   ])('records_validation: %s', async (_case, name, args, refusal) => {
     const tools = toolsFor(
       SWEEP,
@@ -310,6 +420,76 @@ describe('work tool input', () => {
     expect(onlyText(result)).toBe('Recorded.');
     expect(tools.update).not.toHaveBeenCalled();
   });
+
+  const NEWEST_AT = '2026-11-23T11:45:00.000Z';
+  it.each([
+    [
+      'three comments past a cap of 2',
+      RECORD_WORK_TICKETS_TOOL.name,
+      {
+        tickets: [
+          ticketArg('WS-1', {
+            detail: detailArg({
+              comments: [
+                message('Ann', LATER_AT, 'middle'),
+                message('Bo', NEWEST_AT, 'newest'),
+                message('Cy', EARLIER, 'oldest'),
+              ],
+            }),
+          }),
+        ],
+        replace: false,
+      },
+      (file: WorkFile) => {
+        const detail = file.details['WS-1'];
+        return detail?.kind === 'ticket'
+          ? detail.comments.map((comment) => comment.text)
+          : detail;
+      },
+      ['middle', 'newest'],
+    ],
+    [
+      'three replies past a cap of 1, with reply_count 1',
+      RECORD_WORK_ITEMS_TOOL.name,
+      {
+        items: [
+          itemArg('a', {
+            thread: threadArg({
+              replies: [
+                message('Bo', NEWEST_AT, 'newest'),
+                message('Cy', EARLIER, 'oldest'),
+                message('Ann', LATER_AT, 'middle'),
+              ],
+              reply_count: 1,
+            }),
+          }),
+        ],
+      },
+      (file: WorkFile) => {
+        const detail = file.details.a;
+        return detail?.kind === 'thread'
+          ? {
+              replies: detail.replies.map((reply) => reply.text),
+              replyCount: detail.replyCount,
+            }
+          : detail;
+      },
+      { replies: ['newest'], replyCount: 3 },
+    ],
+  ])(
+    'recordTickets_detailCapped_keepsNewest: %s',
+    async (_case, name, args, read, expected) => {
+      const tools = toolsFor(SWEEP, EMPTY_WORK_FILE, {
+        comments: 2,
+        replies: 1,
+      });
+
+      const result = await tools.call(name, args);
+
+      expect(result.isError).toBeUndefined();
+      expect(read(tools.file())).toEqual(expected);
+    },
+  );
 });
 
 describe('read_work_state', () => {
@@ -318,8 +498,16 @@ describe('read_work_state', () => {
       MOVE,
       fileWith({
         lastSweepAt: EARLIER,
-        items: [workItem('a', { state: 'snoozed' })],
-        cards: [jiraCard('WS-1', 'in review'), localCard('local-1', 'Todo')],
+        items: [workItem('a', { state: 'snoozed' }), workItem('b')],
+        cards: [
+          jiraCard('WS-1', 'in review'),
+          jiraCard('WS-2', 'To Do'),
+          localCard('local-1', 'Todo'),
+        ],
+        details: {
+          a: threadDetail('a', { stamp: '1763892000.000100' }),
+          'WS-1': ticketDetail('WS-1', { stamp: LATER_AT }),
+        },
       }),
     );
 
@@ -336,6 +524,15 @@ describe('read_work_state', () => {
           state: 'snoozed',
           title: 'Thread a',
           at: STORED_AT,
+          stamp: '1763892000.000100',
+        },
+        {
+          id: 'b',
+          section: 'needs_you',
+          state: 'open',
+          title: 'Thread b',
+          at: STORED_AT,
+          stamp: null,
         },
       ],
       cards: [
@@ -345,6 +542,15 @@ describe('read_work_state', () => {
           title: 'Ticket WS-1',
           jiraStatus: 'in review',
           column: 'Review',
+          stamp: LATER_AT,
+        },
+        {
+          kind: 'jira',
+          id: 'WS-2',
+          title: 'Ticket WS-2',
+          jiraStatus: 'To Do',
+          column: 'Todo',
+          stamp: null,
         },
         { kind: 'local', id: 'local-1', title: 'Task local-1', column: 'Todo' },
       ],
@@ -529,6 +735,55 @@ describe('mergeRecordedItems', () => {
       expect(item).toMatchObject(expected);
     }
   });
+
+  const THREAD: RecordedThread = {
+    root: message('Ann', '2026-11-23T09:00:00.000Z', 'Any news?'),
+    replies: [message('Bo', STORED_AT, 'Soon.')],
+    replyCount: 4,
+    latestTs: '1763899200.000200',
+  };
+  it.each<{
+    name: string;
+    stored: WorkItem[];
+    details: Record<string, WorkDetail>;
+    items: RecordedItem[];
+    expected: WorkDetail | undefined;
+  }>([
+    {
+      name: 'an item with a thread stores its detail',
+      stored: [],
+      details: {},
+      items: [recorded('a', { thread: THREAD })],
+      expected: threadDetail('a', {
+        fetchedAt: NOW,
+        stamp: THREAD.latestTs,
+        replyCount: 4,
+      }),
+    },
+    {
+      name: 'an item with no thread keeps its stored detail',
+      stored: [workItem('a')],
+      details: { a: threadDetail('a') },
+      items: [recorded('a', { thread: null })],
+      expected: threadDetail('a'),
+    },
+    {
+      name: 'a pruned item drops its detail',
+      stored: [workItem('a', { state: 'cleared', at: daysAgo(91) })],
+      details: { a: threadDetail('a') },
+      items: [],
+      expected: undefined,
+    },
+  ])('details: $name', ({ stored, details, items, expected }) => {
+    const merged = mergeRecordedItems(
+      fileWith({ items: stored, details }),
+      items,
+      [],
+      NOW,
+    );
+
+    expect(merged.details.a).toEqual(expected);
+  });
 });
 
 describe('mergeRecordedTickets', () => {
@@ -616,5 +871,93 @@ describe('mergeRecordedTickets', () => {
     );
 
     expect(merged.cards.map((card) => card.id).sort()).toEqual(ids);
+  });
+
+  // Kept verbatim: Jira's own form, not the store's.
+  const UPDATED = '2026-11-23T11:30:00.000+0000';
+  const DETAIL: RecordedTicketDetail = {
+    type: 'Bug',
+    assignee: 'Ann',
+    reporter: 'Bo',
+    updated: UPDATED,
+    description: 'Fix the **board**.',
+    comments: [message('Bo', '2026-11-23T09:00:00.000Z', 'Seen it.')],
+    subtasks: [],
+    links: [],
+  };
+  const BOTH_CARDS = [jiraCard('WS-1', 'To Do'), jiraCard('WS-2', 'To Do')];
+  const BOTH_DETAILS = {
+    'WS-1': ticketDetail('WS-1'),
+    'WS-2': ticketDetail('WS-2'),
+  };
+  it.each<{
+    name: string;
+    cards: WorkCard[];
+    details: Record<string, WorkDetail>;
+    tickets: RecordedTicket[];
+    replace: boolean;
+    expected: Record<string, WorkDetail>;
+  }>([
+    {
+      name: 'a ticket with a detail stores it, with its status and priority',
+      cards: [],
+      details: {},
+      tickets: [
+        ticket('WS-1', 'In Review', { priority: 'High', detail: DETAIL }),
+      ],
+      replace: false,
+      expected: {
+        'WS-1': ticketDetail('WS-1', {
+          fetchedAt: NOW,
+          stamp: UPDATED,
+          updated: UPDATED,
+          status: 'In Review',
+          priority: 'High',
+        }),
+      },
+    },
+    {
+      name: 'a ticket with no detail keeps its stored detail, with its status and priority',
+      cards: [jiraCard('WS-1', 'To Do')],
+      details: { 'WS-1': ticketDetail('WS-1') },
+      tickets: [ticket('WS-1', 'In Review', { priority: 'High' })],
+      replace: false,
+      expected: {
+        'WS-1': ticketDetail('WS-1', { status: 'In Review', priority: 'High' }),
+      },
+    },
+    {
+      name: 'a ticket with no detail and none stored adds none',
+      cards: [],
+      details: {},
+      tickets: [ticket('WS-1', 'To Do')],
+      replace: false,
+      expected: {},
+    },
+    {
+      name: "replace true drops a dropped card's detail",
+      cards: BOTH_CARDS,
+      details: BOTH_DETAILS,
+      tickets: [ticket('WS-1', 'To Do')],
+      replace: true,
+      expected: { 'WS-1': ticketDetail('WS-1') },
+    },
+    {
+      name: 'replace false keeps the detail of a ticket the record leaves out',
+      cards: BOTH_CARDS,
+      details: BOTH_DETAILS,
+      tickets: [ticket('WS-1', 'To Do')],
+      replace: false,
+      expected: BOTH_DETAILS,
+    },
+  ])('details: $name', ({ cards, details, tickets, replace, expected }) => {
+    const merged = mergeRecordedTickets(
+      fileWith({ cards, details }),
+      tickets,
+      replace,
+      NOW,
+    );
+
+    expect(merged.details).toEqual(expected);
   });
 });

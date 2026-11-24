@@ -9,6 +9,7 @@ import {
 } from './job-text';
 import { EMPTY_WORK_FILE, type WorkFile } from './store';
 import {
+  READ_WORK_STATE_TOOL,
   RECORD_WORK_TICKETS_TOOL,
   REPORT_WORK_JOB_TOOL,
   WORK_TOOLS,
@@ -24,6 +25,8 @@ const SETTINGS: JobTextSettings = {
   stallHours: DEFAULTS.stallHours,
   jiraQuery: DEFAULTS.jiraQuery,
   columns: DEFAULTS.columns,
+  detailComments: 10,
+  threadReplies: 5,
 };
 
 const ITEM = workItem('a', {
@@ -88,6 +91,23 @@ describe('sweep message', () => {
     expect(message).toContain('- Keywords: none\n');
     expect(message).toContain(
       '; Todo = To Do / Selected for Development / Open;',
+    );
+    expect(message).toContain(
+      '- Detail: the newest 10 comments of a ticket, the newest 5 replies of a thread\n',
+    );
+  });
+
+  it('sweep_detailOnlyWhenStampMoved', () => {
+    const message = messageOf({ kind: 'sweep' });
+
+    expect(message).toContain(
+      `When the updated time differs from the ticket's stamp in ${READ_WORK_STATE_TOOL.name}`,
+    );
+    expect(message).toContain(
+      `When it differs from the item's stamp in ${READ_WORK_STATE_TOOL.name}`,
+    );
+    expect(message).toContain(
+      'convert Jira markup and Slack formatting to markdown',
     );
   });
 

@@ -25,6 +25,7 @@ import {
   type WorkJob,
   type WorkStartArg,
   type WorkStartResult,
+  workDetailsSlot,
   workStateSlot,
 } from '../contract';
 import { workManifest } from '../manifest';
@@ -54,7 +55,12 @@ import { RESEED_FILE, workSelfTestScript } from './selftest-script';
 import { fixtureFile, fixtureSignals } from './selftest-fixture';
 import { createSignalWatch } from './signals';
 import { linkSession, startFromWork } from './spin-up';
-import { buildWorkState, createWorkStore, type WorkFile } from './store';
+import {
+  buildWorkState,
+  createWorkStore,
+  detailCaps,
+  type WorkFile,
+} from './store';
 import { createSweepTimer } from './sweep-timer';
 import { startWorkTools, WORK_TOOLS } from './work-tools';
 
@@ -86,9 +92,11 @@ const openNeedsYou = (file: WorkFile) =>
 // A press main refused: the rejection the page toasts, its message the refusal text.
 class PressRefused extends Error {}
 
-// Keeps the user's work in `work.json` and publishes it as `work.state`, built against `work.columns`: the slot holds
-// no value until the store's load ends, then is written again on each store change and each settings change. It
-// runs the worker jobs (05) and gives the worker its tools (06), watches the work signals (07) and writes detection's
+// Keeps the user's work in `work.json` and publishes it as `work.state`, built against `work.columns`, and its detail
+// records as `work.details`, one entry per record: neither slot holds anything until the store's load ends, then both
+// are written again on each store change and each settings change, `work.details` setting only the entries that
+// changed and deleting the ones the store dropped.
+// It runs the worker jobs (05) and gives the worker its tools (06), watches the work signals (07) and writes detection's
 // suggestions back to the store, and handles every `WorkChannel` method with 08's actions, logging each press's line
 // and each refusal under `[work]`. It sweeps once chat's restore settles and every `work.intervalMinutes` after a
 // sweep's end, wakes snoozed items, sets the Dock badge to the open Needs you items, and reopens the last job's row.
@@ -106,6 +114,7 @@ export const workMainPart: MainPart<typeof workManifest> = {
     const chatSessions = api.state.read(chatSessionSlot);
     const sessionRows = api.state.read(sessionsRowsSlot);
     const state = api.state.publish(workStateSlot);
+    const details = api.state.publish(workDetailsSlot);
     const store = createWorkStore(api.data, log);
     const jobRows = createJobRows(api.data, log);
     const isSelfTest = services.runMode === 'selfTest';
@@ -118,12 +127,30 @@ export const workMainPart: MainPart<typeof workManifest> = {
     let intervalMinutes = api.settings().intervalMinutes;
 
     const columns = () => readColumns(api.settings().columns);
+    const caps = () => detailCaps(api.settings());
+
+    // Sets each entry whose JSON changed, skipping one the store kept by reference, and deletes each the store dropped.
+    const publishDetails = (file: WorkFile) => {
+      for (const [id, detail] of Object.entries(file.details)) {
+        const shown = details.get(id);
+        if (shown !== detail && !isSameJson(shown, detail)) {
+          details.set(id, detail);
+        }
+      }
+      for (const id of details.all().keys()) {
+        if (!Object.hasOwn(file.details, id)) {
+          details.delete(id);
+        }
+      }
+    };
 
     const publish = () => {
       if (isStopped) {
         return;
       }
-      state.set(buildWorkState(store.file(), columns(), store.problem()));
+      const file = store.file();
+      state.set(buildWorkState(file, columns(), store.problem()));
+      publishDetails(file);
     };
 
     const runner = createJobRunner({
@@ -141,12 +168,16 @@ export const workMainPart: MainPart<typeof workManifest> = {
       launchesWorkers,
       profile: () => api.settings().profile,
       instructions: () => [WORKER_INSTRUCTIONS],
-      message: (job) =>
-        jobMessage(
-          job,
-          { ...api.settings(), columns: columns() },
-          store.file(),
-        ),
+      message: (job) => {
+        const { comments, replies } = caps();
+        const settings = {
+          ...api.settings(),
+          columns: columns(),
+          detailComments: comments,
+          threadReplies: replies,
+        };
+        return jobMessage(job, settings, store.file());
+      },
       ended: (job, outcome) => onJobEnded(job, outcome),
     });
 
@@ -157,6 +188,7 @@ export const workMainPart: MainPart<typeof workManifest> = {
         report: (session, result) => runner.report(session, result),
         store,
         columns,
+        caps,
         clock,
       }),
     );
@@ -362,13 +394,19 @@ export const workMainPart: MainPart<typeof workManifest> = {
         items: file.items.length,
         cards: file.cards.length,
         suggestions: file.suggestions.length,
+        details: Object.keys(file.details).length,
       };
       log(
         `fixture seeded: ${counts.items} items, ${counts.cards} cards, ${counts.suggestions} suggestions`,
       );
-      const wanted = { items: 7, cards: 7, suggestions: 3 };
+      const wanted = { items: 7, cards: 7, suggestions: 3, details: 4 };
       const problems: string[] = [];
-      for (const name of ['items', 'cards', 'suggestions'] as const) {
+      for (const name of [
+        'items',
+        'cards',
+        'suggestions',
+        'details',
+      ] as const) {
         if (counts[name] !== wanted[name]) {
           problems.push(`${counts[name]} ${name}, not ${wanted[name]}`);
         }

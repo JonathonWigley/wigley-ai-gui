@@ -13,16 +13,25 @@ import {
   type ToolSession,
 } from '../../sessions/contract';
 import {
+  type DetailMessage,
+  type LinkedIssue,
   ticketKeysIn,
   WORK_SECTIONS,
   type WorkCard,
   type WorkColumnSetting,
+  type WorkDetail,
   type WorkItem,
   type WorkJiraCard,
   type WorkJob,
   type WorkSection,
 } from '../contract';
-import { buildWorkState, type WorkFile, type WorkStore } from './store';
+import {
+  buildWorkState,
+  type DetailCaps,
+  newestMessages,
+  type WorkFile,
+  type WorkStore,
+} from './store';
 
 const DAY_MS = 86_400_000;
 
@@ -37,14 +46,50 @@ const TITLE_FROM_SUMMARY_LENGTH = 60;
 export const READ_WORK_STATE_TOOL: ToolDefinition = {
   name: 'read_work_state',
   description:
-    "Read what the app's Inbox and Board hold now: the running job, the last sweep's time, the Board columns with their Jira statuses, each inbox item's id, section, state, title and time (cleared and dismissed items only from the last 7 days), and every card. Only the running work job's session may call it.",
+    "Read what the app's Inbox and Board hold now: the running job, the last sweep's time, the Board columns with their Jira statuses, each inbox item's id, section, state, title, time and detail stamp (cleared and dismissed items only from the last 7 days), and every card, each Jira card with its detail stamp. A stamp is null when the app holds no detail. Only the running work job's session may call it.",
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+};
+
+const MESSAGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    author: { type: 'string' },
+    at: { type: 'string', description: 'ISO time.' },
+    text: { type: 'string', description: 'Markdown.' },
+  },
+  required: ['author', 'at', 'text'],
+  additionalProperties: false,
+};
+
+const SUBTASK_SCHEMA = {
+  type: 'object',
+  properties: {
+    key: { type: 'string' },
+    title: { type: 'string' },
+    status: { type: 'string' },
+    url: { type: 'string' },
+  },
+  required: ['key', 'title', 'status', 'url'],
+  additionalProperties: false,
+};
+
+const LINK_SCHEMA = {
+  type: 'object',
+  properties: {
+    ...SUBTASK_SCHEMA.properties,
+    relation: {
+      type: 'string',
+      description:
+        'How it links, as Jira names it: "blocks", "is blocked by", …',
+    },
+  },
+  required: ['key', 'title', 'status', 'relation', 'url'],
+  additionalProperties: false,
 };
 
 export const RECORD_WORK_ITEMS_TOOL: ToolDefinition = {
   name: 'record_work_items',
-  description:
-    "Add or update Slack conversations in the app's Inbox by id, and clear the ones the user has since replied or reacted to. An item the user dismissed comes back only when it has newer messages. Only the running work job's session may call it.",
+  description: `Add or update Slack conversations in the app's Inbox by id, and clear the ones the user has since replied or reacted to. An item the user dismissed comes back only when it has newer messages. Give an item's thread only when the Slack ts of its newest message differs from its stamp in ${READ_WORK_STATE_TOOL.name}; an item given without thread keeps its stored thread. Only the running work job's session may call it.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -102,6 +147,29 @@ export const RECORD_WORK_ITEMS_TOOL: ToolDefinition = {
               description:
                 "For needs_you a reply, for waiting a nudge, in the user's voice.",
             },
+            thread: {
+              type: 'object',
+              properties: {
+                root: MESSAGE_SCHEMA,
+                replies: {
+                  type: 'array',
+                  items: MESSAGE_SCHEMA,
+                  description: 'The newest replies.',
+                },
+                reply_count: {
+                  type: 'integer',
+                  minimum: 0,
+                  description: 'Every reply in the thread, given or not.',
+                },
+                latest_ts: {
+                  type: 'string',
+                  description:
+                    "The Slack ts of the thread's newest message: the root's when it has no reply.",
+                },
+              },
+              required: ['root', 'replies', 'reply_count', 'latest_ts'],
+              additionalProperties: false,
+            },
           },
           required: [
             'id',
@@ -129,8 +197,7 @@ export const RECORD_WORK_ITEMS_TOOL: ToolDefinition = {
 
 export const RECORD_WORK_TICKETS_TOOL: ToolDefinition = {
   name: 'record_work_tickets',
-  description:
-    "Record the user's Jira tickets on the app's Board, each with its status and the statuses its transitions reach now. replace true (a sweep only) makes the list the whole set of tickets; false updates only the tickets given. Only the running work job's session may call it.",
+  description: `Record the user's Jira tickets on the app's Board, each with its status and the statuses its transitions reach now. replace true (a sweep only) makes the list the whole set of tickets; false updates only the tickets given. Give a ticket's detail only when Jira's updated time differs from its stamp in ${READ_WORK_STATE_TOOL.name}; give updated exactly as Jira returns it, and compare it with the stamp as text; a ticket given without detail keeps its stored detail. Only the running work job's session may call it.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -151,6 +218,42 @@ export const RECORD_WORK_TICKETS_TOOL: ToolDefinition = {
               type: 'array',
               items: { type: 'string' },
               description: 'The status names its transitions reach now.',
+            },
+            detail: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                assignee: { type: 'string' },
+                reporter: { type: 'string' },
+                updated: {
+                  type: 'string',
+                  description:
+                    "Jira's updated time, ISO, exactly as Jira returns it.",
+                },
+                description: {
+                  type: 'string',
+                  description: 'Markdown; "" for none.',
+                },
+                comments: {
+                  type: 'array',
+                  items: MESSAGE_SCHEMA,
+                  description: 'The newest comments.',
+                },
+                subtasks: { type: 'array', items: SUBTASK_SCHEMA },
+                links: {
+                  type: 'array',
+                  items: LINK_SCHEMA,
+                  description: 'The linked issues.',
+                },
+              },
+              required: [
+                'updated',
+                'description',
+                'comments',
+                'subtasks',
+                'links',
+              ],
+              additionalProperties: false,
             },
           },
           required: ['key', 'title', 'url', 'status'],
@@ -184,7 +287,7 @@ export const WORK_TOOLS: ToolDefinition[] = [
 ];
 
 // `jobOf` names the running job for the worker's session, null for any other session; `report` records that job's
-// outcome; `columns` is `work.columns`, read at each call.
+// outcome; `columns` is `work.columns`, and `caps` the detail caps, each read at each call.
 export interface WorkToolsDeps {
   jobOf(session: AgentSession): WorkJob | null;
   report(
@@ -193,7 +296,29 @@ export interface WorkToolsDeps {
   ): boolean;
   store: Pick<WorkStore, 'file' | 'update'>;
   columns(): readonly WorkColumnSetting[];
+  caps(): DetailCaps;
   clock: Clock;
+}
+
+// A ticket's detail as `record_work_tickets` gives it, its comments already capped to the newest.
+export interface RecordedTicketDetail {
+  type: string | null;
+  assignee: string | null;
+  reporter: string | null;
+  updated: string;
+  description: string;
+  comments: DetailMessage[];
+  subtasks: LinkedIssue[];
+  links: LinkedIssue[];
+}
+
+// A thread as `record_work_items` gives it, its replies already capped to the newest; `replyCount` is never fewer
+// than the replies given.
+export interface RecordedThread {
+  root: DetailMessage;
+  replies: DetailMessage[];
+  replyCount: number;
+  latestTs: string;
 }
 
 // One Slack conversation as `record_work_items` gives it, its optional strings null when absent or empty.
@@ -212,9 +337,10 @@ export interface RecordedItem {
   linkReason: string | null;
   why: string | null;
   draft: string | null;
+  thread: RecordedThread | null;
 }
 
-// One Jira ticket as `record_work_tickets` gives it; `reachableStatuses` null when the record gives none.
+// One Jira ticket as `record_work_tickets` gives it; `reachableStatuses` and `detail` null when the record gives none.
 export interface RecordedTicket {
   key: string;
   title: string;
@@ -222,6 +348,7 @@ export interface RecordedTicket {
   status: string;
   priority: string | null;
   reachableStatuses: string[] | null;
+  detail: RecordedTicketDetail | null;
 }
 
 interface ItemMerge {
@@ -299,6 +426,22 @@ function isPrunable(item: WorkItem, nowMs: number): boolean {
   return isClosed(item) && isOld;
 }
 
+function threadDetail(
+  id: string,
+  thread: RecordedThread,
+  now: string,
+): WorkDetail {
+  return {
+    kind: 'thread',
+    id,
+    fetchedAt: now,
+    stamp: thread.latestTs,
+    root: thread.root,
+    replies: thread.replies,
+    replyCount: thread.replyCount,
+  };
+}
+
 function mergeItems(
   file: WorkFile,
   recorded: readonly RecordedItem[],
@@ -306,6 +449,7 @@ function mergeItems(
   now: string,
 ): ItemMerge {
   const byId = new Map(file.items.map((item) => [item.id, item]));
+  const details = { ...file.details };
   let added = 0;
   for (const item of recorded) {
     const stored = byId.get(item.id);
@@ -313,6 +457,9 @@ function mergeItems(
       added += 1;
     }
     byId.set(item.id, mergedItem(stored, item, now));
+    if (item.thread !== null) {
+      details[item.id] = threadDetail(item.id, item.thread, now);
+    }
   }
   let cleared = 0;
   let unknown = 0;
@@ -328,11 +475,19 @@ function mergeItems(
     }
   }
   const nowMs = Date.parse(now);
-  const items = [...byId.values()].filter((item) => !isPrunable(item, nowMs));
-  return { file: { ...file, items }, added, cleared, unknown };
+  const items: WorkItem[] = [];
+  for (const item of byId.values()) {
+    if (isPrunable(item, nowMs)) {
+      delete details[item.id];
+    } else {
+      items.push(item);
+    }
+  }
+  return { file: { ...file, items, details }, added, cleared, unknown };
 }
 
-// `file` with `items` recorded, then `clear` applied, then closed items older than 90 days removed. Pure.
+// `file` with `items` recorded, each given thread stored as its detail, then `clear` applied, then closed items older
+// than 90 days removed with their details. An item given without a thread keeps its stored detail. Pure.
 export function mergeRecordedItems(
   file: WorkFile,
   items: readonly RecordedItem[],
@@ -379,6 +534,35 @@ function mergedCard(
   };
 }
 
+// A ticket given with a detail gets a new record; one given without keeps its stored record, with the ticket's status
+// and priority, and gets none when none is stored.
+function mergedTicketDetail(
+  stored: WorkDetail | undefined,
+  ticket: RecordedTicket,
+  now: string,
+): WorkDetail | undefined {
+  const { detail } = ticket;
+  if (detail !== null) {
+    return {
+      kind: 'ticket',
+      id: ticket.key,
+      fetchedAt: now,
+      stamp: detail.updated,
+      status: ticket.status,
+      priority: ticket.priority,
+      ...detail,
+    };
+  }
+  if (stored?.kind !== 'ticket') {
+    return stored;
+  }
+  const isSameStatus =
+    stored.status === ticket.status && stored.priority === ticket.priority;
+  return isSameStatus
+    ? stored
+    : { ...stored, status: ticket.status, priority: ticket.priority };
+}
+
 function mergeTickets(
   file: WorkFile,
   tickets: readonly RecordedTicket[],
@@ -387,6 +571,7 @@ function mergeTickets(
 ): TicketMerge {
   const recorded = new Map(tickets.map((ticket) => [ticket.key, ticket]));
   const cards: WorkCard[] = [];
+  const details = { ...file.details };
   let dropped = 0;
   for (const card of file.cards) {
     if (card.kind === 'local') {
@@ -399,6 +584,7 @@ function mergeTickets(
       recorded.delete(card.key);
     } else if (replace) {
       dropped += 1;
+      delete details[card.key];
     } else {
       cards.push(card);
     }
@@ -406,11 +592,18 @@ function mergeTickets(
   for (const ticket of recorded.values()) {
     cards.push(mergedCard(undefined, ticket, now));
   }
-  return { file: { ...file, cards }, dropped };
+  for (const ticket of tickets) {
+    const detail = mergedTicketDetail(details[ticket.key], ticket, now);
+    if (detail !== undefined) {
+      details[ticket.key] = detail;
+    }
+  }
+  return { file: { ...file, cards, details }, dropped };
 }
 
-// `file` with each ticket's Jira card made or updated; `replace` also drops every Jira card `tickets` leaves out.
-// Local tasks are never touched. Pure.
+// `file` with each ticket's Jira card made or updated, and its detail stored or its stored detail given the ticket's
+// status and priority; `replace` also drops every Jira card `tickets` leaves out, with its detail. Local tasks are
+// never touched. Pure.
 export function mergeRecordedTickets(
   file: WorkFile,
   tickets: readonly RecordedTicket[],
@@ -427,6 +620,8 @@ const A_STRING = 'a string';
 const A_LIST = 'a list';
 const STRINGS = 'a list of strings';
 const A_BOOLEAN = 'a boolean';
+const AN_OBJECT = 'an object';
+const A_WHOLE_NUMBER = 'a whole number';
 const AN_ISO_TIME = 'an ISO time';
 const A_JIRA_KEY = 'a Jira key like ABC-123';
 const A_SECTION = `one of ${WORK_SECTIONS.join(', ')}`;
@@ -477,13 +672,107 @@ function objectList(value: unknown, path: string): JsonObject[] {
   return value.map((entry: unknown) => (isJsonObject(entry) ? entry : {}));
 }
 
+function requiredObject(value: unknown, path: string): JsonObject {
+  return isJsonObject(value) ? value : refuse(path, AN_OBJECT);
+}
+
+// Absent and null read as null.
+function optionalObject(value: unknown, path: string): JsonObject | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return requiredObject(value, path);
+}
+
+function wholeNumber(value: unknown, path: string): number {
+  const isWhole = Number.isInteger(value) && (value as number) >= 0;
+  return isWhole ? (value as number) : refuse(path, A_WHOLE_NUMBER);
+}
+
 function readSection(value: unknown, path: string): WorkSection {
   const isSection =
     typeof value === 'string' && WORK_SECTIONS.includes(value as WorkSection);
   return isSection ? (value as WorkSection) : refuse(path, A_SECTION);
 }
 
-function readItem(raw: JsonObject, at: string): RecordedItem {
+function readMessage(raw: JsonObject, at: string): DetailMessage {
+  return {
+    author: requiredString(raw.author, `${at}.author`),
+    at: isoTime(raw.at, `${at}.at`),
+    text: requiredString(raw.text, `${at}.text`),
+  };
+}
+
+function readMessages(value: unknown, path: string): DetailMessage[] {
+  return objectList(value, path).map((raw, index) =>
+    readMessage(raw, `${path}[${index}]`),
+  );
+}
+
+// A subtask's `relation` reads as null; a link's is required.
+function readIssues(
+  value: unknown,
+  path: string,
+  hasRelation: boolean,
+): LinkedIssue[] {
+  return objectList(value, path).map((raw, index) => {
+    const at = `${path}[${index}]`;
+    return {
+      key: jiraKey(raw.key, `${at}.key`),
+      title: requiredString(raw.title, `${at}.title`),
+      status: requiredString(raw.status, `${at}.status`),
+      relation: hasRelation
+        ? requiredString(raw.relation, `${at}.relation`)
+        : null,
+      url: requiredString(raw.url, `${at}.url`),
+    };
+  });
+}
+
+function readTicketDetail(
+  value: unknown,
+  at: string,
+  caps: DetailCaps,
+): RecordedTicketDetail | null {
+  const raw = optionalObject(value, at);
+  if (raw === null) {
+    return null;
+  }
+  const comments = readMessages(raw.comments, `${at}.comments`);
+  return {
+    type: optionalString(raw.type, `${at}.type`),
+    assignee: optionalString(raw.assignee, `${at}.assignee`),
+    reporter: optionalString(raw.reporter, `${at}.reporter`),
+    updated: isoTime(raw.updated, `${at}.updated`),
+    description: requiredString(raw.description, `${at}.description`),
+    comments: newestMessages(comments, caps.comments),
+    subtasks: readIssues(raw.subtasks, `${at}.subtasks`, false),
+    links: readIssues(raw.links, `${at}.links`, true),
+  };
+}
+
+function readThread(
+  value: unknown,
+  at: string,
+  caps: DetailCaps,
+): RecordedThread | null {
+  const raw = optionalObject(value, at);
+  if (raw === null) {
+    return null;
+  }
+  const rootPath = `${at}.root`;
+  const root = readMessage(requiredObject(raw.root, rootPath), rootPath);
+  const replies = readMessages(raw.replies, `${at}.replies`);
+  const replyCount = wholeNumber(raw.reply_count, `${at}.reply_count`);
+  return {
+    root,
+    replies: newestMessages(replies, caps.replies),
+    replyCount: Math.max(replyCount, replies.length),
+    latestTs: requiredString(raw.latest_ts, `${at}.latest_ts`),
+  };
+}
+
+function readItem(raw: JsonObject, at: string, caps: DetailCaps): RecordedItem {
   const keys = optionalStrings(raw.ticket_keys, `${at}.ticket_keys`) ?? [];
   return {
     id: requiredString(raw.id, `${at}.id`),
@@ -502,10 +791,15 @@ function readItem(raw: JsonObject, at: string): RecordedItem {
     linkReason: optionalString(raw.link_reason, `${at}.link_reason`),
     why: optionalString(raw.why, `${at}.why`),
     draft: optionalString(raw.draft, `${at}.draft`),
+    thread: readThread(raw.thread, `${at}.thread`, caps),
   };
 }
 
-function readTicket(raw: JsonObject, at: string): RecordedTicket {
+function readTicket(
+  raw: JsonObject,
+  at: string,
+  caps: DetailCaps,
+): RecordedTicket {
   return {
     key: jiraKey(raw.key, `${at}.key`),
     title: requiredString(raw.title, `${at}.title`),
@@ -516,6 +810,7 @@ function readTicket(raw: JsonObject, at: string): RecordedTicket {
       raw.reachable_statuses,
       `${at}.reachable_statuses`,
     ),
+    detail: readTicketDetail(raw.detail, `${at}.detail`, caps),
   };
 }
 
@@ -527,13 +822,15 @@ function nowIso(clock: Clock): string {
   return new Date(clock.now()).toISOString();
 }
 
-// What `read_work_state` answers: closed items listed only within 7 days of now, and no summaries.
+// What `read_work_state` answers: closed items listed only within 7 days of now, no summaries, and each item's and
+// Jira card's detail stamp, null with no stored detail.
 function workStateText(deps: WorkToolsDeps, job: WorkJob): string {
   const file = deps.store.file();
   const columns = deps.columns();
   const nowMs = deps.clock.now();
   const isListed = (item: WorkItem) =>
     !isClosed(item) || nowMs - Date.parse(item.at) <= READ_CLOSED_ITEMS_MS;
+  const stampOf = (id: string) => file.details[id]?.stamp ?? null;
   const shownCards = buildWorkState(file, columns, null).cards;
   const view = {
     job: jobView(job),
@@ -547,6 +844,7 @@ function workStateText(deps: WorkToolsDeps, job: WorkJob): string {
         state,
         title,
         at,
+        stamp: stampOf(id),
       })),
     cards: shownCards.map((card) =>
       card.kind === 'jira'
@@ -556,6 +854,7 @@ function workStateText(deps: WorkToolsDeps, job: WorkJob): string {
             title: card.title,
             jiraStatus: card.jiraStatus,
             column: card.column,
+            stamp: stampOf(card.id),
           }
         : {
             kind: card.kind,
@@ -590,8 +889,9 @@ async function recordItems(
   deps: WorkToolsDeps,
   args: JsonObject,
 ): Promise<ToolResult> {
+  const caps = deps.caps();
   const items = objectList(args.items, 'items').map((raw, index) =>
-    readItem(raw, `items[${index}]`),
+    readItem(raw, `items[${index}]`, caps),
   );
   const clear = optionalStrings(args.clear, 'clear') ?? [];
   const now = nowIso(deps.clock);
@@ -613,8 +913,9 @@ async function recordTickets(
   job: WorkJob,
   args: JsonObject,
 ): Promise<ToolResult> {
+  const caps = deps.caps();
   const tickets = objectList(args.tickets, 'tickets').map((raw, index) =>
-    readTicket(raw, `tickets[${index}]`),
+    readTicket(raw, `tickets[${index}]`, caps),
   );
   const replace = readBoolean(args.replace, 'replace');
   if (replace && job.kind !== 'sweep') {

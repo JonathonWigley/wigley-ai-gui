@@ -12,8 +12,11 @@ import {
   OTHER_COLUMN,
   WORK_SECTIONS,
   WORK_SIGNALS,
+  type DetailMessage,
+  type LinkedIssue,
   type WorkCard,
   type WorkColumnSetting,
+  type WorkDetail,
   type WorkItem,
   type WorkItemState,
   type WorkJobKind,
@@ -39,7 +42,7 @@ export interface WorkNotYet {
   rowId: string | null;
 }
 
-// What `work.json` holds.
+// What `work.json` holds. `details` holds each ticket's and thread's detail record under its `id`.
 export interface WorkFile {
   items: WorkItem[];
   cards: WorkCard[];
@@ -47,6 +50,7 @@ export interface WorkFile {
   notYet: WorkNotYet[];
   job: WorkState['job'];
   lastSweepAt: string | null;
+  details: Record<string, WorkDetail>;
 }
 
 export const EMPTY_WORK_FILE: WorkFile = {
@@ -56,7 +60,44 @@ export const EMPTY_WORK_FILE: WorkFile = {
   notYet: [],
   job: { running: null, last: null },
   lastSweepAt: null,
+  details: {},
 };
+
+// How many of the newest comments a ticket's detail keeps, and of the newest replies a thread's.
+export interface DetailCaps {
+  readonly comments: number;
+  readonly replies: number;
+}
+
+export const DEFAULT_DETAIL_CAPS: DetailCaps = { comments: 10, replies: 5 };
+
+const capOf = (value: unknown, fallback: number) =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : fallback;
+
+// The caps `work.detailComments` and `work.threadReplies` set: each finite number floored and kept at 0 or more, any
+// other value its `DEFAULT_DETAIL_CAPS` value.
+export function detailCaps(settings: {
+  readonly detailComments: unknown;
+  readonly threadReplies: unknown;
+}): DetailCaps {
+  return {
+    comments: capOf(settings.detailComments, DEFAULT_DETAIL_CAPS.comments),
+    replies: capOf(settings.threadReplies, DEFAULT_DETAIL_CAPS.replies),
+  };
+}
+
+// The `cap` newest of `messages` by `at`, oldest first; messages of equal time keep their input order.
+export function newestMessages(
+  messages: readonly DetailMessage[],
+  cap: number,
+): DetailMessage[] {
+  const sorted = [...messages].sort(
+    (left, right) => Date.parse(left.at) - Date.parse(right.at),
+  );
+  return sorted.slice(Math.max(0, sorted.length - cap));
+}
 
 const ITEM_STATES: readonly WorkItemState[] = [
   'open',
@@ -190,14 +231,72 @@ function isJobStatusOrNull(value: unknown): value is WorkJobStatus | null {
   );
 }
 
-type SavedWorkFile = Omit<WorkFile, 'suggestions' | 'notYet'> & {
+const isListOf = (list: unknown, isEntry: (entry: unknown) => boolean) =>
+  Array.isArray(list) && list.every(isEntry);
+
+function isDetailMessage(value: unknown): value is DetailMessage {
+  return isJsonObject(value) && areStrings(value, ['author', 'at', 'text']);
+}
+
+function isLinkedIssue(value: unknown): value is LinkedIssue {
+  return (
+    isJsonObject(value) &&
+    areStrings(value, ['key', 'title', 'status', 'url']) &&
+    isNullableString(value.relation)
+  );
+}
+
+function isWorkDetail(value: unknown): value is WorkDetail {
+  const hasBase =
+    isJsonObject(value) && areStrings(value, ['id', 'fetchedAt', 'stamp']);
+  if (!hasBase) {
+    return false;
+  }
+  switch (value.kind) {
+    case 'ticket':
+      return (
+        areStrings(value, ['status', 'updated', 'description']) &&
+        areNullableStrings(value, [
+          'type',
+          'priority',
+          'assignee',
+          'reporter',
+        ]) &&
+        isListOf(value.comments, isDetailMessage) &&
+        isListOf(value.subtasks, isLinkedIssue) &&
+        isListOf(value.links, isLinkedIssue)
+      );
+    case 'thread':
+      return (
+        isDetailMessage(value.root) &&
+        isListOf(value.replies, isDetailMessage) &&
+        typeof value.replyCount === 'number'
+      );
+    default:
+      return false;
+  }
+}
+
+// A file saved before it had `details` may leave it out; each record held is filed under its own `id`.
+function isDetailsOrAbsent(value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  return (
+    isJsonObject(value) &&
+    Object.entries(value).every(
+      ([key, detail]) => isWorkDetail(detail) && detail.id === key,
+    )
+  );
+}
+
+type SavedWorkFile = Omit<WorkFile, 'suggestions' | 'notYet' | 'details'> & {
   suggestions: MaybeWithoutRowId<SavedSuggestion>[];
   notYet: MaybeWithoutRowId<WorkNotYet>[];
+  details?: Record<string, WorkDetail>;
 };
 
 function isWorkFile(value: unknown): value is SavedWorkFile {
-  const isListOf = (list: unknown, isEntry: (entry: unknown) => boolean) =>
-    Array.isArray(list) && list.every(isEntry);
   return (
     isJsonObject(value) &&
     isListOf(value.items, isWorkItem) &&
@@ -207,13 +306,15 @@ function isWorkFile(value: unknown): value is SavedWorkFile {
     isJsonObject(value.job) &&
     isJobStatusOrNull(value.job.running) &&
     isJobStatusOrNull(value.job.last) &&
-    isNullableString(value.lastSweepAt)
+    isNullableString(value.lastSweepAt) &&
+    isDetailsOrAbsent(value.details)
   );
 }
 
 // The work `work.json` holds, without the top-level keys it does not read, a suggestion or mark saved with no `rowId`
-// given a null one; throws `work.json is not a work file` for text that is not JSON, or any key or element whose
-// fields are not of their kinds.
+// given a null one, and a file saved with no `details` given `{}`; throws `work.json is not a work file` for text that
+// is not JSON, any key or element whose fields are not of their kinds, or a detail record filed under a key other than
+// its `id`.
 export function parseWorkFile(text: string): WorkFile {
   const notAWorkFile = new Error('work.json is not a work file');
   let parsed: unknown;
@@ -225,7 +326,8 @@ export function parseWorkFile(text: string): WorkFile {
   if (!isWorkFile(parsed)) {
     throw notAWorkFile;
   }
-  const { items, cards, suggestions, notYet, job, lastSweepAt } = parsed;
+  const { items, cards, suggestions, notYet, job, lastSweepAt, details } =
+    parsed;
   return {
     items,
     cards,
@@ -233,6 +335,7 @@ export function parseWorkFile(text: string): WorkFile {
     notYet: notYet.map((mark) => withRowId<WorkNotYet>(mark)),
     job: { running: job.running, last: job.last },
     lastSweepAt,
+    details: details ?? {},
   };
 }
 

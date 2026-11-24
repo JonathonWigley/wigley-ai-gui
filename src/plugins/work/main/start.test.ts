@@ -21,13 +21,20 @@ import {
   type WorkJob,
   type WorkJobStatus,
   type WorkState,
+  workDetailsSlot,
   workStateSlot,
 } from '../contract';
-import { jiraCard, workItem } from '../contract.test-support';
+import {
+  jiraCard,
+  threadDetail,
+  ticketDetail,
+  workItem,
+} from '../contract.test-support';
 import { workManifest } from '../manifest';
 import { SNOOZE_MS } from './actions';
 import type { SeenSignal } from './detection';
 import type { JobOutcome, JobRunner, JobRunnerDeps } from './job-runner';
+import { FIXTURE_ITEM_IDS } from './selftest-fixture';
 import type { SignalDeps, SignalWatch } from './signals';
 import { JOB_ROWS_FILE, workMainPart } from './start';
 import {
@@ -233,6 +240,9 @@ function slotOf(harness: WorkHarness): WorkState {
   return state;
 }
 
+const detailsOf = (harness: WorkHarness) =>
+  harness.state.read(workDetailsSlot, 'test');
+
 const workLines = (harness: WorkHarness) =>
   harness.logs
     .filter((line) => line.source === 'work')
@@ -352,6 +362,38 @@ describe('workMainPart', () => {
     });
 
     expect(cardOf(harness, 'WS-1')?.column).toBe('Done');
+    await harness.stop();
+  });
+
+  it('start_detailsSlot — publishes each stored detail by id, and deletes one the store drops', async () => {
+    const records = { 'WS-1': ticketDetail('WS-1'), a: threadDetail('a') };
+    const { harness } = await open();
+    await harness.files.write(WORK_PATH, fileText({ details: records }));
+    const read = deferred<void>();
+    const realRead = harness.files.read;
+    vi.spyOn(harness.files, 'read').mockImplementation(async (path) => {
+      if (path === WORK_PATH) {
+        await read.promise;
+      }
+      return realRead(path);
+    });
+
+    await harness.restart();
+    await settled();
+    expect([...detailsOf(harness).all().keys()]).toEqual([]);
+    read.resolve();
+    await settled();
+    expect(Object.fromEntries(detailsOf(harness).all())).toEqual(records);
+    const kept = detailsOf(harness).get('WS-1');
+    await lastStore().update((file) => ({
+      ...file,
+      details: Object.fromEntries(
+        Object.entries(file.details).filter(([id]) => id !== 'a'),
+      ),
+    }));
+
+    expect(detailsOf(harness).get('a')).toBeUndefined();
+    expect(detailsOf(harness).get('WS-1')).toBe(kept);
     await harness.stop();
   });
 
@@ -996,7 +1038,7 @@ describe('workMainPart', () => {
     expect(isStopped).toBe(true);
   });
 
-  it('fixture — seed gives 7 items, 7 cards, 3 suggestions and badge 1', async () => {
+  it('fixture — seed gives 7 items, 7 cards, 3 suggestions, 4 details and badge 1', async () => {
     const { harness, badge } = await open({ runMode: 'drive', drive: true });
 
     const problems = await harness.drive?.run('seed', {});
@@ -1016,6 +1058,14 @@ describe('workMainPart', () => {
       { cardId: 'WRK-3', column: 'In QA', state: 'suggested' },
       { cardId: 'WRK-5', column: 'Done', state: 'done' },
     ]);
+    expect([...detailsOf(harness).all().keys()].sort()).toEqual(
+      [
+        'WRK-1',
+        'WRK-3',
+        FIXTURE_ITEM_IDS.needsYou,
+        FIXTURE_ITEM_IDS.around,
+      ].sort(),
+    );
     expect(badge.at(-1)).toBe(1);
     await harness.stop();
   });

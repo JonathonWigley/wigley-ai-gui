@@ -98,6 +98,8 @@ export const workManifest = definePlugin({
     broadcastChannels: ['general', 'announcements'] as string[],
     keywords: [] as string[],
     stallHours: 24,
+    detailComments: 10,
+    threadReplies: 5,
     jiraQuery:
       'assignee = currentUser() AND (statusCategory != Done OR resolved >= -14d) ORDER BY updated DESC',
     columns: [
@@ -154,6 +156,16 @@ export const workManifest = definePlugin({
       label: 'Stall hours',
       description:
         'Hours of quiet before a thread counts as Waiting on others.',
+    },
+    detailComments: {
+      label: 'Ticket comments',
+      description:
+        "How many of the newest Jira comments a ticket's detail keeps.",
+    },
+    threadReplies: {
+      label: 'Thread replies',
+      description:
+        "How many of the newest Slack replies a thread's detail keeps under its root message.",
     },
     jiraQuery: {
       label: 'Jira query',

@@ -1,6 +1,6 @@
 import type { CommandKey } from '../../contracts/commands';
 import type { ChannelShape } from '../../contracts/plugin';
-import type { SlotKey } from '../../contracts/state';
+import type { KeyedSlotKey, SlotKey } from '../../contracts/state';
 import { isJsonObject, isStringArray } from '../../shared/json';
 
 // The Inbox's sections, in the order it shows them.
@@ -300,6 +300,56 @@ export const workStateSlot: SlotKey<WorkState, 'main', 'work'> = {
   id: 'work.state',
   process: 'main',
   kind: 'value',
+};
+
+export interface DetailMessage {
+  readonly author: string;
+  readonly at: string; // ISO time
+  readonly text: string; // markdown
+}
+
+export interface LinkedIssue {
+  readonly key: string;
+  readonly title: string;
+  readonly status: string;
+  readonly relation: string | null; // "blocks", "is blocked by", … ; null for a subtask
+  readonly url: string;
+}
+
+export interface TicketDetail {
+  readonly kind: 'ticket';
+  readonly id: string; // the Jira key, same as the card id
+  readonly fetchedAt: string; // ISO, set by main when the record lands
+  readonly stamp: string; // Jira's `updated` value; the sweep's skip key
+  readonly type: string | null;
+  readonly priority: string | null;
+  readonly status: string;
+  readonly assignee: string | null;
+  readonly reporter: string | null;
+  readonly updated: string; // ISO
+  readonly description: string; // markdown; '' for none
+  readonly comments: readonly DetailMessage[]; // oldest first, at most work.detailComments
+  readonly subtasks: readonly LinkedIssue[];
+  readonly links: readonly LinkedIssue[];
+}
+
+export interface ThreadDetail {
+  readonly kind: 'thread';
+  readonly id: string; // the WorkItem id (root permalink)
+  readonly fetchedAt: string;
+  readonly stamp: string; // the latest reply's Slack ts; the sweep's skip key
+  readonly root: DetailMessage;
+  readonly replies: readonly DetailMessage[]; // oldest first, at most work.threadReplies
+  readonly replyCount: number; // every reply in the thread, shown or not
+}
+
+export type WorkDetail = TicketDetail | ThreadDetail;
+
+// Each stored detail record under its `id`, a Jira key or a `WorkItem` id; no entry until main has read `work.json`.
+export const workDetailsSlot: KeyedSlotKey<WorkDetail, 'main', 'work'> = {
+  id: 'work.details',
+  process: 'main',
+  kind: 'keyed',
 };
 
 export interface WorkSendArg {

@@ -1,5 +1,7 @@
 import type {
+  DetailMessage,
   WorkCard,
+  WorkDetail,
   WorkItem,
   WorkItemState,
   WorkSection,
@@ -7,8 +9,9 @@ import type {
 import type { SeenSignal } from './detection';
 import { EMPTY_WORK_FILE, type WorkFile } from './store';
 
-// The self-test's and drive run's sample work: seven Slack items, six Jira cards and one local task, and three
-// signals that suggest two moves and mark one done. No item, card or signal names a real place.
+// The self-test's and drive run's sample work: seven Slack items, six Jira cards and one local task, four detail
+// records (two tickets, two threads), and three signals that suggest two moves and mark one done. No item, card,
+// record or signal names a real place.
 
 export const FIXTURE_ITEM_IDS: Readonly<
   Record<
@@ -177,11 +180,106 @@ function jiraCard(
   };
 }
 
-// The sample `work.json` at `now` (epoch ms): the items, then the cards in Board order, with no suggestions until
-// detection runs over the signals.
+// A Slack ts `minutes` before `now`: seconds since the epoch, to the microsecond.
+const slackTsBefore = (now: number, minutes: number) =>
+  ((now - minutes * MINUTE_MS) / 1000).toFixed(6);
+
+const message = (author: string, at: string, text: string): DetailMessage => ({
+  author,
+  at,
+  text,
+});
+
+const issue = (
+  key: string,
+  title: string,
+  status: string,
+  relation: string | null,
+) => ({
+  key,
+  title,
+  status,
+  relation,
+  url: `https://jira.example/browse/${key}`,
+});
+
+// Ticket details for WRK-1 and WRK-3, and thread details for the Needs you and Around items, each thread ending at its
+// item's `at`.
+function fixtureDetails(now: number): Record<string, WorkDetail> {
+  const records: WorkDetail[] = [
+    {
+      kind: 'ticket',
+      id: 'WRK-1',
+      fetchedAt: isoBefore(now, 5),
+      stamp: isoBefore(now, 90),
+      type: 'Bug',
+      priority: null,
+      status: 'Backlog',
+      assignee: 'Dee',
+      reporter: 'Ann',
+      updated: isoBefore(now, 90),
+      description: 'The sample report shows **two** totals for one day.',
+      comments: [
+        message('Ann', isoBefore(now, 180), 'Seen on the sample data too.'),
+        message('Bo', isoBefore(now, 90), 'It could be the `totals` rounding.'),
+      ],
+      subtasks: [issue('WRK-7', 'Check the rounding', 'To Do', null)],
+      links: [issue('WRK-3', 'Tidy pass', 'In Progress', 'blocks')],
+    },
+    {
+      kind: 'ticket',
+      id: 'WRK-3',
+      fetchedAt: isoBefore(now, 5),
+      stamp: isoBefore(now, 240),
+      type: 'Task',
+      priority: 'High',
+      status: 'In Progress',
+      assignee: 'Dee',
+      reporter: 'Eli',
+      updated: isoBefore(now, 240),
+      description:
+        'Tidy the sample module:\n\n- rename the helpers\n- drop the dead branch',
+      comments: [],
+      subtasks: [],
+      links: [],
+    },
+    {
+      kind: 'thread',
+      id: FIXTURE_ITEM_IDS.needsYou,
+      fetchedAt: isoBefore(now, 5),
+      stamp: slackTsBefore(now, 10),
+      root: message('Ann', isoBefore(now, 40), 'Can you look at WRK-1?'),
+      replies: [
+        message('Bo', isoBefore(now, 20), 'I saw it too on the sample data.'),
+        message('Ann', isoBefore(now, 10), 'Today would be great.'),
+      ],
+      replyCount: 2,
+    },
+    {
+      kind: 'thread',
+      id: FIXTURE_ITEM_IDS.around,
+      fetchedAt: isoBefore(now, 5),
+      stamp: slackTsBefore(now, 50),
+      root: message(
+        'Eli',
+        isoBefore(now, 120),
+        'Starting the tidy pass on WRK-3.',
+      ),
+      replies: [
+        message('Eli', isoBefore(now, 50), 'How is the tidy pass going?'),
+      ],
+      replyCount: 3,
+    },
+  ];
+  return Object.fromEntries(records.map((record) => [record.id, record]));
+}
+
+// The sample `work.json` at `now` (epoch ms): the items, then the cards in Board order, then the detail records, with
+// no suggestions until detection runs over the signals.
 export function fixtureFile(now: number): WorkFile {
   return {
     ...EMPTY_WORK_FILE,
+    details: fixtureDetails(now),
     items: ITEM_SHAPES.map((shape, index) => fixtureItem(shape, index, now)),
     cards: [
       jiraCard('WRK-1', 'Backlog', null, 'Look into the sample report'),
