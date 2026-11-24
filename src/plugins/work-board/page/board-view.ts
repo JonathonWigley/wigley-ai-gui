@@ -211,7 +211,7 @@ export interface BoardView {
   commands: Record<BoardCommand, () => void>;
   // Shows the mode with the cursor on card `key`, scrolled into view and flashed, the board focused.
   showTicket(key: string): void;
-  // Puts the cursor on card `id`, the board focused.
+  // Puts the cursor on card `id`, the board focused, unless that card's own box holds the focus, which keeps it.
   selectCard(id: string): void;
   // Shows the open threads holding `key` in the Inbox.
   openThreads(key: string): void;
@@ -333,9 +333,22 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       .querySelector('.is-cursor')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   };
-  // The board pane narrows as the detail pane opens, its divider moves or the window resizes, which can leave the
-  // cursor card behind the detail pane.
-  const boardPaneSize = new ResizeObserver(revealCursorCard);
+  // The board pane narrows as the detail pane opens, its divider moves or the window narrows, which can leave the
+  // cursor card behind the detail pane; a widen or a height change leaves the columns where the user scrolled them.
+  // The width at the last observation, null before the first.
+  let boardPaneWidth: number | null = null;
+  const boardPaneSize = new ResizeObserver((entries) => {
+    const entry = entries.at(-1);
+    if (entry === undefined) {
+      return;
+    }
+    const { width } = entry.contentRect;
+    const isNarrowed = boardPaneWidth !== null && width < boardPaneWidth;
+    boardPaneWidth = width;
+    if (isNarrowed) {
+      revealCursorCard();
+    }
+  });
   boardPaneSize.observe(boardPane);
   let statusDraws: DrawnRoot[] = [];
   let columnDraws: DrawnRoot[] = [];
@@ -645,21 +658,42 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       ),
     }));
 
-  // Draws the detail pane while it is open: the cursor card's detail, or the empty part with none. True when the
-  // redraw dropped the focused box without placing it again.
+  // Whether the user is in the detail pane: its box holds the focus, or a text selection lies in it.
+  const isUserInPane = (): boolean => {
+    if (boxes.active() !== null) {
+      return true;
+    }
+    const selection = window.getSelection();
+    return (
+      selection !== null &&
+      !selection.isCollapsed &&
+      (detailPane.contains(selection.anchorNode) ||
+        detailPane.contains(selection.focusNode))
+    );
+  };
+
+  // The time the detail pane's ages read. It holds while the user is in the pane, so only a change of what the pane
+  // shows redraws it, never an age moving: a redraw re-places the box and drops the selection.
+  let paneNow = deps.now();
+
+  // Draws the detail pane while it is open: the cursor card's detail, or the empty part with none. A redraw for the card
+  // last drawn keeps the pane's scroll; one for another card scrolls it to the top. True when the redraw dropped the
+  // focused box without placing it again.
   const drawDetail = (state: BoardViewState, work: WorkState): boolean => {
     split.setEndHidden(!state.paneOpen);
+    if (!isUserInPane()) {
+      paneNow = deps.now();
+    }
     const card = state.paneOpen ? cursorCard(state, work) : null;
     const input =
-      card === null
-        ? null
-        : paneInputOf(card, work, shownDetails(), deps.now());
+      card === null ? null : paneInputOf(card, work, shownDetails(), paneNow);
     let isBoxDropped = false;
     // The box's own text is left out, so typing never redraws the pane.
     const key = JSON.stringify([state.paneOpen, input]);
     if (key !== drawnDetailKey) {
       drawnDetailKey = key;
       const wasBoxFocused = boxes.active() !== null;
+      const scrollTop = detailPane.scrollTop;
       isRedrawingPane = true;
       try {
         keepFocusedBox(boxes, BOX_FORM, () => {
@@ -680,10 +714,9 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       }
       isBoxDropped = wasBoxFocused && boxes.active() === null;
       const shownCard = card?.id ?? null;
-      if (shownCard !== drawnDetailCard) {
-        drawnDetailCard = shownCard;
-        detailPane.scrollTop = 0;
-      }
+      const isSameCard = shownCard === drawnDetailCard;
+      drawnDetailCard = shownCard;
+      detailPane.scrollTop = isSameCard ? scrollTop : 0;
     }
     const box = input?.box ?? null;
     const hasEditableBox = box !== null && box.sending === null;
@@ -783,7 +816,8 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   drawBoardPane();
   store.subscribe(() => render());
 
-  // The status line's and the detail pane's ages, again once a minute.
+  // The status line's and the detail pane's ages, again once a minute; the pane's hold while the user is in it
+  // (`paneNow`).
   let statusTimer: number | null = null;
   const redrawStatus = () => {
     const state = store.get();

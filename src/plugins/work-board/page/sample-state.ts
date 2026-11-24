@@ -68,7 +68,7 @@ function sampleItem(at: string): WorkItem {
   };
 }
 
-// The Board demo's sample: every default column, Jira cards in three of them (one with a priority), one in Other,
+// The Board demo's sample: every default column, Jira cards in four of them (one with a priority), one in Other,
 // one with a suggestion and a queued comment and one moving, a local task in Todo, a thread for the suggestion card,
 // and a finished sweep with a transcript.
 export function sampleBoardState(now: number): WorkState {

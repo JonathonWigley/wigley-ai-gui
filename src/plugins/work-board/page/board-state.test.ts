@@ -501,6 +501,7 @@ describe('paneInputOf', () => {
     id: 'local-1',
     title: 'Task local-1',
     url: null,
+    hasThread: true,
     source: {
       channel: '#team',
       participants: ['Ann', 'Bo'],
@@ -659,6 +660,11 @@ describe('paneInputOf', () => {
       card: localCard('local-1', 'Todo'),
       items: [sourceItem()],
       details: [threadDetail('t1')],
+      expected: { ...TASK, hasThread: false, source: null, box: null },
+    },
+    {
+      case: 'a local task whose source item the Inbox no longer holds',
+      card: task,
       expected: { ...TASK, source: null, box: null },
     },
   ])(

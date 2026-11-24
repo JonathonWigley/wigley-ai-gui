@@ -269,6 +269,7 @@ function taskPaneInput(
     id: card.id,
     title: card.title,
     url: card.url,
+    hasThread: card.sourceItemId !== null,
     source:
       item === null
         ? null

@@ -125,7 +125,7 @@ function messageBlock(parent, message, kit) {
   const head = kit.el(root, 'div', 'work-board-detail-message-head');
   kit.el(head, 'span', 'work-board-detail-author', message.author);
   kit.el(head, 'span', 'work-board-detail-age', message.age);
-  kit.markdown(root, message.text, 'work-board-detail-text');
+  kit.markdown(root, message.text, 'work-board-detail-text md');
 }
 
 /**
@@ -193,7 +193,7 @@ function ticketDetail(parent, detail, kit) {
   if (detail.description === '') {
     kit.el(parent, 'p', 'work-board-detail-none', 'No description.');
   } else {
-    kit.markdown(parent, detail.description, 'work-board-detail-text');
+    kit.markdown(parent, detail.description, 'work-board-detail-text md');
   }
   kit.sectionHeader(parent, 'Comments');
   if (detail.comments.length === 0) {
@@ -227,7 +227,8 @@ function threadRows(parent, threads, kit) {
 }
 
 /**
- * The pane's head: a ticket's key or a task's Tag, the title, the open hint, then when the detail was fetched.
+ * The pane's head: a ticket's key or a task's Tag, the title, the open hint while the card has a link, then when the
+ * detail was fetched.
  * @param {HTMLElement} parent
  * @param {import('../layout').DetailInput} input
  * @param {import('../layout').BoardKit} kit
@@ -241,10 +242,12 @@ function detailHead(parent, input, kit) {
     kit.tag(title, 'Local task');
   }
   kit.el(title, 'span', 'work-board-detail-title', input.title);
-  kit.keyHint(head, 'openCard', {
-    label: input.kind === 'ticket' ? 'open in Jira' : 'open in Slack',
-    className: 'work-board-box-hint',
-  });
+  if (input.url !== null) {
+    kit.keyHint(head, 'openCard', {
+      label: input.kind === 'ticket' ? 'open in Jira' : 'open in Slack',
+      className: 'work-board-box-hint',
+    });
+  }
   if (input.fetched !== null) {
     kit.el(head, 'p', 'work-board-detail-fetched', input.fetched);
   }
@@ -273,14 +276,14 @@ function ticketPane(root, input, kit) {
     missingDetail(root, kit);
   } else {
     ticketDetail(root, input.detail, kit);
-    threadRows(root, input.threads, kit);
   }
+  threadRows(root, input.threads, kit);
   kit.sectionHeader(root, 'Comment');
   kit.box(root);
   for (const text of input.posting) {
     const block = kit.el(root, 'div', 'work-board-detail-posting');
     kit.el(block, 'p', 'work-board-posting', 'Posting…');
-    kit.markdown(block, text, 'work-board-detail-text');
+    kit.markdown(block, text, 'work-board-detail-text md');
   }
   noteLine(root, input.note, kit);
 }
@@ -325,7 +328,9 @@ function taskPane(root, input, kit) {
       root,
       'p',
       'work-board-detail-missing',
-      'This task has no Slack thread.',
+      input.hasThread
+        ? 'Its Slack thread is no longer in the Inbox.'
+        : 'This task has no Slack thread.',
     );
   } else {
     if (source !== null) {

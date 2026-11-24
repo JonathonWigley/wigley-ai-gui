@@ -11,8 +11,10 @@ import type { DragReorderEvents } from '../../../shared/page/ui/drag-reorder';
 import {
   asFake,
   type FakeElement,
+  fakeWindow,
   findAll,
   installFocusFakeDom,
+  ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
 import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
 import {
@@ -176,7 +178,7 @@ const detailMap = (details: readonly WorkDetail[]) =>
 
 // A Board view over `state` (none landed yet when undefined), shown. `runs` holds each reporting run as `[id, arg]`,
 // `opened` each `core.openLink` run, `calls` each `showMode`, `scopes` and `resizeTargets` each set, `boxes` each vim
-// box made, and `logs`, `toasts` and `places` what the view wrote.
+// box made, `anchors` each key hint anchored, and `logs`, `toasts` and `places` what the view wrote.
 function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
   const places: WorkBoardPlace[] = [];
@@ -189,7 +191,7 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const editors = fakeEditors();
   // What `now` reads; a test moves it with the timers.
   const clock = { ms: NOW };
-  const { keys } = recordingAnchors();
+  const { anchors, keys } = recordingAnchors();
   let isShown = false;
   let view: BoardView | null = null;
   // Each kit or key run, routed as the page part routes it.
@@ -276,6 +278,7 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     scopes,
     resizeTargets,
     boxes: editors.boxes,
+    anchors,
     clock,
   };
 }
@@ -288,15 +291,16 @@ async function settle() {
   }
 }
 
-// Stubs ResizeObserver with observers that report only when the returned `resize` runs each observer of its target,
-// as the browser does when that element resizes.
-function recordResizeObservers(): (target: unknown) => void {
-  const observers: { callback: () => void; observed: Set<unknown> }[] = [];
+// Stubs ResizeObserver with observers that report only when the returned `resize` runs each observer of its target
+// with the target's new content width, as the browser does when that element resizes.
+function recordResizeObservers(): (target: unknown, width: number) => void {
+  type Callback = (entries: { contentRect: { width: number } }[]) => void;
+  const observers: { callback: Callback; observed: Set<unknown> }[] = [];
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      private record: { callback: () => void; observed: Set<unknown> };
-      constructor(callback: () => void) {
+      private record: { callback: Callback; observed: Set<unknown> };
+      constructor(callback: Callback) {
         this.record = { callback, observed: new Set() };
         observers.push(this.record);
       }
@@ -311,10 +315,10 @@ function recordResizeObservers(): (target: unknown) => void {
       }
     },
   );
-  return (target) => {
+  return (target, width) => {
     for (const { callback, observed } of observers) {
       if (observed.has(target)) {
-        callback();
+        callback([{ contentRect: { width } }]);
       }
     }
   };
@@ -750,20 +754,35 @@ describe('createBoardView', () => {
     ]);
   });
 
-  it('a resize of the board pane, as the pane opens or its divider moves, scrolls the cursor card into view', () => {
-    const resize = recordResizeObservers();
-    const each = started(PANE_BOARD, { details: DETAILS });
-    const reveal = vi.spyOn(cardTitled(each, 'Ticket ABC-1'), 'scrollIntoView');
-    each.view.commands.togglePane();
-    reveal.mockClear();
+  it.each([
+    { case: 'a narrow, as the pane opens', widths: [1000, 600], reveals: true },
+    {
+      case: 'a widen, as the divider moves',
+      widths: [600, 1000],
+      reveals: false,
+    },
+    { case: 'a height-only change', widths: [800, 800], reveals: false },
+  ])(
+    'a board pane resize scrolls the cursor card into view only when the pane narrows: $case',
+    ({ widths, reveals }) => {
+      const resize = recordResizeObservers();
+      const each = started(PANE_BOARD, { details: DETAILS });
+      const reveal = vi.spyOn(
+        cardTitled(each, 'Ticket ABC-1'),
+        'scrollIntoView',
+      );
+      const [before, after] = widths;
+      resize(boardPaneOf(each), before);
+      each.view.commands.togglePane();
+      reveal.mockClear();
 
-    resize(boardPaneOf(each));
+      resize(boardPaneOf(each), after);
 
-    expect(reveal).toHaveBeenCalledWith({
-      block: 'nearest',
-      inline: 'nearest',
-    });
-  });
+      expect(reveal.mock.calls).toEqual(
+        reveals ? [[{ block: 'nearest', inline: 'nearest' }]] : [],
+      );
+    },
+  );
 
   it('the pane follows the cursor and scrolls back to the top on a move', () => {
     const each = started(PANE_BOARD, { details: DETAILS });
@@ -778,6 +797,70 @@ describe('createBoardView', () => {
     expect(paneOf(each).scrollTop).toBe(0);
   });
 
+  it("a redraw for the same card keeps the pane's scroll", () => {
+    // A browser drops a scroller's scroll as its content goes.
+    installFocusFakeDom(vi.stubGlobal, ShrinkingScrollerFakeElement);
+    const each = started(PANE_BOARD, { details: DETAILS });
+    each.view.commands.togglePane();
+    paneOf(each).scrollTop = 50;
+
+    each.view.detailsChanged(
+      detailMap([
+        ticketDetail('ABC-1', { assignee: 'Cy' }),
+        ...DETAILS.slice(1),
+      ]),
+    );
+
+    expect(paneOf(each).textContent).toContain('AssigneeCy');
+    expect(paneOf(each).scrollTop).toBe(50);
+  });
+
+  it.each([
+    {
+      case: 'the card with its link',
+      card: inColumn('ABC-1', 'Todo'),
+      hasHint: true,
+    },
+    {
+      case: 'a task with no link',
+      card: localCard('local-1', 'Todo'),
+      hasHint: false,
+    },
+  ])(
+    "the pane's head draws the open hint only with a link: $case",
+    ({ card, hasHint }) => {
+      const each = started(board([card]));
+
+      each.view.commands.togglePane();
+
+      expect(
+        each.anchors.some(
+          (anchor) =>
+            !anchor.isDisposed && anchor.command === 'work-board.openCard',
+        ),
+      ).toBe(hasHint);
+    },
+  );
+
+  it.each([
+    {
+      case: 'a task with no thread',
+      card: localCard('local-1', 'Todo'),
+      line: 'This task has no Slack thread.',
+    },
+    {
+      case: 'a task whose thread left the Inbox',
+      card: localCard('local-1', 'Todo', { sourceItemId: 't9' }),
+      line: 'Its Slack thread is no longer in the Inbox.',
+    },
+  ])('a task pane with no thread to show says why: $case', ({ card, line }) => {
+    const each = started(board([card]));
+
+    each.view.commands.togglePane();
+
+    expect(paneOf(each).textContent).toContain(line);
+  });
+
   it('an open pane with no cursor card draws the empty part', () => {
     const each = started(board([]));
 
@@ -786,14 +869,23 @@ describe('createBoardView', () => {
     expect(paneOf(each).textContent).toBe('No card selected.');
   });
 
-  it('a Jira card with no stored detail draws the missing line and the comment box', () => {
-    const each = started(board([inColumn('ABC-9', 'Todo')]));
+  it('a Jira card with no stored detail draws the missing line, its open threads and the comment box', () => {
+    const each = started(
+      board([inColumn('ABC-9', 'Todo')], {
+        items: [workItem('t1', { ticketKeys: ['ABC-9'], summary: 'QA asks.' })],
+      }),
+    );
 
     each.view.commands.togglePane();
 
     expect(paneOf(each).textContent).toContain(
       'No detail yet: the next sweep fetches it.',
     );
+    expect(
+      findAll(paneOf(each), 'work-board-detail-summary').map(
+        (line) => line.textContent,
+      ),
+    ).toEqual(['QA asks.']);
     expect(findAll(paneOf(each), 'work-board-box')).toHaveLength(1);
     expect(each.boxes).toHaveLength(1);
   });
@@ -989,6 +1081,25 @@ describe('createBoardView', () => {
     expect(paneOf(each).textContent).not.toContain('Sample person');
   });
 
+  it('a restored draft fills the box, and the placeholder shows only while the box is empty', () => {
+    const each = started(PANE_BOARD, {
+      savedPlace: {
+        cursorCardId: 'ABC-1',
+        paneOpen: true,
+        drafts: { 'ABC-1': 'saved text' },
+      },
+    });
+    const isEmpty = () =>
+      findAll(paneOf(each), 'work-board-box')[0].classList.contains('is-empty');
+
+    expect(each.boxes.at(-1)?.text).toBe('saved text');
+    expect(isEmpty()).toBe(false);
+
+    each.boxes.at(-1)?.type('');
+
+    expect(isEmpty()).toBe(true);
+  });
+
   it('hidden leaves the focused box', () => {
     const each = started(PANE_BOARD);
     each.view.commands.enterBox();
@@ -998,15 +1109,62 @@ describe('createBoardView', () => {
     expect(each.boxes[0].isFocused).toBe(false);
   });
 
-  it("the pane's ages redraw once a minute", () => {
+  // A text selection whose anchor is the first element of `root` with class `className`.
+  const selectIn = (root: FakeElement, className: string) => {
+    const anchorNode = findAll(root, className)[0];
+    Object.assign(fakeWindow(), {
+      getSelection: () => ({ isCollapsed: false, anchorNode }),
+    });
+  };
+
+  it.each([
+    {
+      case: 'nothing in the pane',
+      select: () => {},
+      fetched: 'Fetched 4m ago',
+    },
+    {
+      case: 'a selection on the board',
+      select: (each: Setup) => selectIn(boardPaneOf(each), 'work-board-card'),
+      fetched: 'Fetched 4m ago',
+    },
+    {
+      case: 'a selection inside the pane waits',
+      select: (each: Setup) =>
+        selectIn(paneOf(each), 'work-board-detail-title'),
+      fetched: 'Fetched 3m ago',
+    },
+  ])("the pane's ages redraw once a minute: $case", ({ select, fetched }) => {
     vi.useFakeTimers();
     const each = started(PANE_BOARD, { details: DETAILS });
     each.view.commands.togglePane();
     expect(paneOf(each).textContent).toContain('Fetched 3m ago');
+    select(each);
 
     each.clock.ms += 60_000;
     vi.advanceTimersByTime(60_000);
 
-    expect(paneOf(each).textContent).toContain('Fetched 4m ago');
+    expect(paneOf(each).textContent).toContain(fetched);
+  });
+
+  it('a minute tick, and the typing after it, while the box holds the focus leave the box and the pane as they are', () => {
+    vi.useFakeTimers();
+    const each = started(PANE_BOARD, { details: DETAILS });
+    each.view.commands.enterBox();
+    const drawn = findAll(paneOf(each), 'work-board-detail-pane')[0];
+
+    each.clock.ms += 60_000;
+    vi.advanceTimersByTime(60_000);
+    each.boxes[0].type('half a thought');
+
+    expect(findAll(paneOf(each), 'work-board-detail-pane')[0]).toBe(drawn);
+    expect(paneOf(each).textContent).toContain('Fetched 3m ago');
+    expect(each.boxes).toHaveLength(1);
+    expect(each.boxes[0]).toMatchObject({
+      text: 'half a thought',
+      isFocused: true,
+      isDestroyed: false,
+    });
+    expect(each.scopes.at(-1)).toBe('box');
   });
 });

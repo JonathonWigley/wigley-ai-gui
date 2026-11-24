@@ -191,14 +191,15 @@ export interface TicketPaneInput {
   note: string | null;
 }
 
-// A local task's pane. `source` is the Slack thread the task came from, null for none; `detail` is that thread's stored
-// detail, null for none; `fetched` is as on a ticket. `box` is the reply box while the thread is open in the Inbox,
-// else null.
+// A local task's pane. `hasThread` is whether the task came from a Slack thread; `source` is that thread's Inbox item,
+// null for none or one the Inbox no longer holds; `detail` is the thread's stored detail, null for none; `fetched` is as
+// on a ticket. `box` is the reply box while the thread is open in the Inbox, else null.
 export interface TaskPaneInput {
   kind: 'task';
   id: string;
   title: string;
   url: string | null;
+  hasThread: boolean;
   source: DetailSourceInput | null;
   fetched: string | null;
   detail: ThreadDetailInput | null;
