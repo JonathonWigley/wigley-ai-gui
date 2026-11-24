@@ -545,6 +545,17 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         return texts.length === 0 ? null : texts.join('; ');
       }
 
+      // True when the backend has no instance and gets none until its settings change: no parsed entry, or a create
+      // that answered a problem.
+      function neverLists(backend: ParsedBackend): boolean {
+        const backendLive = live.get(backend.id);
+        const hasFailedToStart =
+          backendLive !== undefined &&
+          backendLive.instance === null &&
+          backendLive.problem !== null;
+        return backend.entry === null || hasFailedToStart;
+      }
+
       function backendStates(): BackendState[] {
         return parsed.map((backend) => ({
           id: backend.id,
@@ -552,6 +563,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
           label: backend.label,
           problem: headingProblem(backend),
           capabilities: live.get(backend.id)?.instance?.capabilities ?? null,
+          neverLists: neverLists(backend),
           games: (backend.entry?.games ?? []).map((game) => {
             const gameRecords = records.get(backend.id)?.get(game.id);
             return {

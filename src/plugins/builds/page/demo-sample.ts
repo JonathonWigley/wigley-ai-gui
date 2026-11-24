@@ -108,6 +108,7 @@ export function demoSample(now: number): BuildsSnapshot {
         label: 'Sample CI',
         problem: null,
         capabilities: { cancel: true, choosesBranch: true, saveLog: true },
+        neverLists: false,
         games: [
           {
             backendId: BACKEND,

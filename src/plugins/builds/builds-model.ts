@@ -65,6 +65,7 @@ export interface BackendState {
   label: string;
   problem: string | null;
   capabilities: BackendCapabilities | null;
+  neverLists: boolean;
   games: GameState[];
 }
 
@@ -131,6 +132,7 @@ export function foldBuilds(input: BuildsModelInput): BuildsFold {
         label: backend.label,
         problem: backend.problem,
         capabilities: backend.capabilities,
+        neverLists: backend.neverLists,
         games: backend.games.map((state) =>
           gameView(backend.id, state, input.setRuns),
         ),

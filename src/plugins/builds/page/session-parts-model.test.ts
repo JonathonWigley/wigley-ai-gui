@@ -37,6 +37,7 @@ function snapshotOf(builds: BuildRecord[]): BuildsSnapshot {
         label: 'Work',
         problem: null,
         capabilities: { cancel: true, choosesBranch: true, saveLog: false },
+        neverLists: false,
         games: [
           {
             backendId: 'work',

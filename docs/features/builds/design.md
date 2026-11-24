@@ -235,7 +235,11 @@ every parse is tested over recorded JSON.
   that has a failed job while it still runs (once per build), a linked build whose state moved to
   `finished`, and a set whose last build finished. A set's build that no list holds counts as ended 10 minutes
   after the set run was made, but only once its game has listed. A game's `GameView.listed` says whether the entry's
-  current instance has listed it: false at start and after each re-apply until its first good list. It is tested by
+  current instance has listed it: false at start and after each re-apply until its first good list. A backend's
+  `BackendView.neverLists` says it has no instance and gets none until its settings change: its entry did not parse,
+  its kind is off or missing, or its instance failed to start. Its `problem` is no such signal, since it also joins a
+  live instance's parse and list problems. The page puts back a saved place once every game it waits on has listed or
+  sits in a backend that never lists, and drops a saved game's place once a backend that can list lacks it. It is tested by
   tables over built records.
 - **Finish detection** survives a restart: each session link carries a `failingNotified` and a
   `notified` flag in plugin data, each written before its message is sent, so nothing is told

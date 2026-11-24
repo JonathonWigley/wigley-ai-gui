@@ -63,6 +63,7 @@ function backendView(
     label: id.toUpperCase(),
     problem: null,
     capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+    neverLists: false,
     games,
     ...changes,
   };

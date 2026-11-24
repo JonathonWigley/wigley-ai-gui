@@ -810,6 +810,53 @@ describe('buildsMainPart', () => {
     },
   );
 
+  it.each([
+    {
+      case: 'a live instance with a parse problem and a list failure',
+      setting: backendSetting({ games: [gameSetting(), gameSetting()] }),
+      kind: null,
+      neverLists: false,
+    },
+    {
+      case: 'an instance still starting',
+      setting: backendSetting({ kind: 'slow' }),
+      kind: SLOW_KIND,
+      neverLists: false,
+    },
+    {
+      case: 'a create that answers a problem',
+      setting: backendSetting(),
+      kind: {
+        kind: 'fixture',
+        label: 'Fixture',
+        create: () => Promise.resolve({ problem: 'no cli' }),
+      },
+      neverLists: true,
+    },
+    {
+      case: 'a kind that is off',
+      setting: backendSetting({ kind: 'off' }),
+      kind: null,
+      neverLists: true,
+    },
+    {
+      case: 'an entry that does not parse',
+      setting: backendSetting({ id: 5 }),
+      kind: null,
+      neverLists: true,
+    },
+  ])('never lists: $case', async ({ setting, kind, neverLists }) => {
+    const run = await startOnHarness({
+      backends: [setting],
+      kinds: (fixture) => [kind ?? fixtureBackendKind('fixture', fixture)],
+    });
+    run.fixture.failLists(new Error('offline'));
+
+    await run.ready();
+
+    expect(run.backendView()?.neverLists).toBe(neverLists);
+  });
+
   it('tells a failing build once, writing the flag first', async () => {
     const run = await startOnHarness({
       linksFile: { links: [sessionLink()] },

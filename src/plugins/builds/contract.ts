@@ -212,13 +212,15 @@ export interface GameView {
 }
 
 // One backend entry: `problem` names what is wrong with its entry or its last poll, null when nothing is;
-// `capabilities` is null while the backend has no instance.
+// `capabilities` is null while the backend has no instance. `neverLists` is true while it has no instance and gets
+// none until its settings change: its entry did not parse, its kind is off or missing, or its instance failed to start.
 export interface BackendView {
   id: string;
   kind: string;
   label: string;
   problem: string | null;
   capabilities: BackendCapabilities | null;
+  neverLists: boolean;
   games: GameView[];
 }
 

@@ -45,6 +45,7 @@ function backend(
     label: `Backend ${id}`,
     problem: null,
     capabilities: { cancel: true, choosesBranch: true, saveLog: false },
+    neverLists: false,
     games: [{ game, builds, subjects: {}, files: {}, listed }],
   };
 }

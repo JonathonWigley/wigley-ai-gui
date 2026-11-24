@@ -164,9 +164,9 @@ export interface BuildsViewDeps {
 // the nearest row still drawn, the job cursor to the build's default job, and the shown entry falls back to All.
 // It writes the entry and both cursors to `builds.place` after each change, and puts back the place the last page
 // wrote once its builds are in: a game's once that game has listed; All's once every game of its build's backend has
-// listed, or, with no build or that backend absent or with a problem, once every game is settled (listed, or in a
-// backend with a problem). It drops that place when the user moves first, or when a polled snapshot lacks its game
-// while the game's backend has no problem or is gone. It logs each download state `builds.downloads` reaches.
+// listed, or, with no build or that backend absent or never listing, once every game is settled (listed, or in a
+// backend that never lists). It drops that place when the user moves first, or when a polled snapshot lacks its game
+// while the game's backend can list or is gone. It logs each download state `builds.downloads` reaches.
 // `showSample` draws a sample's snapshot and session links in place of the slots' until it is dropped; while it
 // shows, the queue, cancel, with-agent, save, download and open commands do nothing and no place is written. Once
 // disposed, it draws and toasts nothing.
@@ -379,7 +379,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
 
   // The pending place once the shown snapshot has its entry's builds in, null otherwise or while a sample shows. A
   // game entry needs its game listed. All with a build needs every game of the build's backend listed; All with no
-  // build, or whose build's backend is absent or has a problem, needs at least one game and every game settled.
+  // build, or whose build's backend is absent or never lists, needs at least one game and every game settled.
   const restorablePlace = (): BuildsPlace | null => {
     if (pendingPlace === null || sample !== null) {
       return null;
@@ -396,7 +396,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
         ? undefined
         : backends.find((backend) => backend.id === keyBackendId(build));
     const isAllIn =
-      buildBackend !== undefined && buildBackend.problem === null
+      buildBackend !== undefined && !buildBackend.neverLists
         ? buildBackend.games.every((view) => view.listed)
         : backends.some((backend) => backend.games.length > 0) &&
           backends.every((backend) =>
@@ -405,9 +405,9 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     return isAllIn ? pendingPlace : null;
   };
 
-  // True when a polled snapshot lacks the pending game entry's game while its backend has no problem, or lacks that
-  // backend while others polled: the game left the settings, so the place never comes back. A backend with a problem
-  // keeps the place, since an entry that fails to parse lists no games.
+  // True when a polled snapshot lacks the pending game entry's game while its backend can list, or lacks that backend
+  // while others polled: the game left the settings, so the place never comes back. A backend that never lists keeps
+  // the place, since an entry that fails to parse lists no games.
   const isPendingGameGone = (): boolean => {
     if (
       pendingPlace === null ||
@@ -422,10 +422,11 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
       (backend) => backend.id === backendId,
     );
     const hasPolled = shown.polledAt !== null && shown.backends.length > 0;
-    const isBackendBroken =
-      entryBackend !== undefined && entryBackend.problem !== null;
+    const isBackendNeverListing = entryBackend?.neverLists === true;
     return (
-      hasPolled && !isBackendBroken && !lookup.games.has(pendingPlace.entry)
+      hasPolled &&
+      !isBackendNeverListing &&
+      !lookup.games.has(pendingPlace.entry)
     );
   };
 
@@ -1445,9 +1446,9 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   };
 }
 
-// True when `view` will not hold a restore back: it has listed, or its backend has a problem and may never list it.
+// True when `view` will not hold a restore back: it has listed, or its backend never lists.
 function isSettled(backend: BackendView, view: GameView): boolean {
-  return view.listed || backend.problem !== null;
+  return view.listed || backend.neverLists;
 }
 
 // The backend id of a `<backendId>/<id>` game or build key: the part before the first `/`.

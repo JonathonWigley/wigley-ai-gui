@@ -67,6 +67,8 @@ const G1 = 'work/g1';
 
 interface Fixture {
   capabilities?: BackendCapabilities | null;
+  // Backend `work`'s problem; null when left out.
+  problem?: string | null;
   clone?: string | null;
   g1Builds?: BuildRecord[];
   g1Files?: Record<string, BuildFile[]>;
@@ -116,11 +118,12 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
         id: 'work',
         kind: 'fixture',
         label: 'Work',
-        problem: null,
+        problem: fixture.problem ?? null,
         capabilities:
           fixture.capabilities === undefined
             ? { cancel: true, choosesBranch: true, saveLog: false }
             : fixture.capabilities,
+        neverLists: false,
         games: [
           g1View(fixture),
           {
@@ -647,6 +650,7 @@ describe('buildsPagePart', () => {
       label: 'Off',
       problem: null,
       capabilities: null,
+      neverLists: false,
       games: [
         {
           backendId: 'off',
@@ -1272,6 +1276,7 @@ describe('buildsPagePart', () => {
     label: 'CI',
     problem: 'no backend kind "missing": its plugin is off or missing',
     capabilities: null,
+    neverLists: true,
     games: [
       {
         backendId: 'ci',
@@ -1288,6 +1293,14 @@ describe('buildsPagePart', () => {
     listed: false,
     extraBackends: [KIND_OFF],
   });
+  // Unlisted, with a build a restore would move the list cursor to.
+  const UNLISTED_WITH_BUILD_BESIDE_OFF = workSnapshot({
+    listed: false,
+    g1Builds: [running('41', 200)],
+    extraBackends: [KIND_OFF],
+  });
+  // A problem on backend `work` while its instance is live.
+  const MALFORMED_GAME = 'duplicate game id "g1"';
   // Backend `work` with an entry that fails to parse: a problem and no games.
   const UNPARSED: BuildsSnapshot = {
     polledAt: 0,
@@ -1298,6 +1311,7 @@ describe('buildsPagePart', () => {
         label: 'Work',
         problem: 'games: expected an array',
         capabilities: null,
+        neverLists: true,
         games: [],
       },
     ],
@@ -1310,6 +1324,8 @@ describe('buildsPagePart', () => {
     before: [BuildsSnapshot, ...BuildsSnapshot[]];
     // Published in the full snapshot after backend `work`.
     others: BackendView[];
+    // Backend `work`'s problem in the full snapshot; none when left out.
+    problem?: string;
     move: 'listDown' | 'setFilter' | null;
     expected: BuildsPlace;
     jobs: string[];
@@ -1333,7 +1349,7 @@ describe('buildsPagePart', () => {
       jobs: ['b'],
     },
     {
-      case: 'a game entry waits while its backend has a problem and no games',
+      case: 'a game entry waits while its backend never lists and has no games',
       saved: SAVED,
       before: [EMPTY_POLL, UNPARSED],
       others: [],
@@ -1351,7 +1367,7 @@ describe('buildsPagePart', () => {
       jobs: ['b'],
     },
     {
-      case: "All waits only for its build's backend, not one with a problem",
+      case: "All waits only for its build's backend, not one that never lists",
       saved: SAVED_ALL,
       before: [UNLISTED_BESIDE_OFF],
       others: [KIND_OFF],
@@ -1360,9 +1376,19 @@ describe('buildsPagePart', () => {
       jobs: ['b'],
     },
     {
-      case: 'All with no build waits for every backend without a problem',
+      case: "All waits for its build's backend with a problem but a live instance",
+      saved: SAVED_ALL,
+      before: [workSnapshot({ listed: false, problem: MALFORMED_GAME })],
+      others: [],
+      problem: MALFORMED_GAME,
+      move: null,
+      expected: SAVED_ALL,
+      jobs: ['b'],
+    },
+    {
+      case: 'All with no build waits for every backend that can list',
       saved: SAVED_ALL_NO_BUILD,
-      before: [UNLISTED_BESIDE_OFF],
+      before: [UNLISTED_WITH_BUILD_BESIDE_OFF],
       others: [KIND_OFF],
       move: null,
       expected: MOVED,
@@ -1395,9 +1421,27 @@ describe('buildsPagePart', () => {
       expected: MOVED,
       jobs: [],
     },
+    {
+      case: 'a game gone beside a malformed entry of a live backend drops it',
+      saved: SAVED_GONE,
+      before: [EMPTY_POLL],
+      others: [],
+      problem: MALFORMED_GAME,
+      move: null,
+      expected: MOVED,
+      jobs: [],
+    },
   ])(
     'keeps the saved place until the restore: $case',
-    ({ saved, before: [first, ...rest], others, move, expected, jobs }) => {
+    ({
+      saved,
+      before: [first, ...rest],
+      others,
+      problem,
+      move,
+      expected,
+      jobs,
+    }) => {
       const page = startBuildsPage(null, {}, { place: saved });
       page.publish(first);
       const held = page.place();
@@ -1418,6 +1462,7 @@ describe('buildsPagePart', () => {
             withJobs('40', 100, [runningJob('a'), job('b')]),
           ],
           extraBackends: others,
+          problem,
         }),
       );
 
