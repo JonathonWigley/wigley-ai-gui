@@ -549,6 +549,12 @@ because the earlier items rewrite many of these tests anyway.
   above the composer and its Dismiss button is partly hidden. Seen in the builds plan's live-fix drive run; screenshots
   were in that run's `lf2-*.png`. Find which composer-part container clips it before changing the card.
 
+- **A file-watch test fails about one run in three** — *agent-ready*: `createNodeFiles >
+  watch_TempFileEvent_ReportsItsTargetOnceWhenPresent` (`src/main/files/node-files.test.ts:332`, case "target and temp
+  file in one window") got `[]` where it expects `['tasks.json']`: once in a full `npm test` and once in three runs of
+  the file alone. Seen in the shareable-app plan's final verification. Find which watch event the window misses before
+  widening any timeout.
+
 - **A second `chat.start` hangs the drive run** — *agent-ready*: in a drive run (fake harness), after the first
   session ran `fake: agents`, a second `npm run drive -- do chat.start` never returned and every later drive command,
   `eval 1+1` included, hung until `restart`; a retry after the restart hung the same way. Seen in the builds plan's
