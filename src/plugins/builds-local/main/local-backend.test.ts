@@ -315,7 +315,7 @@ describe('localBackendKind.create', () => {
     expect(backend.capabilities).toEqual({
       cancel: true,
       choosesBranch: false,
-      saveLog: false,
+      saveLog: true,
     });
   });
 });
@@ -1241,5 +1241,73 @@ describe('cancel', () => {
       result: 'cancelled',
       statusText: 'Cancelled',
     });
+  });
+});
+
+describe('saveLog', () => {
+  const LOG_PATH = '/data/runs/demo/ok/1000000/log.txt';
+
+  it.each([
+    {
+      case: "copies the run's log",
+      log: 'line 1\nline 2\n' as string | null,
+      buildId: FIRST_ID,
+      jobId: null as string | null,
+      rejects: null as string | null,
+    },
+    {
+      case: 'names the missing log',
+      log: null,
+      buildId: FIRST_ID,
+      jobId: null,
+      rejects: `The build demo/ok/1000000 wrote no log at ${LOG_PATH}`,
+    },
+    {
+      case: 'refuses an unknown build',
+      log: null,
+      buildId: 'demo/dev/1',
+      jobId: null,
+      rejects: 'No local build demo/dev/1',
+    },
+    {
+      case: 'refuses a job',
+      log: null,
+      buildId: FIRST_ID,
+      jobId: 'x',
+      rejects: 'A local build has no jobs',
+    },
+    {
+      case: 'looks the build up before the job',
+      log: null,
+      buildId: 'demo/dev/1',
+      jobId: 'x',
+      rejects: 'No local build demo/dev/1',
+    },
+  ])('$case', async ({ log, buildId, jobId, rejects }) => {
+    const t = setup();
+    const backend = await t.startFirstRun(ALIVE);
+    if (log !== null) {
+      await t.services.files.write(LOG_PATH, log);
+    }
+
+    const saved = backend.saveLog?.(t.game, buildId, jobId, '/dl/x.log');
+
+    if (rejects === null) {
+      await saved;
+      expect(await t.services.files.read('/dl/x.log')).toBe(log);
+    } else {
+      await expect(saved).rejects.toThrow(rejects);
+    }
+  });
+
+  it("rethrows the copy's own error", async () => {
+    const t = setup();
+    const backend = await t.startFirstRun(ALIVE);
+    t.services.files.copy = vi.fn().mockRejectedValue(new Error('disk full'));
+
+    const saved = backend.saveLog?.(t.game, FIRST_ID, null, '/dl/x.log');
+
+    await expect(saved).rejects.toThrow('disk full');
+    await expect(saved).rejects.not.toThrow('wrote no log');
   });
 });
