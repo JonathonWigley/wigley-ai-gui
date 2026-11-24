@@ -8,6 +8,7 @@
 - **The worker** — one unattended session per job, its queue, its tools and its permissions.
 - **Inbox** — its sections, cards and how an item clears.
 - **Board** — columns, Jira tickets, local tasks and moves.
+- **Detail pane** — a ticket's or thread's detail beside the cards, with a comment or reply box (planned).
 - **Work detection** — the signals, where each comes from, and the suggested moves.
 - **Spin-up** — starting a session from a card.
 - **Settings** — every `work.*` setting with its default.
@@ -133,6 +134,31 @@ flashes; a key `showTicket` finds no card for toasts and leaves the mode alone.
 A Jira card's ◀/▶ and a drop mark it moving and queue a Move job; a card in Other has neither. When the cursor card
 leaves its column, the cursor keeps the same row, else the column's last card, else the nearest column with cards.
 
+## Detail pane
+
+Planned in `board-detail-pane`, not built yet: until that plan lands, `Enter` still opens Jira or Slack.
+
+The Board and the Inbox each split their sheet: the cards on the left, a **detail pane** on the right that shows the
+cursor card's detail and follows the cursor. `Enter` opens and closes the pane; focus stays on the cards, so `j`/`k`
+read card after card. Whether the pane is open is kept in each view's place slot; its width is the split's own UI
+state, dragged like every split. The pane heads with when the sweep last fetched that record, so a stale copy reads
+as stale.
+
+- **A Jira ticket's pane**: key, title, type, priority, status, assignee, reporter, last updated, the description, the
+  `work.detailComments` most recent comments, subtasks and linked issues, then each open Inbox thread naming the
+  ticket as its summary and latest line (`t` opens them in the Inbox). A comment box closes the pane: `i` enters it,
+  `Cmd+Enter` queues a **Comment job** that posts exactly one comment through the user's Jira connector, and the pane
+  shows `Posting…` while it runs. A second comment queues behind the first; it never replaces it.
+- **A thread's pane** (the Inbox, and a local task on the Board): channel, participants, ticket chips, the worker's
+  summary, the root message and the `work.threadReplies` most recent replies (author, time, text), then a reply box on
+  every thread, filled with the worker's draft where one exists. `Cmd+Enter` sends through the Send job, as before.
+- **Inbox cards slim down** while the pane is open: title, channel, author, age and the latest line. With the pane
+  closed a card also shows its summary. The draft box draws in the pane, not on the card.
+- **Where detail comes from.** Each sweep stores a detail record per ticket and per thread in its own section of
+  `work.json`, published as the keyed `work.details` slot that only the panes read. `read_work_state` hands the worker
+  each stored record's updated stamp, and the worker refetches only tickets and threads that moved since. Description,
+  comments and messages are stored as markdown and drawn with the app's markdown renderer.
+
 ## Work detection
 
 Each sweep also reads three sources, matched to cards by ticket key (and, for a local task, by the session started
@@ -176,6 +202,8 @@ card, so its branch and work count as signals.
 | `work.signals.branch`, `.commit`, `.pr_opened`, `.pr_merged`, `.session` | In Progress · In Progress · In QA · Done · In Progress | Each signal's column, or `off` |
 | `work.repoFolders` | `[]` | Folders watched beyond chat's projects and pool clones |
 | `work.projects` | `[]` | Spin-up targets, each `{ "jiraProject", "project" }`: a Jira project key and the Auri project its sessions start in |
+| `work.detailComments` | 10 | Most recent Jira comments a ticket's detail keeps (planned in `board-detail-pane`) |
+| `work.threadReplies` | 5 | Most recent replies a thread's detail keeps under its root message (planned in `board-detail-pane`) |
 
 ## Keys
 
@@ -191,7 +219,9 @@ list, `l` shows it keeping focus. Alt+h/l move focus between the sections and th
 
 | Key | Does |
 |---|---|
-| `Enter` | Open the thread in Slack |
+| `Enter` | Open the thread in Slack; planned in `board-detail-pane`: open or close the detail pane |
+| `gx` | Planned in `board-detail-pane`: open the thread in Slack |
+| `Ctrl+j` / `Ctrl+k` | Planned in `board-detail-pane`: scroll the detail pane a line (`Ctrl+Shift+j`/`k` half a page) |
 | `i` | Edit the draft |
 | `Cmd+Enter` | Send the draft (in the draft box too; `Esc` leaves the box) |
 | `d` | Dismiss |
@@ -207,7 +237,10 @@ list, `l` shows it keeping focus. Alt+h/l move focus between the sections and th
 | Key | Does |
 |---|---|
 | `H` / `L` | Move the card to the previous or next column |
-| `Enter` | Open the ticket, or the task's source thread |
+| `Enter` | Open the ticket, or the task's source thread; planned in `board-detail-pane`: open or close the detail pane |
+| `gx` | Planned in `board-detail-pane`: open the ticket in Jira, or the task's thread in Slack |
+| `i` | Planned in `board-detail-pane`: enter the pane's comment or reply box (`Cmd+Enter` sends, `Esc` leaves) |
+| `Ctrl+j` / `Ctrl+k` | Planned in `board-detail-pane`: scroll the detail pane a line (`Ctrl+Shift+j`/`k` half a page) |
 | `y` / `n` | Accept the suggested move, or Not yet |
 | `t` | Show the ticket's threads in the Inbox |
 | `s` | Start a session |
@@ -225,3 +258,6 @@ list, `l` shows it keeping focus. Alt+h/l move focus between the sections and th
   in its adapter.
 - **Only while the app runs.** Scheduling has no exports for another plugin, and a closed app has no Board to show.
 - **No catch-up mode** (rejected in the ideas round); key people, muted channels and a memory are later work.
+- **Detail from the sweep, not on open** (planned in `board-detail-pane`). A worker job is a whole agent session, so a
+  fetch on open would keep the pane empty for a minute; the sweep stores detail and skips what has not moved.
+- **Detail in its own slot.** The heavy text stays out of `work.state`, which every view redraws from.

@@ -611,7 +611,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   and Add to Board, or Restore alone on a card that is not open; the cursor card shows its keys' prompts under them and
   a failed Send's note last. A Needs you card carries a `status-warning` edge on its left, drawn in the layout's CSS,
   since the Card primitive's edges are attention and error only. An empty list shows one empty-state line saying why,
-  with the `sweep` hint when nothing was ever gathered.
+  with the `sweep` hint when nothing was ever gathered. Planned in `board-detail-pane`: the sheet splits, cards left
+  and a detail pane right (the split primitive, pane at the end and hideable), the cards slim to title, meta and latest
+  line while it is open, and the draft box moves into the pane.
 - **Board** (`docs/features/work-inbox/design.md`): no side bar. The sheet is one pane: a head (the `Board` heading,
   the status line as in Inbox, the `sweep` hint) over one row of columns that scrolls sideways, each column
   `9 × space-8` wide and scrolling its own cards; a column head is its name and card count, and the Other column
@@ -623,7 +625,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   yet (`secondary`); a move Jira already made is a `done` `success` Tag with the reason and no buttons. A moving card
   shows `Moving to <column> in Jira…`, and a failed job's note follows. The buttons close the card: ◀ and ▶ (`ghost`,
   disabled at an end), Session (`secondary`) and, on a local task, Delete (`danger`); the cursor card's key hints
-  draw inside them. An empty board shows one empty-state line with the `sweep` hint in place of the columns.
+  draw inside them. An empty board shows one empty-state line with the `sweep` hint in place of the columns. Planned in
+  `board-detail-pane`: the sheet splits, columns left and the cursor card's detail pane right (the split primitive,
+  pane at the end and hideable), the pane holding the ticket's fields, description, comments, linked threads and a
+  comment box (`docs/features/work-inbox/design.md` § Detail pane).
 - **Settings:** in Settings mode the sections are the side bar; the open section is one sheet of `row-list` rows, each a
   label in `fg`, its description in `fg-secondary`, and its value or binds at the end, Kbd for keys. A row the user set
   carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame, its check
