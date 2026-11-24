@@ -548,6 +548,12 @@ because the earlier items rewrite many of these tests anyway.
   composer part, `builds.offer` in `src/plugins/builds/page/session-parts.ts`) is clipped inside the scrolling area
   above the composer and its Dismiss button is partly hidden. Seen in the builds plan's live-fix drive run; screenshots
   were in that run's `lf2-*.png`. Find which composer-part container clips it before changing the card.
+- **A TeamCity log save holds the whole log in memory** — *agent-ready*: `saveLog` in
+  `src/plugins/builds-teamcity/main/teamcity-backend.ts` reads the whole `downloadBuildLog.html` output from the
+  `teamcity` CLI into one string, then writes it with `services.files.write`. A long build's whole log sits in main's memory
+  before it reaches disk. Stream the CLI's stdout to the file instead, which needs a streaming run on the
+  `ProcessRunner` contract and a streaming write on the files contract. Source: the builds redesign review,
+  recommendation R2.
 
 - **A second `chat.start` hangs the drive run** — *agent-ready*: in a drive run (fake harness), after the first
   session ran `fake: agents`, a second `npm run drive -- do chat.start` never returned and every later drive command,
