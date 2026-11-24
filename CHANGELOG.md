@@ -43,6 +43,19 @@ changes for the user.
 - The `auri` skills and the docs-index README match the landed app: the workflows-and-checklist skill says how an
   unknown workflow step is refused and when to leave the checklist as it is, and the docs-index README names where the
   pointer check's parser copy lives.
+- The "No workflow" tag on a working session is a per-workflow opt-in (`flagsUnclaimedWork` in `auri.json`); with no
+  workflow opting in, a session on the Checklist flow is never tagged.
+- Docs with no installed plugin naming a wiki page shows "No installed plugin names a wiki page", and the wiki's
+  Main page follows a binding change without a restart.
+- Docs no longer rebuilds its index at launch.
+- `wigley-land` cuts the app release itself: after the rebase it runs `npm run changelog:release` and commits the
+  version bump as the branch's last commit.
+
+### Fixed
+
+- The `auri` checklist hook shows the session's workflow step as well as its list again after a compaction.
+- A missing hook script no longer blocks a session; the hook fails open.
+- A session saved on a workflow no plugin declares any more opens on the Checklist flow with its checklist.
 
 ### Removed
 

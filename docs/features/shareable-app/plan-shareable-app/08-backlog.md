@@ -25,7 +25,7 @@ Consumes:
 - `pickProblemText(featureLabel, pick)` ← 03
 - `DOCS_FIXTURE_BINDING` from `wigley-ai-gui/src/plugins/docs/main/selftest-fixture.ts` ← 09 (its `features` value, for the fixture strategy)
 - `DocsMainExports.setFeaturesHomes(homes: FeaturesHomes | null): void` and `type FeaturesHomes` in `wigley-ai-gui/src/plugins/docs/contract.ts` ← 09
-- `templateProblem(template: string): string | null` and `inRepoHomeParts(homes: readonly string[]): string[][]` in `wigley-ai-gui/src/plugins/docs/features-homes.ts` ← 09
+- `templateProblem(template: string): string | null` and `inRepoHomeParts(homes: readonly string[]): string[][]` in `wigley-ai-gui/src/plugins/backlog/main/features-homes.ts` ← 09
 - the skill `auri:backlog-format` (`wigley-ai-gui/agent-plugin/skills/backlog-format/SKILL.md`), which documents the follow-up file format ← drafter B5's task (the app-feature skills)
 
 Produces:

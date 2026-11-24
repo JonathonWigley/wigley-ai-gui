@@ -506,7 +506,7 @@ open live in `endpoint.py`, which `relay.py` and `hook_client.py` (the hook scri
     its git reads too.
   - the checklist hook (`scripts/checklist/hook.py edit|stop|compact`, hook `workflow.checklist` for all three, request
     `{"mode": "<mode>"}`), which reads the reply `{ "reported": bool, "open": int, "items": [{ "text", "done",
-    "running"? }] }` and asks only for an app session's main agent (`WIGLEY_SESSION_ROW` set, no `agent_id`).
+    "running"? }], "step": str | null }` (`step` is the stage's `set_workflow_step` name, null on the Checklist flow or a stage with none) and asks only for an app session's main agent (`WIGLEY_SESSION_ROW` set, no `agent_id`).
     `docs/features/feature-contributions/design.md` § The Checklist flow gives the fields' meaning.
   - any later hook, through the same three calls.
 - **Starting the app.** On a tool call with no app reachable and no channel dropped in the

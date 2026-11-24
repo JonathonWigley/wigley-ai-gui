@@ -36,10 +36,10 @@ Files (wigley-ai-gui):
 - modify `wigley-ai-gui/src/plugins/docs/page/list-page.ts`
 - modify `wigley-ai-gui/src/plugins/docs/page/docs-dialogs.ts`
 - modify `wigley-ai-gui/src/plugins/docs/page/wiki-main-source.ts`
-- create `wigley-ai-gui/src/plugins/docs/features-homes.ts`
+- create `wigley-ai-gui/src/plugins/backlog/main/features-homes.ts`
 - create `wigley-ai-gui/src/plugins/docs/main/docs-reader.ts`
 - create `wigley-ai-gui/src/plugins/docs/main/contributions-file.ts`
-- test `wigley-ai-gui/src/plugins/docs/features-homes.test.ts` (create)
+- test `wigley-ai-gui/src/plugins/backlog/main/features-homes.test.ts` (create)
 - test `wigley-ai-gui/src/plugins/docs/main/docs-reader.test.ts` (create)
 - test `wigley-ai-gui/src/plugins/docs/main/contributions-file.test.ts` (create)
 - test `wigley-ai-gui/src/plugins/docs/main/script-locator.test.ts`
@@ -68,7 +68,7 @@ Produces:
 - `DocsMainExports.setFeaturesHomes(homes: FeaturesHomes | null): void` in `wigley-ai-gui/src/plugins/docs/contract.ts`
 - `export interface DocsBinding { globalFolders: DocsGlobalFolder[]; wikiMain: string | null; linkPrefixes: Record<string, string>; features: FeaturesHomes | null }` and `export type DocsGlobalFolder = { path: string; referenceFiles: string[]; subfolders: string[]; skip: string[] }` in `contract.ts`
 - `export const docsBindingSlot: SlotKey<DocsBinding, 'main', 'docs'>` (id `docs.binding`, kind `value`) in `contract.ts`
-- `export function templateProblem(template: string): string | null`, `export function inRepoHomeParts(homes: readonly string[]): string[][]` and `export function outOfRepoHomeFolders(homes: readonly string[]): string[]` in `wigley-ai-gui/src/plugins/docs/features-homes.ts`
+- `export function templateProblem(template: string): string | null`, and `export function inRepoHomeParts(homes: readonly string[]): string[][]` in `wigley-ai-gui/src/plugins/backlog/main/features-homes.ts`
 - `export const docsReader: FeatureReader<DocsContribution>` and `export function mergeDocs(strategies: readonly Strategy<DocsContribution>[], log: PluginLog): Omit<DocsBinding, 'features'>` in `wigley-ai-gui/src/plugins/docs/main/docs-reader.ts`
 - `export const CONTRIBUTIONS_JSON = 'contributions.json'` and `export function contributionsFileText(binding: DocsBinding): string` in `wigley-ai-gui/src/plugins/docs/main/contributions-file.ts`
 - the docs index's `--contributions <file>` option, before the command: `docs_index.py --contributions <file> build|context <dir>|session <id>`
@@ -123,7 +123,7 @@ Its value fills each optional array with `[]` and each optional field with its e
 ### Features homes, shared with Backlog (task 08)
 
 - `templateProblem(template)` is null for an in-repo template (`{repo}/<relative path>`, no `..` part, no other `{…}`) and for an out-of-repo template (`<~ or absolute folder>/{name}`, no other `{…}`). Else it returns `"<template>" is neither {repo}/<folder> nor <folder>/{name}`.
-- `inRepoHomeParts(homes)` gives the part list of each in-repo template, in order (`{repo}/docs/features` gives `['docs', 'features']`). `outOfRepoHomeFolders(homes)` gives each out-of-repo template's folder, `~` kept (`~/wigley-features/{name}` gives `~/wigley-features`). Both skip a template that `templateProblem` refuses.
+- `inRepoHomeParts(homes)` gives the part list of each in-repo template, in order (`{repo}/docs/features` gives `['docs', 'features']`). It skips a template that `templateProblem` refuses.
 
 ### The docs index (Python)
 
@@ -180,7 +180,7 @@ Python, in `agent-plugin/scripts/docs-index/tests/`:
 - `test_docs_index.py`: add `test_contributions_option_reaches_discover`.
 
 TypeScript:
-- `features-homes.test.ts` (new): one table over `templateProblem`, `inRepoHomeParts` and `outOfRepoHomeFolders`, with the template rows task 08 lists.
+- `features-homes.test.ts` (new): one table over `templateProblem` and `inRepoHomeParts`, with the template rows task 08 lists.
 - `docs-reader.test.ts` (new): one row per reason; the user's section reads ok. `mergeDocs` rows: the union and dedupe of global folders, the first `wikiMain`, and a prefix clash kept first with its log line.
 - `contributions-file.test.ts` (new): `contributionsFileText` of the user's binding equals the pinned JSON above, and of a binding with `features: null` holds `"features": null`.
 - `script-locator.test.ts`: the wigley-install rows give way to `pluginDir` rows: a set `scriptPath` wins; an empty one gives the agent plugin's copy; a missing copy gives null.

@@ -73,12 +73,12 @@ describe('createProcessGit', () => {
     },
     {
       case: 'https without .git',
-      result: exited(0, 'https://github.com/peoplefun/new-games-prototypes\n'),
+      result: exited(0, 'https://github.com/acme/new-games-prototypes\n'),
       name: 'new-games-prototypes',
     },
     {
       case: 'https with .git',
-      result: exited(0, 'https://github.com/peoplefun/Spacebreaker.git\n'),
+      result: exited(0, 'https://github.com/acme/Spacebreaker.git\n'),
       name: 'Spacebreaker',
     },
     {

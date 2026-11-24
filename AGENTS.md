@@ -1284,9 +1284,15 @@ stay true on every change:
   `npm run lint:changelog` fails when the three versions disagree.
 
 **Boundary.** The app works for anyone, so no code names one user's setup: every personal binding comes from a
-plugin's `auri.json` (`docs/features/feature-contributions/design.md`). Nothing under `src/`, `agent-plugin/`,
-`scripts/` or in `README.md` and `CHANGELOG.md` names `~/wigley-agents`, `wigley-features`, `wigley-ai-marketplace`, a
-`wigley:` skill, the `wigley` plugin key, `WigleyCapture`, `capture.py`, `plan.py` or a `unity-pool` install path.
+plugin's `auri.json` (`docs/features/feature-contributions/design.md`). The scan reads `src/`, `agent-plugin/`,
+`scripts/`, `.claude-plugin/` and every root file but `AGENTS.md`, `DESIGN.md`, `LICENSE` and `package-lock.json`
+(`README.md`, `CHANGELOG.md`, `package.json` and `forge.config.mts` included). None of them names `~/wigley-agents`,
+`wigley-features`, `wigley-ai-marketplace`, a `wigley:` skill, the `wigley` plugin key, `WigleyCapture`, `capture.py`,
+`plan.py`, a `unity-pool` install path, an email address at any domain but a reserved one (`example.com`, `*.invalid`,
+`*.test`, …; `git@` is no address), a `/Users/<name>` home path (placeholder names such as `you` and `user` pass), or a
+local name: this machine's git `user.email` and each `boundary.name` (set with
+`git config --global --add boundary.name <name>`, for an employer, say) are read at run time, so the rules file names
+no one.
 Exempt, as tests, fixtures and sample data (`scripts/boundary-rules.mts` `isExempt`; change both together): files
 ending `.test.ts`, `.test.mts` or `.test-support.ts`, any path with a `fixtures` folder, `src/**/demo-steps.ts`,
 `src/**/selftest-fixture.ts`, `docs/features/**`, `agent-plugin/**/tests/**` and `scripts/boundary-rules.mts` itself.
