@@ -10,7 +10,6 @@ import {
   type ToolSession,
 } from '../../sessions/contract';
 import {
-  KEEPS_NO_PLAN_IGNORED,
   normalPlanDir,
   type PlanReporter,
   type PlanWorkflowLookup,
@@ -51,8 +50,7 @@ export interface PlanToolDeps {
 // A folder that is not absolute is an error; a session with no plan workflow
 // succeeds with text saying which case ignored it; a folder that holds no plan
 // file in that workflow's format is an error naming it. A flow that left its
-// plan workflow before the report folds answers that its workflow keeps no
-// plan.
+// plan workflow before the report folds answers the case that ignores it now.
 async function setWorkflowPlan(
   deps: PlanToolDeps,
   sessionId: string,
@@ -76,9 +74,8 @@ async function setWorkflowPlan(
   } catch (error) {
     return errorResult(`${folder} not read: ${errorText(error)}`);
   }
-  return (await deps.reportPlan(sessionId, planDir))
-    ? textResult(`Plan folder set to ${folder}.`)
-    : textResult(KEEPS_NO_PLAN_IGNORED);
+  const reportIgnored = await deps.reportPlan(sessionId, planDir);
+  return textResult(reportIgnored ?? `Plan folder set to ${folder}.`);
 }
 
 // What `start` hands sessions' `contributeTools`: each session's calls report

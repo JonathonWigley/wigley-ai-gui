@@ -76,11 +76,11 @@ export interface WorkflowViewDeps {
 // `sidePartFor` makes one workflow's section of the session hub, which draws a
 // session's side pane only while its flow is of that workflow. A flow with no
 // stage to draw draws nothing, but for the chip's `No workflow` tag on
-// unclaimed work; a workflow or stage with no page half does the same and logs its
-// name once. While the session `isWorking`, the chip ends on a running `Working`
-// tag unless its stage is running, which its stage tag already says. While the
-// session `isHeadless`, the chip ends on an accent `Headless` tag in every
-// stage, and the strip input says so.
+// unclaimed work; a workflow or stage with no page half does the same and logs
+// its name once. While the session `isWorking`, the chip ends on a running
+// `Working` tag unless its stage is running, which its stage tag already says.
+// While the session `isHeadless`, the chip ends on an accent `Headless` tag
+// in every stage, and the strip input says so.
 // `activityChanged` draws the session's chip again. A turn that ends in a stage
 // with an `unseenActivity` while another session is active sets that activity on
 // the row until `activeChanged` names the session or its flow is busy again.
@@ -92,8 +92,8 @@ export interface WorkflowViewDeps {
 // side pane draw sets the section's summary: `<checked>/<total>` while it draws a
 // checklist with items, else null. The side pane's list keeps its scroll across
 // those draws, and while the pane has no layout box. `setFlow` also logs the
-// session's level, trail, stage, progress and countdown, and unclaimed work, when
-// each changes; `forget` drops what it logged for a session that left and its
+// session's level, trail, stage, progress and countdown, and unclaimed work,
+// when each changes; `forget` drops what it logged for a session that left and its
 // finished groups' fold.
 // `setSidePaneHidden` shows or hides the side pane in every session, and
 // `toggleFinishedWaves` opens or folds one session's finished groups, which
@@ -170,12 +170,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   let isSidePaneHidden = false;
   const ticker = createPendingTick(timers, TICK_MS, () => tick());
 
-  // The workflow that draws `flow`; null for a flow of none, or of one no plugin
-  // holds.
+  // The workflow that draws `flow`; null for a flow of one no plugin holds.
   const pageWorkflowOf = (flow: SessionFlow): PageWorkflow | null => {
-    if (flow.workflow === null) {
-      return null;
-    }
     const workflow = deps.workflows
       .all()
       .find((each) => each.id === flow.workflow);

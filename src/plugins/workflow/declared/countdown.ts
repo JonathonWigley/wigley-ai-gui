@@ -1,8 +1,7 @@
 // The auto-start countdown of a declared workflow's `auto` stage: started when
 // a live or observed fold enters the stage (a replayed one starts none) and
-// `workflow.autoStart` lists the workflow,
-// held in the flow's `countdownEndsAt`, and run through the stage's `auto`
-// action when it fires.
+// `workflow.autoStart` lists the workflow, held in the flow's `countdownEndsAt`,
+// and run through the stage's `auto` action when it fires.
 
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { PluginLog } from '../../../contracts/log';
@@ -191,7 +190,7 @@ export function createAutoStart(deps: AutoStartDeps): AutoStart {
   // The countdown a flow that just entered an `auto` stage begins.
   const startCountdown = ({ sessionId, before, after, origin }: FoldEvent) => {
     const flow = deps.flowOf(sessionId);
-    if (flow === null || flow.workflow === null) {
+    if (flow === null) {
       return;
     }
     const seconds = secondsOf(flow.workflow);
@@ -232,8 +231,7 @@ export function createAutoStart(deps: AutoStartDeps): AutoStart {
     cancel,
     settingsChanged() {
       for (const flow of deps.flows()) {
-        const isListed =
-          flow.workflow !== null && secondsOf(flow.workflow) !== null;
+        const isListed = secondsOf(flow.workflow) !== null;
         if (flow.countdownEndsAt !== null && !isListed) {
           cancel(flow.sessionId);
         }

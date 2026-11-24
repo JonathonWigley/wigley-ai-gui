@@ -31,10 +31,10 @@ const TASKS_FILE_WORKFLOW: DeclaredWorkflow = {
 // The tool for session `s1` over memory files holding `PLAN_DIR/plan.md`,
 // `TASKS_DIR/tasks.md` and an empty `EMPTY_DIR`, recording each report; the
 // session's flow keeps `workflow`'s plan, or is ignored for the reason a
-// string gives, and each report resolves `reportResolves`.
+// string gives, and each report resolves `reportIgnored`.
 async function toolWith(
   workflow: DeclaredWorkflow | string,
-  reportResolves = true,
+  reportIgnored: string | null = null,
 ) {
   const files = createMemoryFiles();
   await files.write(`${PLAN_DIR}/plan.md`, '# Plan A — plan\n');
@@ -46,7 +46,7 @@ async function toolWith(
     files,
     reportPlan: async (sessionId, planDir) => {
       reports.push([sessionId, planDir]);
-      return reportResolves;
+      return reportIgnored;
     },
     planWorkflowOf: async () =>
       typeof workflow === 'string'
@@ -150,14 +150,18 @@ describe('set_workflow_plan', () => {
     expect(result.content[0].text).toBe(text);
   });
 
-  it('setWorkflowPlan_FlowLeftBeforeTheReport_IsIgnored', async () => {
-    const { call, reports } = await toolWith(planWorkflowFixture(), false);
+  // Breaks if a report ignored at fold time answers with another case's reason.
+  it.each([KEEPS_NO_PLAN_IGNORED, NO_FLOW_IGNORED])(
+    'setWorkflowPlan_FlowLeftBeforeTheReport_AnswersWhyTheFoldIgnored (%s)',
+    async (ignored) => {
+      const { call, reports } = await toolWith(planWorkflowFixture(), ignored);
 
-    const result = await call('set_workflow_plan', { folder: PLAN_DIR });
+      const result = await call('set_workflow_plan', { folder: PLAN_DIR });
 
-    expect(reports).toEqual([['s1', PLAN_DIR]]);
-    expect(result.content[0].text).toBe(KEEPS_NO_PLAN_IGNORED);
-  });
+      expect(reports).toEqual([['s1', PLAN_DIR]]);
+      expect(result.content[0].text).toBe(ignored);
+    },
+  );
 
   it('call_AnotherToolName_Rejects', async () => {
     const { call } = await toolWith(planWorkflowFixture());

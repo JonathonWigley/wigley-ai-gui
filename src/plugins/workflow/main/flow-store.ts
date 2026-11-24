@@ -9,6 +9,7 @@ import {
   CHECKLIST_WORKFLOW_ID,
   type ChecklistItem,
   type SessionFlow,
+  type WorkflowId,
 } from '../contract';
 import { newFlow } from '../flow';
 
@@ -17,9 +18,9 @@ export const FLOWS_FILE = 'flows.json';
 // The open sessions' flows, and every flow saved in `flows.json`, keyed by
 // host session id (a row id is fresh on each launch). `load` reads the file
 // once; a flow read from it runs no turn and no subagent, takes the new flow's
-// value for each field it lacks, and sits on the Checklist flow when it was
-// saved with no workflow. `open` restores a saved flow whose workflow
-// `isKnownWorkflow` denies on the Checklist flow, keeping only its checklist.
+// value for each field it lacks, and sits on the Checklist flow, keeping only
+// its checklist, when it was saved with no workflow or on a retired level id.
+// A flow saved on any other workflow keeps it, registered or not.
 // `put`, `putKeepingSavedAt`, `rekey`, `drop`, `open` and `forgetFlows` each
 // write the whole file, one write after another in call order; a write that
 // fails is logged and the next change writes again. `flushed` resolves once
@@ -44,8 +45,7 @@ export interface FlowStore {
   // Open sessions' flows, in `open` order.
   all(): SessionFlow[];
   // The saved flow for `hostSessionId` with the call's `sessionId` and
-  // `projectDir`, on the Checklist flow when `isKnownWorkflow` denies its
-  // workflow, or a new flow when none is saved.
+  // `projectDir`, or a new flow when none is saved.
   open(
     sessionId: string,
     hostSessionId: string,
@@ -72,24 +72,26 @@ interface SavedFlow {
   savedAt: number;
 }
 
+// A flow as `flows.json` holds it: a file written before the Checklist flow
+// saves a flow of no workflow as null.
+type FileFlow = Omit<SessionFlow, 'workflow'> & { workflow: WorkflowId | null };
+
 // `savedAt` is left out of a file written before the field.
 interface SavedEntry {
   hostSessionId: string;
-  flow: SessionFlow;
+  flow: FileFlow;
   savedAt?: number;
 }
 
-// `files` is workflow's data folder. `isKnownWorkflow` says whether a saved
-// flow's workflow id is still one the app runs, asked at each `open`.
+// `files` is workflow's data folder.
 export function createFlowStore(deps: {
   flows: KeyedSlotWriter<SessionFlow>;
   files: Files;
   log: PluginLog;
   paths: Paths;
   clock: Clock;
-  isKnownWorkflow(workflowId: string): boolean;
 }): FlowStore {
-  const { flows, files, log, paths, clock, isKnownWorkflow } = deps;
+  const { flows, files, log, paths, clock } = deps;
   // Every entry `flows.json` holds, open sessions' included, by host id.
   const saved = new Map<string, SavedFlow>();
   // Each open session's host session id, in `open` order.
@@ -142,14 +144,6 @@ export function createFlowStore(deps: {
     write();
   };
 
-  // `flow` itself, or on the Checklist flow when its workflow is unknown.
-  const knownFlow = (flow: SessionFlow) =>
-    flow.workflow === null ||
-    flow.workflow === CHECKLIST_WORKFLOW_ID ||
-    isKnownWorkflow(flow.workflow)
-      ? flow
-      : onChecklistFlow(flow);
-
   return {
     async load() {
       const text = await readIfPresent(files, FLOWS_FILE);
@@ -185,7 +179,7 @@ export function createFlowStore(deps: {
       const flow =
         savedFlow === undefined
           ? newFlow(sessionId, projectDir)
-          : knownFlow({ ...savedFlow, sessionId, projectDir });
+          : { ...savedFlow, sessionId, projectDir };
       hold(sessionId, hostSessionId, flow, savedAtOfHost(hostSessionId));
       write();
       return flow;
@@ -240,23 +234,38 @@ export function createFlowStore(deps: {
 
 // A saved flow with the new flow's value for each field a file written before
 // that field lacks, without the `state` and `missedLevel` fields a file written
-// before their removal holds, and a flow saved with no workflow on the
-// Checklist flow.
-function loadedFlow(saved: SessionFlow): SessionFlow {
+// before their removal holds, and a flow saved with no workflow or on a
+// retired level id on the Checklist flow.
+function loadedFlow(saved: FileFlow): SessionFlow {
   const {
     state: _removedState,
     missedLevel: _removedMissedLevel,
+    workflow,
     ...fields
-  } = saved as SessionFlow & { state?: unknown; missedLevel?: unknown };
+  } = saved as FileFlow & { state?: unknown; missedLevel?: unknown };
   const flow: SessionFlow = {
     ...newFlow(saved.sessionId, saved.projectDir),
     ...fields,
+    workflow: workflow ?? CHECKLIST_WORKFLOW_ID,
   };
-  return flow.workflow === null ? onChecklistFlow(flow) : flow;
+  return workflow === null || RETIRED_WORKFLOW_IDS.has(workflow)
+    ? onChecklistFlow(flow)
+    : flow;
 }
 
+// The level plugins' ids from before declared workflows: no installed plugin
+// can hold them, so their runs start over. Any other unregistered id may come
+// back (a refused `auri.json`, a plugin reinstalled, a late `addWorkflow`).
+// A one-release bridge: remove once saved flows have moved off them.
+const RETIRED_WORKFLOW_IDS: ReadonlySet<string> = new Set([
+  'workflow-spike',
+  'workflow-small',
+  'workflow-medium',
+  'workflow-large',
+]);
+
 // A new flow on the Checklist flow holding `flow`'s checklist and running
-// state: the run of a workflow the app no longer holds starts over.
+// state: the run of a retired workflow starts over.
 function onChecklistFlow(flow: SessionFlow): SessionFlow {
   return {
     ...newFlow(flow.sessionId, flow.projectDir),
@@ -285,7 +294,7 @@ function parseFlowsFile(text: string): SavedEntry[] | null {
     const isEntry =
       isJsonObject(entry) &&
       typeof entry.hostSessionId === 'string' &&
-      isSessionFlow(entry.flow) &&
+      isFileFlow(entry.flow) &&
       (entry.savedAt === undefined || typeof entry.savedAt === 'number');
     if (!isEntry) {
       return null;
@@ -295,7 +304,7 @@ function parseFlowsFile(text: string): SavedEntry[] | null {
   return entries;
 }
 
-function isSessionFlow(value: unknown): value is SessionFlow {
+function isFileFlow(value: unknown): value is FileFlow {
   return (
     isJsonObject(value) &&
     typeof value.sessionId === 'string' &&

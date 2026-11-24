@@ -46,7 +46,7 @@ function engineStage(
   return {
     beats: [
       {
-        name: 'No level',
+        name: 'Unclaimed work',
         show() {
           shown.show(
             sampleFlow(sessionId, projectDir, {

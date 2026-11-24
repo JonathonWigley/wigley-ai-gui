@@ -35,7 +35,6 @@ function flowsFile(
 async function loadStore(
   text: string | null,
   leftover: Record<string, SessionFlow> = {},
-  isKnownWorkflow: (workflowId: string) => boolean = () => true,
 ) {
   const files = createMemoryFiles();
   if (text !== null) {
@@ -53,7 +52,6 @@ async function loadStore(
     log: (line) => logs.push(line),
     paths: posixPaths,
     clock: { now: () => time.now },
-    isKnownWorkflow,
   });
   await store.load();
   const saved = async () => {
@@ -197,48 +195,39 @@ describe('createFlowStore', () => {
     expect(logs).toEqual([]);
   });
 
-  // A run saved on a retired workflow, such as an id from before declared workflows.
-  const RETIRED: SessionFlow = {
+  // A run partway through a workflow: a stage, a move up and counters.
+  const MID_RUN: SessionFlow = {
     ...SAVED_H1,
-    workflow: 'workflow-large',
-    movedUpFrom: 'workflow-small',
+    movedUpFrom: 'x:small',
     checklistReported: true,
     counters: { fix: 2 },
   };
 
-  it.each<{ name: string; known: boolean; expected: SessionFlow }>([
+  // Breaks if a retired level id reopens on a workflow nothing registers, or if
+  // an id a plugin may register again (a refused `auri.json`, a plugin briefly
+  // uninstalled) loses its run.
+  it.each<{ name: string; workflow: string; keepsRun: boolean }>([
+    { name: 'a retired level id', workflow: 'workflow-large', keepsRun: false },
     {
-      name: 'a known workflow keeps its run',
-      known: true,
-      expected: {
-        ...RETIRED,
-        sessionId: 's9',
-        turnRunning: false,
-        runningSubagents: [],
-      },
+      name: 'an unregistered plugin id',
+      workflow: 'gone:large',
+      keepsRun: true,
     },
-    {
-      name: 'an unknown workflow opens on the Checklist flow with its checklist',
-      known: false,
-      expected: {
-        ...newFlow('s9', '/r'),
-        checklist: RETIRED.checklist,
-        checklistReported: true,
-      },
-    },
-  ])('Open_SavedWorkflow ($name)', async ({ known, expected }) => {
-    const asked: string[] = [];
+  ])('Open_SavedWorkflow ($name)', async ({ workflow, keepsRun }) => {
+    const flow = { ...MID_RUN, workflow };
     const { store } = await loadStore(
-      flowsFile([{ hostSessionId: 'h1', flow: RETIRED }]),
-      {},
-      (workflowId) => {
-        asked.push(workflowId);
-        return known;
-      },
+      flowsFile([{ hostSessionId: 'h1', flow }]),
     );
 
-    expect(store.open('s9', 'h1', '/r')).toStrictEqual(expected);
-    expect(asked).toEqual(['workflow-large']);
+    expect(store.open('s9', 'h1', '/r')).toStrictEqual(
+      keepsRun
+        ? { ...flow, sessionId: 's9', turnRunning: false, runningSubagents: [] }
+        : {
+            ...newFlow('s9', '/r'),
+            checklist: flow.checklist,
+            checklistReported: true,
+          },
+    );
   });
 
   it('Load_SavedMissedLevel_LoadsWithoutIt', async () => {

@@ -94,23 +94,23 @@ type WorkflowApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Folds each owned Chat-tab session's agent events and session events into its
-// flow through the registered workflows, keeps the flows in `flows.json` keyed by
-// host session id, opens a saved flow whose workflow no plugin holds any more
-// on the Checklist flow, opens at start each row chat already holds as its open events
-// would have, folds a re-attach's replay only past the flow's last save,
-// marks a live turn with agent work on the Checklist flow as unclaimed work while a
-// registered workflow `flagsUnclaimedWork`, tells each
-// observer every fold, open, close and replay, contributes `set_workflow_step`
-// while a workflow has a reportable stage, which lists every workflow's stages'
+// Folds each owned Chat-tab session's agent events and session events into
+// its flow through the registered workflows, keeps the flows in `flows.json`
+// keyed by host session id, opens at start each row chat already holds as its
+// open events would have, folds a re-attach's replay only past the flow's last
+// save, marks a live turn with agent work on the Checklist flow as unclaimed
+// work while a registered workflow `flagsUnclaimedWork`, tells each observer
+// every fold, open, close and replay, contributes `set_workflow_step` while a
+// workflow has a reportable stage, which lists every workflow's stages'
 // `reportedAs` and moves a flow only by its own workflow's, and
-// `set_workflow_checklist`, hands chat the session note naming both,
-// meters each session's active time and spend and appends a line to `runs.jsonl`
-// when a fold enters a stage that finishes its workflow, writes each open session's
-// flow to `workflow.flows`, and offers a drive run the two tools' reports as drive
-// actions. A demo session (an ephemeral open, or a row on the demo harness) opens
-// no flow, so nothing of it reaches `flows.json`; registers the main halves of
-// the `workflow.engine` demo step and the four sample workflows' steps. Exports
+// `set_workflow_checklist`, hands chat the session note naming both, meters
+// each session's active time and spend and appends a line to `runs.jsonl` when
+// a fold enters a stage that finishes its workflow, writes each open session's
+// flow to `workflow.flows`, and offers a drive run the two tools' reports as
+// drive actions. A demo session (an ephemeral open, or a row on the demo
+// harness) opens no flow, so nothing of it reaches `flows.json`; registers the
+// main halves of the `workflow.engine` demo step and the four sample
+// workflows' steps. Exports
 // `addWorkflow`, `signal`, `observe`, and `stageFinishes` for whether a flow
 // sits in a stage that finishes its run. Under the self-test, hands the four
 // sample workflows' scripts, each adding its sample declaration.
@@ -132,22 +132,12 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const chatSessions = api.state.read(chatSessionSlot);
     const harnesses = api.state.read(coreAgentHarnessesSlot);
     const workflows = createStageList<MainWorkflow>();
-    // Set once contributions are read: before then, or when they fail, no
-    // saved workflow reads as gone.
-    let isDeclaredSetRead = false;
-    // A saved flow keeps a workflow registered now or one `workflow.off`
-    // switched off; any other id, such as a retired one, is gone.
-    const isKnownWorkflow = (workflowId: string) =>
-      !isDeclaredSetRead ||
-      workflows.all().some((workflow) => workflow.id === workflowId) ||
-      api.settings().off.includes(workflowId);
     const store = createFlowStore({
       flows: api.state.publish(workflowFlowsSlot),
       files: api.data,
       log,
       paths: services.paths,
       clock,
-      isKnownWorkflow,
     });
     const contributions = api.dependency(contributionsMainKey);
     contributions.registerFeature('workflows', workflowsReader);
@@ -184,10 +174,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       log(`flows.json not read: ${errorText(error)}; starting with no flows`);
     });
     const declaredRead = contributions.ready.then(
-      () => {
-        isDeclaredSetRead = true;
-        syncDeclared();
-      },
+      () => syncDeclared(),
       (error: unknown) => {
         log(
           `contributions not read: ${errorText(error)}; no declared workflows`,

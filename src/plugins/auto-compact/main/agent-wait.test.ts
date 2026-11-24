@@ -63,7 +63,6 @@ describe('agent wait', () => {
       flow: flowOf({ workflow: 'small' }),
       expected: REASON,
     },
-    { case: 'NoWorkflow', flow: flowOf({ workflow: null }), expected: null },
     {
       case: 'ChecklistFlow',
       flow: flowOf({ workflow: CHECKLIST_WORKFLOW_ID, stage: CHECKLIST_STAGE }),

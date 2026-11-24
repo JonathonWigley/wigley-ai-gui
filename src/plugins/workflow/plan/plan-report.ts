@@ -10,12 +10,12 @@ import {
 } from '../contract';
 import { usesPlan } from '../declared/uses-plan';
 
-// Folds a session's report of `planDir`; resolves whether a flow of a plan
-// workflow holds the session.
+// Folds a session's report of `planDir`; resolves null when a flow of a plan
+// workflow holds the session, else why the report is ignored.
 export type PlanReporter = (
   sessionId: string,
   planDir: string,
-) => Promise<boolean>;
+) => Promise<string | null>;
 
 export interface PlanReporterDeps {
   readonly workflow: Pick<WorkflowMainExports, 'ready' | 'flowOf' | 'signal'>;
@@ -64,7 +64,7 @@ export async function planWorkflowOf(
   }
   const declared = deps.workflowOf(flow);
   if (declared === null) {
-    return flow.workflow === null || flow.workflow === CHECKLIST_WORKFLOW_ID
+    return flow.workflow === CHECKLIST_WORKFLOW_ID
       ? ignoredFor(KEEPS_NO_PLAN_IGNORED)
       : ignoredFor(notEnabledIgnored(flow.workflow));
   }
@@ -77,10 +77,11 @@ export async function planWorkflowOf(
 // workflow uses the plan capability; any other session is ignored.
 export function planReporter(deps: PlanReporterDeps): PlanReporter {
   return async (sessionId, planDir) => {
-    if ((await planWorkflowOf(deps, sessionId)).workflow === null) {
-      return false;
+    const { workflow, ignored } = await planWorkflowOf(deps, sessionId);
+    if (workflow === null) {
+      return ignored;
     }
     deps.workflow.signal(sessionId, { type: 'planReported', planDir }, 'live');
-    return true;
+    return null;
   };
 }

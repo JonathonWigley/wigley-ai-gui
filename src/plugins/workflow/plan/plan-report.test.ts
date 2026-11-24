@@ -34,29 +34,29 @@ describe('planReporter', () => {
       name: 'a flow of a plan workflow',
       workflow: PLAN_WORKFLOW_ID,
       loadsLate: false,
-      resolves: true,
+      ignored: null,
     },
     {
       name: 'a flow of a plan workflow loaded only once ready settles',
       workflow: PLAN_WORKFLOW_ID,
       loadsLate: true,
-      resolves: true,
+      ignored: null,
     },
     {
       name: 'a workflow keeping no plan',
       workflow: NO_PLAN_WORKFLOW.id,
       loadsLate: false,
-      resolves: false,
+      ignored: KEEPS_NO_PLAN_IGNORED,
     },
     {
       name: 'a workflow no enabled entry has',
       workflow: 'gone:plan',
       loadsLate: false,
-      resolves: false,
+      ignored: notEnabledIgnored('gone:plan'),
     },
   ])(
-    'in $name resolves $resolves',
-    async ({ workflow, loadsLate, resolves }) => {
+    'in $name resolves why it is ignored',
+    async ({ workflow, loadsLate, ignored }) => {
       const ready = Promise.withResolvers<void>();
       let loaded = !loadsLate;
       const signalled: [string, WorkflowSignal, string][] = [];
@@ -79,9 +79,9 @@ describe('planReporter', () => {
       ready.resolve();
       const applied = await applying;
 
-      expect(applied).toBe(resolves);
+      expect(applied).toBe(ignored);
       expect(signalled).toEqual(
-        resolves
+        ignored === null
           ? [['s1', { type: 'planReported', planDir: PLAN_DIR }, 'live']]
           : [],
       );

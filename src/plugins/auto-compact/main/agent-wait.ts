@@ -18,9 +18,9 @@ export interface AgentWaitInput {
 }
 
 // The `compact` reason for a session whose main turn ended while a subagent it
-// spawned still runs, its flow claimed by a workflow and its last main context above
-// `minTokens`; null otherwise, or once this wait compacted. Chat's `compact`
-// checks the session is idle, with no compaction or hold up.
+// spawned still runs, its flow claimed by a workflow and its last main context
+// above `minTokens`; null otherwise, or once this wait compacted. Chat's
+// `compact` checks the session is idle, with no compaction or hold up.
 export function agentWaitReason({
   flow,
   usage,

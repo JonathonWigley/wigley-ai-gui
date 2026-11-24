@@ -52,7 +52,7 @@ describe('workflow page demo steps', () => {
   it('a shown beat disposes the previous handle after showing its own', async () => {
     const { step, log } = registerEngineStep();
 
-    await enterAndShow(step, ['No level', 'No level']);
+    await enterAndShow(step, ['Unclaimed work', 'Unclaimed work']);
 
     expect(log).toEqual(['showSample#1', 'showSample#2', 'dispose#1']);
   });
@@ -60,7 +60,7 @@ describe('workflow page demo steps', () => {
   // Breaks: a sample flow left on the demo row after the step.
   it('stage dispose disposes the last handle', async () => {
     const { step, log } = registerEngineStep();
-    const stage = await enterAndShow(step, ['No level']);
+    const stage = await enterAndShow(step, ['Unclaimed work']);
     log.length = 0;
 
     stage.dispose();

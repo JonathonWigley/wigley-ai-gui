@@ -781,7 +781,7 @@ describe('workflowMainPart', () => {
       checklist: null,
     },
     {
-      name: 'a workflow no plugin holds',
+      name: 'a saved workflow nothing registers',
       data: () => savedFlowData({ workflow: 'gone', stage: 'somewhere' }),
       opens: true,
       skill: null,
@@ -1104,7 +1104,6 @@ describe('workflowMainPart', () => {
       }
 
       await harness.restart();
-      exportsNow().addWorkflow(stubWorkflow());
       await settled();
 
       expect(exportsNow().flowOf('s1')).toEqual(
@@ -1751,7 +1750,12 @@ describe('workflowMainPart', () => {
       stage: 'scope',
       expected: false,
     },
-    { name: 'no workflow', workflow: null, stage: 'done', expected: false },
+    {
+      name: 'a workflow nothing registers',
+      workflow: 'gone',
+      stage: 'done',
+      expected: false,
+    },
   ])('stageFinishes ($name)', ({ workflow: workflowId, stage, expected }) => {
     const workflow = startWorkflowPart();
     workflow.exported().addWorkflow(finishingWorkflow());
@@ -1908,29 +1912,45 @@ describe('workflowMainPart › declared workflows', () => {
     ]);
   });
 
-  it('ChecklistHook_AfterAChecklist_RepliesReportedWithItsOpenItems', async () => {
-    const workflow = startWorkflowPart();
-    await workflow.openS1();
-    await workflow.callChecklistTool('s1', [
-      { text: 'a', done: true },
-      { text: 'b', done: false },
-    ]);
-
-    const reply = await workflow.hooks.get(CHECKLIST_HOOK)?.(
-      session('s1', 'h1'),
-      {},
-    );
-
-    expect(reply).toEqual({
-      reported: true,
-      open: 1,
-      items: [
+  // Breaks if the hook's `workflowOf` stops reaching the declared workflow
+  // holding the flow, so a declared stage's step reads as null.
+  it.each<{ name: string; claim: string | null; step: string | null }>([
+    { name: 'on the Checklist flow', claim: null, step: null },
+    {
+      name: 'on a Large stage with a step',
+      claim: 'wigley:feature',
+      step: 'explore',
+    },
+  ])(
+    'ChecklistHook_AfterAChecklist_RepliesReportedWithItsOpenItems ($name)',
+    async ({ claim, step }) => {
+      const workflow = startWorkflowPart({ selfTest: true });
+      addDeclared(workflow, sampleDeclared('large'));
+      await workflow.openS1();
+      if (claim !== null) {
+        await workflow.agentEvent(skill(claim, ''));
+      }
+      await workflow.callChecklistTool('s1', [
         { text: 'a', done: true },
         { text: 'b', done: false },
-      ],
-      step: null,
-    });
-  });
+      ]);
+
+      const reply = await workflow.hooks.get(CHECKLIST_HOOK)?.(
+        session('s1', 'h1'),
+        {},
+      );
+
+      expect(reply).toEqual({
+        reported: true,
+        open: 1,
+        items: [
+          { text: 'a', done: true },
+          { text: 'b', done: false },
+        ],
+        step,
+      });
+    },
+  );
 });
 
 const PLAN_DIR = '/r/docs/features/x/plan-a';

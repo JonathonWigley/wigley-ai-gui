@@ -49,7 +49,7 @@ describe('createPlanReports', () => {
       folder: FOLDER,
       reportPlan: async (rowId, planDir) => {
         reported.push([rowId, planDir]);
-        return true;
+        return null;
       },
     });
 
@@ -74,7 +74,7 @@ describe('createPlanReports', () => {
       paths: posixPaths,
       log: (line) => logs.push(line),
       folder: FOLDER,
-      reportPlan: async () => true,
+      reportPlan: async () => null,
     });
 
     expect(logs).toEqual([
@@ -109,7 +109,7 @@ describe('createPlanReports', () => {
       folder: FOLDER,
       reportPlan: async (rowId) => {
         reported.push(rowId);
-        return true;
+        return null;
       },
       now: () => 1000,
     });
@@ -142,7 +142,7 @@ describe('createPlanReports', () => {
       folder: FOLDER,
       reportPlan: async (rowId) => {
         reported.push(rowId);
-        return true;
+        return null;
       },
     });
     await memory.write(`${FOLDER}/s1.json`, '{"planDir": "/w/p/plan-a"}\n');
