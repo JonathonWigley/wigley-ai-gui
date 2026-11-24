@@ -196,8 +196,12 @@ async function cachedIds(test: Setup): Promise<string[]> {
   return file.games['tiki-smash'].map((record: { id: string }) => record.id);
 }
 
-// A cache file holding finished build 821200 with `job` as its one job, every other field of the record well formed.
-function cacheFileWithJob(job: Record<string, unknown>): string {
+// A cache file holding finished build 821200 with `job` as its one job and `links`, every other field of the record
+// well formed.
+function cacheFileWithJob(
+  job: Record<string, unknown>,
+  links: { label: string; url: string }[] = [],
+): string {
   return JSON.stringify({
     games: {
       'tiki-smash': [
@@ -221,7 +225,7 @@ function cacheFileWithJob(job: Record<string, unknown>): string {
           startEstimate: null,
           state: 'finished',
           queuedAt: 1795458000000,
-          links: [],
+          links,
           jobs: [job],
         },
       ],
@@ -594,7 +598,27 @@ describe('list', () => {
     expect(await cachedIds(test)).toEqual(['821200']);
   });
 
-  it.each([
+  const LOG_LINKS = [
+    { label: 'iOS', url: IOS_URL },
+    { label: 'Android', url: ANDROID_URL },
+  ];
+  // A job as the cache shape before jobs carried webUrl, startedAt, finishedAt and dependsOn.
+  const EARLIER_JOB = {
+    id: '821193',
+    label: 'Build',
+    state: 'finished',
+    result: 'success',
+    percent: 100,
+    leftSeconds: 0,
+    stepText: null,
+  };
+
+  it.each<{
+    name: string;
+    text: string;
+    now?: number;
+    links?: { label: string; url: string }[];
+  }>([
     { name: 'is not JSON', text: 'not json' },
     {
       name: 'holds records that lack fields',
@@ -638,10 +662,18 @@ describe('list', () => {
         finishedAt: 1795464060000,
       }),
     },
+    {
+      name: 'holds an earlier-shape record with links, read past the link window',
+      text: cacheFileWithJob(EARLIER_JOB, [{ label: 'iOS', url: IOS_URL }]),
+      // `20261127T000000+0000`
+      now: 1795737600000,
+      links: [{ label: 'iOS', url: IOS_URL }],
+    },
   ])(
     'reads the finished builds again over a cache file that $name',
-    async ({ text }) => {
+    async ({ text, now = NOW, links = LOG_LINKS }) => {
       const test = setup();
+      test.setNow(now);
       await test.dataFiles.write(CACHE_FILE, text);
       answerRecordedList(test);
       const backend = await createBackend(test.services);
@@ -652,10 +684,12 @@ describe('list', () => {
       expect(detailIds(test.processes.runs)).toEqual(
         expect.arrayContaining(['821200', '821150']),
       );
-      expect(records[2].links).toEqual([
-        { label: 'iOS', url: IOS_URL },
-        { label: 'Android', url: ANDROID_URL },
-      ]);
+      expect(records[2].links).toEqual(links);
+      const file = JSON.parse(await test.dataFiles.read(CACHE_FILE));
+      const cached = file.games['tiki-smash'].find(
+        (record: { id: string }) => record.id === '821200',
+      );
+      expect(cached.links).toEqual(links);
     },
   );
 

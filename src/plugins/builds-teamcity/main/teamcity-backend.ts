@@ -153,10 +153,12 @@ interface QueuedPin {
 
 // What CACHE_FILE holds: finished builds whose detail and every log were read, by game id then build id, and what
 // this backend queued each build with, by build id, until that build is cached or LINK_WINDOW_MS has passed since it
-// was queued.
+// was queued. `earlierLinks` holds the install links of each record an earlier cache shape wrote, by build id, for its
+// read again to keep; it is never written.
 interface StoredBuilds {
   finished: Map<string, Map<string, BuildRecord>>;
   pins: Map<string, QueuedPin>;
+  earlierLinks: Map<string, BuildLink[]>;
 }
 
 // A build whose detail or a log could not be read. A running build's next read waits out one list; a finished
@@ -303,9 +305,13 @@ function createTeamcityBackend(
     kind: string,
     cached: Map<string, BuildRecord>,
     pin: QueuedPin | undefined,
+    earlierLinks: BuildLink[] | undefined,
     limit: Limit,
   ): Promise<ReadBuild> => {
     const record = listedRecord(game, listed, kind, pin);
+    // A read that finds no links keeps those an earlier cache shape held.
+    const keptLinks = (links: BuildLink[]) =>
+      links.length > 0 ? links : (earlierLinks ?? []);
     if (listed.state === 'queued') {
       return { record, isCacheable: false };
     }
@@ -347,10 +353,13 @@ function createTeamcityBackend(
       listed.finishedAt !== null &&
       services.clock.now() - listed.finishedAt > LINK_WINDOW_MS;
     if (isPastLinkWindow) {
-      return { record: withDetail, isCacheable: true };
+      return {
+        record: { ...withDetail, links: keptLinks(withDetail.links) },
+        isCacheable: true,
+      };
     }
     const { links, isComplete } = await readLinks(detail.logJobIds, limit);
-    const withLinks = { ...withDetail, links };
+    const withLinks = { ...withDetail, links: keptLinks(links) };
     if (!isComplete) {
       recordFailure(listed.id, false, withLinks);
     }
@@ -422,6 +431,7 @@ function createTeamcityBackend(
             kind,
             cached,
             store.pins.get(listed.id),
+            store.earlierLinks.get(listed.id),
             callLimit,
           ),
         ),
@@ -435,9 +445,10 @@ function createTeamcityBackend(
         nextCached.size !== cached.size ||
         [...nextCached.keys()].some((id) => !cached.has(id));
       store.finished.set(game.id, nextCached);
-      // A cached record holds the branch its pin gave it.
+      // A cached record holds the branch its pin gave it and the links an earlier cache shape held.
       for (const id of nextCached.keys()) {
         store.pins.delete(id);
+        store.earlierLinks.delete(id);
       }
       if (hasCacheChanged) {
         await writeStored(store);
@@ -537,9 +548,14 @@ function listedRecord(
 }
 
 // The cache file's finished records and pins; a missing or malformed file reads as empty, and a malformed record or
-// pin, or a pin past the link window, is left out.
+// pin, or a pin past the link window, is left out. A record well formed but for its jobs leaves its links in
+// `earlierLinks`.
 async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
-  const builds: StoredBuilds = { finished: new Map(), pins: new Map() };
+  const builds: StoredBuilds = {
+    finished: new Map(),
+    pins: new Map(),
+    earlierLinks: new Map(),
+  };
   let text: string;
   try {
     text = await services.dataFiles.read(CACHE_FILE);
@@ -560,11 +576,15 @@ async function readCacheFile(services: BackendServices): Promise<StoredBuilds> {
   }
   const games = isJsonObject(file.games) ? file.games : {};
   for (const [gameId, records] of Object.entries(games)) {
-    const kept = Array.isArray(records) ? records.filter(isFinishedRecord) : [];
-    builds.finished.set(
-      gameId,
-      new Map(kept.map((record) => [record.id, record])),
-    );
+    const kept = new Map<string, BuildRecord>();
+    for (const record of Array.isArray(records) ? records : []) {
+      if (isFinishedRecord(record)) {
+        kept.set(record.id, record);
+      } else if (isFinishedRecordButJobs(record) && record.links.length > 0) {
+        builds.earlierLinks.set(record.id, record.links);
+      }
+    }
+    builds.finished.set(gameId, kept);
   }
   const pins = isJsonObject(file.pins) ? file.pins : {};
   for (const [id, pin] of Object.entries(pins)) {
@@ -615,6 +635,18 @@ const JOB_NULLABLE_NUMBERS = [
 
 // Whether a cached value is a finished build's record, every field of its type.
 function isFinishedRecord(value: unknown): value is BuildRecord {
+  return (
+    isFinishedRecordButJobs(value) &&
+    Array.isArray(value.jobs) &&
+    value.jobs.every(isJob)
+  );
+}
+
+// Whether a cached value is a finished build's record in every field but `jobs`, which an earlier cache shape wrote
+// without fields `BuildJob` now has.
+function isFinishedRecordButJobs(
+  value: unknown,
+): value is JsonObject & Omit<BuildRecord, 'jobs'> {
   if (!isJsonObject(value)) {
     return false;
   }
@@ -625,11 +657,9 @@ function isFinishedRecord(value: unknown): value is BuildRecord {
     RECORD_NULLABLE_NUMBERS,
   );
   const hasLinks = Array.isArray(value.links) && value.links.every(isLink);
-  const hasJobs = Array.isArray(value.jobs) && value.jobs.every(isJob);
   return (
     hasFields &&
     hasLinks &&
-    hasJobs &&
     value.state === 'finished' &&
     typeof value.queuedAt === 'number'
   );

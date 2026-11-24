@@ -448,15 +448,16 @@ function createLocalBackend(
     await writeRuns();
   };
 
-  // Copies the run's log as it stands to `path`. Outside `chain`: a copy of a long log must not hold up a list, and
-  // reading `runs.json` changes no state.
+  // Copies the run's log as it stands to `path`, finding the run among the runs a list would see. Outside `chain`: a
+  // copy of a long log must not hold up a list, and the lookup changes no state.
   const saveLog = async (
     game: GameEntry,
     buildId: string,
     jobId: string | null,
     path: string,
   ) => {
-    const run = (await readRuns(dataFiles)).find(
+    const known = mergedRuns(await readRuns(dataFiles), changedRuns());
+    const run = known.find(
       (candidate) => candidate.id === buildId && candidate.gameId === game.id,
     );
     if (run === undefined) {

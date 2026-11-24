@@ -1254,6 +1254,15 @@ describe('saveLog', () => {
       buildId: FIRST_ID,
       jobId: null as string | null,
       rejects: null as string | null,
+      savesRuns: true,
+    },
+    {
+      case: 'copies the log of a run whose runs.json write failed',
+      log: 'line 1\n',
+      buildId: FIRST_ID,
+      jobId: null,
+      rejects: null,
+      savesRuns: false,
     },
     {
       case: 'names the missing log',
@@ -1261,6 +1270,7 @@ describe('saveLog', () => {
       buildId: FIRST_ID,
       jobId: null,
       rejects: `The build demo/ok/1000000 wrote no log at ${LOG_PATH}`,
+      savesRuns: true,
     },
     {
       case: 'refuses an unknown build',
@@ -1268,6 +1278,7 @@ describe('saveLog', () => {
       buildId: 'demo/dev/1',
       jobId: null,
       rejects: 'No local build demo/dev/1',
+      savesRuns: true,
     },
     {
       case: 'refuses a job',
@@ -1275,6 +1286,7 @@ describe('saveLog', () => {
       buildId: FIRST_ID,
       jobId: 'x',
       rejects: 'A local build has no jobs',
+      savesRuns: true,
     },
     {
       case: 'looks the build up before the job',
@@ -1282,9 +1294,17 @@ describe('saveLog', () => {
       buildId: 'demo/dev/1',
       jobId: 'x',
       rejects: 'No local build demo/dev/1',
+      savesRuns: true,
     },
-  ])('$case', async ({ log, buildId, jobId, rejects }) => {
+  ])('$case', async ({ log, buildId, jobId, rejects, savesRuns }) => {
     const t = setup();
+    if (!savesRuns) {
+      const write = t.dataFiles.write.bind(t.dataFiles);
+      t.dataFiles.write = async (path, text) =>
+        path === 'runs.json'
+          ? Promise.reject(new Error('disk full'))
+          : write(path, text);
+    }
     const backend = await t.startFirstRun(ALIVE);
     if (log !== null) {
       await t.services.files.write(LOG_PATH, log);

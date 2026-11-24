@@ -285,11 +285,14 @@ async function writeAtomically(
   }
 }
 
-// `from` is checked before anything is made, so a refused `from` leaves no
-// folder of `to` behind.
+// `from`, then `to`, is checked before anything is made, so a folder at
+// either rejects with code `EISDIR`, leaving no temp file or folder of `to`.
 async function copyAtomically(from: string, to: string): Promise<void> {
   if ((await stat(from)).isDirectory()) {
     throw Object.assign(new Error(`${from} is a folder`), { code: 'EISDIR' });
+  }
+  if ((await lstatOrNull(to))?.isDirectory() === true) {
+    throw Object.assign(new Error(`${to} is a folder`), { code: 'EISDIR' });
   }
   const temp = tempFileBeside(to);
   await mkdir(path.dirname(to), { recursive: true });
