@@ -6,6 +6,21 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- Builds mode shows the selected build beside the list: its links, its files and its jobs as boxes with arrows from
+  each job's prerequisites. `Alt+l` or `Enter` moves into the graph, `h`/`j`/`k`/`l` step between the jobs, `s` saves
+  the job's log to Downloads and `o` opens the job's own page in the backend.
+- A tracked game's kinds take `downloads`: files such as a build's Android zip in a synced Drive folder. Each shows as
+  a button once it exists, and `s` on a build copies it to Downloads and shows it in Finder or Explorer.
+- Local builds save their log too.
+- A build's finish message names the path of each file the build has ready.
+- Each build in the session hub has an Open in Builds button.
+
+### Changed
+
+- `Enter` on a build moves the keys into its job graph; the build's detail no longer opens under its row.
+
 ## 1.2.0 — 2026-11-24
 
 ### Changed

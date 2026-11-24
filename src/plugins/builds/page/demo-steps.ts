@@ -8,23 +8,26 @@ import type { SessionsPageExports } from '../../sessions/contract';
 import {
   type BuildsDemoSample,
   DEMO_FIRST_GAME,
+  DEMO_RUNNING_BUILD,
   demoSample,
   demoSessionSample,
 } from './demo-sample';
 
 // `showSample` draws a sample in place of the slots in Builds mode and the session parts, null dropping it;
-// `selectEntry` shows a side-bar entry; `activate` and `showHubForNow` are sessions' and chat's.
+// `selectEntry` shows a side-bar entry; `selectBuild` puts the list cursor on a build, its detail beside the list;
+// `activate` and `showHubForNow` are sessions' and chat's.
 export interface BuildsDemoPageDeps {
   commands: Pick<PluginCommands, 'run'>;
   showSample(sample: BuildsDemoSample | null): void;
   selectEntry(key: string): void;
+  selectBuild(key: string): void;
   activate: SessionsPageExports['activate'];
   showHubForNow: ChatPageExports['showHubForNow'];
 }
 
-// The Builds step: Builds mode on the sample's first game. The Session builds step: the demo session main launched,
-// shown with its row line, its hub's Builds section held open, and its offer card. Each sample lives in the page until
-// the stage's dispose.
+// The Builds step: Builds mode on the sample's first game, then its running build's job graph beside the list. The
+// Session builds step: the demo session main launched, shown with its row line, its hub's Builds section held open,
+// and its offer card. Each sample lives in the page until the stage's dispose.
 export function registerDemoSteps(
   services: PageServices,
   deps: BuildsDemoPageDeps,
@@ -37,9 +40,10 @@ export function registerDemoSteps(
       order: 70,
       title: 'Builds',
       caption:
-        'Builds: the CI and local builds of tracked games, queued in one press and followed live.',
+        "Builds: the CI and local builds of tracked games, each build's jobs as a graph, queued in one press and followed live.",
       files: [
         'src/plugins/builds/page/builds-view.ts',
+        'src/plugins/builds/page/job-graph.ts',
         'src/plugins/builds/page/start.ts',
         'src/plugins/builds/main/start.ts',
         'src/plugins/builds/layouts/default/layout.js',
@@ -84,6 +88,10 @@ function buildsStage(deps: BuildsDemoPageDeps, now: number): DemoStage {
           await commands.run(MODES_SHOW, 'builds.main');
           deps.selectEntry(DEMO_FIRST_GAME);
         },
+      },
+      {
+        name: 'build',
+        show: () => deps.selectBuild(DEMO_RUNNING_BUILD),
       },
     ],
     dispose: () => deps.showSample(null),

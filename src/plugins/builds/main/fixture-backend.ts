@@ -1,4 +1,5 @@
 import type { Clock } from '../../../contracts/ambient';
+import type { Files } from '../../../contracts/files';
 import type {
   BackendKind,
   BuildBackend,
@@ -7,25 +8,29 @@ import type {
   GameEntry,
 } from '../contract';
 
-// The self-test's backend kind, `fixture`. Each game lists `<game id>-1`, finished and successful, and `<game id>-2`,
-// which moves one step per `list` of that game: running with job `ios` running, then running with `ios` failed
-// (`Archive failed`), then finished and failed. `queue` adds a queued build `<game id>-3`, `-4`, …, newest first.
+const FIXTURE_URL = 'https://fixture.example.com';
+
+// The self-test's and a drive run's backend kind, `fixture`. Each game lists `<game id>-1`, finished and successful
+// with no jobs, and `<game id>-2`, with jobs `build-android` (succeeded), `ios` and `deploy` (waiting on both), which
+// moves one step per `list` of that game: running with `ios` running and `deploy` queued, then running with `ios`
+// failed (`Archive failed`), then finished and failed with `deploy` cancelled. `queue` adds a queued build
+// `<game id>-3`, `-4`, …, newest first. It saves logs: `saveLog` writes one line naming the build and the job.
 export function selfTestBackendKind(clock: Clock): BackendKind {
   return {
     kind: 'fixture',
     label: 'Fixture',
-    async create() {
-      return selfTestBackend(clock);
+    async create(_entry, services) {
+      return selfTestBackend(clock, services.files);
     },
   };
 }
 
-function selfTestBackend(clock: Clock): BuildBackend {
+function selfTestBackend(clock: Clock, files: Files): BuildBackend {
   const createdAt = clock.now();
   const listCalls = new Map<string, number>();
   const queued = new Map<string, BuildRecord[]>();
   return {
-    capabilities: { cancel: true, choosesBranch: false, saveLog: false },
+    capabilities: { cancel: true, choosesBranch: false, saveLog: true },
     async list(game, limit) {
       const call = (listCalls.get(game.id) ?? 0) + 1;
       listCalls.set(game.id, call);
@@ -73,66 +78,79 @@ function selfTestBackend(clock: Clock): BuildBackend {
         ),
       );
     },
+    async saveLog(_game, buildId, jobId, path) {
+      await files.write(
+        path,
+        `fixture log of ${buildId} ${jobId ?? 'build'}\n`,
+      );
+    },
     dispose() {},
   };
 }
 
-// Build `<game id>-2` at the `call`th list of its game.
+// Build `<game id>-2` at the `call`th list of its game, with its three jobs at that call.
 function movingBuild(
   game: GameEntry,
   call: number,
   createdAt: number,
 ): BuildRecord {
-  const ios = (overrides: Partial<BuildJob>): BuildJob => ({
-    id: 'ios',
-    label: 'iOS build',
-    state: 'running',
-    result: null,
+  const buildId = `${game.id}-2`;
+  const job = (
+    fields: Partial<BuildJob> & Pick<BuildJob, 'id' | 'label'>,
+  ): BuildJob => ({
+    state: 'finished',
+    result: 'success',
     percent: null,
     leftSeconds: null,
     stepText: null,
-    webUrl: null,
+    webUrl: `${FIXTURE_URL}/${buildId}/${fields.id}`,
     startedAt: null,
     finishedAt: null,
     dependsOn: [],
-    ...overrides,
+    ...fields,
   });
+  const iosFailed = call >= 2;
+  const deployCancelled = call >= 3;
+  const jobs = [
+    job({
+      id: 'build-android',
+      label: 'Build Android',
+      startedAt: createdAt - 20_000,
+      finishedAt: createdAt - 10_000,
+    }),
+    job({
+      id: 'ios',
+      label: 'iOS build',
+      state: iosFailed ? 'finished' : 'running',
+      result: iosFailed ? 'failure' : null,
+      stepText: iosFailed ? 'Archive failed' : null,
+      startedAt: createdAt - 20_000,
+      finishedAt: iosFailed ? createdAt - 5_000 : null,
+    }),
+    job({
+      id: 'deploy',
+      label: 'Deploy',
+      state: deployCancelled ? 'finished' : 'queued',
+      result: deployCancelled ? 'cancelled' : null,
+      dependsOn: ['build-android', 'ios'],
+    }),
+  ];
   const base = {
-    id: `${game.id}-2`,
+    id: buildId,
     number: '2',
     queuedAt: createdAt - 30_000,
     startedAt: createdAt - 20_000,
+    webUrl: `${FIXTURE_URL}/${buildId}`,
+    jobs,
   };
-  if (call === 1) {
-    return record(game, {
-      ...base,
-      state: 'running',
-      result: null,
-      jobs: [ios({})],
-    });
-  }
-  if (call === 2) {
-    return record(game, {
-      ...base,
-      state: 'running',
-      result: null,
-      jobs: [
-        ios({
-          state: 'finished',
-          result: 'failure',
-          stepText: 'Archive failed',
-        }),
-      ],
-    });
+  if (call < 3) {
+    return record(game, { ...base, state: 'running', result: null });
   }
   return record(game, {
     ...base,
     state: 'finished',
     result: 'failure',
     finishedAt: createdAt,
-    jobs: [
-      ios({ state: 'finished', result: 'failure', stepText: 'Archive failed' }),
-    ],
   });
 }
 

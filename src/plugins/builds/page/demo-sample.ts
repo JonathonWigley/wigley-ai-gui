@@ -16,7 +16,16 @@ const SKY_HOP: GameEntry = {
   defaultBranch: 'main',
   kinds: {
     dev: { label: 'Dev', target: null, downloads: [] },
-    release: { label: 'Release', target: null, downloads: [] },
+    release: {
+      label: 'Release',
+      target: null,
+      downloads: [
+        {
+          label: 'Android zip',
+          path: '/sample/sky-hop/{version}/android_SkyHop_{version}.{number}.zip',
+        },
+      ],
+    },
   },
   sets: [
     {
@@ -85,9 +94,10 @@ function sampleJob(
   };
 }
 
-// The demo step's snapshot, its times relative to `now` (epoch ms): one backend `Sample CI` with two games, holding
-// a running build at 60 % with 7 minutes left, a backend page and two links, a queued build with a start estimate, a
-// failed build with a failed job, and an RC set run of two builds.
+// The demo step's snapshot, its times relative to `now` (epoch ms): one backend `Sample CI`, which saves logs, with
+// two games, holding a running build at 60 % with 7 minutes left, a backend page, two links and five jobs in three
+// columns (two builds, their two deploys, a notify after both), a queued build with a start estimate, a release build
+// with its Android zip found, a failed build with a failed job, and an RC set run of two builds.
 export function demoSample(now: number): BuildsSnapshot {
   return {
     polledAt: now,
@@ -97,7 +107,7 @@ export function demoSample(now: number): BuildsSnapshot {
         kind: 'sample',
         label: 'Sample CI',
         problem: null,
-        capabilities: { cancel: true, choosesBranch: true, saveLog: false },
+        capabilities: { cancel: true, choosesBranch: true, saveLog: true },
         games: [
           {
             backendId: BACKEND,
@@ -106,7 +116,15 @@ export function demoSample(now: number): BuildsSnapshot {
               [MAIN_REVISION]: 'Tune the jump arc',
               [RC_REVISION]: 'Release 1.4',
             },
-            files: {},
+            files: {
+              'sky-104': [
+                {
+                  label: 'Android zip',
+                  path: '/sample/sky-hop/1.4.0/android_SkyHop_1.4.0.104.zip',
+                  entry: 0,
+                },
+              ],
+            },
             setRuns: [
               {
                 id: 'run-1',
@@ -154,15 +172,47 @@ export function demoSample(now: number): BuildsSnapshot {
                   },
                 ],
                 jobs: [
-                  sampleJob({ id: 'android', label: 'Android' }),
                   sampleJob({
-                    id: 'ios',
-                    label: 'iOS',
+                    id: 'build-android',
+                    label: 'Build Android',
+                    webUrl: 'https://ci.example.com/sky-hop/105/build-android',
+                    startedAt: now - 11 * MINUTE,
+                    finishedAt: now - 5 * MINUTE,
+                  }),
+                  sampleJob({
+                    id: 'build-ios',
+                    label: 'Build iOS',
                     state: 'running',
                     result: null,
                     percent: 60,
                     leftSeconds: 420,
                     stepText: 'Building the iOS player',
+                    webUrl: 'https://ci.example.com/sky-hop/105/build-ios',
+                    startedAt: now - 11 * MINUTE,
+                  }),
+                  sampleJob({
+                    id: 'deploy-android',
+                    label: 'Deploy Android',
+                    webUrl: 'https://ci.example.com/sky-hop/105/deploy-android',
+                    startedAt: now - 5 * MINUTE,
+                    finishedAt: now - 3 * MINUTE,
+                    dependsOn: ['build-android'],
+                  }),
+                  sampleJob({
+                    id: 'deploy-ios',
+                    label: 'Deploy iOS',
+                    state: 'queued',
+                    result: null,
+                    webUrl: 'https://ci.example.com/sky-hop/105/deploy-ios',
+                    dependsOn: ['build-ios'],
+                  }),
+                  sampleJob({
+                    id: 'notify',
+                    label: 'Notify',
+                    state: 'queued',
+                    result: null,
+                    webUrl: 'https://ci.example.com/sky-hop/105/notify',
+                    dependsOn: ['deploy-android', 'deploy-ios'],
                   }),
                 ],
               }),
@@ -211,6 +261,9 @@ export function demoSample(now: number): BuildsSnapshot {
                     label: 'Tests',
                     result: 'failure',
                     stepText: 'GridTests.FillsEveryCell failed',
+                    webUrl: 'https://ci.example.com/word-garden/58/tests',
+                    startedAt: now - 24 * MINUTE,
+                    finishedAt: now - 9 * MINUTE,
                   }),
                 ],
               }),
@@ -224,6 +277,9 @@ export function demoSample(now: number): BuildsSnapshot {
 
 // The side-bar key of the sample's first game.
 export const DEMO_FIRST_GAME = `${BACKEND}/${SKY_HOP.id}` as const;
+
+// The list key of the sample's running build.
+export const DEMO_RUNNING_BUILD = `${BACKEND}/sky-105` as const;
 
 // What a demo step shows in place of the slots: a snapshot, and the session builds of the demo sessions it holds.
 export interface BuildsDemoSample {

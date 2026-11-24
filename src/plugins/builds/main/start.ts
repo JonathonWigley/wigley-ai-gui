@@ -741,11 +741,18 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
       const registryChanged = registry.onChanged(() => apply());
       const sessionDemoStep = registerSessionDemoStep(services);
 
-      if (services.selfTest !== null) {
+      if (services.selfTest !== null || services.runMode === 'drive') {
         registry.add(selfTestBackendKind(clock));
+      }
+      if (services.selfTest !== null) {
         services.selfTest.run(
           buildsSelfTestScript({
             addLinkUntilEnded,
+            writeHomeFile: (path, text) =>
+              services.files.write(
+                services.paths.join(services.homeDir, path),
+                text,
+              ),
             now: () => clock.now(),
             log,
           }),

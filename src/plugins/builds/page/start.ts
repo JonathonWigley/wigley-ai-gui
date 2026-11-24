@@ -194,6 +194,7 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
       commands: api.commands,
       showSample,
       selectEntry: (key) => view.selectEntry(key),
+      selectBuild: (key) => view.selectBuild(key),
       activate: (sessionId) => sessions.activate(sessionId),
       showHubForNow: (sectionId) => chat.showHubForNow(sectionId),
     });
