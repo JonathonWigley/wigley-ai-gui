@@ -1,8 +1,8 @@
 // The changelog rules `check-changelog.mts` enforces (`AGENTS.md` § README,
 // changelog and boundary): a branch that changes app code adds an entry under
 // `## Unreleased` under a `###` heading, and the app and its agent plugin
-// carry one version. Pure
-// functions over paths and text, so the rules are tested without git.
+// carry one version. Pure functions over paths and text, so the rules are
+// tested without git.
 
 // Folders whose files are docs or agent instructions, which need no entry.
 const NO_ENTRY_FOLDERS = ['docs/', '.claude/', '.agents/'];

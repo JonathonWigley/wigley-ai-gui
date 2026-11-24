@@ -189,7 +189,7 @@ Settled while drafting (Decided notices for the run):
      (`betterleaks git --help`, 1.10.1: it has no `--include=merges`, and `git log -p` shows no merge diff, so
      `--diff-merges=remerge` adds what each merge's resolution changed; `--all` scans every ref, since custom
      `--log-opts` replace the default; `-f` is the format and `-r` the report path; no `--validation`, so nothing
-     goes online). Exit 1 means findings, not a failure.
+     goes online); add `--exit-code=10`, so exit 10 alone means findings and any other non-zero exit is a failed scan.
    Also list the user's work email in the split: `git -C <scratch>/split.git log --all -p | command grep -ac '17443783+JonathonWigley@users.noreply.github.com'`
    (one commit added or removed it at plan time: `git log --all -S'peoplefun.com' -- wigley-ai-gui`).
 6. **Findings to the user (stop).** One forms round: each finding with its file, commit and detector, never the
@@ -272,10 +272,13 @@ Settled while drafting (Decided notices for the run):
      scripts, `wigley-harness`.
    - Features home: the app's `docs/features/` moved with it and stays in-repo (a plain root `docs/features/`); no
      `~/wigley-features/wigley-ai-gui/` exists (`ls -d ~/wigley-features/wigley-ai-gui`).
+   - Edit for the sweep to make: `wigley-ai-marketplace/AGENTS.md` § Changing a plugin reads "a change to either
+     section is made to that copy in the same commit" for the `auri.json` fixture; once the app is its own repo the
+     copy and its source cannot share a commit, so reword it to one commit per repo, each landing with its own side.
 10. **Remove `ai`'s copy.** First restart every app session started before step 8's install, the dev app's and the
     installed app's (review finding 6): each launched with `--plugin-dir ~/Documents/ai/wigley-ai-gui/agent-plugin`,
-    and once that folder is gone each `auri` hook's bare `python3 <script>` exits 2 on the missing script and blocks
-    the running session. Quit the dev app started from `~/Documents/ai/wigley-ai-gui` and the installed app, start
+    and once that folder is gone each `auri` hook's bare `python3 <script>` fails on the missing script: a session started before
+    `51f9de6a1` is blocked (exit 2), and a later one fails open silently and loses the gates. Quit the dev app started from `~/Documents/ai/wigley-ai-gui` and the installed app, start
     them again (the dev app from `~/Documents/wigley-ai-gui`), and restart their sessions. Peers' sessions and this
     one are the user's to restart: ask in a forms round, one choice per way to restart, and wait for the answer. Then,
     in an `ai` worktree: run the freeze check (Decisions), then `git rm -r -q wigley-ai-gui`

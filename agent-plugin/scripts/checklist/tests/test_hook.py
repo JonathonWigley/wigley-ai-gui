@@ -32,9 +32,9 @@ COMPACT_LIST = ("auri: this session's task list before the compaction:\n"
 COMPACT_NONE = ("auri: this session has sent no task list yet. Send it with set_workflow_checklist before your first "
                 "edit.")
 STEP_LINE = "auri: this session's workflow step before the compaction: cold_read.\n"
-COMPACT_STEP_LIST = (STEP_LINE + COMPACT_LIST.rsplit("\n", 1)[0] + "\n"
-                     "Report the step and checklist that match the work in hand now, with set_workflow_step and "
-                     "set_workflow_checklist, in the same message as the next call.")
+STEP_FOOTER = ("Report the step and checklist that match the work in hand now, with set_workflow_step and "
+               "set_workflow_checklist, in the same message as the next call.")
+COMPACT_STEP_LIST = STEP_LINE + COMPACT_LIST.rsplit("\n", 1)[0] + "\n" + STEP_FOOTER
 
 ITEMS = [{"text": "Read the relay", "done": True}, {"text": "Write the hook", "done": False, "running": True},
          {"text": "Run the tests", "done": False}]
@@ -75,8 +75,9 @@ class DecideTests(unittest.TestCase):
              context("SessionStart", COMPACT_NONE)),
             ("compact, list sent on a step", "compact", COMPACT_INPUT, ROW_ENV, REPORTED_ON_STEP,
              context("SessionStart", COMPACT_STEP_LIST)),
-            ("compact, no list sent on a step", "compact", COMPACT_INPUT, ROW_ENV, {**NOT_REPORTED, "step": "cold_read"},
-             context("SessionStart", STEP_LINE + COMPACT_NONE)),
+            ("compact, no list sent on a step", "compact", COMPACT_INPUT, ROW_ENV,
+             {**NOT_REPORTED, "step": "cold_read"},
+             context("SessionStart", STEP_LINE + COMPACT_NONE + "\n" + STEP_FOOTER)),
             ("compact, a reply with no step", "compact", COMPACT_INPUT, ROW_ENV,
              {key: value for key, value in REPORTED.items() if key != "step"}, context("SessionStart", COMPACT_LIST)),
             ("step not a string", "compact", COMPACT_INPUT, ROW_ENV, {**REPORTED, "step": 3}, None),
@@ -99,8 +100,9 @@ class DecideTests(unittest.TestCase):
         items = [{"text": f"item {index:015d}", "done": index % 2 == 0} for index in range(900)]
         text = hook.compact_text({"reported": True, "open": 450, "items": items, "step": "cold_read"})
         self.assertLessEqual(len(text), 10_000)
-        self.assertTrue(text.startswith(STEP_LINE + "auri: this session's task list before the compaction:\n- [x] item "))
-        self.assertEqual(text.splitlines()[-1], "…")
+        list_start = STEP_LINE + "auri: this session's task list before the compaction:\n- [x] item "
+        self.assertTrue(text.startswith(list_start))
+        self.assertEqual(text.splitlines()[-2:], ["…", STEP_FOOTER])
 
 
 class MainTests(unittest.TestCase):
