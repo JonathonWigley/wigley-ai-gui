@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.5.0 — 2026-11-24
+
 ### Added
 
 - A detail pane on the Board and the Inbox: the cursor card's Jira ticket (fields, description, comments, subtasks and
