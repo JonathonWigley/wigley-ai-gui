@@ -315,7 +315,14 @@ export function moveCard(
   );
 }
 
-// Marks a Jira card commenting `arg.text` and queues its comment job; a card in Other or moving takes one too.
+const COMMENT_FAILED = 'Comment failed';
+
+// The card's note once the comment flow moves on: a note the comment flow wrote goes, another (a move's) stays.
+const noteAfterComment = (card: WorkJiraCard): string | null =>
+  card.note?.startsWith(COMMENT_FAILED) === true ? null : card.note;
+
+// Marks a Jira card commenting `arg.text` and queues its comment job; a card in Other or moving takes one too. A text
+// equal, trimmed, to one the card is already posting is refused.
 export function comment(
   file: WorkFile,
   arg: WorkCommentArg,
@@ -327,13 +334,17 @@ export function comment(
   if (card.kind !== 'jira') {
     return refuse('Only a Jira ticket takes a comment');
   }
-  if (arg.text.trim() === '') {
+  const trimmed = arg.text.trim();
+  if (trimmed === '') {
     return refuse('Nothing to post');
+  }
+  if (card.commenting.some((text) => text.trim() === trimmed)) {
+    return refuse('Already posting that comment');
   }
   const marked: WorkJiraCard = {
     ...card,
     commenting: [...card.commenting, arg.text],
-    note: null,
+    note: noteAfterComment(card),
   };
   return done(
     withCard(file, marked),
@@ -441,8 +452,8 @@ function moveEnded(file: WorkFile, key: string, end: JobEnd): WorkFile {
 
 type WorkCommentJob = Extract<WorkJob, { kind: 'comment' }>;
 
-// The card's first `commenting` entry equal to the job's text goes; on success the stored ticket detail, when there is
-// one, gains the comment as the user's, kept to the newest `caps.comments`.
+// The card's first `commenting` entry equal to the job's text goes; on success a note the comment flow wrote goes and
+// the stored ticket detail, when there is one, gains the comment as the user's, kept to the newest `caps.comments`.
 function commentEnded(
   file: WorkFile,
   job: WorkCommentJob,
@@ -464,10 +475,14 @@ function commentEnded(
       : card.commenting.filter((_, at) => at !== index);
   if (!end.ok) {
     const note =
-      end.note === null ? 'Comment failed' : `Comment failed: ${end.note}`;
+      end.note === null ? COMMENT_FAILED : `${COMMENT_FAILED}: ${end.note}`;
     return withCard(file, { ...card, commenting, note });
   }
-  const posted = withCard(file, { ...card, commenting, note: null });
+  const posted = withCard(file, {
+    ...card,
+    commenting,
+    note: noteAfterComment(card),
+  });
   const stored = file.details[job.key];
   if (stored?.kind !== 'ticket') {
     return posted;
@@ -564,7 +579,7 @@ export function clearStaleMarks(
     );
     return commenting === moved.commenting
       ? moved
-      : { ...moved, commenting, note: `Comment failed: ${LOST_JOB_NOTE}` };
+      : { ...moved, commenting, note: `${COMMENT_FAILED}: ${LOST_JOB_NOTE}` };
   };
   const items = file.items.map((item) =>
     isStaleSend(item)

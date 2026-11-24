@@ -596,10 +596,31 @@ describe('comment', () => {
       expected: refused('Only a Jira ticket takes a comment'),
     },
     {
+      name: 'a move’s failure note survives',
+      card: jiraCard('ABC-12', 'To Do', { note: 'No transition to In QA' }),
+      text: 'Hi',
+      expected: result(
+        ofCards(
+          jiraCard('ABC-12', 'To Do', {
+            commenting: ['Hi'],
+            note: 'No transition to In QA',
+          }),
+        ),
+        job('Hi'),
+        'comment queued ABC-12',
+      ),
+    },
+    {
       name: 'blank text',
       card: jiraCard('ABC-12', 'To Do'),
       text: '  \n',
       expected: refused('Nothing to post'),
+    },
+    {
+      name: 'a text equal, trimmed, to one already posting',
+      card: jiraCard('ABC-12', 'To Do', { commenting: ['First', 'Hi'] }),
+      text: '  Hi\n',
+      expected: refused('Already posting that comment'),
     },
   ])('comment ($name)', ({ card, id, text, expected }) => {
     expect(comment(ofCards(card), { cardId: id ?? card.id, text })).toEqual(
@@ -963,6 +984,50 @@ describe('jobEnded', () => {
         ],
         details: detailOf(older),
       }),
+    },
+    {
+      name: 'comment ok keeps a move’s failure note',
+      file: ofCards({ ...commenting('A'), note: 'No transition to In QA' }),
+      job: commentJob('A'),
+      end: { ok: true, note: null },
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', { note: 'No transition to In QA' }),
+      ),
+    },
+    {
+      name: 'comment ok for a text no longer commenting clears the lost note and adds the comment',
+      file: fileWith({
+        cards: [
+          jiraCard('ABC-12', 'To Do', {
+            commenting: ['B'],
+            note: COMMENT_LOST_NOTE,
+          }),
+        ],
+        details: detailOf(older),
+      }),
+      job: commentJob('A'),
+      end: { ok: true, note: null },
+      expected: fileWith({
+        cards: [jiraCard('ABC-12', 'To Do', { commenting: ['B'] })],
+        details: detailOf(older, { author: 'You', at: NOW_ISO, text: 'A' }),
+      }),
+    },
+    {
+      name: 'comment failed for a text no longer commenting keeps commenting',
+      file: ofCards(
+        jiraCard('ABC-12', 'To Do', {
+          commenting: ['B'],
+          note: COMMENT_LOST_NOTE,
+        }),
+      ),
+      job: commentJob('A'),
+      end: { ok: false, note: 'x' },
+      expected: ofCards(
+        jiraCard('ABC-12', 'To Do', {
+          commenting: ['B'],
+          note: 'Comment failed: x',
+        }),
+      ),
     },
     {
       name: 'comment failed with a null note',

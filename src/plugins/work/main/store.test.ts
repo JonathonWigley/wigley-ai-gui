@@ -369,6 +369,16 @@ describe('newestMessages', () => {
       cap: 3,
       expected: ['first', 'second', 'third'],
     },
+    {
+      case: 'a time that does not parse counts as oldest',
+      messages: [
+        message('b', 11),
+        { author: 'Ann', at: 'yesterday', text: 'unparsed' },
+        message('a', 9),
+      ],
+      cap: 2,
+      expected: ['a', 'b'],
+    },
   ])('$case', ({ messages, cap, expected }) => {
     expect(newestMessages(messages, cap).map((kept) => kept.text)).toEqual(
       expected,

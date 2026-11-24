@@ -20,7 +20,9 @@ export const RESEED_FILE = 'selftest-reseed.txt';
 
 const line = (text: string) => `[work] ${text}`;
 
-const SEEDED_LINE = line('fixture seeded: 7 items, 7 cards, 3 suggestions');
+const SEEDED_LINE = line(
+  'fixture seeded: 7 items, 7 cards, 3 suggestions, 4 details',
+);
 
 // A group's first step: it writes the reseed file, and main seeds the fixture again.
 export function reseedStep(group: string): SelfTestStep {
@@ -190,7 +192,7 @@ const GROUPS: SelfTestGroup[] = [
         ['Enter'],
         inboxLine('pane closed'),
         undefined,
-        'Enter in the list reaches work-inbox.togglePane; the pane is still open from the reply box earlier in the group, so it closes.',
+        "Enter in the list reaches work-inbox.togglePane; the pane is still open from the group's `i` step, which opened it to focus the reply box (box focused), so it closes.",
       ),
       viewStep(
         ['Enter'],
@@ -278,7 +280,7 @@ const GROUPS: SelfTestGroup[] = [
         ['Escape', 'Escape'],
         boardLine('board focused'),
         undefined,
-        'The first Escape leaves the box input and the second reaches work-board.leaveBox, which returns focus to the Board, as in the Inbox.',
+        'The first Escape leaves insert mode and the second, in normal mode, reaches work-board.leaveBox, which returns focus to the Board, as in the Inbox.',
       ),
       viewStep(
         ['Enter'],

@@ -1061,7 +1061,7 @@ describe('workMainPart', () => {
 
     expect(problems).toEqual([]);
     expect(workLines(harness)).toContain(
-      'fixture seeded: 7 items, 7 cards, 3 suggestions',
+      'fixture seeded: 7 items, 7 cards, 3 suggestions, 4 details',
     );
     expect(
       slotOf(harness).suggestions.map(({ cardId, column, state }) => ({

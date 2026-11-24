@@ -138,7 +138,7 @@ export const workMainPart: MainPart<typeof workManifest> = {
           details.set(id, detail);
         }
       }
-      for (const id of details.all().keys()) {
+      for (const id of [...details.all().keys()]) {
         if (!Object.hasOwn(file.details, id)) {
           details.delete(id);
         }
@@ -403,7 +403,7 @@ export const workMainPart: MainPart<typeof workManifest> = {
         details: Object.keys(file.details).length,
       };
       log(
-        `fixture seeded: ${counts.items} items, ${counts.cards} cards, ${counts.suggestions} suggestions`,
+        `fixture seeded: ${counts.items} items, ${counts.cards} cards, ${counts.suggestions} suggestions, ${counts.details} details`,
       );
       const wanted = { items: 7, cards: 7, suggestions: 3, details: 4 };
       const problems: string[] = [];

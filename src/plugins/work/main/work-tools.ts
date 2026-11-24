@@ -426,7 +426,7 @@ function isPrunable(item: WorkItem, nowMs: number): boolean {
   return isClosed(item) && isOld;
 }
 
-function threadDetail(
+function threadRecord(
   id: string,
   thread: RecordedThread,
   now: string,
@@ -458,7 +458,7 @@ function mergeItems(
     }
     byId.set(item.id, mergedItem(stored, item, now));
     if (item.thread !== null) {
-      details[item.id] = threadDetail(item.id, item.thread, now);
+      details[item.id] = threadRecord(item.id, item.thread, now);
     }
   }
   let cleared = 0;

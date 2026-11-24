@@ -308,6 +308,35 @@ describe('work tool input', () => {
       'Refused: tickets[0].detail.comments[0].at must be an ISO time.',
     ],
     [
+      'a thread root at of yesterday',
+      RECORD_WORK_ITEMS_TOOL.name,
+      {
+        items: [
+          itemArg('a', {
+            thread: threadArg({ root: message('Ann', 'yesterday', 'Hi') }),
+          }),
+        ],
+      },
+      'Refused: items[0].thread.root.at must be an ISO time.',
+    ],
+    [
+      'a thread reply at of yesterday',
+      RECORD_WORK_ITEMS_TOOL.name,
+      {
+        items: [
+          itemArg('a', {
+            thread: threadArg({
+              replies: [
+                message('Bo', STORED_AT, 'Soon.'),
+                message('Cy', 'yesterday', 'Hi'),
+              ],
+            }),
+          }),
+        ],
+      },
+      'Refused: items[0].thread.replies[1].at must be an ISO time.',
+    ],
+    [
       'a detail given as a string',
       RECORD_WORK_TICKETS_TOOL.name,
       { tickets: [ticketArg('WS-1', { detail: 'none' })], replace: false },
@@ -379,6 +408,88 @@ describe('work tool input', () => {
         file.items[0]?.ticketKeys,
       ],
       [[], []],
+    ],
+    [
+      'a full ticket detail',
+      RECORD_WORK_TICKETS_TOOL.name,
+      {
+        tickets: [
+          ticketArg(' ws-1 ', {
+            detail: detailArg({
+              type: '',
+              assignee: '',
+              reporter: 'Ann',
+              subtasks: [
+                {
+                  key: ' ws-6 ',
+                  title: 'Split',
+                  status: 'To Do',
+                  relation: 'subtask of',
+                  url: 'https://jira.example/browse/WS-6',
+                },
+              ],
+              links: [
+                {
+                  key: 'ws-5',
+                  title: 'Blocker',
+                  status: 'Done',
+                  relation: 'is blocked by',
+                  url: 'https://jira.example/browse/WS-5',
+                },
+              ],
+            }),
+          }),
+        ],
+        replace: false,
+      },
+      (file: WorkFile) => file.details['WS-1'],
+      {
+        kind: 'ticket',
+        id: 'WS-1',
+        fetchedAt: NOW,
+        stamp: LATER_AT,
+        status: 'To Do',
+        priority: null,
+        type: null,
+        assignee: null,
+        reporter: 'Ann',
+        updated: LATER_AT,
+        description: 'Fix the board.',
+        comments: [message('Bo', STORED_AT, 'Seen it.')],
+        subtasks: [
+          {
+            key: 'WS-6',
+            title: 'Split',
+            status: 'To Do',
+            relation: null,
+            url: 'https://jira.example/browse/WS-6',
+          },
+        ],
+        links: [
+          {
+            key: 'WS-5',
+            title: 'Blocker',
+            status: 'Done',
+            relation: 'is blocked by',
+            url: 'https://jira.example/browse/WS-5',
+          },
+        ],
+      } satisfies WorkDetail,
+    ],
+    [
+      'a full thread',
+      RECORD_WORK_ITEMS_TOOL.name,
+      { items: [itemArg('a', { thread: threadArg() })] },
+      (file: WorkFile) => file.details.a,
+      {
+        kind: 'thread',
+        id: 'a',
+        fetchedAt: NOW,
+        stamp: '1763892000.000100',
+        root: message('Ann', EARLIER, 'Any news?'),
+        replies: [message('Bo', STORED_AT, 'Soon.')],
+        replyCount: 1,
+      } satisfies WorkDetail,
     ],
   ])('records_normalised: %s', async (_case, name, args, read, expected) => {
     const tools = toolsFor(SWEEP);
@@ -477,7 +588,7 @@ describe('work tool input', () => {
       { replies: ['newest'], replyCount: 3 },
     ],
   ])(
-    'recordTickets_detailCapped_keepsNewest: %s',
+    'records_detailCapped_keepsNewest: %s',
     async (_case, name, args, read, expected) => {
       const tools = toolsFor(SWEEP, EMPTY_WORK_FILE, {
         comments: 2,

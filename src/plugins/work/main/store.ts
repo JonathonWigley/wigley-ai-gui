@@ -90,14 +90,21 @@ export function detailCaps(settings: {
   };
 }
 
+// A message's time for ordering: an `at` that does not parse (a hand-edited `work.json`) counts as oldest.
+function messageTime(message: DetailMessage): number {
+  const time = Date.parse(message.at);
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+}
+
 // The `cap` newest of `messages` by `at`, oldest first; messages of equal time keep their input order.
 export function newestMessages(
   messages: readonly DetailMessage[],
   cap: number,
 ): DetailMessage[] {
-  const sorted = [...messages].sort(
-    (left, right) => Date.parse(left.at) - Date.parse(right.at),
-  );
+  const sorted = [...messages].sort((left, right) => {
+    const [leftTime, rightTime] = [messageTime(left), messageTime(right)];
+    return leftTime === rightTime ? 0 : leftTime < rightTime ? -1 : 1;
+  });
   return sorted.slice(Math.max(0, sorted.length - cap));
 }
 

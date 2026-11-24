@@ -465,6 +465,15 @@ describe('createJobRunner', () => {
     expect(part.titles).toEqual([['row-1', 'user', 'Work move K-1']]);
   });
 
+  it('launch_titlesCommentRowWithKey', async () => {
+    const part = await runnerOver();
+    await part.start();
+
+    await part.enqueue({ kind: 'comment', key: 'K-1', text: 'Looks good' });
+
+    expect(part.titles).toEqual([['row-1', 'user', 'Work comment K-1']]);
+  });
+
   it.each([
     { setting: 'p1', fallback: 'd', launchedOn: 'p1' },
     { setting: '', fallback: 'd', launchedOn: 'd' },
