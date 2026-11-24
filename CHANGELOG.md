@@ -28,6 +28,13 @@ changes for the user.
 
 - The `builds.openDetail` command: a `keymap.json` bind naming it does nothing.
 
+## 1.3.0 — 2026-11-24
+
+### Changed
+
+- Python bytecode (`__pycache__/`, `*.pyc`) is ignored in the app repo, as it was in `ai`: running the agent plugin's
+  Python tests no longer leaves untracked files that fail the changelog lint.
+
 ## 1.2.0 — 2026-11-24
 
 ### Changed

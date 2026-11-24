@@ -13,7 +13,11 @@ import {
 } from '../../../shared/fake-agent-harness';
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { ChecklistItem, WorkflowSelfTestHooks } from '../contract';
+import {
+  CHECKLIST_STAGE,
+  type ChecklistItem,
+  type WorkflowSelfTestHooks,
+} from '../contract';
 
 // Sends the fake answers as any other, whose turn end makes the tool call the
 // send asks for, as a real agent would.
@@ -168,8 +172,10 @@ export function levelSelfTestScript(
       marks = markRun(harnesses.list());
       turnEndListener?.dispose();
       turnEndListener = null;
+      // A new session starts on the Checklist flow, and the launch's tool
+      // turn ends there as unclaimed work.
       return {
-        shownLine: line('shows idle'),
+        shownLine: line(`shows ${CHECKLIST_STAGE}`),
         alsoShown: [anchored('no workflow')],
         result: openSession(),
       };

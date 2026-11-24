@@ -17,7 +17,7 @@ import {
 } from '../../../shared/fake-agent-harness';
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { WorkflowSelfTestHooks } from '../contract';
+import { CHECKLIST_STAGE, type WorkflowSelfTestHooks } from '../contract';
 import { sampleDeclared } from '../declared/sample-workflows';
 
 // The self-test's project folder, made under the self-test's home. Its name
@@ -365,8 +365,9 @@ export function sampleLargeSelfTestScript(
       marks = markRun(harnesses.list());
       turnEndListener?.dispose();
       turnEndListener = null;
+      // A new session starts on the Checklist flow.
       return {
-        shownLine: line('shows idle'),
+        shownLine: line(`shows ${CHECKLIST_STAGE}`),
         result: openSession(),
       };
     },

@@ -154,3 +154,7 @@ out/
 
 # Drive runs
 .drive/
+
+# Python bytecode from the agent plugin's scripts and their tests
+__pycache__/
+*.pyc
