@@ -60,6 +60,13 @@ Core seams that most items below assume.
 
 Defects seen in a drive run, a transcript or the user's own use.
 
+- **Inbox detail pane stacks under the cards at common window widths** — *needs a look call*: the Inbox split's least
+  widths (cards 320px, pane 480px, `PANE_SPLIT` in `src/plugins/work-inbox/page/inbox-view.ts`) need a middle area of
+  about 810px. With the section list and the system-stats bar open that takes a window about 1410px wide: a drive run at
+  1400x900 stacked the pane below the cards, and at 1600x900 it sat beside them. The Board, with no section list,
+  sits beside at 1400. Decide whether the Inbox pane's least width drops, or stacking stays the answer at that width.
+  Source session: Claude Code 8fcdd4ae (board-detail-pane run).
+
 - **Practice's Solution tab sits under the file name** — *agent-ready*: in a drive run at 1400x900, the practice
   Solution tab lay under `span.practice-file-name`, so a real click on the tab was refused and only a DOM `.click()`
   opened its confirm. Find the overlap in practice's tab row layout and keep the tab clickable.
