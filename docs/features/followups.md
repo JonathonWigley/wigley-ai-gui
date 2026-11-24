@@ -561,6 +561,11 @@ Duplication and drift with no user-visible defect.
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
+- **A second `chat.start` hangs the drive run** — *agent-ready*: in a drive run (fake harness), after the first
+  session ran `fake: agents`, a second `npm run drive -- do chat.start` never returned and every later drive command,
+  `eval 1+1` included, hung until `restart`; a retry after the restart hung the same way. Seen in the builds plan's
+  task 10 drive (check 11's hidden-hub case). Cause not checked: find what `chat.start` waits on.
+
 - **The hosted busy rule lacks the adapter's interrupt rescues** — *needs a feature plan*: the host's busy reading
   (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE` in `src/plugins/claude-code/main/claude-launch.ts`) now has
   turn-tracker's no-lifecycle fallback. It still lacks the close of every open message on an interrupt reply when no
