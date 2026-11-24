@@ -261,4 +261,5 @@ Review base: a9161d1a
 - Review fix: trackCalls refuses saveLog after dispose but leaves it out of drained (overrides 02's 'drained waits for it'); the saved place restores only once its game (All: every game) is listed, and a saved game gone from a polled snapshot drops the hold
 ### Review rounds
 - Round 1 (a9161d1a..43060941, 5 lanes): NEEDS FIXES — 3 Important, 19 Minor, 8 recommendations, all taken per repo § Review. Lead-applied 9445a61f (docs/comments). Fix range 992fd4cf, 4aaa350d, b7dd1da7 — risk Medium (restore rule, drain membership, end-message timing, download resolution change behaviour across main and page) → correctness re-review
+- Re-review 1 (9445a61f..b7dd1da7, correctness): NEEDS FIXES — 1 Important (repeat of R1#2: All restore waits on a backend that never lists), 4 Minor, 1 pre-existing; lead-applied ff78daba. Repeat stepped back to the cause: the restore rules read BackendView.problem as the 'will not list' signal (repo § Review takes the recommendation)
 ### Test gate
