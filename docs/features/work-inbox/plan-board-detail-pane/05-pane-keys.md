@@ -1,6 +1,6 @@
 # 05 — Pane keys
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · binds commands 03 and 04 already ship, and adds self-test steps for them
 Wave: 5 · Depends on: 03, 04
@@ -71,3 +71,4 @@ Bookkeeping: tick this task's box in `plan.md`
 
 ## Proof
 
+Commit 79d48a57 · proof: Diff read: Board <CR>→togglePane, gx→openCard, C-j/k, C-S-j/k, i, box scope with D-Enter/Esc; Inbox <CR>→togglePane, gx→openSlack, four pane scrolls. typecheck clean; vitest shared+keymap+work 4500 passed; selftest --plugin work all PASS; grep prints only the two gx lines. · concerns: Inbox keys steps start with the pane already open (opened by the earlier i step), so the steps read Enter→pane closed, Enter→pane open, C-S-j, Enter→pane closed. Board box needs two Escapes to log 'board focused' (first leaves the box input, as in the Inbox); unverified whether leaveBox on the first Escape is swallowed.
