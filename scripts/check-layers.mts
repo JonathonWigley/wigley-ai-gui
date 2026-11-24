@@ -26,39 +26,6 @@ import {
 
 const NODE_ONLY: Partial<LayerRule> = { packages: ['node:'] };
 
-const LARGE_SUBLAYERS = ['src/plugins/workflow-large/stages'];
-
-// Large's tests that run a stage rule through the engine's real fold.
-const LARGE_FOLD_TEST_RULE: LayerRule = {
-  layers: [
-    'src/contracts',
-    'src/shared',
-    'src/plugins/workflow',
-    'src/plugins/workflow/contract.ts',
-    'src/plugins/workflow-large',
-    'src/plugins/workflow-large/contract.ts',
-    'src/plugins/workflow-large/stages',
-    'src/plugins/chat/contract.ts',
-    'src/plugins/workflow-large/main',
-  ],
-  packages: [],
-};
-const LARGE_FOLD_TESTS = [
-  'large-state.test.ts',
-  'main/actions.test.ts',
-  'main/countdown.test.ts',
-  'stages/main-stages.test.ts',
-  'stages/page-stages.test.ts',
-  'stages/reported-steps.test.ts',
-  'stages/closed/main.test.ts',
-  'stages/explore/main.test.ts',
-  'stages/idle/main.test.ts',
-  'stages/make/main.test.ts',
-  'stages/plan-ready/main.test.ts',
-  'stages/primer/main.test.ts',
-  'stages/review/main.test.ts',
-];
-
 const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   'audio-picker': {
     // A picker is an agent form with a `node:crypto` fingerprint.
@@ -115,7 +82,14 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   // Its contract's records hold the follow-up file module's types.
-  backlog: { contract: { layers: ['src/shared/followups'] } },
+  backlog: {
+    contract: { layers: ['src/shared/followups'] },
+    // Its reader checks home templates with Docs' `features-homes.ts`, and its
+    // fixture strategy copies Docs' fixture binding's features homes.
+    main: {
+      layers: ['src/plugins/docs', 'src/plugins/docs/main/selftest-fixture.ts'],
+    },
+  },
   chat: {
     // Its contract's `readAdoptRequest` reads JSON with the shared readers, and
     // it names the layouts' entry types, for `addEntryRenderer`.
@@ -142,7 +116,25 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its adapter's tests drive fake children over node:events, node:readline and node:stream.
   'claude-code': { main: NODE_ONLY },
   // Its plugin status hashes files with `node:crypto`.
-  docs: { main: NODE_ONLY },
+  docs: {
+    main: {
+      layers: ['src/plugins/docs/main/selftest-fixture.ts'],
+      packages: ['node:'],
+    },
+    sublayers: {
+      // Its own layer, so Backlog's main reads the fixture binding and no
+      // other Docs main file.
+      'src/plugins/docs/main/selftest-fixture.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/docs/contract.ts',
+          'src/plugins/docs/main',
+        ],
+        packages: [],
+      },
+    },
+  },
   forms: {
     // Its contract imports NUMBER_KEY_COUNT from `./manifest`.
     contract: { layers: ['src/plugins/forms'] },
@@ -218,7 +210,13 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     },
   },
   // Its self-test script builds a PNG with `node:zlib`.
-  notes: { main: NODE_ONLY },
+  // Its self-test reads back the follow-ups file of Docs' fixture repo.
+  notes: {
+    main: {
+      layers: ['src/plugins/docs/main/selftest-fixture.ts'],
+      packages: ['node:'],
+    },
+  },
   primer: {
     // A primer is an agent form with a `node:crypto` fingerprint.
     main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
@@ -364,244 +362,6 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     contract: { layers: ['src/plugins/workflow/layouts'] },
     main: { packages: ['node:'] },
   },
-  // Its root and parts share the stages; main uses `node:path`.
-  'workflow-large': {
-    root: { layers: LARGE_SUBLAYERS },
-    contract: { layers: ['src/shared'] },
-    main: { layers: LARGE_SUBLAYERS, packages: ['node:'] },
-    page: { layers: LARGE_SUBLAYERS },
-    sublayers: {
-      'src/plugins/workflow-large/stages': {
-        layers: [
-          'src/contracts',
-          'src/shared',
-          'src/plugins/workflow-large',
-          'src/plugins/workflow-large/contract.ts',
-          'src/plugins/workflow/contract.ts',
-        ],
-        packages: [],
-      },
-      ...Object.fromEntries(
-        LARGE_FOLD_TESTS.map((file) => [
-          `src/plugins/workflow-large/${file}`,
-          LARGE_FOLD_TEST_RULE,
-        ]),
-      ),
-      // Starts the real engine page part and Large's on it.
-      'src/plugins/workflow-large/page/start.test.ts': {
-        layers: [
-          'src/contracts',
-          'src/shared',
-          'src/plugins/docs/contract.ts',
-          'src/plugins/sessions/contract.ts',
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow/page',
-          'src/plugins/workflow-large/contract.ts',
-          'src/plugins/workflow-large/page',
-        ],
-        packages: [],
-      },
-      // Draws through the engine's layout types.
-      'src/plugins/workflow-large/layouts/default/layout.test.ts': {
-        layers: [
-          'src/shared',
-          'src/shared/page',
-          'src/plugins/workflow-large/layouts',
-          'src/plugins/workflow/layouts',
-        ],
-        packages: [],
-      },
-    },
-  },
-  'workflow-spike': {
-    main: {
-      layers: [
-        'src/plugins/workflow-spike/stages',
-        'src/plugins/workflow-spike/main/selftest-script.ts',
-      ],
-    },
-    page: { layers: ['src/plugins/workflow-spike/stages'] },
-    sublayers: {
-      // Self-test support: Spike's script is built on the engine's level script.
-      'src/plugins/workflow-spike/main/selftest-script.ts': {
-        layers: ['src/contracts', 'src/plugins/workflow/main'],
-        packages: [],
-      },
-      'src/plugins/workflow-spike/stages': {
-        layers: [
-          'src/contracts',
-          'src/plugins/workflow-spike',
-          'src/plugins/workflow-spike/contract.ts',
-          'src/plugins/workflow/contract.ts',
-        ],
-        packages: [],
-      },
-      // Runs Spike's stage rules through the engine's real fold.
-      'src/plugins/workflow-spike/stages/spike-stages.test.ts': {
-        layers: [
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow-spike/contract.ts',
-          'src/plugins/workflow-spike/stages',
-        ],
-        packages: [],
-      },
-      // Starts the real engine page part and Spike's on it.
-      'src/plugins/workflow-spike/page/start.test.ts': {
-        layers: [
-          'src/shared',
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow/page',
-          'src/plugins/workflow-spike',
-          'src/plugins/workflow-spike/contract.ts',
-          'src/plugins/workflow-spike/page',
-          'src/plugins/workflow-spike/stages',
-        ],
-        packages: [],
-      },
-      // Draws with the engine's real kit.
-      'src/plugins/workflow-spike/layouts/default/layout.test.ts': {
-        layers: [
-          'src/shared/page',
-          'src/plugins/workflow-spike/layouts',
-          'src/plugins/workflow/layouts',
-          'src/plugins/workflow/page',
-        ],
-        packages: [],
-      },
-    },
-  },
-  'workflow-small': {
-    main: {
-      layers: [
-        'src/plugins/workflow-small/stages',
-        'src/plugins/workflow-small/main/selftest-script.ts',
-      ],
-    },
-    page: { layers: ['src/plugins/workflow-small/stages'] },
-    sublayers: {
-      // Self-test support: Small's script is built on the engine's level script.
-      'src/plugins/workflow-small/main/selftest-script.ts': {
-        layers: ['src/contracts', 'src/plugins/workflow/main'],
-        packages: [],
-      },
-      'src/plugins/workflow-small/stages': {
-        layers: [
-          'src/contracts',
-          'src/plugins/workflow-small',
-          'src/plugins/workflow-small/contract.ts',
-          'src/plugins/workflow/contract.ts',
-        ],
-        packages: [],
-      },
-      // Runs Small's stage rules through the engine's real fold.
-      'src/plugins/workflow-small/stages/small-stages.test.ts': {
-        layers: [
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow-small/contract.ts',
-          'src/plugins/workflow-small/stages',
-        ],
-        packages: [],
-      },
-      // Starts the real engine page part and Small's on it.
-      'src/plugins/workflow-small/page/start.test.ts': {
-        layers: [
-          'src/shared',
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow/page',
-          'src/plugins/workflow-small',
-          'src/plugins/workflow-small/contract.ts',
-          'src/plugins/workflow-small/page',
-          'src/plugins/workflow-small/stages',
-        ],
-        packages: [],
-      },
-      // Draws with the engine's real kit.
-      'src/plugins/workflow-small/layouts/default/layout.test.ts': {
-        layers: [
-          'src/shared/page',
-          'src/plugins/workflow-small/layouts',
-          'src/plugins/workflow/layouts',
-          'src/plugins/workflow/page',
-        ],
-        packages: [],
-      },
-    },
-  },
-  'workflow-medium': {
-    main: {
-      layers: [
-        'src/plugins/workflow-medium/stages',
-        'src/plugins/workflow-medium/main/selftest-script.ts',
-      ],
-    },
-    page: { layers: ['src/plugins/workflow-medium/stages'] },
-    sublayers: {
-      // Self-test support: Medium's script is built on the engine's level script.
-      'src/plugins/workflow-medium/main/selftest-script.ts': {
-        layers: ['src/contracts', 'src/plugins/workflow/main'],
-        packages: [],
-      },
-      'src/plugins/workflow-medium/stages': {
-        layers: [
-          'src/contracts',
-          'src/plugins/workflow-medium',
-          'src/plugins/workflow-medium/contract.ts',
-          'src/plugins/workflow/contract.ts',
-        ],
-        packages: [],
-      },
-      // Runs Medium's stage rules through the engine's real fold.
-      'src/plugins/workflow-medium/stages/medium-stages.test.ts': {
-        layers: [
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow-medium/contract.ts',
-          'src/plugins/workflow-medium/stages',
-        ],
-        packages: [],
-      },
-      // Runs Medium's state rules through the engine's real fold.
-      'src/plugins/workflow-medium/medium-state.test.ts': {
-        layers: [
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow-medium',
-          'src/plugins/workflow-medium/contract.ts',
-          'src/plugins/workflow-medium/stages',
-        ],
-        packages: [],
-      },
-      // Starts the real engine page part and Medium's on it.
-      'src/plugins/workflow-medium/page/start.test.ts': {
-        layers: [
-          'src/shared',
-          'src/plugins/workflow',
-          'src/plugins/workflow/contract.ts',
-          'src/plugins/workflow/page',
-          'src/plugins/workflow-medium',
-          'src/plugins/workflow-medium/contract.ts',
-          'src/plugins/workflow-medium/page',
-          'src/plugins/workflow-medium/stages',
-        ],
-        packages: [],
-      },
-      // Draws with the engine's real kit.
-      'src/plugins/workflow-medium/layouts/default/layout.test.ts': {
-        layers: [
-          'src/shared/page',
-          'src/plugins/workflow-medium/layouts',
-          'src/plugins/workflow/layouts',
-          'src/plugins/workflow/page',
-        ],
-        packages: [],
-      },
-    },
-  },
 };
 
 const CORE_LAYERS: Record<string, LayerRule> = {
@@ -610,6 +370,11 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
   'src/shared/followups': { layers: ['src/shared'], packages: [] },
+  // Reads the agent-plugin manifests from disk to check them against its constants.
+  'src/shared/agent-plugin.test.ts': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
+    packages: ['node:'],
+  },
   // The local channel transport the relay and the session host share.
   'src/shared/local-channel': {
     layers: ['src/contracts'],
@@ -932,66 +697,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/primer/main',
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main',
-    ],
-    packages: [],
-  },
-  // The real engine's main part and Large's on its exports.
-  'src/plugins/workflow-large-main.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/main',
-      'src/plugins/workflow-large/contract.ts',
-      'src/plugins/workflow-large/main',
-      'src/plugins/workflow-large',
-    ],
-    packages: [],
-  },
-  // The real engine's page part and Large's on its exports.
-  'src/plugins/workflow-large-page.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/shared/page/layout-host',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/layouts',
-      'src/plugins/workflow/page',
-      'src/plugins/workflow-large/contract.ts',
-      'src/plugins/workflow-large/layouts',
-      'src/plugins/workflow-large/page',
-    ],
-    packages: [],
-  },
-  // The four level workflows' main rules through the engine's real fold, and
-  // Small's, Medium's and Spike's main parts on the real engine.
-  'src/plugins/workflow-levels.test.ts': {
-    layers: [
-      'src/shared',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/main',
-      'src/plugins/workflow-large',
-      'src/plugins/workflow-large/contract.ts',
-      'src/plugins/workflow-small/contract.ts',
-      'src/plugins/workflow-small/main',
-      'src/plugins/workflow-small/stages',
-      'src/plugins/workflow-medium/contract.ts',
-      'src/plugins/workflow-medium/main',
-      'src/plugins/workflow-medium/stages',
-      'src/plugins/workflow-spike/contract.ts',
-      'src/plugins/workflow-spike/main',
-      'src/plugins/workflow-spike/stages',
     ],
     packages: [],
   },

@@ -35,6 +35,24 @@ export function jsonKind(value: unknown): JsonKind {
   }
 }
 
+// The user's value at a dotted `path` of `layer`; `isSet` false when a key on
+// the path is missing or a step is not an object.
+export function userValue(
+  layer: Record<string, unknown> | null,
+  path: string,
+): { isSet: boolean; value: unknown } {
+  const keys = path.split('.');
+  let parent: unknown = layer;
+  for (const key of keys.slice(0, -1)) {
+    parent = isJsonObject(parent) ? parent[key] : undefined;
+  }
+  const last = keys[keys.length - 1];
+  if (!isJsonObject(parent) || !Object.hasOwn(parent, last)) {
+    return { isSet: false, value: undefined };
+  }
+  return { isSet: true, value: parent[last] };
+}
+
 // Whether `value` is an array holding only strings.
 export function isStringArray(value: unknown): value is string[] {
   return (

@@ -60,7 +60,7 @@ import type { UserSettings } from './user-settings';
 // The served config holds the plugins the store admitted (`admit`), not the
 // catalog's: a caller hands it entries with `setPlugins`, and a file rebuild
 // uses the last admitted ones. Plugin problems serve as `plugins/<id>`, after
-// the file problems.
+// the file problems, and service problems serve last.
 export interface ConfigStore extends Disposable {
   current(): AppConfig;
   onChanged(listener: (config: AppConfig) => void): Disposable;
@@ -85,6 +85,10 @@ export interface ConfigStore extends Disposable {
   // after the store's own file problems and before `pluginProblems()`. A
   // changed list re-serves.
   setPluginProblems(problems: readonly CatalogProblem[]): void;
+  // The problems main parts serve through `services.configProblems`, in plugin
+  // catalog order, each with its own `file` and `message`, served after every
+  // other problem. A changed list re-serves.
+  setServiceProblems(problems: readonly ConfigProblem[]): void;
   // The check deps and schema over the admitted entries, for user-config.
   checks(): { deps: ConfigCheckDeps; schema: ConfigSchema };
   // The remaps of the user keymap layer the store keeps, for main to layer
@@ -369,6 +373,7 @@ export async function loadConfigStore(
   let runtimeLayer: DefaultKeyLayer = {};
   let handedPlugins: readonly CatalogEntry[] | null = null;
   let outsideProblems: readonly CatalogProblem[] = [];
+  let serviceProblems: readonly ConfigProblem[] = [];
   let loggedDrops: ReadonlySet<string> = new Set();
   let watchProblem: ConfigProblem | null = null;
   let pluginsProblem: string | null = null;
@@ -580,6 +585,7 @@ export async function loadConfigStore(
           file: `plugins/${problem.id}`,
           message: problem.message,
         })),
+        ...serviceProblems.map(({ file, message }) => ({ file, message })),
       ],
     };
   };
@@ -715,6 +721,15 @@ export async function loadConfigStore(
         return;
       }
       outsideProblems = [...problems];
+      if (!isDisposed) {
+        requestRebuild();
+      }
+    },
+    setServiceProblems(problems) {
+      if (JSON.stringify(problems) === JSON.stringify(serviceProblems)) {
+        return;
+      }
+      serviceProblems = [...problems];
       if (!isDisposed) {
         requestRebuild();
       }

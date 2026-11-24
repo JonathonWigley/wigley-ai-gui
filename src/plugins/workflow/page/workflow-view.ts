@@ -18,6 +18,7 @@ import type {
 } from '../../sessions/contract';
 import {
   type ActionInput,
+  CHECKLIST_WORKFLOW_ID,
   type ChecklistGroup,
   type ChecklistItem,
   type ChecklistView,
@@ -349,7 +350,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     if (
       workflow === null ||
       stage === null ||
-      stage.id === IDLE_STAGE ||
+      isStageless(flow, stage) ||
       isSidePaneHidden
     ) {
       return null;
@@ -381,12 +382,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     const isHeadless = deps.isHeadless(sessionId);
     drawnHeadless.set(sessionId, isHeadless);
     const drawsStage =
-      workflow !== null && stage !== null && stage.id !== IDLE_STAGE;
+      workflow !== null && stage !== null && !isStageless(flow, stage);
     switch (part.kind) {
       case 'chip': {
         const running = deps.runningActivity(part.sessionId);
         if (!drawsStage) {
-          if (flow.workflow === null && flow.missedLevel) {
+          if (flow.workflow === CHECKLIST_WORKFLOW_ID && flow.missedLevel) {
             part.wrapper.append(tag(NO_WORKFLOW_TEXT, 'error'));
           }
           if (running !== null) {
@@ -551,7 +552,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   };
 
   const logMissedLevel = (flow: SessionFlow, name: string) => {
-    if (flow.workflow !== null || !flow.missedLevel) {
+    if (flow.workflow !== CHECKLIST_WORKFLOW_ID || !flow.missedLevel) {
       noWorkflowLogged.delete(flow.sessionId);
     } else if (!noWorkflowLogged.has(flow.sessionId)) {
       noWorkflowLogged.add(flow.sessionId);
@@ -730,6 +731,14 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
   };
   return view;
+}
+
+// Whether the flow draws as no stage: idle, or on the Checklist flow before a
+// checklist arrives.
+function isStageless(flow: SessionFlow, stage: PageStage): boolean {
+  const isChecklistWaiting =
+    flow.workflow === CHECKLIST_WORKFLOW_ID && flow.checklist === null;
+  return stage.id === IDLE_STAGE || isChecklistWaiting;
 }
 
 // The running activity's word with its first letter raised, as the row draws a label.

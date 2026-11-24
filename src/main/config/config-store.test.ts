@@ -1542,6 +1542,41 @@ describe('plugin admission', () => {
     ]);
   });
 
+  it('setServiceProblems_ServedLastWithTheirOwnFile', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/keymap.json`, '{');
+    const store = await load(files, {
+      plugins: [builtIn(listPlugin), userEntry(badToken('x'))],
+    });
+    store.setPluginProblems([{ id: 'y', message: 'm' }]);
+    await nextChange(store);
+
+    store.setServiceProblems([{ file: '/p/auri.json', message: 'p: bad' }]);
+    const config = await nextChange(store);
+
+    expect(config.problems).toEqual([
+      { file: 'keymap.json', message: expect.any(String) },
+      { file: 'plugins/y', message: 'm' },
+      { file: 'plugins/x', message: expect.stringContaining('"Bad"') },
+      { file: '/p/auri.json', message: 'p: bad' },
+    ]);
+  });
+
+  it('setServiceProblems_EqualList_DoesNotRebuild', async () => {
+    const held = heldReads(createMemoryFiles());
+    const store = await load(held.files);
+    const problems = [{ file: '/p/auri.json', message: 'p: bad' }];
+    store.setServiceProblems(problems);
+    await nextChange(store);
+    const readsBefore = held.reads.length;
+
+    store.setServiceProblems([...problems]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(held.reads.length).toBe(readsBefore);
+    expect(store.current().problems).toEqual(problems);
+  });
+
   it.each([
     {
       case: 'settings object under an absent id',

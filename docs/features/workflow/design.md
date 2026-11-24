@@ -1,5 +1,7 @@
 # Workflow
 
+The four level plugins this describes were replaced by declarations in `auri.json` (shareable-app): see `docs/features/feature-contributions/design.md`.
+
 **Contents**
 
 - **Status** — what is built now and where each workflow lives.

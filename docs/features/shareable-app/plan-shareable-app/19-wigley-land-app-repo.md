@@ -1,6 +1,6 @@
 # 19 — wigley-land lands the app repo
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds a second repo mode and a new stage to a tool whose steps stop before anything they cannot undo; 17 relies on its behaviour
 Wave: 2 · Depends on: 01 (the app repo is recognised by the `auri` manifests 01 creates, and the update step installs `auri@auri`)
@@ -162,3 +162,4 @@ Commit: one commit for the group, landed in `ai` with `wigley-land` itself (an `
 
 ## Proof
 
+Commit 87f2f1e05 · proof: diff read: repo_kind, APP_REPO, scan_secrets, auri update with installed-only skip, README modes present; both files parse; suite waits for the test gate · concerns: a landing with no pull scans main..branch but pushes origin/main..main, so earlier unpushed main commits go unscanned; betterleaks --redact/--exit-code unchecked against the binary (task 17); skip-betterleaks test PATH assumption

@@ -70,44 +70,12 @@ describe('manifests', () => {
     });
   });
 
-  it('manifests_WorkflowLarge_ListsItsCommandsAndSettings', () => {
-    const large = manifests.find(({ id }) => id === 'workflow-large');
+  it('manifests_Workflow_ListsItsSettings', () => {
+    const workflow = manifests.find(({ id }) => id === 'workflow');
 
-    expect(Object.keys(large?.commands ?? {}).sort()).toEqual(
-      [
-        'clearAndMake',
-        'cancelCountdown',
-        'makeInNewSession',
-        'resumeMake',
-        'openPlan',
-        'retro',
-        'dismiss',
-      ].sort(),
+    expect(Object.keys(workflow?.settings ?? {}).sort()).toEqual(
+      ['autoStart', 'layout', 'off'].sort(),
     );
-    expect(Object.keys(large?.settings ?? {}).sort()).toEqual(
-      ['layout', 'autoClearAndMake', 'autoStartSeconds'].sort(),
-    );
-  });
-
-  it('manifests_WorkflowSmall_HasItsLayoutSettingAndBadgeToken', () => {
-    const small = manifests.find(({ id }) => id === 'workflow-small');
-
-    expect(Object.keys(small?.settings ?? {})).toEqual(['layout']);
-    expect(small?.themeTokens?.badge.default).toBe('var(--wg-status-info)');
-  });
-
-  it('manifests_WorkflowMedium_HasItsLayoutSettingAndBadgeToken', () => {
-    const medium = manifests.find(({ id }) => id === 'workflow-medium');
-
-    expect(Object.keys(medium?.settings ?? {})).toEqual(['layout']);
-    expect(medium?.themeTokens?.badge.default).toBe('var(--wg-accent)');
-  });
-
-  it('manifests_WorkflowSpike_HasItsLayoutSettingAndBadgeToken', () => {
-    const spike = manifests.find(({ id }) => id === 'workflow-spike');
-
-    expect(Object.keys(spike?.settings ?? {})).toEqual(['layout']);
-    expect(spike?.themeTokens?.badge.default).toBe('var(--wg-fg-secondary)');
   });
 });
 

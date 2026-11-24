@@ -3,7 +3,10 @@ import type { PluginLog } from '../../../contracts/log';
 import type { ListSlotReader } from '../../../contracts/state';
 import { bashCommandOf } from '../../../shared/bash-command';
 import { CHAT_PREVIEW_HOST_ID, type ChatAgentEvent } from '../../chat/contract';
-import { parsePlaytestCommand } from '../playtest-command';
+import {
+  type PlaytestPatterns,
+  parsePlaytestCommand,
+} from '../playtest-command';
 import type { LiveTools } from './live-tools';
 
 type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
@@ -12,6 +15,8 @@ export interface PlaytestWatchDeps {
   entries: ListSlotReader<ChatEntry>;
   liveTools: Pick<LiveTools, 'playtestStarted' | 'playtestStopped'>;
   log: PluginLog;
+  // The installed strategies' patterns, read on each settled call.
+  patterns(): PlaytestPatterns;
 }
 
 // Feeds chat's agent events in; the watch hears `chat.entries` itself.
@@ -28,13 +33,12 @@ interface RowCalls {
 }
 
 // Opens and closes a session's Live view on its live Bash calls that succeed:
-// a playtest start or stop as `parsePlaytestCommand` reads it, on the project
-// folder it names. A call is
-// live when chat's `toolStarted` for its `toolUseId` came with `replayed`
+// a playtest start or stop as `parsePlaytestCommand` reads it against the
+// installed patterns, on the project folder it names. A call is live when chat's `toolStarted` for its `toolUseId` came with `replayed`
 // false; a restored or replayed entry never acts, and each call acts once.
 // Chat's preview row is left out; a subagent's call acts for its lead's row.
 export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch {
-  const { entries, liveTools, log } = deps;
+  const { entries, liveTools, log, patterns } = deps;
   const rows = new Map<string, RowCalls>();
 
   const callsOf = (sessionId: string): RowCalls => {
@@ -47,7 +51,7 @@ export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch {
   };
 
   const act = (sessionId: string, command: string) => {
-    const signal = parsePlaytestCommand(command);
+    const signal = parsePlaytestCommand(command, patterns());
     if (signal === null) {
       return;
     }
@@ -57,7 +61,7 @@ export function createPlaytestWatch(deps: PlaytestWatchDeps): PlaytestWatch {
     }
     if (signal.projectPath === null) {
       log(
-        `${sessionId} opened no Live view for a playtest: the command names no --project-path`,
+        `${sessionId} opened no Live view for a playtest: the command names no project folder`,
       );
       return;
     }

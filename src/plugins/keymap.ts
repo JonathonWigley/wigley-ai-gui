@@ -362,15 +362,6 @@ export const defaultKeymap = {
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
-    {
-      keys: '<Leader>wn',
-      scope: 'any',
-      command: 'workflow-large.makeInNewSession',
-    },
-    { keys: '<Leader>wr', scope: 'any', command: 'workflow-large.resumeMake' },
-    { keys: '<Leader>wo', scope: 'any', command: 'workflow-large.openPlan' },
-    { keys: '<Leader>wt', scope: 'any', command: 'workflow-large.retro' },
-    { keys: '<Leader>wd', scope: 'any', command: 'workflow-large.dismiss' },
     { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
       keys: '<Leader>wf',

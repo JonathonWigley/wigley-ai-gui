@@ -1,6 +1,6 @@
 # 03 — Contributions registry: the `contributions` plugin and config problems
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses the harness install lists, file watches with a debounce, and the ConfigStore's served problems
 Wave: 2 · Depends on: 01
@@ -258,3 +258,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 9125a450a 95fe3eef5 · proof: diff read: every Produces present in contracts/contributions.ts, contributions/contract.ts, plugin.ts, agent.ts, config-store, plugin-types; wave 2 typecheck and lint pass after the fix commit; tests wait for the test gate · concerns: TS2589 on the slot publish fixed with a local cast key (values unknown) in main/start.ts; start.test.ts debounce rows rest on harness timer assumptions, never run; page/start.ts slot sync untested; tell now iterates the live listener set; no-thenable warning on ActionDecl then left

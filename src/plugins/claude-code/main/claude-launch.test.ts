@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentStart } from '../../../contracts/agent';
+import {
+  AGENT_PLUGIN_NAME,
+  AGENT_SERVER_NAME,
+  claudePluginToolName,
+} from '../../../shared/agent-plugin';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
 import { NESTED_SESSION_ENV } from '../../../shared/session-env';
@@ -13,7 +18,11 @@ import {
   claudeSpawn,
 } from './claude-launch';
 
-const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
+const TOOL = claudePluginToolName(
+  AGENT_PLUGIN_NAME,
+  AGENT_SERVER_NAME,
+  'permission_prompt',
+);
 
 describe('claudeLaunch', () => {
   it('claudeLaunch_NewSession_PinnedArgsAndProfileEnv', () => {
@@ -33,6 +42,7 @@ describe('claudeLaunch', () => {
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
       '/h',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.args).toEqual([
@@ -49,6 +59,8 @@ describe('claudeLaunch', () => {
       'auto',
       '--permission-prompt-tool',
       TOOL,
+      '--plugin-dir',
+      '/app/agent-plugin',
     ]);
     expect(launch.cwd).toBe('/proj');
     expect(launch.env).toEqual({
@@ -77,6 +89,7 @@ describe('claudeLaunch', () => {
       { HOME: '/h' },
       '/h',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.args).toEqual([
@@ -94,6 +107,8 @@ describe('claudeLaunch', () => {
       'bypassPermissions',
       '--permission-prompt-tool',
       TOOL,
+      '--plugin-dir',
+      '/app/agent-plugin',
     ]);
   });
 
@@ -116,6 +131,7 @@ describe('claudeLaunch', () => {
       env,
       '/h',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.args.slice(7, 9)).toEqual(['--resume', 's-1']);
@@ -192,6 +208,7 @@ describe('claudeLaunch', () => {
         {},
         '/h',
         posixPaths,
+        '/app/agent-plugin',
       );
 
       for (const flag of present) {
@@ -233,6 +250,7 @@ describe('claudeLaunch', () => {
         {},
         '/h',
         posixPaths,
+        '/app/agent-plugin',
       );
 
       const flagIndex = launch.args.indexOf('--append-system-prompt');
@@ -268,6 +286,7 @@ describe('claudeLaunch', () => {
       },
       '/h',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.env).toEqual({
@@ -304,6 +323,7 @@ describe('claudeLaunch', () => {
         { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' },
         '/h',
         posixPaths,
+        '/app/agent-plugin',
       );
 
       expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe(expected);
@@ -333,6 +353,7 @@ describe('claudeLaunch', () => {
       env,
       '/h',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.env.WIGLEY_SESSION_ROW).toBe('row-7');
@@ -355,6 +376,7 @@ describe('claudeLaunch', () => {
       { HOME: '/elsewhere' },
       '/Users/u',
       posixPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('/Users/u/.claude-personal');
@@ -377,6 +399,7 @@ describe('claudeLaunch', () => {
       {},
       'C:\\Users\\jo',
       windowsPaths,
+      '/app/agent-plugin',
     );
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\jo\\.claude-work');
@@ -422,6 +445,7 @@ describe('claudeLaunch', () => {
         inherited,
         '/h',
         posixPaths,
+        '/app/agent-plugin',
       );
       const cleaned = claudeEnv(inherited, profileDir, '/h', posixPaths);
 
@@ -462,14 +486,22 @@ describe('claudeSpawn', () => {
       env,
       homeDir: '/h',
       paths: posixPaths,
+      pluginDir: '/app/agent-plugin',
       stdin: ['line-1'],
       inheritEnv: true,
     });
 
-    const launch = claudeLaunch(request, env, '/h', posixPaths);
+    const launch = claudeLaunch(
+      request,
+      env,
+      '/h',
+      posixPaths,
+      '/app/agent-plugin',
+    );
     expect(spawn.id).toBe('p-3');
     expect(spawn.command).toBe('/bin/claude');
     expect(spawn.args).toEqual(['--lead', ...launch.args]);
+    expect(spawn.args).toContain('/app/agent-plugin');
     expect(spawn.cwd).toBe(launch.cwd);
     expect(spawn.unsetEnv).toEqual(launch.unsetEnv);
     expect(spawn.stdin).toEqual(['line-1']);

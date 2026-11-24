@@ -51,8 +51,8 @@ text and no top-level list item. Fenced code never counts.
 
 ```markdown
 - **<title>** — <one line>
-- **<title>** — *agent-ready*: <one line>
-- **<title>** — *agent-ready, <tag>*: <one line>
+- **<title>** — _agent-ready_: <one line>
+- **<title>** — _agent-ready, <tag>_: <one line>
 ```
 
 - The title is bold and unique in the repo: Backlog keys a row by repo and title, and an edit names its item by

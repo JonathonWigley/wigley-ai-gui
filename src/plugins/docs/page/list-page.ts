@@ -23,9 +23,10 @@ export function listPlace(target: ListTarget): string {
     : `wiki:owner/${target.owner}`;
 }
 
-// The list a history place names; null for a file's path.
+// The list a history place names; null for a file's path. A list's place is
+// a `wiki:` link, so no skill link prefix bears on it.
 export function listTargetOfPlace(path: string): ListTarget | null {
-  const target = parseWikiTarget(path);
+  const target = parseWikiTarget(path, {});
   return target?.type === 'kind' || target?.type === 'owner' ? target : null;
 }
 

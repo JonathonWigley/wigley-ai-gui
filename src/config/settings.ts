@@ -10,7 +10,12 @@ export function coreDefaultSettings(): Settings {
     keySequenceTimeoutMs: 1000,
     shell: { layout: 'default' },
     plugins: {
-      disabled: ['agent-lines', 'usage-tab-line', 'docs-session-tab'],
+      disabled: [
+        'agent-lines',
+        'usage-tab-line',
+        'docs-session-tab',
+        'unity-pool',
+      ],
     },
     programs: { python: '' },
   };

@@ -22,6 +22,9 @@ changes for the user.
   checklist.
 - `README.md`, this changelog and an MIT `LICENSE`. `npm run lint` fails when a branch changes app code without a
   changelog entry, and a test fails when the README leaves out a plugin, tool, setting, skill or hook.
+- `npm run lint` also fails when app code names one user's setup (`npm run lint:boundary`), and
+  `npm run changelog:release` moves the Unreleased entries under a version heading and bumps the app and `auri`
+  plugin versions together.
 - Inbox mode (`Space k i`): your Slack threads sorted by what needs you, with drafts ready to send, snooze, dismiss and
   restore, a ticket filter, and a Dock badge counting what needs you.
 - Board mode (`Space k j`): your Jira tickets and local tasks in columns, with moves you make by key, button or drag and

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import type {
+  DocsContribution,
+  FeatureKey,
+} from '../../../contracts/contributions';
 import { DEMO_HARNESS_ID, type DemoMainStep } from '../../../contracts/demo';
 import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Git } from '../../../contracts/git';
@@ -25,6 +29,11 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
+  type ContributionsMainExports,
+  contributionsMainKey,
+  type Strategy,
+} from '../../contributions/contract';
+import {
   type OwnedSession,
   type SessionInfo,
   sessionsMainKey,
@@ -33,16 +42,59 @@ import {
 } from '../../sessions/contract';
 import { sessionRow } from '../../sessions/contract.test-support';
 import {
+  docsBindingSlot,
+  type DocsGlobalFolder,
   type DocsMainExports,
+  type FeaturesHomes,
   type IndexDocument,
+  NO_DOCS_BINDING,
   SAMPLE_HOME_FOLDER,
 } from '../contract';
+import { contributionsFileText } from './contributions-file';
 import { MACHINE_INDEX_FILE } from './index-sources';
-import { docsFixtureInstalls } from './selftest-fixture';
+import { DOCS_FIXTURE_BINDING, docsFixtureInstalls } from './selftest-fixture';
 import { addDriveActions, docsMainPart, startDocs } from './start';
 
 const HOME = '/home';
 const CLAUDE_MD = `${HOME}/.claude/CLAUDE.md`;
+// The contributions file in docs' data folder, as the part harness and
+// `startDocsPart` place it, and the args every script run starts with.
+const CONTRIBUTIONS_PATH = '/data/docs/contributions.json';
+const RUN = ['-X', 'utf8', '/script.py', '--contributions', CONTRIBUTIONS_PATH];
+const RAN_OK: ProcessResult = {
+  code: 0,
+  stdout: '',
+  stderr: '',
+  timedOut: false,
+};
+
+// A contributions registry, ready at once, serving `strategies` for every
+// key; `change` replaces them and tells each `onChanged` listener.
+function fakeContributions(strategies: Strategy<DocsContribution>[] = []) {
+  let current = strategies;
+  const listeners = new Set<(next: readonly Strategy<unknown>[]) => void>();
+  const exports = {
+    registerFeature: () => ({ dispose: () => undefined }),
+    strategies: () => current,
+    onChanged(
+      _key: FeatureKey,
+      listener: (next: readonly Strategy<unknown>[]) => void,
+    ) {
+      listeners.add(listener);
+      return { dispose: () => listeners.delete(listener) };
+    },
+    ready: Promise.resolve(),
+  } as unknown as ContributionsMainExports;
+  return {
+    exports,
+    change(next: Strategy<DocsContribution>[]) {
+      current = next;
+      for (const listener of listeners) {
+        listener(next);
+      }
+    },
+  };
+}
 
 function setUpFiles() {
   const files = createMemoryFiles();
@@ -73,10 +125,15 @@ function start(
       runMode,
       paths: posixPaths,
       agentHarnesses: harnessRegistryOf([harness]),
+      appDir: '/app',
     },
-    () => '/script.py',
-    () => [],
-    () => new Map([[harness.id, harness.info()]]),
+    {
+      scriptPath: () => '/script.py',
+      entries: () => [],
+      infos: () => new Map([[harness.id, harness.info()]]),
+      binding: () => NO_DOCS_BINDING,
+      contributionsFile: () => Promise.resolve(CONTRIBUTIONS_PATH),
+    },
   );
 }
 
@@ -214,6 +271,7 @@ function startDocsPart() {
   const emitted: [string, unknown][] = [];
   const processes = new FakeProcesses();
   const files = createMemoryFiles();
+  const contributions = fakeContributions();
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const git = {
     topLevel: vi.fn<Git['topLevel']>(async () => '/r'),
@@ -244,8 +302,15 @@ function startDocsPart() {
       selfTest: null,
       agentHarnesses: harnessRegistryOf([]),
       demoSteps,
+      appDir: '/app',
     },
+    data: {
+      write: (path: string, text: string) =>
+        files.write(`/data/docs/${path}`, text),
+    },
+    dataFolder: '/data/docs',
     state: {
+      publish: () => ({ set: () => undefined, dispose: () => undefined }),
       read: (key: unknown) =>
         key === sessionsRowsSlot
           ? { all: () => new Map(), on: () => ({ dispose: () => undefined }) }
@@ -254,7 +319,8 @@ function startDocsPart() {
                 new Map([['claude', harnessInfo({ label: 'Claude Code' })]]),
             },
     },
-    dependency: () => ({}),
+    dependency: (key: unknown) =>
+      key === contributionsMainKey ? contributions.exports : {},
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof docsMainPart.start>[0];
@@ -338,16 +404,12 @@ function documentWithDoc(path: string): IndexDocument {
 describe('docs main part', () => {
   it('sessionSource_RegisteredWhileConnected', async () => {
     const docs = startDocsPart();
-    docs.processes.script(
-      'python3',
-      ['-X', 'utf8', '/script.py', 'session', 'abc'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    docs.processes.script('python3', [...RUN, 'session', 'abc'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const info: SessionInfo = {
       sessionId: 'abc',
       projectDir: '/p',
@@ -370,16 +432,12 @@ describe('docs main part', () => {
 
   it('sessionSource_HostSessionChanged_LoadsNewId', async () => {
     const docs = startDocsPart();
-    docs.processes.script(
-      'python3',
-      ['-X', 'utf8', '/script.py', 'session', 'new-host'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    docs.processes.script('python3', [...RUN, 'session', 'new-host'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const info: SessionInfo = {
       sessionId: 'old-host',
       projectDir: '/p',
@@ -441,7 +499,7 @@ describe('docs main part', () => {
       ] as const) {
         await docs.files.makeFolder(path.slice(0, path.lastIndexOf('/')));
         await docs.files.write(path, 'one');
-        docs.processes.script('python3', ['-X', 'utf8', '/script.py', ...run], {
+        docs.processes.script('python3', [...RUN, ...run], {
           code: 0,
           stdout: JSON.stringify(documentWithDoc(path)),
           stderr: '',
@@ -824,13 +882,22 @@ describe('demo sample docs', () => {
 });
 
 const NOTES = '/notes.md';
-// Docs' main part on the harness, live over an empty root, so it writes no
-// fixture, running `/script.py`.
-function startDocsOnHarness() {
+// Docs' main part on the harness over an empty root, running `/script.py`,
+// live by default, so it writes no fixture, with `contributions` faked.
+function startDocsOnHarness(
+  options: {
+    runMode?: RunMode;
+    contributions?: ReturnType<typeof fakeContributions>;
+  } = {},
+) {
+  const contributions = options.contributions ?? fakeContributions();
   const harness = startMainPart(docsMainPart, {
     drive: true,
+    dependencies: [
+      fakeDependency(contributionsMainKey, () => contributions.exports),
+    ],
     settings: { ...docsMainPart.manifest.settings, scriptPath: '/script.py' },
-    services: { homeDir: '/', runMode: 'live' },
+    services: { homeDir: '/', runMode: options.runMode ?? 'live' },
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsMainExports;
@@ -878,7 +945,10 @@ describe('docs main part lifecycle', () => {
     );
     const harness = startMainPart(docsMainPart, {
       drive: true,
-      dependencies: [sessions],
+      dependencies: [
+        sessions,
+        fakeDependency(contributionsMainKey, () => fakeContributions().exports),
+      ],
       settings: { ...docsMainPart.manifest.settings, scriptPath: '/script.py' },
       services: { homeDir: '/', runMode: 'live' },
     });
@@ -960,16 +1030,12 @@ describe('docs main part lifecycle', () => {
     { when: 'a row and its connected event', seed: 'both' },
   ])('serves the session index of $when', async ({ seed }) => {
     const { harness } = startDocsOnHarness();
-    harness.processes.script(
-      'python3',
-      ['-X', 'utf8', '/script.py', 'session', 'abc'],
-      {
-        code: 0,
-        stdout: JSON.stringify(INDEX_DOCUMENT),
-        stderr: '',
-        timedOut: false,
-      },
-    );
+    harness.processes.script('python3', [...RUN, 'session', 'abc'], {
+      code: 0,
+      stdout: JSON.stringify(INDEX_DOCUMENT),
+      stderr: '',
+      timedOut: false,
+    });
     const rows = harness.state.publish(sessionsRowsSlot);
     const row = sessionRow('row-1', { hostSessionId: 'abc', projectDir: '/p' });
     rows.set('row-1', row);
@@ -1001,7 +1067,7 @@ describe('docs main part lifecycle', () => {
     const { harness } = startDocsOnHarness();
     harness.processes.script(
       'python3',
-      ['-X', 'utf8', '/script.py', 'session', 'abc'],
+      [...RUN, 'session', 'abc'],
       Promise.withResolvers<ProcessResult>().promise,
     );
     harness.emit('sessions.connected', {
@@ -1028,5 +1094,122 @@ describe('docs main part lifecycle', () => {
       harness.logs.filter(({ source }) => source !== 'plugin-host'),
     ).toEqual([]);
     expect(harness.processes.runs).toHaveLength(1);
+  });
+});
+
+const USER_FOLDER: DocsGlobalFolder = {
+  path: '~/wigley-agents',
+  referenceFiles: ['decisions.md'],
+  subfolders: ['learning', 'wiki'],
+  skip: ['archive', 'learning/archive'],
+};
+
+const USER_DOCS: DocsContribution = {
+  globalFolders: [USER_FOLDER],
+  wikiMain: '~/wigley-agents/wiki/Main.md',
+  linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
+};
+
+const USER_HOMES: FeaturesHomes = {
+  homes: ['{repo}/docs/features', '~/wigley-features/{name}'],
+  file: 'followups.md',
+  areaFolder: 'followups',
+};
+
+function wigleyStrategy(value: DocsContribution): Strategy<DocsContribution> {
+  return {
+    id: 'wigley',
+    label: 'wigley',
+    source: {
+      pluginName: 'wigley',
+      pluginKey: 'wigley@wigley-ai-marketplace',
+      version: '1.0.0',
+      root: '/plugins/wigley',
+      harnessId: 'claude',
+    },
+    value,
+  };
+}
+
+// Lets every settled promise's chain run.
+const settled = () => new Promise((resolve) => setTimeout(resolve));
+
+describe('docs binding', () => {
+  // Docs started live, its first contributions file written, with each
+  // machine index build scripted to succeed.
+  async function startBound(contributions = fakeContributions()) {
+    const { harness, exportsTo } = startDocsOnHarness({ contributions });
+    harness.processes.script('python3', [...RUN, 'build'], RAN_OK);
+    const exports = exportsTo(createRegistrations());
+    await vi.waitFor(async () =>
+      expect(await harness.files.stat(CONTRIBUTIONS_PATH)).not.toBeNull(),
+    );
+    const builds = () =>
+      harness.processes.runs.filter((run) => run.args.at(-1) === 'build');
+    return { harness, exports, builds };
+  }
+
+  it('firstBinding_NoContribution_WritesTheEmptyFileAndRunsNothing', async () => {
+    const { harness, builds } = await startBound();
+    await settled();
+
+    expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
+      contributionsFileText(NO_DOCS_BINDING),
+    );
+    expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(
+      NO_DOCS_BINDING,
+    );
+    expect(builds()).toEqual([]);
+  });
+
+  it('setFeaturesHomes_SameValueTwice_RunsOnce', async () => {
+    const { harness, exports, builds } = await startBound();
+
+    exports.setFeaturesHomes(USER_HOMES);
+    exports.setFeaturesHomes({ ...USER_HOMES });
+    await vi.waitFor(() => expect(builds()).toHaveLength(1));
+    await settled();
+
+    expect(builds()).toHaveLength(1);
+    expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
+      contributionsFileText({ ...NO_DOCS_BINDING, features: USER_HOMES }),
+    );
+  });
+
+  it('docsStrategyChanged_RewritesTheFileAndRebuilds', async () => {
+    const contributions = fakeContributions();
+    const { harness, builds } = await startBound(contributions);
+
+    contributions.change([wigleyStrategy(USER_DOCS)]);
+    await vi.waitFor(() => expect(builds()).toHaveLength(1));
+
+    const expected = {
+      globalFolders: [USER_FOLDER],
+      wikiMain: '~/wigley-agents/wiki/Main.md',
+      linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
+      features: null,
+    };
+    expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
+      contributionsFileText(expected),
+    );
+    expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(expected);
+  });
+
+  it('setFeaturesHomes_SelfTestMode_KeepsTheFixtureFeatures', async () => {
+    const { harness, exportsTo } = startDocsOnHarness({ runMode: 'selfTest' });
+    const exports = exportsTo(createRegistrations());
+    await vi.waitFor(() =>
+      expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(
+        DOCS_FIXTURE_BINDING,
+      ),
+    );
+
+    exports.setFeaturesHomes({ ...USER_HOMES, file: 'todo.md' });
+    await settled();
+
+    expect(harness.state.read(docsBindingSlot, 'test').get()).toEqual(
+      DOCS_FIXTURE_BINDING,
+    );
+    expect(harness.processes.runs).toEqual([]);
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessActivity } from '../../../contracts/agent';
+import type {
+  FeatureKey,
+  RetroContribution,
+} from '../../../contracts/contributions';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type { DemoMainStep } from '../../../contracts/demo';
 import { readIfPresent } from '../../../contracts/files';
@@ -22,6 +26,12 @@ import {
   type SessionOrigin,
 } from '../../chat/contract';
 import {
+  type ContributionsMainExports,
+  contributionsMainKey,
+  type FeatureReader,
+  type Strategy,
+} from '../../contributions/contract';
+import {
   type SessionRow,
   type SessionsMainExports,
   sessionsMainKey,
@@ -34,12 +44,51 @@ import { DEMO_QUEUED } from './demo-steps';
 import { QUEUE_FILE } from './queue-file';
 import { DEFAULT_SETTLE_SECONDS, RESTORE_WAIT_MS } from './retro-done';
 import type { RetroQueue } from './retro-queue';
+import { retroReader } from './retro-reader';
 import { autoRetroMainPart } from './start';
 
 const QUEUE_PATH = `/data/auto-retro/${QUEUE_FILE}`;
 const SETTLE_MS = DEFAULT_SETTLE_SECONDS * 1000;
 
 const settled = () => new Promise((settle) => setImmediate(settle));
+
+type RetroStrategy = Strategy<RetroContribution>;
+
+function retroStrategy(id: string, value: RetroContribution): RetroStrategy {
+  return {
+    id,
+    label: id,
+    source: {
+      pluginName: id,
+      pluginKey: `${id}@market`,
+      version: '1.0.0',
+      root: `/plugins/${id}`,
+      harnessId: 'claude',
+    },
+    value,
+  };
+}
+
+const WIGLEY = retroStrategy('wigley', {
+  command: '/wigley:retro auto {sessions}',
+  folder: '~/wigley-agents',
+  on: ['close', 'clear'],
+});
+
+const ACME = retroStrategy('acme', {
+  command: '/acme:retro {sessions}',
+  folder: '~/retros',
+  on: ['close'],
+});
+
+const SETTINGS = {
+  strategy: '',
+  layout: 'default',
+  settleSeconds: DEFAULT_SETTLE_SECONDS,
+};
+
+const notQueuedLines = (messages: string[]) =>
+  messages.filter((message) => message.startsWith('retro not queued:'));
 
 function rowOf(sessionId: string, hostSessionId: string): SessionRow {
   return sessionRow(sessionId, {
@@ -107,22 +156,25 @@ function sessionInfo(
 // The part on the harness, over a chat whose `launch` answers through
 // `answerLaunch` (by default: row `retro-<n>` with host `retro-host-<n>` set in
 // `sessions.rows`, then that row id) and records each launch and close, and a
-// sessions that records each title set. Every fake lives across a restart. `enterDemoStep` enters the registered
-// `auto-retro.section` step, its demo session `row-demo`.
+// sessions that records each title set, and a contributions that serves `strategies` (by default the wigley strategy
+// alone), holds each registered reader in `features` and tells `onChanged` listeners on `setStrategies`. Every fake
+// lives across a restart. `enterDemoStep` enters the registered `auto-retro.section` step, its demo session `row-demo`.
 function startPart(
   options: {
     runMode?: RunMode;
-    settings?: { folder: string; layout: string; settleSeconds: number };
+    settings?: typeof SETTINGS;
+    strategies?: RetroStrategy[];
   } = {},
 ) {
   const launches: LaunchRequest[] = [];
   const closes: [string, SessionCloseReason][] = [];
   const titles: [string, TitleSource, string | null][] = [];
-  const settings = options.settings ?? {
-    folder: '~/wigley-agents',
-    layout: 'default',
-    settleSeconds: DEFAULT_SETTLE_SECONDS,
-  };
+  const features = new Map<FeatureKey, FeatureReader<unknown>>();
+  const strategyListeners = new Set<
+    (strategies: readonly Strategy<unknown>[]) => void
+  >();
+  const settings = options.settings ?? SETTINGS;
+  let strategies = options.strategies ?? [WIGLEY];
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const state = createSlotStore(() => undefined);
   state.publish(coreAgentHarnessesSlot).set(
@@ -168,6 +220,33 @@ function startPart(
             },
           }) as unknown as SessionsMainExports,
       ),
+      fakeDependency(
+        contributionsMainKey,
+        () =>
+          ({
+            registerFeature(key: FeatureKey, reader: FeatureReader<unknown>) {
+              features.set(key, reader);
+              return {
+                dispose() {
+                  features.delete(key);
+                },
+              };
+            },
+            strategies: () => strategies,
+            onChanged(
+              _key: FeatureKey,
+              listener: (strategies: readonly Strategy<unknown>[]) => void,
+            ) {
+              strategyListeners.add(listener);
+              return {
+                dispose() {
+                  strategyListeners.delete(listener);
+                },
+              };
+            },
+            ready: Promise.resolve(),
+          }) as unknown as ContributionsMainExports,
+      ),
     ],
   });
   const rows = harness.state.publish(sessionsRowsSlot);
@@ -179,6 +258,13 @@ function startPart(
     titles,
     rows,
     sessions,
+    features,
+    setStrategies(next: RetroStrategy[]) {
+      strategies = next;
+      for (const listener of strategyListeners) {
+        listener(next);
+      }
+    },
     answerLaunch: (_request: LaunchRequest): Promise<string> => {
       const n = launches.length;
       rows.set(`retro-${n}`, rowOf(`retro-${n}`, `retro-host-${n}`));
@@ -248,8 +334,9 @@ async function restartWithQueueLost(firstMessage: string) {
 async function restartThenReopenWithQueueLost(
   firstMessage: string,
   origin: SessionOrigin = 'restored',
+  options: Parameters<typeof startPart>[0] = {},
 ) {
-  const part = startPart();
+  const part = startPart(options);
   await settled();
   await part.harness.files.write(QUEUE_PATH, '{');
   await part.harness.restart();
@@ -627,13 +714,7 @@ describe('autoRetroMainPart', () => {
   });
 
   it('doneRow_SettleSecondsZero_ClosesAtOnce', async () => {
-    const part = startPart({
-      settings: {
-        folder: '~/wigley-agents',
-        layout: 'default',
-        settleSeconds: 0,
-      },
-    });
+    const part = startPart({ settings: { ...SETTINGS, settleSeconds: 0 } });
     await settled();
     await part.close('h1');
     await part.startedThenIdle('retro-1');
@@ -660,6 +741,113 @@ describe('autoRetroMainPart', () => {
     await part.clear('h0', 'h1', false);
 
     expect(part.texts()).toEqual([]);
+  });
+
+  it('sessionClosed_NoStrategy_LaunchesNothingAndLogsOnce', async () => {
+    const part = startPart({ strategies: [] });
+    await settled();
+
+    await part.close('h1');
+    await part.close('h2');
+
+    expect(part.launches).toEqual([]);
+    expect(part.state()?.queued).toBe(0);
+    expect(notQueuedLines(part.messages())).toHaveLength(1);
+  });
+
+  it('sessionClosed_TwoStrategiesAutomatic_LaunchesNothing', async () => {
+    const part = startPart({ strategies: [WIGLEY, ACME] });
+    await settled();
+
+    await part.close('h1');
+
+    expect(part.launches).toEqual([]);
+    expect(part.state()?.queued).toBe(0);
+  });
+
+  it('sessionClosed_PickedStrategy_LaunchesItsCommandInItsFolder', async () => {
+    const part = startPart({
+      strategies: [WIGLEY, ACME],
+      settings: { ...SETTINGS, strategy: 'acme' },
+    });
+    await settled();
+
+    await part.close('h1');
+
+    expect(part.launches).toEqual([
+      {
+        projectDir: '/home/me/retros',
+        profile: 'work',
+        message: { text: '/acme:retro h1', images: [] },
+        unattended: true,
+      },
+    ]);
+  });
+
+  // A retro runs for h1 and h2 waits queued when a second strategy installs and the automatic pick turns `choose`;
+  // then h1's retro ends.
+  async function queueThenUnbind() {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    await part.close('h2');
+    part.setStrategies([WIGLEY, ACME]);
+    await settled();
+    await part.close('retro-host-1', 'finished');
+    return part;
+  }
+
+  it('queuedThenUnbound_StaysQueuedNotRunning', async () => {
+    const part = await queueThenUnbind();
+
+    const saved = await part.queueFile();
+    expect({ queued: saved?.queued, running: saved?.running }).toEqual({
+      queued: [{ hostIds: ['h2'], profile: 'work', title: 'Fix login' }],
+      running: null,
+    });
+    expect(part.texts()).toEqual(['/wigley:retro auto h1']);
+  });
+
+  it('queuedThenUnbound_PickRestored_Launches', async () => {
+    const part = await queueThenUnbind();
+
+    part.harness.pushSettings({ ...SETTINGS, strategy: 'acme' });
+    await settled();
+    part.harness.pushSettings({ ...SETTINGS, strategy: 'acme' });
+    await settled();
+
+    expect(part.texts()).toEqual(['/wigley:retro auto h1', '/acme:retro h2']);
+    expect(part.state()?.queued).toBe(0);
+  });
+
+  it('start_RegistersTheRetroReaderInSelfTestMode', async () => {
+    const part = startPart({ runMode: 'selfTest' });
+    await settled();
+
+    expect(part.features.get('retro')).toBe(retroReader);
+  });
+
+  it('restoredSessionOpened_OtherStrategysPrefix_ClaimedAsRetroRow', async () => {
+    const part = await restartThenReopenWithQueueLost(
+      '/acme:retro h1',
+      'restored',
+      {
+        strategies: [WIGLEY, ACME],
+        settings: { ...SETTINGS, strategy: 'wigley' },
+      },
+    );
+
+    expect(part.state()?.rows).toEqual(['retro-9']);
+
+    part.harness.emit('chat.sessionClosed', {
+      ...closedEvent('retro-host-9', 'user'),
+      sessionId: 'retro-9',
+      titles: { user: null, agent: null, firstMessage: '/acme:retro h1' },
+    });
+    await settled();
+
+    expect(part.launches).toEqual([]);
+    expect(part.state()?.queued).toBe(0);
   });
 
   it('selfTestRunMode_UserClose_LaunchesNothing', async () => {

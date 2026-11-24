@@ -1,5 +1,6 @@
 import type { AgentHarnessInfo } from '../../../contracts/agent';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
+import type { DocsContribution } from '../../../contracts/contributions';
 import { DEMO_HARNESS_ID } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
@@ -12,6 +13,7 @@ import type {
   MainServices,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { agentPluginDir } from '../../../shared/agent-plugin';
 import {
   argsObject,
   optionalBoolean,
@@ -26,6 +28,10 @@ import {
 } from '../../../shared/fake-agent-harness';
 import type { JsonObject } from '../../../shared/json';
 import {
+  contributionsMainKey,
+  type ContributionsMainExports,
+} from '../../contributions/contract';
+import {
   type AgentSession,
   followRows,
   type SessionsMainEvents,
@@ -34,9 +40,12 @@ import {
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
+  type DocsBinding,
+  docsBindingSlot,
   type DocsChannel,
   type DocsMainEvents,
   type DocsMainExports,
+  type FeaturesHomes,
   type IndexEntry,
   type IndexSource,
   MACHINE_SOURCE_ID,
@@ -47,7 +56,12 @@ import {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { docsManifest } from '../manifest';
+import {
+  CONTRIBUTIONS_JSON,
+  contributionsFileText,
+} from './contributions-file';
 import { registerDemoSteps } from './demo-steps';
+import { docsReader, mergeDocs } from './docs-reader';
 import { createDocFiles, type DocFiles } from './doc-files';
 import { createHarnessFolders } from '../../../shared/harness-folders';
 import {
@@ -64,7 +78,12 @@ import {
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
 import { readRecentChanges } from './recent-changes';
-import { docsFixtureInstalls, writeDocsFixture } from './selftest-fixture';
+import {
+  DOCS_FIXTURE_BINDING,
+  docsFixtureInstalls,
+  docsFixturePluginDir,
+  writeDocsFixture,
+} from './selftest-fixture';
 import { docsSelfTestScript, openDocsFixtureSession } from './selftest-script';
 import { createViewWatches } from './view-watches';
 
@@ -93,13 +112,24 @@ async function hasDocsFixture(
   return (await files.stat(paths.join(homeDir, MACHINE_INDEX_FILE))) !== null;
 }
 
+// What `startDocs` reads beyond the services: `scriptPath` at each index run,
+// `entries` at each doc change, `infos` (`core.agentHarnesses`) at each guard
+// and lookup, `binding` at each guard, create and wiki page lookup, and
+// `contributionsFile` before each index run.
+export interface StartDocsDeps {
+  scriptPath(): string;
+  entries(): readonly IndexEntry[];
+  infos(): ReadonlyMap<string, AgentHarnessInfo>;
+  binding(): DocsBinding;
+  contributionsFile(): Promise<string>;
+}
+
 // The index uses real paths, so the home folder every `~` expands to is the
-// real one. `scriptPath` is read at each index run, `entries` at each doc
-// change, `infos` (`core.agentHarnesses`) at each guard and lookup. A drive
-// run's restart keeps the home, so the fixture is written only into a home
-// without one; every run other than a live one hands each fake harness the
-// fixture's installs for each of its profiles, since a restart builds a new
-// fake.
+// real one. A live run runs the app's agent plugin's `docs_index.py`; every
+// other run runs the fixture's stand-in. A drive run's restart keeps the
+// home, so the fixture is written only into a home without one; every run
+// other than a live one hands each fake harness the fixture's installs for
+// each of its profiles, since a restart builds a new fake.
 export async function startDocs(
   services: Pick<
     MainServices,
@@ -110,10 +140,9 @@ export async function startDocs(
     | 'runMode'
     | 'paths'
     | 'agentHarnesses'
+    | 'appDir'
   >,
-  scriptPath: () => string,
-  entries: () => readonly IndexEntry[],
-  infos: () => ReadonlyMap<string, AgentHarnessInfo>,
+  deps: StartDocsDeps,
 ): Promise<DocsMain> {
   const { files, processes, log, paths, agentHarnesses } = services;
   const homeDir = await files.realPath(services.homeDir);
@@ -130,15 +159,19 @@ export async function startDocs(
   }
   const folders = createHarnessFolders({
     harnesses: agentHarnesses,
-    infos,
+    infos: deps.infos,
     log,
   });
-  const indexDeps = {
+  const indexDeps: IndexSourcesDeps = {
     files,
     processes,
     homeDir,
-    scriptPath,
-    folders,
+    scriptPath: deps.scriptPath,
+    pluginDir:
+      services.runMode === 'live'
+        ? agentPluginDir(services.appDir, paths)
+        : docsFixturePluginDir(homeDir, paths),
+    contributionsFile: deps.contributionsFile,
     log,
     paths,
   };
@@ -148,9 +181,100 @@ export async function startDocs(
     log,
     paths,
     folders,
-    entries,
+    entries: deps.entries,
+    binding: deps.binding,
   });
   return { indexDeps, docFiles };
+}
+
+// The binding docs works with and the contributions file that hands it to the
+// index. A live run merges the `docs` strategies after `contributions.ready`
+// and on each change of them, with Backlog's latest features homes; every
+// other run keeps `DOCS_FIXTURE_BINDING`. The file is written once the first
+// binding is set, and again on each binding whose file text differs, each
+// such change then rebuilding the machine index. `file()` waits for every
+// write queued so far, so no index run starts while one is in flight.
+interface DocsBindingHolder extends Disposable {
+  binding(): DocsBinding;
+  setFeaturesHomes(homes: FeaturesHomes | null): void;
+  file(): Promise<string>;
+}
+
+interface DocsBindingDeps {
+  contributions: Pick<
+    ContributionsMainExports,
+    'strategies' | 'onChanged' | 'ready'
+  >;
+  isLive: boolean;
+  // Writes the file's text to `CONTRIBUTIONS_JSON` in the data folder.
+  writeFile(text: string): Promise<void>;
+  filePath: string;
+  publish(binding: DocsBinding): void;
+  rebuildMachineIndex(): void;
+  log(message: string): void;
+}
+
+export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
+  const { contributions, isLive, log } = deps;
+  let features: FeaturesHomes | null = null;
+  let binding: DocsBinding = isLive
+    ? { globalFolders: [], wikiMain: null, linkPrefixes: {}, features }
+    : DOCS_FIXTURE_BINDING;
+  let isBound = false;
+  let writtenText: string | null = null;
+  let fileWrite: Promise<void> = Promise.resolve();
+
+  // True when `next` queued a write: its file text differs from the last.
+  const bind = (next: DocsBinding): boolean => {
+    binding = next;
+    deps.publish(next);
+    const text = contributionsFileText(next);
+    if (text === writtenText) {
+      return false;
+    }
+    writtenText = text;
+    fileWrite = fileWrite
+      .then(() => deps.writeFile(text))
+      .catch((error: unknown) =>
+        log(`contributions file not written: ${errorText(error)}`),
+      );
+    return true;
+  };
+  const merged = (): DocsBinding =>
+    isLive
+      ? {
+          ...mergeDocs(contributions.strategies<DocsContribution>('docs'), log),
+          features,
+        }
+      : DOCS_FIXTURE_BINDING;
+  const rebind = () => {
+    if (isBound && bind(merged())) {
+      deps.rebuildMachineIndex();
+    }
+  };
+  const firstBinding = contributions.ready.then(() => {
+    bind(merged());
+    isBound = true;
+  });
+  const changes = isLive ? contributions.onChanged('docs', rebind) : null;
+  return {
+    binding: () => binding,
+    setFeaturesHomes(homes) {
+      if (!isLive || JSON.stringify(homes) === JSON.stringify(features)) {
+        return;
+      }
+      features = homes;
+      rebind();
+    },
+    async file() {
+      await firstBinding;
+      await fileWrite;
+      return deps.filePath;
+    },
+    dispose() {
+      changes?.dispose();
+    },
+  };
 }
 
 const SAMPLE_SOURCE_TITLE = 'Sample docs';
@@ -319,12 +443,34 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     api.layouts.register({ layoutTypes });
     const registry = createIndexSourceRegistry();
     const harnessInfos = api.state.read(coreAgentHarnessesSlot);
-    const docs = startDocs(
-      services,
-      () => api.settings().scriptPath,
-      () => registry.loadedEntries(),
-      () => harnessInfos.all(),
+    const contributions = api.dependency(contributionsMainKey);
+    const readerRegistration = contributions.registerFeature(
+      'docs',
+      docsReader,
     );
+    const bindingWriter = api.state.publish(docsBindingSlot);
+    const binding = createDocsBinding({
+      contributions,
+      isLive: services.runMode === 'live',
+      writeFile: (text) => api.data.write(CONTRIBUTIONS_JSON, text),
+      filePath: services.paths.join(api.dataFolder, CONTRIBUTIONS_JSON),
+      publish: (next) => bindingWriter.set(next),
+      rebuildMachineIndex: () => {
+        registry
+          .rebuild(MACHINE_SOURCE_ID)
+          .catch((error: unknown) =>
+            services.log(`machine index not rebuilt: ${errorText(error)}`),
+          );
+      },
+      log: services.log,
+    });
+    const docs = startDocs(services, {
+      scriptPath: () => api.settings().scriptPath,
+      entries: () => registry.loadedEntries(),
+      infos: () => harnessInfos.all(),
+      binding: () => binding.binding(),
+      contributionsFile: () => binding.file(),
+    });
     docs.catch((error: unknown) =>
       services.log(`docs not started: ${errorText(error)}`),
     );
@@ -557,6 +703,10 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     }
     return {
       commands: {},
+      dispose() {
+        binding.dispose();
+        readerRegistration.dispose();
+      },
       exports: (consumer): DocsMainExports => ({
         addSource: (source) => consumer.track(registry.add(source)),
         addSampleDocs: async (scratchDir) =>
@@ -569,6 +719,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         trashDoc,
         watchDoc: async (path, changed) =>
           consumer.track(await (await docs).docFiles.watch(path, changed)),
+        setFeaturesHomes: (homes) => binding.setFeaturesHomes(homes),
       }),
     };
   },

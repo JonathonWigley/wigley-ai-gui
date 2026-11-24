@@ -1,8 +1,8 @@
 import type { Timers } from '../../../../contracts/ambient';
 import type { PluginLog } from '../../../../contracts/log';
 
-// Stays under the relay's 10 s wait for its hello reply (wigley-ai-marketplace
-// `plugins/wigley/scripts/forms/relay.py`).
+// Stays under the relay's 10 s wait for its hello reply
+// (`agent-plugin/scripts/relay/relay.py`).
 export const CONNECT_HOLD_MS = 5_000;
 
 // `hold` adds a promise to the running wait, or starts a new wait with its own

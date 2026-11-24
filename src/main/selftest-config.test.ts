@@ -444,6 +444,25 @@ describe('checkGroups', () => {
 describe('selectScripts', () => {
   const groupsOf = (...names: string[]): SelfTestGroup[] =>
     names.map((name) => ({ name, why: 'w', steps: [] }));
+
+  it('selectScripts_PluginWithTwoScripts_KeepsBothInHandOverOrder', () => {
+    const runs = selectScripts(
+      [
+        withGroups('workflow', groupsOf('Small: full run')),
+        withGroups('forms', groupsOf('gallery')),
+        withGroups('workflow', groupsOf('Spike: full run')),
+      ],
+      { plugins: ['workflow'], groups: [] },
+    );
+
+    expect(
+      runs.map((run) => [run.pluginId, run.script.groups[0].name]),
+    ).toEqual([
+      ['workflow', 'Small: full run'],
+      ['workflow', 'Spike: full run'],
+    ]);
+  });
+
   const scripts = [
     withGroups('forms', groupsOf('gallery', 'side bar', 'review')),
     withGroups('settings', groupsOf('side bar', 'keymap')),

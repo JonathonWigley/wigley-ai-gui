@@ -7,6 +7,7 @@ import { parseIndexDocument } from '../index-document';
 import { buildWikiTree, type TreeNode } from '../tree';
 import { parseWikiMain } from '../wiki-main';
 import {
+  DOCS_FIXTURE_BINDING,
   docsFixtureInstalls,
   WIKI_MAIN_TEXT,
   writeDocsFixture,
@@ -131,11 +132,12 @@ describe('writeDocsFixture', () => {
     await writeDocsFixture(files, HOME, posixPaths);
 
     const tree = buildWikiTree(
-      parseWikiMain(WIKI_MAIN_TEXT),
+      parseWikiMain(WIKI_MAIN_TEXT, DOCS_FIXTURE_BINDING.linkPrefixes),
       (await readIndex(files)).entries,
       `${HOME}/wigley-agents/wiki`,
       HOME,
       posixPaths,
+      DOCS_FIXTURE_BINDING.linkPrefixes,
     );
     expect(wikiRows(tree)).toEqual([
       { group: 'Shelf one' },

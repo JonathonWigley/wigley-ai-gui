@@ -1,6 +1,6 @@
 # 09 — Docs reads its folders, wiki page and link prefixes from contributions; the docs index moves into the app
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · it adds a file format the TypeScript plugin writes and the Python index reads, and moves the index across repos with a parser the marketplace still imports
 Wave: 3 · Depends on: 01, 03
@@ -223,4 +223,4 @@ Commit: one commit for the group, covering both repos' paths.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 05e68a119 6883c8d0b · proof: diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: AGENTS.md line 116 still says docs reads wigley-install.ts; marketplace followups.md holds docs-index follow-ups now owned by the app

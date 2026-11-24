@@ -1,6 +1,6 @@
 # 05 — Plan capability in the workflow plugin
 
-Status: not started
+Status: done
 Type: Task
 Rung: deep · crosses async file watches, git worktree listing and the flow fold; a wrong guess loses a run's plan
 Wave: 4 · Depends on: 04
@@ -191,3 +191,5 @@ The rows of `workflow-large-main.test.ts` that test the countdown, the run log a
 Commit: one commit for the group.
 
 ## Proof
+
+Commit ebbcb3765 2545d311d · proof: diff read: startPlanCapability, createPlanFold, createPlanPane present and wired in main/page start.ts; wave 4 typecheck + lint pass after one test fix (AppInstance id literal, two spreads) · concerns: capability test builds the engine from foldFlow/buildMainWorkflow, so main/start.ts wiring is unexercised until 06/18; stage expectations rest on 04's engine rules, unrun

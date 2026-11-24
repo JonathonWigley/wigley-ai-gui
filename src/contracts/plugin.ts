@@ -45,6 +45,7 @@ import type { ProcessRunner } from './processes';
 import type { PullRequests } from './pull-requests';
 import type { ScreenCapture } from './screen-capture';
 import type { SessionHost } from './session-host';
+import type { ConfigProblem } from './settings';
 import type {
   JsonSlot,
   KeyedSlotKey,
@@ -1090,11 +1091,12 @@ export interface SelfTestScript {
   problems(result: unknown): string[];
 }
 
-// Each plugin's part calls `run` at most once, during its `start`, and the
-// script's page binds and settings join the config. The driver runs the handed
-// scripts in hand-over order, each cut after its last kept group on a filtered
-// run. `run` throws on a plugin's second script or after the parts have
-// started, and a self-test that got no script fails.
+// Each plugin's part calls `run` during its `start`, once per script it hands
+// (the workflow plugin hands one per sample workflow), and each script's page
+// binds and settings join the config. The driver runs the handed scripts in
+// hand-over order, each cut after its last kept group on a filtered run. `run`
+// throws after the parts have started, and a self-test that got no script
+// fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
@@ -1168,9 +1170,12 @@ export interface DriveHost {
 // `demoSteps` is the demo-step registry: a plugin registers its steps there,
 // each id starting `<plugin id>.`, and stopping the plugin disposes its
 // registrations. `cloneDir` is the clone the app runs from, or null when none
-// resolves. `pluginSwitch` tells whether a plugin may switch off now, and runs
+// resolves. `appDir` is the folder that holds the app's files outside the asar
+// (the resources folder when packaged, the repo folder in dev);
+// `agentPluginDir` resolves the `auri` plugin under it. `pluginSwitch` tells whether a plugin may switch off now, and runs
 // the built-in plugins the user switched off, in memory, as
-// `PluginSwitchService` says.
+// `PluginSwitchService` says. `configProblems` serves the plugin's own
+// config problems, as `ConfigProblemsService` says.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -1208,8 +1213,18 @@ export interface MainServices {
   appInstance: AppInstance;
   appBuild: AppBuild | null;
   cloneDir: string | null;
+  appDir: string;
   selfTest: SelfTestHost | null;
   pluginSwitch: PluginSwitchService;
+  configProblems: ConfigProblemsService;
+}
+
+// A main part's own config problems, which the ConfigStore serves after the
+// plugin catalog's, each with its own `file` and `message`, as the title bar
+// badge and toast show any config problem. `set` replaces every problem this
+// plugin served before; the part's stop clears them.
+export interface ConfigProblemsService {
+  set(problems: readonly ConfigProblem[]): void;
 }
 
 // The part of main's plugin switch a main part reaches. `mayDisable` gives the

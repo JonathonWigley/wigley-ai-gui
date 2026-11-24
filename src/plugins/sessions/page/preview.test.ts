@@ -94,7 +94,7 @@ describe('sessions preview', () => {
 
   it.each([
     {
-      label: 'wigley-ai-marketplace',
+      label: 'plugin-marketplace',
       title: 'Marketplace release notes',
       activity: 'working',
     },
@@ -141,7 +141,7 @@ describe('sessions preview', () => {
   });
 
   it.each([
-    { by: 1 as const, selected: 'wigley-ai-marketplace' },
+    { by: 1 as const, selected: 'plugin-marketplace' },
     { by: -1 as const, selected: 'wigley-agents 2' },
   ])(
     'sessionsView_StepPreview_MovesSampleSelectionOnly (by $by)',

@@ -1,3 +1,4 @@
+import type { RetroContribution } from '../../../contracts/contributions';
 import { coreAgentHarnessesSlot } from '../../../contracts/core-state';
 import type {
   ChannelShape,
@@ -14,6 +15,13 @@ import {
   chatSessionSlot,
 } from '../../chat/contract';
 import {
+  contributionsMainKey,
+  pickProblemText,
+  pickStrategy,
+  type Strategy,
+  type StrategyPick,
+} from '../../contributions/contract';
+import {
   followRows,
   sessionsMainKey,
   sessionsRowsSlot,
@@ -29,14 +37,17 @@ import {
   RESTORE_WAIT_MS,
 } from './retro-done';
 import {
+  commandPrefix,
   EMPTY_QUEUE,
   nextQueue,
   opensWithRetroCommand,
   type QueueEvent,
-  RETRO_COMMAND,
   type RetroItem,
+  type RetroPolicy,
   type RetroQueue,
+  retroCommandText,
 } from './retro-queue';
+import { retroReader } from './retro-reader';
 
 type AutoRetroApi = MainApi<
   typeof autoRetroManifest,
@@ -58,12 +69,20 @@ function hostIdsText(item: RetroItem): string {
   return item.hostIds.join(' ');
 }
 
-// Queues a retro for each session the user closes, and each conversation a `/clear` ends, after it sent a message, in
-// `queue.json` in the plugin data, launches one unattended `/wigley:retro auto <host ids>` row at a time in the
-// `folder` setting, claims each retro row (launched, or restored with a retro command as its first message), and
-// closes it `settleSeconds` after it reads done. Every event and launch result applies in one
-// serial chain that starts once the queue is loaded. Writes the retro rows and the queued count to
-// `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it registers its layouts and queues nothing.
+type RetroPick = StrategyPick<RetroContribution>;
+
+// The endings a close or a clear is checked against to tell whether it would have queued a retro under some pick.
+const EVERY_ENDING: RetroPolicy['on'] = ['close', 'clear'];
+
+// Registers the `retro` reader with `contributions`, then queues a retro for each session the user closes, and each
+// conversation a `/clear` ends, after it sent a message, when the picked retro strategy's `on` holds that ending, in
+// `queue.json` in the plugin data. It launches one unattended row at a time, in the picked strategy's folder with its
+// command, claims each retro row (launched, or restored with any installed strategy's command as its first message),
+// and closes it `settleSeconds` after it reads done. With no pick it queues nothing and logs why once per pick; a
+// queued retro waits at the head until a pick returns. Every event, launch result and change of pick applies in one
+// serial chain that starts once the queue is loaded and the strategies are read. Writes the retro rows and the queued
+// count to `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it
+// registers its layouts and reader and queues nothing.
 // A demo session (`ephemeral` on chat's event) queues no retro. While the demo step is entered, the slot shows its
 // row after the real rows and its queued count in place of the real one; the queue and `queue.json` never hold it.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
@@ -95,9 +114,19 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         write(real);
       },
     });
+    const contributions = api.dependency(contributionsMainKey);
+    const readerRegistration = contributions.registerFeature(
+      'retro',
+      retroReader,
+    );
     if (services.runMode === 'selfTest') {
       write({ rows: [], queued: 0 });
-      return { commands: {} };
+      return {
+        commands: {},
+        dispose() {
+          readerRegistration.dispose();
+        },
+      };
     }
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
@@ -116,6 +145,34 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const startedRows = new Set<string>();
     // Each claimed row in its settle wait, to its timer.
     const settles = new Map<string, number>();
+
+    // The unbound pick the last `retro not queued` line named, as JSON; null until one is logged and after a pick
+    // binds again.
+    let loggedUnboundPick: string | null = null;
+
+    const retroStrategies = () =>
+      contributions.strategies<RetroContribution>('retro');
+    const retroPick = (): RetroPick =>
+      pickStrategy(retroStrategies(), api.settings().strategy);
+    // Every installed strategy's prefix, not the pick's alone, so a row an earlier pick launched still reads as a
+    // retro row.
+    const installedPrefixes = () =>
+      retroStrategies().map((strategy) =>
+        commandPrefix(strategy.value.command),
+      );
+    const policyOf = (pick: RetroPick): RetroPolicy => ({
+      prefixes: installedPrefixes(),
+      on: pick.kind === 'picked' ? pick.strategy.value.on : [],
+    });
+
+    const logNotQueued = (pick: Exclude<RetroPick, { kind: 'picked' }>) => {
+      const pickJson = JSON.stringify(pick);
+      if (pickJson === loggedUnboundPick) {
+        return;
+      }
+      loggedUnboundPick = pickJson;
+      log(`retro not queued: ${pickProblemText(retroReader.label, pick)}`);
+    };
 
     const publish = () =>
       write({ rows: [...rows], queued: queue.queued.length });
@@ -218,23 +275,37 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
     };
 
-    // Takes `next` as the queue, moves the head to running when none runs, then saves, writes the slot and launches
-    // the new run.
+    // Takes `next` as the queue and, while a strategy is picked, moves the head to running when none runs; then saves,
+    // writes the slot and launches the new run with the picked strategy. With no pick the head stays queued.
     const commit = async (next: RetroQueue) => {
-      queue = nextQueue(next, { kind: 'launching' });
+      const pick = retroPick();
+      const strategy = pick.kind === 'picked' ? pick.strategy : null;
+      queue =
+        strategy === null
+          ? next
+          : nextQueue(next, { kind: 'launching' }, policyOf(pick));
       const isNewRun = next.running === null && queue.running !== null;
       await save();
       publish();
-      if (isNewRun && queue.running !== null) {
-        launch(queue.running.item);
+      if (isNewRun && queue.running !== null && strategy !== null) {
+        launch(queue.running.item, strategy);
       }
     };
 
-    const apply = (event: QueueEvent) => commit(nextQueue(queue, event));
+    const apply = (event: QueueEvent) =>
+      commit(nextQueue(queue, event, policyOf(retroPick())));
 
-    // `apply`, logging the item `event` queued.
+    // Whether `event` would queue a retro under a pick whose `on` holds every ending.
+    const wouldQueueUnderAPick = (event: QueueEvent) =>
+      nextQueue(queue, event, {
+        prefixes: installedPrefixes(),
+        on: EVERY_ENDING,
+      }).queued.length > queue.queued.length;
+
+    // `apply`, logging the item `event` queued, or why an ending that would queue one under a pick queued none.
     const applyLoggingQueued = (event: QueueEvent) => {
-      const next = nextQueue(queue, event);
+      const pick = retroPick();
+      const next = nextQueue(queue, event, policyOf(pick));
       const queuedItem =
         next.queued.length > queue.queued.length
           ? next.queued.at(-1)
@@ -243,6 +314,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         log(
           `queued retro of ${hostIdsText(queuedItem)} (${next.queued.length} queued)`,
         );
+      } else if (pick.kind !== 'picked' && wouldQueueUnderAPick(event)) {
+        logNotQueued(pick);
       }
       return commit(next);
     };
@@ -263,16 +336,16 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       checkDone(rowId, sessionSlot.get(rowId));
     };
 
-    const launch = (item: RetroItem) => {
+    const launch = (item: RetroItem, strategy: Strategy<RetroContribution>) => {
       chat
         .launch({
           projectDir: services.paths.expandTilde(
-            api.settings().folder,
+            strategy.value.folder,
             services.homeDir,
           ),
           profile: item.profile,
           message: {
-            text: `${RETRO_COMMAND} ${hostIdsText(item)}`,
+            text: retroCommandText(strategy.value.command, item.hostIds),
             images: [],
           },
           unattended: true,
@@ -325,21 +398,26 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     };
 
     const begin = async () => {
+      await contributions.ready;
       const before = queue.running;
-      queue = nextQueue(queue, {
-        kind: 'started',
-        profiles: registeredProfiles(harnessSlot.all()).map(
-          (profile) => profile.name,
-        ),
-      });
+      queue = nextQueue(
+        queue,
+        {
+          kind: 'started',
+          profiles: registeredProfiles(harnessSlot.all()).map(
+            (profile) => profile.name,
+          ),
+        },
+        policyOf(retroPick()),
+      );
       if (before?.hostSessionId != null && queue.running === null) {
         log(
           `dropped retro ${before.hostSessionId}: profile ${before.item.profile} is gone`,
         );
       }
       // Claims a retro row present at start or restored before chat's restore ends — one `launched` holds, or one
-      // the queue lost that opens with the retro command — as started. A row that joins later, a resumed or
-      // hand-started retro included, is left alone; a launch claims its own row in `launched`. A row chat restores
+      // the queue lost that opens with an installed strategy's command — as started. A row that joins later, a resumed
+      // or hand-started retro included, is left alone; a launch claims its own row in `launched`. A row chat restores
       // joins before its titles are set, so its first message is read at its `sessionOpened` instead.
       followRows(rowsSlot, {
         added(row) {
@@ -349,7 +427,10 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
           const isLaunchedRow =
             row.hostSessionId !== null &&
             queue.launched.includes(row.hostSessionId);
-          if (isLaunchedRow || opensWithRetroCommand(row.titles)) {
+          if (
+            isLaunchedRow ||
+            opensWithRetroCommand(row.titles, installedPrefixes())
+          ) {
             claimRestored(row.sessionId);
           }
         },
@@ -392,7 +473,10 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
       serial(() => {
         const row = rowsSlot.get(sessionId);
-        if (row !== undefined && opensWithRetroCommand(row.titles)) {
+        const isRetroRow =
+          row !== undefined &&
+          opensWithRetroCommand(row.titles, installedPrefixes());
+        if (isRetroRow) {
           claimRestored(sessionId);
         }
       });
@@ -424,6 +508,17 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
       checkDone(sessionId, info);
     });
+    // A change of strategies or of a setting may change the pick; `commit` then launches a retro queued while none
+    // was picked. A pick that binds again lets the next unbound pick log.
+    const repick = () =>
+      serial(() => {
+        if (retroPick().kind === 'picked') {
+          loggedUnboundPick = null;
+        }
+        return commit(queue);
+      });
+    const strategiesWatch = contributions.onChanged('retro', repick);
+    api.onSettingsChanged(repick);
 
     chain = file.load().then(
       (loaded) => {
@@ -446,6 +541,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       async dispose() {
         await chain;
         isDisposed = true;
+        strategiesWatch.dispose();
+        readerRegistration.dispose();
         if (demo !== null) {
           demo = null;
           state.set(real);

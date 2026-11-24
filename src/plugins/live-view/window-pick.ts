@@ -115,7 +115,7 @@ export function pickOf(
           error: `${folder}'s editor (process ${processId}) has no window the app can stream; a minimized window cannot stream.`,
         }
       : {
-          error: `The Game View rect ${rectText(gameRect)} is not inside any window of ${folder}'s editor. Call show_live_view again with the game_view of a fresh capture.py start, or with no gameRect to stream the whole editor.`,
+          error: `The Game View rect ${rectText(gameRect)} is not inside any window of ${folder}'s editor. Call show_live_view again with the Game View rect of a fresh capture, or with no gameRect to stream the whole editor.`,
         };
   }
   return {

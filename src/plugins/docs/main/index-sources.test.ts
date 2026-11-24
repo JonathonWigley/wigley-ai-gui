@@ -18,10 +18,11 @@ import {
 
 const HOME = '/Users/u';
 const SCRIPT = '/s/docs_index.py';
-// No profile lists an install, so an empty script path finds no script.
-const NO_INSTALLS = { installedPlugins: async () => [] };
+// The contributions file every run passes. `/plugin` holds no script, so an
+// empty script path finds none.
+const FILE = '/data/docs/contributions.json';
 const INDEX_FILE = '/Users/u/.agents/wigley-docs/index.json';
-const BUILD = ['-X', 'utf8', SCRIPT, 'build'];
+const BUILD = ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'build'];
 
 const ENTRY: IndexEntry = {
   id: '/Users/u/.claude/CLAUDE.md',
@@ -64,7 +65,10 @@ function deferred<T>() {
 
 // `machine` is the machine source; `session(spec)` builds the source of row
 // `row-1`; `registry` holds no source until a test adds one.
-function setUp(scriptPath = SCRIPT) {
+function setUp(
+  scriptPath = SCRIPT,
+  contributionsFile = () => Promise.resolve(FILE),
+) {
   const files = createMemoryFiles();
   const processes = new FakeProcesses();
   const logged: string[] = [];
@@ -73,7 +77,8 @@ function setUp(scriptPath = SCRIPT) {
     processes,
     homeDir: HOME,
     scriptPath: () => scriptPath,
-    folders: NO_INSTALLS,
+    pluginDir: '/plugin',
+    contributionsFile,
     log: (message: string) => logged.push(message),
     paths: posixPaths,
   };
@@ -122,7 +127,8 @@ describe('machine source', () => {
       },
       homeDir: HOME,
       scriptPath: () => SCRIPT,
-      folders: NO_INSTALLS,
+      pluginDir: '/plugin',
+      contributionsFile: () => Promise.resolve(FILE),
       log: () => undefined,
       paths: posixPaths,
     });
@@ -180,8 +186,25 @@ describe('machine source', () => {
 
     const load = await rebuildOf(test.machine);
 
-    expect(load.message).toBe('docs_index.py not found — set docs.scriptPath');
+    expect(load.message).toBe(
+      "docs_index.py not found in the app's agent plugin — set docs.scriptPath",
+    );
     expect(test.processes.runs).toEqual([]);
+  });
+
+  it('rebuild_ContributionsFileHeld_RunsOnlyOnceItSettles', async () => {
+    const held = deferred<string>();
+    const test = setUp(SCRIPT, () => held.promise);
+    test.processes.script('python3', BUILD, exited(0));
+
+    const rebuild = rebuildOf(test.machine);
+    await new Promise((settle) => setTimeout(settle, 0));
+    const runsWhileHeld = test.processes.runs.length;
+    held.resolve(FILE);
+    await rebuild;
+
+    expect(runsWhileHeld).toBe(0);
+    expect(test.processes.runs.map((run) => run.args)).toEqual([BUILD]);
   });
 
   it('rebuild_PythonFromResolveProgram_LeadsWithItsArgs', async () => {
@@ -251,14 +274,14 @@ describe('session source', () => {
       const document = documentOf([ENTRY]);
       test.processes.script(
         'python3',
-        ['-X', 'utf8', SCRIPT, ...command],
+        ['-X', 'utf8', SCRIPT, '--contributions', FILE, ...command],
         exited(0, '', JSON.stringify(document)),
       );
 
       const load = await test.session(spec).load();
 
       expect(test.processes.runs.map((run) => run.args)).toEqual([
-        ['-X', 'utf8', SCRIPT, ...command],
+        ['-X', 'utf8', SCRIPT, '--contributions', FILE, ...command],
       ]);
       expect(load).toEqual({ document, message: null });
     },
@@ -286,7 +309,7 @@ describe('session source', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
       exited(0, 'warning: slow disk', JSON.stringify(documentOf([]))),
     );
 
@@ -308,12 +331,12 @@ describe('session source', () => {
     const document = documentOf([ENTRY]);
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
       exited(1, 'LookupError: no transcript for abc'),
     );
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'context', '/p'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'context', '/p'],
       exited(0, '', JSON.stringify(document)),
     );
 
@@ -327,8 +350,8 @@ describe('session source', () => {
 
     expect(load).toEqual({ document, message: null });
     expect(test.processes.runs.map((run) => run.args)).toEqual([
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
-      ['-X', 'utf8', SCRIPT, 'context', '/p'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'context', '/p'],
     ]);
     expect(test.logged).toContainEqual(
       expect.stringContaining('LookupError: no transcript for abc'),
@@ -377,7 +400,7 @@ describe('session source', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
       exited(1, 'LookupError: no transcript for abc'),
     );
 
@@ -427,7 +450,7 @@ describe('registry', () => {
     await test.files.write(INDEX_FILE, JSON.stringify(documentOf([ENTRY])));
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
       exited(0, '', JSON.stringify(documentOf([SESSION_ENTRY]))),
     );
     test.registry.add(test.machine);
@@ -462,7 +485,7 @@ describe('registry', () => {
     const test = setUp();
     test.processes.script(
       'python3',
-      ['-X', 'utf8', SCRIPT, 'session', 'abc'],
+      ['-X', 'utf8', SCRIPT, '--contributions', FILE, 'session', 'abc'],
       exited(0, '', JSON.stringify(documentOf([SESSION_ENTRY]))),
     );
     test.registry.add(test.machine);

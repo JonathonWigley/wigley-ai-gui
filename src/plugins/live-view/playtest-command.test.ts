@@ -1,7 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { parsePlaytestCommand, type PlaytestSignal } from './playtest-command';
+import type { CommandPattern } from '../../contracts/contributions';
+import {
+  parsePlaytestCommand,
+  type PlaytestPatterns,
+  type PlaytestSignal,
+} from './playtest-command';
 
 const P = '/clones/b/Game';
+
+const UNITY_FLAGS = [
+  '--timeout',
+  '--port',
+  '--pid',
+  '--instance',
+  '--runtime',
+  '--runtime-path',
+  '--detail',
+  '--query',
+  '--tag',
+];
+
+const unity = (words: string[]): CommandPattern => ({
+  program: 'unity',
+  words,
+  valueFlags: UNITY_FLAGS,
+  projectPathFlag: '--project-path',
+  projectPathVariable: 'UNITY_PROJECT_PATH',
+});
+
+const CAPTURE_START: CommandPattern = {
+  program: 'capture.py',
+  words: ['start'],
+  valueFlags: ['--fps', '--backend'],
+  projectPathFlag: '--project-path',
+};
+
+// The wigley plugin's liveView patterns, which keep the commands the app read
+// before patterns came from contributions.
+const WIGLEY_PATTERNS: PlaytestPatterns = {
+  open: [
+    unity(['command', 'editor.playmode', 'start']),
+    unity(['command', 'editor_play']),
+    CAPTURE_START,
+  ],
+  close: [
+    unity(['command', 'editor.playmode', 'stop']),
+    unity(['command', 'editor_stop']),
+  ],
+};
+
+const GODOT_PATTERNS: PlaytestPatterns = {
+  open: [{ program: 'godot-play', words: ['run'] }],
+  close: [{ program: 'godot-play', words: ['quit'] }],
+};
 
 const start = (projectPath: string | null): PlaytestSignal => ({
   kind: 'start',
@@ -181,9 +232,9 @@ describe('parsePlaytestCommand', () => {
       result: start(P),
     },
     {
-      given: 'flag between unity and command',
+      given: 'path flag between unity and command',
       command: `unity --project-path ${P} command editor_play`,
-      result: null,
+      result: start(P),
     },
     {
       given: 'redirect 2>&1',
@@ -393,7 +444,108 @@ describe('parsePlaytestCommand', () => {
   ])(
     'parsePlaytestCommand_ReadsTheSignal_given $given',
     ({ command, result }) => {
-      expect(parsePlaytestCommand(command)).toEqual(result);
+      expect(parsePlaytestCommand(command, WIGLEY_PATTERNS)).toEqual(result);
+    },
+  );
+
+  it.each<{
+    given: string;
+    patterns: PlaytestPatterns;
+    command: string;
+    result: PlaytestSignal | null;
+  }>([
+    {
+      given: 'NoPatterns_UnityStart_NoSignal',
+      patterns: { open: [], close: [] },
+      command: `unity command editor.playmode start --project-path ${P}`,
+      result: null,
+    },
+    {
+      given: 'CustomProgram_Words_Start',
+      patterns: GODOT_PATTERNS,
+      command: '/opt/bin/godot-play run --verbose',
+      result: start(null),
+    },
+    {
+      given: 'CustomProgram_Words_Stop',
+      patterns: GODOT_PATTERNS,
+      command: 'godot-play quit',
+      result: stop(null),
+    },
+    {
+      given: 'CustomProgram_NoVariable_CdIgnored',
+      patterns: GODOT_PATTERNS,
+      command: 'cd /g && godot-play run',
+      result: start(null),
+    },
+    {
+      given: 'CustomProgram_OtherWords_NoSignal',
+      patterns: GODOT_PATTERNS,
+      command: 'godot-play build run',
+      result: null,
+    },
+    {
+      given: 'ScriptPattern_PythonFlagsBeforeScript_Start',
+      patterns: { open: [CAPTURE_START], close: [] },
+      command: `python3 -u /x/capture.py start --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'ScriptPattern_NotRunByPython_NoSignal',
+      patterns: { open: [CAPTURE_START], close: [] },
+      command: `/x/capture.py start --project-path ${P}`,
+      result: null,
+    },
+    {
+      given: 'UnityFlagBeforeCommand_Start',
+      patterns: WIGLEY_PATTERNS,
+      command: `unity --timeout 5 command editor_play --project-path ${P}`,
+      result: start(P),
+    },
+    {
+      given: 'OpenBeforeClose_SameWords_Start',
+      patterns: {
+        open: [{ program: 'play', words: ['go'] }],
+        close: [{ program: 'play', words: ['go'] }],
+      },
+      command: 'play go',
+      result: start(null),
+    },
+    {
+      given: 'OwnPathFlag_Value_Start',
+      patterns: {
+        open: [
+          {
+            program: 'godot-play',
+            words: ['run'],
+            valueFlags: ['--scene'],
+            projectPathFlag: '--path',
+          },
+        ],
+        close: [],
+      },
+      command: 'godot-play --scene main run --path /g',
+      result: start('/g'),
+    },
+    {
+      given: 'OwnVariable_Assigned_Start',
+      patterns: {
+        open: [
+          {
+            program: 'godot-play',
+            words: ['run'],
+            projectPathVariable: 'GODOT_PROJECT',
+          },
+        ],
+        close: [],
+      },
+      command: `GODOT_PROJECT=${P} godot-play run`,
+      result: start(P),
+    },
+  ])(
+    'parsePlaytestCommand_MatchesThePatterns_given $given',
+    ({ patterns, command, result }) => {
+      expect(parsePlaytestCommand(command, patterns)).toEqual(result);
     },
   );
 });

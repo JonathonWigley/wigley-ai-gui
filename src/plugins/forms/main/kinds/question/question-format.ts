@@ -65,14 +65,14 @@ const QUESTION_CONTEXT_DESCRIPTION =
   'question about concrete changes opens instead with a `:::changes` block ' +
   'for a few changes, or a `:::tree` block when they span several places. ' +
   'Close each block with a line holding only `:::`. Markdown. Wording: ' +
-  '~/wigley-agents/forms.md § Questions.';
+  'the auri:forms skill.';
 
 const APPROVES_DESCRIPTION =
   'Optional. Tag each choice that approves an action auto mode gates — a ' +
-  'push past PR protection, releasing or taking a pool hold, an edit to ' +
+  'push past PR protection, an edit to ' +
   'your settings or hooks, start_session in another project — with that ' +
   'exact action in plain words, such as "push `main` of ' +
-  'new-games-prototypes to origin past PR protection". When the user ' +
+  'my-repo to origin past PR protection". When the user ' +
   'submits the round with a tagged choice picked, the app first posts ' +
   '"Approved in form: <action>" into the running turn as the user\'s own ' +
   'message, one line per action, then returns the answers, each tagged ' +

@@ -1,4 +1,5 @@
 import type { Clock } from '../../../contracts/ambient';
+import type { BacklogContribution } from '../../../contracts/contributions';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
@@ -23,13 +24,20 @@ import {
 } from '../../../shared/followups/followup-file';
 import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
 import {
+  contributionsMainKey,
+  pickProblemText,
+  pickStrategy,
+} from '../../contributions/contract';
+import {
   type DocsMainEvents,
   type DocsMainExports,
   docsMainKey,
+  type FeaturesHomes,
   MACHINE_SOURCE_ID,
   type SampleDocs,
   type SourceRead,
 } from '../../docs/contract';
+import { inRepoHomeParts } from '../../docs/features-homes';
 import { scopedAgentsMainKey } from '../../scoped-agents/contract';
 import { sessionsMainKey } from '../../sessions/contract';
 import {
@@ -48,12 +56,13 @@ import layoutTypes from '../layouts/layout.d.ts?raw';
 import { backlogManifest } from '../manifest';
 import {
   ASSISTANT_ID,
-  ASSISTANT_INSTRUCTIONS,
   ASSISTANT_SCOPE,
   ASSISTANT_TITLE,
+  assistantInstructions,
   createAssistantStore,
   sweepMessage,
 } from './assistant';
+import { backlogReader } from './backlog-reader';
 import {
   assistantPlace,
   READ_BACKLOG_STATE_TOOL,
@@ -80,9 +89,13 @@ import {
   linkedImages,
   noteBody,
 } from './note-images';
-import { repoFolderOf } from './repo-folder';
+import { climbFolder, endsWithParts, repoFolderOf } from './repo-folder';
 import { backlogRows } from './rows';
-import { hasBacklogFixture, writeBacklogFixture } from './selftest-fixture';
+import {
+  BACKLOG_FIXTURE_STRATEGY,
+  hasBacklogFixture,
+  writeBacklogFixture,
+} from './selftest-fixture';
 import { backlogSelfTestScript } from './selftest-script';
 import {
   createStalenessReader,
@@ -98,12 +111,27 @@ type BacklogApi = MainApi<
     QualifiedEvents<'chat', ChatMainEvents>
 >;
 
-// The file a home's new follow-ups go to.
-const CREATE_TARGET_FILE = 'followups.md';
-// A clone's own home in git; a project folder's is the same path under that
-// folder.
-const FEATURES_FOLDER = 'docs/features';
 const IMAGE_FILE = /^(\d+)\.png$/;
+
+// What the backlog pick gives a load: the picked strategy's value, or the
+// empty-state message of a pick that binds none.
+type BacklogBinding =
+  | { value: BacklogContribution; message: null }
+  | { value: null; message: string };
+
+const FIXTURE_BINDING: BacklogBinding = {
+  value: BACKLOG_FIXTURE_STRATEGY,
+  message: null,
+};
+
+// The binding's value as the homes Docs indexes; null with no value.
+function featuresHomesOf(binding: BacklogBinding): FeaturesHomes | null {
+  if (binding.value === null) {
+    return null;
+  }
+  const { homes, file, areaFolder } = binding.value;
+  return { homes, file, areaFolder: areaFolder ?? null };
+}
 
 interface BacklogDeps {
   docs: DocsMainExports;
@@ -117,6 +145,8 @@ interface BacklogDeps {
   homeDir: string;
   // The `repoFolders` setting as the user config now sets it.
   repoFolders(): readonly RepoFolderSetting[];
+  // The backlog pick a load reads, once the registry can answer it.
+  binding(): Promise<BacklogBinding>;
 }
 
 // `isInClone`: `git.topLevel` found a clone holding the home.
@@ -129,9 +159,19 @@ type MarkedHome = LocatedHome & { isCreateTarget: boolean };
 
 // A load's read, and the repos it left a follow-up file out of because the
 // file did not read: their titles in the read are not all of their titles.
+// `createFile` is the follow-up file name of the strategy the load read,
+// null when it read none.
 interface LoadedRead {
   read: BacklogRead;
   reposWithUnreadFile: ReadonlySet<string>;
+  createFile: string | null;
+}
+
+// What a load reads homes with: the strategy's in-repo folder parts and its
+// follow-up file name.
+interface HomeRules {
+  homeParts: readonly string[][];
+  file: string;
 }
 
 function logSkipped(log: PluginLog, path: string, error: unknown): void {
@@ -153,29 +193,35 @@ async function realPathOrNull(
   }
 }
 
-// The folders of a clone at `topLevel` that may be `root`: the clone's own
-// `docs/features`, and the `docs/features` of the project folder directly
-// under the clone that `root` names, which the docs index lists as a home
-// only when that folder holds its own `AGENTS.md`.
+// The folders of a clone at `topLevel` that may be `root`, for each in-repo
+// home's folder parts: the clone's own `<parts>`, and, when `root` ends with
+// them, the `<parts>` of the project folder directly under the clone that
+// `root` names, which the docs index lists as a home only when that folder
+// holds its own `AGENTS.md`.
 function clonesFeaturesFolders(
   paths: Paths,
   topLevel: string,
   root: string,
+  homeParts: readonly string[][],
 ): string[] {
-  const projectFolder = paths.parent(paths.parent(root));
-  return [
-    paths.join(topLevel, FEATURES_FOLDER),
-    paths.join(topLevel, paths.base(projectFolder), FEATURES_FOLDER),
-  ];
+  return homeParts.flatMap((parts) => {
+    const own = paths.join(topLevel, ...parts);
+    if (!endsWithParts(paths, root, parts)) {
+      return [own];
+    }
+    const projectFolder = climbFolder(paths, root, parts.length);
+    return [own, paths.join(topLevel, paths.base(projectFolder), ...parts)];
+  });
 }
 
-// The home with its `gitRoot`: the clone whose `docs/features` folder it is,
-// its own or a project folder's, else null; and whether any clone holds it, a
+// The home with its `gitRoot`: the clone whose in-repo home folder it is, its
+// own or a project folder's, else null; and whether any clone holds it, a
 // `topLevel` that throws counting as none. Null in place of the home when it
 // is such a folder of a linked worktree.
 async function locateHome(
   deps: BacklogDeps,
   home: HomeShape,
+  rules: HomeRules,
 ): Promise<LocatedHome | null> {
   let topLevel: string | null = null;
   try {
@@ -183,7 +229,12 @@ async function locateHome(
     if (topLevel === null) {
       return { ...home, gitRoot: null, isInClone: false };
     }
-    const folders = clonesFeaturesFolders(deps.paths, topLevel, home.root);
+    const folders = clonesFeaturesFolders(
+      deps.paths,
+      topLevel,
+      home.root,
+      rules.homeParts,
+    );
     const [homeReal, ...featuresReals] = await Promise.all(
       [home.root, ...folders].map((path) => realPathOrNull(deps.files, path)),
     );
@@ -207,13 +258,17 @@ async function locateHome(
 }
 
 // The paths of the home's follow-up files: the index's, and for the create
-// target its `followups.md` too, which the index may not list yet.
-function followupPathsOf(home: MarkedHome, paths: Paths): string[] {
-  const listed = home.followupFiles.map((file) => file.path);
+// target its `file` too, which the index may not list yet.
+function followupPathsOf(
+  home: MarkedHome,
+  paths: Paths,
+  file: string,
+): string[] {
+  const listed = home.followupFiles.map((listedFile) => listedFile.path);
   if (!home.isCreateTarget) {
     return listed;
   }
-  const createPath = paths.join(home.root, CREATE_TARGET_FILE);
+  const createPath = paths.join(home.root, file);
   const isListed = listed.some((path) => paths.samePath(path, createPath));
   return isListed ? listed : [...listed, createPath];
 }
@@ -241,10 +296,11 @@ async function readFollowupFile(
 async function readFollowupFiles(
   deps: BacklogDeps,
   home: MarkedHome,
+  file: string,
 ): Promise<{ files: BacklogFollowupFile[]; hasUnreadFile: boolean }> {
   const listedCount = home.followupFiles.length;
   const read = await Promise.all(
-    followupPathsOf(home, deps.paths).map((path, index) =>
+    followupPathsOf(home, deps.paths, file).map((path, index) =>
       readFollowupFile(deps, path, index < listedCount),
     ),
   );
@@ -261,8 +317,13 @@ async function readHome(
   deps: BacklogDeps,
   home: MarkedHome,
   homeDir: string,
+  rules: HomeRules,
 ): Promise<{ home: BacklogHome; hasUnreadFile: boolean }> {
-  const { files, hasUnreadFile } = await readFollowupFiles(deps, home);
+  const { files, hasUnreadFile } = await readFollowupFiles(
+    deps,
+    home,
+    rules.file,
+  );
   return {
     home: {
       repo: home.repo,
@@ -275,6 +336,7 @@ async function readHome(
         deps.repoFolders(),
         deps.paths,
         homeDir,
+        rules.homeParts,
       ),
       followupFiles: files,
     },
@@ -282,24 +344,42 @@ async function readHome(
   };
 }
 
+// No homes and no index read while the pick binds no strategy, its message
+// in the index's place.
 async function readHomes(
   deps: BacklogDeps,
-  read: SourceRead,
+  binding: BacklogBinding,
+  index: () => Promise<SourceRead>,
 ): Promise<LoadedRead> {
+  if (binding.value === null) {
+    return {
+      read: { homes: [], message: binding.message },
+      reposWithUnreadFile: new Set(),
+      createFile: null,
+    };
+  }
+  const rules: HomeRules = {
+    homeParts: inRepoHomeParts(binding.value.homes),
+    file: binding.value.file,
+  };
+  const read = await index();
   if (read.document === null) {
     return {
       read: { homes: [], message: read.message },
       reposWithUnreadFile: new Set(),
+      createFile: rules.file,
     };
   }
   const located = await Promise.all(
-    groupHomes(read.document.entries).map((home) => locateHome(deps, home)),
+    groupHomes(read.document.entries).map((home) =>
+      locateHome(deps, home, rules),
+    ),
   );
   const homeDir =
     (await realPathOrNull(deps.files, deps.homeDir)) ?? deps.homeDir;
   const homes = await Promise.all(
     markCreateTargets(located.filter((home) => home !== null)).map((home) =>
-      readHome(deps, home, homeDir),
+      readHome(deps, home, homeDir, rules),
     ),
   );
   return {
@@ -309,6 +389,7 @@ async function readHomes(
         hasUnreadFile ? [home.repo] : [],
       ),
     ),
+    createFile: rules.file,
   };
 }
 
@@ -396,6 +477,16 @@ function createBacklogMain(deps: BacklogDeps) {
     return home;
   }
 
+  // The create target's path in `home`: its root joined with the follow-up
+  // file name of the strategy the last load read.
+  function createPathOf(home: BacklogHome): string {
+    const file = last?.createFile ?? null;
+    if (file === null) {
+      throw new Error(`No Backlog follow-up file for ${home.root}`);
+    }
+    return paths.join(home.root, file);
+  }
+
   async function watchFile(
     path: string,
     homeRoot: string,
@@ -430,7 +521,7 @@ function createBacklogMain(deps: BacklogDeps) {
   async function serve(index: () => Promise<SourceRead>): Promise<LoadedRead> {
     loads += 1;
     const load = loads;
-    const loaded = await readHomes(deps, await index());
+    const loaded = await readHomes(deps, await deps.binding(), index);
     if (load === loads) {
       last = loaded;
     }
@@ -551,7 +642,7 @@ function createBacklogMain(deps: BacklogDeps) {
     if (refusal !== null) {
       return refusal;
     }
-    const file = path ?? paths.join(home.root, CREATE_TARGET_FILE);
+    const file = path ?? createPathOf(home);
     const result = await writeFollowupEdit(
       docs,
       file,
@@ -576,7 +667,7 @@ function createBacklogMain(deps: BacklogDeps) {
       const { title, oneLine, tags } = target;
       return {
         type: 'create',
-        path: paths.join(home.root, CREATE_TARGET_FILE),
+        path: createPathOf(home),
         title,
         oneLine,
         tags,
@@ -825,8 +916,12 @@ async function startFixture(
   }
 }
 
-// Registers backlog's layouts, and serves the page every features home on the
-// machine, from the docs machine index, and exports the load, the tag list and
+// Registers backlog's layouts and its `backlog` reader, picks a backlog
+// strategy (the fixture's outside a live run) and hands its homes to Docs,
+// redrawing the page on every pick change; serves the page every features home
+// on the machine the docs machine index lists for that pick, its file name the
+// create target's, or no home and the pick's message when it binds none; and
+// exports the load, the tag list and
 // note filing through Docs' guarded follow-up writes to dependent plugins;
 // watches each listed follow-up file and hears the machine index reload, each
 // sending `changed`, as a change to the `repoFolders` setting does. It serves
@@ -847,10 +942,33 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const { services, channel } = api;
     const docs = api.dependency(docsMainKey);
     const chat = api.dependency(chatMainKey);
+    const contributions = api.dependency(contributionsMainKey);
+    const readerRegistration = contributions.registerFeature(
+      'backlog',
+      backlogReader,
+    );
     const fixture = startFixture(services);
     fixture.catch((error: unknown) =>
       services.log(`fixture not written: ${errorText(error)}`),
     );
+    const isLive = services.runMode === 'live';
+    // Outside a live run the fixture strategy, whatever the registry and the
+    // setting hold.
+    const currentBinding = (): BacklogBinding => {
+      if (!isLive) {
+        return FIXTURE_BINDING;
+      }
+      const pick = pickStrategy(
+        contributions.strategies<BacklogContribution>('backlog'),
+        api.settings().strategy,
+      );
+      return pick.kind === 'picked'
+        ? { value: pick.strategy.value, message: null }
+        : {
+            value: null,
+            message: pickProblemText(backlogReader.label, pick) ?? '',
+          };
+    };
     const backlogDeps: BacklogDeps = {
       docs,
       git: services.git,
@@ -862,6 +980,12 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       emit: (event, data) => api.events.emit(event, data),
       homeDir: services.homeDir,
       repoFolders: () => api.settings().repoFolders,
+      binding: async () => {
+        if (isLive) {
+          await contributions.ready;
+        }
+        return currentBinding();
+      },
     };
     const backlog = createBacklogMain(backlogDeps);
     const stalenessDeps: StalenessDeps = {
@@ -958,7 +1082,12 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       owner: backlogManifest.id,
       agentId: ASSISTANT_ID,
       folder: () => services.homeDir,
-      instructions: () => Promise.resolve(ASSISTANT_INSTRUCTIONS),
+      instructions: () =>
+        Promise.resolve(
+          assistantInstructions(
+            currentBinding().value?.assistant?.instructions ?? null,
+          ),
+        ),
       title: () => Promise.resolve(ASSISTANT_TITLE),
       store: createAssistantStore(api.data, services.log),
     });
@@ -1046,8 +1175,46 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         channel.send('changed', { homeRoot: null });
       }
     });
+    // The binding and the homes Docs was last given; null until the registry
+    // first answers. A change of binding redraws the page, since a pick change
+    // that leaves the homes as they were rebuilds no index.
+    let syncedBinding: BacklogBinding | null = null;
+    let syncedHomes: FeaturesHomes | null = null;
+    let isDisposed = false;
+    const syncBinding = () => {
+      if (isDisposed) {
+        return;
+      }
+      const binding = currentBinding();
+      const isFirst = syncedBinding === null;
+      if (!isFirst && isSameJson(binding, syncedBinding)) {
+        return;
+      }
+      syncedBinding = binding;
+      const homes = featuresHomesOf(binding);
+      if (isFirst || !isSameJson(homes, syncedHomes)) {
+        syncedHomes = homes;
+        docs.setFeaturesHomes(homes);
+      }
+      if (!isFirst) {
+        channel.send('changed', { homeRoot: null });
+      }
+    };
+    if (isLive) {
+      void contributions.ready.then(syncBinding);
+    } else {
+      syncBinding();
+    }
+    const strategiesWatch = contributions.onChanged('backlog', () => {
+      if (syncedBinding !== null) {
+        syncBinding();
+      }
+    });
     let repoFolders = api.settings().repoFolders;
     api.onSettingsChanged((settings) => {
+      if (syncedBinding !== null) {
+        syncBinding();
+      }
       if (isSameJson(settings.repoFolders, repoFolders)) {
         return;
       }
@@ -1069,6 +1236,9 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       commands: {},
       exports: () => exports,
       dispose: () => {
+        isDisposed = true;
+        strategiesWatch.dispose();
+        readerRegistration.dispose();
         backlog.dispose();
         staleness.dispose();
       },

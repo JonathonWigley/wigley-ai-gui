@@ -4,6 +4,7 @@ import type { RepoFolderSetting } from '../contract';
 import { repoFolderOf } from './repo-folder';
 
 const HOME_DIR = '/Users/me';
+const DOCS_FEATURES = [['docs', 'features']];
 
 describe('repoFolderOf', () => {
   it.each<{
@@ -92,8 +93,49 @@ describe('repoFolderOf', () => {
           settings,
           posixPaths,
           HOME_DIR,
+          DOCS_FEATURES,
         ),
       ).toBe(folder);
+    },
+  );
+
+  it('repoFolderOf_CustomInRepoParts_ReadsTheCloneFolder', () => {
+    expect(
+      repoFolderOf(
+        { repo: 'r', root: '/r/notes/todo' },
+        true,
+        [],
+        posixPaths,
+        HOME_DIR,
+        [['notes', 'todo']],
+      ),
+    ).toBe('/r');
+  });
+
+  it('repoFolderOf_DocsFeaturesWithOtherParts_IsNotInRepo', () => {
+    expect(
+      repoFolderOf(
+        { repo: 'r', root: '/r/docs/features' },
+        true,
+        [{ repo: 'r', folder: '~/dev/r' }],
+        posixPaths,
+        HOME_DIR,
+        [['notes', 'todo']],
+      ),
+    ).toBe(`${HOME_DIR}/dev/r`);
+  });
+
+  it.each([
+    { parts: ['features'], root: '/r/features' },
+    { parts: ['a', 'b', 'c'], root: '/r/a/b/c' },
+  ])(
+    'repoFolderOf_OneAndThreePartLists_ClimbThatManyLevels ($root)',
+    ({ parts, root }) => {
+      expect(
+        repoFolderOf({ repo: 'r', root }, true, [], posixPaths, HOME_DIR, [
+          parts,
+        ]),
+      ).toBe('/r');
     },
   );
 });

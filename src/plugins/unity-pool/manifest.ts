@@ -53,7 +53,7 @@ export const unityPoolManifest = definePlugin({
     scriptPath: {
       label: 'unity-pool command',
       description:
-        "The unity-pool script the panel's Hold, Release and Open buttons run with the core programs.python Python. ~ is the home folder. Empty, it is ~/.local/bin/unity-pool, and on Windows ~/wigley-agents/tools/unity-pool/unity-pool, since a Windows install writes launchers, not a symlink Python can run.",
+        "The unity-pool script the panel's Hold, Release and Open buttons run with the core programs.python Python; ~ is the home folder. Empty, the buttons run nothing and say no script is set.",
     },
     layout: {
       label: 'Layout',

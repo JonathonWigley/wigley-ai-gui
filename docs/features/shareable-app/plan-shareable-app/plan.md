@@ -314,34 +314,34 @@ Names the drafting added (each with the task that produces it):
 Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 
 ### Wave 1
-- [ ] [The auri agent plugin scaffold](01-auri-agent-plugin.md)
+- [x] [The auri agent plugin scaffold](01-auri-agent-plugin.md)
 
 ### Wave 2
-- [ ] [Contributions registry](03-contributions-registry.md) — after 01
-- [ ] [wigley-land lands the app repo](19-wigley-land-app-repo.md) — after 01
+- [x] [Contributions registry](03-contributions-registry.md) — after 01
+- [x] [wigley-land lands the app repo](19-wigley-land-app-repo.md) — after 01
 
 ### Wave 3
-- [ ] [Launch wiring](02-launch-wiring.md) — after 01, 03
-- [ ] [Declarative workflow engine and Checklist flow](04-workflow-engine.md) — after 03
-- [ ] [Retro](07-retro.md) — after 03
-- [ ] [Docs and the docs index](09-docs.md) — after 01, 03
-- [ ] [Live view](10-live-view.md) — after 03
+- [x] [Launch wiring](02-launch-wiring.md) — after 01, 03
+- [x] [Declarative workflow engine and Checklist flow](04-workflow-engine.md) — after 03
+- [x] [Retro](07-retro.md) — after 03
+- [x] [Docs and the docs index](09-docs.md) — after 01, 03
+- [x] [Live view](10-live-view.md) — after 03
 
 ### Wave 4
-- [ ] [Plan capability](05-plan-capability.md) — after 04
-- [ ] [Backlog](08-backlog.md) — after 03, 09
-- [ ] [App notes and tool wording](11-app-notes.md) — after 01, 02, 04
-- [ ] [The auri hooks](12-auri-hooks.md) — after 01, 04
+- [x] [Plan capability](05-plan-capability.md) — after 04
+- [x] [Backlog](08-backlog.md) — after 03, 09
+- [x] [App notes and tool wording](11-app-notes.md) — after 01, 02, 04
+- [x] [The auri hooks](12-auri-hooks.md) — after 01, 04
 
 ### Wave 5
-- [ ] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
+- [x] [Retire the level plugins](06-retire-level-plugins.md) — after 04, 05
 
 ### Wave 6
-- [ ] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
+- [x] [The wigley plugin's auri.json](13-wigley-auri-json.md) — after 01, 06, 07, 08, 09, 10
 
 ### Wave 7
-- [ ] [Personal rules rename](14-personal-rules-rename.md) — after 01, 12, 13
-- [ ] [README and changelog checks](15-readme-changelog-checks.md) — after 01–13
+- [x] [Personal rules rename](14-personal-rules-rename.md) — after 01, 12, 13
+- [x] [README and changelog checks](15-readme-changelog-checks.md) — after 01–13
 
 ### Wave 8
 - [ ] [Repo move](17-repo-move.md) — after 01–15, 19
@@ -354,10 +354,57 @@ Critical path: 01 → 03 → 04 → 05 → 06 → 13 → 14 → 17 → 16 → 18
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 35f62ddac
 
 ### Groups
+- 01 · hard · 8f40515f6 b64e14f07 · diff read: every Produces present (agent-plugin.ts names, appFolder, MainServices.appDir, manifests, hooks, marketplace, moves, wigley 3.0.0); typecheck, lint, check_manifests, claude plugin validate x3 pass; Python and npm tests wait for the test gate · concerns: check-layers had no entry for agent-plugin.test.ts (fixed in b64e14f07, same rung); oxfmt also flagged 5 pre-existing Markdown files from main, formatted; check_pointers fails only on 4 pre-existing ~/wigley-agents/learning/candidates headings, outside this diff; retro ledger files and forms.md line 14 still name old paths (task 14)
+- 03 · deep · 9125a450a 95fe3eef5 · diff read: every Produces present in contracts/contributions.ts, contributions/contract.ts, plugin.ts, agent.ts, config-store, plugin-types; wave 2 typecheck and lint pass after the fix commit; tests wait for the test gate · concerns: TS2589 on the slot publish fixed with a local cast key (values unknown) in main/start.ts; start.test.ts debounce rows rest on harness timer assumptions, never run; page/start.ts slot sync untested; tell now iterates the live listener set; no-thenable warning on ActionDecl then left
+- 19 · hard · 87f2f1e05 · diff read: repo_kind, APP_REPO, scan_secrets, auri update with installed-only skip, README modes present; both files parse; suite waits for the test gate · concerns: a landing with no pull scans main..branch but pushes origin/main..main, so earlier unpushed main commits go unscanned; betterleaks --redact/--exit-code unchecked against the binary (task 17); skip-betterleaks test PATH assumption
+- 02 · standard · bda3396a9 · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: liveStart test asserts on the fake session host's spawn (the ProcessRunner route the plan named is never reached)
+- 10 · hard · 9fec618a4 6883c8d0b · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 339-341 still describe capture.py; oxfmt fixes rode in task 09's fix commit
+- 07 · deep · 0e5e7039c · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 347-351 and docs/features/auto-retro/design.md still name /wigley:retro auto and the folder setting; tsconfig is not strict, so StrategyPick narrowing is checked loosely
+- 09 · deep · 05e68a119 6883c8d0b · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: AGENTS.md line 116 still says docs reads wigley-install.ts; marketplace followups.md holds docs-index follow-ups now owned by the app
+- 04 · deep · 2ec509037 ef5ca1ea4 · diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: level page tests may trip on the Checklist flow's page half; strategyOf now lives in declared/fixtures.test-support.ts, which 06 replaces
+- 05 · deep · ebbcb3765 2545d311d · diff read: startPlanCapability, createPlanFold, createPlanPane present and wired in main/page start.ts; wave 4 typecheck + lint pass after one test fix (AppInstance id literal, two spreads) · concerns: capability test builds the engine from foldFlow/buildMainWorkflow, so main/start.ts wiring is unexercised until 06/18; stage expectations rest on 04's engine rules, unrun
+- 08 · hard · e01c387f6 · diff read: backlogReader, strategy setting, contributions dependency, setFeaturesHomes call, assistantInstructions present; wave 4 typecheck + lint pass · concerns: fixtureStrategy throws if DOCS_FIXTURE_BINDING.features is null; pickProblemText ?? '' only for the type
+- 11 · hard · 83b612921 · diff read: notes and tool descriptions name auri: skills (folders checked in agent-plugin/skills/); AUTO_ANSWER_GATE_CLAUSE shared; unity-pool in default plugins.disabled; resolveScriptPath gone; one quoting break in the primer description fixed before commit; wave 4 typecheck + lint pass · concerns: stale docs outside the task: docs/features/unity-pool/design.md:123-125 and docs/features/followups.md:350 describe the removed scriptPath fallbacks (to task 16)
+- 12 · hard · 3e205f034 · diff read: hook_client.py shared by chatroom and checklist hooks; checklist edit/stop/compact and AskUserQuestion hooks; four hooks.json entries checked by agent-plugin.test.ts; wave 4 typecheck + lint pass · concerns: Stop row compares matcher: undefined to an entry with no matcher key (toEqual should match, unrun); reminder reads '1 open items' for one item
+- 06 · hard · 5af2b120a c7288b4c8 · diff read: sample-auri.json, SAMPLE_AURI_FILE, SAMPLE_PLUGIN_NAME, sampleDeclared present; four plugins and shared plan-progress/plan-copies removed; wave 5 typecheck + lint pass after one fixture fix round · concerns: plan-watch-driven sample Large rows (RunLog_LargeClosed fixCycles 2, Open_SavedCountdown_RunsNone) unrun; docs/features/agent-chat/design.md:577 still says one self-test script per plugin (task 16); ~/.config/wigley-ai-gui/layouts/workflow-{large,medium,small,spike}/ left as user state
+- 13 · standard · ca20d7316 · python3 parse: key order version..liveView; workflows and planFormat equal sample-auri.json; retro/backlog/docs/liveView match the pinned values; check_manifests.py passes · concerns: none
+- 14 · hard · e03dd181d · diff read: personal files keep only additions and point at auri skills; wigley visuals/chatroom skills deleted; workflow-gate reads declared_level_skills from installed auri.json and is_app_session from WIGLEY_SESSION_ROW, checklist halves removed; py_compile + check_manifests pass; its pytest suites wait for the test gate (no pytest on python3 here) · concerns: machine edits (settings.json AskUserQuestion group and workflow-gate Stop group, ask-user-question-to-forms hook, AGENTS.local.md) held in scratchpad machine-edits-14.md for the landing; once on main the old checklist gate stops until the app ships auri hooks; the gate passes every edit until the installed wigley plugin carries auri.json; Verification grep needs one more exclusion for answers.py:36; wiki/Main.md visuals link is a file path for task 17's sweep
+- 15 · hard · c15be8077 · diff read; wave 7 typecheck + full lint pass: layers, styles, changelog (entry under Unreleased), boundary (2176 files clean), oxlint, oxfmt · concerns: forms-tools.golden.txt edited by hand; readme-coverage.test.mts unrun; docs/features/live-view/design.md:92 names the deleted wigley-install.ts (task 16); the exits-1 proof must first remove the branch's own Added line
 ### Contract changes
 ### Rulings
+- test_record_fields.py's README opening sentence kept verbatim since the test matches it · group 01
+- relay README 'Registering the server' describes the built state, including task 02's --plugin-dir launch · group 01
+- registerFeature<V>(key, reader: FeatureReader<V> & JsonSlot<V>) replaces V extends JsonValue: interface values cannot extend the recursive JsonValue (consumers 04 07 08 09 10, call sites unchanged) · group 03
+- JsonValue defined in contracts/contributions.ts (no app-wide type existed) · group 03
+- userValue moved from settings setting-rows.ts to shared/json.ts so the workflow-list control kind can use it · group 03
+- several reasons from one refused section make one problem, lines joined by newline · group 03
+- RepoKind namedtuple (AI_REPO, APP_REPO) chosen once by repo_kind replaces require_ai_clone · group 19
+- secrets stage is a sub-item of README step 4 so steps keep their numbers · group 19
+- the row 'unity --project-path P command editor_play' now expects start(P), the planned widening · group 10
+- PlaytestWatchDeps gains patterns(); live-view-reader exports playtestPatternsOf and probeScriptOf · group 10
+- with no pick, one 'retro not queued' line per distinct pick JSON; a strategies or settings change re-commits the queue · group 07
+- createTarget, placesFor, buildTree, buildWikiTree, locateScript take the docs binding or pluginDir (contract changes inside docs only) · group 09
+- check_pointers.py imports a copy of the parser at wigley-ai-marketplace/scripts/pointer_parser/ · group 09
+- PageBuildDeps gains openDoc(path) and paths (consumers 05, 06): declared/ is the root layer · group 04
+- counters reset on any claim; a countdown starts only on a stage change into an auto stage; addDeclared ignores workflow.off and an already enabled id wins · group 04
+- 05: FollowedPlan is {dir, reported, unreportedDir, format}; a format change reopens the watch · group 05
+- 05: PlanCopyDeps gains format and drops files.list (changedAt from linked task docs); PlanReporterDeps is {workflow, workflowOf}, planWorkflowOf exported; PlanToolDeps gains planWorkflowOf · group 05
+- 05: set_workflow_plan answers Ignored before it stats the plan file; counter snapshots fill only in a stage that records them; the plan endpoint folder is computed only while a plan workflow is enabled · group 05
+- 08: the pick is held as a BacklogBinding in start.ts; a pick change with the same binding does not redraw; setFeaturesHomes is called when the registry first answers, then only when homes change · group 08
+- 08: with no pick the load reads no machine index; check-layers lets backlog main import docs features-homes.ts and docs' selftest-fixture.ts (its own sublayer); repo-folder.ts exports climbFolder and endsWithParts · group 08
+- 11: user settings.json gained plugins.disabled (without unity-pool, so it stays on for the user) and unity-pool.scriptPath ~/.local/bin/unity-pool; backup in the scratchpad · group 11
+- 11: an empty scriptPath answers no-cli 'No unity-pool script is set' with no stat; the start-test harness defaults to a set script path · group 11
+- 12: the fake hook app is shared as relay/tests/fake_hook_app.py; over the 10,000-char cap the compaction list ends on the … line without the footer; is_gated runs before the app is contacted · group 12
+- 06 (lead): one plugin may hand several self-test scripts; selftest.ts drops its second-script throw, a plugin filter runs every script of that plugin, the four sample scripts' groups carry a level prefix; src/contracts/plugin.ts, selftest.ts, selftest-config(.test).ts edited outside Files · group 06
+- 06: SampleDemoDeps is {showSample, addWorkflow, createDraw(workflow), planPane, runAction, openDoc}; demo page halves register no commands or keys · group 06
+- 06: sample Large main rows live in main/start.test.ts ('the sample Large'); fixtures.test-support.ts renamed sample-fixtures.test-support.ts; SessionFlow drops state · group 06
+- 06: engine behaviour now asserted: an untitled closed stage's detail is ''; {plan} actions hide while a flow has no plan dir; a template whose every variable is 0 renders '' · group 06
+- 14 (lead): machine files are not edited during the task; the edits wait for the landing · group 14
+- 14: no version bump, task 01's 3.0.0 bump covers the deleted skills · group 14
+- 15: addedEntryLines also counts entries in a version section origin/main lacks, so a branch passes after changelog:release · group 15
+- 15: sample-auri.json moves to declared/fixtures/; SAMPLE_PLUGIN_NAME and sampleQualified live in src/shared/sample-plugin.ts; check-layers lets notes main import docs' selftest-fixture.ts · group 15
 ### Review rounds
 ### Test gate

@@ -15,6 +15,7 @@ import type {
   SelfTestHost,
 } from '../../contracts/plugin';
 import type { SpawnExit } from '../../contracts/processes';
+import type { ConfigProblem } from '../../contracts/settings';
 import {
   coreRuntimeMainSlot,
   coreRuntimePageSlot,
@@ -371,6 +372,23 @@ const AFTER_DISPOSE_ROWS: {
       api.services.alerts.setOpenCount('p', 2, F);
 
       expect(counts).toEqual([]);
+    },
+  },
+  {
+    member: 'config problems set',
+    callAndCheck: () => {
+      const held = new Map<string, readonly ConfigProblem[]>();
+      const { api, registrations } = apiWithServices({
+        configProblems: {
+          set: (pluginId, problems) => held.set(pluginId, problems),
+          delete: (pluginId) => held.delete(pluginId),
+        },
+      });
+      registrations.dispose();
+
+      api.services.configProblems.set([{ file: '/f', message: 'm' }]);
+
+      expect([...held]).toEqual([]);
     },
   },
 ];
@@ -760,6 +778,23 @@ describe('createMainApi recording', () => {
     registrations.dispose();
 
     expect(cleared).toEqual([1]);
+  });
+
+  it("clears the plugin's config problems when its registrations are disposed", () => {
+    const held = new Map<string, readonly ConfigProblem[]>();
+    const { api, registrations } = apiWithServices({
+      configProblems: {
+        set: (pluginId, problems) => held.set(pluginId, problems),
+        delete: (pluginId) => held.delete(pluginId),
+      },
+    });
+
+    api.services.configProblems.set([{ file: '/f', message: 'm' }]);
+    const whileRunning = [...held];
+    registrations.dispose();
+
+    expect(whileRunning).toEqual([['p', [{ file: '/f', message: 'm' }]]]);
+    expect([...held]).toEqual([]);
   });
 
   it.each(AFTER_DISPOSE_ROWS)(

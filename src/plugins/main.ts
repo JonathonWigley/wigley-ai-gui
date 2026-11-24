@@ -5,6 +5,7 @@ import { appUpdateMainPart } from './app-update/main/start';
 import { audioPickerMainPart } from './audio-picker/main/start';
 import { agentSkillsMainPart } from './agent-skills/main/start';
 import { contextSourcesMainPart } from './context-sources/main/start';
+import { contributionsMainPart } from './contributions/main/start';
 import { agentStripMainPart } from './agent-strip/main/start';
 import { agentsMainPart } from './agents/main/start';
 import { autoCompactMainPart } from './auto-compact/main/start';
@@ -41,16 +42,13 @@ import { workMainPart } from './work/main/start';
 import { workBoardMainPart } from './work-board/main/start';
 import { workInboxMainPart } from './work-inbox/main/start';
 import { workflowMainPart } from './workflow/main/start';
-import { workflowLargeMainPart } from './workflow-large/main/start';
-import { workflowMediumMainPart } from './workflow-medium/main/start';
-import { workflowSmallMainPart } from './workflow-small/main/start';
-import { workflowSpikeMainPart } from './workflow-spike/main/start';
 
 // Every built-in plugin's main part. `builtInManifests`' order, not this
 // list's, sets the start order where no dependency says otherwise.
 export const mainParts: readonly MainPart[] = [
   keysMainPart,
   sessionsMainPart,
+  contributionsMainPart,
   // Before chat and usage, so Claude's harness is registered when they start.
   claudeCodeMainPart,
   formsMainPart,
@@ -82,10 +80,6 @@ export const mainParts: readonly MainPart[] = [
   usageMainPart,
   usageTabLineMainPart,
   workflowMainPart,
-  workflowLargeMainPart,
-  workflowSpikeMainPart,
-  workflowSmallMainPart,
-  workflowMediumMainPart,
   unityPoolMainPart,
   buildsMainPart,
   buildsTeamcityMainPart,

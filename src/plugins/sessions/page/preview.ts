@@ -73,7 +73,7 @@ export const PREVIEW_STATE: SessionsState = {
     sampleRow('preview-1', 'wigley-ai-gui', 'wigley-ai-gui', 'claude', false),
     sampleRow(
       'preview-2',
-      'wigley-ai-marketplace',
+      'plugin-marketplace',
       'wigley-ai-gui',
       'codex',
       true,

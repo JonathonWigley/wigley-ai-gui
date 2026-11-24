@@ -2,19 +2,19 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // The session hub's Live section: main answers the agent's `show_live_view` and `hide_live_view` tools by writing each
 // session's pick to the `live-view.picks` slot, and the page streams the picked window in chat's side part through the
-// `layout` setting's live-view layout. Main also opens a session's Live view when a live `unity command
-// editor.playmode start` (`editor_play` on Pipeline 0.8) or `capture.py start` Bash call succeeds, on the editor its
-// project folder names, cut to the Game View that editor's WigleyCapture.cs probe reports, and closes the view it
-// opened on a successful `unity command editor.playmode stop` (`editor_stop`) for the same project; it reads chat's
-// entries and agent events for them. It names `sessions` for the tools it contributes and the picks it forgets, and
-// reads it on the page for the names in its page log and the session its demo step activates.
+// `layout` setting's live-view layout. Main also opens a session's Live view when a live Bash call matches an
+// installed plugin's open pattern, on the editor its project folder names, cropped to the Game View that plugin's
+// probe reports, and closes the view it opened on a close pattern for the same project; it reads chat's entries and
+// agent events for them, and the patterns and probe from `contributions`' liveView strategies. It names `sessions` for
+// the tools it contributes and the picks it forgets, and reads it on the page for the names in its page log and the
+// session its demo step activates.
 export const liveViewManifest = definePlugin({
   id: 'live-view',
   label: 'Live view',
   description:
     "Streams a Unity editor's Game View into the session hub while an agent plays it.",
   dependsOn: {
-    main: ['chat', 'sessions'],
+    main: ['chat', 'contributions', 'sessions'],
     page: ['chat', 'sessions'],
   },
   reads: { main: [], page: [] },

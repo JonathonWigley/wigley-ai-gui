@@ -810,7 +810,7 @@ describe('chat main part', () => {
       at: 0,
       agentId,
       toolUseId: 't1',
-      tool: 'mcp__wigley-forms__chatroom_post',
+      tool: 'mcp__plugin_auri_auri__chatroom_post',
       summary: '',
     });
 
@@ -1276,7 +1276,7 @@ describe('chat main part', () => {
       at: 0,
       agentId: 'subagent-1',
       toolUseId: 't1',
-      tool: 'mcp__wigley-forms__set_workflow_step',
+      tool: 'mcp__plugin_auri_auri__set_workflow_step',
       summary: '',
     });
     const [guard] = chat.toolCallGuards;

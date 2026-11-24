@@ -1,101 +1,68 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type {
-  HarnessFolders,
-  HarnessPlugin,
-} from '../../../shared/harness-folders';
-import { WIGLEY_PLUGIN_KEY } from '../../../shared/wigley-install';
 import { locateScript } from './script-locator';
 
 const HOME = '/Users/u';
-const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
-
-// A folders stub listing `plugins` (key, install folder), in order.
-function foldersListing(
-  ...plugins: [key: string, installDir: string][]
-): Pick<HarnessFolders, 'installedPlugins'> {
-  const listed: HarnessPlugin[] = plugins.map(([key, installDir]) => ({
-    harnessId: 'claude',
-    plugin: { key, installDir, version: null, listedAt: null },
-  }));
-  return { installedPlugins: async () => listed };
-}
+const PLUGIN_DIR = '/Applications/App.app/Contents/Resources/agent-plugin';
+const PLUGIN_SCRIPT = `${PLUGIN_DIR}/scripts/docs-index/docs_index.py`;
 
 describe('locateScript', () => {
-  it('locateScript_SettingSet_ReturnsItExpanded', async () => {
-    const files = createMemoryFiles();
+  it.each<{
+    case: string;
+    scriptPath: string;
+    written: string[];
+    folders: string[];
+    expected: string | null;
+  }>([
+    {
+      case: 'a set scriptPath, expanded, over the plugin copy',
+      scriptPath: '~/src/docs_index.py',
+      written: [PLUGIN_SCRIPT],
+      folders: [],
+      expected: '/Users/u/src/docs_index.py',
+    },
+    {
+      case: "an empty scriptPath, the agent plugin's copy",
+      scriptPath: '',
+      written: [PLUGIN_SCRIPT],
+      folders: [],
+      expected: PLUGIN_SCRIPT,
+    },
+    {
+      case: 'no copy in the plugin, null',
+      scriptPath: '',
+      written: [],
+      folders: [],
+      expected: null,
+    },
+    {
+      case: 'a folder where the copy belongs, null',
+      scriptPath: '',
+      written: [],
+      folders: [PLUGIN_SCRIPT],
+      expected: null,
+    },
+  ])(
+    'locateScript gives $case',
+    async ({ scriptPath, written, folders, expected }) => {
+      const files = createMemoryFiles();
+      for (const path of written) {
+        await files.write(path, '');
+      }
+      for (const folder of folders) {
+        await files.makeFolder(folder);
+      }
 
-    const script = await locateScript(
-      files,
-      HOME,
-      '~/src/docs_index.py',
-      foldersListing(),
-      posixPaths,
-    );
+      const script = await locateScript(
+        files,
+        HOME,
+        scriptPath,
+        PLUGIN_DIR,
+        posixPaths,
+      );
 
-    expect(script).toBe('/Users/u/src/docs_index.py');
-  });
-
-  it('locateScript_InstalledInDefaultDir_ReturnsInstallScript', async () => {
-    const files = createMemoryFiles();
-    const install = '/Users/u/.claude/plugins/cache/w/wigley/9.9.9';
-    await files.write(`${install}/${SCRIPT_IN_INSTALL}`, '');
-
-    const script = await locateScript(
-      files,
-      HOME,
-      '',
-      foldersListing([WIGLEY_PLUGIN_KEY, install]),
-      posixPaths,
-    );
-
-    expect(script).toBe(`${install}/${SCRIPT_IN_INSTALL}`);
-  });
-
-  it('locateScript_SecondProfilesInstall_Found', async () => {
-    const files = createMemoryFiles();
-    const other = '/Users/u/.claude/plugins/cache/m/other/1.0.0';
-    const install = '/Users/u/.claude-personal/plugins/cache/w/wigley/1.0.0';
-    await files.write(`${other}/${SCRIPT_IN_INSTALL}`, '');
-    await files.write(`${install}/${SCRIPT_IN_INSTALL}`, '');
-
-    const script = await locateScript(
-      files,
-      HOME,
-      '',
-      foldersListing(['other@m', other], [WIGLEY_PLUGIN_KEY, install]),
-      posixPaths,
-    );
-
-    expect(script).toBe(`${install}/${SCRIPT_IN_INSTALL}`);
-  });
-
-  it('locateScript_InstallPathWithoutScript_SkipsIt', async () => {
-    const files = createMemoryFiles();
-    const missing = '/Users/u/.claude/plugins/cache/w/wigley/1.0.0';
-    const present = '/Users/u/.claude/plugins/cache/w/wigley/2.0.0';
-    await files.write(`${present}/${SCRIPT_IN_INSTALL}`, '');
-
-    const script = await locateScript(
-      files,
-      HOME,
-      '',
-      foldersListing(
-        [WIGLEY_PLUGIN_KEY, missing],
-        [WIGLEY_PLUGIN_KEY, present],
-      ),
-      posixPaths,
-    );
-
-    expect(script).toBe(`${present}/${SCRIPT_IN_INSTALL}`);
-  });
-
-  it('locateScript_NothingInstalled_Null', async () => {
-    const files = createMemoryFiles();
-
-    expect(
-      await locateScript(files, HOME, '', foldersListing(), posixPaths),
-    ).toBeNull();
-  });
+      expect(script).toBe(expected);
+    },
+  );
 });

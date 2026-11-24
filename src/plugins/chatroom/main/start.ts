@@ -66,7 +66,7 @@ type ChatroomApi = MainApi<
 const DRIVE_PROJECT_FOLDER = ['dev', 'chatroom-drive'];
 
 export const STANDING_NOTE =
-  "This app runs a chatroom for each project's sessions: the wigley-forms tools chatroom_post, chatroom_read, chatroom_board, chatroom_claim and chatroom_release. Follow the wigley:chatroom skill for when to read and what to post. Call chatroom_read at the start of a turn when the hook or the app says a message waits for you.";
+  "This app runs a chatroom for each project's sessions: the auri server's tools chatroom_post, chatroom_read, chatroom_board, chatroom_claim and chatroom_release. Follow the auri:chatroom skill for when to read and what to post. Call chatroom_read at the start of a turn when the hook or the app says a message waits for you.";
 
 // Registers the chatroom layouts. Keeps one room per project in plugin data;
 // contributes the five `chatroom_*` tools to every session, subagents

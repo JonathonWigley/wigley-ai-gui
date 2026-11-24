@@ -1,6 +1,6 @@
 // The sample visuals the fake harness's `fake: visual` reply and the chat
 // layout preview draw: one UI mockup and one systems flowchart, each a whole
-// document written to the `wigley:visuals` skill.
+// document written to the `auri:visuals` skill.
 
 export const SAMPLE_MOCKUP_VISUAL = `<!doctype html>
 <html>

@@ -2,6 +2,7 @@ import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { Log } from '../../contracts/log';
 import type {
   ChannelShape,
+  ConfigProblemsService,
   DependencyKey,
   DriveHost,
   MainApi,
@@ -12,6 +13,7 @@ import type {
   SelfTestHost,
   UntypedEvents,
 } from '../../contracts/plugin';
+import type { ConfigProblem } from '../../contracts/settings';
 import { pluginDemoSteps } from '../../shared/demo-step-registry';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import { pluginLog } from '../../shared/plugin-log';
@@ -29,10 +31,22 @@ import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
 
-// The services the main core hands the plugin APIs: each plugin's `selfTest`
-// and scoped `log` are made from these, `log` being the core's own.
-export type MainApiServices = Omit<MainServices, 'selfTest' | 'log'> & {
+// Every main part's config problems, held by plugin id: `set` replaces the
+// plugin's entry and `delete` drops it.
+export interface PluginConfigProblems {
+  set(pluginId: string, problems: readonly ConfigProblem[]): void;
+  delete(pluginId: string): void;
+}
+
+// The services the main core hands the plugin APIs: each plugin's `selfTest`,
+// scoped `log` and `configProblems` view are made from these, `log` being the
+// core's own.
+export type MainApiServices = Omit<
+  MainServices,
+  'selfTest' | 'log' | 'configProblems'
+> & {
   log: Log;
+  configProblems: PluginConfigProblems;
 };
 
 // `pluginSettings` reads every plugin's settings, by plugin id, as the user
@@ -69,8 +83,8 @@ export interface MainApiDeps {
 // (`data`'s included), running processes and alert counts are held per plugin
 // and filed as one entry each, so a run timer or a disposed watch leaves nothing
 // in the store; `services.git` is not recorded, since it makes only short runs.
-// Its demo steps, and the holds `pluginSwitch.runDisabledForNow` gives it, are
-// filed there too.
+// Its demo steps, the holds `pluginSwitch.runDisabledForNow` gives it, and the
+// clearing of its `configProblems` entry are filed there too.
 // `onSettingsChanged` calls its listener only when the JSON of this plugin's
 // settings differs from the last it saw, so another plugin's change calls
 // nothing.
@@ -132,6 +146,11 @@ export function createMainApi(
       ),
       timers: trackedTimers(deps.services.timers, registrations),
       userConfig: trackedUserConfig(deps.services.userConfig, registrations),
+      configProblems: trackedConfigProblems(
+        deps.services.configProblems,
+        manifest.id,
+        registrations,
+      ),
       selfTest: deps.selfTestFor(manifest.id),
     },
     dependency: <E>(key: DependencyKey<E, 'main'>) =>
@@ -167,6 +186,31 @@ function trackedDrive(
   }
   return {
     add: (name, action) => registrations.track(drive.add(name, action)),
+  };
+}
+
+// One plugin's view of `configProblems`: `set` replaces the plugin's entry,
+// and `registrations` disposing it, after the first `set`, deletes the entry;
+// a `set` after that dispose is deleted at once.
+function trackedConfigProblems(
+  configProblems: PluginConfigProblems,
+  pluginId: string,
+  registrations: Registrations,
+): ConfigProblemsService {
+  let isTracked = false;
+  return {
+    set(problems) {
+      configProblems.set(pluginId, problems);
+      if (!isTracked) {
+        isTracked = true;
+        registrations.track({
+          dispose() {
+            isTracked = false;
+            configProblems.delete(pluginId);
+          },
+        });
+      }
+    },
   };
 }
 

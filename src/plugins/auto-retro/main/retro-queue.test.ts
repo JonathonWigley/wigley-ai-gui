@@ -2,13 +2,22 @@ import { describe, expect, it } from 'vitest';
 import type { SessionCloseReason } from '../../chat/contract';
 import type { SessionTitles } from '../../sessions/contract';
 import {
+  commandPrefix,
   EMPTY_QUEUE,
   nextQueue,
   parseQueue,
   type QueueEvent,
   type RetroItem,
+  type RetroPolicy,
   type RetroQueue,
+  retroCommandText,
 } from './retro-queue';
+
+// The wigley strategy's policy, picked, every row's unless it names its own.
+const WIGLEY_POLICY: RetroPolicy = {
+  prefixes: ['/wigley:retro auto '],
+  on: ['close', 'clear'],
+};
 
 const TITLES: SessionTitles = {
   user: 'Fix login',
@@ -68,6 +77,7 @@ describe('nextQueue', () => {
     case: string;
     start: RetroQueue;
     events: QueueEvent[];
+    policy?: RetroPolicy;
     expected: RetroQueue;
   }>([
     {
@@ -277,14 +287,80 @@ describe('nextQueue', () => {
       events: [{ kind: 'restoreMissed' }],
       expected: queueOf({ running: null, launched: [], queued: [B] }),
     },
-  ])('nextQueue_AppliesEachRule: $case', ({ start, events, expected }) => {
-    const startCopy = structuredClone(start);
+    {
+      case: 'close_OnLacksClose_QueuesNothing',
+      start: EMPTY_QUEUE,
+      events: [closed('h1')],
+      policy: { ...WIGLEY_POLICY, on: ['clear'] },
+      expected: EMPTY_QUEUE,
+    },
+    {
+      case: 'clear_OnLacksClear_QueuesNothing',
+      start: EMPTY_QUEUE,
+      events: [cleared('h0', 'h1')],
+      policy: { ...WIGLEY_POLICY, on: ['close'] },
+      expected: EMPTY_QUEUE,
+    },
+    {
+      case: 'close_EmptyOn_StillDropsTheLaunchedHost',
+      start: queueOf({
+        running: { item: A, hostSessionId: 'r1' },
+        launched: ['r1'],
+        queued: [B],
+      }),
+      events: [closed('r1')],
+      policy: { ...WIGLEY_POLICY, on: [] },
+      expected: queueOf({ running: null, launched: [], queued: [B] }),
+    },
+    {
+      case: 'close_RowOpensWithASecondStrategysPrefix_QueuesNothing',
+      start: EMPTY_QUEUE,
+      events: [
+        closed('h9', 'user', true, { ...TITLES, firstMessage: '/b:retro h9' }),
+      ],
+      policy: { prefixes: ['/a:retro ', '/b:retro '], on: ['close', 'clear'] },
+      expected: EMPTY_QUEUE,
+    },
+  ])(
+    'nextQueue_AppliesEachRule: $case',
+    ({ start, events, policy = WIGLEY_POLICY, expected }) => {
+      const startCopy = structuredClone(start);
 
-    const result = events.reduce(nextQueue, start);
+      const result = events.reduce(
+        (queue, event) => nextQueue(queue, event, policy),
+        start,
+      );
 
-    expect(result).toEqual(expected);
-    expect(start).toEqual(startCopy);
+      expect(result).toEqual(expected);
+      expect(start).toEqual(startCopy);
+    },
+  );
+});
+
+describe('retro command', () => {
+  it('commandPrefix_WigleyCommand_IsTheUntrimmedTextBeforeSessions', () => {
+    expect(commandPrefix('/wigley:retro auto {sessions}')).toBe(
+      '/wigley:retro auto ',
+    );
   });
+
+  it.each([
+    {
+      command: '/wigley:retro auto {sessions}',
+      hostIds: ['h1', 'h2'],
+      expected: '/wigley:retro auto h1 h2',
+    },
+    {
+      command: '/acme:retro {sessions} --quiet',
+      hostIds: ['h1'],
+      expected: '/acme:retro h1 --quiet',
+    },
+  ])(
+    'retroCommandText_PutsTheHostIdsInPlaceOfSessions: $command',
+    ({ command, hostIds, expected }) => {
+      expect(retroCommandText(command, hostIds)).toBe(expected);
+    },
+  );
 });
 
 describe('parseQueue', () => {

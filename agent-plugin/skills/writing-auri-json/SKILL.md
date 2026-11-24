@@ -56,32 +56,32 @@ config problem.
 An array of workflow declarations. Each replaces the app's built-in Checklist flow for a session once one of its
 claimed skills loads (`workflows-and-checklist` skill).
 
-| Workflow field | Meaning |
-|---|---|
-| `id` | Unique in the plugin; qualified as `<plugin name>:<id>`. |
-| `label`, `badge`, `badgeColor` | The workflow's word, the row's letter, and a CSS colour or theme token (default `var(--wg-accent)`). |
-| `order` | The lowest order wins a skill two workflows claim. |
-| `claims` | The skills that start this workflow (`acme:small`). Each appears in exactly one stage's `skill` trigger. |
-| `groups` | Named stage lists for `from`: `{ "planning": ["explore", "plan"] }`. A group name may not equal a stage id. |
-| `counters` | `{ "<name>": { "counts": "<stage id>", "resetOn": "claim" } }`: adds one each time the flow enters the stage from another; 0 when the workflow's own skill claims the flow. |
-| `fixCycles` | `{ "counter": "<name>" }` or `{ "planCounter": "<name>" }`: the run log's fix cycles. |
-| `sidePane` | `{ "kind": "checklist" \| "plan", "title": "…" }`. |
-| `actions` | Actions by id (below). |
-| `stages` | Stage declarations, in stage order. |
+| Workflow field                 | Meaning                                                                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                           | Unique in the plugin; qualified as `<plugin name>:<id>`.                                                                                                                    |
+| `label`, `badge`, `badgeColor` | The workflow's word, the row's letter, and a CSS colour or theme token (default `var(--wg-accent)`).                                                                        |
+| `order`                        | The lowest order wins a skill two workflows claim.                                                                                                                          |
+| `claims`                       | The skills that start this workflow (`acme:small`). Each appears in exactly one stage's `skill` trigger.                                                                    |
+| `groups`                       | Named stage lists for `from`: `{ "planning": ["explore", "plan"] }`. A group name may not equal a stage id.                                                                 |
+| `counters`                     | `{ "<name>": { "counts": "<stage id>", "resetOn": "claim" } }`: adds one each time the flow enters the stage from another; 0 when the workflow's own skill claims the flow. |
+| `fixCycles`                    | `{ "counter": "<name>" }` or `{ "planCounter": "<name>" }`: the run log's fix cycles.                                                                                       |
+| `sidePane`                     | `{ "kind": "checklist" \| "plan", "title": "…" }`.                                                                                                                          |
+| `actions`                      | Actions by id (below).                                                                                                                                                      |
+| `stages`                       | Stage declarations, in stage order.                                                                                                                                         |
 
-| Stage field | Meaning |
-|---|---|
-| `id`, `label` | Unique id; the step's word. |
-| `step` | The value `set_workflow_step` enters this stage by. Left out, no report enters it. |
-| `inStepper`, `slot` | Default `true`; stages sharing a slot take one place in the stepper. |
-| `status` | `busy`, `finishing`, `ready` or `none`. |
-| `runsTasks` | The plan's current group draws the stage's status. |
-| `finishes`, `reopens` | Entering it ends the run; a `planChanged` while busy returns the flow to the stage it came from. |
-| `records` | Plan counters to snapshot on entry, for `counterRose`. |
-| `enter` | Triggers, in order. |
-| `progress`, `chipProgress`, `detail` | Templates after the status text, on the row chip, and in the side pane (joined by ` · `). |
-| `rowActivity`, `unseenActivity` | `{ "word", "tone", "emphasis"? }` shown on the row while the stage waits, or until the user views a finished turn. |
-| `actions`, `auto` | Action ids, the main one first; an action the countdown runs on entry when `workflow.autoStart` lists the workflow. |
+| Stage field                          | Meaning                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `id`, `label`                        | Unique id; the step's word.                                                                                         |
+| `step`                               | The value `set_workflow_step` enters this stage by. Left out, no report enters it.                                  |
+| `inStepper`, `slot`                  | Default `true`; stages sharing a slot take one place in the stepper.                                                |
+| `status`                             | `busy`, `finishing`, `ready` or `none`.                                                                             |
+| `runsTasks`                          | The plan's current group draws the stage's status.                                                                  |
+| `finishes`, `reopens`                | Entering it ends the run; a `planChanged` while busy returns the flow to the stage it came from.                    |
+| `records`                            | Plan counters to snapshot on entry, for `counterRose`.                                                              |
+| `enter`                              | Triggers, in order.                                                                                                 |
+| `progress`, `chipProgress`, `detail` | Templates after the status text, on the row chip, and in the side pane (joined by `·`).                             |
+| `rowActivity`, `unseenActivity`      | `{ "word", "tone", "emphasis"? }` shown on the row while the stage waits, or until the user views a finished turn.  |
+| `actions`, `auto`                    | Action ids, the main one first; an action the countdown runs on entry when `workflow.autoStart` lists the workflow. |
 
 **Triggers** — `{ "skill": "<skill>" }`, `{ "step": "<step>" }` or `{ "event": "<event>" }`, each with optional `from`
 (stage ids and group names the flow must be in) and `when` (predicates that must all hold). A `skill` trigger may add
@@ -107,15 +107,35 @@ A minimal workflow:
 
 ```json
 {
-  "id": "small", "label": "Small", "badge": "S", "order": 10,
+  "id": "small",
+  "label": "Small",
+  "badge": "S",
+  "order": 10,
   "claims": ["acme:small"],
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
-    { "id": "scope", "label": "Scope", "status": "busy", "enter": [{ "skill": "acme:small" }] },
-    { "id": "build", "label": "Build", "step": "build", "status": "busy", "progress": " {checklist}",
-      "enter": [{ "step": "build" }] },
-    { "id": "done", "label": "Done", "step": "done", "status": "finishing", "finishes": true,
-      "enter": [{ "step": "done" }] }
+    {
+      "id": "scope",
+      "label": "Scope",
+      "status": "busy",
+      "enter": [{ "skill": "acme:small" }]
+    },
+    {
+      "id": "build",
+      "label": "Build",
+      "step": "build",
+      "status": "busy",
+      "progress": " {checklist}",
+      "enter": [{ "step": "build" }]
+    },
+    {
+      "id": "done",
+      "label": "Done",
+      "step": "done",
+      "status": "finishing",
+      "finishes": true,
+      "enter": [{ "step": "done" }]
+    }
   ]
 }
 ```
@@ -125,52 +145,52 @@ A minimal workflow:
 How a workflow with the plan capability reads its plan. Every knob is optional; with none, the reader reads a plain
 checklist: every box in the file, no groups, the title from the first `# ` heading.
 
-| Knob | Meaning |
-|---|---|
-| `folder` | Glob for a plan folder's name (`plan-*`). A write of `<folder>/<file>`, or a `planFromArgs` argument naming it, sets the plan. Default: reports only. |
-| `file` | The plan file in the folder. Default `plan.md`. |
-| `tasksSection` | The H2 heading whose boxes count, exact text. Default: the whole file. |
-| `groupHeading` | `{ "pattern": "^### Wave (\\d+)", "title": "Wave {1}" }`; capture 1 is the group number. |
-| `titleSuffix` | Text dropped from the end of the title. |
-| `counters` | `{ "<name>": { "section"?, "heading", "itemPrefix" } }`: counts of list lines under a heading. |
-| `taskDocs` | `{ "link": "bareMd", "statusField", "statusLines", "statuses", "running" }`: a box's linked task document and the status read from it. |
-| `verificationTask` | `{ "lastTaskDocLacking": "<field>" }`: the last box whose task document lacks that field; `{plan.build}` leaves it out. |
+| Knob               | Meaning                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `folder`           | Glob for a plan folder's name (`plan-*`). A write of `<folder>/<file>`, or a `planFromArgs` argument naming it, sets the plan. Default: reports only. |
+| `file`             | The plan file in the folder. Default `plan.md`.                                                                                                       |
+| `tasksSection`     | The H2 heading whose boxes count, exact text. Default: the whole file.                                                                                |
+| `groupHeading`     | `{ "pattern": "^### Wave (\\d+)", "title": "Wave {1}" }`; capture 1 is the group number.                                                              |
+| `titleSuffix`      | Text dropped from the end of the title.                                                                                                               |
+| `counters`         | `{ "<name>": { "section"?, "heading", "itemPrefix" } }`: counts of list lines under a heading.                                                        |
+| `taskDocs`         | `{ "link": "bareMd", "statusField", "statusLines", "statuses", "running" }`: a box's linked task document and the status read from it.                |
+| `verificationTask` | `{ "lastTaskDocLacking": "<field>" }`: the last box whose task document lacks that field; `{plan.build}` leaves it out.                               |
 
 ## retro
 
-| Field | Meaning |
-|---|---|
-| `label` | The Settings choice's text. Default: the plugin name. |
+| Field     | Meaning                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------ |
+| `label`   | The Settings choice's text. Default: the plugin name.                                                  |
 | `command` | The retro row's first message. `{sessions}` is the ended conversation's session ids, joined by spaces. |
-| `folder` | The folder each retro row runs in; `~` is the home folder. |
-| `on` | Which endings queue a retro: `close`, `clear`, or both. |
+| `folder`  | The folder each retro row runs in; `~` is the home folder.                                             |
+| `on`      | Which endings queue a retro: `close`, `clear`, or both.                                                |
 
 ## backlog
 
-| Field | Meaning |
-|---|---|
-| `label` | The Settings choice's text. |
-| `homes` | Folder templates for a repo's features home, in order: `{repo}` the clone root, `{name}` the origin repo name. |
-| `file` | The follow-ups file in a home. |
-| `areaFolder` | Optional: a folder in a home holding per-area follow-up files. |
-| `assistant` | Optional `{ "instructions": "…" }`, added after the Backlog assistant's own instructions. |
+| Field        | Meaning                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `label`      | The Settings choice's text.                                                                                    |
+| `homes`      | Folder templates for a repo's features home, in order: `{repo}` the clone root, `{name}` the origin repo name. |
+| `file`       | The follow-ups file in a home.                                                                                 |
+| `areaFolder` | Optional: a folder in a home holding per-area follow-up files.                                                 |
+| `assistant`  | Optional `{ "instructions": "…" }`, added after the Backlog assistant's own instructions.                      |
 
 The file format is the `backlog-format` skill's.
 
 ## docs
 
-| Field | Meaning |
-|---|---|
+| Field           | Meaning                                                                                                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `globalFolders` | `[{ "path", "referenceFiles"?, "subfolders"?, "skip"? }]`: the docs index walks `path`'s top level as instructions, `referenceFiles` as reference, each subfolder in full, and leaves out `skip`. |
-| `wikiMain` | The wiki's main page. The first plugin that names one wins. |
-| `linkPrefixes` | `{ "acme:": "acme@acme-marketplace" }`: a wiki link `acme:<skill>` opens that skill in the install with that key. |
+| `wikiMain`      | The wiki's main page. The first plugin that names one wins.                                                                                                                                       |
+| `linkPrefixes`  | `{ "acme:": "acme@acme-marketplace" }`: a wiki link `acme:<skill>` opens that skill in the install with that key.                                                                                 |
 
 ## liveView
 
-| Field | Meaning |
-|---|---|
-| `open`, `close` | Command patterns whose successful Bash call opens or closes the session's Live view. |
-| `probe` | Optional `{ "file": "<path from the plugin root>", "entry": "<C# entry>", "runner": "unityScript" }` (`live-view` skill, The probe). |
+| Field           | Meaning                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `open`, `close` | Command patterns whose successful Bash call opens or closes the session's Live view.                                                 |
+| `probe`         | Optional `{ "file": "<path from the plugin root>", "entry": "<C# entry>", "runner": "unityScript" }` (`live-view` skill, The probe). |
 
 A command pattern is `{ "program", "words", "valueFlags"?, "projectPathFlag"?, "projectPathVariable"? }`. `program`
 matches the base name of a command segment's first word (a `python` before a `*.py` program is skipped). `words` must

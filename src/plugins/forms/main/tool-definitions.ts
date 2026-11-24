@@ -23,7 +23,7 @@ function askRoundDescription(): string {
     'Ask the user a whole round of interview questions and review findings in ' +
     'the wigley-ai-gui app and wait for the answers. Send every item whose ' +
     "prerequisites are already settled in one call. How each item's text is " +
-    'worded: ~/wigley-agents/forms.md. The app draws the ' +
+    'worded: the auri:forms skill. The app draws the ' +
     "not-applicable control, the Notes box, the round note and the Don't ask " +
     'me this control by itself — do not ' +
     'describe them as questions or choices. Use ' +
@@ -42,7 +42,7 @@ function askRoundDescription(): string {
     'user takes it with Accept or picks any other entry. A choice never opens ' +
     "with an action's label. Use 'questions' for any " +
     'other open decision. When a choice approves an action auto mode gates ' +
-    "(a push past PR protection, a pool hold's release or take, an edit to " +
+    '(a push past PR protection, an edit to ' +
     'your own settings or hooks, start_session in another project), tag it ' +
     "in that question's 'approves' with the exact action in plain words: on " +
     'submit with that choice picked, the app posts "Approved in form: ' +
@@ -115,7 +115,7 @@ const COLLECT_LAST_ROUND_DESCRIPTION =
   "answers fill in. After an 'auto_answered' round it returns that result " +
   'again.';
 
-// The two wigley-forms tools as MCP tools/list publishes them. ask_round's item
+// The two forms tools as MCP tools/list publishes them. ask_round's item
 // lists come from the same kinds parseRound validates with, in their order, so
 // the schema and the validator agree, but for one case: the validator still
 // reads a question's legacy `question` as its summary.

@@ -5,6 +5,7 @@ import { appUpdateManifest } from './app-update/manifest';
 import { audioPickerManifest } from './audio-picker/manifest';
 import { agentSkillsManifest } from './agent-skills/manifest';
 import { contextSourcesManifest } from './context-sources/manifest';
+import { contributionsManifest } from './contributions/manifest';
 import { agentStripManifest } from './agent-strip/manifest';
 import { agentsManifest } from './agents/manifest';
 import { autoCompactManifest } from './auto-compact/manifest';
@@ -43,10 +44,6 @@ import { workManifest } from './work/manifest';
 import { workBoardManifest } from './work-board/manifest';
 import { workInboxManifest } from './work-inbox/manifest';
 import { workflowManifest } from './workflow/manifest';
-import { workflowLargeManifest } from './workflow-large/manifest';
-import { workflowMediumManifest } from './workflow-medium/manifest';
-import { workflowSmallManifest } from './workflow-small/manifest';
-import { workflowSpikeManifest } from './workflow-spike/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
 export { DIGITS } from './forms/manifest';
@@ -56,6 +53,9 @@ export { MAX_CANDIDATES } from './audio-picker/manifest';
 // and scopes in its type, which the default keymap is checked against.
 export const builtInManifests = [
   sessionsManifest,
+  // Before every feature that reads contributions, each listing it in
+  // `dependsOn.main`.
+  contributionsManifest,
   claudeCodeManifest,
   formsManifest,
   agentCommandsManifest,
@@ -88,10 +88,6 @@ export const builtInManifests = [
   usageManifest,
   usageTabLineManifest,
   workflowManifest,
-  workflowLargeManifest,
-  workflowSpikeManifest,
-  workflowSmallManifest,
-  workflowMediumManifest,
   unityPoolManifest,
   buildsManifest,
   buildsTeamcityManifest,

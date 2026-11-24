@@ -6,6 +6,8 @@ import {
   buildTree,
   buildWikiFilterTree,
   buildWikiTree,
+  featureSlug,
+  findSkillEntry,
   isStarredLeafId,
   MINE_ROOT_ID,
   titleFromId,
@@ -18,6 +20,8 @@ import type { WikiShelf, WikiTarget } from './wiki-main';
 
 const HOME = '/Users/u';
 const NO_STARS: ReadonlySet<string> = new Set();
+// Skill links `w:<name>` name a skill of the plugin `wigley@w`.
+const LINK_PREFIXES = { 'w:': 'wigley@w' };
 
 function entry(overrides: Partial<IndexEntry> & { path: string }): IndexEntry {
   return {
@@ -56,7 +60,10 @@ function mineChildren(
   homeDir = HOME,
   paths = posixPaths,
 ): TreeNode[] {
-  return child(buildTree(entries, homeDir, paths, NO_STARS), 'Mine').children;
+  return child(
+    buildTree(entries, homeDir, paths, NO_STARS, 'followups'),
+    'Mine',
+  ).children;
 }
 
 function ids(nodes: readonly TreeNode[]): string[] {
@@ -226,9 +233,9 @@ describe('buildTree', () => {
   ])(
     'buildTree_OwnerRoots_OnlyOwnersWithEntries $roots',
     ({ entries, roots }) => {
-      expect(ids(buildTree(entries, HOME, posixPaths, NO_STARS))).toEqual(
-        roots,
-      );
+      expect(
+        ids(buildTree(entries, HOME, posixPaths, NO_STARS, 'followups')),
+      ).toEqual(roots);
     },
   );
 
@@ -339,7 +346,13 @@ describe('buildTree', () => {
   });
 
   it('buildTree_Roles_RepoClonePluginOther', () => {
-    const roots = buildTree(marketplaceRepo(), HOME, posixPaths, NO_STARS);
+    const roots = buildTree(
+      marketplaceRepo(),
+      HOME,
+      posixPaths,
+      NO_STARS,
+      'followups',
+    );
     const repo = child(child(roots, 'Mine').children, 'm');
     const plugin = child(repo.children, 'w@m');
 
@@ -375,7 +388,7 @@ describe('buildTree', () => {
     ];
 
     const thirdParty = child(
-      buildTree(entries, HOME, posixPaths, NO_STARS),
+      buildTree(entries, HOME, posixPaths, NO_STARS, 'followups'),
       'Third-party',
     );
 
@@ -459,12 +472,19 @@ describe('buildTree', () => {
   });
 
   it('buildTree_SameIndexTwice_SameIds', () => {
-    const first = buildTree(twoClonesCarryingKey(), HOME, posixPaths, NO_STARS);
+    const first = buildTree(
+      twoClonesCarryingKey(),
+      HOME,
+      posixPaths,
+      NO_STARS,
+      'followups',
+    );
     const second = buildTree(
       twoClonesCarryingKey(),
       HOME,
       posixPaths,
       NO_STARS,
+      'followups',
     );
     const starred = new Set([installedOnlySkill().id]);
     const firstStarred = buildTree(
@@ -472,12 +492,14 @@ describe('buildTree', () => {
       HOME,
       posixPaths,
       starred,
+      'followups',
     );
     const secondStarred = buildTree(
       twoClonesCarryingKey(),
       HOME,
       posixPaths,
       starred,
+      'followups',
     );
 
     expect(flattenedIds(second)).toEqual(flattenedIds(first));
@@ -750,6 +772,7 @@ describe('buildTree', () => {
       HOME,
       posixPaths,
       new Set([rule]),
+      'followups',
     );
 
     expect(titles(roots)).toEqual(['Starred', 'Mine']);
@@ -770,6 +793,7 @@ describe('buildTree', () => {
       HOME,
       posixPaths,
       new Set([rule]),
+      'followups',
     );
 
     const rules = child(
@@ -786,6 +810,7 @@ describe('buildTree', () => {
       HOME,
       posixPaths,
       new Set([rule]),
+      'followups',
     );
 
     const [starredLeaf] = child(roots, 'Starred').children;
@@ -805,6 +830,7 @@ describe('buildTree', () => {
       HOME,
       posixPaths,
       new Set(['/Users/u/gone.md']),
+      'followups',
     );
 
     expect(titles(roots)).toEqual(['Mine']);
@@ -814,7 +840,13 @@ describe('buildTree', () => {
     const skill = thirdPartyPluginSkill('v@m');
     const entries = [entry({ path: '/Users/u/.claude/rules/a.md' }), skill];
 
-    const roots = buildTree(entries, HOME, posixPaths, new Set([skill.id]));
+    const roots = buildTree(
+      entries,
+      HOME,
+      posixPaths,
+      new Set([skill.id]),
+      'followups',
+    );
 
     expect(titles(roots)).toEqual(['Starred', 'Mine', 'Third-party']);
   });
@@ -834,7 +866,7 @@ describe('buildTree', () => {
     ];
     const starred = new Set(entries.map((starredEntry) => starredEntry.id));
 
-    const roots = buildTree(entries, HOME, posixPaths, starred);
+    const roots = buildTree(entries, HOME, posixPaths, starred, 'followups');
 
     expect(titles(child(roots, 'Starred').children)).toEqual([
       'a.md',
@@ -958,6 +990,94 @@ describe('buildTree', () => {
     ];
 
     expect(titles(mineChildren(entries))).toEqual(['Global', 'r']);
+  });
+});
+
+describe('featureSlug', () => {
+  it.each<{
+    given: string;
+    path: string;
+    meta: IndexEntry['meta'];
+    areaFolder: string | null;
+    slug: string | null;
+  }>([
+    {
+      given: 'a feature folder',
+      path: 'a-feat/design.md',
+      meta: {},
+      areaFolder: 'followups',
+      slug: 'a-feat',
+    },
+    {
+      given: 'meta.feature over the folder',
+      path: 'a-feat/01-task.md',
+      meta: { feature: 'b-feat' },
+      areaFolder: 'followups',
+      slug: 'b-feat',
+    },
+    {
+      given: 'the area folder',
+      path: 'followups/ui.md',
+      meta: {},
+      areaFolder: 'followups',
+      slug: null,
+    },
+    {
+      given: 'a custom area folder',
+      path: 'todo/ui.md',
+      meta: {},
+      areaFolder: 'todo',
+      slug: null,
+    },
+    {
+      given: 'followups/ under a custom area folder',
+      path: 'followups/ui.md',
+      meta: {},
+      areaFolder: 'todo',
+      slug: 'followups',
+    },
+    {
+      given: 'a file at the root',
+      path: 'followups.md',
+      meta: {},
+      areaFolder: 'followups',
+      slug: null,
+    },
+  ])(
+    'featureSlug gives $slug for $given',
+    ({ path, meta, areaFolder, slug }) => {
+      const featureEntry = entry({
+        path: `${FEATURES_ROOT}/${path}`,
+        source: 'features',
+        repo: 'r',
+        root: FEATURES_ROOT,
+        meta,
+      });
+
+      expect(featureSlug(featureEntry, posixPaths, areaFolder)).toBe(slug);
+    },
+  );
+});
+
+describe('findSkillEntry', () => {
+  const skillOf = (path: string, plugin: string) =>
+    entry({ path, kind: 'skill', title: 'make', plugin });
+
+  it('findSkillEntry_ExactKey_Found', () => {
+    const entries = [
+      skillOf('/x/make/SKILL.md', 'wigley@x'),
+      skillOf('/w/make/SKILL.md', 'wigley@w'),
+    ];
+
+    expect(findSkillEntry('make', 'wigley@w', entries)?.path).toBe(
+      '/w/make/SKILL.md',
+    );
+  });
+
+  it('findSkillEntry_OtherKeySameName_NotFound', () => {
+    const entries = [skillOf('/x/make/SKILL.md', 'wigley@x')];
+
+    expect(findSkillEntry('make', 'wigley@w', entries)).toBeNull();
   });
 });
 
@@ -1086,7 +1206,12 @@ describe('buildWikiTree', () => {
 
   const makeSkill = (path: string, plugin: string) =>
     entry({ path, kind: 'skill', title: 'make', plugin });
-  const SKILL_MAKE: WikiTarget = { type: 'skill', name: 'make' };
+  const SKILL_MAKE: WikiTarget = { type: 'skill', prefix: 'w:', name: 'make' };
+  const UNMAPPED_MAKE: WikiTarget = {
+    type: 'skill',
+    prefix: 'other:',
+    name: 'make',
+  };
   const pathTo = (path: string): WikiTarget => ({ type: 'path', path });
 
   it.each<{
@@ -1138,7 +1263,7 @@ describe('buildWikiTree', () => {
       expected: leafTo('/b/a.md'),
     },
     {
-      given: 'skill of the wigley plugin',
+      given: 'skill of the plugin its prefix maps',
       target: SKILL_MAKE,
       entries: [
         makeSkill('/m/make/SKILL.md', 'ng@n'),
@@ -1173,6 +1298,18 @@ describe('buildWikiTree', () => {
       target: SKILL_MAKE,
       entries: [makeSkill('/m/make/SKILL.md', 'ng@n')],
       expected: danglingTo(SKILL_MAKE),
+    },
+    {
+      given: 'skill of a same-named plugin in another marketplace',
+      target: SKILL_MAKE,
+      entries: [makeSkill('/x/make/SKILL.md', 'wigley@x')],
+      expected: danglingTo(SKILL_MAKE),
+    },
+    {
+      given: 'skill link whose prefix maps no plugin',
+      target: UNMAPPED_MAKE,
+      entries: [makeSkill('/w/make/SKILL.md', 'wigley@w')],
+      expected: danglingTo(UNMAPPED_MAKE),
     },
     {
       given: 'no entry',
@@ -1211,6 +1348,7 @@ describe('buildWikiTree', () => {
       MAIN,
       HOME,
       posixPaths,
+      LINK_PREFIXES,
     );
 
     expect(onlyChild(tree)).toEqual(expected);
@@ -1223,6 +1361,7 @@ describe('buildWikiTree', () => {
       'C:\\Dev\\wiki',
       'C:\\Users\\u',
       windowsPaths,
+      LINK_PREFIXES,
     );
 
     expect(onlyChild(tree)).toEqual(leafTo('c:\\dev\\a.md'));
@@ -1250,6 +1389,7 @@ describe('buildWikiTree', () => {
       MAIN,
       HOME,
       posixPaths,
+      LINK_PREFIXES,
     );
 
     expect(onlyChild(tree)).toEqual({
@@ -1285,6 +1425,7 @@ describe('buildWikiTree', () => {
       MAIN,
       HOME,
       posixPaths,
+      LINK_PREFIXES,
     );
 
     const groups = tree.filter((node) => node.type === 'group');
@@ -1313,6 +1454,7 @@ describe('buildWikiTree', () => {
       ],
       HOME,
       posixPaths,
+      'followups',
     );
 
     expect(ids(tree)).toEqual([MINE_ROOT_ID]);

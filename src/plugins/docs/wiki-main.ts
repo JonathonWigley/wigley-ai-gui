@@ -11,7 +11,7 @@ export type WikiItem =
 
 export type WikiTarget =
   | { type: 'path'; path: string }
-  | { type: 'skill'; name: string }
+  | { type: 'skill'; prefix: string; name: string }
   | { type: 'kind'; kind: string }
   | { type: 'owner'; owner: 'third-party' }
   | { type: 'all' };
@@ -21,7 +21,6 @@ const LABEL_LEVEL = 3;
 
 const WIKI_SCHEME = 'wiki:';
 const KIND_TARGET = /^wiki:kind\/([^/]+)$/;
-const SKILL_TARGET = /^wigley:([^/]+)$/;
 
 const LINK =
   /(?<![!\\])\[([^\]]+)\]\(\s*(<[^>]*>|[^\s)]+)(?:\s+"[^"]*")?\s*\)/g;
@@ -29,8 +28,12 @@ const CODE_SPAN = /(`+).*?\1/g;
 
 // Reads the file's headings and links into shelves: a level 2 heading is a
 // shelf, a level 3 heading is a label in it, and each link on any other prose
-// line under a shelf is a page. Never throws.
-export function parseWikiMain(text: string): WikiShelf[] {
+// line under a shelf is a page. `linkPrefixes` are the binding's skill link
+// prefixes (`parseWikiTarget`). Never throws.
+export function parseWikiMain(
+  text: string,
+  linkPrefixes: Readonly<Record<string, string>>,
+): WikiShelf[] {
   const shelves: WikiShelf[] = [];
   for (const line of scanLines(text)) {
     if (!line.isProse) {
@@ -42,13 +45,16 @@ export function parseWikiMain(text: string): WikiShelf[] {
     } else if (line.heading?.level === LABEL_LEVEL) {
       shelf?.items.push({ type: 'label', title: line.heading.title });
     } else if (line.heading === null) {
-      shelf?.items.push(...pagesOn(line.text));
+      shelf?.items.push(...pagesOn(line.text, linkPrefixes));
     }
   }
   return shelves;
 }
 
-function pagesOn(line: string): WikiItem[] {
+function pagesOn(
+  line: string,
+  linkPrefixes: Readonly<Record<string, string>>,
+): WikiItem[] {
   const codeSpans = [...line.matchAll(CODE_SPAN)];
   const pages: WikiItem[] = [];
   for (const link of line.matchAll(LINK)) {
@@ -58,7 +64,7 @@ function pagesOn(line: string): WikiItem[] {
     );
     const target = isInCodeSpan
       ? null
-      : parseWikiTarget(withoutAngleBrackets(link[2]));
+      : parseWikiTarget(withoutAngleBrackets(link[2]), linkPrefixes);
     if (target !== null) {
       pages.push({ type: 'page', title: link[1], target });
     }
@@ -70,9 +76,13 @@ function withoutAngleBrackets(target: string): string {
   return target.startsWith('<') ? target.slice(1, -1) : target;
 }
 
-// What a link's target text names. Null is a `wiki:` link no page can act on,
-// which adds no item.
-export function parseWikiTarget(text: string): WikiTarget | null {
+// What a link's target text names: `<prefix><name>`, for a key of
+// `linkPrefixes` (the longest that fits) and a name with no `/`, is a skill.
+// Null is a `wiki:` link no page can act on, which adds no item.
+export function parseWikiTarget(
+  text: string,
+  linkPrefixes: Readonly<Record<string, string>>,
+): WikiTarget | null {
   if (text === 'wiki:all') {
     return { type: 'all' };
   }
@@ -86,9 +96,12 @@ export function parseWikiTarget(text: string): WikiTarget | null {
   if (text.startsWith(WIKI_SCHEME)) {
     return null;
   }
-  const skill = SKILL_TARGET.exec(text);
-  if (skill !== null) {
-    return { type: 'skill', name: skill[1] };
+  const prefix = Object.keys(linkPrefixes)
+    .filter((each) => text.startsWith(each))
+    .sort((a, b) => b.length - a.length)[0];
+  const name = prefix === undefined ? '' : text.slice(prefix.length);
+  if (prefix !== undefined && name !== '' && !name.includes('/')) {
+    return { type: 'skill', prefix, name };
   }
   return { type: 'path', path: text };
 }

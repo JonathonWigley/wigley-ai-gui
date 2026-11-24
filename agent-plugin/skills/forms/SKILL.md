@@ -99,6 +99,7 @@ What becomes a finding is the calling skill's decision. The card opens on the ta
 
   Name files and symbols only where the user needs them to follow the explanation. A `design` finding that decides a
   look carries a mock of each choice, as a question does.
+
 - **`severity`** — on `caused` and `pre_existing` only: `critical`, `important` or `minor`.
 - **`proof`** — on a `nit`: why it cannot happen, shown under "Why it's safe".
 - **Each choice** — its `text` names the fix alone, opening with what the user gets, never with an action's label
@@ -137,14 +138,14 @@ Notices ride in a round already being sent. With no round to send, they go in th
 
 ## Outcomes
 
-| `outcome` | The caller |
-|---|---|
-| `submitted` | Reads the answers. |
-| `draft` | Calls `collect_last_round`, again after every `draft`, however many come back in a row: a draft is the user still writing. A `draft` whose `next` says the round was not opened has no answers: send the same round again with `ask_round`. |
-| `cancelled` | Leaves the round closed and reports what it settled. |
-| `needs_manual_open` | Sends the same round again with `ask_round` once. On a second one, tells the user the `summary`'s reason and asks the round in the reply (Written fallback). |
-| `auto_answered` | Reads each pick as its own, lists each as a Decided notice in the reply, and sends no more rounds while the session stays headless (Headless). |
-| `no_round` | Sends the same round again with `ask_round`; the user's saved answers fill in. |
+| `outcome`           | The caller                                                                                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitted`         | Reads the answers.                                                                                                                                                                                                                          |
+| `draft`             | Calls `collect_last_round`, again after every `draft`, however many come back in a row: a draft is the user still writing. A `draft` whose `next` says the round was not opened has no answers: send the same round again with `ask_round`. |
+| `cancelled`         | Leaves the round closed and reports what it settled.                                                                                                                                                                                        |
+| `needs_manual_open` | Sends the same round again with `ask_round` once. On a second one, tells the user the `summary`'s reason and asks the round in the reply (Written fallback).                                                                                |
+| `auto_answered`     | Reads each pick as its own, lists each as a Decided notice in the reply, and sends no more rounds while the session stays headless (Headless).                                                                                              |
+| `no_round`          | Sends the same round again with `ask_round`; the user's saved answers fill in.                                                                                                                                                              |
 
 - A result carrying `earlier_heading` holds the answers to that earlier round. Read them as that round's answers,
   then send the current round again.

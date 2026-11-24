@@ -1,0 +1,21 @@
+{
+  "name": "auri",
+  "version": "1.0.0",
+  "description": "The Auri app's agent plugin: the app's MCP tools, its hooks and the skills for its features",
+  "author": { "name": "Wigley" },
+  "skills": "./skills/",
+  "mcpServers": {
+    "auri": {
+      "command": "python3",
+      "args": ["./scripts/relay/relay.py"],
+      "cwd": ".",
+      "tool_timeout_sec": 330
+    }
+  },
+  "interface": {
+    "displayName": "Auri",
+    "shortDescription": "The Auri app's agent plugin: the app's MCP tools, its hooks and the skills for its features",
+    "developerName": "Wigley",
+    "category": "Development"
+  }
+}

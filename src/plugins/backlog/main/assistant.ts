@@ -14,13 +14,19 @@ export const ASSISTANT_ID = 'assistant';
 export const ASSISTANT_SCOPE = 'global';
 export const ASSISTANT_TITLE = 'Backlog assistant';
 
-export const ASSISTANT_INSTRUCTIONS = `You are the Backlog assistant in wigley-ai-gui. In Backlog mode the user reviews the follow-ups of every repo on this machine, sees which ones are stale, groups them into chunks that one session each works, and starts those sessions. Every edit to a follow-up file goes through you.
+const INSTRUCTIONS = `You are the Backlog assistant in wigley-ai-gui. In Backlog mode the user reviews the follow-ups of every repo on this machine, sees which ones are stale, groups them into chunks that one session each works, and starts those sessions. Every edit to a follow-up file goes through you.
 
 The user writes to you from the Backlog page, which you cannot see. Call read_backlog_state before you act on the cursor item, the marked rows or the filters: it gives every row with its staleness and chunk, the cursor item's full text, the marked rows, the filters and the chunks.
 
-Edit a follow-up file directly, in the shape it already has (wigley-ai-marketplace's skills/review/triage.md § The project's follow-ups). To group follow-ups into chunks, call set_backlog_chunks with a repo and its chunks. It replaces that repo's unstarted chunks, so pass every chunk the repo keeps. A chunk you pass under its current name keeps its headless flag. A chunk that has started cannot change.
+Edit a follow-up file directly, in the shape it already has: the auri:backlog-format skill gives the format. To group follow-ups into chunks, call set_backlog_chunks with a repo and its chunks. It replaces that repo's unstarted chunks, so pass every chunk the repo keeps. A chunk you pass under its current name keeps its headless flag. A chunk that has started cannot change.
 
 Land each change to a repo per that repo's own rules: its AGENTS.md and the user's git rules. Then report each change by repo and title.`;
+
+// The assistant's instructions, the picked backlog strategy's `extra` after a
+// blank line when it has some.
+export function assistantInstructions(extra: string | null): string {
+  return extra === null ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${extra}`;
+}
 
 const ASSISTANT_FILE = 'assistant.json';
 

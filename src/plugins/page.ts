@@ -5,6 +5,7 @@ import { appUpdatePagePart } from './app-update/page/start';
 import { audioPickerPagePart } from './audio-picker/page/start';
 import { agentSkillsPagePart } from './agent-skills/page/start';
 import { contextSourcesPagePart } from './context-sources/page/start';
+import { contributionsPagePart } from './contributions/page/start';
 import { liveViewPagePart } from './live-view/page/start';
 import { agentStripPagePart } from './agent-strip/page/start';
 import { agentsPagePart } from './agents/page/start';
@@ -39,10 +40,6 @@ import { workPagePart } from './work/page/start';
 import { workBoardPagePart } from './work-board/page/start';
 import { workInboxPagePart } from './work-inbox/page/start';
 import { workflowPagePart } from './workflow/page/start';
-import { workflowLargePagePart } from './workflow-large/page/start';
-import { workflowMediumPagePart } from './workflow-medium/page/start';
-import { workflowSmallPagePart } from './workflow-small/page/start';
-import { workflowSpikePagePart } from './workflow-spike/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise. `keys` starts first, so its Keys button contributes to the title
@@ -52,6 +49,7 @@ export const pageParts: readonly PagePart[] = [
   keysPagePart,
   markdownBlocksPagePart,
   sessionsPagePart,
+  contributionsPagePart,
   sessionStashPagePart,
   sessionLogPagePart,
   chatPagePart,
@@ -63,10 +61,6 @@ export const pageParts: readonly PagePart[] = [
   autoCompactPagePart,
   agentLinesPagePart,
   workflowPagePart,
-  workflowLargePagePart,
-  workflowSpikePagePart,
-  workflowSmallPagePart,
-  workflowMediumPagePart,
   unityPoolPagePart,
   buildsPagePart,
   systemStatsPagePart,

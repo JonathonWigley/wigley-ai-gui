@@ -17,7 +17,7 @@ function setUp(
     holdsReads?: boolean;
     read?: () => Promise<string | null>;
     watch?: () => Promise<void>;
-    path?: () => Promise<string>;
+    path?: () => Promise<string | null>;
   } = {},
 ) {
   const reads: PromiseWithResolvers<string | null>[] = [];
@@ -52,6 +52,7 @@ function setUp(
     viewId: 'machine',
     channel: { invoke } as unknown as PageChannel<DocsChannel>,
     log: (line) => logs.push(line),
+    linkPrefixes: () => ({}),
     changed,
     answered,
   });
@@ -168,6 +169,20 @@ describe('createWikiMainSource', () => {
       MAIN_PATH,
     );
     expect(test.source.fileState()).toBe('exists');
+  });
+
+  it('start_NoWikiMainNamed_ReadsAsAbsentAndAsksAgainAtReread', async () => {
+    const test = setUp({ path: () => Promise.resolve(null) });
+
+    await test.source.start();
+    await test.source.reread();
+
+    expect(test.source.isRead()).toBe(true);
+    expect(test.source.fileState()).toBe('absent');
+    expect(test.readDoc).not.toHaveBeenCalled();
+    expect(test.watchDoc).not.toHaveBeenCalled();
+    expect(test.wikiMainPath).toHaveBeenCalledTimes(2);
+    expect(test.answered).toHaveBeenCalledTimes(2);
   });
 
   it('reread_FileGoesAway_ChangedRunsOnceAndTheFileIsAbsent', async () => {

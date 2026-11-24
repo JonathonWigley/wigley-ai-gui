@@ -8,7 +8,7 @@ import {
 } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import { windowsPaths } from '../../../shared/paths/windows-paths';
-import type { CreatePlace, IndexEntry } from '../contract';
+import type { CreatePlace, DocsBinding, IndexEntry } from '../contract';
 import { createDocFiles } from './doc-files';
 import type { HarnessFolders } from '../../../shared/harness-folders';
 
@@ -63,6 +63,26 @@ const FEATURES_ENTRIES: IndexEntry[] = [
 
 const PROFILE_DIRS = ['/Users/u/.claude', '/Users/u/.claude-personal'];
 
+// The user's binding: `~/wigley-agents` as the global folder, its wiki page
+// and the features homes.
+const USER_BINDING: DocsBinding = {
+  globalFolders: [
+    {
+      path: '~/wigley-agents',
+      referenceFiles: ['decisions.md'],
+      subfolders: ['learning', 'wiki'],
+      skip: ['archive', 'learning/archive'],
+    },
+  ],
+  wikiMain: '~/wigley-agents/wiki/Main.md',
+  linkPrefixes: { 'wigley:': 'wigley@wigley-ai-marketplace' },
+  features: {
+    homes: ['{repo}/docs/features', '~/wigley-features/{name}'],
+    file: 'followups.md',
+    areaFolder: 'followups',
+  },
+};
+
 // Two `claude` profiles at `PROFILE_DIRS`, each with its `plugins/cache`;
 // `installs[n]` are the installs profile n lists.
 function foldersOf(
@@ -73,7 +93,11 @@ function foldersOf(
       PROFILE_DIRS.map((configDir, at) => ({
         harnessId: 'claude',
         profile: `profile-${String(at + 1)}`,
-        roots: { configDir, pluginCacheDirs: [`${configDir}/plugins/cache`] },
+        roots: {
+          configDir,
+          pluginCacheDirs: [`${configDir}/plugins/cache`],
+          installedPluginsFile: null,
+        },
       })),
     installedPlugins: async () =>
       installs.flatMap((plugins) =>
@@ -89,6 +113,7 @@ function setUp(
     homeDir?: string;
     paths?: Paths;
     folders?: HarnessFolders;
+    binding?: DocsBinding;
   } = {},
 ) {
   const files = createMemoryFiles();
@@ -100,6 +125,7 @@ function setUp(
     paths: options.paths ?? posixPaths,
     folders: options.folders ?? foldersOf(),
     entries: () => options.entries ?? ENTRIES,
+    binding: () => options.binding ?? USER_BINDING,
   });
   return { files, docFiles, logged };
 }
@@ -182,6 +208,7 @@ const REPO_PLACE = (folder: string): CreatePlace => ({
   title: `r · ${folder}`,
   folder,
   source: 'repo',
+  repo: 'r',
 });
 
 describe('write', () => {
@@ -309,7 +336,11 @@ describe('write', () => {
           {
             harnessId: 'other',
             profile: 'p',
-            roots: { configDir: '~/.other', pluginCacheDirs: [] },
+            roots: {
+              configDir: '~/.other',
+              pluginCacheDirs: [],
+              installedPluginsFile: null,
+            },
           },
         ],
       },
@@ -328,7 +359,11 @@ describe('write', () => {
           {
             harnessId: 'other',
             profile: 'p',
-            roots: { configDir: 'rel/.other', pluginCacheDirs: [] },
+            roots: {
+              configDir: 'rel/.other',
+              pluginCacheDirs: [],
+              installedPluginsFile: null,
+            },
           },
         ],
       },
@@ -367,6 +402,30 @@ describe('write', () => {
 
     expect(await test.files.read(`${clone}/learning/l.md`)).toBe('l');
   });
+
+  it.each([
+    { case: 'a global folder', path: '~/notes/n.md', isWritten: true },
+    { case: 'no global folder', path: '~/other/n.md', isWritten: false },
+  ])(
+    'write_InBindingGlobalFolder_Allowed: $case',
+    async ({ path, isWritten }) => {
+      const binding: DocsBinding = {
+        ...USER_BINDING,
+        globalFolders: [
+          { path: '~/notes', referenceFiles: [], subfolders: [], skip: [] },
+        ],
+      };
+      const test = setUp({ binding });
+      await test.files.makeFolder(`${HOME}/notes`);
+      await test.files.makeFolder(`${HOME}/other`);
+
+      const written = test.docFiles.write(path, 'n', null);
+
+      await (isWritten
+        ? expect(written).resolves.toEqual({ type: 'written' })
+        : expect(written).rejects.toThrow('outside the indexed folders'));
+    },
+  );
 
   it('write_Outside_RejectsNamingPath', async () => {
     const test = setUp();
@@ -412,6 +471,7 @@ describe('create', () => {
         title: 'r · ~/dev/r/.claude/skills',
         folder: `${ROOT}/.claude/skills`,
         source: 'repo',
+        repo: 'r',
       },
       name: ' tidy ',
     });
@@ -1012,6 +1072,21 @@ describe('wikiMainPath', () => {
       expect(path).toBe(expected);
     },
   );
+
+  it('wikiMainPath_NoWikiMain_Null', async () => {
+    const test = setUp({ binding: { ...USER_BINDING, wikiMain: null } });
+    await test.files.write(`${HOME}/wigley-agents/wiki/Main.md`, 'text');
+
+    expect(await test.docFiles.wikiMainPath()).toBeNull();
+  });
+
+  it('wikiMainPath_OtherWikiMain_ItsRealPath', async () => {
+    const test = setUp({
+      binding: { ...USER_BINDING, wikiMain: '~/notes/Home.md' },
+    });
+
+    expect(await test.docFiles.wikiMainPath()).toBe('/Users/u/notes/Home.md');
+  });
 });
 
 describe('pluginConfigFile', () => {

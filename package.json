@@ -3,19 +3,21 @@
   "productName": "wigley-ai-gui",
   "version": "1.0.0",
   "private": true,
-  "description": "My Electron application description",
+  "description": "A desktop app for running and answering coding-agent sessions.",
   "keywords": [],
   "license": "MIT",
   "author": {
-    "name": "Wigley",
-    "email": "17443783+JonathonWigley@users.noreply.github.com"
+    "name": "Jonathon Wigley"
   },
   "main": ".vite/build/main.cjs",
   "scripts": {
     "start": "electron-forge start",
     "selftest": "node scripts/selftest.mts",
     "package": "electron-forge package",
-    "lint": "node scripts/check-layers.mts && node scripts/check-styles.mts && oxlint && oxfmt --check",
+    "lint": "node scripts/check-layers.mts && node scripts/check-styles.mts && node scripts/check-changelog.mts && node scripts/check-boundary.mts && oxlint && oxfmt --check",
+    "lint:changelog": "node scripts/check-changelog.mts",
+    "lint:boundary": "node scripts/check-boundary.mts",
+    "changelog:release": "node scripts/changelog-release.mts",
     "lint:fix": "oxlint --fix && oxfmt --write && node scripts/check-layers.mts && node scripts/check-styles.mts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

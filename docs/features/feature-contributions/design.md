@@ -311,7 +311,7 @@ Every `{plan.…}` variable is empty until the plan is read, and `{checklist}` u
 ### Example: the user's workflows
 
 These four declarations are the user's workflows as today's level plugins run them, read from their stage files. They
-equal the app's sample, `src/plugins/workflow/declared/sample-auri.json` (task 06 of shareable-app), which the `wigley`
+equal the app's sample, `src/plugins/workflow/declared/fixtures/sample-auri.json` (task 06 of shareable-app), which the `wigley`
 plugin's `auri.json` copies. Small, Medium and Spike follow one shape. Small:
 
 ```json

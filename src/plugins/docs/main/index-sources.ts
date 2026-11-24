@@ -15,7 +15,6 @@ import {
   sessionSourceId,
 } from '../contract';
 import { parseIndexDocument } from '../index-document';
-import type { HarnessFolders } from '../../../shared/harness-folders';
 import { locateScript } from './script-locator';
 
 // The machine index `docs_index.py build` writes, under the home folder.
@@ -23,7 +22,8 @@ export const MACHINE_INDEX_FILE = '.agents/wigley-docs/index.json';
 
 // What the machine source reads with no index file.
 export const NO_INDEX_MESSAGE = 'No docs index yet — building…';
-const NO_SCRIPT_MESSAGE = 'docs_index.py not found — set docs.scriptPath';
+const NO_SCRIPT_MESSAGE =
+  "docs_index.py not found in the app's agent plugin — set docs.scriptPath";
 const NO_FOLDER_MESSAGE = 'No project folder is known for this session';
 
 type ScriptCommand = 'build' | 'session' | 'context';
@@ -40,8 +40,12 @@ export interface IndexSourcesDeps {
   homeDir: string;
   // Read at each index run.
   scriptPath(): string;
-  // Where an empty `scriptPath` finds the script, at each index run.
-  folders: Pick<HarnessFolders, 'installedPlugins'>;
+  // The agent plugin folder whose `scripts/docs-index/docs_index.py` an empty
+  // `scriptPath` runs.
+  pluginDir: string;
+  // Settles the contributions file's queued write and gives its path, at each
+  // index run, before the run starts.
+  contributionsFile(): Promise<string>;
   log: PluginLog;
   paths: Paths;
 }
@@ -271,9 +275,9 @@ function sessionRun(
   return null;
 }
 
-// Runs `<python> -X utf8 <script> <command> <args>` with the Python
-// `resolveProgram('python')` gives, its own args leading, logging what it
-// wrote to stderr. With no Python found it runs nothing and logs one `not run`
+// Runs `<python> -X utf8 <script> --contributions <file> <command> <args>`
+// with the Python `resolveProgram('python')` gives, its own args leading, once
+// the contributions file's write settles, logging what it wrote to stderr. With no Python found it runs nothing and logs one `not run`
 // line. UTF-8 mode lets the script print the index's `→` to a Windows
 // console's cp1252 pipe. A failed run's message is stderr's last non-empty
 // line, where a traceback puts its cause. A run the plugin's stop ended rejects
@@ -288,7 +292,7 @@ async function runScript(
     deps.files,
     deps.homeDir,
     deps.scriptPath(),
-    deps.folders,
+    deps.pluginDir,
     deps.paths,
   );
   if (script === null) {
@@ -302,11 +306,14 @@ async function runScript(
       deps.log(`docs_index.py ${command} not run: ${message}`);
       return { ok: false, message, isUnrunnable: true };
     }
+    const contributionsFile = await deps.contributionsFile();
     result = await deps.processes.run(python.command, [
       ...python.args,
       '-X',
       'utf8',
       script,
+      '--contributions',
+      contributionsFile,
       command,
       ...args,
     ]);

@@ -3,12 +3,7 @@ import type { ProcessResult } from '../../../contracts/processes';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { PoolAction, PoolActionResult } from '../contract';
-import {
-  poolCommandArgs,
-  readActionResult,
-  resolveScriptPath,
-  runPoolCommand,
-} from './pool-cli';
+import { poolCommandArgs, readActionResult, runPoolCommand } from './pool-cli';
 
 function exited(
   code: number,
@@ -129,7 +124,27 @@ describe('runPoolCommand', () => {
 
     const result = await runPoolCommand(run.deps, 'hold', 'p', 3);
 
-    expect(result).toMatchObject({ ok: false, error: 'no-cli' });
+    expect(result).toEqual({
+      ok: false,
+      error: 'no-cli',
+      message: 'unity-pool not found at /s/unity-pool',
+    });
+    expect(run.processes.runs).toEqual([]);
+  });
+
+  // Breaks if an empty setting falls back to a default script path again.
+  it('runPoolCommand_EmptyScriptPath_AnswersNoCliWithoutStat', async () => {
+    const run = deps([], '');
+
+    const result = await runPoolCommand(run.deps, 'hold', 'p', 3);
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'no-cli',
+      message:
+        'No unity-pool script is set: set unity-pool.scriptPath in Settings.',
+    });
+    expect(run.statted).toEqual([]);
     expect(run.processes.runs).toEqual([]);
   });
 
@@ -218,24 +233,4 @@ describe('runPoolCommand', () => {
       message: 'spawn failed',
     });
   });
-});
-
-describe('resolveScriptPath', () => {
-  it('resolveScriptPath_Empty_DiffersByPlatform', () => {
-    const mac = resolveScriptPath('', false);
-    const windows = resolveScriptPath('', true);
-
-    expect(mac).not.toBe('');
-    expect(windows).not.toBe('');
-    expect(mac).not.toBe(windows);
-  });
-
-  it.each([false, true])(
-    'resolveScriptPath_Set_KeepsIt: windows %s',
-    (windows) => {
-      expect(resolveScriptPath('~/tools/unity-pool', windows)).toBe(
-        '~/tools/unity-pool',
-      );
-    },
-  );
 });

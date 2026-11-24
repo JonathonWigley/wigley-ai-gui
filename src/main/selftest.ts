@@ -212,9 +212,8 @@ export interface SelfTestDriver {
 // writes through. `cleanUp` closes what holds files there
 // and deletes what the self-test made outside the repo; the self-test awaits
 // it before it exits. `screenshotFolder` is emptied here, so it ends the run
-// holding only that run's PNGs. Each plugin hands at most one script while the
-// parts start; a host throws on its plugin's second script or one handed over
-// late. Every page load runs the scripts `filter` keeps (`selectScripts`) in
+// holding only that run's PNGs. Each plugin hands its scripts while the parts
+// start; a host throws on one handed over late. Every page load runs the scripts `filter` keeps (`selectScripts`) in
 // hand-over order, a run begun on the previous page standing down as the new
 // one commits. The window's content width as the self-test starts is the
 // width every script starts and ends on.
@@ -236,11 +235,6 @@ export function startSelfTest(
         if (isHandoverClosed) {
           throw new Error(
             'A self-test script was handed over after the plugins started; hand it over during start',
-          );
-        }
-        if (handed.some((entry) => entry.pluginId === pluginId)) {
-          throw new Error(
-            `Plugin ${pluginId} handed over a second self-test script; each plugin hands at most one`,
           );
         }
         handed.push({ pluginId, script });

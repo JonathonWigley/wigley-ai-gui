@@ -149,7 +149,7 @@ describe('list places', () => {
     expect({
       place: listPlace(target),
       target: listTargetOfPlace(place),
-      isTheLinksOwnText: parseWikiTarget(place),
+      isTheLinksOwnText: parseWikiTarget(place, {}),
     }).toEqual({ place, target, isTheLinksOwnText: target });
   });
 

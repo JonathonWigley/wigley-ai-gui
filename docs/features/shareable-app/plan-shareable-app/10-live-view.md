@@ -1,6 +1,6 @@
 # 10 — Live view reads its playtest commands and Game View probe from contributions
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · it replaces a hand-tuned shell-command parser's runner rules with data, and must keep every command form the user runs today
 Wave: 3 · Depends on: 03
@@ -174,4 +174,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 9fec618a4 6883c8d0b · proof: diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: wigley-ai-gui/AGENTS.md 339-341 still describe capture.py; oxfmt fixes rode in task 09's fix commit

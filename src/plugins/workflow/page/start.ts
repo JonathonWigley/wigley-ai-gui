@@ -1,12 +1,13 @@
 import './workflow.css';
 import type { Disposable } from '../../../contracts/disposable';
 import type {
-  ChannelShape,
   PageApi,
   PageCommandContext,
   PagePart,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { docsPageKey } from '../../docs/contract';
 import {
   CHAT_PREVIEW_HOST_ID,
   chatPageKey,
@@ -20,28 +21,45 @@ import {
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import {
+  actionCommandShortId,
+  CHECKLIST_WORKFLOW,
+  CHECKLIST_WORKFLOW_ID,
+  type DeclaredWorkflow,
   type PageWorkflow,
   type SessionFlow,
+  type WorkflowChannel,
+  workflowDeclaredSlot,
+  type WorkflowDrawOptions,
   workflowFlowsSlot,
   type WorkflowId,
   type WorkflowPageExports,
   workflowStageActionCommand,
 } from '../contract';
+import { CANCEL_COUNTDOWN_ACTION } from '../declared/actions';
+import { buildPageWorkflow, type PageBuildDeps } from '../declared/build-page';
 import { newFlow } from '../flow';
+import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import { workflowManifest } from '../manifest';
+import { createPlanPane } from '../plan/plan-pane';
 import { registerDemoSteps } from './demo-steps';
 import {
   createWorkflowDraw,
+  createWorkflowDrawShow,
   type WorkflowDrawDeps,
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
+import { registerSampleDemoSteps } from './sample-demo-steps';
 import { createWorkflowView, topRunningActivity } from './workflow-view';
 import {
   keyRunner,
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 
-type WorkflowApi = PageApi<typeof workflowManifest, ChannelShape>;
+type WorkflowApi = PageApi<typeof workflowManifest, WorkflowChannel>;
+
+// The badge color of a declaration that names none.
+const DEFAULT_BADGE_COLOR = 'var(--wg-accent)';
 
 // The engine's commands a key runs on the session Sessions mode shows.
 type SessionCommand = 'mainAction' | 'toggleFinishedWaves' | 'toggleHeadless';
@@ -63,7 +81,14 @@ const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 // Sessions mode shows no session. `openPreview` steps chat's preview session
 // through every workflow's samples (`createPreview`). `showSample` draws a demo
 // step's sample flow on its session in place of the stored flow, and like the
-// preview runs no action; registers the `workflow.engine` demo step.
+// preview runs no action; registers the `workflow.engine` demo step and the
+// four sample workflows' steps, each adding a `demo:<id>` page half. Holds the
+// built-in Checklist flow's page half, and one page half per entry of
+// `workflow.declared`, built again when its entry changes and disposed when it
+// leaves: each declared action is a runtime command `workflow.<short id>`,
+// bound to its key, and runs in main through the channel, `openPlan` aside,
+// which opens the plan file in Docs mode. `cancelCountdown` stops the
+// countdown of the session it targets.
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -79,6 +104,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const workflows = new Map<WorkflowId, PageWorkflow>();
     // The demo sample each session shows (`showSample`), over its stored flow.
     const samples = new Map<string, SessionFlow>();
+    // Set once `ready` has drawn every flow the slot holds.
+    let isReady = false;
 
     const nameOf = (sessionId: string) =>
       rows.get(sessionId)?.label ?? sessionId;
@@ -139,9 +166,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       redraw: () => view.redraw(),
     };
 
-    // Holds a copy whose stages are in stage order, and draws again each flow of it,
-    // which arrived before its page half; its dispose does nothing once the copy is
-    // gone.
+    // Holds a copy whose stages are in stage order and, once `ready` ran, draws
+    // again each flow of it, which arrived before its page half; before then
+    // `ready` draws every flow. Its dispose does nothing once the copy is gone.
     const addWorkflow = (workflow: PageWorkflow): Disposable => {
       if (workflows.has(workflow.id)) {
         throw new Error(`${workflow.id} is already added`);
@@ -154,7 +181,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       const sidePart = chat.addSidePart(view.sidePartFor(added));
       view.redraw();
       for (const flow of flows.all().values()) {
-        if (flow.workflow === added.id) {
+        if (isReady && flow.workflow === added.id) {
           drawFlow(flow);
         }
       }
@@ -176,6 +203,115 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
 
+    const drawOptions = (entry: DeclaredWorkflow): WorkflowDrawOptions => ({
+      manifest: workflowManifest,
+      defaultLayout,
+      defaultStylesheet,
+      userLayout: () => api.settings().layout,
+      sideTitle: entry.decl.sidePane.title,
+      badgeColor: entry.decl.badgeColor ?? DEFAULT_BADGE_COLOR,
+    });
+    const planPane = createPlanPane();
+    const runAction: PageBuildDeps['runAction'] = (sessionId, action) =>
+      api.channel.invoke('runAction', { sessionId, action });
+    // Docs is read at the call: a part started with no Docs page still draws.
+    const openDoc: PageBuildDeps['openDoc'] = (path) =>
+      api.dependency(docsPageKey).openDoc(path);
+    const buildDeps = (draw: PageBuildDeps['draw']): PageBuildDeps => ({
+      draw,
+      planPane,
+      runAction,
+      openDoc,
+      paths: services.paths,
+    });
+    // Registers each action of `entry` as `workflow.<short id>` and binds its
+    // key. A command that does not register costs that action's command and
+    // key, and a key that does not bind costs that key alone.
+    const registerActions = (entry: DeclaredWorkflow): Disposable[] => {
+      const handles: Disposable[] = [];
+      for (const [actionId, action] of Object.entries(
+        entry.decl.actions ?? {},
+      )) {
+        const short = actionCommandShortId(entry.id, actionId);
+        try {
+          handles.push(
+            api.commands.register(
+              short,
+              {
+                label: action.label,
+                group: 'workflow',
+                runsIn: 'page',
+                targets: true,
+                ...(action.risky === true ? { risky: true } : {}),
+              },
+              ({ targetSessionId }) =>
+                runOnTarget(short, targetSessionId ?? null),
+            ),
+          );
+        } catch (error) {
+          log(
+            `workflow ${entry.id}: command ${short} not registered: ${errorText(error)}`,
+          );
+          continue;
+        }
+        if (action.key === undefined) {
+          continue;
+        }
+        try {
+          handles.push(
+            api.keys.bind({
+              keys: action.key,
+              scope: 'any',
+              command: `${workflowManifest.id}.${short}`,
+            }),
+          );
+        } catch (error) {
+          log(
+            `workflow ${entry.id}: key ${action.key} not bound: ${errorText(error)}`,
+          );
+        }
+      }
+      return handles;
+    };
+
+    // A declared workflow's page half: its draw, its commands and keys, and its
+    // `addWorkflow` entry, disposed together.
+    const addDeclaredHalf = (entry: DeclaredWorkflow): Disposable => {
+      const draw = createWorkflowDrawShow(drawDeps, api, drawOptions(entry));
+      const handles: Disposable[] = [draw];
+      try {
+        handles.push(...registerActions(entry));
+        handles.push(addWorkflow(buildPageWorkflow(entry, buildDeps(draw))));
+      } catch (error) {
+        log(`workflow ${entry.id} not drawn: ${errorText(error)}`);
+      }
+      return {
+        dispose: () =>
+          callEach([...handles].reverse(), (handle) => handle.dispose()),
+      };
+    };
+
+    const declared = api.state.read(workflowDeclaredSlot);
+    const declaredHalves = new Map<
+      string,
+      { json: string; half: Disposable }
+    >();
+    const syncDeclaredHalf = (
+      id: string,
+      entry: DeclaredWorkflow | undefined,
+    ) => {
+      const held = declaredHalves.get(id);
+      const json = entry === undefined ? null : JSON.stringify(entry);
+      if (held?.json === json) {
+        return;
+      }
+      held?.half.dispose();
+      declaredHalves.delete(id);
+      if (entry !== undefined && json !== null) {
+        declaredHalves.set(id, { json, half: addDeclaredHalf(entry) });
+      }
+    };
+
     // A flow whose draw throws is logged, so the rest of the catch-up still draws.
     const drawFlow = (flow: SessionFlow) => {
       const rowHasLeft = rows.get(flow.sessionId) === undefined;
@@ -188,6 +324,22 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         log(`flow of ${flow.sessionId} not drawn: ${errorText(error)}`);
       }
     };
+
+    // The built-in Checklist flow's page half, before any declared one.
+    const checklistEntry: DeclaredWorkflow = {
+      id: CHECKLIST_WORKFLOW_ID,
+      pluginName: '',
+      decl: CHECKLIST_WORKFLOW,
+      planFormat: null,
+    };
+    addWorkflow(
+      buildPageWorkflow(
+        checklistEntry,
+        buildDeps(
+          createWorkflowDraw(drawDeps, api, drawOptions(checklistEntry)),
+        ),
+      ),
+    );
 
     // Draws the sample now when its row is there, else once the row arrives.
     const showSample = (flow: SessionFlow): Disposable => {
@@ -224,6 +376,15 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       };
     };
     registerDemoSteps(services, { showSample });
+    registerSampleDemoSteps(services, {
+      showSample,
+      addWorkflow,
+      createDraw: (entry) =>
+        createWorkflowDrawShow(drawDeps, api, drawOptions(entry)),
+      planPane,
+      runAction,
+      openDoc,
+    });
 
     const runKey = keyRunner(api.commands, log);
     // Acts on the run's target when it names one; else on the session
@@ -239,6 +400,16 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         }
         runKey(workflowStageActionCommand, { sessionId, action: command });
       };
+    // Runs a stage action through the view's gate on the run's target, else
+    // on the session Sessions mode shows.
+    function runOnTarget(action: string, targetSessionId: string | null) {
+      const sessionId = targetSessionId ?? sessions.shownSessionId();
+      if (sessionId === null) {
+        log(`no shown session for ${action}`);
+        return;
+      }
+      runKey(workflowStageActionCommand, { sessionId, action });
+    }
     const toggleSidePane = () => {
       if (sessions.shownSessionId() === null) {
         log('side pane key ignored: no shown session');
@@ -258,6 +429,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         toggleHeadless: runOnSelected('toggleHeadless'),
         stageAction: ({ arg }) => view.runFor(arg.sessionId, arg.action),
         openPreview: () => preview.press(),
+        cancelCountdown: ({ targetSessionId }) =>
+          runOnTarget(CANCEL_COUNTDOWN_ACTION, targetSessionId ?? null),
       },
       exports: (consumer): WorkflowPageExports => ({
         addWorkflow: (workflow) => consumer.track(addWorkflow(workflow)),
@@ -284,9 +457,14 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         chatSessions.on((sessionId, info) =>
           view.headlessChanged(sessionId, info?.headless),
         );
+        declared.on((id, entry) => syncDeclaredHalf(id, entry));
+        for (const [id, entry] of declared.all()) {
+          syncDeclaredHalf(id, entry);
+        }
         for (const flow of flows.all().values()) {
           drawFlow(flow);
         }
+        isReady = true;
       },
     };
   },

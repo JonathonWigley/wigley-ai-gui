@@ -1,6 +1,6 @@
 # 02 — Launch every Claude Code session with the `auri` plugin, and build every tool name from one place
 
-Status: not started
+Status: done
 Type: Task
 Rung: standard · follows the existing `claudeLaunch` argument pattern (`src/plugins/claude-code/main/claude-launch.ts`, the `--permission-prompt-tool` pair) and adds no seam another task consumes
 Wave: 3 · Depends on: 01 (consumes `agentPluginDir` and `MainServices.appDir`), 03 (both edit `claude-code-harness.ts`)
@@ -126,3 +126,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit bda3396a9 · proof: diff read: Produces present per report and spot reads; wave 3 typecheck and lint pass; tests wait for the test gate · concerns: liveStart test asserts on the fake session host's spawn (the ProcessRunner route the plan named is never reached)

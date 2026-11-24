@@ -1,22 +1,22 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
-import type { HarnessFolders } from '../../../shared/harness-folders';
-import { locateWigleyFile } from '../../../shared/wigley-install';
 
-const SCRIPT_IN_INSTALL = 'scripts/docs-index/docs_index.py';
+const SCRIPT_IN_PLUGIN = 'scripts/docs-index/docs_index.py';
 
-// The docs_index.py to run: `scriptPath` expanded when set, else the first
-// wigley install, among the registered profiles' installs, whose script is a
-// file; null when none is.
+// The docs_index.py to run: `scriptPath` expanded when set, else the copy in
+// the app's agent plugin at `pluginDir` when that is a file; null when it is
+// not.
 export async function locateScript(
-  files: Files,
+  files: Pick<Files, 'stat'>,
   homeDir: string,
   scriptPath: string,
-  folders: Pick<HarnessFolders, 'installedPlugins'>,
+  pluginDir: string,
   paths: Paths,
 ): Promise<string | null> {
   if (scriptPath !== '') {
     return paths.expandTilde(scriptPath, homeDir);
   }
-  return locateWigleyFile(files, folders, paths, SCRIPT_IN_INSTALL);
+  const script = paths.join(pluginDir, SCRIPT_IN_PLUGIN);
+  const found = await files.stat(script);
+  return found !== null && !found.isFolder ? script : null;
 }

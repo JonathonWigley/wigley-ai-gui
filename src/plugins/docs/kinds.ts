@@ -7,6 +7,7 @@ import {
 import type {
   CreateKind,
   CreatePlace,
+  DocsBinding,
   DocSource,
   IndexEntry,
 } from './contract';
@@ -40,16 +41,26 @@ export interface CreateTarget {
   contents(existing: string | null): CreateContents;
 }
 
+// What a kind rule reads beyond the entry. `projectConfigFolders` are the
+// registered harnesses' project config folder names (`.claude`);
+// `globalFolders` each global folder's path, `~` expanded.
+interface PlaceContext {
+  paths: Paths;
+  projectConfigFolders: readonly string[];
+  globalFolders: readonly string[];
+  features: DocsBinding['features'];
+}
+
 interface KindRule {
   // The folder a new doc of this kind goes in, from an indexed one; null
-  // when this entry gives no place. `projectConfigFolders` are the registered
-  // harnesses' project config folder names (`.claude`).
-  placeFolder(
-    entry: IndexEntry,
+  // when this entry gives no place.
+  placeFolder(entry: IndexEntry, context: PlaceContext): string | null;
+  targetPath(
+    place: CreatePlace,
+    name: string,
     paths: Paths,
-    projectConfigFolders: readonly string[],
-  ): string | null;
-  targetPath(place: CreatePlace, name: string, paths: Paths): string;
+    features: DocsBinding['features'],
+  ): string;
   contents(
     name: string,
     existing: string | null,
@@ -59,10 +70,6 @@ interface KindRule {
 }
 
 const SLUG_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-// The name of the folder `~/wigley-agents` names, a link or a clone, and the
-// base name of that clone; the index walks its top level (`decisions.md` as
-// reference, every other file as instructions) and `learning`.
-export const WIGLEY_AGENTS_FOLDER = 'wigley-agents';
 
 const KIND_RULES: Record<CreateKind, KindRule> = {
   instructions: {
@@ -75,7 +82,7 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
   },
   rule: titledFileRule(),
   skill: {
-    placeFolder: (entry, paths) => paths.parent(paths.parent(entry.path)),
+    placeFolder: (entry, { paths }) => paths.parent(paths.parent(entry.path)),
     targetPath: (place, name, paths) =>
       paths.join(place.folder, name, 'SKILL.md'),
     contents: (name) => ({
@@ -84,7 +91,7 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
     }),
   },
   subagent: {
-    placeFolder: (entry, paths) => paths.parent(entry.path),
+    placeFolder: (entry, { paths }) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: (name) => ({
       text: `---\nname: ${name}\ndescription: \n---\n\n`,
@@ -92,7 +99,7 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
     }),
   },
   command: {
-    placeFolder: (entry, paths) => paths.parent(entry.path),
+    placeFolder: (entry, { paths }) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: () => ({ text: '---\ndescription: \n---\n\n', line: 2 }),
   },
@@ -100,12 +107,16 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
   reference: { ...titledFileRule(), placeFolder: referenceFolder },
   'feature-doc': titledFileRule(),
   followup: {
-    placeFolder: (entry, paths) =>
-      paths.base(entry.path) === 'followups.md'
+    placeFolder: (entry, { paths, features }) =>
+      features !== null && paths.base(entry.path) === features.file
         ? paths.parent(entry.path)
         : null,
-    targetPath: (place, _name, paths) =>
-      paths.join(place.folder, 'followups.md'),
+    targetPath: (place, _name, paths, features) => {
+      if (features === null) {
+        throw new Error('No features home takes follow-ups');
+      }
+      return paths.join(place.folder, features.file);
+    },
     contents: createdFollowup,
   },
 };
@@ -113,14 +124,25 @@ const KIND_RULES: Record<CreateKind, KindRule> = {
 // The places a doc of `kind` may be created: the folders the index finds
 // that kind in, outside plugins, third-party docs and sources the app does
 // not know; global places first, then by title. A repo's instructions in a
-// folder named in `projectConfigFolders` place their doc in its parent.
+// folder named in `projectConfigFolders` place their doc in its parent. A
+// follow-up place is a features home's follow-ups file's folder, none while
+// the binding has no features homes.
 export function placesFor(
   kind: CreateKind,
   entries: readonly IndexEntry[],
   homeDir: string,
   paths: Paths,
   projectConfigFolders: readonly string[],
+  binding: Pick<DocsBinding, 'globalFolders' | 'features'>,
 ): CreatePlace[] {
+  const context: PlaceContext = {
+    paths,
+    projectConfigFolders,
+    globalFolders: binding.globalFolders.map((folder) =>
+      paths.expandTilde(folder.path, homeDir),
+    ),
+    features: binding.features,
+  };
   const places = new Map<string, CreatePlace>();
   for (const entry of entries) {
     const { source } = entry;
@@ -129,16 +151,12 @@ export function placesFor(
     if (entry.kind !== kind || !isPlaceSource || isThirdParty) {
       continue;
     }
-    const folder = KIND_RULES[kind].placeFolder(
-      entry,
-      paths,
-      projectConfigFolders,
-    );
+    const folder = KIND_RULES[kind].placeFolder(entry, context);
     if (folder === null || places.has(folder)) {
       continue;
     }
     const title = placeTitle(entry, source, paths.tilde(folder, homeDir));
-    places.set(folder, { title, folder, source });
+    places.set(folder, { title, folder, source, repo: entry.repo });
   }
   return [...places.values()].sort(
     (a, b) =>
@@ -167,17 +185,20 @@ export function nameProblem(kind: CreateKind, name: string): string | null {
   return null;
 }
 
-// The file a new doc of `kind` named `name` is written to in `place`.
+// The file a new doc of `kind` named `name` is written to in `place`. A
+// follow-up goes in the features homes' follow-ups file, and throws while the
+// binding has no features homes.
 export function createTarget(
   kind: CreateKind,
   place: CreatePlace,
   name: string,
   paths: Paths,
+  binding: Pick<DocsBinding, 'features'>,
 ): CreateTarget {
   const rule = KIND_RULES[kind];
   const trimmed = name.trim();
   return {
-    path: rule.targetPath(place, trimmed, paths),
+    path: rule.targetPath(place, trimmed, paths, binding.features),
     appends: kind === 'followup',
     contents: (existing) => rule.contents(trimmed, existing, place, paths),
   };
@@ -195,7 +216,7 @@ export function skillFolder(path: string, paths: Paths): string | null {
 
 function titledFileRule(): KindRule {
   return {
-    placeFolder: (entry, paths) => paths.parent(entry.path),
+    placeFolder: (entry, { paths }) => paths.parent(entry.path),
     targetPath: fileInFolder,
     contents: (name) => ({ text: `# ${name}\n\n`, line: 3 }),
   };
@@ -207,30 +228,43 @@ function fileInFolder(place: CreatePlace, name: string, paths: Paths): string {
 
 // An instruction file's folder, a trailing project config folder (one of
 // `projectConfigFolders`) dropped for a repo's own. A global one gives a place
-// only in the wigley-agents folder, whatever path it resolves to, since the
-// index reads no other global folder's new files.
+// only at a global folder's top level, since the index reads no other global
+// folder's new files.
 function instructionsFolder(
   entry: IndexEntry,
-  paths: Paths,
-  projectConfigFolders: readonly string[],
+  context: PlaceContext,
 ): string | null {
+  const { paths, projectConfigFolders } = context;
   const folder = paths.parent(entry.path);
-  const folderName = paths.base(folder);
   if (entry.source === 'global') {
-    return folderName === WIGLEY_AGENTS_FOLDER ? folder : null;
+    return isAtGlobalFolderTop(entry, context) ? folder : null;
   }
-  return projectConfigFolders.includes(folderName)
+  return projectConfigFolders.includes(paths.base(folder))
     ? paths.parent(folder)
     : folder;
 }
 
-// A reference doc's folder. A global one in the wigley-agents folder gives no
-// place, since a new file at its top level indexes as instructions.
-function referenceFolder(entry: IndexEntry, paths: Paths): string | null {
-  const folder = paths.parent(entry.path);
-  const isWigleyAgentsGlobal =
-    entry.source === 'global' && paths.base(folder) === WIGLEY_AGENTS_FOLDER;
-  return isWigleyAgentsGlobal ? null : folder;
+// A reference doc's folder. A global one at a global folder's top level gives
+// no place, since a new file there indexes as instructions.
+function referenceFolder(
+  entry: IndexEntry,
+  context: PlaceContext,
+): string | null {
+  const isAtTop =
+    entry.source === 'global' && isAtGlobalFolderTop(entry, context);
+  return isAtTop ? null : context.paths.parent(entry.path);
+}
+
+// True when the entry's file, by its real path or a path the index's walk
+// reached it by (a global folder that is a link to a clone), sits directly in
+// a global folder.
+function isAtGlobalFolderTop(
+  entry: IndexEntry,
+  { paths, globalFolders }: PlaceContext,
+): boolean {
+  return [entry.path, ...entry.walked].some((path) =>
+    globalFolders.some((folder) => paths.samePath(paths.parent(path), folder)),
+  );
 }
 
 function placeTitle(
@@ -250,7 +284,8 @@ function placeTitle(
 // `existing` with a follow-up titled `name` created in the file's own shape,
 // its list item or Contents line written as `- **<name>** — ` and the editor
 // on that line. No file, or a blank one, starts as a new follow-ups file
-// named after the place's repo.
+// named after the place's repo, or the folder's own name for a place with no
+// repo.
 function createdFollowup(
   name: string,
   existing: string | null,
@@ -259,7 +294,7 @@ function createdFollowup(
 ): CreateContents {
   const isMissing = existing === null || existing.trim() === '';
   const text = isMissing
-    ? newFollowupsFile(followupsRepoName(place.folder, paths))
+    ? newFollowupsFile(place.repo ?? paths.base(place.folder))
     : existing;
   const result = applyFollowupEdit(text, {
     type: 'create',
@@ -270,14 +305,4 @@ function createdFollowup(
     throw new Error(`A follow-up titled ${name} already exists`);
   }
   return { text: result.text, line: result.line };
-}
-
-// The repo a features home belongs to: the clone's folder for an in-repo
-// `<clone>/docs/features`, else the home's own folder, as in
-// `~/wigley-features/<repo>`.
-function followupsRepoName(folder: string, paths: Paths): string {
-  const docs = paths.parent(folder);
-  const isInRepoHome =
-    paths.base(folder) === 'features' && paths.base(docs) === 'docs';
-  return paths.base(isInRepoHome ? paths.parent(docs) : folder);
 }

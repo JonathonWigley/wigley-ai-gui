@@ -15,6 +15,7 @@ import {
   registeredInfos,
 } from '../../../shared/agent-harness-label';
 import { base64LengthOf, MAX_IMAGE_BASE64 } from '../../../shared/image-types';
+import { docsFixtureFollowupsFile } from '../../docs/main/selftest-fixture';
 import type {
   OwnedSession,
   SessionsMainExports,
@@ -388,9 +389,7 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     const shrunkSent = deps.nextSessionSend();
     await store.addImage(overCapPng);
     await shrunkSent;
-    const followups = await files.read(
-      path.join(home, 'wigley-features', REPO, 'followups.md'),
-    );
+    const followups = await files.read(docsFixtureFollowupsFile(home, paths));
     return {
       folder,
       followups,

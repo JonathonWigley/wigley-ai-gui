@@ -1,4 +1,5 @@
 import type { CommandKey } from '../../contracts/commands';
+import type { ActivityTone, RowEmphasis } from '../../contracts/contributions';
 import type { Disposable } from '../../contracts/disposable';
 import type {
   ChannelShape,
@@ -606,15 +607,9 @@ export interface SectionPart {
   build(parent: HTMLElement): { dispose?(): void };
 }
 
-// The tones a row's activity shows in, the members of the page kit's
-// `DotStatus`.
-export type ActivityTone =
-  | 'idle'
-  | 'running'
-  | 'success'
-  | 'warning'
-  | 'attention'
-  | 'error';
+// A row activity's tone and emphasis, declared beside `auri.json`'s types,
+// which name them too.
+export type { ActivityTone, RowEmphasis };
 
 // What a session is doing, as one plugin sees it: the word its row and tooltip
 // show and the `tone` of its label. Of a session's activities its row shows the
@@ -627,8 +622,6 @@ export interface RowActivity {
   rank: number;
   emphasis?: RowEmphasis;
 }
-
-export type RowEmphasis = 'raised' | 'urgent';
 
 // Something waiting on the user: the one copy every source sets.
 export const NEEDS_YOU_ACTIVITY: RowActivity = {

@@ -1,36 +1,23 @@
+import type { CommandPattern } from '../../contracts/contributions';
+
 export type PlaytestSignal =
   | { kind: 'start'; projectPath: string | null }
   | { kind: 'stop'; projectPath: string | null };
 
-type Runner = 'unity' | 'capture';
+// The command patterns whose segments open a session's Live view (`open`) and
+// close it (`close`), each list in match order.
+export interface PlaytestPatterns {
+  open: readonly CommandPattern[];
+  close: readonly CommandPattern[];
+}
 
 type Variables = ReadonlyMap<string, string>;
 
-const UNITY_PROJECT_PATH_VARIABLE = 'UNITY_PROJECT_PATH';
 const VARIABLE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
-
-const UNITY_VALUE_FLAGS: ReadonlySet<string> = new Set([
-  '--timeout',
-  '--port',
-  '--pid',
-  '--instance',
-  '--runtime',
-  '--runtime-path',
-  '--detail',
-  '--query',
-  '--tag',
-]);
-
-const CAPTURE_VALUE_FLAGS: ReadonlySet<string> = new Set([
-  '--fps',
-  '--backend',
-]);
-
-const PROJECT_PATH_FLAG = '--project-path';
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const PYTHON_PROGRAM = /^(?:.*\/)?python(?:3(?:\.\d+)?)?$/;
-const CAPTURE_SCRIPT = /^(?:.*\/)?capture\.py$/;
+const SCRIPT_PROGRAM = /\.py$/;
 const JOINED_REDIRECTION = /^(?:[0-9]*(?:>>?|<)&?.+|&>>?.+)$/;
 const BARE_REDIRECTION = /^(?:[0-9]*(?:>>?|<)|&>>?)$/;
 
@@ -211,29 +198,31 @@ function readDoubleQuoted(
   return i;
 }
 
-// The runner a segment's words invoke, the index of its program word (the
-// words before it are `NAME=value` assignments), and the index of the first
-// word after `command` (unity) or after the script word (capture); null for
-// any other. The program and script words expand from `variables`.
-function runnerOf(
+// The index of a segment's program word (the words before it are
+// `NAME=value` assignments) and of the first word after it, when the segment
+// runs `program`: a program word whose base name is `program`, or for a `.py`
+// program, Python running a script whose base name is `program`, the script
+// word read past Python's own flags; null otherwise. The program and script
+// words expand from `variables`.
+function invocationOf(
   words: readonly string[],
   variables: Variables,
-): { runner: Runner; programAt: number; argsStart: number } | null {
+  program: string,
+): { programAt: number; argsStart: number } | null {
   let i = 0;
   while (i < words.length && ASSIGNMENT.test(words[i] ?? '')) {
     i += 1;
   }
-  const program = expand(words[i] ?? '', variables);
-  if (program === null || program === '') {
+  const programWord = expand(words[i] ?? '', variables);
+  if (programWord === null) {
     return null;
   }
-  const isUnity = program === 'unity' || program.endsWith('/unity');
-  if (isUnity) {
-    return words[i + 1] === 'command'
-      ? { runner: 'unity', programAt: i, argsStart: i + 2 }
+  if (!SCRIPT_PROGRAM.test(program)) {
+    return baseNameOf(programWord) === program
+      ? { programAt: i, argsStart: i + 1 }
       : null;
   }
-  if (!PYTHON_PROGRAM.test(program)) {
+  if (!PYTHON_PROGRAM.test(programWord)) {
     return null;
   }
   let script = i + 1;
@@ -241,16 +230,22 @@ function runnerOf(
     script += 1;
   }
   const scriptWord = expand(words[script] ?? '', variables);
-  return scriptWord !== null && CAPTURE_SCRIPT.test(scriptWord)
-    ? { runner: 'capture', programAt: i, argsStart: script + 1 }
+  return scriptWord !== null && baseNameOf(scriptWord) === program
+    ? { programAt: i, argsStart: script + 1 }
     : null;
 }
 
-// The positionals and the last `--project-path` among a runner's arguments,
-// with redirections and flags dropped.
+function baseNameOf(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+// The positionals and the last `projectPathFlag` value among a program's
+// arguments, with redirections and flags dropped; null `projectPathFlag`
+// reads no path.
 function readArgs(
   words: readonly string[],
   valueFlags: ReadonlySet<string>,
+  projectPathFlag: string | null,
 ): { positionals: string[]; projectPath: string | null } {
   const positionals: string[] = [];
   let projectPath: string | null = null;
@@ -262,14 +257,17 @@ function readArgs(
       i += 1;
     } else if (BARE_REDIRECTION.test(word)) {
       i += 2;
-    } else if (word === PROJECT_PATH_FLAG) {
+    } else if (projectPathFlag !== null && word === projectPathFlag) {
       const hasValue = next !== undefined && !next.startsWith('-');
       if (hasValue && next !== '') {
         projectPath = next;
       }
       i += hasValue ? 2 : 1;
-    } else if (word.startsWith(`${PROJECT_PATH_FLAG}=`)) {
-      const value = word.slice(PROJECT_PATH_FLAG.length + 1);
+    } else if (
+      projectPathFlag !== null &&
+      word.startsWith(`${projectPathFlag}=`)
+    ) {
+      const value = word.slice(projectPathFlag.length + 1);
       if (value !== '') {
         projectPath = value;
       }
@@ -339,78 +337,89 @@ function noteVariables(
   }
 }
 
-// The playtest a runner's positionals name: Pipeline 0.8's `editor_play` and
-// `editor_stop`, the grouped `editor.playmode start` and `stop` of 0.9 and
-// above, and capture's `start`.
-function kindOf(
-  runner: Runner,
-  [name, verb]: readonly string[],
-): PlaytestSignal['kind'] | null {
-  if (runner === 'capture') {
-    return name === 'start' ? 'start' : null;
+// The project folder a segment names when it runs `pattern` (its program,
+// then its positionals starting with the pattern's words), or null when it
+// does not run it.
+function matchOf(
+  words: readonly string[],
+  variables: Variables,
+  pattern: CommandPattern,
+): { projectPath: string | null } | null {
+  const invocation = invocationOf(words, variables, pattern.program);
+  if (invocation === null) {
+    return null;
   }
-  const isPlayMode = name === 'editor.playmode';
-  if (name === 'editor_play' || (isPlayMode && verb === 'start')) {
-    return 'start';
+  const { programAt, argsStart } = invocation;
+  const { positionals, projectPath } = readArgs(
+    words.slice(argsStart),
+    new Set(pattern.valueFlags ?? []),
+    pattern.projectPathFlag ?? null,
+  );
+  const startsWithWords = pattern.words.every(
+    (word, index) => positionals[index] === word,
+  );
+  if (!startsWithWords) {
+    return null;
   }
-  if (name === 'editor_stop' || (isPlayMode && verb === 'stop')) {
-    return 'stop';
+  if (projectPath !== null) {
+    return { projectPath: expand(projectPath, variables) };
+  }
+  const variable = pattern.projectPathVariable;
+  if (variable === undefined) {
+    return { projectPath: null };
+  }
+  // A CLI that reads a project variable falls back to it, set by an
+  // assignment before the program or earlier on the line, then to the project
+  // holding the working folder, read here as the folder the line `cd`s into:
+  // one that holds no editor opens nothing.
+  const environment = new Map(variables);
+  noteVariables(words.slice(0, programAt), environment);
+  return {
+    projectPath: environment.get(variable) ?? environment.get('PWD') ?? null,
+  };
+}
+
+// The first pattern a segment runs, `open` before `close`, each in order.
+function signalOfSegment(
+  words: readonly string[],
+  variables: Variables,
+  patterns: PlaytestPatterns,
+): PlaytestSignal | null {
+  const lists = [
+    ['start', patterns.open],
+    ['stop', patterns.close],
+  ] as const;
+  for (const [kind, list] of lists) {
+    for (const pattern of list) {
+      const match = matchOf(words, variables, pattern);
+      if (match !== null) {
+        return { kind, projectPath: match.projectPath };
+      }
+    }
   }
   return null;
 }
 
-function signalOfSegment(
-  words: readonly string[],
-  variables: Variables,
+// Whether a Bash command's text starts a playtest (a segment that runs a
+// pattern in `patterns.open`) or stops one (a pattern in `patterns.close`),
+// with the project folder it names. A segment runs a pattern when its program
+// word, or for a `.py` program the script Python runs, has the pattern's
+// program as its base name, and its positionals start with the pattern's
+// words; within a segment the first pattern wins, open before close, and the
+// last segment that signals wins. The folder is the pattern's
+// `projectPathFlag` value, else for a pattern with a `projectPathVariable`
+// that variable as the line sets it, else the folder the line `cd`s into.
+// `$NAME` and `${NAME}` expand from plain assignments and `cd`s in earlier
+// segments; a path naming any other variable or a command substitution reads
+// as no path. A heredoc's body signals nothing.
+export function parsePlaytestCommand(
+  command: string,
+  patterns: PlaytestPatterns,
 ): PlaytestSignal | null {
-  const invocation = runnerOf(words, variables);
-  if (invocation === null) {
-    return null;
-  }
-  const { runner, programAt, argsStart } = invocation;
-  const { positionals, projectPath } = readArgs(
-    words.slice(argsStart),
-    runner === 'unity' ? UNITY_VALUE_FLAGS : CAPTURE_VALUE_FLAGS,
-  );
-  const kind = kindOf(runner, positionals);
-  if (kind === null) {
-    return null;
-  }
-  if (projectPath !== null) {
-    return { kind, projectPath: expand(projectPath, variables) };
-  }
-  if (runner === 'capture') {
-    return { kind, projectPath: null };
-  }
-  // The unity CLI falls back to `UNITY_PROJECT_PATH`, set by an assignment
-  // before the program or earlier on the line, then to the project holding
-  // the working folder, read here as the folder the line `cd`s into: one that
-  // holds no editor opens nothing.
-  const environment = new Map(variables);
-  noteVariables(words.slice(0, programAt), environment);
-  return {
-    kind,
-    projectPath:
-      environment.get(UNITY_PROJECT_PATH_VARIABLE) ??
-      environment.get('PWD') ??
-      null,
-  };
-}
-
-// Whether a Bash command's text starts a playtest (`unity command
-// editor.playmode start` or `editor_play`, `capture.py start`) or stops one
-// (`unity command editor.playmode stop` or `editor_stop`), with the project
-// folder it names; the last segment that signals wins. The folder is the
-// `--project-path`, else for unity the `UNITY_PROJECT_PATH` the line sets,
-// else the folder it `cd`s into. `$NAME` and `${NAME}` expand from plain
-// assignments and `cd`s in earlier segments; a path naming any other variable
-// or a command substitution reads as no path. A heredoc's body signals
-// nothing.
-export function parsePlaytestCommand(command: string): PlaytestSignal | null {
   const variables = new Map<string, string>();
   let signal: PlaytestSignal | null = null;
   for (const words of segmentsOf(command)) {
-    signal = signalOfSegment(words, variables) ?? signal;
+    signal = signalOfSegment(words, variables, patterns) ?? signal;
     noteVariables(words, variables);
   }
   return signal;

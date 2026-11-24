@@ -1,6 +1,6 @@
 # 08 — Backlog reads its homes, file and assistant text from the picked backlog strategy
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · it adds a reader and a pick, and hands the pick to the docs index through 09's new export
 Wave: 4 · Depends on: 03, 09
@@ -110,4 +110,4 @@ Commit: one commit for the group.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit e01c387f6 · proof: diff read: backlogReader, strategy setting, contributions dependency, setFeaturesHomes call, assistantInstructions present; wave 4 typecheck + lint pass · concerns: fixtureStrategy throws if DOCS_FIXTURE_BINDING.features is null; pickProblemText ?? '' only for the type

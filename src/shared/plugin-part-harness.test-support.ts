@@ -61,6 +61,7 @@ import type {
 } from '../contracts/plugin';
 import type { ScreenCapture } from '../contracts/screen-capture';
 import type { SessionHost } from '../contracts/session-host';
+import type { ConfigProblem } from '../contracts/settings';
 import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
 import type { UiState } from '../contracts/ui-state';
@@ -191,11 +192,13 @@ export interface PartHarness<Started> {
 // `invoke` calls the live handler of the part under test and throws when none
 // is live; `sent` holds what that part sent. `pushSettings` replaces what
 // `settings()` reads for the part under test and tells its `onSettingsChanged`
-// listeners.
+// listeners. `configProblems` holds each part's last `services.configProblems`
+// list by plugin id, the entry dropped when that part stops, as the app does.
 export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   MainStart<M>
 > {
   readonly files: MemoryFiles;
+  readonly configProblems: ReadonlyMap<string, readonly ConfigProblem[]>;
   readonly processes: FakeProcesses;
   readonly drive: ReturnType<typeof fakeDriveHost> | null;
   invoke(method: string, ...args: unknown[]): unknown;
@@ -873,6 +876,7 @@ interface MainWorld extends HarnessWorld {
   files: MemoryFiles;
   processes: FakeProcesses;
   drive: ReturnType<typeof fakeDriveHost> | null;
+  configProblems: Map<string, readonly ConfigProblem[]>;
   replaced: Partial<Omit<MainServices, 'timers' | 'log'>>;
   randomHex(): string;
   randomUuid(): string;
@@ -921,6 +925,7 @@ function createMainWorld(
     files: createMemoryFiles({ now: world.scheduler.now }),
     processes: new FakeProcesses(),
     drive: drive ? fakeDriveHost() : null,
+    configProblems: new Map(),
     replaced,
     randomHex() {
       hexes += 1;
@@ -957,6 +962,31 @@ function fakeLayoutsRegister(
       record.layoutsRegistered = false;
     },
   });
+}
+
+// One part's `services.configProblems`: `set` replaces the part's entry in
+// `world.configProblems`, and the part's registrations disposing, after the
+// first `set`, delete it.
+function harnessConfigProblems(
+  world: MainWorld,
+  manifest: PluginManifest,
+  context: PartContext,
+): MainServices['configProblems'] {
+  let isTracked = false;
+  return {
+    set(problems) {
+      world.configProblems.set(manifest.id, [...problems]);
+      if (!isTracked) {
+        isTracked = true;
+        context.registrations.track({
+          dispose() {
+            isTracked = false;
+            world.configProblems.delete(manifest.id);
+          },
+        });
+      }
+    },
+  };
 }
 
 function fakeMainApi(
@@ -1035,6 +1065,7 @@ function fakeMainApi(
       appInstance: DEV_APP,
       appBuild: null,
       cloneDir: null,
+      appDir: '/app',
       window: {
         show() {},
         summon: () => false,
@@ -1055,6 +1086,7 @@ function fakeMainApi(
         mayDisable: async () => null,
         runDisabledForNow: async () => ({ dispose() {} }),
       },
+      configProblems: harnessConfigProblems(world, manifest, context),
       loginStart: createFakeLoginStart(),
       ...replaced,
       files:
@@ -1129,6 +1161,7 @@ export function startMainPart<M extends PluginManifest>(
   return {
     ...baseHarness(lifecycle, world, record.counts),
     files: world.files,
+    configProblems: world.configProblems,
     processes: world.processes,
     drive: world.drive,
     sent: record.sent,

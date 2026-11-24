@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RowActivity } from '../sessions/contract';
 import {
+  actionCommandShortId,
   type PageStage,
+  qualifiedWorkflowId,
   type SessionFlow,
   type StageStatus,
   shownRowActivity,
@@ -34,6 +36,18 @@ function stageWith(
     rowActivity,
   };
 }
+
+describe('declared ids', () => {
+  it('actionCommandShortId_QualifiedWorkflow_DashesTheColon', () => {
+    expect(actionCommandShortId('wigley:large', 'clearAndMake')).toBe(
+      'wigley-large-clearAndMake',
+    );
+  });
+
+  it('qualifiedWorkflowId_PluginAndId_JoinsWithAColon', () => {
+    expect(qualifiedWorkflowId('wigley', 'large')).toBe('wigley:large');
+  });
+});
 
 describe('shownRowActivity', () => {
   it.each([

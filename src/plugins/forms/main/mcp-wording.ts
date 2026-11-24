@@ -7,6 +7,7 @@ import type {
 } from '../contract';
 import type { RoundReason, RoundResult } from './round';
 import { capitalised } from '../../../shared/capitalised';
+import { AUTO_ANSWER_GATE_CLAUSE } from '../../chat/contract';
 
 // The round's MCP wording: its tool names, the text of a malformed call, and
 // the payload an agent reads for each round result.
@@ -22,9 +23,7 @@ const NEXT_ON_AUTO_ANSWERED =
   'This session is headless until a tool result says the session is no ' +
   'longer headless: the app showed no form and answered every item with its ' +
   'recommendation. Build no more rounds, and list every pick as a Decided ' +
-  'notice in your reply. An auto-answered pick never approves a hard-gated ' +
-  'action (third-party code, destroying user state, a push): name what the ' +
-  'gate needs in the reply and end the turn.';
+  `notice in your reply. ${AUTO_ANSWER_GATE_CLAUSE}`;
 
 const NEXT_ON_NO_ROUND =
   'No round is open for this session, and no finished answers are waiting ' +

@@ -402,7 +402,7 @@ export type AgentEvent =
     }
   | { type: 'userMessage'; at: number }
   // A skill or slash command started: the agent called its Skill tool, or the user's sent message began with `/`.
-  // `skill` has no leading `/` (`wigley:make`); `args` is trimmed, `''` when none.
+  // `skill` has no leading `/` (`my-plugin:make`); `args` is trimmed, `''` when none.
   | {
       type: 'skillStarted';
       at: number;
@@ -577,11 +577,12 @@ export interface HarnessProfile {
   configDir: string;
 }
 
-// A profile's config folder (as `AgentHarness.configFolder` resolves it) and the folders the harness caches its
-// installed plugins in.
+// A profile's config folder (as `AgentHarness.configFolder` resolves it), the folders the harness caches its
+// installed plugins in, and the file that lists the profile's plugin installs, null when the harness keeps none.
 export interface HarnessConfigRoots {
   configDir: string;
   pluginCacheDirs: readonly string[];
+  installedPluginsFile: string | null;
 }
 
 // One install of a plugin in a profile, as the harness lists it: `key` the harness's name for the plugin,
