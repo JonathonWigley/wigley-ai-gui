@@ -225,7 +225,7 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 - [x] [Pane keys](05-pane-keys.md) — after 03, 04
 
 ### Wave 6
-- [ ] [Doc re-read, changelog and README](06-doc-re-read.md) — after 05
+- [x] [Doc re-read, changelog and README](06-doc-re-read.md) — after 05
 - [ ] [Final verification](07-final-verification.md)
 
 ## Run log
@@ -238,6 +238,7 @@ Review base: 0eab07e6
 - 03 · hard · 83922156 · diff read: every Produces signature present; typecheck clean; work-board tests 115/115 and keymap-checks pass (worker run plus lead); drive capture board-detail-pane.png shows columns left and ABC-12 pane right with fields, description, comments, subtasks, links, thread, comment box and Posting block · concerns: LIVE: .work-board-detail grows to content and its parent .ui-split-end scrolls, so the pane scroll commands and the scrollTop reset on a cursor move hit a non-scrolling element (tests faked scroll sizes on .work-board-detail) -- determined fix for review; send sends untrimmed text as the Inbox does; selectCard keep-box branch unreachable by a real click
 - 04 · hard · 3e97b718 · diff read: every Produces signature present; typecheck clean; work-inbox tests 95/95; demo selftest passes; drive captures (inbox-*.png) show slim cards and the pane, and eval proves .work-inbox-detail scrolls while .ui-split-end does not, with scrollTop reset on a cursor move · concerns: card-click pane-button row passes trivially (fake DOM events don't bubble); togglePane-from-box test proves no held editor by the destroy, not a blur; sendItem label still 'send this card's draft'; empty-box placeholder sits under the editor as before
 - 05 · standard · 79d48a57 · Diff read: Board <CR>→togglePane, gx→openCard, C-j/k, C-S-j/k, i, box scope with D-Enter/Esc; Inbox <CR>→togglePane, gx→openSlack, four pane scrolls. typecheck clean; vitest shared+keymap+work 4500 passed; selftest --plugin work all PASS; grep prints only the two gx lines. · concerns: Inbox keys steps start with the pane already open (opened by the earlier i step), so the steps read Enter→pane closed, Enter→pane open, C-S-j, Enter→pane closed. Board box needs two Escapes to log 'board focused' (first leaves the box input, as in the Inbox); unverified whether leaveBox on the first Escape is swallowed.
+- 06 · standard · e3c584d4 · Diff read of the six docs; grep board-detail-pane prints only plan-folder lines; npm run lint passes (changelog included); npm test passes on rerun (first run: 2 tests timed out at 5000ms, unidentified, treated as flake); readme coverage passes. · concerns: docs/keymap.md: the 'Inbox's and the Board's own keys' paragraph still runs to ~160 columns after the reflow ask. npm test first run had 2 timeouts in 1 file, not identified.
 ### Contract changes
 ### Rulings
 - Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead
@@ -247,5 +248,6 @@ Review base: 0eab07e6
 - 03 follow-on (837887fa, user's look sign-off): the Board scrolls the cursor card into view on every board-pane resize (pane open/close, divider drag, window resize), and its end cell is a one-cell grid so .work-board-detail scrolls; verified live (card fully left of the pane with the demo panel open; detail scrollHeight 919 > clientHeight 813, end cell does not scroll) · group 04
 - 04: detailInput.draft follows the old card rule; showSample closes the pane and restores focus to what it was (the Board's forces board); detail padding space-2 space-4 per the doc (Board's space-3 space-4); detailEmpty uses kit.emptyState · group 04
 - 05 self-test: Inbox steps reordered to start from an open pane; Board box leave presses Escape twice, matching the Inbox box. · group 05
+- 06 docs vs code: reply box only on open Inbox threads (and on the Board for a local task whose thread is not open); Inbox card carries no Buttons or draft in any state, summary hides while the pane is open; Posting… shows on the Board card and in the pane; design.md documents the Fetched-age head and the No-detail-yet line. · group 06
 ### Review rounds
 ### Test gate

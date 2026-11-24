@@ -1,6 +1,6 @@
 # 06 — Doc re-read, changelog and README
 
-Status: not started
+Status: done
 Type: Batch
 Rung: standard · doc-only work against settled code
 Wave: 6 · Depends on: 05 (reads every landed task's code)
@@ -51,3 +51,4 @@ Bookkeeping: tick this task's box in `plan.md`
 
 ## Proof
 
+Commit e3c584d4 · proof: Diff read of the six docs; grep board-detail-pane prints only plan-folder lines; npm run lint passes (changelog included); npm test passes on rerun (first run: 2 tests timed out at 5000ms, unidentified, treated as flake); readme coverage passes. · concerns: docs/keymap.md: the 'Inbox's and the Board's own keys' paragraph still runs to ~160 columns after the reflow ask. npm test first run had 2 timeouts in 1 file, not identified.
