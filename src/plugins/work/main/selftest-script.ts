@@ -187,6 +187,30 @@ const GROUPS: SelfTestGroup[] = [
         /^\[work-inbox\] list focused$/,
       ]),
       viewStep(
+        ['Enter'],
+        inboxLine('pane closed'),
+        undefined,
+        'Enter in the list reaches work-inbox.togglePane; the pane is still open from the reply box earlier in the group, so it closes.',
+      ),
+      viewStep(
+        ['Enter'],
+        inboxLine('pane open'),
+        undefined,
+        "A second Enter opens the cursor item's pane again.",
+      ),
+      viewStep(
+        ['<C-S-j>'],
+        inboxLine('the detail did not scroll down'),
+        undefined,
+        'The half-page key reaches the pane command; the item holds one short line, so the detail does not scroll.',
+      ),
+      viewStep(
+        ['Enter'],
+        inboxLine('pane closed'),
+        undefined,
+        'A second Enter toggles the pane closed.',
+      ),
+      viewStep(
         ['W'],
         line('sweep queued'),
         undefined,
@@ -232,6 +256,36 @@ const GROUPS: SelfTestGroup[] = [
       viewStep(['y'], line('moving WRK-3 to In QA')),
       viewStep(['h'], boardLine('selected WRK-2')),
       viewStep(['n'], line('not yet WRK-2')),
+      viewStep(
+        ['Enter'],
+        boardLine('pane open'),
+        undefined,
+        'Enter on the cursor card reaches work-board.togglePane and opens its pane.',
+      ),
+      viewStep(
+        ['<C-S-j>'],
+        boardLine('the detail did not scroll down'),
+        undefined,
+        'The half-page key reaches the pane command; WRK-2 holds one short line, so the detail does not scroll.',
+      ),
+      viewStep(
+        ['i'],
+        boardLine('focused box of WRK-2'),
+        undefined,
+        'i on the card reaches work-board.enterBox and focuses the pane box.',
+      ),
+      viewStep(
+        ['Escape', 'Escape'],
+        boardLine('board focused'),
+        undefined,
+        'The first Escape leaves the box input and the second reaches work-board.leaveBox, which returns focus to the Board, as in the Inbox.',
+      ),
+      viewStep(
+        ['Enter'],
+        boardLine('pane closed'),
+        undefined,
+        'A second Enter toggles the pane closed.',
+      ),
     ],
   },
 ];
