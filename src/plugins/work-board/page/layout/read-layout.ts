@@ -9,6 +9,8 @@ const LAYOUT_PARTS: Record<keyof BoardLayout, true> = {
   column: true,
   card: true,
   empty: true,
+  detail: true,
+  detailEmpty: true,
 };
 
 // The Board layout a user's `layout.js` module exports as its default. A layout defines only the parts it changes;

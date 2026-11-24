@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
+import type { EditorHost } from '../../../contracts/editor';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { ToastTone } from '../../../contracts/plugin';
+import { uiStateOver } from '../../../shared/fake-ui-state.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -11,9 +14,11 @@ import {
   findAll,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
+import { countingEditors } from '../../../shared/plugin-part-harness.test-support';
 import {
   OTHER_COLUMN,
   type WorkCard,
+  type WorkDetail,
   type WorkMoveArg,
   type WorkState,
   type WorkSuggestion,
@@ -21,6 +26,8 @@ import {
 import {
   jiraCard,
   localCard,
+  threadDetail,
+  ticketDetail,
   workItem,
 } from '../../work/contract.test-support';
 import type { WorkBoardPlace } from '../contract';
@@ -94,6 +101,59 @@ function suggestion(
   };
 }
 
+// One vim box the fake editor host made: its text, and whether it holds the focus or was destroyed. `blurFromOutside`
+// is a click elsewhere taking its focus.
+interface FakeBox {
+  text: string;
+  isFocused: boolean;
+  isDestroyed: boolean;
+  type(text: string): void;
+  blurFromOutside(): void;
+}
+
+function fakeEditors(): { host: EditorHost; boxes: FakeBox[] } {
+  const boxes: FakeBox[] = [];
+  const host: EditorHost = {
+    ...countingEditors().host,
+    create(_parent, doc, events) {
+      const blur = () => {
+        if (box.isFocused) {
+          box.isFocused = false;
+          events.blurred();
+        }
+      };
+      const box: FakeBox = {
+        text: doc,
+        isFocused: false,
+        isDestroyed: false,
+        type(text) {
+          box.text = text;
+          events.changed(text);
+        },
+        blurFromOutside: blur,
+      };
+      boxes.push(box);
+      return {
+        text: () => box.text,
+        setText(text) {
+          box.text = text;
+        },
+        insert() {},
+        charBeforeCursor: () => '',
+        focus() {
+          box.isFocused = true;
+          events.focused();
+        },
+        blur,
+        destroy() {
+          box.isDestroyed = true;
+        },
+      };
+    },
+  };
+  return { host, boxes };
+}
+
 // The card commands a button runs, as the page part routes them.
 const CARD_PRESSES: Record<string, BoardCardAction> = {
   'work-board.acceptCard': 'accept',
@@ -106,10 +166,17 @@ interface SetupOptions {
   // The rejection text of each command id whose run fails.
   rejects?: Record<string, string>;
   savedPlace?: WorkBoardPlace;
+  // The records `work.details` holds at start.
+  details?: WorkDetail[];
 }
 
+// The records `details` as `work.details` hands them, by id.
+const detailMap = (details: readonly WorkDetail[]) =>
+  new Map(details.map((detail) => [detail.id, detail]));
+
 // A Board view over `state` (none landed yet when undefined), shown. `runs` holds each reporting run as `[id, arg]`,
-// `opened` each `core.openLink` run, `calls` each `showMode`, and `logs`, `toasts` and `places` what the view wrote.
+// `opened` each `core.openLink` run, `calls` each `showMode`, `scopes` and `resizeTargets` each set, `boxes` each vim
+// box made, and `logs`, `toasts` and `places` what the view wrote.
 function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const runs: [CommandId, unknown][] = [];
   const places: WorkBoardPlace[] = [];
@@ -117,6 +184,11 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
   const calls: string[] = [];
   const logs: string[] = [];
   const toasts: [string, ToastTone][] = [];
+  const scopes: string[] = [];
+  const resizeTargets: (ResizeTarget | null)[] = [];
+  const editors = fakeEditors();
+  // What `now` reads; a test moves it with the timers.
+  const clock = { ms: NOW };
   const { keys } = recordingAnchors();
   let isShown = false;
   let view: BoardView | null = null;
@@ -163,14 +235,16 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
       platform: 'macos',
       state: noLayoutState,
     },
+    editor: editors.host,
+    uiState: uiStateOver(new Map()),
     timers: {
       set: (run, ms) => setTimeout(run, ms) as unknown as number,
       clear: (handle) => clearTimeout(handle),
     },
-    now: () => NOW,
-    setScope: () => undefined,
+    now: () => clock.ms,
+    setScope: (scope) => scopes.push(scope),
     setFocusTarget: () => undefined,
-    setResizeTarget: () => undefined,
+    setResizeTarget: (target) => resizeTargets.push(target),
     isShown: () => isShown,
     showMode: () => calls.push('showMode'),
     runKey: (key, arg) => route(key.id, arg),
@@ -186,6 +260,7 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     placeChanged: (place) => places.push(place),
     holdPlace: () => ({ dispose: () => undefined }),
   });
+  view.detailsChanged(detailMap(options.details ?? []));
   view.stateChanged(state);
   isShown = true;
   view.shown();
@@ -198,6 +273,10 @@ function boardSetup(state: WorkState | undefined, options: SetupOptions = {}) {
     logs,
     toasts,
     places,
+    scopes,
+    resizeTargets,
+    boxes: editors.boxes,
+    clock,
   };
 }
 
@@ -530,13 +609,13 @@ describe('createBoardView', () => {
     {
       case: 'the first state lands, with a saved place',
       first: undefined,
-      savedPlace: { cursorCardId: 'T-1' },
+      savedPlace: { cursorCardId: 'T-1', paneOpen: false, drafts: {} },
     },
   ])(
     "a sample's end puts the cursor back over the real work: $case",
     ({ first, savedPlace }) => {
       const each = started(first, { savedPlace });
-      const shown = each.view.showSample(board([inColumn('S-1', 'Todo')]));
+      const shown = each.view.showSample(board([inColumn('S-1', 'Todo')]), []);
 
       each.view.stateChanged(
         board([inColumn('T-1', 'Todo'), inColumn('Q-1', 'In QA')]),
@@ -546,7 +625,11 @@ describe('createBoardView', () => {
       expect(
         cardTitled(each, 'Ticket T-1').classList.contains('is-cursor'),
       ).toBe(true);
-      expect(each.places.at(-1)).toEqual({ cursorCardId: 'T-1' });
+      expect(each.places.at(-1)).toEqual({
+        cursorCardId: 'T-1',
+        paneOpen: false,
+        drafts: {},
+      });
     },
   );
 
@@ -585,5 +668,298 @@ describe('createBoardView', () => {
     each.view.commands.accept();
     each.view.commands.cardDown();
     expect(each.logs).toEqual(['shown', 'no card']);
+  });
+
+  // Backlog: ABC-1, ABC-2; Todo: the local task from thread t1, whose worker draft waits.
+  const PANE_BOARD = board(
+    [
+      inColumn('ABC-1', 'Backlog'),
+      inColumn('ABC-2', 'Backlog'),
+      localCard('local-1', 'Todo', { sourceItemId: 't1' }),
+    ],
+    { items: [workItem('t1', { draft: 'worker draft' })] },
+  );
+  const DETAILS = [
+    ticketDetail('ABC-1', { fetchedAt: '2026-11-23T11:57:00.000Z' }),
+    ticketDetail('ABC-2'),
+    threadDetail('t1'),
+  ];
+  const paneOf = (each: Setup) => findAll(each.sheet, 'work-board-detail')[0];
+  const boardPaneOf = (each: Setup) => findAll(each.sheet, 'work-board')[0];
+  const isPaneHidden = (each: Setup) =>
+    findAll(each.sheet, 'work-board-split')[0].classList.contains(
+      'is-end-hidden',
+    );
+
+  it('togglePane shows and hides the pane, with the split as the resize target while it shows', () => {
+    const each = started(PANE_BOARD, { details: DETAILS });
+    expect(isPaneHidden(each)).toBe(true);
+
+    each.view.commands.togglePane();
+
+    expect(isPaneHidden(each)).toBe(false);
+    expect(paneOf(each).textContent).toContain('Fetched 3m ago');
+    expect(each.resizeTargets.at(-1)?.nudge).toBeTypeOf('function');
+    expect(each.scopes.at(-1)).toBe('board');
+    expect(each.places.at(-1)).toEqual({
+      cursorCardId: 'ABC-1',
+      paneOpen: true,
+      drafts: {},
+    });
+
+    each.view.commands.togglePane();
+
+    expect(isPaneHidden(each)).toBe(true);
+    expect(paneOf(each).textContent).toBe('');
+    expect(each.resizeTargets.at(-1)).toBeNull();
+    expect(each.logs.filter((line) => line.startsWith('pane '))).toEqual([
+      'pane open',
+      'pane closed',
+    ]);
+  });
+
+  it('the pane follows the cursor and scrolls back to the top on a move', () => {
+    const each = started(PANE_BOARD, { details: DETAILS });
+    each.view.commands.togglePane();
+    paneOf(each).scrollTop = 50;
+
+    each.view.commands.cardDown();
+
+    expect(findAll(paneOf(each), 'work-board-card-key')[0].textContent).toBe(
+      'ABC-2',
+    );
+    expect(paneOf(each).scrollTop).toBe(0);
+  });
+
+  it('an open pane with no cursor card draws the empty part', () => {
+    const each = started(board([]));
+
+    each.view.commands.togglePane();
+
+    expect(paneOf(each).textContent).toBe('No card selected.');
+  });
+
+  it('a Jira card with no stored detail draws the missing line and the comment box', () => {
+    const each = started(board([inColumn('ABC-9', 'Todo')]));
+
+    each.view.commands.togglePane();
+
+    expect(paneOf(each).textContent).toContain(
+      'No detail yet: the next sweep fetches it.',
+    );
+    expect(findAll(paneOf(each), 'work-board-box')).toHaveLength(1);
+    expect(each.boxes).toHaveLength(1);
+  });
+
+  it.each<{
+    case: string;
+    rejects: Record<string, string>;
+    drafts: Record<string, string>;
+    toasts: [string, string][];
+  }>([
+    {
+      case: 'main takes it: the draft leaves the place',
+      rejects: {},
+      drafts: {},
+      toasts: [],
+    },
+    {
+      case: 'main refuses: the draft stays and the reason toasts',
+      rejects: { 'work.comment': 'ABC-1 is not commentable' },
+      drafts: { 'ABC-1': 'my text' },
+      toasts: [['ABC-1 is not commentable', 'error']],
+    },
+  ])(
+    'send on a Jira card runs work.comment and leaves the box at once: $case',
+    async ({ rejects, drafts, toasts }) => {
+      const each = started(PANE_BOARD, { rejects });
+      each.view.commands.enterBox();
+      each.boxes[0].type('my text');
+
+      each.view.commands.send();
+
+      expect(each.scopes.at(-1)).toBe('board');
+      expect(each.boxes[0].isFocused).toBe(false);
+      await settle();
+      expect(each.runs).toEqual([
+        ['work.comment', { cardId: 'ABC-1', text: 'my text' }],
+      ]);
+      expect(each.places.at(-1)?.drafts).toEqual(drafts);
+      expect(each.toasts).toEqual(toasts);
+    },
+  );
+
+  it('send with an empty box toasts and runs nothing', () => {
+    const each = started(PANE_BOARD);
+    each.view.commands.enterBox();
+
+    each.view.commands.send();
+
+    expect(each.toasts).toEqual([['Nothing to send', 'info']]);
+    expect(each.runs).toEqual([]);
+  });
+
+  it("send on a local task runs work.send on its source item with the thread's draft", async () => {
+    const each = started(PANE_BOARD);
+    each.view.selectCard('local-1');
+    each.view.commands.enterBox();
+
+    each.view.commands.send();
+    await settle();
+
+    expect(each.runs).toEqual([
+      ['work.send', { itemId: 't1', text: 'worker draft' }],
+    ]);
+  });
+
+  it('enterBox opens the pane, sets the box scope and focuses the box', () => {
+    const each = started(PANE_BOARD);
+
+    each.view.commands.enterBox();
+
+    expect(isPaneHidden(each)).toBe(false);
+    expect(each.scopes.at(-1)).toBe('box');
+    expect(each.boxes[0].isFocused).toBe(true);
+    expect(each.logs).toContain('focused box of ABC-1');
+  });
+
+  it('enterBox on a task with no thread logs no box', () => {
+    const each = started(board([localCard('local-1', 'Todo')]));
+
+    each.view.commands.enterBox();
+
+    expect(each.logs.at(-1)).toBe('no box for local-1');
+    expect(each.scopes.at(-1)).toBe('board');
+  });
+
+  it('the scroll keys log no pane while it is closed, and scroll the open pane', () => {
+    const each = started(PANE_BOARD, { details: DETAILS });
+
+    each.view.commands.lineDown();
+    expect(each.logs.at(-1)).toBe('no pane');
+
+    each.view.commands.togglePane();
+    const pane = paneOf(each);
+    Object.defineProperty(pane, 'scrollHeight', { value: 1000 });
+    Object.defineProperty(pane, 'clientHeight', { value: 200 });
+    vi.stubGlobal('getComputedStyle', () => ({ lineHeight: '20px' }));
+    each.view.commands.lineDown();
+
+    expect(each.logs.at(-1)).toBe('scrolled the detail down a line');
+  });
+
+  it('a card with queued comments reads Posting… on the card and in the pane', () => {
+    const each = started(
+      board([inColumn('ABC-1', 'Todo', { commenting: ['queued text'] })]),
+    );
+
+    each.view.commands.togglePane();
+
+    expect(cardTitled(each, 'Ticket ABC-1').textContent).toContain('Posting…');
+    const [block] = findAll(paneOf(each), 'work-board-detail-posting');
+    expect(block?.textContent).toContain('Posting…');
+    const [text] = findAll(block, 'work-board-detail-text');
+    expect(text?.innerHTML).toBe('queued text');
+  });
+
+  it.each([
+    {
+      case: 'the card leaves the board',
+      act: (each: Setup) =>
+        each.view.stateChanged(
+          board([inColumn('ABC-2', 'Backlog')], { items: [] }),
+        ),
+    },
+    {
+      case: 'a palette togglePane closes the pane',
+      act: (each: Setup) => each.view.commands.togglePane(),
+    },
+  ])(
+    'a redraw that drops the focused box hands the keys to the board: $case',
+    ({ act }) => {
+      const each = started(PANE_BOARD);
+      each.view.commands.enterBox();
+
+      act(each);
+
+      expect(each.scopes.at(-1)).toBe('board');
+      // A box dropped by a redraw is destroyed; no live one holds the focus.
+      expect(each.boxes.some((box) => box.isFocused && !box.isDestroyed)).toBe(
+        false,
+      );
+      expect(document.activeElement).toBe(boardPaneOf(each));
+    },
+  );
+
+  it.each([
+    { case: 'its own card keeps the box', cardId: 'ABC-1', scope: 'box' },
+    { case: 'another card leaves the box', cardId: 'ABC-2', scope: 'board' },
+  ])('selectCard under a focused box: $case', ({ cardId, scope }) => {
+    const each = started(PANE_BOARD);
+    each.view.commands.enterBox();
+
+    each.view.selectCard(cardId);
+
+    expect(each.scopes.at(-1)).toBe(scope);
+    expect(each.boxes[0]).toMatchObject({
+      isFocused: true,
+      isDestroyed: scope === 'board',
+    });
+  });
+
+  it.each([
+    { case: 'leaveBox', act: (each: Setup) => each.view.commands.leaveBox() },
+    {
+      case: 'a click outside',
+      act: (each: Setup) => each.boxes[0].blurFromOutside(),
+    },
+  ])(
+    'leaving the box gives the keys and the focus to the board: $case',
+    ({ act }) => {
+      const each = started(PANE_BOARD);
+      each.view.commands.enterBox();
+
+      act(each);
+
+      expect(each.scopes.at(-1)).toBe('board');
+      expect(document.activeElement).toBe(boardPaneOf(each));
+      expect(each.logs.at(-1)).toBe('board focused');
+    },
+  );
+
+  it("a sample's details show in place of the slot's until its end", () => {
+    const each = started(PANE_BOARD, { details: DETAILS });
+    each.view.commands.togglePane();
+
+    const shown = each.view.showSample(board([inColumn('ABC-1', 'Todo')]), [
+      ticketDetail('ABC-1', { assignee: 'Sample person' }),
+    ]);
+    each.view.openPane();
+    expect(paneOf(each).textContent).toContain('Sample person');
+
+    shown.dispose();
+    expect(paneOf(each).textContent).toContain('AssigneeAnn');
+    expect(paneOf(each).textContent).not.toContain('Sample person');
+  });
+
+  it('hidden leaves the focused box', () => {
+    const each = started(PANE_BOARD);
+    each.view.commands.enterBox();
+
+    each.view.hidden();
+
+    expect(each.boxes[0].isFocused).toBe(false);
+  });
+
+  it("the pane's ages redraw once a minute", () => {
+    vi.useFakeTimers();
+    const each = started(PANE_BOARD, { details: DETAILS });
+    each.view.commands.togglePane();
+    expect(paneOf(each).textContent).toContain('Fetched 3m ago');
+
+    each.clock.ms += 60_000;
+    vi.advanceTimersByTime(60_000);
+
+    expect(paneOf(each).textContent).toContain('Fetched 4m ago');
   });
 });

@@ -2,20 +2,32 @@ import { describe, expect, it } from 'vitest';
 import {
   OTHER_COLUMN,
   type WorkCard,
+  type WorkDetail,
+  type WorkItem,
   type WorkState,
   type WorkSuggestion,
 } from '../../work/contract';
 import {
   jiraCard,
   localCard,
+  threadDetail,
+  ticketDetail,
   workItem,
 } from '../../work/contract.test-support';
+import type { WorkBoardPlace } from '../contract';
+import type {
+  DetailInput,
+  TaskPaneInput,
+  TicketPaneInput,
+} from '../layouts/layout';
 import {
   type BoardAction,
+  type BoardViewState,
   boardReducer,
   cardActions,
   initialBoardState,
   neighbourColumns,
+  paneInputOf,
   shownColumns,
   threadCount,
 } from './board-state';
@@ -39,6 +51,13 @@ function board(
 
 const inColumn = (key: string, column: string) =>
   jiraCard(key, column, { column });
+
+// A saved place on card `cursorCardId`, the pane closed, no drafts.
+const savedPlace = (cursorCardId: string): WorkBoardPlace => ({
+  cursorCardId,
+  paneOpen: false,
+  drafts: {},
+});
 
 function suggestion(
   cardId: string,
@@ -229,19 +248,19 @@ describe('boardReducer', () => {
     {
       case: 'the first placement puts it on the first card',
       cursor: null,
-      action: { type: 'restore', cursorCardId: null },
+      action: { type: 'restore', place: null },
       expected: 'B-1',
     },
     {
       case: 'a saved card still on the board is put back',
       cursor: null,
-      action: { type: 'restore', cursorCardId: 'Q-2' },
+      action: { type: 'restore', place: savedPlace('Q-2') },
       expected: 'Q-2',
     },
     {
       case: 'a saved card gone from the board falls back to the first card',
       cursor: null,
-      action: { type: 'restore', cursorCardId: 'GONE-1' },
+      action: { type: 'restore', place: savedPlace('GONE-1') },
       expected: 'B-1',
     },
     {
@@ -354,7 +373,11 @@ describe('boardReducer', () => {
   );
 
   it('drops the flash when its card leaves', () => {
-    const state = { cursorCardId: 'B-1', flashCardId: 'Q-1' };
+    const state = {
+      ...initialBoardState,
+      cursorCardId: 'B-1',
+      flashCardId: 'Q-1',
+    };
 
     const next = boardReducer(
       state,
@@ -364,4 +387,288 @@ describe('boardReducer', () => {
 
     expect(next.flashCardId).toBeNull();
   });
+
+  it.each<{
+    case: string;
+    state: Partial<BoardViewState>;
+    action: BoardAction;
+    after?: WorkState;
+    expected: Pick<BoardViewState, 'paneOpen' | 'focus' | 'drafts'>;
+  }>([
+    {
+      case: 'pane opens',
+      state: {},
+      action: { type: 'pane', open: true },
+      expected: { paneOpen: true, focus: 'board', drafts: {} },
+    },
+    {
+      case: 'pane closes',
+      state: { paneOpen: true },
+      action: { type: 'pane', open: false },
+      expected: { paneOpen: false, focus: 'board', drafts: {} },
+    },
+    {
+      case: 'restore puts back the pane and the drafts of cards still on the board',
+      state: {},
+      action: {
+        type: 'restore',
+        place: {
+          cursorCardId: 'T-1',
+          paneOpen: true,
+          drafts: { 'T-1': 'mine', 'GONE-1': 'lost' },
+        },
+      },
+      expected: { paneOpen: true, focus: 'board', drafts: { 'T-1': 'mine' } },
+    },
+    {
+      case: 'draftEdited sets a card text beside the others',
+      state: { drafts: { 'B-1': 'old' } },
+      action: { type: 'draftEdited', cardId: 'T-1', text: 'hi' },
+      expected: {
+        paneOpen: false,
+        focus: 'board',
+        drafts: { 'B-1': 'old', 'T-1': 'hi' },
+      },
+    },
+    {
+      case: 'draftDropped removes only that card text',
+      state: { drafts: { 'B-1': 'a', 'T-1': 'b' } },
+      action: { type: 'draftDropped', cardId: 'T-1' },
+      expected: { paneOpen: false, focus: 'board', drafts: { 'B-1': 'a' } },
+    },
+    {
+      case: 'stateChanged drops the draft of a card that left',
+      state: { cursorCardId: 'Q-1', drafts: { 'B-2': 'x', 'Q-1': 'y' } },
+      action: { type: 'stateChanged', previous: work },
+      after: without('B-2'),
+      expected: { paneOpen: false, focus: 'board', drafts: { 'Q-1': 'y' } },
+    },
+    {
+      case: 'focus moves to the box',
+      state: {},
+      action: { type: 'focus', focus: 'box' },
+      expected: { paneOpen: false, focus: 'box', drafts: {} },
+    },
+  ])(
+    'boardReducer keeps the pane, the focus and each card draft: $case',
+    ({ state, action, after, expected }) => {
+      const next = boardReducer(
+        { ...initialBoardState, cursorCardId: 'B-1', ...state },
+        action,
+        after ?? work,
+      );
+
+      expect({
+        paneOpen: next.paneOpen,
+        focus: next.focus,
+        drafts: next.drafts,
+      }).toEqual(expected);
+    },
+  );
+});
+
+describe('paneInputOf', () => {
+  const NOW = Date.parse('2026-11-23T12:00:00.000Z');
+  const ISSUE = {
+    key: 'ABC-2',
+    title: 'Add a test',
+    status: 'To Do',
+    relation: null,
+    url: 'https://jira.example/browse/ABC-2',
+  };
+  const LINK = {
+    key: 'ABC-9',
+    title: 'Crash on resume',
+    status: 'Done',
+    relation: 'blocks',
+    url: 'https://jira.example/browse/ABC-9',
+  };
+  const TICKET: TicketPaneInput = {
+    kind: 'ticket',
+    id: 'ABC-1',
+    key: 'ABC-1',
+    title: 'Ticket ABC-1',
+    url: 'https://jira.example/browse/ABC-1',
+    fetched: null,
+    detail: null,
+    threads: [],
+    box: { kind: 'comment', sending: null },
+    posting: [],
+    note: null,
+  };
+  const TASK: TaskPaneInput = {
+    kind: 'task',
+    id: 'local-1',
+    title: 'Task local-1',
+    url: null,
+    source: {
+      channel: '#team',
+      participants: ['Ann', 'Bo'],
+      ticketKeys: ['ABC-1'],
+      summary: 'Ann asks for a review.',
+    },
+    fetched: null,
+    detail: null,
+    box: { kind: 'reply', sending: null },
+    note: null,
+  };
+  const ticket = jiraCard('ABC-1', 'To Do', { column: 'Todo' });
+  const task = localCard('local-1', 'Todo', { sourceItemId: 't1' });
+  const sourceItem = (overrides: Partial<WorkItem> = {}) =>
+    workItem('t1', { ticketKeys: ['ABC-1'], ...overrides });
+
+  it.each<{
+    case: string;
+    card: WorkCard;
+    items?: WorkItem[];
+    details?: WorkDetail[];
+    expected: DetailInput;
+  }>([
+    {
+      case: 'a Jira card with its ticket detail',
+      card: ticket,
+      details: [
+        ticketDetail('ABC-1', {
+          fetchedAt: '2026-11-23T11:57:00.000Z',
+          updated: '2026-11-23T11:20:00.000Z',
+          priority: 'High',
+          comments: [
+            { author: 'Bo', at: '2026-11-23T11:59:30.000Z', text: 'Seen it.' },
+            { author: 'Ann', at: '2026-11-23T09:00:00.000Z', text: '`x`' },
+          ],
+          subtasks: [ISSUE],
+          links: [LINK],
+        }),
+      ],
+      expected: {
+        ...TICKET,
+        fetched: 'Fetched 3m ago',
+        detail: {
+          type: 'Bug',
+          priority: 'High',
+          status: 'To Do',
+          assignee: 'Ann',
+          reporter: 'Bo',
+          updated: '40m ago',
+          description: 'Fix the **board**.',
+          comments: [
+            { author: 'Bo', age: 'just now', text: 'Seen it.' },
+            { author: 'Ann', age: '3h ago', text: '`x`' },
+          ],
+          subtasks: [ISSUE],
+          links: [LINK],
+        },
+      },
+    },
+    {
+      case: 'a Jira card with no record',
+      card: ticket,
+      expected: TICKET,
+    },
+    {
+      case: 'a Jira card whose id holds a thread record',
+      card: ticket,
+      details: [threadDetail('ABC-1')],
+      expected: TICKET,
+    },
+    {
+      case: 'threads list only the open items naming the key, in slot order',
+      card: ticket,
+      items: [
+        workItem('t1', { ticketKeys: ['ABC-1'], latest: 'Ann: one' }),
+        workItem('t2', { ticketKeys: ['ABC-1'], state: 'dismissed' }),
+        workItem('t3', { ticketKeys: ['ABC-10'] }),
+        workItem('t4', {
+          ticketKeys: ['XYZ-2', 'ABC-1'],
+          channel: '#client',
+          summary: 'QA wants a build.',
+          latest: 'Sam: ETA?',
+        }),
+      ],
+      expected: {
+        ...TICKET,
+        threads: [
+          {
+            channel: '#team',
+            summary: 'Ann asks for a review.',
+            latest: 'Ann: one',
+          },
+          {
+            channel: '#client',
+            summary: 'QA wants a build.',
+            latest: 'Sam: ETA?',
+          },
+        ],
+      },
+    },
+    {
+      case: 'posting holds the queued comments, and the note shows',
+      card: jiraCard('ABC-1', 'To Do', {
+        column: 'Todo',
+        commenting: ['first', 'second'],
+        note: 'Jira refused the comment',
+      }),
+      expected: {
+        ...TICKET,
+        posting: ['first', 'second'],
+        note: 'Jira refused the comment',
+      },
+    },
+    {
+      case: 'a local task with its source and thread detail',
+      card: task,
+      items: [sourceItem()],
+      details: [
+        threadDetail('t1', {
+          fetchedAt: '2026-11-23T11:57:00.000Z',
+          root: { author: 'Ann', at: '2026-11-23T11:00:00.000Z', text: 'Q?' },
+          replies: [
+            { author: 'Bo', at: '2026-11-23T11:30:00.000Z', text: 'A.' },
+            { author: 'Ann', at: '2026-11-23T11:58:00.000Z', text: 'B.' },
+          ],
+          replyCount: 4,
+        }),
+      ],
+      expected: {
+        ...TASK,
+        fetched: 'Fetched 3m ago',
+        detail: {
+          root: { author: 'Ann', age: '1h ago', text: 'Q?' },
+          replies: [
+            { author: 'Bo', age: '30m ago', text: 'A.' },
+            { author: 'Ann', age: '2m ago', text: 'B.' },
+          ],
+          hidden: 2,
+        },
+      },
+    },
+    {
+      case: 'a local task whose source item is cleared has no box',
+      card: task,
+      items: [sourceItem({ state: 'cleared' })],
+      expected: { ...TASK, box: null },
+    },
+    {
+      case: 'a local task whose source item is sending',
+      card: task,
+      items: [sourceItem({ sending: 'on its way' })],
+      expected: { ...TASK, box: { kind: 'reply', sending: 'on its way' } },
+    },
+    {
+      case: 'a local task with no source thread',
+      card: localCard('local-1', 'Todo'),
+      items: [sourceItem()],
+      details: [threadDetail('t1')],
+      expected: { ...TASK, source: null, box: null },
+    },
+  ])(
+    'paneInputOf reads the stored detail of its own kind and ages it: $case',
+    ({ card, items = [], details = [], expected }) => {
+      const stored = new Map(details.map((detail) => [detail.id, detail]));
+
+      expect(paneInputOf(card, board([card], { items }), stored, NOW)).toEqual(
+        expected,
+      );
+    },
+  );
 });

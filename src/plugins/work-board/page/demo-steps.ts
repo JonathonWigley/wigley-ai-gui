@@ -2,24 +2,27 @@ import { MODES_SHOW } from '../../../contracts/commands';
 import type { DemoStage } from '../../../contracts/demo';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageServices, PluginCommands } from '../../../contracts/plugin';
-import type { WorkState } from '../../work/contract';
+import type { WorkDetail, WorkState } from '../../work/contract';
 import {
   SAMPLE_LOCAL_TASK,
   SAMPLE_SUGGESTION_CARD,
+  sampleBoardDetails,
   sampleBoardState,
 } from './sample-state';
 
-// `showSample` draws a sample in place of `work.state`, holding the place, until its dispose; `selectCard` puts the
-// cursor on a card with the board focused; `now` is epoch milliseconds.
+// `showSample` draws a sample in place of `work.state` and `work.details`, holding the place, until its dispose;
+// `selectCard` puts the cursor on a card with the board focused; `openPane` opens the detail pane; `now` is epoch
+// milliseconds.
 export interface BoardDemoPageDeps {
   commands: Pick<PluginCommands, 'run'>;
-  showSample(state: WorkState): Disposable;
+  showSample(state: WorkState, details: readonly WorkDetail[]): Disposable;
   selectCard(id: string): void;
+  openPane(): void;
   now(): number;
 }
 
-// The Board step: Board mode over its own sample, the cursor on the suggestion card and then on the local task, so
-// every card anchor draws. It presses nothing and launches no worker.
+// The Board step: Board mode over its own sample, the cursor on the suggestion card with the detail pane open, and
+// then on the local task, so every card anchor and both pane kinds draw. It presses nothing and launches no worker.
 export function registerDemoSteps(
   services: PageServices,
   deps: BoardDemoPageDeps,
@@ -34,6 +37,7 @@ export function registerDemoSteps(
     files: [
       'src/plugins/work-board/page/board-view.ts',
       'src/plugins/work-board/page/board-state.ts',
+      'src/plugins/work-board/page/sample-state.ts',
       'src/plugins/work-board/layouts/default/layout.js',
     ],
     enter: async () => boardStage(deps),
@@ -41,7 +45,11 @@ export function registerDemoSteps(
 }
 
 function boardStage(deps: BoardDemoPageDeps): DemoStage {
-  const sample = deps.showSample(sampleBoardState(deps.now()));
+  const now = deps.now();
+  const sample = deps.showSample(
+    sampleBoardState(now),
+    sampleBoardDetails(now),
+  );
   return {
     beats: [
       {
@@ -49,6 +57,7 @@ function boardStage(deps: BoardDemoPageDeps): DemoStage {
         async show() {
           await deps.commands.run(MODES_SHOW, 'work-board.main');
           deps.selectCard(SAMPLE_SUGGESTION_CARD);
+          deps.openPane();
         },
       },
       { name: 'local task', show: () => deps.selectCard(SAMPLE_LOCAL_TASK) },

@@ -1,7 +1,8 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // Board mode: the work plugin's Jira tickets and local tasks in the `work.columns` columns, with the moves work
-// detection suggests. It reads `work.state` and runs `work` commands only, each through its own commands, so a refusal
+// detection suggests, and a detail pane beside them for the cursor card with its comment or reply box. It reads
+// `work.state` and `work.details` and runs `work` commands only, each through its own commands, so a refusal
 // toasts. `layout` names the layout the Board draws with. The commands taking an arg are the clicks on a card's
 // buttons, chip and root, a drop, and the run from another view (`showTicket`), so they have no key.
 export const workBoardManifest = definePlugin({
@@ -30,10 +31,42 @@ export const workBoardManifest = definePlugin({
       runsIn: 'page',
     },
     openCard: {
-      label: "open the ticket, or the task's thread",
+      label: "open the ticket in Jira, or the task's thread in Slack",
       group: 'card',
       runsIn: 'page',
     },
+    togglePane: {
+      label: 'open or close the detail pane',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    lineDown: {
+      label: 'scroll the detail pane a line down',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    lineUp: {
+      label: 'scroll the detail pane a line up',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    halfPageDown: {
+      label: 'scroll the detail pane half a page down',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    halfPageUp: {
+      label: 'scroll the detail pane half a page up',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    enterBox: {
+      label: 'enter the comment or reply box',
+      group: 'pane',
+      runsIn: 'page',
+    },
+    send: { label: 'send the comment or reply', group: 'box', runsIn: 'page' },
+    leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
     accept: {
       label: 'accept the suggested move',
       group: 'card',
@@ -108,6 +141,7 @@ export const workBoardManifest = definePlugin({
   },
   scopes: {
     board: 'On the Board',
+    box: 'In a Board comment or reply box',
   },
   settings: {
     layout: 'default',

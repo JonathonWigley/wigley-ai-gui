@@ -21,6 +21,11 @@ import type {
 // The app makes each `column` root a drop zone while `isDropTarget`, and each `card` root a drag item while its card
 // can move. It sets the click on each `card` root (it puts the cursor there) and toggles there `is-cursor` (the
 // cursor card), `is-flash` (the card `work-board.showTicket` just showed) and `is-dragging` (the card being dragged).
+//
+// The detail pane. While it is open the app draws the `detail` part for the cursor card into `div.work-board-detail`,
+// the split's end pane, on each render that changes its input; `detailEmpty` draws in its place into the same div while
+// the pane is open with no card selected. The `box` slot (a detail kit's) is the app's: the comment or reply box, its
+// placeholder and key hints, or the text being sent read-only.
 
 // The board pane's root, appended to the sheet's `div.work-board`; it lays out its own children.
 export interface BoardPane {
@@ -66,7 +71,8 @@ export interface CardSuggestionInput {
 // One card. `key` is the Jira key, null on a local task; `url` opens the ticket or the task's source thread
 // (`core.openLink`), null for none; `priority` is null for none and on a local task. `threads` counts the open Slack
 // threads holding `ticketKey` (0 on a local task); the chip runs `work-board.openThreads` with `ticketKey`.
-// `movingTo` is the column a running Jira move targets, null for none; `note` is the last failed job's, null for none.
+// `movingTo` is the column a running Jira move targets, null for none; `isPosting` is true while a Jira card's comments
+// are queued or posting; `note` is the last failed job's, null for none.
 // `prev` and `next` are the columns ◀ and ▶ move to, null at either end and in Other. `actions` are the enabled
 // buttons, in order; a button whose action is absent draws disabled (◀ and ▶) or not at all. ◀ and ▶ run
 // `work-board.moveCardTo` with `{ cardId: id, column }`; Accept `work-board.acceptCard`, Not yet
@@ -86,6 +92,7 @@ export interface CardInput {
   ticketKey: string | null;
   suggestion: CardSuggestionInput | null;
   movingTo: string | null;
+  isPosting: boolean;
   note: string | null;
   prev: string | null;
   next: string | null;
@@ -105,9 +112,111 @@ export interface ColumnKit extends BoardKit {
   cards(parent: HTMLElement): HTMLElement;
 }
 
+// One message of a ticket's comments or a thread: `age` reads as `30m ago` or `just now`; `text` is markdown.
+export interface DetailMessageInput {
+  author: string;
+  age: string;
+  text: string;
+}
+
+// A subtask or linked issue: `relation` reads as `relates to` or `blocks`, null on a subtask; `url` opens it.
+export interface DetailIssueInput {
+  key: string;
+  title: string;
+  status: string;
+  relation: string | null;
+  url: string;
+}
+
+// An open Inbox thread naming the ticket: the worker's summary and the thread's latest line.
+export interface DetailThreadInput {
+  channel: string;
+  summary: string;
+  latest: string;
+}
+
+// The Slack thread a local task came from.
+export interface DetailSourceInput {
+  channel: string;
+  participants: string[];
+  ticketKeys: string[];
+  summary: string;
+}
+
+// The pane's box: a Jira comment or a Slack reply. `sending` is the reply's text while its Send runs, null otherwise;
+// a comment's is always null, its queued texts being the pane's `posting`.
+export interface DetailBoxInput {
+  kind: 'comment' | 'reply';
+  sending: string | null;
+}
+
+// A ticket's stored detail. A null field is unknown. `updated` reads as `40m ago` or `just now`; `description` is
+// markdown, '' for none; `comments` are oldest first.
+export interface TicketDetailInput {
+  type: string | null;
+  priority: string | null;
+  status: string;
+  assignee: string | null;
+  reporter: string | null;
+  updated: string;
+  description: string;
+  comments: DetailMessageInput[];
+  subtasks: DetailIssueInput[];
+  links: DetailIssueInput[];
+}
+
+// A thread's stored detail: the root message and the latest replies, oldest first; `hidden` counts the replies left
+// out, 0 for none.
+export interface ThreadDetailInput {
+  root: DetailMessageInput;
+  replies: DetailMessageInput[];
+  hidden: number;
+}
+
+// A Jira card's pane. `fetched` reads as `Fetched 3m ago`, null with no stored detail; `detail` is null until the sweep
+// stores one. `threads` are the open Inbox threads naming `key`, in the slot's order. `posting` holds the comment texts
+// queued or posting, oldest first. `note` is the last failed job's, null for none. The `Priority` row reads
+// `detail.priority`.
+export interface TicketPaneInput {
+  kind: 'ticket';
+  id: string;
+  key: string;
+  title: string;
+  url: string | null;
+  fetched: string | null;
+  detail: TicketDetailInput | null;
+  threads: DetailThreadInput[];
+  box: DetailBoxInput;
+  posting: string[];
+  note: string | null;
+}
+
+// A local task's pane. `source` is the Slack thread the task came from, null for none; `detail` is that thread's stored
+// detail, null for none; `fetched` is as on a ticket. `box` is the reply box while the thread is open in the Inbox,
+// else null.
+export interface TaskPaneInput {
+  kind: 'task';
+  id: string;
+  title: string;
+  url: string | null;
+  source: DetailSourceInput | null;
+  fetched: string | null;
+  detail: ThreadDetailInput | null;
+  box: DetailBoxInput | null;
+  note: string | null;
+}
+
+export type DetailInput = TicketPaneInput | TaskPaneInput;
+
+// The `detail` part's kit. `box` places the app's comment or reply box; it throws `no box` when `input.box` is null,
+// and `box placed twice` on a second call. A box the part leaves out the app appends at the end of the part's root.
+export interface DetailKit extends BoardKit {
+  box(parent: HTMLElement): HTMLElement;
+}
+
 // A user layout defines only the parts it changes; `default` draws the rest. The `board` pane is drawn into the
-// app-owned sheet once per layout set; `status`, `problem`, `column`, `card` and `empty` on every render that changes
-// what they show, one call per column or card. Every part draws in `work-board.board`.
+// app-owned sheet once per layout set; `status`, `problem`, `column`, `card`, `empty`, `detail` and `detailEmpty` on
+// every render that changes what they show, one call per column or card. Every part draws in `work-board.board`.
 export interface BoardLayout {
   board?(parent: HTMLElement, kit: BoardPaneKit): BoardPane;
   status?(
@@ -123,6 +232,8 @@ export interface BoardLayout {
   column?(parent: HTMLElement, input: ColumnInput, kit: ColumnKit): HTMLElement;
   card?(parent: HTMLElement, input: CardInput, kit: BoardKit): HTMLElement;
   empty?(parent: HTMLElement, kit: BoardKit): HTMLElement;
+  detail?(parent: HTMLElement, input: DetailInput, kit: DetailKit): HTMLElement;
+  detailEmpty?(parent: HTMLElement, kit: BoardKit): HTMLElement;
 }
 
 // A layout with every part defined, as `default` is.

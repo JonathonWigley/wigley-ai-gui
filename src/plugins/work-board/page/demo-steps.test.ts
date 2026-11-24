@@ -32,12 +32,13 @@ describe('board demo step', () => {
             events.push(`run ${String(args[1])}`);
           },
         } as never,
-        showSample(state) {
+        showSample(state, details) {
           sample = state;
-          events.push('sample');
+          events.push(`sample ${details.length} details`);
           return { dispose: () => events.push('sample ended') };
         },
         selectCard: (id) => events.push(`card ${id}`),
+        openPane: () => events.push('pane'),
         now: () => Date.parse('2026-11-23T12:00:00.000Z'),
       }),
     );
@@ -51,9 +52,10 @@ describe('board demo step', () => {
     expect(step.id).toBe('work-board.mode');
     expect(sample).not.toBeNull();
     expect(events).toEqual([
-      'sample',
+      'sample 2 details',
       'run work-board.main',
       `card ${SAMPLE_SUGGESTION_CARD}`,
+      'pane',
       `card ${SAMPLE_LOCAL_TASK}`,
       'sample ended',
     ]);

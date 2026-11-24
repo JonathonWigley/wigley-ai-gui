@@ -11,7 +11,7 @@ import {
   kitCommandsOf,
 } from '../../../shared/page/layout-host/base-kit';
 import { placeWrites } from '../../../shared/page/place-slot';
-import { workStateSlot } from '../../work/contract';
+import { workDetailsSlot, workStateSlot } from '../../work/contract';
 import { type WorkBoardPlace, workBoardPlaceSlot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -23,9 +23,10 @@ import { readBoardLayout } from './layout/read-layout';
 
 type WorkBoardApi = PageApi<typeof workBoardManifest, ChannelShape>;
 
-// Board mode: the head and the columns of cards in the sheet, drawn with the layout the `layout` setting names. It
-// draws each value of `work.state` and acts only through work's commands. `showMode` shows the mode, and does nothing
-// while it shows. The cursor card goes to `work-board.place` on each change, and a page load puts the last page's back
+// Board mode: the head and the columns of cards in the sheet, and the cursor card's detail pane beside them, drawn with
+// the layout the `layout` setting names. It draws each value of `work.state` and `work.details` and acts only through
+// work's commands. `showMode` shows the mode, and does nothing while it shows. The cursor card, whether the pane is
+// open and the unsent box texts go to `work-board.place` on each change, and a page load puts the last page's back
 // once the first state lands. Registers the Board demo step.
 export const workBoardPagePart: PagePart<typeof workBoardManifest> = {
   manifest: workBoardManifest,
@@ -55,6 +56,8 @@ export const workBoardPagePart: PagePart<typeof workBoardManifest> = {
         platform: api.platform.os,
         state: api.state.forLayouts,
       },
+      editor: services.editor,
+      uiState: services.uiState,
       timers: services.timers,
       now: () => services.clock.now(),
       setScope: (scope) => api.keys.setScope(scope),
@@ -97,10 +100,17 @@ export const workBoardPagePart: PagePart<typeof workBoardManifest> = {
     const state = api.state.read(workStateSlot);
     const stateListener = state.on((value) => view.stateChanged(value));
     view.stateChanged(state.get());
+    const details = api.state.read(workDetailsSlot);
+    const detailsListener = details.on(() =>
+      view.detailsChanged(details.all()),
+    );
+    view.detailsChanged(details.all());
     const demoStep = registerDemoSteps(services, {
       commands: api.commands,
-      showSample: (sample) => view.showSample(sample),
+      showSample: (sample, sampleDetails) =>
+        view.showSample(sample, sampleDetails),
       selectCard: (id) => view.selectCard(id),
+      openPane: () => view.openPane(),
       now: () => services.clock.now(),
     });
 
@@ -121,6 +131,7 @@ export const workBoardPagePart: PagePart<typeof workBoardManifest> = {
         callEach<() => void>(
           [
             () => stateListener.dispose(),
+            () => detailsListener.dispose(),
             () => demoStep.dispose(),
             () => view.dispose(),
           ],

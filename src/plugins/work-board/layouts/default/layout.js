@@ -1,7 +1,11 @@
 // @ts-check
 
 // The built-in Board look. The pane's root is `div.work-board-pane`: a head (title, the status line and any load
-// problem, the sweep hint), then one row of columns that scrolls sideways, each column scrolling its own cards.
+// problem, the sweep hint), then one row of columns that scrolls sideways, each column scrolling its own cards. The
+// detail pane's root is `div.work-board-detail-pane`: the card's head, then a ticket's fields, text, threads and
+// comment box, or a task's source thread and reply box.
+
+const MISSING_DETAIL = 'No detail yet: the next sweep fetches it.';
 
 /**
  * The cursor card's key hint for `command`, inside `parent`, when the card's prompt holds it.
@@ -100,6 +104,267 @@ function suggestionBlock(parent, input, kit) {
   }
 }
 
+/**
+ * The missing-detail line, with the sweep hint.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').BoardKit} kit
+ */
+function missingDetail(parent, kit) {
+  const line = kit.el(parent, 'p', 'work-board-detail-missing', MISSING_DETAIL);
+  kit.keyHint(line, 'sweep', { label: 'sweep' });
+}
+
+/**
+ * One message: its author and age, then its markdown.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').DetailMessageInput} message
+ * @param {import('../layout').BoardKit} kit
+ */
+function messageBlock(parent, message, kit) {
+  const root = kit.el(parent, 'div', 'work-board-detail-message');
+  const head = kit.el(root, 'div', 'work-board-detail-message-head');
+  kit.el(head, 'span', 'work-board-detail-author', message.author);
+  kit.el(head, 'span', 'work-board-detail-age', message.age);
+  kit.markdown(root, message.text, 'work-board-detail-text');
+}
+
+/**
+ * A ticket's label and value rows, a null field left out.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').TicketDetailInput} detail
+ * @param {import('../layout').BoardKit} kit
+ */
+function fieldRows(parent, detail, kit) {
+  const rows = kit.el(parent, 'dl', 'work-board-detail-fields');
+  /** @type {[string, string | null][]} */
+  const fields = [
+    ['Type', detail.type],
+    ['Priority', detail.priority],
+    ['Status', detail.status],
+    ['Assignee', detail.assignee],
+    ['Reporter', detail.reporter],
+    ['Updated', detail.updated],
+  ];
+  for (const [label, value] of fields) {
+    if (value !== null) {
+      kit.el(rows, 'dt', 'work-board-detail-label', label);
+      kit.el(rows, 'dd', 'work-board-detail-value', value);
+    }
+  }
+}
+
+/**
+ * Subtasks or linked issues under `header`, only while there are any: each key opens the issue.
+ * @param {HTMLElement} parent
+ * @param {string} header
+ * @param {import('../layout').DetailIssueInput[]} issues
+ * @param {import('../layout').BoardKit} kit
+ */
+function issueRows(parent, header, issues, kit) {
+  if (issues.length === 0) {
+    return;
+  }
+  kit.sectionHeader(parent, header);
+  const list = kit.el(parent, 'div', 'work-board-detail-issues');
+  for (const issue of issues) {
+    const row = kit.el(list, 'div', 'work-board-detail-issue');
+    const key = kit.button(row, issue.key, 'core.openLink', {
+      arg: issue.url,
+      variant: 'ghost',
+    });
+    key.classList.add('work-board-card-key');
+    if (issue.relation !== null) {
+      kit.el(row, 'span', 'work-board-detail-relation', issue.relation);
+    }
+    kit.el(row, 'span', 'work-board-detail-issue-title', issue.title);
+    kit.tag(row, issue.status);
+  }
+}
+
+/**
+ * A ticket's stored detail: fields, description, comments, subtasks and links.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').TicketDetailInput} detail
+ * @param {import('../layout').BoardKit} kit
+ */
+function ticketDetail(parent, detail, kit) {
+  fieldRows(parent, detail, kit);
+  kit.sectionHeader(parent, 'Description');
+  if (detail.description === '') {
+    kit.el(parent, 'p', 'work-board-detail-none', 'No description.');
+  } else {
+    kit.markdown(parent, detail.description, 'work-board-detail-text');
+  }
+  kit.sectionHeader(parent, 'Comments');
+  if (detail.comments.length === 0) {
+    kit.el(parent, 'p', 'work-board-detail-none', 'No comments yet.');
+  }
+  for (const comment of detail.comments) {
+    messageBlock(parent, comment, kit);
+  }
+  issueRows(parent, 'Subtasks', detail.subtasks, kit);
+  issueRows(parent, 'Linked issues', detail.links, kit);
+}
+
+/**
+ * The open Inbox threads naming the ticket, only while there are any.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').DetailThreadInput[]} threads
+ * @param {import('../layout').BoardKit} kit
+ */
+function threadRows(parent, threads, kit) {
+  if (threads.length === 0) {
+    return;
+  }
+  const header = kit.sectionHeader(parent, 'Threads');
+  kit.keyHint(header, 'threads', { className: 'work-board-control-hint' });
+  for (const thread of threads) {
+    const root = kit.el(parent, 'div', 'work-board-detail-thread');
+    kit.el(root, 'span', 'work-board-detail-channel', thread.channel);
+    kit.el(root, 'p', 'work-board-detail-summary', thread.summary);
+    kit.el(root, 'p', 'work-board-detail-latest', thread.latest);
+  }
+}
+
+/**
+ * The pane's head: a ticket's key or a task's Tag, the title, the open hint, then when the detail was fetched.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').DetailInput} input
+ * @param {import('../layout').BoardKit} kit
+ */
+function detailHead(parent, input, kit) {
+  const head = kit.el(parent, 'div', 'work-board-detail-head');
+  const title = kit.el(head, 'div', 'work-board-detail-title-line');
+  if (input.kind === 'ticket') {
+    kit.el(title, 'span', 'work-board-card-key', input.key);
+  } else {
+    kit.tag(title, 'Local task');
+  }
+  kit.el(title, 'span', 'work-board-detail-title', input.title);
+  kit.keyHint(head, 'openCard', {
+    label: input.kind === 'ticket' ? 'open in Jira' : 'open in Slack',
+    className: 'work-board-box-hint',
+  });
+  if (input.fetched !== null) {
+    kit.el(head, 'p', 'work-board-detail-fetched', input.fetched);
+  }
+}
+
+/**
+ * The last failed job's note, when there is one.
+ * @param {HTMLElement} parent
+ * @param {string | null} note
+ * @param {import('../layout').BoardKit} kit
+ */
+function noteLine(parent, note, kit) {
+  if (note !== null) {
+    kit.el(parent, 'p', 'work-board-note', note);
+  }
+}
+
+/**
+ * A Jira card's pane body.
+ * @param {HTMLElement} root
+ * @param {import('../layout').TicketPaneInput} input
+ * @param {import('../layout').DetailKit} kit
+ */
+function ticketPane(root, input, kit) {
+  if (input.detail === null) {
+    missingDetail(root, kit);
+  } else {
+    ticketDetail(root, input.detail, kit);
+    threadRows(root, input.threads, kit);
+  }
+  kit.sectionHeader(root, 'Comment');
+  kit.box(root);
+  for (const text of input.posting) {
+    const block = kit.el(root, 'div', 'work-board-detail-posting');
+    kit.el(block, 'p', 'work-board-posting', 'Posting…');
+    kit.markdown(block, text, 'work-board-detail-text');
+  }
+  noteLine(root, input.note, kit);
+}
+
+/**
+ * The thread a local task came from: channel, participants and ticket keys, then the summary.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').DetailSourceInput} source
+ * @param {import('../layout').BoardKit} kit
+ */
+function sourceBlock(parent, source, kit) {
+  const root = kit.el(parent, 'div', 'work-board-detail-source');
+  const meta = kit.el(root, 'div', 'work-board-detail-source-meta');
+  kit.el(meta, 'span', 'work-board-detail-channel', source.channel);
+  if (source.participants.length > 0) {
+    kit.el(
+      meta,
+      'span',
+      'work-board-detail-participants',
+      source.participants.join(', '),
+    );
+  }
+  for (const key of source.ticketKeys) {
+    kit.button(meta, key, 'work-board.showTicket', {
+      arg: key,
+      variant: 'secondary',
+    });
+  }
+  kit.el(root, 'p', 'work-board-detail-summary', source.summary);
+}
+
+/**
+ * A local task's pane body.
+ * @param {HTMLElement} root
+ * @param {import('../layout').TaskPaneInput} input
+ * @param {import('../layout').DetailKit} kit
+ */
+function taskPane(root, input, kit) {
+  const { source, detail } = input;
+  if (source === null && detail === null) {
+    kit.el(
+      root,
+      'p',
+      'work-board-detail-missing',
+      'This task has no Slack thread.',
+    );
+  } else {
+    if (source !== null) {
+      sourceBlock(root, source, kit);
+    }
+    kit.sectionHeader(root, 'Thread');
+    if (detail === null) {
+      missingDetail(root, kit);
+    } else {
+      messageBlock(root, detail.root, kit);
+      if (detail.hidden > 0) {
+        kit.el(
+          root,
+          'p',
+          'work-board-detail-hidden',
+          detail.hidden === 1
+            ? '1 earlier reply in Slack'
+            : `${detail.hidden} earlier replies in Slack`,
+        );
+      }
+      for (const reply of detail.replies) {
+        messageBlock(root, reply, kit);
+      }
+    }
+  }
+  if (input.box !== null) {
+    kit.sectionHeader(root, 'Reply');
+    kit.box(root);
+  } else {
+    kit.el(
+      root,
+      'p',
+      'work-board-detail-none',
+      'No reply from here: the thread is not open in the Inbox.',
+    );
+  }
+  noteLine(root, input.note, kit);
+}
+
 /** @type {import('../layout').CompleteBoardLayout} */
 const layout = {
   board(parent, kit) {
@@ -166,6 +431,9 @@ const layout = {
         `Moving to ${input.movingTo} in Jira…`,
       );
     }
+    if (input.isPosting) {
+      kit.el(root, 'p', 'work-board-posting', 'Posting…');
+    }
     if (input.note !== null) {
       kit.el(root, 'p', 'work-board-note', input.note);
     }
@@ -201,6 +469,19 @@ const layout = {
       hint,
     );
     return root;
+  },
+  detail(parent, input, kit) {
+    const root = kit.el(parent, 'div', 'work-board-detail-pane');
+    detailHead(root, input, kit);
+    if (input.kind === 'ticket') {
+      ticketPane(root, input, kit);
+    } else {
+      taskPane(root, input, kit);
+    }
+    return root;
+  },
+  detailEmpty(parent, kit) {
+    return kit.el(parent, 'p', 'work-board-detail-empty', 'No card selected.');
   },
 };
 

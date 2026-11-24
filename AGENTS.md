@@ -453,7 +453,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layouts/ (the Inbox Layout contract and the built-in `default` layout);
                  `docs/features/work-inbox/design.md`
   work-board/    manifest.ts, contract.ts (`work-board.place`), main/ (registers the layouts only), page/ (Board mode:
-                 the columns in the sheet; board-state.ts, the pure view state; board-view.ts; board.css, the
+                 the columns and the detail pane in the sheet's split; board-state.ts, the pure view state; board-view.ts; board.css, the
                  container's styles; sample-state.ts and the demo step; layout/, the layout reader and kit), layouts/ (the Board Layout contract and the built-in
                  `default` layout); `docs/features/work-inbox/design.md`
   practice/      manifest.ts, contract.ts, main/ (the practice folder's problems through one problem store, the judge

@@ -1,5 +1,5 @@
 /* The default layout's look: the head (title, status line, sweep hint), then one row of columns that scrolls
-   sideways, each column scrolling its own cards. */
+   sideways, each column scrolling its own cards; and the detail pane: the card's head over its sections. */
 
 /* The pane: the head, then the columns row. */
 .work-board-pane[data-layout-owner='work-board'] {
@@ -136,4 +136,115 @@
 
 [data-layout-owner='work-board'] .work-board-control-hint {
   margin-left: var(--wg-space-1);
+}
+
+[data-layout-owner='work-board'] .work-board-posting {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+/* The detail pane: the card's head, then its sections one under another. */
+.work-board-detail-pane[data-layout-owner='work-board'] {
+  display: grid;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-head {
+  display: grid;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-title-line {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-title {
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-head .work-board-box-hint {
+  justify-self: start;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-fetched,
+[data-layout-owner='work-board'] .work-board-detail-missing,
+[data-layout-owner='work-board'] .work-board-detail-none,
+[data-layout-owner='work-board'] .work-board-detail-hidden,
+.work-board-detail-empty[data-layout-owner='work-board'] {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+/* The ticket's fields: a label column and a value column. */
+[data-layout-owner='work-board'] .work-board-detail-fields {
+  column-gap: var(--wg-space-3);
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 0;
+  row-gap: var(--wg-space-1);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-label {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-message,
+[data-layout-owner='work-board'] .work-board-detail-thread,
+[data-layout-owner='work-board'] .work-board-detail-source,
+[data-layout-owner='work-board'] .work-board-detail-posting {
+  display: grid;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-message-head,
+[data-layout-owner='work-board'] .work-board-detail-source-meta,
+[data-layout-owner='work-board'] .work-board-detail-issue {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-author,
+[data-layout-owner='work-board'] .work-board-detail-channel {
+  font-weight: var(--wg-weight-semibold);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-age,
+[data-layout-owner='work-board'] .work-board-detail-participants,
+[data-layout-owner='work-board'] .work-board-detail-relation,
+[data-layout-owner='work-board'] .work-board-detail-latest {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-summary,
+[data-layout-owner='work-board'] .work-board-detail-latest {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-issues {
+  display: grid;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='work-board'] .work-board-detail-issue-title {
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='work-board'] .work-board-detail-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

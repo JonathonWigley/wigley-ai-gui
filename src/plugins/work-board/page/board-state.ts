@@ -1,23 +1,48 @@
 import {
+  ageText,
+  type DetailMessage,
   OTHER_COLUMN,
+  type ThreadDetail,
+  type TicketDetail,
   type WorkCard,
+  type WorkDetail,
+  type WorkItem,
+  type WorkJiraCard,
+  type WorkLocalCard,
   type WorkState,
   type WorkSuggestion,
 } from '../../work/contract';
-import type { BoardCardAction } from '../layouts/layout';
+import type { WorkBoardPlace } from '../contract';
+import type {
+  BoardCardAction,
+  DetailInput,
+  DetailMessageInput,
+  TaskPaneInput,
+  TicketPaneInput,
+} from '../layouts/layout';
 
 export type { BoardCardAction };
 
-// What the Board shows of `work.state`: the cursor card and the card `showTicket` flashes, each null for none. The
-// cursor's column is read from its card through `shownColumns`, never stored.
+// Where the keys act: the cards (`board`), or the detail pane's comment or reply box (`box`).
+export type BoardFocus = 'board' | 'box';
+
+// What the Board shows of `work.state`: the cursor card and the card `showTicket` flashes, each null for none, whether
+// the detail pane is open, where the keys act, and each card's unsent box text by card id. The cursor's column is read
+// from its card through `shownColumns`, never stored.
 export interface BoardViewState {
   cursorCardId: string | null;
   flashCardId: string | null;
+  paneOpen: boolean;
+  focus: BoardFocus;
+  drafts: Record<string, string>;
 }
 
 export const initialBoardState: BoardViewState = {
   cursorCardId: null,
   flashCardId: null,
+  paneOpen: false,
+  focus: 'board',
+  drafts: {},
 };
 
 // One column the board draws: Other is never a drop target.
@@ -30,15 +55,20 @@ export interface BoardColumn {
 export type CardStep = 'down' | 'up' | 'top' | 'bottom';
 
 // `stateChanged`: `work.state` (or the sample drawn in its place) changed from `previous`. `restore`: a page load's
-// saved cursor card, or the first show with none. `reset`: back to `state`, as a demo sample's end does.
+// saved place, or null on the first show with none. `reset`: back to `state`, as a demo sample's end does. `pane`
+// opens or closes the detail pane. `draftEdited` sets card `cardId`'s box text; `draftDropped` removes it once sent.
 export type BoardAction =
   | { type: 'stateChanged'; previous: WorkState }
-  | { type: 'restore'; cursorCardId: string | null }
+  | { type: 'restore'; place: WorkBoardPlace | null }
   | { type: 'reset'; state: BoardViewState }
   | { type: 'cardStep'; to: CardStep }
   | { type: 'columnStep'; delta: -1 | 1 }
   | { type: 'select'; cardId: string }
-  | { type: 'flash'; cardId: string | null };
+  | { type: 'flash'; cardId: string | null }
+  | { type: 'pane'; open: boolean }
+  | { type: 'focus'; focus: BoardFocus }
+  | { type: 'draftEdited'; cardId: string; text: string }
+  | { type: 'draftDropped'; cardId: string };
 
 // `work.columns` minus Other, in order, then Other only while a card sits there: a card whose column is no configured
 // one. Cards keep the slot's order within a column.
@@ -142,6 +172,162 @@ export function cursorCard(
   work: WorkState,
 ): WorkCard | null {
   return cardNamed(work, state.cursorCardId);
+}
+
+// The id of the `work.details` record a card's pane reads: a Jira card's key, a local task's source thread; null for a
+// task with none.
+export function detailIdOf(card: WorkCard): string | null {
+  return card.kind === 'jira' ? card.id : card.sourceItemId;
+}
+
+// The item a local task came from, null for none or one `work.items` no longer holds.
+function sourceItemOf(card: WorkLocalCard, work: WorkState): WorkItem | null {
+  return work.items.find((item) => item.id === card.sourceItemId) ?? null;
+}
+
+// The text a card's box holds: the user's unsent edit, else a local task's source thread draft, else empty.
+export function draftText(
+  card: WorkCard,
+  state: BoardViewState,
+  work: WorkState,
+): string {
+  const edit = state.drafts[card.id];
+  if (edit !== undefined) {
+    return edit;
+  }
+  return card.kind === 'local' ? (sourceItemOf(card, work)?.draft ?? '') : '';
+}
+
+// `<age> ago`, or `just now` under a minute, for ISO time `at`.
+function agoText(at: string, now: number): string {
+  const age = ageText(now - Date.parse(at));
+  return age === null ? 'just now' : `${age} ago`;
+}
+
+function fetchedText(detail: WorkDetail | null, now: number): string | null {
+  return detail === null ? null : `Fetched ${agoText(detail.fetchedAt, now)}`;
+}
+
+function messageInput(message: DetailMessage, now: number): DetailMessageInput {
+  return {
+    author: message.author,
+    age: agoText(message.at, now),
+    text: message.text,
+  };
+}
+
+function ticketPaneInput(
+  card: WorkJiraCard,
+  work: WorkState,
+  stored: WorkDetail | undefined,
+  now: number,
+): TicketPaneInput {
+  const detail: TicketDetail | null = stored?.kind === 'ticket' ? stored : null;
+  return {
+    kind: 'ticket',
+    id: card.id,
+    key: card.key,
+    title: card.title,
+    url: card.url,
+    fetched: fetchedText(detail, now),
+    detail:
+      detail === null
+        ? null
+        : {
+            type: detail.type,
+            priority: detail.priority,
+            status: detail.status,
+            assignee: detail.assignee,
+            reporter: detail.reporter,
+            updated: agoText(detail.updated, now),
+            description: detail.description,
+            comments: detail.comments.map((each) => messageInput(each, now)),
+            subtasks: detail.subtasks.map((each) => ({ ...each })),
+            links: detail.links.map((each) => ({ ...each })),
+          },
+    threads: work.items
+      .filter(
+        (item) => item.state === 'open' && item.ticketKeys.includes(card.key),
+      )
+      .map(({ channel, summary, latest }) => ({ channel, summary, latest })),
+    box: { kind: 'comment', sending: null },
+    posting: [...card.commenting],
+    note: card.note,
+  };
+}
+
+function taskPaneInput(
+  card: WorkLocalCard,
+  work: WorkState,
+  stored: WorkDetail | undefined,
+  now: number,
+): TaskPaneInput {
+  const item = sourceItemOf(card, work);
+  const detail: ThreadDetail | null = stored?.kind === 'thread' ? stored : null;
+  return {
+    kind: 'task',
+    id: card.id,
+    title: card.title,
+    url: card.url,
+    source:
+      item === null
+        ? null
+        : {
+            channel: item.channel,
+            participants: [...item.participants],
+            ticketKeys: [...item.ticketKeys],
+            summary: item.summary,
+          },
+    fetched: fetchedText(detail, now),
+    detail:
+      detail === null
+        ? null
+        : {
+            root: messageInput(detail.root, now),
+            replies: detail.replies.map((each) => messageInput(each, now)),
+            hidden: Math.max(0, detail.replyCount - detail.replies.length),
+          },
+    box:
+      item !== null && item.state === 'open'
+        ? { kind: 'reply', sending: item.sending }
+        : null,
+    note: card.note,
+  };
+}
+
+// What the detail pane draws for `card`: its stored detail from `details` (a record of the other kind reads as none),
+// with ages as of `now` in epoch milliseconds. A Jira card adds the open threads naming it and its queued comments; a
+// local task its source thread and, while that thread is open, its reply box.
+export function paneInputOf(
+  card: WorkCard,
+  work: WorkState,
+  details: ReadonlyMap<string, WorkDetail>,
+  now: number,
+): DetailInput {
+  const id = detailIdOf(card);
+  const stored = id === null ? undefined : details.get(id);
+  return card.kind === 'jira'
+    ? ticketPaneInput(card, work, stored, now)
+    : taskPaneInput(card, work, stored, now);
+}
+
+// `drafts` without the edits of cards `work` no longer holds; `drafts` itself when it drops none.
+function prunedDrafts(
+  drafts: Record<string, string>,
+  work: WorkState,
+): Record<string, string> {
+  const ids = new Set(work.cards.map((card) => card.id));
+  const kept = Object.entries(drafts).filter(([id]) => ids.has(id));
+  return kept.length === Object.keys(drafts).length
+    ? drafts
+    : Object.fromEntries(kept);
+}
+
+function withDrafts(
+  state: BoardViewState,
+  drafts: Record<string, string>,
+): BoardViewState {
+  return drafts === state.drafts ? state : { ...state, drafts };
 }
 
 interface CardPlace {
@@ -258,11 +444,21 @@ export function boardReducer(
       const next = withCursor(state, keptCursor(state, action.previous, work));
       const isFlashGone =
         next.flashCardId !== null && cardNamed(work, next.flashCardId) === null;
-      return isFlashGone ? { ...next, flashCardId: null } : next;
+      const kept = withDrafts(next, prunedDrafts(next.drafts, work));
+      return isFlashGone ? { ...kept, flashCardId: null } : kept;
     }
     case 'restore': {
-      const saved = cardNamed(work, action.cursorCardId);
-      return withCursor(state, saved?.id ?? firstCardId(work));
+      const { place } = action;
+      const saved = cardNamed(work, place?.cursorCardId ?? null);
+      const next = withCursor(state, saved?.id ?? firstCardId(work));
+      if (place === null) {
+        return next;
+      }
+      return {
+        ...next,
+        paneOpen: place.paneOpen,
+        drafts: prunedDrafts(place.drafts, work),
+      };
     }
     case 'reset':
       return action.state;
@@ -294,5 +490,27 @@ export function boardReducer(
       return action.cardId === state.flashCardId
         ? state
         : { ...state, flashCardId: action.cardId };
+    case 'pane':
+      return action.open === state.paneOpen
+        ? state
+        : { ...state, paneOpen: action.open };
+    case 'focus':
+      return action.focus === state.focus
+        ? state
+        : { ...state, focus: action.focus };
+    case 'draftEdited':
+      return state.drafts[action.cardId] === action.text
+        ? state
+        : {
+            ...state,
+            drafts: { ...state.drafts, [action.cardId]: action.text },
+          };
+    case 'draftDropped': {
+      if (!(action.cardId in state.drafts)) {
+        return state;
+      }
+      const { [action.cardId]: _dropped, ...drafts } = state.drafts;
+      return { ...state, drafts };
+    }
   }
 }
