@@ -202,6 +202,20 @@ describe('movedJob', () => {
     },
     {
       graph: crossed,
+      from: 'f',
+      move: 'top',
+      expected: 'd',
+      why: 'the first job of its column',
+    },
+    {
+      graph: crossed,
+      from: 'e',
+      move: 'bottom',
+      expected: 'f',
+      why: 'the last job of its column',
+    },
+    {
+      graph: crossed,
       from: 'b',
       move: 'right',
       expected: 'd',

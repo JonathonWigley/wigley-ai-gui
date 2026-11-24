@@ -47,6 +47,7 @@ function gameView(
     subjects: {},
     setRuns: [],
     files: {},
+    listed: true,
     ...changes,
   };
 }

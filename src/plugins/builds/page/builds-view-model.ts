@@ -2,6 +2,7 @@ import { kindLabel, shortRevision } from '../builds-model';
 import type {
   BackendView,
   BuildDownload,
+  BuildFile,
   BuildJob,
   BuildRecord,
   BuildSetEntry,
@@ -202,6 +203,11 @@ export function downloadStateInput(
   };
 }
 
+// The files the last check found for the build `buildId` of `view`.
+export function buildFiles(view: GameView, buildId: string): BuildFile[] {
+  return Object.hasOwn(view.files, buildId) ? view.files[buildId] : [];
+}
+
 // The shown build's head: the row's fields, its step text while it lists no job, its status text, links, backend
 // page, the files the last check found with each one's download, and whether the backend cancels. `now` is epoch ms.
 export function buildHeaderInput(
@@ -212,9 +218,7 @@ export function buildHeaderInput(
   now: number,
 ): BuildHeaderInput {
   const row = buildRowInput(record, view, null, now);
-  const files = Object.hasOwn(view.files, record.id)
-    ? view.files[record.id]
-    : [];
+  const files = buildFiles(view, record.id);
   return {
     gameLabel: row.gameLabel,
     kindLabel: row.kindLabel,

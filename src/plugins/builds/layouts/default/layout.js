@@ -16,6 +16,10 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 // Each drawn graph's arrowhead marker gets its own id, so two graphs on a page never share one.
 let markerCount = 0;
 
+// Each drawn graph's arrow observer by the observer, holding the graph's root.
+/** @type {Map<ResizeObserver, HTMLElement>} */
+const arrowObservers = new Map();
+
 /** @type {Record<import('../layout').EmptyInput['reason'], string>} */
 const EMPTY_TEXTS = {
   noBackends: 'No build backends. Add one to builds.backends in settings.json.',
@@ -477,13 +481,15 @@ function drawDownload(parent, download, kit) {
  * The graph's arrows: one `svg.builds-graph-arrows` over `grid`, a horizontal curve per edge from the middle of the
  * prerequisite box's end edge to the middle of the dependent box's start edge, its arrowhead at the dependent's end.
  * The paths come from the boxes as laid out: drawn in the next frame and again each time the grid's size changes,
- * nothing while `root` is not in the page; the first size change that finds `root` gone stops watching.
+ * nothing while `root` is not in the page. A size change that finds `root` gone stops watching, and so does the next
+ * graph's draw, since a grid removed while hidden reports no size change.
  * @param {HTMLElement} root
  * @param {HTMLElement} grid
  * @param {Map<string, HTMLElement>} boxes
  * @param {{ from: string; to: string }[]} edges
  */
 function drawArrows(root, grid, boxes, edges) {
+  disconnectRemovedGraphs();
   markerCount += 1;
   const markerId = `builds-arrowhead-${markerCount}`;
   const svg = svgNode('svg', 'builds-graph-arrows');
@@ -518,11 +524,24 @@ function drawArrows(root, grid, boxes, edges) {
   const observer = new ResizeObserver(() => {
     if (!root.isConnected) {
       observer.disconnect();
+      arrowObservers.delete(observer);
       return;
     }
     draw();
   });
   observer.observe(grid);
+  arrowObservers.set(observer, root);
+}
+
+// Stops and forgets each arrow observer whose graph is no longer in the page. Runs before a new graph's root is
+// placed, so that root, not yet connected, is never among them.
+function disconnectRemovedGraphs() {
+  for (const [observer, root] of arrowObservers) {
+    if (!root.isConnected) {
+      observer.disconnect();
+      arrowObservers.delete(observer);
+    }
+  }
 }
 
 /**

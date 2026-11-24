@@ -112,6 +112,7 @@ export function demoSample(now: number): BuildsSnapshot {
           {
             backendId: BACKEND,
             game: SKY_HOP,
+            listed: true,
             subjects: {
               [MAIN_REVISION]: 'Tune the jump arc',
               [RC_REVISION]: 'Release 1.4',
@@ -242,6 +243,7 @@ export function demoSample(now: number): BuildsSnapshot {
           {
             backendId: BACKEND,
             game: WORD_GARDEN,
+            listed: true,
             subjects: {},
             files: {},
             setRuns: [],

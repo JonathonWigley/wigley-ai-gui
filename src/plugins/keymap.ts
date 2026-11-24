@@ -1330,6 +1330,8 @@ export const defaultKeymap = {
     { keys: 'l', scope: 'builds.graph', command: 'builds.graphRight' },
     { keys: 'k', scope: 'builds.graph', command: 'builds.graphUp' },
     { keys: 'j', scope: 'builds.graph', command: 'builds.graphDown' },
+    { keys: 'gg', scope: 'builds.graph', command: 'builds.graphTop' },
+    { keys: 'G', scope: 'builds.graph', command: 'builds.graphBottom' },
     { keys: 's', scope: 'builds.graph', command: 'builds.saveLog' },
     { keys: 'o', scope: 'builds.graph', command: 'builds.openJob' },
     // `k` and Esc both hand the offer card's cursor back to the entries.

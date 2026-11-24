@@ -33,14 +33,14 @@
   min-height: 0;
 }
 
-/* Stacked, the list and the detail share the height evenly; the `.ui-split` prefix outranks the shared split's
-   stacked rows whatever order the sheets load in. */
-.ui-split.builds-split.is-stacked {
+/* Stacked, the list and the detail share the height evenly; the `.builds-sheet` prefix gives each rule one class more
+   than the shared split's stacked rows, so it wins whatever order the sheets load in. */
+.builds-sheet > .ui-split.builds-split.is-stacked {
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 @media (max-width: 640px) {
-  .ui-split.builds-split {
+  .builds-sheet > .ui-split.builds-split {
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }

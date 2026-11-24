@@ -71,6 +71,8 @@ interface Fixture {
   g1Builds?: BuildRecord[];
   g1Files?: Record<string, BuildFile[]>;
   g2Builds?: BuildRecord[];
+  // Whether the backend has listed both games' builds; true when left out.
+  listed?: boolean;
   extraBackends?: BackendView[];
 }
 
@@ -100,6 +102,7 @@ function g1View(fixture: Fixture): GameView {
     subjects: {},
     setRuns: [],
     files: fixture.g1Files ?? {},
+    listed: fixture.listed ?? true,
   };
 }
 
@@ -127,6 +130,7 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
             subjects: {},
             setRuns: [],
             files: {},
+            listed: fixture.listed ?? true,
           },
         ],
       },
@@ -138,7 +142,7 @@ function workSnapshot(fixture: Fixture = {}): BuildsSnapshot {
 type Answer = (...args: unknown[]) => unknown;
 
 // The Builds page on the harness, drawing its layout for real, with `snapshot` published to `builds.snapshot` (none
-// for null) and `seed.place` in `builds.place` as the last page wrote it. `answers` answers an invoke by method, else
+// for null), `seed.place` in `builds.place` as the last page wrote it and `seed.downloads` in `builds.downloads`. `answers` answers an invoke by method, else
 // undefined; `calls` holds each invoke, `opens` each picker request, `opened` each `openExternal` url. `putDownload`
 // writes `builds.downloads`, `place` reads `builds.place`, and `focusTarget` is the focus target the view set last. The fake sessions record each `setActivity` in `activities` and answer
 // `shownSessionId` with `shown.sessionId`; the fakes record each row, side and composer part, `drawPart(id, sessionId)`
@@ -146,7 +150,7 @@ type Answer = (...args: unknown[]) => unknown;
 function startBuildsPage(
   snapshot: BuildsSnapshot | null,
   answers: Record<string, Answer> = {},
-  seed: { place?: BuildsPlace } = {},
+  seed: { place?: BuildsPlace; downloads?: BuildDownload[] } = {},
 ) {
   installFocusFakeDom(vi.stubGlobal);
   // The job graph draws its arrows in an animation frame, which the fake DOM lacks; the frame never comes.
@@ -175,6 +179,9 @@ function startBuildsPage(
   }
   const sessionsWriter = state.publish(buildsSessionsSlot);
   const downloadsWriter = state.publish(buildsDownloadsSlot);
+  for (const download of seed.downloads ?? []) {
+    downloadsWriter.set(download.id, download);
+  }
   if (seed.place !== undefined) {
     const lastPage = state.publish(buildsPlaceSlot);
     lastPage.set(seed.place);
@@ -648,6 +655,7 @@ describe('buildsPagePart', () => {
           subjects: {},
           setRuns: [],
           files: {},
+          listed: true,
         },
       ],
     };
@@ -1081,7 +1089,21 @@ describe('buildsPagePart', () => {
   );
 
   it('logs each download state it hears', () => {
-    const page = startBuildsPage(workSnapshot({ g1Builds: [running('41')] }));
+    const before: BuildDownload = {
+      id: 'work/41/file/1',
+      backendId: 'work',
+      buildId: '41',
+      label: 'APK',
+      state: 'saved',
+      path: '/home/Downloads/41.apk',
+      problem: null,
+      startedAt: 0,
+    };
+    const page = startBuildsPage(
+      workSnapshot({ g1Builds: [running('41')] }),
+      {},
+      { downloads: [before] },
+    );
     const saving: BuildDownload = {
       id: 'work/41/log/a',
       backendId: 'work',
@@ -1099,6 +1121,7 @@ describe('buildsPagePart', () => {
       state: 'saved',
       path: '/home/Downloads/x.log',
     });
+    page.publish(workSnapshot({ g1Builds: [running('41'), running('42')] }));
 
     expect(
       page.logged().filter((line) => line.startsWith('download work/')),
@@ -1229,32 +1252,81 @@ describe('buildsPagePart', () => {
   });
 
   const SAVED: BuildsPlace = { entry: G1, build: 'work/40', job: 'b' };
+  const SAVED_ALL: BuildsPlace = { entry: 'all', build: 'work/40', job: 'b' };
+  const SAVED_GONE: BuildsPlace = { entry: 'work/g9', build: 'work/40', job: 'b' };
+  const EMPTY_POLL: BuildsSnapshot = { backends: [], polledAt: 0 };
+  const UNLISTED = workSnapshot({ listed: false });
+  const MOVED: BuildsPlace = { entry: 'all', build: 'work/41', job: null };
   it.each<{
     case: string;
-    movesFirst: boolean;
+    saved: BuildsPlace;
+    // Published in order before the full snapshot; the place is read held after the first.
+    before: [BuildsSnapshot, ...BuildsSnapshot[]];
+    move: 'listDown' | 'setFilter' | null;
     expected: BuildsPlace;
     jobs: string[];
   }>([
     {
       case: 'the snapshot that holds it puts it back',
-      movesFirst: false,
+      saved: SAVED,
+      before: [EMPTY_POLL],
+      move: null,
       expected: SAVED,
       jobs: ['b'],
     },
     {
+      case: 'a game entry waits for its game to list its builds',
+      saved: SAVED,
+      before: [EMPTY_POLL, UNLISTED],
+      move: null,
+      expected: SAVED,
+      jobs: ['b'],
+    },
+    {
+      case: 'All waits for every game to list its builds',
+      saved: SAVED_ALL,
+      before: [UNLISTED],
+      move: null,
+      expected: SAVED_ALL,
+      jobs: ['b'],
+    },
+    {
       case: 'a move before it drops it',
-      movesFirst: true,
-      expected: { entry: 'all', build: 'work/41', job: null },
+      saved: SAVED,
+      before: [EMPTY_POLL],
+      move: 'listDown',
+      expected: MOVED,
+      jobs: [],
+    },
+    {
+      case: 'a filter chip before it drops it',
+      saved: SAVED,
+      before: [EMPTY_POLL],
+      move: 'setFilter',
+      expected: MOVED,
+      jobs: [],
+    },
+    {
+      case: 'a game gone from the settings drops it',
+      saved: SAVED_GONE,
+      before: [EMPTY_POLL, workSnapshot()],
+      move: null,
+      expected: MOVED,
       jobs: [],
     },
   ])(
     'keeps the saved place until the restore: $case',
-    ({ movesFirst, expected, jobs }) => {
-      const page = startBuildsPage(null, {}, { place: SAVED });
-      page.publish({ backends: [], polledAt: 0 });
+    ({ saved, before: [first, ...rest], move, expected, jobs }) => {
+      const page = startBuildsPage(null, {}, { place: saved });
+      page.publish(first);
       const held = page.place();
-      if (movesFirst) {
+      for (const shown of rest) {
+        page.publish(shown);
+      }
+      if (move === 'listDown') {
         page.run('listDown');
+      } else if (move === 'setFilter') {
+        page.commands.setFilter({ arg: 'running' });
       }
 
       // Job a runs, so the default job of 40 is a, not the saved b.
@@ -1267,7 +1339,7 @@ describe('buildsPagePart', () => {
         }),
       );
 
-      expect(held).toEqual(SAVED);
+      expect(held).toEqual(saved);
       expect(page.place()).toEqual(expected);
       expect(selectedJobs(page)).toEqual(jobs);
     },

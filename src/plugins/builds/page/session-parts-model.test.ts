@@ -45,6 +45,7 @@ function snapshotOf(builds: BuildRecord[]): BuildsSnapshot {
             subjects: {},
             setRuns: [],
             files: {},
+            listed: true,
           },
         ],
       },

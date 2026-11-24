@@ -55,6 +55,7 @@ import type {
 import { buildsManifest } from '../manifest';
 import {
   type BuildsEntryKey,
+  buildFiles,
   buildHeaderInput,
   buildKey,
   type CursorMove,
@@ -114,6 +115,8 @@ export type BuildsViewCommand = Extract<
   | 'graphRight'
   | 'graphUp'
   | 'graphDown'
+  | 'graphTop'
+  | 'graphBottom'
   | 'saveLog'
   | 'openJob'
   | ListPickerCommand
@@ -158,7 +161,8 @@ export interface BuildsViewDeps {
 // cursor and the job cursor by key, each kept across a redraw while its key is still drawn: the list cursor moves to
 // the nearest row still drawn, the job cursor to the build's default job, and the shown entry falls back to All.
 // It writes the entry and both cursors to `builds.place` after each change, and puts back the place the last page
-// wrote once a snapshot holds it, unless the user moved first. It logs each download state `builds.downloads` reaches.
+// wrote once a snapshot has listed its builds, unless the user moved first or its game left the settings. It logs
+// each download state `builds.downloads` reaches.
 // `showSample` draws a sample's snapshot and session links in place of the slots' until it is dropped; while it
 // shows, the queue, cancel, with-agent, save, download and open commands do nothing and no place is written. Once
 // disposed, it draws and toasts nothing.
@@ -270,7 +274,8 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
   // The cursor stops of each list, in the drawn order.
   let sideKeys: BuildsEntryKey[] = [];
   let listKeys: string[] = [];
-  // The place the last page wrote, until a snapshot puts it back or the user moves first; writes wait while it does.
+  // The place the last page wrote, until a snapshot puts it back, its game is gone or the user moves first; writes wait
+  // while it is held.
   let pendingPlace: BuildsPlace | null = deps.restoredPlace;
   let pendingHold: Disposable | null =
     pendingPlace === null ? null : deps.place.hold();
@@ -368,14 +373,33 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     writePlace();
   };
 
-  // The pending place once the shown snapshot holds its entry; null otherwise or while a sample shows.
+  // The pending place once the shown snapshot has listed its entry's builds: its game's, or for All those of every
+  // game, at least one. Null otherwise or while a sample shows.
   const restorablePlace = (): BuildsPlace | null => {
     if (pendingPlace === null || sample !== null) {
       return null;
     }
-    const holdsEntry =
-      pendingPlace.entry === 'all' || lookup.games.has(pendingPlace.entry);
-    return holdsEntry ? pendingPlace : null;
+    const games = snapshot().backends.flatMap((backend) => backend.games);
+    const isListed =
+      pendingPlace.entry === 'all'
+        ? games.length > 0 && games.every((view) => view.listed)
+        : lookup.games.get(pendingPlace.entry)?.view.listed === true;
+    return isListed ? pendingPlace : null;
+  };
+
+  // True when a polled snapshot of at least one backend lists no game of the pending place's entry: the game left the
+  // settings, so the place never comes back.
+  const isPendingGameGone = (): boolean => {
+    if (pendingPlace === null || sample !== null) {
+      return false;
+    }
+    const shown = snapshot();
+    const hasPolled = shown.polledAt !== null && shown.backends.length > 0;
+    return (
+      hasPolled &&
+      pendingPlace.entry !== 'all' &&
+      !lookup.games.has(pendingPlace.entry)
+    );
   };
 
   // ── Drawing ────────────────────────────────────────────────────────────
@@ -758,11 +782,13 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     drawDetail(restoresJob ? restored.job : undefined);
   };
 
-  // Indexes the shown snapshot, puts back the pending place once the snapshot holds it, keeps the shown entry and the
-  // side-bar cursor on what is still drawn, and draws the entries, the list and the detail pane again.
+  // Indexes the shown snapshot, puts back the pending place once the snapshot has listed it, or drops it once its game
+  // is gone, keeps the shown entry and the side-bar cursor on what is still drawn, and draws the entries, the list and
+  // the detail pane again.
   const drawSnapshot = () => {
     lookup = indexSnapshot(snapshot());
     const restored = restorablePlace();
+    const isPendingGone = isPendingGameGone();
     if (restored !== null) {
       selected = restored.entry as BuildsEntryKey;
       sideCursor = selected;
@@ -791,7 +817,10 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     sideKeys = nextSideKeys;
     drawEntries();
     drawBody(restored);
-    if (restored !== null) {
+    if (isPendingGone) {
+      log(`saved game ${pendingPlace?.entry} gone: place dropped`);
+    }
+    if (restored !== null || isPendingGone) {
       dropPending();
     }
   };
@@ -992,17 +1021,8 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     }
   };
 
+  // The list cursor's build, which the detail pane shows; null, after logging, with none.
   const cursorBuild = (): ListedBuild | null => {
-    const listed =
-      listCursor === null ? undefined : lookup.builds.get(listCursor);
-    if (listed === undefined) {
-      log('no build under the cursor');
-      return null;
-    }
-    return listed;
-  };
-
-  const detailBuild = (): ListedBuild | null => {
     const listed = shownBuild();
     if (listed === null) {
       log('no build under the cursor');
@@ -1083,7 +1103,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     if (isDemoBlocked('openJob')) {
       return;
     }
-    const listed = detailBuild();
+    const listed = cursorBuild();
     if (listed === null) {
       return;
     }
@@ -1104,7 +1124,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     if (isDemoBlocked('saveLog')) {
       return;
     }
-    const listed = detailBuild();
+    const listed = cursorBuild();
     if (listed === null) {
       return;
     }
@@ -1147,7 +1167,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     if (listed === null) {
       return;
     }
-    const files = buildFiles(listed);
+    const files = buildFiles(listed.target.view, listed.record.id);
     if (files.length === 0) {
       toast('This build has no files to download', 'info');
       return;
@@ -1211,6 +1231,8 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     graphRight: moveGraph('right'),
     graphUp: moveGraph('up'),
     graphDown: moveGraph('down'),
+    graphTop: moveGraph('top'),
+    graphBottom: moveGraph('bottom'),
     saveLog,
     openJob,
     ...listPickerCommands(picker),
@@ -1318,7 +1340,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
       if (isDemoBlocked('downloadFile')) {
         return;
       }
-      const listed = detailBuild();
+      const listed = cursorBuild();
       if (listed !== null) {
         startDownload(listed, entry);
       }
@@ -1352,6 +1374,7 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
         log(`no filter ${next}`);
         return;
       }
+      dropPending();
       filter = next;
       log(`filter ${next}`);
       drawBody();
@@ -1405,12 +1428,6 @@ function dropDraw(draw: DrawnRoot | null): void {
   } finally {
     draw.built.element.remove();
   }
-}
-
-// The files the last check found for the build.
-function buildFiles(listed: ListedBuild): BuildFile[] {
-  const { files } = listed.target.view;
-  return Object.hasOwn(files, listed.record.id) ? files[listed.record.id] : [];
 }
 
 function downloadStates(

@@ -13,7 +13,7 @@ export interface JobGraph {
   edges: JobEdge[];
 }
 
-export type GraphMove = 'left' | 'right' | 'up' | 'down';
+export type GraphMove = 'left' | 'right' | 'up' | 'down' | 'top' | 'bottom';
 
 // The graph of `jobs`. A job's column is the length of its longest chain of used prerequisites: 0 with none, else
 // 1 + the largest column among them. A used prerequisite is a `dependsOn` id that names a job in `jobs`, is not a
@@ -79,7 +79,8 @@ export function defaultJob(
   return running?.id ?? failed?.id ?? lastColumn?.at(-1) ?? null;
 }
 
-// The job the cursor lands on after `move` from `job`. Up and down step within the column and hold at its ends.
+// The job the cursor lands on after `move` from `job`. Up and down step within the column and hold at its ends; top
+// and bottom land on its first and last job.
 // Left and right step a column and hold at the graph's ends: they land on the first job of that column (column order)
 // joined to `job` by an edge, else on `job`'s row clamped to that column. A null `job`, or one the graph lacks,
 // lands on the first job of column 0; null for an empty graph.
@@ -103,6 +104,10 @@ export function movedJob(
       return ids[row - 1] ?? job;
     case 'down':
       return ids[row + 1] ?? job;
+    case 'top':
+      return ids[0];
+    case 'bottom':
+      return ids[ids.length - 1];
     case 'right': {
       const next = graph.columns[column + 1];
       if (!next) {
