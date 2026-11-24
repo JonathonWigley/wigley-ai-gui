@@ -56,7 +56,8 @@ type LiveViewApi = MainApi<
 // `sessions.ended`; writes chat's layout preview row a sample pick,
 // the real pick and crop over the fake ScreenCapture's windows; registers the
 // Live view demo step's main half, which picks the Unity editor or the app's
-// own window; and hands the self-test its script.
+// own window; and hands the self-test its script, whose patterns the watch
+// matches after the strategies'.
 export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
   manifest: liveViewManifest,
   start(api: LiveViewApi) {
@@ -65,6 +66,8 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
     const picks = api.state.publish(livePicksSlot);
     // Empty until the first scan settles, then every strategy's, merged.
     let patterns: PlaytestPatterns = { open: [], close: [] };
+    // The self-test script's patterns, matched after the strategies'.
+    const addedPatterns: PlaytestPatterns[] = [];
     let probe: ProbeScript | null = null;
     let isMissingProbeLogged = false;
     const contributions = api.dependency(contributionsMainKey);
@@ -127,7 +130,13 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
       entries: api.state.read(chatEntriesSlot),
       liveTools,
       log: services.log,
-      patterns: () => patterns,
+      patterns: () => ({
+        open: [...patterns.open, ...addedPatterns.flatMap(({ open }) => open)],
+        close: [
+          ...patterns.close,
+          ...addedPatterns.flatMap(({ close }) => close),
+        ],
+      }),
     });
     api.events.on('sessions.ended', ({ sessionId }) => {
       liveTools.sessionEnded(sessionId);
@@ -190,6 +199,9 @@ export const liveViewMainPart: MainPart<typeof liveViewManifest> = {
         sessions,
         show: liveTools.show,
         picks: api.state.read(livePicksSlot),
+        addPatterns: (added) => {
+          addedPatterns.push(added);
+        },
       }),
     );
 

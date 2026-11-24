@@ -10,6 +10,7 @@ import {
 import type { ChatMainExports } from '../../chat/contract';
 import type { SessionsMainExports, ToolResult } from '../../sessions/contract';
 import type { LivePick } from '../contract';
+import type { PlaytestPatterns } from '../playtest-command';
 import { pickText, type LiveTools } from './live-tools';
 
 // The self-test's Unity project folder, made under the self-test's home. Its
@@ -23,6 +24,29 @@ const PLAYTEST_PICK_SUMMARY = `Editor · ${SELFTEST_PROJECT_NAME}`;
 
 const PLAYTEST_PICK_WAIT_MS = 10_000;
 
+// The patterns of the fake agent's playtest command (`FAKE_PLAYTEST_TEXT`'s
+// `unity command editor_play --project-path <folder>`), as an installed
+// plugin's `liveView` section would give them: the self-test home has no
+// installed agent plugin, and the script checks the watch, not the registry.
+const SELFTEST_PLAYTEST_PATTERNS: PlaytestPatterns = {
+  open: [
+    {
+      program: 'unity',
+      words: ['command', 'editor_play'],
+      valueFlags: [],
+      projectPathFlag: '--project-path',
+    },
+  ],
+  close: [
+    {
+      program: 'unity',
+      words: ['command', 'editor_stop'],
+      valueFlags: [],
+      projectPathFlag: '--project-path',
+    },
+  ],
+};
+
 export interface LiveViewSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath' | 'write'>;
@@ -31,6 +55,9 @@ export interface LiveViewSelfTestDeps {
   sessions: Pick<SessionsMainExports, 'activate'>;
   show: LiveTools['show'];
   picks: Pick<KeyedSlotReader<LivePick>, 'get' | 'on'>;
+  // Adds patterns the playtest watch matches after the installed plugins',
+  // for the rest of the app's run.
+  addPatterns(patterns: PlaytestPatterns): void;
 }
 
 // The pick the playtest command opened, as the wait first saw it, or null when
@@ -103,8 +130,9 @@ function firstPickOf(
   });
 }
 
-// Each run closes an earlier run's rows, launches a new chat session with the
-// fake agent's playtest text in a project folder whose
+// The first run adds the fake playtest command's patterns. Each run closes an
+// earlier run's rows, launches a new chat session with the fake agent's
+// playtest text in a project folder whose
 // `Library/EditorInstance.json` names the fake editor's pid, waits for the
 // pick the app opens on that playtest command, then shows Live there as the
 // agent's `show_live_view` would, with the fake Game View's rect. The start
@@ -113,8 +141,10 @@ function firstPickOf(
 export function liveViewSelfTestScript(
   deps: LiveViewSelfTestDeps,
 ): SelfTestScript {
-  const { homeDir, files, paths, chat, sessions, show, picks } = deps;
+  const { homeDir, files, paths, chat, sessions, show, picks, addPatterns } =
+    deps;
   let made: Promise<string> | null = null;
+  let isPatternsAdded = false;
 
   async function makeProject(): Promise<string> {
     const projectDir = paths.join(
@@ -148,6 +178,10 @@ export function liveViewSelfTestScript(
       '.chat-working-done',
     ],
     open() {
+      if (!isPatternsAdded) {
+        isPatternsAdded = true;
+        addPatterns(SELFTEST_PLAYTEST_PATTERNS);
+      }
       made ??= makeProject().catch((error: unknown) => {
         made = null;
         throw error;
