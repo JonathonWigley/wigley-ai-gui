@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.3.0 — 2026-11-24
+
 ### Changed
 
 - Python bytecode (`__pycache__/`, `*.pyc`) is ignored in the app repo, as it was in `ai`: running the agent plugin's
