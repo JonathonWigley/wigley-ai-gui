@@ -15,6 +15,7 @@ import {
   type BuildBackend,
   type BuildRecord,
   type BuildsMainExports,
+  buildsDownloadsSlot,
   buildsSessionsSlot,
   buildsSnapshotSlot,
 } from '../contract';
@@ -129,6 +130,7 @@ interface StartOptions {
   restored?: Promise<void>;
   rows?: string[];
   git?: Partial<Git>;
+  revealPath?: (path: string) => void;
 }
 
 // A new part under test, so no drain outlives its test, with one fixture backend `b1` of game `g1`, a fake chat, and
@@ -151,7 +153,10 @@ async function startOnHarness(options: StartOptions = {}) {
       fakeDependency(chatMainKey, () => chat as unknown as ChatMainExports),
     ],
     settings: settingsWith(options.backends ?? [backendSetting()]),
-    ...(options.git && { services: { git: options.git as Git } }),
+    services: {
+      ...(options.git && { git: options.git as Git }),
+      ...(options.revealPath && { revealPath: options.revealPath }),
+    },
   });
   const rows = harness.state.publish(sessionsRowsSlot);
   for (const sessionId of options.rows ?? ['s1']) {
@@ -217,6 +222,21 @@ const finishedX = buildRecord({
   result: 'success',
   finishedAt: 50,
 });
+
+// Game `g1` whose `dev` kind has one download, `Android zip` at `path`.
+function gameWithDownload(path = '/d/{number}.zip') {
+  return gameSetting({
+    kinds: {
+      dev: {
+        label: 'Dev',
+        target: 'dev',
+        downloads: [{ label: 'Android zip', path }],
+      },
+    },
+  });
+}
+
+const numberedX = buildRecord({ ...finishedX, number: '332' });
 
 describe('buildsMainPart', () => {
   it('applies the setting at ready, after a kind added at start', async () => {
@@ -789,5 +809,127 @@ describe('buildsMainPart', () => {
     await expect(queue({ arg: { ...arg, game: 'nope' } })).rejects.toThrow(
       'builds.queue: no game "nope" in Backend',
     );
+  });
+
+  it('checks, downloads and reveals a build file through the channel', async () => {
+    const revealed: string[] = [];
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameWithDownload()] })],
+      revealPath: (path) => revealed.push(path),
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.harness.files.write('/d/332.zip', 'zip');
+
+    await run.ready();
+    expect(run.snapshot()?.backends[0]?.games[0]?.files).toEqual({
+      x: [{ label: 'Android zip', path: '/d/332.zip', entry: 0 }],
+    });
+    await expect(
+      run.harness.invoke('download', {
+        backend: 'b1',
+        game: 'g1',
+        build: 'x',
+        file: 0,
+      }),
+    ).resolves.toEqual({ ok: true });
+    await settle();
+
+    expect(
+      run.harness.state.read(buildsDownloadsSlot, 'test').get('b1/x/file/0'),
+    ).toMatchObject({ state: 'saved', path: '/home/Downloads/332.zip' });
+    expect(revealed).toEqual(['/home/Downloads/332.zip']);
+  });
+
+  it('refreshes the files after a settings change', async () => {
+    const run = await startOnHarness({
+      backends: [backendSetting({ games: [gameWithDownload()] })],
+    });
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.harness.files.write('/d/332.zip', 'zip');
+    await run.harness.files.write('/d/332-new.zip', 'zip');
+    await run.ready();
+    const files = () => run.snapshot()?.backends[0]?.games[0]?.files;
+
+    run.harness.pushSettings(
+      settingsWith([
+        backendSetting({ games: [gameWithDownload('/d/{number}-new.zip')] }),
+      ]),
+    );
+    expect(files()).toEqual({});
+    await settle();
+
+    expect(files()).toEqual({
+      x: [{ label: 'Android zip', path: '/d/332-new.zip', entry: 0 }],
+    });
+  });
+
+  const listedX = { backend: 'b1', game: 'g1', build: 'x' };
+
+  it.each([
+    {
+      case: 'an unknown backend',
+      method: 'saveLog',
+      arg: { ...listedX, backend: 'nope', job: null },
+      expected: 'no backend nope',
+    },
+    {
+      case: 'a backend whose instance is not created yet',
+      method: 'saveLog',
+      arg: { ...listedX, job: null },
+      isStarting: true,
+      expected: 'Backend: still starting',
+    },
+    {
+      case: 'an unknown game',
+      method: 'download',
+      arg: { ...listedX, game: 'nope', file: 0 },
+      expected: 'no game nope in Backend',
+    },
+    {
+      case: 'an unknown build',
+      method: 'download',
+      arg: { ...listedX, build: 'nope', file: 0 },
+      expected: 'no build nope in Game',
+    },
+    {
+      case: 'an unknown job',
+      method: 'saveLog',
+      arg: { ...listedX, job: 'nope' },
+      expected: 'no job nope in build x',
+    },
+    {
+      case: 'an entry the last check did not find',
+      method: 'download',
+      arg: { ...listedX, file: 0 },
+      expected: 'no file 0 for build x',
+    },
+    {
+      case: "an entry past the kind's downloads",
+      method: 'download',
+      arg: { ...listedX, file: 5 },
+      expected: 'no file 5 for build x',
+    },
+    {
+      case: 'a log save on a backend that cannot save logs',
+      method: 'saveLog',
+      arg: { ...listedX, job: null },
+      expected: 'this backend cannot save logs',
+    },
+  ])('refuses $case', async ({ method, arg, isStarting, expected }) => {
+    const backends = [backendSetting({ games: [gameWithDownload()] })];
+    const slow: BackendKind = {
+      kind: 'fixture',
+      label: 'Slow',
+      create: () => new Promise<BuildBackend>(() => undefined),
+    };
+    const run = await startOnHarness(
+      isStarting ? { backends, kinds: () => [slow] } : { backends },
+    );
+    run.fixture.setBuilds('g1', [numberedX]);
+    await run.ready();
+
+    await expect(run.harness.invoke(method, arg)).resolves.toEqual({
+      problem: expected,
+    });
   });
 });

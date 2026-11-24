@@ -13,11 +13,14 @@ import {
 import {
   type BackendEntry,
   type BackendServices,
+  type BuildBackend,
+  type BuildFile,
   type BuildRecord,
   type BuildRef,
   BUILDS_PER_GAME,
   type BuildsChannel,
   type BuildsMainExports,
+  buildsDownloadsSlot,
   buildsSessionsSlot,
   buildsSnapshotSlot,
   type GameEntry,
@@ -32,10 +35,15 @@ import {
   failingMessage,
   setEndedMessage,
 } from './build-messages';
+import { createDownloads, type DownloadTarget } from './downloads';
 import { selfTestBackendKind } from './fixture-backend';
 import { createLinkStore, LINKS_FILE } from './link-store';
 import { createBuildsPoller, SLOW_POLL_MS } from './poller';
-import { createQueueing, type QueueingResult } from './queueing';
+import {
+  createQueueing,
+  type QueueingBackend,
+  type QueueingResult,
+} from './queueing';
 import { buildsSelfTestScript } from './selftest-script';
 import { registerSessionDemoStep } from './demo-steps';
 import {
@@ -79,17 +87,26 @@ interface EventMessage {
   text: string;
 }
 
+// By build id, the files on disk of `builds`, each a build of game `game` of backend `backendId`.
+type FilesLookup = (
+  backendId: string,
+  game: GameEntry,
+  builds: readonly BuildRecord[],
+) => Record<string, BuildFile[]>;
+
 // Starts with an empty snapshot and loads the session links. `ready` waits for the load and chat's restore of its
 // rows, then applies the `backends` setting, and applies it again on each settings change and each kind a backend
 // plugin adds or removes: an apply that changes the parsed backends or the kinds disposes every instance and creates
 // each entry's anew once the calls into every instance replaced over its data folder have settled, those of a start
 // before a restart included, logging once while it still waits after `DRAIN_TIMEOUT_MS`; each publishes as its own
 // `create` settles. The stop disposes every instance and leaves the wait for its calls to the next start. Polls each
-// backend with an instance and games, folds after each poll, apply and store change into `builds.snapshot` and
-// `builds.sessions`, and tells each linked session its build's failing job and end, and a set's end, writing the flag
+// backend with an instance and games, starts each poll's file checks through `downloads`, folds after each poll,
+// apply, store change and file check that changed the files into `builds.snapshot` and `builds.sessions`, and tells
+// each linked session its build's failing job and end, and a set's end, with the files on disk then, writing the flag
 // before the message. Exports `addBackend`; the commands and the channel queue, offer, cancel and launch a set's agent
-// through `queueing`. Registers the builds layout contract and the main half of the Session builds demo step. Each
-// part made holds its own drains, kept across its starts.
+// through `queueing`, and the channel's `saveLog` and `download` save into the Downloads folder through `downloads`,
+// published in `builds.downloads`. Registers the builds layout contract and the main half of the Session builds demo
+// step. Each part made holds its own drains, kept across its starts.
 export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
   // By backend data folder, the wait for the calls of the instances replaced over it.
   const drains = createDrains();
@@ -141,23 +158,22 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         log,
       });
 
+      const downloads = createDownloads({
+        files: services.files,
+        paths: services.paths,
+        clock,
+        timers: services.timers,
+        downloadsDir: services.downloadsDir,
+        revealPath: (path) => services.revealPath(path),
+        slot: api.state.publish(buildsDownloadsSlot),
+        log,
+        filesChanged: () => fold(),
+      });
+      const filesOf: FilesLookup = (backendId, game, builds) =>
+        downloads.filesOf(backendId, game, builds);
+
       const queueing = createQueueing({
-        backend(id) {
-          const backend = parsed.find((each) => each.id === id);
-          if (backend === undefined) {
-            return null;
-          }
-          const instanceProblem = live.get(id)?.problem ?? null;
-          return {
-            label: backend.label,
-            entry: backend.entry,
-            instance: live.get(id)?.instance ?? null,
-            problem:
-              backend.entry === null
-                ? backend.problems.join('; ')
-                : instanceProblem,
-          };
-        },
+        backend: (id) => resolvedBackend(id),
         store,
         git: services.git,
         clock,
@@ -167,6 +183,59 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         stored: () => fold(),
         log,
       });
+
+      // The parsed backend `id` with its instance, null for none: `problem` is the parsed entry's, else its instance's.
+      function resolvedBackend(id: string): QueueingBackend | null {
+        const backend = parsed.find((each) => each.id === id);
+        if (backend === undefined) {
+          return null;
+        }
+        const instanceProblem = live.get(id)?.problem ?? null;
+        return {
+          label: backend.label,
+          entry: backend.entry,
+          instance: live.get(id)?.instance ?? null,
+          problem:
+            backend.entry === null
+              ? backend.problems.join('; ')
+              : instanceProblem,
+        };
+      }
+
+      // The listed build an arg names, with its backend's instance; else the refusal of the first of the backend, its
+      // instance, the game and the build in the game's last listed builds that does not resolve.
+      function downloadTargetOf(arg: {
+        backend: string;
+        game: string;
+        build: string;
+      }):
+        | { target: DownloadTarget; instance: BuildBackend }
+        | { problem: string } {
+        const backend = resolvedBackend(arg.backend);
+        if (backend === null) {
+          return { problem: `no backend ${arg.backend}` };
+        }
+        if (backend.entry === null || backend.instance === null) {
+          return {
+            problem: `${backend.label}: ${backend.problem ?? 'still starting'}`,
+          };
+        }
+        const game = backend.entry.games.find((each) => each.id === arg.game);
+        if (game === undefined) {
+          return { problem: `no game ${arg.game} in ${backend.label}` };
+        }
+        const build = records
+          .get(arg.backend)
+          ?.get(arg.game)
+          ?.builds.find((each) => each.id === arg.build);
+        if (build === undefined) {
+          return { problem: `no build ${arg.build} in ${game.label}` };
+        }
+        return {
+          target: { backendId: arg.backend, game, build },
+          instance: backend.instance,
+        };
+      }
 
       function apply() {
         if (!isReady || isStopped) {
@@ -238,13 +307,14 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         services.timers.clear(handle);
       }
 
-      // Drops the records of every game no longer in its backend's entry.
+      // Drops the records and the file checks of every game no longer in its backend's entry.
       function keepRecordsOf(next: ParsedBackend[]) {
         for (const [backendId, games] of records) {
           const entry = next.find((backend) => backend.id === backendId)?.entry;
           for (const gameId of games.keys()) {
             if (!entry?.games.some((game) => game.id === gameId)) {
               games.delete(gameId);
+              downloads.forgetGame(backendId, gameId);
             }
           }
           if (games.size === 0) {
@@ -352,6 +422,9 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         await readSubjects(lists);
         if (!isCurrent()) {
           return;
+        }
+        for (const { game, builds } of lists) {
+          downloads.checkFiles(backendId, game, builds);
         }
         let listedCount = 0;
         for (const { game, builds, failure } of lists) {
@@ -487,7 +560,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
               game,
               builds: gameRecords?.builds ?? [],
               subjects: gameRecords?.subjects ?? {},
-              files: {},
+              files: filesOf(backend.id, game, gameRecords?.builds ?? []),
               hasListed: gameRecords?.hasListed ?? false,
             };
           }),
@@ -584,7 +657,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
         if (isStopped) {
           return;
         }
-        const { sessionId, line, text } = messageOf(event);
+        const { sessionId, line, text } = messageOf(event, filesOf);
         if (sessionId === null) {
           return;
         }
@@ -636,6 +709,34 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
       api.channel.handle('launchSetAgent', (arg) =>
         queueing.launchSetAgent(arg),
       );
+      api.channel.handle('saveLog', async (arg) => {
+        const found = downloadTargetOf(arg);
+        if ('problem' in found) {
+          return found;
+        }
+        const job =
+          arg.job === null
+            ? null
+            : found.target.build.jobs.find((each) => each.id === arg.job);
+        if (job === undefined) {
+          return { problem: `no job ${arg.job} in build ${arg.build}` };
+        }
+        return downloads.saveLog(found.target, job, found.instance);
+      });
+      api.channel.handle('download', async (arg) => {
+        const found = downloadTargetOf(arg);
+        if ('problem' in found) {
+          return found;
+        }
+        const { backendId, game, build } = found.target;
+        const file = filesOf(backendId, game, [build])[build.id]?.find(
+          (each) => each.entry === arg.file,
+        );
+        if (file === undefined) {
+          return { problem: `no file ${arg.file} for build ${arg.build}` };
+        }
+        return downloads.download(found.target, file);
+      });
       api.onSettingsChanged(() => apply());
       const registryChanged = registry.onChanged(() => apply());
       const sessionDemoStep = registerSessionDemoStep(services);
@@ -696,6 +797,7 @@ export function createBuildsMainPart(): MainPart<typeof buildsManifest> {
           callEach<() => void>(
             [
               () => poller.dispose(),
+              () => downloads.dispose(),
               () => releaseInstances(),
               () => registryChanged.dispose(),
               () => sessionDemoStep.dispose(),
@@ -740,7 +842,8 @@ function isLinkOf(
     link.buildId === ref.buildId;
 }
 
-function messageOf(event: BuildsEvent): EventMessage {
+// The message an event tells, a build's end naming the files `filesOf` finds on disk now.
+function messageOf(event: BuildsEvent, filesOf: FilesLookup): EventMessage {
   if (event.kind === 'failing') {
     return {
       sessionId: event.sessionId,
@@ -752,13 +855,24 @@ function messageOf(event: BuildsEvent): EventMessage {
     return {
       sessionId: event.sessionId,
       line: `ended ${event.ref.backendId}/${event.ref.buildId} for ${event.sessionId}`,
-      text: endedMessage(event.game, event.build),
+      text: endedMessage(
+        event.game,
+        event.build,
+        filesOf(event.ref.backendId, event.game, [event.build])[
+          event.build.id
+        ] ?? [],
+      ),
     };
   }
   return {
     sessionId: event.setRun.sessionId,
     line: `set ended ${event.setRun.id} for ${event.setRun.sessionId}`,
-    text: setEndedMessage(event.game, event.setRun, event.builds),
+    text: setEndedMessage(
+      event.game,
+      event.setRun,
+      event.builds,
+      filesOf(event.setRun.backendId, event.game, event.builds),
+    ),
   };
 }
 
