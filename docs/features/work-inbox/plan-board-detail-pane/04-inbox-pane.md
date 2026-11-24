@@ -1,6 +1,6 @@
 # 04 — Inbox detail pane
 
-Status: not started
+Status: done
 Type: Task
 Rung: hard · adds the pane commands that 05 binds, and moves the focused reply box across a split and its redraws
 Wave: 4 · Depends on: 01, 03 (look sign-off on 03's render)
@@ -299,3 +299,5 @@ Grep `no split` in `inbox-view.ts` prints nothing.
 Commit: one commit for the group.
 
 ## Proof
+
+Commit 3e97b718 · proof: diff read: every Produces signature present; typecheck clean; work-inbox tests 95/95; demo selftest passes; drive captures (inbox-*.png) show slim cards and the pane, and eval proves .work-inbox-detail scrolls while .ui-split-end does not, with scrollTop reset on a cursor move · concerns: card-click pane-button row passes trivially (fake DOM events don't bubble); togglePane-from-box test proves no held editor by the destroy, not a blur; sendItem label still 'send this card's draft'; empty-box placeholder sits under the editor as before

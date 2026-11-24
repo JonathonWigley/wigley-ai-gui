@@ -1,6 +1,6 @@
 # 05 — Pane keys
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · binds commands 03 and 04 already ship, and adds self-test steps for them
 Wave: 5 · Depends on: 03, 04

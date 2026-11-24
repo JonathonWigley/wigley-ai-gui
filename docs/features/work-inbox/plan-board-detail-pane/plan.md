@@ -219,7 +219,7 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 - [x] [Board detail pane](03-board-pane.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Inbox detail pane](04-inbox-pane.md) — after 01, 03 (look sign-off)
+- [x] [Inbox detail pane](04-inbox-pane.md) — after 01, 03 (look sign-off)
 
 ### Wave 5
 - [ ] [Pane keys](05-pane-keys.md) — after 03, 04
@@ -236,11 +236,14 @@ Review base: 0eab07e6
 - 01 · deep · 648283a9 · diff read: every Produces present; tsc --noEmit clean; oxfmt applied · concerns: README coverage test fails until 06 adds the two settings; AGENTS.md work entry and design.md line 32 name only work.state (06 fixes); ticketDetail/threadDetail builders added to contract.test-support.ts outside Files
 - 02 · deep · eda7d05b · diff read: every Produces signature present (comment job, commenting, WorkCommentArg, workCommentCommand, WorkChannel.comment, actions.comment, jobEnded caps); wave typecheck clean after one test-file compile fix on the same rung · concerns: commentMessage kept private like sibling builders; clearStaleMarks rewritten to build lists first and return the same object when unchanged; Jira card saved without commenting parses as []
 - 03 · hard · 83922156 · diff read: every Produces signature present; typecheck clean; work-board tests 115/115 and keymap-checks pass (worker run plus lead); drive capture board-detail-pane.png shows columns left and ABC-12 pane right with fields, description, comments, subtasks, links, thread, comment box and Posting block · concerns: LIVE: .work-board-detail grows to content and its parent .ui-split-end scrolls, so the pane scroll commands and the scrollTop reset on a cursor move hit a non-scrolling element (tests faked scroll sizes on .work-board-detail) -- determined fix for review; send sends untrimmed text as the Inbox does; selectCard keep-box branch unreachable by a real click
+- 04 · hard · 3e97b718 · diff read: every Produces signature present; typecheck clean; work-inbox tests 95/95; demo selftest passes; drive captures (inbox-*.png) show slim cards and the pane, and eval proves .work-inbox-detail scrolls while .ui-split-end does not, with scrollTop reset on a cursor move · concerns: card-click pane-button row passes trivially (fake DOM events don't bubble); togglePane-from-box test proves no held editor by the destroy, not a blur; sendItem label still 'send this card's draft'; empty-box placeholder sits under the editor as before
 ### Contract changes
 ### Rulings
 - Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead
 - Sweep text's Detail numbers come from detailCaps, matching what the reader keeps — one truth — a raw setting would disagree with the stored cap · group 01 · group 01
 - A detail-less ticket whose status and priority are unchanged keeps its stored record by reference, so the slot's identity skip holds — avoids resending — none · group 01 · group 01
 - 03: restore takes the whole WorkBoardPlace; a click-out returns DOM focus to the board pane only when focus has not gone elsewhere; the sample end forces focus board; the start test restores paneOpen but no draft (board-state rows cover drafts) · group 03
+- 03 follow-on (837887fa, user's look sign-off): the Board scrolls the cursor card into view on every board-pane resize (pane open/close, divider drag, window resize), and its end cell is a one-cell grid so .work-board-detail scrolls; verified live (card fully left of the pane with the demo panel open; detail scrollHeight 919 > clientHeight 813, end cell does not scroll) · group 04
+- 04: detailInput.draft follows the old card rule; showSample closes the pane and restores focus to what it was (the Board's forces board); detail padding space-2 space-4 per the doc (Board's space-3 space-4); detailEmpty uses kit.emptyState · group 04
 ### Review rounds
 ### Test gate
