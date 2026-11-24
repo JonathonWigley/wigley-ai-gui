@@ -7,6 +7,7 @@ import {
 } from 'node:fs';
 import {
   appendFile,
+  copyFile,
   link,
   lstat,
   mkdir,
@@ -37,8 +38,8 @@ import type { OsName } from '../../contracts/platform';
 // arrives as several events for one path.
 const WATCH_QUIET_MS = 100;
 
-// The temp file `write` renames over its target: `.<name>.<8 hex>.tmp`, the
-// target's name captured.
+// The temp file `write` and `copy` rename over their target:
+// `.<name>.<8 hex>.tmp`, the target's name captured.
 const TEMP_FILE = /^\.(.+)\.[0-9a-f]{8}\.tmp$/;
 
 // The waits between tries of `write`'s rename while another process holds the
@@ -89,6 +90,7 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
       await mkdir(folder, { recursive: true });
     },
     rename: renameWithoutReplacing,
+    copy: copyAtomically,
     trash: (file) => options.trashItem(file),
     // No `recursive`, so a folder rejects.
     deleteFile: (file) => rm(file, { force: true }),
@@ -272,12 +274,8 @@ async function writeAtomically(
   file: string,
   content: string | Uint8Array,
 ): Promise<void> {
-  const folder = path.dirname(file);
-  const temp = path.join(
-    folder,
-    `.${path.basename(file)}.${randomBytes(4).toString('hex')}.tmp`,
-  );
-  await mkdir(folder, { recursive: true });
+  const temp = tempFileBeside(file);
+  await mkdir(path.dirname(file), { recursive: true });
   try {
     await writeFile(temp, content, 'utf8');
     await renameRetryingHeld(temp, file);
@@ -285,6 +283,31 @@ async function writeAtomically(
     await rm(temp, { force: true });
     throw error;
   }
+}
+
+// `from` is checked before anything is made, so a refused `from` leaves no
+// folder of `to` behind.
+async function copyAtomically(from: string, to: string): Promise<void> {
+  if ((await stat(from)).isDirectory()) {
+    throw Object.assign(new Error(`${from} is a folder`), { code: 'EISDIR' });
+  }
+  const temp = tempFileBeside(to);
+  await mkdir(path.dirname(to), { recursive: true });
+  try {
+    await copyFile(from, temp);
+    await renameRetryingHeld(temp, to);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
+}
+
+// The temp file `write` and `copy` rename over `file`, as `TEMP_FILE` matches.
+function tempFileBeside(file: string): string {
+  return path.join(
+    path.dirname(file),
+    `.${path.basename(file)}.${randomBytes(4).toString('hex')}.tmp`,
+  );
 }
 
 // `rename`, tried again after each of `RENAME_RETRY_DELAYS_MS` while it fails

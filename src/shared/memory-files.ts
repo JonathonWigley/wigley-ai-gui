@@ -8,7 +8,7 @@ import {
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `makeFolder`, `rename`, `trash`, `deleteFile` and `remove` report
+// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile` and `remove` report
 // each changed file's and folder's path to the watches over it at once, with no
 // debounce, so a test drives a save by writing; a rename reports each moved
 // file's and folder's old path and its new one. A watch with
@@ -289,6 +289,13 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         ...movedFolders.flatMap((folder) => [folder, moved(folder)]),
         ...movedContents.flatMap(([file]) => [file, moved(file)]),
       ]);
+    },
+    // Both checks on `from` run before `store` writes anything.
+    copy: async (from, to) => {
+      if (isFolder(keyOf(from))) {
+        throw codedError(`${from} is a folder`, 'EISDIR');
+      }
+      store(to, bytesOf(from));
     },
     trash: async (path) => {
       const key = keyOf(path);

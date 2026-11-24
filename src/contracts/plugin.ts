@@ -1209,6 +1209,8 @@ export interface MainServices {
     capture(): Promise<Uint8Array>; // PNG of the window's content, as shown
   };
   openExternal(url: string): Promise<void>;
+  downloadsDir: string; // the OS Downloads folder; `<homeDir>/Downloads` in the self-test and a drive run
+  revealPath(path: string): void; // shows the file in Finder or Explorer; logs and does nothing in the self-test and a drive run
   runMode: RunMode;
   appInstance: AppInstance;
   appBuild: AppBuild | null;

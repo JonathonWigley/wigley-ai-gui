@@ -53,6 +53,11 @@ describe('scopedFiles', () => {
       call: (scoped: Files) => scoped.rename('a.md', '../y'),
     },
     {
+      method: 'copy',
+      path: '../e',
+      call: (scoped: Files) => scoped.copy('../e', 'in.txt'),
+    },
+    {
       method: 'readStart',
       path: '../z',
       call: (scoped: Files) => scoped.readStart('../z', 4),

@@ -96,6 +96,10 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
         method: 'realPath',
         call: (files: Files, file: string) => files.realPath(file),
       },
+      {
+        method: 'copy',
+        call: (files: Files, file: string) => files.copy(file, `${file}.copy`),
+      },
     ])(
       '$method of a missing file rejects as a missing file naming it',
       async ({ call }) => {
@@ -339,6 +343,64 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
       expect(errorCode(error)).toBe('ENOTDIR');
       expect(await files.read(at('a.md'))).toBe('one');
       expect(await files.read(at('f'))).toBe('file');
+    });
+
+    it('copy_File_CopiesBytesAndMakesParents', async () => {
+      const { files, at } = current();
+      await files.writeBytes(at('a/one.bin'), new Uint8Array([0, 255, 137]));
+
+      await files.copy(at('a/one.bin'), at('b/c/two.bin'));
+
+      expect([...(await files.readBytes(at('b/c/two.bin')))]).toEqual([
+        0, 255, 137,
+      ]);
+      expect([...(await files.readBytes(at('a/one.bin')))]).toEqual([
+        0, 255, 137,
+      ]);
+      expect(await files.list(at('b/c'))).toEqual([
+        { path: 'two.bin', kind: 'file' },
+      ]);
+    });
+
+    it('copy_OntoExistingFile_ReplacesIt', async () => {
+      const { files, at } = current();
+      await files.write(at('a.txt'), 'new');
+      await files.write(at('b.txt'), 'old');
+
+      await files.copy(at('a.txt'), at('b.txt'));
+
+      expect(await files.read(at('b.txt'))).toBe('new');
+    });
+
+    it('copy_Folder_RejectsAndWritesNothing', async () => {
+      const { files, at } = current();
+      await files.makeFolder(at('top/f'));
+
+      await rejectionOf(files.copy(at('top/f'), at('out/x')));
+
+      expect(await files.stat(at('out'))).toBeNull();
+    });
+
+    it('copy_MissingFile_WritesNothing', async () => {
+      const { files, at } = current();
+
+      await rejectionOf(files.copy(at('none.txt'), at('out/x')));
+
+      expect(await files.stat(at('out'))).toBeNull();
+    });
+
+    // On the Node adapter, the failed rename's cleanup.
+    it('copy_OntoFolder_RejectsAndLeavesNoTemp', async () => {
+      const { files, at } = current();
+      await files.write(at('a.txt'), 'new');
+      await files.write(at('d/x/keep.txt'), 'k');
+
+      await rejectionOf(files.copy(at('a.txt'), at('d/x')));
+
+      expect(await files.list(at('d'))).toEqual([
+        { path: 'x', kind: 'folder' },
+      ]);
+      expect(await files.read(at('d/x/keep.txt'))).toBe('k');
     });
 
     it('deleteFile_File_DeletesItAndKeepsItsFolder', async () => {
