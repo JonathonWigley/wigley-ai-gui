@@ -38,12 +38,14 @@ import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import type {
+  BackendView,
   BuildDownload,
   BuildFile,
   BuildRecord,
   BuildsChannel,
   BuildsPlace,
   BuildsSnapshot,
+  GameView,
   SessionBuilds,
 } from '../contract';
 import type {
@@ -161,8 +163,10 @@ export interface BuildsViewDeps {
 // cursor and the job cursor by key, each kept across a redraw while its key is still drawn: the list cursor moves to
 // the nearest row still drawn, the job cursor to the build's default job, and the shown entry falls back to All.
 // It writes the entry and both cursors to `builds.place` after each change, and puts back the place the last page
-// wrote once a snapshot has listed its builds, unless the user moved first or its game left the settings. It logs
-// each download state `builds.downloads` reaches.
+// wrote once its builds are in: a game's once that game has listed; All's once every game of its build's backend has
+// listed, or, with no build or that backend absent or with a problem, once every game is settled (listed, or in a
+// backend with a problem). It drops that place when the user moves first, or when a polled snapshot lacks its game
+// while the game's backend has no problem or is gone. It logs each download state `builds.downloads` reaches.
 // `showSample` draws a sample's snapshot and session links in place of the slots' until it is dropped; while it
 // shows, the queue, cancel, with-agent, save, download and open commands do nothing and no place is written. Once
 // disposed, it draws and toasts nothing.
@@ -373,32 +377,55 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
     writePlace();
   };
 
-  // The pending place once the shown snapshot has listed its entry's builds: its game's, or for All those of every
-  // game, at least one. Null otherwise or while a sample shows.
+  // The pending place once the shown snapshot has its entry's builds in, null otherwise or while a sample shows. A
+  // game entry needs its game listed. All with a build needs every game of the build's backend listed; All with no
+  // build, or whose build's backend is absent or has a problem, needs at least one game and every game settled.
   const restorablePlace = (): BuildsPlace | null => {
     if (pendingPlace === null || sample !== null) {
       return null;
     }
-    const games = snapshot().backends.flatMap((backend) => backend.games);
-    const isListed =
-      pendingPlace.entry === 'all'
-        ? games.length > 0 && games.every((view) => view.listed)
-        : lookup.games.get(pendingPlace.entry)?.view.listed === true;
-    return isListed ? pendingPlace : null;
+    if (pendingPlace.entry !== 'all') {
+      const isGameListed =
+        lookup.games.get(pendingPlace.entry)?.view.listed === true;
+      return isGameListed ? pendingPlace : null;
+    }
+    const { backends } = snapshot();
+    const { build } = pendingPlace;
+    const buildBackend =
+      build === null
+        ? undefined
+        : backends.find((backend) => backend.id === keyBackendId(build));
+    const isAllIn =
+      buildBackend !== undefined && buildBackend.problem === null
+        ? buildBackend.games.every((view) => view.listed)
+        : backends.some((backend) => backend.games.length > 0) &&
+          backends.every((backend) =>
+            backend.games.every((view) => isSettled(backend, view)),
+          );
+    return isAllIn ? pendingPlace : null;
   };
 
-  // True when a polled snapshot of at least one backend lists no game of the pending place's entry: the game left the
-  // settings, so the place never comes back.
+  // True when a polled snapshot lacks the pending game entry's game while its backend has no problem, or lacks that
+  // backend while others polled: the game left the settings, so the place never comes back. A backend with a problem
+  // keeps the place, since an entry that fails to parse lists no games.
   const isPendingGameGone = (): boolean => {
-    if (pendingPlace === null || sample !== null) {
+    if (
+      pendingPlace === null ||
+      sample !== null ||
+      pendingPlace.entry === 'all'
+    ) {
       return false;
     }
     const shown = snapshot();
+    const backendId = keyBackendId(pendingPlace.entry);
+    const entryBackend = shown.backends.find(
+      (backend) => backend.id === backendId,
+    );
     const hasPolled = shown.polledAt !== null && shown.backends.length > 0;
+    const isBackendBroken =
+      entryBackend !== undefined && entryBackend.problem !== null;
     return (
-      hasPolled &&
-      pendingPlace.entry !== 'all' &&
-      !lookup.games.has(pendingPlace.entry)
+      hasPolled && !isBackendBroken && !lookup.games.has(pendingPlace.entry)
     );
   };
 
@@ -1416,6 +1443,16 @@ export function createBuildsView(deps: BuildsViewDeps): BuildsView {
       );
     },
   };
+}
+
+// True when `view` will not hold a restore back: it has listed, or its backend has a problem and may never list it.
+function isSettled(backend: BackendView, view: GameView): boolean {
+  return view.listed || backend.problem !== null;
+}
+
+// The backend id of a `<backendId>/<id>` game or build key: the part before the first `/`.
+function keyBackendId(key: string): string {
+  return key.slice(0, key.indexOf('/'));
 }
 
 // Disposes `draw` and removes its root; nothing for null.

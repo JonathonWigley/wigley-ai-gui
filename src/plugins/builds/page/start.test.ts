@@ -1258,14 +1258,58 @@ describe('buildsPagePart', () => {
     build: 'work/40',
     job: 'b',
   };
+  const SAVED_ALL_NO_BUILD: BuildsPlace = {
+    entry: 'all',
+    build: null,
+    job: null,
+  };
   const EMPTY_POLL: BuildsSnapshot = { backends: [], polledAt: 0 };
   const UNLISTED = workSnapshot({ listed: false });
+  // A backend whose kind plugin is off: it has a problem and never lists its game.
+  const KIND_OFF: BackendView = {
+    id: 'ci',
+    kind: 'missing',
+    label: 'CI',
+    problem: 'no backend kind "missing": its plugin is off or missing',
+    capabilities: null,
+    games: [
+      {
+        backendId: 'ci',
+        game: gameEntry({ id: 'g3', label: 'Game Three' }),
+        builds: [],
+        subjects: {},
+        setRuns: [],
+        files: {},
+        listed: false,
+      },
+    ],
+  };
+  const UNLISTED_BESIDE_OFF = workSnapshot({
+    listed: false,
+    extraBackends: [KIND_OFF],
+  });
+  // Backend `work` with an entry that fails to parse: a problem and no games.
+  const UNPARSED: BuildsSnapshot = {
+    polledAt: 0,
+    backends: [
+      {
+        id: 'work',
+        kind: 'fixture',
+        label: 'Work',
+        problem: 'games: expected an array',
+        capabilities: null,
+        games: [],
+      },
+    ],
+  };
   const MOVED: BuildsPlace = { entry: 'all', build: 'work/41', job: null };
   it.each<{
     case: string;
     saved: BuildsPlace;
     // Published in order before the full snapshot; the place is read held after the first.
     before: [BuildsSnapshot, ...BuildsSnapshot[]];
+    // Published in the full snapshot after backend `work`.
+    others: BackendView[];
     move: 'listDown' | 'setFilter' | null;
     expected: BuildsPlace;
     jobs: string[];
@@ -1274,6 +1318,7 @@ describe('buildsPagePart', () => {
       case: 'the snapshot that holds it puts it back',
       saved: SAVED,
       before: [EMPTY_POLL],
+      others: [],
       move: null,
       expected: SAVED,
       jobs: ['b'],
@@ -1282,6 +1327,16 @@ describe('buildsPagePart', () => {
       case: 'a game entry waits for its game to list its builds',
       saved: SAVED,
       before: [EMPTY_POLL, UNLISTED],
+      others: [],
+      move: null,
+      expected: SAVED,
+      jobs: ['b'],
+    },
+    {
+      case: 'a game entry waits while its backend has a problem and no games',
+      saved: SAVED,
+      before: [EMPTY_POLL, UNPARSED],
+      others: [],
       move: null,
       expected: SAVED,
       jobs: ['b'],
@@ -1290,14 +1345,34 @@ describe('buildsPagePart', () => {
       case: 'All waits for every game to list its builds',
       saved: SAVED_ALL,
       before: [UNLISTED],
+      others: [],
       move: null,
       expected: SAVED_ALL,
       jobs: ['b'],
     },
     {
+      case: "All waits only for its build's backend, not one with a problem",
+      saved: SAVED_ALL,
+      before: [UNLISTED_BESIDE_OFF],
+      others: [KIND_OFF],
+      move: null,
+      expected: SAVED_ALL,
+      jobs: ['b'],
+    },
+    {
+      case: 'All with no build waits for every backend without a problem',
+      saved: SAVED_ALL_NO_BUILD,
+      before: [UNLISTED_BESIDE_OFF],
+      others: [KIND_OFF],
+      move: null,
+      expected: MOVED,
+      jobs: [],
+    },
+    {
       case: 'a move before it drops it',
       saved: SAVED,
       before: [EMPTY_POLL],
+      others: [],
       move: 'listDown',
       expected: MOVED,
       jobs: [],
@@ -1306,6 +1381,7 @@ describe('buildsPagePart', () => {
       case: 'a filter chip before it drops it',
       saved: SAVED,
       before: [EMPTY_POLL],
+      others: [],
       move: 'setFilter',
       expected: MOVED,
       jobs: [],
@@ -1314,13 +1390,14 @@ describe('buildsPagePart', () => {
       case: 'a game gone from the settings drops it',
       saved: SAVED_GONE,
       before: [EMPTY_POLL, workSnapshot()],
+      others: [],
       move: null,
       expected: MOVED,
       jobs: [],
     },
   ])(
     'keeps the saved place until the restore: $case',
-    ({ saved, before: [first, ...rest], move, expected, jobs }) => {
+    ({ saved, before: [first, ...rest], others, move, expected, jobs }) => {
       const page = startBuildsPage(null, {}, { place: saved });
       page.publish(first);
       const held = page.place();
@@ -1340,6 +1417,7 @@ describe('buildsPagePart', () => {
             running('41', 200),
             withJobs('40', 100, [runningJob('a'), job('b')]),
           ],
+          extraBackends: others,
         }),
       );
 
