@@ -36,9 +36,15 @@
   padding: 0 var(--wg-space-1) var(--wg-space-2);
 }
 
-/* The sheet's split: the board pane, then the detail pane, which scrolls. */
+/* The sheet's split: the board pane, then the detail pane, which takes the end pane's height and scrolls itself. */
 .work-board-split {
   height: 100%;
+}
+
+.work-board-split > .ui-split-end {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .work-board-detail {

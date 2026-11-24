@@ -327,6 +327,16 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   });
 
   // ── Drawing ────────────────────────────────────────────────────────────
+  // Scrolls the columns until the cursor card shows whole.
+  const revealCursorCard = () => {
+    columnsSlot
+      .querySelector('.is-cursor')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  // The board pane narrows as the detail pane opens, its divider moves or the window resizes, which can leave the
+  // cursor card behind the detail pane.
+  const boardPaneSize = new ResizeObserver(revealCursorCard);
+  boardPaneSize.observe(boardPane);
   let statusDraws: DrawnRoot[] = [];
   let columnDraws: DrawnRoot[] = [];
   let cardDraws: DrawnRoot[] = [];
@@ -546,9 +556,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     for (const column of columns) {
       drawColumn(column, state, work);
     }
-    columnsSlot
-      .querySelector('.is-cursor')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    revealCursorCard();
   };
 
   // A detail kit's `box`: the card's comment or reply box with its key hints, or the reply being sent read-only;
@@ -1103,6 +1111,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
       detailDraw = null;
       callEach<() => void>(
         [
+          () => boardPaneSize.disconnect(),
           () => drag.dispose(),
           () => disposeDraws(draws),
           () => boxes.destroyForm(BOX_FORM),

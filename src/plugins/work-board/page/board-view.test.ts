@@ -288,6 +288,38 @@ async function settle() {
   }
 }
 
+// Stubs ResizeObserver with observers that report only when the returned `resize` runs each observer of its target,
+// as the browser does when that element resizes.
+function recordResizeObservers(): (target: unknown) => void {
+  const observers: { callback: () => void; observed: Set<unknown> }[] = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      private record: { callback: () => void; observed: Set<unknown> };
+      constructor(callback: () => void) {
+        this.record = { callback, observed: new Set() };
+        observers.push(this.record);
+      }
+      observe(target: unknown) {
+        this.record.observed.add(target);
+      }
+      unobserve(target: unknown) {
+        this.record.observed.delete(target);
+      }
+      disconnect() {
+        this.record.observed.clear();
+      }
+    },
+  );
+  return (target) => {
+    for (const { callback, observed } of observers) {
+      if (observed.has(target)) {
+        callback();
+      }
+    }
+  };
+}
+
 function cardTitled(setup: Setup, title: string): FakeElement {
   const found = findAll(setup.sheet, 'work-board-card').find((card) =>
     card.textContent.includes(title),
@@ -716,6 +748,21 @@ describe('createBoardView', () => {
       'pane open',
       'pane closed',
     ]);
+  });
+
+  it('a resize of the board pane, as the pane opens or its divider moves, scrolls the cursor card into view', () => {
+    const resize = recordResizeObservers();
+    const each = started(PANE_BOARD, { details: DETAILS });
+    const reveal = vi.spyOn(cardTitled(each, 'Ticket ABC-1'), 'scrollIntoView');
+    each.view.commands.togglePane();
+    reveal.mockClear();
+
+    resize(boardPaneOf(each));
+
+    expect(reveal).toHaveBeenCalledWith({
+      block: 'nearest',
+      inline: 'nearest',
+    });
   });
 
   it('the pane follows the cursor and scrolls back to the top on a move', () => {
