@@ -1,6 +1,6 @@
 # 09 — Tiki Smash download paths
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · a settings edit in the shape design.md § Configuration gives; no code
 Wave: 5 · Depends on: 02 (its parser reads a kind's `downloads`)
@@ -52,3 +52,4 @@ Commit:    none: the file is outside the repo. Record the read-back in Proof.
 
 ## Proof
 
+Commit none (user settings.json, outside the repo) · proof: grep of settings.json: dev, qa and release kinds of tiki-smash each hold label, target and the task's downloads path; json.load passes · concerns: the shared bash best folder still needs a My Drive shortcut before the paths exist (wrap-up note)

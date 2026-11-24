@@ -222,8 +222,8 @@ Critical path: 02 → 05 → 07 → 08 → 10 → 11
 - [x] [Demo, self-test and README](08-demo-selftest.md) — after 07
 
 ### Wave 5
-- [ ] [Tiki Smash download paths](09-tiki-settings.md) — after 02
-- [ ] [Doc re-read](10-doc-re-read.md) — after 03, 04, 06, 08
+- [x] [Tiki Smash download paths](09-tiki-settings.md) — after 02
+- [x] [Doc re-read](10-doc-re-read.md) — after 03, 04, 06, 08
 
 ### Wave 6
 - [ ] [Final verification](11-final-verification.md) — after 10
@@ -241,6 +241,8 @@ Review base: a9161d1a
 - 05 · deep · 8183fa1d · diff read: downloads.ts exports filledFiles, savedLogName, createDownloads, DOWNLOAD_KEEP_MS, FILE_CHECK_TIMEOUT_MS; start.ts wires checkFiles, filesOf, forgetGame, dispose and the saveLog/download handlers with refusals; Files: line between Links: and Open:; wave 2 typecheck and oxlint pass; oxfmt applied by the lead to build-messages.ts and downloads.test.ts · concerns: settings-change test reads the snapshot right after pushSettings with no settle
 - 07 · deep · 0e2453f2 · diff read: BuildsPlace and buildsPlaceSlot, the six view-model functions, BuildsScope, BuildsView and BuildsViewDeps members present in the task's shape; openDetail, buildDetail and BuildDetailInput gone; wave 3 typecheck and oxlint pass; oxfmt applied by the lead to six files · concerns: restore of entry 'all' on an empty first snapshot overwrites the saved build with null; a pending place holds writes until a named move (a removed game keeps writes blocked); setFilter drops no pending place; job boxes carry ui-row--action; requestAnimationFrame stubbed in tests so arrows are live-only; divergence: part harness gains focusTarget(), view model exports fileBaseName
 - 08 · hard · 58e1dca1 · diff read: Sample CI saveLog true, sky-104 download and file, sky-105 five jobs, selectBuild beat; fixture saveLog and three-job moving build, loaded in drive runs; graph, saves and narrow self-test groups; README and CHANGELOG; writeHomeFile and selectBuild Produces present; wave 4 typecheck and full npm run lint pass (changelog and boundary included) · concerns: self-test steps assume view behaviour not run yet (keys after Enter, default cursors) — the filtered self-test settles them; design.md:150 still calls the fixture self-test only (task 10's doc)
+- 09 · standard · none (user settings.json, outside the repo) · grep of settings.json: dev, qa and release kinds of tiki-smash each hold label, target and the task's downloads path; json.load passes · concerns: the shared bash best folder still needs a My Drive shortcut before the paths exist (wrap-up note)
+- 10 · standard · 0094c0e2 · diff read: design.md arrow direction, fixture in drive runs, Enter/Alt+l and no-job s/o lines match keymap.ts, start.ts and fixture-backend.ts; other docs checked unchanged · concerns: machine skill teamcity-builds line-56 planned mark drops in an ai worktree after the app lands (close step); Drive fetch-on-copy and DESIGN.md fg-tertiary step text unverified
 ### Contract changes
 ### Rulings
 - Node temp name extracted into tempFileBeside, shared by write and copy — one temp-name rule — none if wrong, write unchanged · group 01

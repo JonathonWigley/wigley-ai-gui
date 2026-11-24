@@ -1,6 +1,6 @@
 # 10 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · a doc-only task: prose checked line by line against landed code (`plan-folder.md` § Rung)
 Wave: 5 · Depends on: 03 (design.md is read against `teamcity-backend.ts`), 04 (design.md is read against `builds-local/main/`), 06 (design.md is read against `job-graph.ts`), 08 (it reads every code task's landed result; 08 is the last of them)
@@ -60,3 +60,4 @@ Commit:    one commit for the group, naming each doc and what changed in it
 
 ## Proof
 
+Commit 0094c0e2 · proof: diff read: design.md arrow direction, fixture in drive runs, Enter/Alt+l and no-job s/o lines match keymap.ts, start.ts and fixture-backend.ts; other docs checked unchanged · concerns: machine skill teamcity-builds line-56 planned mark drops in an ai worktree after the app lands (close step); Drive fetch-on-copy and DESIGN.md fg-tertiary step text unverified
