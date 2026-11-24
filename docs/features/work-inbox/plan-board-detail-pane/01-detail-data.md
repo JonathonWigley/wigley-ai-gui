@@ -1,6 +1,6 @@
 # 01 — Detail records, slot and sweep
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · adds a `work.json` section, a keyed slot and two tool schemas, and 02, 03 and 04 consume them
 Wave: 1 · Depends on: none

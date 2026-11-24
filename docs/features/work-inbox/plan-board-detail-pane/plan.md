@@ -230,10 +230,11 @@ Critical path: 01 → 02 → 03 → 04 → 05 → 06
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 0eab07e6
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Plan runs in the new app repo JonathonWigley/wigley-ai-gui (worktree ~/Documents/.worktrees/wigley-ai-gui-board-detail-pane, branch board-detail-pane off main eb81b65a): the app moved out of ai after the plan was written; its 3 ai commits were ported with git am -p2. Every plan path's leading `wigley-ai-gui/` reads as the repo root; ai's precondition sha 72e8802b2 maps to eb81b65a (the split tip) — the tree is the same, preconditions re-checked — the user's move, not ours — lead
 ### Review rounds
 ### Test gate
