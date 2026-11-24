@@ -429,7 +429,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  pane, the chunk strip and the assistant pane through scoped-agents' `addAgentPane`; layout/, the layout
                  reader and kit), layouts/ (the backlog Layout contract and the built-in `default` layout);
                  `docs/features/backlog/design.md`
-  work/          manifest.ts, contract.ts (the `work.state` slot, the work commands, `WorkChannel`, `columnForStatus`),
+  work/          manifest.ts, contract.ts (the `work.state` slot, the keyed `work.details` slot of each ticket's and
+                 thread's stored detail, the work commands including `workCommentCommand` and the `comment` job
+                 (`WorkJob`, `WorkChannel.comment`), `WorkChannel`, `columnForStatus`),
                  contract.test-support.ts (the `workItem`, `jiraCard` and `localCard` fixtures), main/ (store.ts, the
                  `work.json` store in plugin data with its one writer and `buildWorkState`; job-queue.ts, the pure
                  queue reducer; job-runner.ts, one unattended session per job through chat's `launch` with

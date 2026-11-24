@@ -6,6 +6,21 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- A detail pane on the Board and the Inbox: the cursor card's Jira ticket (fields, description, comments, subtasks and
+  linked issues) or Slack thread (root message and replies), fetched by each sweep and shown beside the cards.
+- Comments on Jira tickets from the Board pane: `i` enters the comment box, `Cmd+Enter` posts it through a worker job.
+- A reply box on every open Inbox thread's pane, filled with the worker's draft where one exists.
+- `work.detailComments` and `work.threadReplies` settings: how many recent Jira comments and Slack replies a detail keeps.
+
+### Changed
+
+- `Enter` on a Board or Inbox card opens and closes the detail pane instead of opening Jira or Slack.
+- `gx` opens the card's Jira ticket or Slack thread.
+- Inbox cards no longer carry the draft box or buttons, which moved into the detail pane, and hide their summary while
+  the pane is open.
+
 ## 1.3.0 — 2026-11-24
 
 ### Changed

@@ -65,9 +65,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   the editor), key repeat supplying the speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the
   bigger step. The views are the doc, its editor too while editing, the chat transcript, the session hub, an open
   agent-strip box's tool list, the form and its review, the primer card and its review, the audio picker's list, the
-  Backlog review pane, the Practice problem pane and console, the gallery and the key help; the docs tree takes both
-  pairs and scrolls the doc beside it. The Backlog table takes both pairs too and scrolls the review pane, and the
-  Schedules list and details both scroll the details pane. In the editor
+  Backlog review pane, the Board's and the Inbox's detail panes, the Practice problem pane and console, the gallery
+  and the key help; the docs tree takes both pairs and scrolls the doc beside it. The Backlog table takes both pairs
+  too and scrolls the review pane, and the Schedules list and details both scroll the details pane. In the editor
   the line scroll keeps the cursor unless it would leave the view, as vim's `Ctrl+e`/`Ctrl+y` do, and the half page
   moves it with the scroll in visual mode, as vim's `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks
   with the cursor. Other list views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and
@@ -119,8 +119,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   editor `j`/`k` move the field cursor, `Enter` or `i` edit the field (a box, or a list picker of its choices), `Cmd+Enter`
   saves and `Esc` cancels. Backlog's own keys (the table's `Enter` activate, `x` mark, `c` chunk, `u` unchunk,
   `r` rename, `s`/`S` start (`S` skips started and empty chunks), `H` headless, `gl` commits since, `W` sweep, and the strip's `h`/`l` and `Enter`) are listed in
-  `docs/features/backlog/design.md` § The mode. The Inbox's and the Board's own keys (`i` draft, `Cmd+Enter` send,
-  `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W` sweep, `gs` the last
+  `docs/features/backlog/design.md` § The mode. The Inbox's and the Board's own keys (`Enter` the detail pane, `gx` Jira or Slack, `i` draft (on the Board, the
+  pane's box), `Cmd+Enter` send, `d` dismiss, `z` snooze, `u` restore, `b` add to Board, `s` session, `t` ticket or threads, `W` sweep, `gs` the last
   job's row, and on the Board `H`/`L` move, `y`/`n` accept or not yet) are listed in
   `docs/features/work-inbox/design.md` § Keys. The Sessions
   list's cursor row also takes `s` favorite its project, `J`/`K` move its project among the favorites, `r` rename
