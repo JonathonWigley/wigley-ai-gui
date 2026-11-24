@@ -448,12 +448,21 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   and the commit's subject as the detail; at the row's end the state (a meter and time left while it runs, `starts in
   <time>` or `Queued`, a result Tag: `success` Succeeded, `error` Failed, `warning` Cancelled) and who queued it in
   `fg-tertiary`. A set run's rows sit under a `text-12` head, the set's label in medium weight and its short revision in
-  mono. `Enter` opens the build's detail under its row, a `border-subtle` edge at its start: its step text in
-  `fg-tertiary` when it lists no job, a line per job (label in medium weight, state, step text), the status text in
-  `fg-secondary`, then a button per link and a `ghost` Open in the backend. A session row's builds part is one `text-12`
-  line, the newest build's game, kind and number with its state; the hub's Builds section lists every build the session
-  queued, newest first: that line without the meter, the branch and short revision in mono under it, a line per job, a
-  button per link. The offer card sits above the composer: `Build <game> <choice>?`, the branch, short revision and
+  mono. The list sits in a Split beside the detail pane, which shows the list cursor's build; a narrow window stacks
+  the list above the pane. The pane opens on the build's head: kind, number and version, then branch, short revision
+  and subject, the state, a button per file the build has (its label and `↓`) and the backend's link (`<backend> ↗`).
+  Under it the job graph: one `radius-md` `border-subtle` box per job (label in medium weight, the state as the row's,
+  `ran <duration>` in `fg-tertiary` once finished), in columns left to right by how long a chain of jobs each waits on,
+  joined by curved arrows in `border-strong` from each job to the jobs that wait on it directly. Boxes keep their
+  width, and the graph scrolls sideways in a narrow pane. The selected box takes `list-active-background`, and the focus
+  ring while the graph holds the keys. Under the graph the selected job's panel: its label, state and how long it ran,
+  its step text in `fg-tertiary`, then a `secondary` `Log ↓` button and a `ghost` `<backend> ↗` link. While its log
+  saves, `Saving…` in `fg-tertiary`; once saved, a `success` Tag `Saved` and the file's name; on a failure,
+  `Failed: <problem>` in `status-error`. A build that lists no jobs draws
+  no graph, and the panel shows the build itself. A session row's builds part is one `text-12` line, the newest build's
+  game, kind and number with its state; the hub's Builds section lists every build the session queued, newest first:
+  that line without the meter, the branch and short revision in mono under it, a line per job, a button per link and a
+  `ghost` Open in Builds. The offer card sits above the composer: `Build <game> <choice>?`, the branch, short revision and
   subject under it in `fg-tertiary`, then Queue and a `ghost` Dismiss; while its keys hold the cursor it takes
   `focus-border`. Empty states are one line each.
 - **Chatroom:** in Chatroom mode the side bar holds one group per room under its section header, by name, padded
@@ -689,7 +698,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Codicons**, one family, `icon-size`, `fg-secondary` at rest and `fg` on hover or when active.
 - **Copy is sentence case with plain verbs.** A button says what happens ("Run agent", "Save
   file"); the toast echoes it ("Agent started", "Saved"). An error says what happened and what to
-  do next, without apology. A button label stands alone, with no trailing arrow.
+  do next, without apology. A button label stands alone, with no trailing arrow, except two: a button that saves a
+  file to disk ends in `↓` ("Log ↓"), and one that opens a page outside the app ends in `↗` ("TeamCity ↗").
 
 ## Checks
 
