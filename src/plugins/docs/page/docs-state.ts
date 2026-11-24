@@ -704,7 +704,12 @@ export interface TreeLineState {
   rowCount: number;
   isFilterOpen: boolean;
   isWikiView: boolean;
+  // False while no installed plugin names a wiki page; read in the wiki view.
+  isWikiPageNamed: boolean;
 }
+
+// The wiki's empty state while no installed plugin names a wiki page.
+export const NO_WIKI_PAGE_TEXT = 'No installed plugin names a wiki page';
 
 // The line the tree pane shows for its state; null for none.
 export function treeLine(state: TreeLineState): TreeLine | null {
@@ -718,6 +723,9 @@ export function treeLine(state: TreeLineState): TreeLine | null {
       text: `No docs match "${state.filter}"`,
       hint: { command: 'filter', words: 'to change it' },
     };
+  }
+  if (state.isIndexEmpty && state.isWikiView && !state.isWikiPageNamed) {
+    return { placement: 'empty', text: NO_WIKI_PAGE_TEXT, hint: null };
   }
   if (state.isIndexEmpty) {
     return {

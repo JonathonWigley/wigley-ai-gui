@@ -84,11 +84,8 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its contract's records hold the follow-up file module's types.
   backlog: {
     contract: { layers: ['src/shared/followups'] },
-    // Its reader checks home templates with Docs' `features-homes.ts`, and its
-    // fixture strategy copies Docs' fixture binding's features homes.
-    main: {
-      layers: ['src/plugins/docs', 'src/plugins/docs/main/selftest-fixture.ts'],
-    },
+    // Its fixture strategy copies Docs' fixture binding's features homes.
+    main: { layers: ['src/plugins/docs/main/selftest-fixture.ts'] },
   },
   chat: {
     // Its contract's `readAdoptRequest` reads JSON with the shared readers, and

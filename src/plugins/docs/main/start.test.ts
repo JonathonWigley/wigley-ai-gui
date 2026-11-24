@@ -1197,26 +1197,40 @@ describe('docs binding', () => {
     expect(builds()).toEqual([]);
   });
 
-  it('setFeaturesHomes_SameValueTwice_RunsOnce', async () => {
-    const { harness, exports, builds } = await startBound();
+  // Before any index run reads the file, as Backlog's first homes come at
+  // launch, the next run reads the new file, so nothing rebuilds.
+  it.each([
+    { given: 'before any index run', hasRun: false, rebuilds: 0 },
+    { given: 'after an index run', hasRun: true, rebuilds: 1 },
+  ])(
+    'setFeaturesHomes_SameValueTwice_$given: RewritesTheFileAndRebuilds$rebuilds',
+    async ({ hasRun, rebuilds }) => {
+      const { harness, exports, builds } = await startBound();
+      if (hasRun) {
+        await exports.rebuildMachineIndex();
+      }
+      const runsBefore = builds().length;
 
-    exports.setFeaturesHomes(USER_HOMES);
-    exports.setFeaturesHomes({ ...USER_HOMES });
-    await vi.waitFor(() => expect(builds()).toHaveLength(1));
-    await settled();
+      exports.setFeaturesHomes(USER_HOMES);
+      exports.setFeaturesHomes({ ...USER_HOMES });
+      await vi.waitFor(async () =>
+        expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
+          contributionsFileText({ ...NO_DOCS_BINDING, features: USER_HOMES }),
+        ),
+      );
+      await settled();
 
-    expect(builds()).toHaveLength(1);
-    expect(await harness.files.read(CONTRIBUTIONS_PATH)).toBe(
-      contributionsFileText({ ...NO_DOCS_BINDING, features: USER_HOMES }),
-    );
-  });
+      expect(builds().length - runsBefore).toBe(rebuilds);
+    },
+  );
 
-  it('docsStrategyChanged_RewritesTheFileAndRebuilds', async () => {
+  it('docsStrategyChanged_AfterAnIndexRun_RewritesTheFileAndRebuilds', async () => {
     const contributions = fakeContributions();
-    const { harness, builds } = await startBound(contributions);
+    const { harness, exports, builds } = await startBound(contributions);
+    await exports.rebuildMachineIndex();
 
     contributions.change([wigleyStrategy(USER_DOCS)]);
-    await vi.waitFor(() => expect(builds()).toHaveLength(1));
+    await vi.waitFor(() => expect(builds()).toHaveLength(2));
 
     const expected = {
       globalFolders: [USER_FOLDER],

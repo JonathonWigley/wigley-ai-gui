@@ -4,6 +4,7 @@ import type { DocsChannel } from '../contract';
 import { createWikiMainSource } from './wiki-main-source';
 
 const MAIN_PATH = '/real/wiki/Main.md';
+const OTHER_PATH = '/real/other-wiki/Main.md';
 const ONE_SHELF = '## Shelf one\n\n[a](a.md)\n';
 const TWO_SHELVES = '## Shelf one\n\n## Shelf two\n';
 
@@ -47,12 +48,13 @@ function setUp(
   };
   const changed = vi.fn();
   const answered = vi.fn();
+  const linkPrefixes = vi.fn(() => ({}));
   const logs: string[] = [];
   const source = createWikiMainSource({
     viewId: 'machine',
     channel: { invoke } as unknown as PageChannel<DocsChannel>,
     log: (line) => logs.push(line),
-    linkPrefixes: () => ({}),
+    linkPrefixes,
     changed,
     answered,
   });
@@ -62,6 +64,7 @@ function setUp(
     readDoc,
     watchDoc,
     wikiMainPath,
+    linkPrefixes,
     changed,
     answered,
     logs,
@@ -445,6 +448,63 @@ describe('createWikiMainSource', () => {
 
     expect(test.readDoc).toHaveBeenCalledOnce();
     expect(test.source.isRead()).toBe(true);
+  });
+
+  it.each([
+    {
+      given: 'another path with the same text',
+      nextPath: OTHER_PATH,
+      watch: OTHER_PATH,
+      path: OTHER_PATH,
+      isUnnamed: false,
+      fileState: 'exists',
+      parses: 2,
+    },
+    {
+      given: 'no page named any more',
+      nextPath: null,
+      watch: null,
+      path: null,
+      isUnnamed: true,
+      fileState: 'absent',
+      parses: 1,
+    },
+  ])(
+    'bindingChanged_$given: AsksAgainMovesTheWatchAndChangedRuns',
+    async ({ nextPath, watch, path, isUnnamed, fileState, parses }) => {
+      const paths = [MAIN_PATH, nextPath];
+      const test = setUp({ path: () => Promise.resolve(paths.shift()!) });
+      await test.source.start();
+      test.changed.mockClear();
+
+      await test.source.bindingChanged();
+
+      expect({
+        asks: test.wikiMainPath.mock.calls.length,
+        watch: test.watchDoc.mock.lastCall,
+        path: test.source.path(),
+        isUnnamed: test.source.isUnnamed(),
+        fileState: test.source.fileState(),
+        changes: test.changed.mock.calls.length,
+        parses: test.linkPrefixes.mock.calls.length,
+      }).toEqual({
+        asks: 2,
+        watch: ['machine:main', watch],
+        path,
+        isUnnamed,
+        fileState,
+        changes: 1,
+        parses,
+      });
+    },
+  );
+
+  it('bindingChanged_BeforeStart_AsksNothing', async () => {
+    const test = setUp();
+
+    await test.source.bindingChanged();
+
+    expect(test.wikiMainPath).not.toHaveBeenCalled();
   });
 
   it('dispose_StopsTheWatchAndDropsALateRead', async () => {

@@ -153,9 +153,9 @@ export interface CreatePlace {
 }
 
 // Where feature homes sit, as Backlog hands them to Docs: each of `homes` is
-// an in-repo template `{repo}/<folder>` or an out-of-repo one
-// `<folder>/{name}` (`features-homes.ts`). `file` is a home's follow-ups file
-// and `areaFolder` its folder of per-area follow-up files, null for none.
+// an in-repo template `{repo}/<folder>` or an out-of-repo one `<folder>/{name}`
+// (Backlog's `main/features-homes.ts`). `file` is a home's follow-ups file and
+// `areaFolder` its folder of per-area follow-up files, null for none.
 export type FeaturesHomes = {
   homes: string[];
   file: string;
@@ -177,7 +177,8 @@ export type DocsGlobalFolder = {
 // What Docs indexes and links beyond the harness folders: the merged `docs`
 // contributions' global folders, wiki page and skill link prefixes
 // (`<prefix>` → the plugin key whose skill `<prefix><name>` names), and
-// Backlog's features homes, null until Backlog hands them.
+// Backlog's features homes, null until Backlog hands them and while it hands
+// none.
 export interface DocsBinding {
   globalFolders: DocsGlobalFolder[];
   wikiMain: string | null;
@@ -300,9 +301,11 @@ export interface DocsMainExports {
   // Calls `changed` after the file at `path` changes or is replaced, until
   // `dispose`.
   watchDoc(path: string, changed: () => void): Promise<Disposable>;
-  // Replaces the binding's `features` (Backlog's pick), then rewrites the
-  // contributions file and rebuilds the machine index; a value equal to the
-  // current one does nothing. Outside the `live` run mode it does nothing.
+  // Replaces the binding's `features` (Backlog's pick, null for none), then
+  // rewrites the contributions file and, once an index run has read the file,
+  // rebuilds the machine index; before that run, the run reads the new file. A
+  // value equal to the one handed last does nothing. Outside the `live` run
+  // mode it does nothing.
   setFeaturesHomes(homes: FeaturesHomes | null): void;
 }
 

@@ -123,11 +123,13 @@ export interface TreeView {
     hasIndex: boolean,
   ): void;
   // `filterTree`: what the wiki view's rows read while a filter is on. Keeps
-  // the `pathOf` and `headingsOf` that `setTree` set.
+  // the `pathOf` and `headingsOf` that `setTree` set. `isPageNamed`: whether
+  // an installed plugin names a wiki page; with none, the empty wiki says so.
   setWikiTree(
     tree: TreeNode[],
     filterTree: TreeNode[],
     hasIndex: boolean,
+    isPageNamed: boolean,
   ): void;
   // Closes the filter box, keeping its filter, then draws `view`. A box holding
   // focus returns it to the tree and hears `filterClosed`; any other switch
@@ -237,6 +239,8 @@ interface ViewSlot {
   state: TreeState;
   hasRows: boolean;
   hasTree: boolean;
+  // False while no installed plugin names the wiki view's page.
+  isPageNamed: boolean;
   // Every group id a tree of this view has held.
   seenGroups: ReadonlySet<string>;
   // A reloaded page's state, which the first tree with rows takes.
@@ -250,6 +254,7 @@ function emptySlot(): ViewSlot {
     state: { expanded: new Set(), selectedId: null, filter: '' },
     hasRows: false,
     hasTree: false,
+    isPageNamed: true,
     seenGroups: new Set(),
     restored: null,
   };
@@ -444,6 +449,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       rowCount: rows.length,
       isFilterOpen: filterScope !== null,
       isWikiView: shownView === 'wiki',
+      isWikiPageNamed: slot.isPageNamed,
     });
     if (isSameLine(next, shownLine)) {
       return;
@@ -617,11 +623,12 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         draw();
       }
     },
-    setWikiTree(next, filterTree, hasIndex) {
+    setWikiTree(next, filterTree, hasIndex, isPageNamed) {
       const slot = slots.wiki;
       slot.tree = next;
       slot.filterTree = filterTree;
       slot.hasTree = hasIndex;
+      slot.isPageNamed = isPageNamed;
       const isFirstTree = !slot.hasRows && next.length > 0;
       if (isFirstTree) {
         openFirstTree(slot);

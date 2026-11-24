@@ -1,7 +1,7 @@
 import type { BacklogContribution } from '../../../contracts/contributions';
 import { isJsonObject, isNonEmptyString } from '../../../shared/json';
 import type { FeatureReader } from '../../contributions/contract';
-import { templateProblem } from '../../docs/features-homes';
+import { templateProblem } from './features-homes';
 
 function isFileName(value: unknown): value is string {
   return isNonEmptyString(value) && !/[/\\]/.test(value);

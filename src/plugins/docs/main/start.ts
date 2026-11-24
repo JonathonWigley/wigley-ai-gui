@@ -190,11 +190,14 @@ export async function startDocs(
 
 // The binding docs works with and the contributions file that hands it to the
 // index. A live run merges the `docs` strategies after `contributions.ready`
-// and on each change of them, with Backlog's latest features homes; every
-// other run keeps `DOCS_FIXTURE_BINDING`. The file is written once the first
-// binding is set, and again on each binding whose file text differs, each
-// such change then rebuilding the machine index. `file()` waits for every
-// write queued so far, so no index run starts while one is in flight.
+// and on each change of them, with Backlog's latest features homes (none
+// until Backlog hands them, and while it hands none); every other run keeps
+// `DOCS_FIXTURE_BINDING`. The file is written once the first binding is set,
+// and again on each binding whose file text differs, each such change then
+// rebuilding the machine index once an index run has asked for the file: a
+// change before the first run, such as Backlog's first homes, reaches the
+// index through that run. `file()` waits for every write queued so far, so no
+// index run starts while one is in flight.
 interface DocsBindingHolder extends Disposable {
   binding(): DocsBinding;
   setFeaturesHomes(homes: FeaturesHomes | null): void;
@@ -217,11 +220,17 @@ interface DocsBindingDeps {
 
 export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
   const { contributions, isLive, log } = deps;
+  // Backlog's latest homes, null for none; `isFeaturesHanded` tells a first
+  // handing of none from no handing yet.
   let features: FeaturesHomes | null = null;
+  let isFeaturesHanded = false;
   let binding: DocsBinding = isLive
     ? { ...NO_DOCS_BINDING, features }
     : DOCS_FIXTURE_BINDING;
   let isBound = false;
+  // Set as the first index run asks for the file: before it, no index was
+  // built from an older file, so a rewrite rebuilds nothing.
+  let isFileAsked = false;
   let writtenText: string | null = null;
   let fileWrite: Promise<void> = Promise.resolve();
 
@@ -254,7 +263,7 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
         }
       : DOCS_FIXTURE_BINDING;
   const rebind = () => {
-    if (isBound && bind(merged())) {
+    if (isBound && bind(merged()) && isFileAsked) {
       deps.rebuildMachineIndex();
     }
   };
@@ -266,13 +275,17 @@ export function createDocsBinding(deps: DocsBindingDeps): DocsBindingHolder {
   return {
     binding: () => binding,
     setFeaturesHomes(homes) {
-      if (!isLive || JSON.stringify(homes) === JSON.stringify(features)) {
+      const isSame =
+        isFeaturesHanded && JSON.stringify(homes) === JSON.stringify(features);
+      if (!isLive || isSame) {
         return;
       }
+      isFeaturesHanded = true;
       features = homes;
       rebind();
     },
     async file() {
+      isFileAsked = true;
       await firstBinding;
       await fileWrite;
       return deps.filePath;

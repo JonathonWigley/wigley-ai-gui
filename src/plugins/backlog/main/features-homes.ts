@@ -1,4 +1,4 @@
-// The two shapes of a features-home template, shared by Docs and Backlog: an
+// The two shapes of a features-home template, as Backlog reads them: an
 // in-repo template `{repo}/<relative folder>` and an out-of-repo template
 // `<~ or absolute folder>/{name}`. The docs index's `contributions.py` reads
 // the same two shapes by the same rules.
@@ -20,15 +20,6 @@ export function inRepoHomeParts(homes: readonly string[]): string[][] {
   return homes.flatMap((template) => {
     const parts = inRepoParts(template);
     return parts === null ? [] : [parts];
-  });
-}
-
-// Each out-of-repo template's folder, in order, `~` kept:
-// `~/features/{name}` gives `~/features`.
-export function outOfRepoHomeFolders(homes: readonly string[]): string[] {
-  return homes.flatMap((template) => {
-    const folder = outOfRepoFolder(template);
-    return folder === null ? [] : [folder];
   });
 }
 

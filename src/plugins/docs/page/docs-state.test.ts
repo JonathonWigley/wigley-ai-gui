@@ -1529,6 +1529,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: null,
     },
@@ -1540,6 +1541,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: null,
     },
@@ -1551,6 +1553,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'empty',
@@ -1566,6 +1569,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: true,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'empty',
@@ -1581,6 +1585,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: true,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'empty',
@@ -1591,11 +1596,28 @@ describe('treeLine', () => {
     {
       lineState: {
         hasTree: true,
+        isIndexEmpty: true,
+        filter: '',
+        rowCount: 0,
+        isFilterOpen: false,
+        isWikiView: true,
+        isWikiPageNamed: false,
+      },
+      expected: {
+        placement: 'empty',
+        hint: null,
+        mentions: 'No installed plugin names a wiki page',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
         isIndexEmpty: false,
         filter: 'zqzq',
         rowCount: 0,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'empty',
@@ -1611,6 +1633,7 @@ describe('treeLine', () => {
         rowCount: 0,
         isFilterOpen: true,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'empty',
@@ -1626,6 +1649,7 @@ describe('treeLine', () => {
         rowCount: 3,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: {
         placement: 'above',
@@ -1641,6 +1665,7 @@ describe('treeLine', () => {
         rowCount: 3,
         isFilterOpen: true,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: null,
     },
@@ -1652,6 +1677,7 @@ describe('treeLine', () => {
         rowCount: 3,
         isFilterOpen: false,
         isWikiView: false,
+        isWikiPageNamed: true,
       },
       expected: null,
     },

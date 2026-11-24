@@ -32,6 +32,7 @@ import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import { followRows, sessionsRowsSlot } from '../../sessions/contract';
 import {
+  type DocsBinding,
   docsBindingSlot,
   type DocsChannel,
   type DocsPageEvents,
@@ -445,6 +446,22 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     api.state.read(coreModeSlot).on((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
+    // A binding whose wiki page or link prefixes changed reaches every view;
+    // one that changed only its folders or features homes does not.
+    const wikiOf = (binding: DocsBinding | undefined) => {
+      const { wikiMain, linkPrefixes } = binding ?? NO_DOCS_BINDING;
+      return JSON.stringify({ wikiMain, linkPrefixes });
+    };
+    let shownWiki = wikiOf(bindingReader.get());
+    const bindingListening = bindingReader.on((binding) => {
+      const wiki = wikiOf(binding);
+      if (wiki === shownWiki) {
+        return;
+      }
+      shownWiki = wiki;
+      log('docs binding changed its wiki page or link prefixes');
+      callEach(allViews(), (view) => view.bindingChanged());
+    });
 
     // Hiding moves focus by `treeHiddenIn`, as Docs mode's side bar hiding
     // does. Showing leaves focus where it is, as the side bar showing beside
@@ -830,6 +847,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         callEach<() => void>(
           [
             () => window.removeEventListener('resize', onWindowResize),
+            () => bindingListening.dispose(),
             () => {
               if (pendingResizeFrame !== null) {
                 cancelAnimationFrame(pendingResizeFrame);

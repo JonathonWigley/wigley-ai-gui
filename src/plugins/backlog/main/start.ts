@@ -37,7 +37,6 @@ import {
   type SampleDocs,
   type SourceRead,
 } from '../../docs/contract';
-import { inRepoHomeParts } from '../../docs/features-homes';
 import { scopedAgentsMainKey } from '../../scoped-agents/contract';
 import { sessionsMainKey } from '../../sessions/contract';
 import {
@@ -73,6 +72,7 @@ import { createChunkStarter } from './chunk-start';
 import { createChunkStore, titlesByRepo } from './chunk-store';
 import { registerDemoSteps } from './demo-steps';
 import { addDriveActions } from './drive-actions';
+import { inRepoHomeParts } from './features-homes';
 import {
   type NoteEdit,
   readFollowupText,
@@ -1175,11 +1175,12 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         channel.send('changed', { homeRoot: null });
       }
     });
-    // The binding and the homes Docs was last given; null until the registry
-    // first answers. A change of binding redraws the page, since a pick change
-    // that leaves the homes as they were rebuilds no index.
+    // The binding and the homes Docs was last given (`homes` null for no
+    // pick); each null until the registry first answers. A change of binding
+    // redraws the page, since a pick change that leaves the homes as they were
+    // rebuilds no index.
     let syncedBinding: BacklogBinding | null = null;
-    let syncedHomes: FeaturesHomes | null = null;
+    let syncedHomes: { homes: FeaturesHomes | null } | null = null;
     let isDisposed = false;
     const syncBinding = () => {
       if (isDisposed) {
@@ -1192,8 +1193,8 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
       }
       syncedBinding = binding;
       const homes = featuresHomesOf(binding);
-      if (isFirst || !isSameJson(homes, syncedHomes)) {
-        syncedHomes = homes;
+      if (syncedHomes === null || !isSameJson(homes, syncedHomes.homes)) {
+        syncedHomes = { homes };
         docs.setFeaturesHomes(homes);
       }
       if (!isFirst) {

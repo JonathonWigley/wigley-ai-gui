@@ -338,6 +338,7 @@ describe('createTreeView', () => {
       [shelf('One', [page('a')]), shelf('Two', [page('b')])],
       [],
       true,
+      true,
     );
     tree.down();
     tree.down();
@@ -353,7 +354,7 @@ describe('createTreeView', () => {
 
   it('showView_AllHoldsAFilter_WikiUnfilteredAndTheFilterReturns', () => {
     const { tree, titles, type } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [page('wiki page')])], [], true);
+    tree.setWikiTree([shelf('One', [page('wiki page')])], [], true, true);
     tree.setTree(
       [shelf('Mine', [page('alpha'), page('beta')])],
       NOTHING,
@@ -399,6 +400,7 @@ describe('createTreeView', () => {
       [shelf('One', [page('listed')])],
       [shelf('Repo', [shelf('Rules', [page('outside')])])],
       true,
+      true,
     );
 
     type('outside');
@@ -408,7 +410,7 @@ describe('createTreeView', () => {
 
   it('wikiFilter_NoMainPage_StillFindsTheDocs', () => {
     const { tree, titles, type, root } = wikiSetUp();
-    tree.setWikiTree([], [shelf('Repo', [page('outside')])], true);
+    tree.setWikiTree([], [shelf('Repo', [page('outside')])], true, true);
     expect(findAll(root, 'docs-line-slot')[0].textContent).toContain('Main.md');
 
     type('outside');
@@ -421,6 +423,7 @@ describe('createTreeView', () => {
     tree.setWikiTree(
       [shelf('One', [page('listed')])],
       [shelf('Repo', [page('outside')])],
+      true,
       true,
     );
     type('outside');
@@ -437,24 +440,25 @@ describe('createTreeView', () => {
 
   it('setWikiTree_DropsTheSelectedRow_SelectsTheFirstRow', () => {
     const { tree, selected } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true, true);
     tree.down();
     tree.down();
     expect(selected()).toEqual(['b']);
 
-    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a')])], [], true, true);
 
     expect(selected()).toEqual(['One']);
   });
 
   it('setWikiTree_AddsAGroup_ExpandsItAndTheCollapsedGroupStays', () => {
     const { tree, titles } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a')])], [], true, true);
     tree.close();
 
     tree.setWikiTree(
       [shelf('One', [page('a')]), shelf('Two', [page('b')])],
       [],
+      true,
       true,
     );
 
@@ -464,18 +468,18 @@ describe('createTreeView', () => {
   it('setWikiTree_EmptyTreeThenBack_TheCollapsedGroupStaysCollapsed', () => {
     const { tree, titles } = wikiSetUp();
     const shelves = [shelf('One', [page('a')])];
-    tree.setWikiTree(shelves, [], true);
+    tree.setWikiTree(shelves, [], true, true);
     tree.close();
 
-    tree.setWikiTree([], [], true);
-    tree.setWikiTree(shelves, [], true);
+    tree.setWikiTree([], [], true, true);
+    tree.setWikiTree(shelves, [], true, true);
 
     expect(titles()).toEqual(['One']);
   });
 
   it('click_LabelRowWithFocusInThePane_DrawsTheNewSelection', () => {
     const { tree, root, selected } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [WIKI_LABEL, page('a')])], [], true);
+    tree.setWikiTree([shelf('One', [WIKI_LABEL, page('a')])], [], true, true);
     tree.focus();
     const label = findAll(root, 'test-row').find(
       (row) => row.textContent === 'Label',
@@ -489,7 +493,7 @@ describe('createTreeView', () => {
   it('openNode_Row_SelectsFocusesThenOpens', () => {
     const openLeaf = vi.fn();
     const { tree, selected } = wikiSetUp({ openLeaf });
-    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a'), page('b')])], [], true, true);
 
     tree.openNode('entry:e:b');
 
@@ -507,7 +511,7 @@ describe('createTreeView', () => {
       openLeaf,
       log: (line) => logs.push(line),
     });
-    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a')])], [], true, true);
 
     tree.openNode('entry:e:gone');
 
@@ -557,7 +561,7 @@ describe('createTreeView', () => {
     },
   ])('the selected row holds its fields: $name', ({ node, expected }) => {
     const { tree, inputs, selected } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [node])], [], true);
+    tree.setWikiTree([shelf('One', [node])], [], true, true);
     tree.down();
     expect(selected()).toEqual([node.title]);
 
@@ -566,7 +570,7 @@ describe('createTreeView', () => {
 
   it('prompt_PageRowInTheWiki_OffersRenameAndTrashAndNoStar', () => {
     const { tree, inputs, anchors } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [page('a')])], [], true);
+    tree.setWikiTree([shelf('One', [page('a')])], [], true, true);
     tree.setTree([shelf('Mine', [page('a')])], NOTHING, NO_HEADINGS, true);
     const promptCommands = () =>
       inputs.get('entry:e:a')?.prompt.map((action) => action.command);
@@ -600,6 +604,7 @@ describe('createTreeView', () => {
       [shelf('One', [page('other')]), shelf('Two', [page('both')])],
       [],
       true,
+      true,
     );
     tree.setTree(
       [shelf('Mine', [page('other'), page('both')])],
@@ -616,7 +621,7 @@ describe('createTreeView', () => {
 
   it('selectEntry_OnlyInAllPages_WikiKeepsItsSelection', () => {
     const { tree, selected } = wikiSetUp();
-    tree.setWikiTree([shelf('One', [page('other')])], [], true);
+    tree.setWikiTree([shelf('One', [page('other')])], [], true, true);
     tree.setTree([shelf('Mine', [page('alone')])], NOTHING, NO_HEADINGS, true);
 
     tree.selectEntry('e:alone');
@@ -630,6 +635,7 @@ describe('createTreeView', () => {
     tree.setWikiTree(
       [shelf('One', [page('other')]), shelf('Two', [page('both')])],
       [],
+      true,
       true,
     );
     tree.setTree(
@@ -651,7 +657,7 @@ describe('createTreeView', () => {
       hasWiki: true,
       placeOf: (own: DocsTreePlace): TreePlace => ({ wiki: own, all: null }),
       setTree: (tree: TreeView, nodes: TreeNode[]) =>
-        tree.setWikiTree(nodes, [], true),
+        tree.setWikiTree(nodes, [], true, true),
     },
     {
       name: 'all pages',
@@ -723,6 +729,7 @@ describe('createTreeView', () => {
       tree.setWikiTree(
         [shelf('One', [page('a')]), shelf('Two', [page('b')])],
         [],
+        true,
         true,
       );
       tree.setTree(
@@ -806,7 +813,7 @@ describe('createTreeView', () => {
     ({ key, focusDoc }) => {
       const { tree, openWikiLink } = wikiSetUp();
       const link = wikiLink({});
-      tree.setWikiTree([shelf('One', [link])], [], true);
+      tree.setWikiTree([shelf('One', [link])], [], true, true);
       tree.down();
 
       tree[key]();

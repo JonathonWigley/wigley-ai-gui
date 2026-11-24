@@ -39,6 +39,8 @@ export interface WikiMainSource {
   // The real path of `Main.md`; null until main has given it, and while main
   // answers that no contribution names one.
   path(): string | null;
+  // Whether main's latest answer is that no contribution names a wiki page.
+  isUnnamed(): boolean;
   shelves(): readonly WikiShelf[];
   // Whether a first read has settled, present, absent or rejected.
   isRead(): boolean;
@@ -49,6 +51,12 @@ export interface WikiMainSource {
   // Reads the file again, after `start` when it has not run or not settled;
   // never rejects.
   reread(): Promise<void>;
+  // The docs binding's wiki page or link prefixes changed: once the running
+  // path ask and watch settle, asks main for the path again, moves the watch to
+  // it, and reads it. The next read that answers calls `changed` even when it
+  // says what the last did, so the shelves are parsed with the new prefixes.
+  // Does nothing before `start`, which asks then; never rejects.
+  bindingChanged(): Promise<void>;
   // Stops the watch; nothing read after it calls `changed` or `answered`.
   dispose(): void;
 }
@@ -63,6 +71,8 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   // True from a rejection until a read answers.
   let isUnreadable = false;
   let shelves: readonly WikiShelf[] = [];
+  // True from a binding change until a read answers.
+  let isAnswerChange = false;
   let isWatching = false;
   let isDisposed = false;
   let started: Promise<void> | null = null;
@@ -73,7 +83,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
 
   const settleAbsent = () => {
     isUnreadable = false;
-    if (known.type === 'absent') {
+    if (known.type === 'absent' && !isAnswerChange) {
       return;
     }
     known = { type: 'absent' };
@@ -97,7 +107,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
 
   const settleText = (text: string) => {
     isUnreadable = false;
-    if (known.type === 'text' && known.text === text) {
+    if (known.type === 'text' && known.text === text && !isAnswerChange) {
       return;
     }
     known = { type: 'text', text };
@@ -115,6 +125,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     } else {
       settleText(text);
     }
+    isAnswerChange = false;
     deps.answered();
   };
 
@@ -125,6 +136,12 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     } catch (error) {
       settleUnreadable(errorText(error));
     }
+  };
+
+  const unwatch = () => {
+    channel.invoke('watchDoc', watchId, null).catch((error: unknown) => {
+      log(`not watching Main.md: ${errorText(error)}`);
+    });
   };
 
   const watch = async (path: string) => {
@@ -183,6 +200,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
       return started;
     },
     path: () => mainPath,
+    isUnnamed: () => isUnnamed,
     shelves: () => shelves,
     isRead: () => known.type !== 'neverKnown' || isUnreadable,
     fileState() {
@@ -203,11 +221,29 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
       await started;
       return connectAndRead();
     },
+    async bindingChanged() {
+      if (started === null) {
+        return;
+      }
+      await started;
+      await connecting;
+      if (isDisposed) {
+        return;
+      }
+      const wasWatching = isWatching;
+      mainPath = null;
+      isUnnamed = false;
+      isWatching = false;
+      isAnswerChange = true;
+      log('docs binding changed: asking for Main.md again');
+      await connectAndRead();
+      if (wasWatching && !isWatching && !isDisposed) {
+        unwatch();
+      }
+    },
     dispose() {
       isDisposed = true;
-      channel.invoke('watchDoc', watchId, null).catch((error: unknown) => {
-        log(`not watching Main.md: ${errorText(error)}`);
-      });
+      unwatch();
     },
   };
   return source;

@@ -78,6 +78,7 @@ import {
   fileStatuses,
   isEntryIdInside,
   movedEntryId,
+  NO_WIKI_PAGE_TEXT,
   paneFocusedBy,
   provisionalEntry,
   readOnlyReason,
@@ -220,9 +221,14 @@ export interface DocsView {
   // the view's first index read, which its first show starts.
   restorePlace(place: DocsPlace): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
-  // unless a newer open was asked, the empty Main page taking focus; nothing in a
-  // view with no wiki.
+  // unless a newer open was asked, the empty Main page taking focus; with no
+  // installed plugin naming a wiki page, toasts so; nothing in a view with no
+  // wiki.
   openMain(): void;
+  // The docs binding's wiki page or link prefixes changed: the machine view
+  // asks main for `Main.md`'s path again and reads it, its wiki tree following;
+  // nothing in a view with no wiki.
+  bindingChanged(): void;
   // Opens the section whose heading carries `anchor` in the doc pane, as its
   // `edit` control's click asks.
   editSectionAt(anchor: string): void;
@@ -1171,6 +1177,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       wikiTree,
       buildWikiFilterTree(entries, deps.homeDir, deps.paths, areaFolder()),
       document !== null && wikiMain.isRead(),
+      !wikiMain.isUnnamed(),
     );
   };
 
@@ -1308,6 +1315,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     const path = wikiMain?.path() ?? null;
     if (wikiMain === null || path === null) {
       log('no Main page path');
+      if (wikiMain?.isUnnamed() === true && cause === 'picked') {
+        toast(NO_WIKI_PAGE_TEXT, 'info');
+      }
       return;
     }
     const mainReady = () => {
@@ -1998,6 +2008,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
           showMain('picked');
         }
       });
+    },
+    bindingChanged() {
+      void wikiMain?.bindingChanged();
     },
     closeOverlays() {
       tree.dismissFilter();
