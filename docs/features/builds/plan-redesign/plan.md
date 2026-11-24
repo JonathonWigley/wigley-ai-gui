@@ -266,3 +266,4 @@ Review base: a9161d1a
 - Cycle 2 fix range 3ea8b304, 0927df9c — risk Medium (restore settle rule, checksSettled re-check, cache file shape) → correctness re-review 2 (last cycle)
 - Re-review 2 (ff78daba..0927df9c, correctness): NEEDS FIXES — 1 Important repeat (All restore reads the joined heading problem as never-lists), 2 Minor (drop rule, same proxy; a wait row that cannot fail). Cycles used up; settled per repo § Review: all three Fix now in the last fix round, with one never-lists signal.
 ### Test gate
+- e92de61d: vitest over the 16 changed test files and their folders (node-files, builds-local, builds-teamcity, builds, scoped-files) 760/760 pass after fixing 5 tests red since tasks 05 and 07 (both test-side: a check read before the save reserved its name; a marks helper read the whole build head); npm run selftest -- --plugin builds all passed (5 of 5 groups); typecheck and lint clean.
