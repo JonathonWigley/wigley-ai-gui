@@ -1326,8 +1326,7 @@ name and prints its file and line.
   the Dock label of an unbundled app.
 
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
-  another). It packages in a build-only worktree beside the git checkout, `.wigley-ai-gui-build` (in the `ai` repo, its
-  `wigley-ai-gui` folder), so neither
+  another). It packages in a build-only worktree beside the git checkout, `.wigley-ai-gui-build`, so neither
   uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when its `node_modules` is
   missing or the lockfile changed since the last one. It copies the packaged app beside the install while the
   stable app still runs, then quits that app, never force-killing it: one still running after 15 s fails the install

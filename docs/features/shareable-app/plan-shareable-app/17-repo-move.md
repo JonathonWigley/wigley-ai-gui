@@ -182,8 +182,9 @@ Settled while drafting (Decided notices for the run):
    lists `package.json` and `agent-plugin` at the root.
 5. **Scan.** Mirror the old GitHub `main`: `git clone --mirror git@github-personal:JonathonWigley/wigley-ai-gui.git <scratch>/old.git`.
    For each of `split.git` and `old.git`, both scanners offline (no credential leaves the machine):
-   - `trufflehog git file://<scratch>/<repo> --no-verification --no-update --json > <scratch>/trufflehog-<repo>.json`
-     (`trufflehog git --help`, 3.100.1: `--no-verification` skips the live check, so every result is unverified;
+   - `trufflehog git file://<scratch>/<repo> --bare --no-verification --no-update --json > <scratch>/trufflehog-<repo>.json`
+     (`trufflehog git --help`, 3.100.1: `--bare` scans a bare repo, which has no `.git` folder and errors without it;
+     `--no-verification` skips the live check, so every result is unverified;
      `--no-update` skips its update check);
    - `betterleaks git <scratch>/<repo> "--log-opts=--all --diff-merges=remerge" --no-banner -f json -r <scratch>/betterleaks-<repo>.json`
      (`betterleaks git --help`, 1.10.1: it has no `--include=merges`, and `git log -p` shows no merge diff, so

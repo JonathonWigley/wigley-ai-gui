@@ -2,7 +2,6 @@
 
 **Contents**
 
-- **Status** — what in this README is planned and not built yet.
 - **What Auri is** — the app, and the agent plugin it ships.
 - **Requirements** — the programs the app and its plugin run.
 - **Install the app** — build and install the stable app, or run the dev app.
@@ -15,11 +14,6 @@
 - **Hooks** — the `auri` plugin's hooks.
 - **Data folders** — where the app keeps rounds, primers and its endpoint.
 - **License**
-
-## Status
-
-Planned in `shareable-app`, not built yet: the app's own repo at the clone URL below (task 17's split). Everything
-else in this README is built.
 
 ## What Auri is
 

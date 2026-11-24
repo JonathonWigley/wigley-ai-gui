@@ -6,6 +6,11 @@ changes for the user.
 
 ## Unreleased
 
+### Changed
+
+- The app moved out of the `ai` repo into its own repo, `JonathonWigley/wigley-ai-gui`, with its history: clone it on
+  its own, and install `auri` for terminal sessions from that clone.
+
 ## 1.1.0 — 2026-11-24
 
 ### Added
