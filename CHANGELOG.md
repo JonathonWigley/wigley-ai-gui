@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.4.0 — 2026-11-24
+
 ### Added
 
 - Builds mode shows the selected build beside the list: its links, its files and its jobs as boxes with arrows from
