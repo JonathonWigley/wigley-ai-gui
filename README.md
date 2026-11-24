@@ -185,6 +185,7 @@ By plugin:
 | `unity-pool`      | `unity-pool.scriptPath`, `unity-pool.layout`                                                                                                                                                                                                                                                                                                 |
 | `system-stats`    | `system-stats.refreshSeconds`, `system-stats.processRows`, `system-stats.layout`                                                                                                                                                                                                                                                             |
 | `visual`          | `visual.layout`                                                                                                                                                                                                                                                                                                                              |
+| `builds`          | `builds.backends`, `builds.layout`                                                                                                                                                                                                                                                                                                           |
 | `scheduling`      | `scheduling.layout`                                                                                                                                                                                                                                                                                                                          |
 | `demo`            | `demo.layout`, `demo.autoplaySeconds`                                                                                                                                                                                                                                                                                                        |
 | `app-update`      | `app-update.layout`                                                                                                                                                                                                                                                                                                                          |
@@ -199,56 +200,61 @@ Settings worth setting first:
   `{ "workflow", "seconds" }` records whose stages run their `auto` action after a countdown.
 - `unity-pool.scriptPath` — the `unity-pool` script the Unity pool panel runs. The plugin is off by default: remove
   `unity-pool` from `plugins.disabled` to use it.
+- `builds.backends` — the build backends this machine uses (`teamcity` or `local`), each with the games it
+  tracks, their build kinds and their sets. An agent adds a game on the user's ask.
 - `docs.scriptPath` — empty runs the app's own `agent-plugin/scripts/docs-index/docs_index.py`.
 
 ## Built-in plugins
 
 Every feature is a plugin in `src/plugins/<id>/`. Settings mode's Plugins section switches each one on or off.
 
-| Plugin             | What it does                                                                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessions`         | Sessions mode, with a side bar row for each agent session beside its panes and tabs.                                                                           |
-| `claude-code`      | Runs agent sessions on the Claude Code CLI.                                                                                                                    |
-| `forms`            | Shows each forms round an agent asks in a popup, to answer it.                                                                                                 |
-| `agent-commands`   | Lets an agent list and run the app's commands and read its state, asking before a risky one.                                                                   |
-| `primer`           | Shows each primer an agent opens, to tick and edit its tasks.                                                                                                  |
-| `audio-picker`     | Shows each audio picker an agent opens, to play candidate sounds and choose one per moment.                                                                    |
-| `chat`             | Runs agent sessions in the Chat tab: the transcript, the composer and the start prompt.                                                                        |
-| `auto-compact`     | Compacts an idle session with a cold prompt cache before the next message, when its context is large.                                                          |
-| `session-stash`    | Stashes a session with a note, and offers it again in the start prompt.                                                                                        |
-| `session-log`      | Records each session's start and end, and offers closed sessions again.                                                                                        |
-| `auto-retro`       | Runs the picked retro strategy's command in the background after each conversation the user ends.                                                              |
-| `agents`           | Tracks the subagents, tasks and skills each session runs.                                                                                                      |
-| `agent-lines`      | Shows a working line under each session row while its agents run.                                                                                              |
-| `agent-strip`      | Shows a box for each subagent and task above the composer.                                                                                                     |
-| `agent-skills`     | Lists the skills each session's agents started.                                                                                                                |
-| `context-sources`  | Shows what fills each session's context.                                                                                                                       |
-| `live-view`        | Streams a Unity editor's Game View into the session hub while an agent plays it.                                                                               |
-| `chatroom`         | One room per project where agent sessions and the user talk, beside a board of every session's state.                                                          |
-| `keys`             | Key hints: which-key, the help overlay and a search over every leader action.                                                                                  |
-| `docs`             | Docs mode: browse and edit every agent doc on the machine, as a wiki and a tree.                                                                               |
-| `docs-session-tab` | A Docs tab in each session, over the docs that session reads.                                                                                                  |
-| `gallery`          | Gallery mode: every design primitive in every state.                                                                                                           |
-| `settings`         | Settings mode: every setting and key bind.                                                                                                                     |
-| `scoped-agents`    | Runs the agent chats a plugin owns per scope, such as Backlog's assistant.                                                                                     |
-| `backlog`          | Backlog mode: every repo's follow-ups in one table, their staleness, and chunks started as sessions.                                                           |
-| `work`             | Slack and Jira work gathered by background worker sessions, with every card action: send, dismiss, snooze, move, accept, start a session.                      |
-| `work-inbox`       | Inbox mode: Slack threads sorted by what needs you, with drafts ready to send.                                                                                 |
-| `work-board`       | Board mode: your Jira tickets and local tasks in columns, with suggested moves.                                                                                |
-| `notes`            | A note popup over every mode that sends a note to a follow-up or a new session.                                                                                |
-| `practice`         | Practice mode: coding problems in C++ with a judge, progress and an interviewer.                                                                               |
-| `usage`            | Plan usage in the status bar, and each session's context and spend.                                                                                            |
-| `usage-tab-line`   | Each session's usage line in its tab bar.                                                                                                                      |
-| `workflow`         | Each session's workflow, step and checklist on its row, above the composer and in a side pane; the Checklist flow, declared workflows and the plan capability. |
-| `contributions`    | Reads every installed plugin's `auri.json` and serves its sections to the features.                                                                            |
-| `unity-pool`       | Which Unity pool clone each session holds, with Hold, Release and Open buttons. Off by default.                                                                |
-| `system-stats`     | CPU, GPU, RAM, network and disk use in the right bar.                                                                                                          |
-| `visual`           | Draws the html code blocks an agent writes as live visuals.                                                                                                    |
-| `markdown-blocks`  | Draws the `:::changes`, `:::tree` and `:::details` blocks agents write.                                                                                        |
-| `scheduling`       | Runs agent tasks on a schedule as new headless sessions, also while the app is closed.                                                                         |
-| `window`           | The command that brings the app forward from any other app.                                                                                                    |
-| `demo`             | Walks through every feature on sample data, one step at a time.                                                                                                |
-| `app-update`       | Shows Update available when origin's `main` has moved past the installed app's commit.                                                                         |
+| Plugin             | What it does                                                                                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sessions`         | Sessions mode, with a side bar row for each agent session beside its panes and tabs.                                                                                   |
+| `claude-code`      | Runs agent sessions on the Claude Code CLI.                                                                                                                            |
+| `forms`            | Shows each forms round an agent asks in a popup, to answer it.                                                                                                         |
+| `agent-commands`   | Lets an agent list and run the app's commands and read its state, asking before a risky one.                                                                           |
+| `primer`           | Shows each primer an agent opens, to tick and edit its tasks.                                                                                                          |
+| `audio-picker`     | Shows each audio picker an agent opens, to play candidate sounds and choose one per moment.                                                                            |
+| `chat`             | Runs agent sessions in the Chat tab: the transcript, the composer and the start prompt.                                                                                |
+| `auto-compact`     | Compacts an idle session with a cold prompt cache before the next message, when its context is large.                                                                  |
+| `session-stash`    | Stashes a session with a note, and offers it again in the start prompt.                                                                                                |
+| `session-log`      | Records each session's start and end, and offers closed sessions again.                                                                                                |
+| `auto-retro`       | Runs the picked retro strategy's command in the background after each conversation the user ends.                                                                      |
+| `agents`           | Tracks the subagents, tasks and skills each session runs.                                                                                                              |
+| `agent-lines`      | Shows a working line under each session row while its agents run.                                                                                                      |
+| `agent-strip`      | Shows a box for each subagent and task above the composer.                                                                                                             |
+| `agent-skills`     | Lists the skills each session's agents started.                                                                                                                        |
+| `context-sources`  | Shows what fills each session's context.                                                                                                                               |
+| `live-view`        | Streams a Unity editor's Game View into the session hub while an agent plays it.                                                                                       |
+| `chatroom`         | One room per project where agent sessions and the user talk, beside a board of every session's state.                                                                  |
+| `keys`             | Key hints: which-key, the help overlay and a search over every leader action.                                                                                          |
+| `docs`             | Docs mode: browse and edit every agent doc on the machine, as a wiki and a tree.                                                                                       |
+| `docs-session-tab` | A Docs tab in each session, over the docs that session reads.                                                                                                          |
+| `gallery`          | Gallery mode: every design primitive in every state.                                                                                                                   |
+| `settings`         | Settings mode: every setting and key bind.                                                                                                                             |
+| `scoped-agents`    | Runs the agent chats a plugin owns per scope, such as Backlog's assistant.                                                                                             |
+| `backlog`          | Backlog mode: every repo's follow-ups in one table, their staleness, and chunks started as sessions.                                                                   |
+| `work`             | Slack and Jira work gathered by background worker sessions, with every card action: send, dismiss, snooze, move, accept, start a session.                              |
+| `work-inbox`       | Inbox mode: Slack threads sorted by what needs you, with drafts ready to send.                                                                                         |
+| `work-board`       | Board mode: your Jira tickets and local tasks in columns, with suggested moves.                                                                                        |
+| `notes`            | A note popup over every mode that sends a note to a follow-up or a new session.                                                                                        |
+| `practice`         | Practice mode: coding problems in C++ with a judge, progress and an interviewer.                                                                                       |
+| `usage`            | Plan usage in the status bar, and each session's context and spend.                                                                                                    |
+| `usage-tab-line`   | Each session's usage line in its tab bar.                                                                                                                              |
+| `workflow`         | Each session's workflow, step and checklist on its row, above the composer and in a side pane; the Checklist flow, declared workflows and the plan capability.         |
+| `contributions`    | Reads every installed plugin's `auri.json` and serves its sections to the features.                                                                                    |
+| `unity-pool`       | Which Unity pool clone each session holds, with Hold, Release and Open buttons. Off by default.                                                                        |
+| `system-stats`     | CPU, GPU, RAM, network and disk use in the right bar.                                                                                                                  |
+| `visual`           | Draws the html code blocks an agent writes as live visuals.                                                                                                            |
+| `markdown-blocks`  | Draws the `:::changes`, `:::tree` and `:::details` blocks agents write.                                                                                                |
+| `scheduling`       | Runs agent tasks on a schedule as new headless sessions, also while the app is closed.                                                                                 |
+| `builds`           | Builds mode: the CI and local builds of the tracked games, queued in one press; each session's builds on its row and in its hub, and a build offer above its composer. |
+| `builds-teamcity`  | The `teamcity` build backend, over the TeamCity CLI.                                                                                                                   |
+| `builds-local`     | The `local` build backend: a command per build kind, run in the game's clone.                                                                                          |
+| `window`           | The command that brings the app forward from any other app.                                                                                                            |
+| `demo`             | Walks through every feature on sample data, one step at a time.                                                                                                        |
+| `app-update`       | Shows Update available when origin's `main` has moved past the installed app's commit.                                                                                 |
 
 ## MCP tools
 
@@ -296,18 +302,18 @@ The `auri` server offers these tools to every session, unless the row says other
 
 The `auri` plugin's skills, in `agent-plugin/skills/<name>/`:
 
-| Skill                          | What it teaches                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------- |
-| `auri:forms`                   | Asking the user in a forms round: wording, outcomes, headless, the written fallback.  |
-| `auri:visuals`                 | Live html visuals, images and videos in replies and rounds; mocks of a look decision. |
-| `auri:chatroom`                | What to post in the chatroom, when, and to whom; reading the board; claims.           |
-| `auri:workflows-and-checklist` | Session title, checklist, steps and plans; the Checklist flow and the edit gate.      |
-| `auri:backlog-format`          | The follow-up file format, and the Backlog assistant's tools.                         |
-| `auri:primer`                  | Opening a primer and reading the edited triage.                                       |
-| `auri:audio-picker`            | Opening an audio picker and reading the picks.                                        |
-| `auri:live-view`               | Streaming a Unity Game View, the `liveView` command patterns, and the probe.          |
-| `auri:writing-auri-json`       | Writing a plugin's `auri.json`.                                                       |
-| `auri:builds`                  | Queueing and tracking builds. Planned in `builds`, not built yet.                     |
+| Skill                          | What it teaches                                                                                    |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `auri:forms`                   | Asking the user in a forms round: wording, outcomes, headless, the written fallback.               |
+| `auri:visuals`                 | Live html visuals, images and videos in replies and rounds; mocks of a look decision.              |
+| `auri:chatroom`                | What to post in the chatroom, when, and to whom; reading the board; claims.                        |
+| `auri:workflows-and-checklist` | Session title, checklist, steps and plans; the Checklist flow and the edit gate.                   |
+| `auri:backlog-format`          | The follow-up file format, and the Backlog assistant's tools.                                      |
+| `auri:primer`                  | Opening a primer and reading the edited triage.                                                    |
+| `auri:audio-picker`            | Opening an audio picker and reading the picks.                                                     |
+| `auri:live-view`               | Streaming a Unity Game View, the `liveView` command patterns, and the probe.                       |
+| `auri:writing-auri-json`       | Writing a plugin's `auri.json`.                                                                    |
+| `auri:builds`                  | Queueing and offering builds, reading `builds.snapshot`, and tracking a game in `builds.backends`. |
 
 ## Hooks
 

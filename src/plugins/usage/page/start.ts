@@ -49,6 +49,8 @@ type UsageApi = PageApi<typeof usageManifest, ChannelShape>;
 // The `uiState` key holding `true` while the details are open.
 const DETAILS_OPEN_KEY = 'details-open';
 const REDRAW_MS = 60_000;
+// Under the build offer (10) and the agent strip (20), over the workflow strip (40).
+const CONTEXT_LINE_ORDER = 30;
 
 // Draws the usage status-bar line at the status bar's end until the part
 // stops, each session's context line above its Chat box (a chat composer part),
@@ -130,9 +132,10 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       lineParts.add(lines);
       return lines.part;
     };
-    chat.addComposerPart(
-      ownLinePart('usage.contextLine', contextLineKind(parts), services.log),
-    );
+    chat.addComposerPart({
+      ...ownLinePart('usage.contextLine', contextLineKind(parts), services.log),
+      order: CONTEXT_LINE_ORDER,
+    });
     chat.addStatusPart(
       ownLinePart('usage.spend', spendLineKind(parts), services.log),
     );

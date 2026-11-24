@@ -3,10 +3,18 @@ import type {
   Git,
   GitBranch,
   GitCommit,
+  GitRemoteHead,
   GitWorktree,
 } from '../../contracts/git';
 import type { Paths } from '../../contracts/paths';
 import type { ProcessRunner } from '../../contracts/processes';
+
+// How long `remoteHeads` waits on origin before it gives up.
+const REMOTE_HEADS_TIMEOUT_MS = 15000;
+
+// A sha `commitSubject` runs git for: hex only, so it never reads as an option
+// or a ref name.
+const SHA = /^[0-9a-f]{4,40}$/i;
 
 interface ProcessGitDeps {
   processes: ProcessRunner;
@@ -271,6 +279,45 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       );
       return commits[0] ?? null;
     },
+    remoteHeads: async (root, pattern) => {
+      try {
+        // `refs/heads/` anchors the pattern at the start of the name: git
+        // matches a bare pattern against a ref's tail from any `/`.
+        const result = await processes.run(
+          'git',
+          [
+            '-C',
+            root,
+            'ls-remote',
+            '--heads',
+            'origin',
+            `refs/heads/${pattern}`,
+          ],
+          { timeoutMs: REMOTE_HEADS_TIMEOUT_MS },
+        );
+        return result.code === 0 && !result.timedOut
+          ? remoteHeadRecords(result.stdout)
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    commitSubject: async (root, sha) => {
+      if (!SHA.test(sha)) {
+        return null;
+      }
+      const result = await processes.run('git', [
+        '-C',
+        root,
+        'show',
+        '-s',
+        '--no-show-signature',
+        '--format=%s',
+        `${sha}^{commit}`,
+        '--',
+      ]);
+      return result.code === 0 ? result.stdout.replace(/\n$/, '') : null;
+    },
     branches: async (root) =>
       branchRecords(
         await gitOutput(processes, 'for-each-ref', [
@@ -309,6 +356,23 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       );
     },
   };
+}
+
+// The heads of an `ls-remote --heads` run, one `<sha>\t<ref>` line each, in
+// git's order.
+function remoteHeadRecords(output: string): GitRemoteHead[] {
+  const heads: GitRemoteHead[] = [];
+  for (const line of output.split('\n')) {
+    const tab = line.indexOf('\t');
+    if (tab === -1) {
+      continue;
+    }
+    heads.push({
+      name: line.slice(tab + 1).replace(/^refs\/heads\//, ''),
+      sha: line.slice(0, tab),
+    });
+  }
+  return heads;
 }
 
 // The stdout of a git run; throws when it cannot start or exits non-zero.

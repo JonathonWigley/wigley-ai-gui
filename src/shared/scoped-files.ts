@@ -29,12 +29,12 @@ export function relativeSegments(path: string): string[] | null {
 // `files` with every path a `/`-separated path relative to `root`, joined
 // onto `root` by `paths` (`root` itself for an empty path). A path
 // `relativeSegments` refuses fails with `<path> is outside <root>` before any
-// I/O: `read`, `modified`, `readStart`, `readBytes`, `write`, `writeBytes`,
-// `append`, `list`, `stat`, `realPath`, `makeFolder`, `rename` (either path),
-// `trash` and `deleteFile` reject, and `watch` throws. `realPath` returns the resolved path
-// relative to `root`'s own real path (`` for `root` itself), as `paths`
-// compares them, its segments joined with `/`, and rejects `<path> is outside
-// <root>` when a link leads out of `root`.
+// I/O: `read`, `modified`, `readStart`, `readEnd`, `readBytes`, `write`,
+// `writeBytes`, `append`, `list`, `stat`, `realPath`, `makeFolder`, `rename`
+// (either path), `trash` and `deleteFile` reject, and `watch` throws.
+// `realPath` returns the resolved path relative to `root`'s own real path (``
+// for `root` itself), as `paths` compares them, its segments joined with `/`,
+// and rejects `<path> is outside <root>` when a link leads out of `root`.
 export function scopedFiles(files: Files, root: string, paths: Paths): Files {
   const outside = (path: string) => new Error(`${path} is outside ${root}`);
   const inside = (path: string): string => {
@@ -49,6 +49,7 @@ export function scopedFiles(files: Files, root: string, paths: Paths): Files {
     modified: async (path) => files.modified(inside(path)),
     readStart: async (path, maxBytes) =>
       files.readStart(inside(path), maxBytes),
+    readEnd: async (path, maxBytes) => files.readEnd(inside(path), maxBytes),
     readBytes: async (path) => files.readBytes(inside(path)),
     write: async (path, text) => files.write(inside(path), text),
     writeBytes: async (path, bytes) => files.writeBytes(inside(path), bytes),

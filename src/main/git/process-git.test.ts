@@ -679,6 +679,127 @@ describe('createProcessGit', () => {
     expect((await test.git.firstAdded(ROOT, 'a.md', '--x'))?.sha).toBe(SHA_A);
   });
 
+  it.each([
+    {
+      case: 'two heads',
+      result: exited(
+        0,
+        `${SHA_A}\trefs/heads/releases/physics-fun/0.12\n` +
+          `${SHA_B}\trefs/heads/releases/physics-fun/0.13\n`,
+      ),
+      expected: [
+        { name: 'releases/physics-fun/0.12', sha: SHA_A },
+        { name: 'releases/physics-fun/0.13', sha: SHA_B },
+      ],
+    },
+    { case: 'no match', result: exited(0, ''), expected: [] },
+    {
+      case: 'exits 128',
+      result: exited(
+        128,
+        '',
+        "fatal: 'origin' does not appear to be a git repository",
+      ),
+      expected: null,
+    },
+    {
+      case: 'times out',
+      result: { code: -1, stdout: '', stderr: '', timedOut: true },
+      expected: null,
+    },
+    {
+      case: 'cannot start',
+      result: new Error('Could not run git: spawn git ENOENT'),
+      expected: null,
+    },
+  ])(
+    'remoteHeads_Outcome_HeadsOrNull ($case)',
+    async ({ result, expected }) => {
+      const test = setUp();
+      test.processes.script(
+        'git',
+        git(
+          'ls-remote',
+          '--heads',
+          'origin',
+          'refs/heads/releases/physics-fun/*',
+        ),
+        result,
+      );
+
+      expect(
+        await test.git.remoteHeads(ROOT, 'releases/physics-fun/*'),
+      ).toEqual(expected);
+      expect(test.processes.runs[0].timeoutMs).toBe(15000);
+    },
+  );
+
+  it.each([
+    {
+      case: 'held',
+      sha: SHA_A,
+      result: exited(0, 'Fix the level loader\n'),
+      expected: 'Fix the level loader',
+      runs: 1,
+    },
+    {
+      case: 'missing',
+      sha: SHA_B,
+      result: exited(128, '', 'fatal: bad object'),
+      expected: null,
+      runs: 1,
+    },
+    {
+      case: 'option text',
+      sha: '--output=x',
+      result: null,
+      expected: null,
+      runs: 0,
+    },
+    { case: 'ref name', sha: 'HEAD', result: null, expected: null, runs: 0 },
+  ])(
+    'commitSubject_Outcome_SubjectOrNull ($case)',
+    async ({ sha, result, expected, runs }) => {
+      const test = setUp();
+      const show = git(
+        'show',
+        '-s',
+        '--no-show-signature',
+        '--format=%s',
+        `${sha}^{commit}`,
+        '--',
+      );
+      if (result !== null) {
+        test.processes.script('git', show, result);
+      }
+
+      expect(await test.git.commitSubject(ROOT, sha)).toBe(expected);
+      expect(test.processes.runs.map((run) => run.args)).toEqual(
+        Array.from({ length: runs }, () => show),
+      );
+    },
+  );
+
+  it('commitSubject_CannotStart_Rejects', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git(
+        'show',
+        '-s',
+        '--no-show-signature',
+        '--format=%s',
+        `${SHA_A}^{commit}`,
+        '--',
+      ),
+      new Error('Could not run git: spawn git ENOENT'),
+    );
+
+    await expect(test.git.commitSubject(ROOT, SHA_A)).rejects.toThrow(
+      'Could not run git',
+    );
+  });
+
   function branchesArgs(): string[] {
     return git(
       'for-each-ref',
@@ -986,6 +1107,44 @@ describe('createProcessGit over a real clone', () => {
       expect(
         (await adapter.firstAdded(root, 'c.md', '### Item\n'))?.subject,
       ).toBe('short title');
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'remoteHeadsAndCommitSubject_BareOrigin_AnchoredHeadsAndSubject',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      const origin = path.join(root, 'origin.git');
+      const clone = path.join(root, 'clone');
+      await run('init', '--quiet', '--bare', origin);
+      await run('clone', '--quiet', origin, clone);
+      writeFileSync(path.join(clone, 'a.md'), '');
+      await run('-C', clone, 'add', '--', 'a.md');
+      await run('-C', clone, 'commit', '--quiet', '-m', 'first');
+      await run(
+        '-C',
+        clone,
+        'push',
+        '--quiet',
+        'origin',
+        'HEAD:refs/heads/main',
+        'HEAD:refs/heads/feature/main',
+        'HEAD:refs/heads/releases/x/1',
+      );
+      const sha = (await run('-C', clone, 'rev-parse', 'HEAD')).trim();
+
+      expect(await adapter.remoteHeads(clone, 'main')).toEqual([
+        { name: 'main', sha },
+      ]);
+      expect(await adapter.remoteHeads(clone, 'releases/x/*')).toEqual([
+        { name: 'releases/x/1', sha },
+      ]);
+      expect(await adapter.remoteHeads(clone, 'nope')).toEqual([]);
+      expect(await adapter.commitSubject(clone, sha)).toBe('first');
+      expect(await adapter.commitSubject(clone, '0'.repeat(40))).toBeNull();
+      const tree = (await run('-C', clone, 'rev-parse', 'HEAD^{tree}')).trim();
+      expect(await adapter.commitSubject(clone, tree)).toBeNull();
     },
   );
 

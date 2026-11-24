@@ -38,4 +38,34 @@ describe('createPartStore', () => {
     expect(store.parts().map((each) => each.id)).toEqual(['p2']);
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it.each<{ name: string; added: [string, number][]; ids: string[] }>([
+    {
+      name: 'a lower order added later goes first',
+      added: [
+        ['strip', 20],
+        ['line', 30],
+        ['offer', 10],
+      ],
+      ids: ['offer', 'strip', 'line'],
+    },
+    {
+      name: 'equal orders keep add order',
+      added: [
+        ['b', 5],
+        ['a', 5],
+        ['c', 1],
+      ],
+      ids: ['c', 'b', 'a'],
+    },
+  ])('add_WithCompare_$name', ({ added, ids }) => {
+    const store = createPartStore<ContributedPart & { order: number }>(
+      (a, b) => a.order - b.order,
+    );
+    for (const [id, order] of added) {
+      store.add({ ...part(id), order });
+    }
+
+    expect(store.parts().map((each) => each.id)).toEqual(ids);
+  });
 });

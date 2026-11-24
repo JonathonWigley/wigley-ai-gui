@@ -29,6 +29,7 @@ import {
   type FileWatch,
   isMissingFile,
   type WatchOptions,
+  withoutLeadingContinuationBytes,
 } from '../../contracts/files';
 import type { OsName } from '../../contracts/platform';
 
@@ -71,6 +72,7 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     read: (file) => readFile(file, 'utf8'),
     modified: async (file) => Math.trunc((await stat(file)).mtimeMs),
     readStart: readFirstBytes,
+    readEnd: readLastBytes,
     write: writeAtomically,
     writeBytes: writeAtomically,
     append: async (file, text) => {
@@ -116,6 +118,35 @@ async function readFirstBytes(file: string, maxBytes: number): Promise<string> {
     return new TextDecoder('utf-8').decode(buffer.subarray(0, filled), {
       stream: true,
     });
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readLastBytes(file: string, maxBytes: number): Promise<string> {
+  const handle = await open(file, 'r');
+  try {
+    const { size } = await handle.stat();
+    const start = Math.max(0, size - maxBytes);
+    const buffer = Buffer.alloc(size - start);
+    // A read may return fewer bytes than asked for before the end of the file.
+    let filled = 0;
+    while (filled < buffer.length) {
+      const { bytesRead } = await handle.read(
+        buffer,
+        filled,
+        buffer.length - filled,
+        start + filled,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      filled += bytesRead;
+    }
+    const read = buffer.subarray(0, filled);
+    return new TextDecoder('utf-8').decode(
+      start > 0 ? withoutLeadingContinuationBytes(read) : read,
+    );
   } finally {
     await handle.close();
   }

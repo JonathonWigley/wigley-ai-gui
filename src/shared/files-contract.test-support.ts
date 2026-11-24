@@ -81,6 +81,10 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
         call: (files: Files, file: string) => files.readStart(file, 10),
       },
       {
+        method: 'readEnd',
+        call: (files: Files, file: string) => files.readEnd(file, 10),
+      },
+      {
         method: 'readBytes',
         call: (files: Files, file: string) => files.readBytes(file),
       },
@@ -124,6 +128,33 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
       await files.write(at('a.md'), 'aé');
 
       expect(await files.readStart(at('a.md'), 2)).toBe('a');
+    });
+
+    it.each([
+      { limit: 3, expected: 'llo' },
+      { limit: 100, expected: 'hello' },
+    ])(
+      'readEnd with limit $limit returns $expected',
+      async ({ limit, expected }) => {
+        const { files, at } = current();
+        await files.write(at('a.txt'), 'hello');
+
+        expect(await files.readEnd(at('a.txt'), limit)).toBe(expected);
+      },
+    );
+
+    it('readEnd_CutInsideACharacter_LeavesItOut', async () => {
+      const { files, at } = current();
+      await files.write(at('a.md'), 'éa');
+
+      expect(await files.readEnd(at('a.md'), 2)).toBe('a');
+    });
+
+    it('readEnd_WholeFile_KeepsALeadingContinuationByte', async () => {
+      const { files, at } = current();
+      await files.writeBytes(at('a.md'), new Uint8Array([0x80, 0x61]));
+
+      expect(await files.readEnd(at('a.md'), 10)).toBe('\uFFFDa');
     });
 
     it('list_MissingFolder_ReturnsEmpty', async () => {

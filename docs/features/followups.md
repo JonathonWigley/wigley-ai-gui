@@ -500,6 +500,10 @@ User-facing features, those other work builds on first.
 
 Duplication and drift with no user-visible defect.
 
+- **One clamped cursor move for every list view** — *agent-ready*: `movedKey`
+  (`src/plugins/builds/page/builds-view-model.ts`) is the eighth copy of the same rule — find the cursor's key, step
+  by the delta, clamp to both ends, fall back to the first row when the key is gone. Move it to one shared page helper
+  and point each copy at it (grep the page view models and states for the clamped `findIndex` step).
 - **Saved outcomes from one list** — *agent-ready*: `isSavedOutcome` (`src/shared/agent-forms/form-store.ts`)
   hard-codes `'open' | 'submitted' | 'cancelled'` beside the `SavedOutcome` type; derive both from one
   `SAVED_OUTCOMES` const.
@@ -539,6 +543,16 @@ Duplication and drift with no user-visible defect.
 
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
+
+- **The build offer card clips in a short window** — *agent-ready*: at a 900x700 window the Builds offer card (a chat
+  composer part, `builds.offer` in `src/plugins/builds/page/session-parts.ts`) is clipped inside the scrolling area
+  above the composer and its Dismiss button is partly hidden. Seen in the builds plan's live-fix drive run; screenshots
+  were in that run's `lf2-*.png`. Find which composer-part container clips it before changing the card.
+
+- **A second `chat.start` hangs the drive run** — *agent-ready*: in a drive run (fake harness), after the first
+  session ran `fake: agents`, a second `npm run drive -- do chat.start` never returned and every later drive command,
+  `eval 1+1` included, hung until `restart`; a retry after the restart hung the same way. Seen in the builds plan's
+  task 10 drive (check 11's hidden-hub case). Cause not checked: find what `chat.start` waits on.
 
 - **The hosted busy rule lacks the adapter's interrupt rescues** — *needs a feature plan*: the host's busy reading
   (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE` in `src/plugins/claude-code/main/claude-launch.ts`) now has

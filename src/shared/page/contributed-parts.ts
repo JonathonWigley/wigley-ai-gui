@@ -10,16 +10,19 @@ export interface ContributedPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
-// The parts other plugins added to one surface, in add order. `add` throws on
-// an id already held, and its `Disposable` removes the part; `onChanged` hears
-// each add and each removal.
+// The parts other plugins added to one surface, in `compare` order when the
+// store was made with one, equal parts in add order; else in add order. `add`
+// throws on an id already held, and its `Disposable` removes the part;
+// `onChanged` hears each add and each removal.
 export interface PartStore<P extends { id: string }> {
   add(part: P): Disposable;
   parts(): P[];
   onChanged(listener: () => void): Disposable;
 }
 
-export function createPartStore<P extends { id: string }>(): PartStore<P> {
+export function createPartStore<P extends { id: string }>(
+  compare?: (a: P, b: P) => number,
+): PartStore<P> {
   const held: P[] = [];
   const listeners = new Set<() => void>();
   const notify = () => {
@@ -32,7 +35,11 @@ export function createPartStore<P extends { id: string }>(): PartStore<P> {
       if (held.some((each) => each.id === part.id)) {
         throw new Error(`part ${part.id} is already added`);
       }
-      held.push(part);
+      const before =
+        compare === undefined
+          ? -1
+          : held.findIndex((each) => compare(part, each) < 0);
+      held.splice(before === -1 ? held.length : before, 0, part);
       notify();
       let isDisposed = false;
       return {

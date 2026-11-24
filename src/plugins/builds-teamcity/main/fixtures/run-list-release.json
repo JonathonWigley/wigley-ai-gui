@@ -1,0 +1,34 @@
+{
+  "count": 2,
+  "href": "",
+  "build": [
+    {
+      "id": 821150,
+      "buildTypeId": "vggt_BashBest_Release_BuildChain",
+      "number": "0.12.0.329",
+      "status": "FAILURE",
+      "state": "finished",
+      "branchName": "protos/physics-fun",
+      "statusText": "Build chain finished (success: 5, failed: 1, canceled: 1)",
+      "queuedDate": "20261123T170000+0000",
+      "startDate": "20261123T170003+0000",
+      "finishDate": "20261123T172510+0000",
+      "webUrl": "https://peoplefun.teamcity.com/build/821150",
+      "triggered": { "user": { "name": "Build User" } }
+    },
+    {
+      "id": 821100,
+      "buildTypeId": "vggt_BashBest_Release_BuildChain",
+      "number": "0.11.0.320",
+      "status": "UNKNOWN",
+      "state": "finished",
+      "branchName": "releases/physics-fun/0.11.x",
+      "statusText": "Canceled",
+      "queuedDate": "20261122T120000+0000",
+      "startDate": "20261122T120002+0000",
+      "finishDate": "20261122T121000+0000",
+      "webUrl": "https://peoplefun.teamcity.com/build/821100",
+      "triggered": { "user": { "name": "Build User" } }
+    }
+  ]
+}

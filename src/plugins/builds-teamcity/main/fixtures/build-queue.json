@@ -1,0 +1,22 @@
+{
+  "count": 2,
+  "build": [
+    {
+      "id": 821400,
+      "buildTypeId": "vggt_BashBest_Release_BuildChain",
+      "state": "queued",
+      "branchName": "<default>",
+      "queuedDate": "20261123T192000+0000",
+      "webUrl": "https://peoplefun.teamcity.com/build/821400",
+      "waitReason": "Waiting for a compatible agent",
+      "startEstimate": "20261123T202305+0000",
+      "triggered": { "user": { "name": "Build User" } }
+    },
+    {
+      "id": 999001,
+      "buildTypeId": "Other_Project_Build",
+      "state": "queued",
+      "queuedDate": "20261123T192100+0000"
+    }
+  ]
+}

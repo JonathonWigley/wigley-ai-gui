@@ -11,6 +11,9 @@ import { agentsMainPart } from './agents/main/start';
 import { autoCompactMainPart } from './auto-compact/main/start';
 import { autoRetroMainPart } from './auto-retro/main/start';
 import { backlogMainPart } from './backlog/main/start';
+import { buildsMainPart } from './builds/main/start';
+import { buildsLocalMainPart } from './builds-local/main/start';
+import { buildsTeamcityMainPart } from './builds-teamcity/main/start';
 import { chatMainPart } from './chat/main/start';
 import { chatroomMainPart } from './chatroom/main/start';
 import { claudeCodeMainPart } from './claude-code/main/start';
@@ -78,6 +81,9 @@ export const mainParts: readonly MainPart[] = [
   usageTabLineMainPart,
   workflowMainPart,
   unityPoolMainPart,
+  buildsMainPart,
+  buildsTeamcityMainPart,
+  buildsLocalMainPart,
   systemStatsMainPart,
   visualMainPart,
   schedulingMainPart,

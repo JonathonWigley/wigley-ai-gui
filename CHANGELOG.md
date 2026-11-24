@@ -33,6 +33,15 @@ changes for the user.
   at once on `W`, with the `work.*` settings for channels, keywords, the Jira query, the Board columns and each signal's
   column. Worker sessions run with permission checks off, and launch only in the installed app's live run: the dev app
   queues jobs and logs each one not launched.
+- Builds mode (`Space k m`) shows the CI and local builds of the games each machine tracks in
+  `builds.backends`: a side bar of games, each build's branch, commit, progress and who queued it, and an All feed
+  with All, Running and From sessions filters. `q` or `Space m q` queues a build or a build set on a branch.
+- A session shows its newest build on its row (`building` while it runs) and every build it queued in the hub's
+  Builds section, and the app messages the session when a build fails a job and when it ends.
+- Agents queue builds with `builds.queue` and offer one at a wrap-up with `builds.offer`; the offer card above
+  the composer queues it (`Space m m`) or dismisses it (`Space m x`). The `auri:builds` skill teaches both.
+- Build backends are plugins: `builds-teamcity` over the TeamCity CLI, and `builds-local`, which runs a
+  command per build kind in a game's clone.
 
 ### Changed
 

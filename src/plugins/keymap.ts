@@ -175,6 +175,7 @@ export const LIST_PICKER_SCOPES = [
   'notes.picker',
   'keys.picker',
   'scheduling.picker',
+  'builds.picker',
 ] as const;
 
 type ListPickerScope = (typeof LIST_PICKER_SCOPES)[number];
@@ -226,6 +227,7 @@ export const defaultKeymap = {
   groups: {
     '<Leader>b': 'session',
     '<Leader>k': 'go to',
+    '<Leader>m': 'build',
     '<Leader>v': 'view',
     '<Leader>d': 'demo',
     '<Leader>z': 'debug',
@@ -281,6 +283,9 @@ export const defaultKeymap = {
         'scoped-agents.ask',
         'chatroom.threads',
         'chatroom.log',
+        'builds.games',
+        'builds.list',
+        'builds.offer',
       ] as const
     ).map((scope) => ({
       keys: '<C-n>',
@@ -297,6 +302,10 @@ export const defaultKeymap = {
     { keys: '<Leader>kp', scope: 'any', command: 'practice.showMode' },
     { keys: '<Leader>kt', scope: 'any', command: 'scheduling.showMode' },
     { keys: '<Leader>kc', scope: 'any', command: 'chatroom.showMode' },
+    { keys: '<Leader>km', scope: 'any', command: 'builds.showMode' },
+    { keys: '<Leader>mq', scope: 'any', command: 'builds.pickQueue' },
+    { keys: '<Leader>mm', scope: 'any', command: 'builds.queueOffer' },
+    { keys: '<Leader>mx', scope: 'any', command: 'builds.dismissOffer' },
     { keys: '<Leader>vd', scope: 'any', command: 'backlog.toggleDone' },
     {
       keys: '<Leader>vi',
@@ -1298,6 +1307,29 @@ export const defaultKeymap = {
       scope: 'chatroom.composer',
       command: 'chatroom.leaveComposer',
     },
+
+    // ── Builds ─────────────────────────────────────────────────────────────
+    { keys: 'j', scope: 'builds.games', command: 'builds.gameDown' },
+    { keys: 'k', scope: 'builds.games', command: 'builds.gameUp' },
+    { keys: 'gg', scope: 'builds.games', command: 'builds.gameTop' },
+    { keys: 'G', scope: 'builds.games', command: 'builds.gameBottom' },
+    { keys: '<CR>', scope: 'builds.games', command: 'builds.openGame' },
+    { keys: 'q', scope: 'builds.games', command: 'builds.pickQueue' },
+    { keys: 'j', scope: 'builds.list', command: 'builds.listDown' },
+    { keys: 'k', scope: 'builds.list', command: 'builds.listUp' },
+    { keys: 'gg', scope: 'builds.list', command: 'builds.listTop' },
+    { keys: 'G', scope: 'builds.list', command: 'builds.listBottom' },
+    { keys: '<CR>', scope: 'builds.list', command: 'builds.openDetail' },
+    { keys: 'q', scope: 'builds.list', command: 'builds.pickQueue' },
+    { keys: 'o', scope: 'builds.list', command: 'builds.openWeb' },
+    { keys: 'x', scope: 'builds.list', command: 'builds.cancel' },
+    // `k` and Esc both hand the offer card's cursor back to the entries.
+    { keys: '<CR>', scope: 'builds.offer', command: 'builds.queueOffer' },
+    { keys: 'x', scope: 'builds.offer', command: 'builds.dismissOffer' },
+    { keys: 'k', scope: 'builds.offer', command: 'builds.leaveOffer' },
+    { keys: '<Esc>', scope: 'builds.offer', command: 'builds.leaveOffer' },
+    { keys: 'i', scope: 'builds.offer', command: 'builds.offerFocusBox' },
+    { keys: 'a', scope: 'builds.offer', command: 'builds.offerAppendBox' },
 
     // ── System stats ───────────────────────────────────────────────────────
     {

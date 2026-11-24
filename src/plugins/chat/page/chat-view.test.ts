@@ -651,6 +651,7 @@ describe('mountChatView side parts', () => {
 
     const composerPart = view.composerParts.add({
       id: 'above-the-box',
+      order: 10,
       build: () => ({}),
     });
 
@@ -1489,6 +1490,7 @@ describe('mountChatView pane keys', () => {
     let stopExits: ComposerStopExits | null = null;
     mount.composerParts.add({
       id: 'strip',
+      order: 10,
       build: () => ({}),
       stop: {
         enter(_sessionId, exits) {
@@ -1922,6 +1924,7 @@ describe('mountChatView focus', () => {
     );
     mount.composerParts.add({
       id: 'strip',
+      order: 10,
       build: () => ({}),
       stop: { enter: () => true, leave: () => undefined },
     });

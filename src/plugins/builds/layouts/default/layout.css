@@ -1,0 +1,203 @@
+/* The default Builds look: the side bar's entries and backend headings, the game head and its buttons, the feed's
+   filter chips, the build rows, set groups and detail. */
+
+[data-layout-owner='builds'][data-layout='default'].builds-side-bar {
+  display: flex;
+  flex-direction: column;
+  padding: var(--wg-space-2);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-backend-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+  padding-block-start: var(--wg-space-2);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-problem {
+  font-size: var(--wg-text-12);
+  color: var(--wg-status-error);
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-main-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-game-header,
+[data-layout-owner='builds'][data-layout='default'].builds-feed-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-3) var(--wg-space-4) var(--wg-space-2);
+  border-block-end: 1px solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-feed-header {
+  flex-direction: row;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-game-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-heading {
+  margin: 0;
+  font-size: var(--wg-text-14);
+  font-weight: var(--wg-weight-medium);
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-hint {
+  margin-inline-start: auto;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-chip.is-selected {
+  background: var(--wg-list-active-background);
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-muted {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-state {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+  white-space: nowrap;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row .ui-row-trailing,
+[data-layout-owner='builds'][data-layout='default'] .builds-job {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A narrow list gives way from the branch and subject first; the kind keeps up to half the row, and the state and
+   time left keep one line. */
+[data-layout-owner='builds'][data-layout='default'].builds-row .ui-row-label {
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row .ui-row-detail {
+  flex: 1 1 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row
+  .ui-row-trailing {
+  flex: none;
+  white-space: nowrap;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-set-group {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-set-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--wg-space-2);
+  padding: var(--wg-space-1) var(--wg-space-4);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-set-label {
+  font-weight: var(--wg-weight-medium);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-revision {
+  font-family: var(--wg-font-mono);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  margin: 0 var(--wg-space-4) var(--wg-space-2);
+  padding: var(--wg-space-2) var(--wg-space-3);
+  border-inline-start: var(--wg-indicator-width) solid var(--wg-border-subtle);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-job-label {
+  font-weight: var(--wg-weight-medium);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-step {
+  overflow-wrap: anywhere;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-status {
+  margin: 0;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+/* The session parts: the line under a session row, the hub's builds and the offer card. */
+
+.session-row-part[data-part='builds.row'] {
+  order: 2;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-row-line,
+[data-layout-owner='builds'][data-layout='default'] .builds-hub-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-line-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-hub-build {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  padding-block: var(--wg-space-1);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-offer-card {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3);
+  border: 1px solid var(--wg-border-subtle);
+  border-radius: var(--wg-radius-md);
+}
+
+[data-layout-owner='builds'][data-layout='default'].builds-offer-card.is-cursor {
+  border-color: var(--wg-focus-border);
+}
+
+[data-layout-owner='builds'][data-layout='default'] .builds-offer-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}

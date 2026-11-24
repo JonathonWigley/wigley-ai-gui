@@ -12,6 +12,7 @@ import { agentsPagePart } from './agents/page/start';
 import { autoCompactPagePart } from './auto-compact/page/start';
 import { autoRetroPagePart } from './auto-retro/page/start';
 import { backlogPagePart } from './backlog/page/start';
+import { buildsPagePart } from './builds/page/start';
 import { chatPagePart } from './chat/page/start';
 import { chatroomPagePart } from './chatroom/page/start';
 import { demoPagePart } from './demo/page/start';
@@ -61,6 +62,7 @@ export const pageParts: readonly PagePart[] = [
   agentLinesPagePart,
   workflowPagePart,
   unityPoolPagePart,
+  buildsPagePart,
   systemStatsPagePart,
   autoRetroPagePart,
   agentStripPagePart,

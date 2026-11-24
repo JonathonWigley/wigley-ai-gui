@@ -26,7 +26,7 @@ import {
 import { newFlow } from '../flow';
 import { createStageList } from '../stage-list';
 import { testWorkflowKit } from './engine-parts.test-support';
-import { createWorkflowView } from './workflow-view';
+import { createWorkflowView, topRunningActivity } from './workflow-view';
 
 const NO_SECTION = { setSummary: () => undefined };
 
@@ -40,6 +40,8 @@ function recordingSection() {
 }
 
 const NOW = 1_000_000;
+const WORKING: RowActivity = { word: 'working', tone: 'running', rank: 20 };
+const BUILDING: RowActivity = { word: 'building', tone: 'running', rank: 18 };
 
 // A stage of `label`, in the stepper unless a field says otherwise.
 function stageOf(
@@ -129,7 +131,7 @@ function flowOf(
 // with the main action `go`, `review`, and `idle` out of the stepper. Its timers
 // record each `set` (its handle the set's count), and its `nameOf` reads every session
 // as `proj`. `workflows` is what the view reads; `sidePart` is `stub`'s. Every session in
-// `previews` shows the preview, and every session in `working` reads as working
+// `previews` shows the preview, and every session in `running` holds that running activity,
 // and in `headless` as headless. `setHeadless` records each call, and rejects
 // with `headlessRefusal` while it is set. `active.session` is the session the
 // user views.
@@ -140,7 +142,7 @@ function setUp(previews: readonly string[] = []) {
   const toasts: string[] = [];
   const flows = new Map<string, SessionFlow>();
   const rowActivities = new Map<string, RowActivity | null>();
-  const working = new Set<string>();
+  const running = new Map<string, RowActivity>();
   const headless = new Set<string>();
   const headlessSets: [string, boolean][] = [];
   const refusal: { headless: string | null } = { headless: null };
@@ -174,7 +176,7 @@ function setUp(previews: readonly string[] = []) {
     isPreview: (sessionId) => previews.includes(sessionId),
     setRowActivity: (sessionId, activity) =>
       rowActivities.set(sessionId, activity),
-    isWorking: (sessionId) => working.has(sessionId),
+    runningActivity: (sessionId) => running.get(sessionId) ?? null,
     isHeadless: (sessionId) => headless.has(sessionId),
     async setHeadless(sessionId, value) {
       headlessSets.push([sessionId, value]);
@@ -205,7 +207,7 @@ function setUp(previews: readonly string[] = []) {
     sets,
     logged,
     rowActivities,
-    working,
+    running,
     headless,
     headlessSets,
     refusal,
@@ -355,17 +357,26 @@ describe('workflow view', () => {
 });
 
 describe('workflow view over several workflows', () => {
-  it.each([
-    { unclaimedWork: false, isWorking: false, chip: [] },
-    { unclaimedWork: true, isWorking: false, chip: ['No workflow'] },
-    { unclaimedWork: false, isWorking: true, chip: ['Working'] },
-    { unclaimedWork: true, isWorking: true, chip: ['No workflow', 'Working'] },
+  it.each<{
+    unclaimedWork: boolean;
+    activity: RowActivity | null;
+    chip: string[];
+  }>([
+    { unclaimedWork: false, activity: null, chip: [] },
+    { unclaimedWork: true, activity: null, chip: ['No workflow'] },
+    { unclaimedWork: false, activity: WORKING, chip: ['Working'] },
+    { unclaimedWork: false, activity: BUILDING, chip: ['Building'] },
+    {
+      unclaimedWork: true,
+      activity: WORKING,
+      chip: ['No workflow', 'Working'],
+    },
   ])(
-    'Draw_NullWorkflow unclaimedWork $unclaimedWork isWorking $isWorking',
-    ({ unclaimedWork, isWorking, chip: chipTexts }) => {
-      const { view, put, sidePart, rowActivities, working } = setUp();
-      if (isWorking) {
-        working.add('a');
+    'Draw_NullWorkflow unclaimedWork $unclaimedWork running $activity.word',
+    ({ unclaimedWork, activity, chip: chipTexts }) => {
+      const { view, put, sidePart, rowActivities, running } = setUp();
+      if (activity !== null) {
+        running.set('a', activity);
       }
       const chip = new FakeElement('div');
       const strip = new FakeElement('div');
@@ -383,7 +394,9 @@ describe('workflow view over several workflows', () => {
       expect(findAll(chip, 'ui-tag--error')).toHaveLength(
         unclaimedWork ? 1 : 0,
       );
-      expect(findAll(chip, 'ui-tag--running')).toHaveLength(isWorking ? 1 : 0);
+      expect(findAll(chip, 'ui-tag--running')).toHaveLength(
+        activity === null ? 0 : 1,
+      );
       expect(strip.children).toHaveLength(0);
       expect(pane.children).toHaveLength(0);
       expect(section.summaries.at(-1)).toBeNull();
@@ -399,14 +412,14 @@ describe('workflow view over several workflows', () => {
   ])(
     'Draw_StageChip status $status isWorking $isWorking',
     ({ status, isWorking, working: workingTags }) => {
-      const { view, workflows, put, working } = setUp();
+      const { view, workflows, put, running } = setUp();
       const shown = stubWorkflow(
         'w',
         stageOf('build', 'Build', 10, { status: () => status }),
       );
       workflows.push(shown.workflow);
       if (isWorking) {
-        working.add('a');
+        running.set('a', WORKING);
       }
       const chip = new FakeElement('div');
       view.chipPart.build(asHtml(chip), 'a');
@@ -420,12 +433,12 @@ describe('workflow view over several workflows', () => {
   );
 
   it('ActivityChanged_DrawsTheChipAgain', () => {
-    const { view, put, working } = setUp();
+    const { view, put, running } = setUp();
     const chip = new FakeElement('div');
     view.chipPart.build(asHtml(chip), 'a');
     put(newFlow('a', '/p'));
 
-    working.add('a');
+    running.set('a', WORKING);
     view.activityChanged('a');
 
     expect(chip.children.map((child) => child.textContent)).toEqual([
@@ -1067,7 +1080,7 @@ describe('workflow view headless', () => {
       },
     );
     run.workflows.push(shown.workflow);
-    run.working.add('a');
+    run.running.set('a', WORKING);
     const chip = new FakeElement('div');
     run.view.chipPart.build(asHtml(chip), 'a');
     run.put(flow);
@@ -1283,4 +1296,36 @@ describe('workflow view unseen word', () => {
       expect(rowActivities.get('a')?.word ?? null).toBe(word);
     },
   );
+});
+
+describe('topRunningActivity', () => {
+  const DONE: RowActivity = { word: 'done', tone: 'success', rank: 10 };
+  const ERROR: RowActivity = { word: 'error', tone: 'error', rank: 30 };
+  const TESTING: RowActivity = { word: 'testing', tone: 'running', rank: 18 };
+  it.each<{ name: string; sources: RowActivity[]; word: string | null }>([
+    { name: 'none', sources: [], word: null },
+    { name: 'no running one', sources: [DONE, ERROR], word: null },
+    { name: 'building alone', sources: [DONE, BUILDING], word: 'building' },
+    {
+      name: 'the higher rank, set first',
+      sources: [WORKING, BUILDING],
+      word: 'working',
+    },
+    {
+      name: 'a higher non-running rank ignored',
+      sources: [BUILDING, ERROR],
+      word: 'building',
+    },
+    {
+      name: 'a tie to the latest',
+      sources: [BUILDING, TESTING],
+      word: 'testing',
+    },
+  ])('TopRunningActivity_$name', ({ sources, word }) => {
+    const top = topRunningActivity(
+      sources.map((activity, index) => ({ sourceId: `s${index}`, activity })),
+    );
+
+    expect(top?.word ?? null).toBe(word);
+  });
 });

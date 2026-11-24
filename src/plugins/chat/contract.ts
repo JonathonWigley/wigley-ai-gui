@@ -892,10 +892,12 @@ export interface ComposerStopExits {
 }
 
 // What a plugin draws above every Chat tab's composer: chat hands it a
-// wrapper and the tab's session id. A part with a `stop` is offered the entry
-// cursor, in part order, the first to take it holding it.
+// wrapper and the tab's session id. Chat draws the parts top to bottom by
+// `order`, equal orders keeping add order, and offers the entry cursor to each
+// part with a `stop` in that order, the first to take it holding it.
 export interface ChatComposerPart {
   id: string;
+  order: number;
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
   stop?: ComposerStop;
 }

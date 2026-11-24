@@ -30,7 +30,7 @@ function part(id: string, enter: Enter, calls: string[], leaveThrows = false) {
       }
     },
   };
-  const built: ChatComposerPart = { id, build: () => ({}), stop };
+  const built: ChatComposerPart = { id, order: 10, build: () => ({}), stop };
   return Object.assign(built, { held });
 }
 
@@ -111,7 +111,11 @@ describe('composer stop holder', () => {
     },
   ])('offer_$case', ({ enters, firstLeaveThrows, holding, calls, logs }) => {
     const run = setUp();
-    const bare: ChatComposerPart = { id: 'bare', build: () => ({}) };
+    const bare: ChatComposerPart = {
+      id: 'bare',
+      order: 10,
+      build: () => ({}),
+    };
     const parts = [
       bare,
       ...enters.map((enter, index) =>

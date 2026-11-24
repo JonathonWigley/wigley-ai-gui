@@ -32,8 +32,8 @@ export interface WatchOptions {
   onMissed?(): void;
 }
 
-// UTF-8 text files read whole or by their first bytes, written whole or
-// appended to, any file read or written whole as bytes, and the folders that
+// UTF-8 text files read whole or by their first or last bytes, written whole
+// or appended to, any file read or written whole as bytes, and the folders that
 // hold them.
 export interface Files {
   // Rejects when the file is missing with an error naming the path, which
@@ -46,6 +46,10 @@ export interface Files {
   // left out; the whole file when shorter. Rejects when the file is missing,
   // naming the path.
   readStart(path: string, maxBytes: number): Promise<string>;
+  // The file's last `maxBytes` bytes as UTF-8, a character the cut splits at
+  // the start left out; the whole file when shorter. Rejects when the file is
+  // missing, naming the path.
+  readEnd(path: string, maxBytes: number): Promise<string>;
   // Atomic: writes a temp file `.<name>.<8 hex>.tmp` beside the target and
   // renames it over the target, creating missing parent folders first. The
   // Node adapter tries a rename that fails with EPERM or EBUSY (a file another
@@ -116,6 +120,16 @@ export function isMissingFile(error: unknown): boolean {
   return (
     error instanceof Error && (error as { code?: unknown }).code === 'ENOENT'
   );
+}
+
+// `bytes` from its first byte that is not a UTF-8 continuation byte
+// (`10xxxxxx`), so a character a cut split at the start is left out.
+export function withoutLeadingContinuationBytes(bytes: Uint8Array): Uint8Array {
+  let first = 0;
+  while (first < bytes.length && (bytes[first] & 0xc0) === 0x80) {
+    first += 1;
+  }
+  return bytes.subarray(first);
 }
 
 // The text at `path`; null when nothing is there.

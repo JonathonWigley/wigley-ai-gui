@@ -1,0 +1,10 @@
+[19:40:01] Step 1/2: Upload to Firebase App Distribution (Command Line)
+[19:40:03] i  uploading binary...
+[19:40:41] ✔  uploaded new release 0.12.0 (330) successfully!
+[19:40:41] i  View this release in the Firebase console: https://appdistribution.firebase.google.com/testerapps/1:1017210896283:ios:26dc2b5eea26c5c6eceb3e/releases/3433pjvova820?utm_source=firebase-tools
+[19:40:41] i  Share this release with testers who have access: https://console.firebase.google.com/project/pf-bash-best-prod/appdistribution/app/ios:com.thrivegames.bashbest/releases/3433pjvova820?utm_source=firebase-tools
+[19:40:42] i  distributing to testers...
+[19:40:43] ✔  distributed to testers/groups successfully
+[19:40:43] Step 2/2: Report the release (Command Line)
+[19:40:44] Release: https://appdistribution.firebase.google.com/testerapps/1:1017210896283:ios:26dc2b5eea26c5c6eceb3e/releases/3433pjvova820?utm_source=firebase-tools
+[19:40:44] Process exited with code 0

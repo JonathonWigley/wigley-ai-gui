@@ -51,10 +51,11 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 
 ```
 ┌ composer (L3 floating) ───────────────────────────────────────────────┐
-│ workflow strip                                  workflow (composer part)
+│ Build demo · ok · main      [Queue] [Dismiss]   builds (composer part, with a stop; only while an offer waits)
 │ ‹ [card] [card] … ›                             agent-strip (composer part, with a stop)
 │ ● Shell  Run Chat Row Tests              3m 05s agent-strip (one row per task, in the same part)
 │ ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂  58k/300k  cache 59m    usage (composer part)
+│ workflow strip                                  workflow (composer part)
 │ 1:05 Working…                                   chat (activity line; only while the hub is not visible)
 │ attachments strip                               chat
 │ ┌ box ─────────────────────────────────────┐    chat (no mode label; the cursor shape shows the mode)
@@ -63,8 +64,10 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- Composer parts draw in plugin start order above the activity line: the workflow strip, the agent strip, then the
-  context line.
+- Composer parts draw above the activity line by each part's `order` (`ChatComposerPart.order`), lowest first, equal
+  orders in add order: the build offer (10), the agent strip (20), the context line (30), then the workflow strip
+  (40). Chat offers the entry cursor to the parts with a stop in the same order, so while an offer waits its card
+  takes `j` from the last entry before the agent strip does.
 - The activity line is chat's own slot in the composer (`ComposerKit.working`), between the composer parts and the
   attachments.
 - The status line is chat's `statusLine` layout part. Chat draws the repo, the branch and the control chips itself;

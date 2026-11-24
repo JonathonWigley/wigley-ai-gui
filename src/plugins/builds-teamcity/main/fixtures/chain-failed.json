@@ -1,0 +1,125 @@
+{
+  "id": 821150,
+  "state": "finished",
+  "status": "FAILURE",
+  "statusText": "Build chain finished (success: 5, failed: 1, canceled: 1)",
+  "snapshot-dependencies": {
+    "count": 7,
+    "build": [
+      {
+        "id": 821141,
+        "buildTypeId": "vggt_BashBest_EmbeddedShellScriptArtifacts_Versioning",
+        "state": "finished",
+        "status": "SUCCESS",
+        "statusText": "Success",
+        "buildType": {
+          "name": "Embedded Shell Script Artifacts"
+        },
+        "revisions": {
+          "count": 1,
+          "revision": [
+            {
+              "version": "db45365f93e1b2c3d4e5f60718293a4b5c6d7e8f"
+            }
+          ]
+        }
+      },
+      {
+        "id": 821143,
+        "buildTypeId": "vggt_BashBest_BuildParameters_Release",
+        "state": "finished",
+        "status": "SUCCESS",
+        "statusText": "Success",
+        "buildType": {
+          "name": "Build Parameters Release"
+        },
+        "revisions": {
+          "count": 0,
+          "revision": []
+        }
+      },
+      {
+        "id": 821144,
+        "buildTypeId": "vggt_BashBest_AppVersion_BashBest",
+        "state": "finished",
+        "status": "SUCCESS",
+        "statusText": "Success",
+        "buildType": {
+          "name": "App Version"
+        },
+        "revisions": {
+          "count": 1,
+          "revision": [
+            {
+              "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
+            }
+          ]
+        }
+      },
+      {
+        "id": 821148,
+        "buildTypeId": "vggt_BashBest_BuildIOS_Release",
+        "state": "finished",
+        "status": "FAILURE",
+        "statusText": "Exit code 65 (Step: Build Xcode project)",
+        "buildType": {
+          "name": "Build iOS Release"
+        },
+        "revisions": {
+          "count": 1,
+          "revision": [
+            {
+              "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
+            }
+          ]
+        }
+      },
+      {
+        "id": 821145,
+        "buildTypeId": "vggt_BashBest_BuildAndroid_Release",
+        "state": "finished",
+        "status": "SUCCESS",
+        "statusText": "Success",
+        "buildType": {
+          "name": "Build Android Release"
+        },
+        "revisions": {
+          "count": 1,
+          "revision": [
+            {
+              "version": "2993a9e4b92724916453c6e2a3257c4838ce0777"
+            }
+          ]
+        }
+      },
+      {
+        "id": 821149,
+        "buildTypeId": "vggt_BashBest_DeployIOS_Release",
+        "state": "finished",
+        "status": "UNKNOWN",
+        "statusText": "Canceled",
+        "buildType": {
+          "name": "Deploy iOS Release"
+        },
+        "revisions": {
+          "count": 0,
+          "revision": []
+        }
+      },
+      {
+        "id": 821146,
+        "buildTypeId": "vggt_BashBest_DeployAndroid_Release",
+        "state": "finished",
+        "status": "SUCCESS",
+        "statusText": "Success",
+        "buildType": {
+          "name": "Deploy Android Release"
+        },
+        "revisions": {
+          "count": 0,
+          "revision": []
+        }
+      }
+    ]
+  }
+}

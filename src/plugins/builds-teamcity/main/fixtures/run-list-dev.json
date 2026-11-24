@@ -1,0 +1,33 @@
+{
+  "count": 2,
+  "href": "",
+  "build": [
+    {
+      "id": 821339,
+      "buildTypeId": "vggt_BashBest_Dev_BuildChain",
+      "number": "0.12.0.331",
+      "status": "SUCCESS",
+      "state": "running",
+      "branchName": "protos/physics-fun",
+      "statusText": "Build chain is running (3 finished, 2 in queue, 2 running)",
+      "queuedDate": "20261123T191020+0000",
+      "startDate": "20261123T191022+0000",
+      "webUrl": "https://peoplefun.teamcity.com/build/821339",
+      "triggered": { "user": { "name": "Build User" } }
+    },
+    {
+      "id": 821200,
+      "buildTypeId": "vggt_BashBest_Dev_BuildChain",
+      "number": "0.12.0.330",
+      "status": "SUCCESS",
+      "state": "finished",
+      "branchName": "protos/physics-fun",
+      "statusText": "Build chain finished (success: 7)",
+      "queuedDate": "20261123T180000+0000",
+      "startDate": "20261123T180002+0000",
+      "finishDate": "20261123T183412+0000",
+      "webUrl": "https://peoplefun.teamcity.com/build/821200",
+      "triggered": { "user": { "name": "Build User" } }
+    }
+  ]
+}

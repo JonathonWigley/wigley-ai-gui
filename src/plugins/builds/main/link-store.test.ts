@@ -1,0 +1,279 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createMemoryFiles } from '../../../shared/memory-files';
+import { deferred } from '../../../shared/plugin-part-harness.test-support';
+import type { SessionLink, SetRun } from '../builds-model';
+import { buildOffer } from '../contract.test-support';
+import { createLinkStore, LINKS_FILE, PRUNE_AFTER_MS } from './link-store';
+
+const flush = () => new Promise((settle) => setImmediate(settle));
+
+function sessionLink(overrides: Partial<SessionLink> = {}): SessionLink {
+  return {
+    sessionId: 's1',
+    backendId: 'b1',
+    buildId: 'x',
+    setRunId: null,
+    linkedAt: 0,
+    failingNotified: false,
+    notified: false,
+    endedAt: null,
+    ...overrides,
+  };
+}
+
+function setRun(overrides: Partial<SetRun> = {}): SetRun {
+  return {
+    id: 'r1',
+    setId: 'rc',
+    label: 'RC set',
+    backendId: 'b1',
+    gameId: 'g1',
+    sessionId: 's1',
+    builds: [{ backendId: 'b1', buildId: 'x' }],
+    revision: null,
+    createdAt: 0,
+    notified: false,
+    endedAt: null,
+    ...overrides,
+  };
+}
+
+function setup() {
+  const files = createMemoryFiles();
+  const logs: string[] = [];
+  const open = () => createLinkStore(files, (line) => logs.push(line));
+  return { files, logs, open };
+}
+
+describe('createLinkStore', () => {
+  it('writes each change whole and reads it back after a new load', async () => {
+    const run = setup();
+    const store = run.open();
+    await store.load();
+
+    store.addLinks([sessionLink()]);
+    store.addSetRun(setRun());
+    store.setOffer('s1', buildOffer({ createdAt: 5 }));
+    store.updateLinks((link) => link.buildId === 'x', { notified: true });
+    store.updateSetRun('r1', { endedAt: 300 });
+    expect(await store.written()).toBe(true);
+    const reloaded = run.open();
+    await reloaded.load();
+
+    expect(reloaded.links()).toEqual([sessionLink({ notified: true })]);
+    expect(reloaded.setRuns()).toEqual([setRun({ endedAt: 300 })]);
+    expect(reloaded.offers()).toEqual({ s1: buildOffer({ createdAt: 5 }) });
+  });
+
+  it('loads a missing file as empty and drops bad entries', async () => {
+    const run = setup();
+    const empty = run.open();
+    await empty.load();
+    expect(empty.links()).toEqual([]);
+    await run.files.write(
+      LINKS_FILE,
+      JSON.stringify({ links: [sessionLink(), { sessionId: 7 }] }),
+    );
+
+    const store = run.open();
+    await store.load();
+
+    expect(store.links()).toEqual([sessionLink()]);
+    expect(run.logs).toEqual(['session-links.json: dropped 1 bad entries']);
+  });
+
+  it.each([
+    { case: 'not JSON', text: '{' },
+    { case: 'an array', text: '[]' },
+    { case: 'links not a list', text: '{"links":{}}' },
+    { case: 'setRuns not a list', text: '{"setRuns":5}' },
+    { case: 'offers not an object', text: '{"offers":[]}' },
+  ])('writes nothing after a load of $case', async ({ text }) => {
+    const run = setup();
+    await run.files.write(LINKS_FILE, text);
+    const store = run.open();
+
+    await expect(store.load()).rejects.toThrow();
+    store.addLinks([sessionLink()]);
+
+    expect(await store.written()).toBe(false);
+    expect(await run.files.read(LINKS_FILE)).toBe(text);
+  });
+
+  it('reads a missing member as empty and counts bad entries across members', async () => {
+    const run = setup();
+    await run.files.write(LINKS_FILE, '{"links":[]}');
+    const sparse = run.open();
+    await sparse.load();
+    expect(sparse.setRuns()).toEqual([]);
+    expect(sparse.offers()).toEqual({});
+    expect(run.logs).toEqual([]);
+    await run.files.write(
+      LINKS_FILE,
+      '{"links":[1],"setRuns":["x"],"offers":{"s1":5}}',
+    );
+
+    const store = run.open();
+    await store.load();
+
+    expect([store.links(), store.setRuns(), store.offers()]).toEqual([
+      [],
+      [],
+      {},
+    ]);
+    expect(run.logs).toEqual(['session-links.json: dropped 3 bad entries']);
+  });
+
+  it('keeps a change made before the load settles after the file, and writes only after the read', async () => {
+    const run = setup();
+    await run.files.write(
+      LINKS_FILE,
+      JSON.stringify({ links: [sessionLink({ buildId: 'filed' })] }),
+    );
+    const store = run.open();
+    const readFile = run.files.read.bind(run.files);
+    const read = deferred<void>();
+    vi.spyOn(run.files, 'read').mockImplementationOnce(async (path) => {
+      await read.promise;
+      return readFile(path);
+    });
+    const write = vi.spyOn(run.files, 'write');
+
+    const loading = store.load();
+    store.addLinks([sessionLink({ buildId: 'early' })]);
+    await flush();
+    expect(write).not.toHaveBeenCalled();
+    read.resolve();
+    await loading;
+
+    expect(store.links().map((link) => link.buildId)).toEqual([
+      'filed',
+      'early',
+    ]);
+    expect(await store.written()).toBe(true);
+    const reloaded = run.open();
+    await reloaded.load();
+    expect(reloaded.links().map((link) => link.buildId)).toEqual([
+      'filed',
+      'early',
+    ]);
+  });
+
+  it('resolves written false when a write rejects', async () => {
+    const run = setup();
+    const store = run.open();
+    await store.load();
+    vi.spyOn(run.files, 'write').mockRejectedValueOnce(new Error('disk full'));
+
+    store.addLinks([sessionLink()]);
+
+    expect(await store.written()).toBe(false);
+    expect(run.logs).toEqual(['session-links.json not written: disk full']);
+  });
+
+  const now = 10 * PRUNE_AFTER_MS;
+  const twoBuildSetRun = setRun({
+    createdAt: now - PRUNE_AFTER_MS - 1,
+    builds: [
+      { backendId: 'b1', buildId: 'x' },
+      { backendId: 'b1', buildId: 'y' },
+    ],
+  });
+  it.each<{
+    case: string;
+    add: {
+      link?: SessionLink;
+      setRun?: SetRun;
+      offer?: ReturnType<typeof buildOffer>;
+    };
+    unlisted: string[];
+    kept: boolean;
+  }>([
+    {
+      case: 'ended at the limit',
+      add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS }) },
+      unlisted: [],
+      kept: true,
+    },
+    {
+      case: 'ended past the limit',
+      add: { link: sessionLink({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
+      unlisted: [],
+      kept: false,
+    },
+    {
+      case: 'untold, listed, old',
+      add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
+      unlisted: [],
+      kept: true,
+    },
+    {
+      case: 'untold, unlisted, old',
+      add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS - 1 }) },
+      unlisted: ['x'],
+      kept: false,
+    },
+    {
+      case: 'untold, unlisted, at the limit',
+      add: { link: sessionLink({ linkedAt: now - PRUNE_AFTER_MS }) },
+      unlisted: ['x'],
+      kept: true,
+    },
+    {
+      case: 'set run ended at the limit',
+      add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS }) },
+      unlisted: [],
+      kept: true,
+    },
+    {
+      case: 'set run ended past the limit',
+      add: { setRun: setRun({ endedAt: now - PRUNE_AFTER_MS - 1 }) },
+      unlisted: [],
+      kept: false,
+    },
+    {
+      case: 'set run untold, old, every build unlisted',
+      add: { setRun: twoBuildSetRun },
+      unlisted: ['x', 'y'],
+      kept: false,
+    },
+    {
+      case: 'set run untold, old, one build unlisted',
+      add: { setRun: twoBuildSetRun },
+      unlisted: ['y'],
+      kept: true,
+    },
+    {
+      case: 'offer at the limit',
+      add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS }) },
+      unlisted: [],
+      kept: true,
+    },
+    {
+      case: 'offer past the limit',
+      add: { offer: buildOffer({ createdAt: now - PRUNE_AFTER_MS - 1 }) },
+      unlisted: [],
+      kept: false,
+    },
+  ])('prune keeps $case: $kept', async ({ add, unlisted, kept }) => {
+    const store = setup().open();
+    await store.load();
+    if (add.link) {
+      store.addLinks([add.link]);
+    }
+    if (add.setRun) {
+      store.addSetRun(add.setRun);
+    }
+    if (add.offer) {
+      store.setOffer('s1', add.offer);
+    }
+
+    const dropped = store.prune(now, (ref) => unlisted.includes(ref.buildId));
+
+    const held =
+      store.links().length +
+      store.setRuns().length +
+      Object.keys(store.offers()).length;
+    expect({ held, dropped }).toEqual({ held: kept ? 1 : 0, dropped: !kept });
+  });
+});

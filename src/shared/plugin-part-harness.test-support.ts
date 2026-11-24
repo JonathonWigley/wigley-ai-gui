@@ -895,6 +895,7 @@ function countingWatches(files: Files, counts: PartCounts): Files {
     read: (...args) => files.read(...args),
     modified: (...args) => files.modified(...args),
     readStart: (...args) => files.readStart(...args),
+    readEnd: (...args) => files.readEnd(...args),
     write: (...args) => files.write(...args),
     writeBytes: (...args) => files.writeBytes(...args),
     append: (...args) => files.append(...args),

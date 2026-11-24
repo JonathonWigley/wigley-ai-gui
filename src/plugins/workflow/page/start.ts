@@ -50,7 +50,7 @@ import {
 } from './layout/workflow-draw';
 import { createPreview } from './preview-steps';
 import { registerSampleDemoSteps } from './sample-demo-steps';
-import { createWorkflowView } from './workflow-view';
+import { createWorkflowView, topRunningActivity } from './workflow-view';
 import {
   keyRunner,
   kitCommandsOf,
@@ -128,10 +128,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       isPreview,
       setRowActivity: (sessionId, activity) =>
         sessions.setActivity(sessionId, workflowManifest.id, activity),
-      isWorking: (sessionId) =>
-        (activities.get(sessionId) ?? []).some(
-          ({ activity }) => activity.tone === 'running',
-        ),
+      runningActivity: (sessionId) =>
+        topRunningActivity(activities.get(sessionId) ?? []),
       isHeadless: (sessionId) => chatSessions.get(sessionId)?.headless === true,
       setHeadless: (sessionId, headless) =>
         chat.setHeadless(sessionId, headless),

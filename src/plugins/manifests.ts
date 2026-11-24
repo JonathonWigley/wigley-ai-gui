@@ -11,6 +11,9 @@ import { agentsManifest } from './agents/manifest';
 import { autoCompactManifest } from './auto-compact/manifest';
 import { autoRetroManifest } from './auto-retro/manifest';
 import { backlogManifest } from './backlog/manifest';
+import { buildsManifest } from './builds/manifest';
+import { buildsLocalManifest } from './builds-local/manifest';
+import { buildsTeamcityManifest } from './builds-teamcity/manifest';
 import { chatManifest } from './chat/manifest';
 import { chatroomManifest } from './chatroom/manifest';
 import { claudeCodeManifest } from './claude-code/manifest';
@@ -86,6 +89,9 @@ export const builtInManifests = [
   usageTabLineManifest,
   workflowManifest,
   unityPoolManifest,
+  buildsManifest,
+  buildsTeamcityManifest,
+  buildsLocalManifest,
   systemStatsManifest,
   visualManifest,
   markdownBlocksManifest,
