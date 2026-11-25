@@ -43,8 +43,8 @@ off, the permission card still draws its target line and its folded full call, j
   `ConfirmRequest` carries a `subject` (`{ toolName, input }`, or null): agent-commands fills it with
   `toolName: app command <id>` and the command's argument, or `{ session, arg }` with the target session's side-bar
   name when the run names one, since the target is what makes a close or a send risky. While the round is open, forms publishes it in its
-  `forms.confirms` keyed slot, keyed by round id, holding `{ sessionId, subject }`, and deletes it when the round
-  finishes. The plugin reviews each new key. Its profile is the caller's chat session's, or chat's default profile
+  `forms.confirms` keyed slot, keyed by round id, holding `{ sessionId, subject }`, and deletes it once the confirm settles, however it ends (submitted,
+  cancelled, aborted or failed). Forms clears any key an earlier start left behind when it starts. The plugin reviews each new key. Its profile is the caller's chat session's, or chat's default profile
   for a caller chat does not own (a terminal session). `confirmSample`, the demo's round, publishes nothing.
 
 ## The one-shot ask
@@ -65,7 +65,7 @@ off, the permission card still draws its target line and its folded full call, j
   - `--output-format json` gives one result object.
   - `--model <askModel>`.
 - The ask runs with the profile's `CLAUDE_CONFIG_DIR`, as every one-shot does, so it signs in with the session's own
-  account. It runs in an empty folder of its own, `claude-code-ask` inside the first OS temp folder, so no project
+  account. It runs in an empty folder of its own, `claude-code-ask` inside the first OS temp folder, made before each ask and reused, so no project
   file is near it. With no temp folder (the self-test), the ask rejects.
 - **Checked at plan time, 2026-11-25:** with these flags and the personal profile, the model said no text mentioned
   the profile's `CLAUDE.md` content. Without `--setting-sources ""` it said yes. Subscription sign-in worked without
@@ -89,7 +89,7 @@ off, the permission card still draws its target line and its folded full call, j
 ## The card
 
 - **Chat's permission entry** carries `summary`: the tool's target line, the same text a tool entry shows (a Bash
-  command's first line, an edited file's path). The harness writes it, so no other plugin reads a tool's input
+  command's first line, an edited file's path; for a tool with no named field, the input's first string field). The harness writes it, so no other plugin reads a tool's input
   shape. The default layout draws, top to bottom:
   1. The contributed entry parts.
   2. The head: the tool name, then the target line in the mono font.
@@ -113,12 +113,13 @@ off, the permission card still draws its target line and its folded full call, j
 ## Lifecycle
 
 - Each request is reviewed once, when it arrives. Reviews run at once, with no queue. Each has a 60-second limit,
-  after which it shows unavailable with the reason `the review took longer than 60 s`.
+  after which the plugin itself writes the unavailable review with the reason `the review took longer than 60 s`,
+  then aborts the ask; whatever the ask settles with later is dropped.
 - A chat review is deleted when its session ends (`sessions.ended`), or when a `replace` of the session's entries (a
-  `/clear`) no longer holds its entry. A confirm review is deleted when its round leaves `forms.confirms`. A review
+  `/clear`) no longer holds its entry; a replace drops only the reviews whose entry went. A confirm review is deleted when its round leaves `forms.confirms`. A review
   that is still running when its key goes is aborted, and a deleted review's verdict leaves the card. An answer does
   not stop a running review: the verdict lands on the answered card.
-- When the plugin starts again, it drops held reviews whose session or round went while it was off, and reviews the
+- When the plugin starts again, it drops held reviews that were still running or whose session or round went while it was off, and reviews the
   requests still waiting.
 - The plugin logs each outcome, so the self-test can wait on it:
   - `[permission-review] reviewed <tool> in <session>: <verdict> · <risk>`

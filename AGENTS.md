@@ -395,7 +395,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  agents' service auto-answers a headless chat session's rounds with every item's recommendation,
                  outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the
                  Layout contract and the built-in `default` layout); main exports `confirm` (an Allow or Deny round
-                 in the calling session's own forms session, a fresh round each call; its request carries an optional subject, published in the `forms.confirms` slot while the round is open) and `confirmSample` (the same round as a sample that saves nothing and wakes no session, for a demo step) to agent-commands
+                 in the calling session's own forms session, a fresh round each call; its request carries a required `subject` (a `ConfirmSubject`, or null for none), published in the `forms.confirms` slot while the round is open) and `confirmSample` (the same round as a sample that saves nothing and wakes no session, for a demo step) to agent-commands
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures, `DEMO_PRIMER_ARGS` (the demo step's sample primer),
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
