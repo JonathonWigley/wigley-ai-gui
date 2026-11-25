@@ -131,7 +131,8 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
 // the OS `claude` runs on; `clock` gives each line this harness writes its `at`,
 // which stamps the entries and agent events the line folds to; `randomUuid`
-// gives each stdin user message its `uuid`. `files` also
+// gives each stdin message that carries a `uuid` its own, and each ask's
+// folder its suffix. `files` also
 // reads the profile's `settings.json` and the agent definitions at each session
 // start. `profiles` reads the harness's profiles at each `info()` call.
 // `askModel` reads the model an `ask` runs on at each ask, '' for the CLI's

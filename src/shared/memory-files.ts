@@ -8,7 +8,7 @@ import {
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile` and `remove` report
+// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile`, `removeFolder` and `remove` report
 // each changed file's and folder's path to the watches over it at once, with no
 // debounce, so a test drives a save by writing; a rename reports each moved
 // file's and folder's old path and its new one. A watch with
@@ -33,7 +33,7 @@ interface MemoryWatch {
 }
 
 // A folder exists when `makeFolder` made it, it held a file or folder that
-// `rename`, `trash` or `remove` took away, or any file or made folder lies
+// `rename`, `trash`, `removeFolder` or `remove` took away, or any file or made folder lies
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
@@ -313,6 +313,12 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         throw codedError(`a file lies above ${path}`, 'ENOTDIR');
       }
       if (contents.has(key)) {
+        removeKey(key);
+      }
+    },
+    removeFolder: async (path) => {
+      const key = keyOf(path);
+      if (statKey(key) !== null) {
         removeKey(key);
       }
     },

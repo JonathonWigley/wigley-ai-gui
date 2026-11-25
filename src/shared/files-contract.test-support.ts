@@ -440,5 +440,25 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
         { path: 'e', kind: 'folder' },
       ]);
     });
+
+    it('removeFolder_FolderWithFiles_RemovesItAndKeepsItsParent', async () => {
+      const { files, at } = current();
+      await files.write(at('top/e/a.md'), 'one');
+      await files.makeFolder(at('top/e/f'));
+      await files.write(at('top/keep.md'), 'k');
+
+      await files.removeFolder(at('top/e'));
+
+      expect(await files.stat(at('top/e'))).toBeNull();
+      expect(await files.list(at('top'))).toEqual([
+        { path: 'keep.md', kind: 'file' },
+      ]);
+    });
+
+    it('removeFolder_Missing_Resolves', async () => {
+      const { files, at } = current();
+
+      await expect(files.removeFolder(at('none'))).resolves.toBeUndefined();
+    });
   });
 }

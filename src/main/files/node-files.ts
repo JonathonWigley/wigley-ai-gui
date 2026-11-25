@@ -94,6 +94,7 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     trash: (file) => options.trashItem(file),
     // No `recursive`, so a folder rejects.
     deleteFile: (file) => rm(file, { force: true }),
+    removeFolder: (folder) => rm(folder, { recursive: true, force: true }),
   };
 }
 

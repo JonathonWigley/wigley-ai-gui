@@ -96,6 +96,9 @@ export interface Files {
   // Deletes the file at `path` for good; nothing there is no error. Rejects for a
   // folder, keeping it.
   deleteFile(path: string): Promise<void>;
+  // Deletes the folder at `path` and everything in it for good, keeping the
+  // folder that holds it; nothing there is no error.
+  removeFolder(path: string): Promise<void>;
   // Watches `folder`, and every folder under it unless `recursive` is false,
   // calling `onChange` with the changed path relative to `folder`, joined with
   // `/`; with `recursive: false` it reports only entries directly in

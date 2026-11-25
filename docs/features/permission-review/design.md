@@ -49,6 +49,9 @@ off, the permission card still draws its target line and its folded full call, j
   key an earlier start left behind when it starts. The plugin reviews each new key. Its profile is the caller's chat
   session's, or chat's default profile for a caller chat does not own (a terminal session). `confirmSample`, the
   demo's round, publishes nothing.
+- **Chat's layout preview session** (`Space z l c`, its row's host id `CHAT_PREVIEW_HOST_ID`) is never reviewed. Its
+  permission entries take one sample review per verdict state (`permission-review/main/preview-reviews.ts`), and
+  the samples are deleted when the session ends.
 
 ## The one-shot ask
 
@@ -71,9 +74,8 @@ off, the permission card still draws its target line and its folded full call, j
 - The ask runs with the profile's `CLAUDE_CONFIG_DIR`, as every one-shot does, so it signs in with the session's own
   account. Each ask runs in a folder of its own, `claude-code-ask-<random>` inside the first OS temp folder, made
   before the spawn and holding only the instructions file, so no project file is near it and no other user can make
-  the folder first. The instructions file is deleted once the ask settles, however it settles; a failed delete is
-  logged and leaves the outcome alone. The folder stays: the app's `Files` seam has no folder removal. With no temp
-  folder (the self-test), the ask rejects.
+  the folder first. The folder is removed with the instructions file in it once the ask settles, however it settles;
+  a failed removal is logged and leaves the outcome alone. With no temp folder (the self-test), the ask rejects.
 - The reply is the JSON object on the last non-empty line of stdout, so a line the CLI prints before it is skipped.
 - **Checked at plan time, 2026-11-25:** with these flags and the personal profile, the model said no text mentioned
   the profile's `CLAUDE.md` content. Without `--setting-sources ""` it said yes. Subscription sign-in worked without
@@ -105,7 +107,8 @@ off, the permission card still draws its target line and its folded full call, j
   4. Allow once and Deny, with their keys as before.
 - Chat's page export `addEntryPart(part)` lets another plugin draw inside an entry kind, the way forms'
   `addCardPart` does on round cards. A part has an `id`, the `kinds` it draws in, and
-  `build(parent, { sessionId, input })`, which returns an optional `update(input)`. A layout places parts with
+  `build(parent, { sessionId, input })`, which returns an optional `update(input)` and an optional `dispose()`, run
+  when chat drops the build. A layout places parts with
   `kit.entryParts(parent)`. A user layout that leaves out the call shows none.
 - **The verdict part** draws through permission-review's own layout part, `verdict(parent, input, kit)`, under the
   `permission-review.layout` setting. It shows:

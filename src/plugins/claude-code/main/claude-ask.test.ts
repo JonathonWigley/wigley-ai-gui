@@ -15,7 +15,6 @@ const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 const SUCCESS_LINE = '{"type":"result","is_error":false,"result":"hello"}';
 const SUCCESS_EXIT: SpawnExit = { code: 0, signal: null, startError: null };
 const ASK_FOLDER = '/tmp/t/claude-code-ask-u1';
-const INSTRUCTIONS_FILE = `${ASK_FOLDER}/instructions.md`;
 
 function askDeps(overrides: Partial<ClaudeAskDeps> = {}) {
   const processes = new FakeProcesses();
@@ -379,7 +378,7 @@ describe('askClaude', () => {
     { name: 'Resolves', end: exits(SUCCESS_LINE, '', 0) },
     { name: 'Rejects', end: exits('', 'bad flag\n', 2) },
     { name: 'IsAborted', end: (_spawn, controller) => controller.abort() },
-  ])('deletes the instructions file once the ask $name', async ({ end }) => {
+  ])('removes the ask folder once the ask $name', async ({ end }) => {
     const controller = new AbortController();
     const { deps, processes, files, logs } = askDeps();
 
@@ -390,15 +389,15 @@ describe('askClaude', () => {
     end(processes.spawns[0], controller);
     await outcome;
 
-    expect(await files.stat(INSTRUCTIONS_FILE)).toBeNull();
+    expect(await files.stat(ASK_FOLDER)).toBeNull();
     expect(logs).toEqual([]);
   });
 
-  it('logs a failed delete of the instructions file and resolves', async () => {
+  it('logs a failed removal of the ask folder and resolves', async () => {
     const { deps, processes, logs } = askDeps({
       files: {
         ...createMemoryFiles(),
-        deleteFile: () => Promise.reject(new Error('EBUSY')),
+        removeFolder: () => Promise.reject(new Error('EBUSY')),
       },
     });
 
@@ -408,7 +407,7 @@ describe('askClaude', () => {
 
     expect(await asked).toBe('hello');
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain(INSTRUCTIONS_FILE);
+    expect(logs[0]).toContain(ASK_FOLDER);
     expect(logs[0]).toContain('EBUSY');
   });
 });

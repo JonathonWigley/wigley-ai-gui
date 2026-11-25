@@ -36,8 +36,7 @@ const STOPPED_MESSAGE = 'the ask was stopped';
 // the CLI's default; `tempFolders` the OS temp folders, the first holding each
 // ask's folder; `randomUuid` the folder's suffix; `env` the environment the
 // run starts from, with `homeDir` and `paths` resolving the profile folder as
-// every `claude` run does; `log` takes a failure to delete the instructions
-// file.
+// every `claude` run does; `log` takes a failure to remove the ask's folder.
 export interface ClaudeAskDeps {
   command(): Promise<ProgramCandidate | null>;
   askModel(): string;
@@ -47,7 +46,7 @@ export interface ClaudeAskDeps {
   homeDir: string;
   paths: Paths;
   log: Log;
-  files: Pick<Files, 'makeFolder' | 'write' | 'deleteFile'>;
+  files: Pick<Files, 'makeFolder' | 'write' | 'removeFolder'>;
   processes: Pick<ProcessRunner, 'spawn'>;
 }
 
@@ -183,16 +182,16 @@ function runAsk(
   });
 }
 
-async function deleteInstructionsOrLog(
+async function removeAskFolderOrLog(
   deps: ClaudeAskDeps,
-  instructionsFile: string,
+  folder: string,
 ): Promise<void> {
   try {
-    await deps.files.deleteFile(instructionsFile);
+    await deps.files.removeFolder(folder);
   } catch (error) {
     deps.log(
       'claude',
-      `ask instructions not deleted at ${instructionsFile}: ${errorText(error)}`,
+      `ask folder not removed at ${folder}: ${errorText(error)}`,
     );
   }
 }
@@ -204,10 +203,10 @@ async function deleteInstructionsOrLog(
 // the reply's `result`. Each check before the spawn rejects spawning nothing:
 // no temp folder, an abort (at the call, during the lookup, the folder make or
 // the instructions write), no program found, and a lookup, folder make or
-// write that rejects, with its own error. Once the folder is made, the
-// instructions file is deleted when the ask settles, however it settles; a
-// failed delete is logged and leaves the outcome alone. The folder itself
-// stays. The caller's `signal` is the only time limit.
+// write that rejects, with its own error. Once the folder is made, it is
+// removed with everything in it when the ask settles, however it settles; a
+// failed removal is logged and leaves the outcome alone. The caller's `signal`
+// is the only time limit.
 export async function askClaude(
   deps: ClaudeAskDeps,
   request: AgentAsk,
@@ -233,6 +232,6 @@ export async function askClaude(
     throwIfStopped(request.signal);
     return await runAsk(deps, program, cwd, instructionsFile, request);
   } finally {
-    await deleteInstructionsOrLog(deps, instructionsFile);
+    await removeAskFolderOrLog(deps, cwd);
   }
 }
