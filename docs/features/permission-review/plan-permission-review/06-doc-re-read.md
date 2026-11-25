@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: prose checked against settled, landed code
 Wave: 4 · Depends on: 01 (reads the landed code), 02 (reads the landed code), 03 (reads the landed code), 04 (reads the landed code), 05 (reads the landed code)
@@ -45,3 +45,5 @@ Done when: every listed doc is checked line by line and each stale line fixed; `
 Commit: one commit for the fixes, by pathspec, only when a fix was made: `git commit -m "Docs: permission review docs re-read against the landed code" -- docs/features/permission-review/design.md docs/features/agent-harnesses/design.md docs/features/agent-chat/design.md docs/features/agent-commands/design.md docs/features/layouts/design.md docs/features/agent-chat/claude-stream.md README.md CHANGELOG.md AGENTS.md DESIGN.md`
 
 ## Proof
+
+Commit 18551103 · proof: diff read: design.md and AGENTS.md fixed to the landed code; layouts design already lists permission-review; lint and readme-coverage pass · concerns: kit.entryParts returns void though the ChatKit header says every part returns what it appended; edited design.md lines run past the file's wrap width

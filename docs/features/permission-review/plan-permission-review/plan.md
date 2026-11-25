@@ -219,7 +219,7 @@ Critical path: 01 → 04 → 05 → 06
 - [x] [permission-review page: verdict part and layout](05-review-page.md) — after 02, 03, 04
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md) — after 01–05
+- [x] [Doc re-read](06-doc-re-read.md) — after 01–05
 - [ ] [Final verification](07-final-verification.md)
 
 ## Run log
@@ -232,6 +232,7 @@ Review base: 5665fe5c
 - 02 · hard · 2c084001, b4773ef2 · diff read: addEntryPart, ChatEntryPart(Context), kit.entryParts, PermissionInput.summary present; wave typecheck and lint pass after test-typing fix on the same rung · concerns: entryParts returns void though the ChatKit header says every part returns what it appended; the entry-parts onChanged keeps toastedKinds
 - 04 · deep · a61e9b8a, 2157d0b2 · diff read: permissionReviewsSlot, Review, chatReviewKey, confirmReviewKey, watcher, findReviewer present; wave typecheck and lint pass after themeTokens fix on the same rung; lead ran the repo's oxfmt --write on review-requests.ts and forms start.test.ts (tooling) · concerns: until 05 the layout setting names no layouts and the demo step has no page half; registerDemoSteps' Disposable is not kept; key parsing misreads a chat session id holding '/' or named confirm
 - 05 · deep · 151bfcaf · diff read: verdict entryPart and cardPart, VerdictInput/VerdictPart/Layout, page part registered in page.ts, layout types registered in main; typecheck and lint pass; lead ran the repo's oxfmt --write on four files (tooling) · concerns: holders are swept only on a later build of the same key; a double build before connect drops the first; layouts/design.md lists no permission-review owner (06); no Space z l preview sample; the self-test step's alsoExpect assumes page log lines carry the [permission-review] prefix
+- 06 · standard · 18551103 · diff read: design.md and AGENTS.md fixed to the landed code; layouts design already lists permission-review; lint and readme-coverage pass · concerns: kit.entryParts returns void though the ChatKit header says every part returns what it appended; edited design.md lines run past the file's wrap width
 ### Contract changes
 ### Rulings
 - 01: withStderr moved to claude-launch.ts with exitText and cliSpawnError, shared by the ask rather than copied · group 01
