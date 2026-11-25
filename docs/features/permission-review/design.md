@@ -41,7 +41,8 @@ off, the permission card still draws its target line and its folded full call, j
   from that harness's profiles in the registry.
 - **agent-commands' confirm rounds.** A risky command that `run_command` runs opens forms' `confirm` round.
   `ConfirmRequest` carries a `subject` (`{ toolName, input }`, or null): agent-commands fills it with
-  `toolName: app command <id>` and the command's argument. While the round is open, forms publishes it in its
+  `toolName: app command <id>` and the command's argument, or `{ session, arg }` with the target session's side-bar
+  name when the run names one, since the target is what makes a close or a send risky. While the round is open, forms publishes it in its
   `forms.confirms` keyed slot, keyed by round id, holding `{ sessionId, subject }`, and deletes it when the round
   finishes. The plugin reviews each new key. Its profile is the caller's chat session's, or chat's default profile
   for a caller chat does not own (a terminal session). `confirmSample`, the demo's round, publishes nothing.
@@ -113,8 +114,12 @@ off, the permission card still draws its target line and its folded full call, j
 
 - Each request is reviewed once, when it arrives. Reviews run at once, with no queue. Each has a 60-second limit,
   after which it shows unavailable with the reason `the review took longer than 60 s`.
-- A chat review is deleted when its session ends (`sessions.ended`). A confirm review is deleted when its round
-  leaves `forms.confirms`. A review that is still running when its key goes is aborted.
+- A chat review is deleted when its session ends (`sessions.ended`), or when a `replace` of the session's entries (a
+  `/clear`) no longer holds its entry. A confirm review is deleted when its round leaves `forms.confirms`. A review
+  that is still running when its key goes is aborted, and a deleted review's verdict leaves the card. An answer does
+  not stop a running review: the verdict lands on the answered card.
+- When the plugin starts again, it drops held reviews whose session or round went while it was off, and reviews the
+  requests still waiting.
 - The plugin logs each outcome, so the self-test can wait on it:
   - `[permission-review] reviewed <tool> in <session>: <verdict> · <risk>`
   - `[permission-review] review unavailable for <tool> in <session>: <reason>`
