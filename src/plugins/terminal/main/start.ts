@@ -26,6 +26,7 @@ type TerminalApi = MainApi<
 
 // A line break, any other C0 control character or DEL: the shell's line editor
 // acts on each before the user presses Enter.
+// oxlint-disable-next-line no-control-regex
 const CONTROL_CHARACTER = /[\x00-\x1f\x7f]/;
 
 // Registers terminal's layouts and the Terminal demo step's main half, hands

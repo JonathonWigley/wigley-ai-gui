@@ -405,4 +405,5 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - main agent: task 10 places the Ctrl+backtick key-hint anchor (a kit.keyHint for terminal.toggle in the default drawer header, or wherever AGENTS.md § Key hints puts a chord with no other home) · group 09
 - toggle key-hint anchor: kit.keyHint(element, 'toggle', { label: 'close' }) at the end of the default drawerHeader (main-agent ruling carried out) · group 10
 ### Review rounds
+- Review 1 (pinned 3eddc580): NEEDS FIXES — 0 Critical, 5 Important, 18 Minor, 1 pre-existing. Lead-applied 25c628c0 (prose, None). Fix cycle 1: 3a7f0126..d3e9bb5b — risk Medium (focus timing in the xterm adapter and the adoption stop path in terminal main are lifecycle changes; the rest is tests and a spawn guard) → correctness re-review.
 ### Test gate

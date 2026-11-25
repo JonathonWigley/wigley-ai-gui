@@ -69,8 +69,8 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 ## The agent's hand-off
 
 - The agent runs the app command `terminal.type` through `run_command`, with the command line as its string
-  argument. It acts on the calling session's own terminal. It is not risky: it refuses text holding a line break, so
-  nothing runs until the user presses Enter.
+  argument. It acts on the calling session's own terminal. It is not risky: it refuses text holding a line break or any
+  other control character, so nothing runs until the user presses Enter.
 - `terminal.type` starts the shell when none runs, writes the text at the prompt, opens the drawer without moving focus,
   and marks the row "needs you" until the user presses Enter in that terminal or closes the drawer.
 - The agent reads the last 200 lines of each shell's output, as plain text with escape sequences stripped, from the
