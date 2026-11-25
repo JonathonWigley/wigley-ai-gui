@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: standard · doc-only: prose checked against settled code
 Wave: 7 · Depends on: 10 (it reads every code task's landed result; 10 is the last of them)
@@ -37,3 +37,5 @@ Done when: both greps above find nothing; each doc's claims were read against th
 Commit:    one commit in wigley-ai-gui for the two design docs; one commit in the `ai` worktree for `AGENTS.md`
 
 ## Proof
+
+Commit d6d5fb72 · proof: diff read: planned notes gone from both design docs, stale lines fixed against the code; grep plan-terminal finds nothing in both docs and in ai wigley-agents/AGENTS.md (ai commit 36fefed32 on terminal-type-rule-done); oxfmt clean · concerns: Alt+j/k wording follows the code's focus moves, not the plan's 'between chat and drawer'
