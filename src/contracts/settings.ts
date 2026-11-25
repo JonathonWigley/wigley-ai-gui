@@ -9,6 +9,20 @@ import type { Theme } from './theme';
 // `system` follows the OS's reduce-transparency preference.
 export type Transparency = 'system' | 'full' | 'reduced';
 
+// One activity bar group: `modes` are qualified mode ids (`work-inbox.main`),
+// in order; `at` is the bar's edge it sits against, `top` when left out.
+export interface ActivityBarGroupSetting {
+  modes: string[];
+  at?: 'top' | 'bottom';
+}
+
+// `groups`, when non-empty, replaces every plugin's suggested place; `hidden`
+// holds mode ids the bar leaves out, with or without `groups`.
+export interface ActivityBarSetting {
+  groups: ActivityBarGroupSetting[];
+  hidden: string[];
+}
+
 export interface Settings {
   // `minWidth` and `minHeight` are the smallest size the user can drag to.
   window: {
@@ -33,9 +47,10 @@ export interface Settings {
   };
   // How long a page key sequence waits for its next key.
   keySequenceTimeoutMs: number;
-  // The layout the shell chrome draws with: a folder in `layouts/shell/`, or
-  // `default`.
-  shell: { layout: string };
+  // `layout` is the layout the shell chrome draws with: a folder in
+  // `layouts/shell/`, or `default`. `activityBar` orders, groups and hides the
+  // activity bar's modes.
+  shell: { layout: string; activityBar: ActivityBarSetting };
   // Plugin ids neither process starts; an id no plugin has disables nothing.
   plugins: { disabled: string[] };
   // `python` is the Python the docs index and unity-pool run; empty, the app

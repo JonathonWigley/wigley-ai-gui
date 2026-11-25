@@ -6,6 +6,11 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- The shell.activityBar setting orders, groups and hides the activity bar's modes, overriding each plugin's suggested
+  place.
+
 ## 1.5.0 — 2026-11-24
 
 ### Added

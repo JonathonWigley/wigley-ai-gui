@@ -25,7 +25,7 @@ const DEFAULTS: Settings = {
   transparency: 'system',
   fonts: {},
   keySequenceTimeoutMs: 1000,
-  shell: { layout: 'default' },
+  shell: { layout: 'default', activityBar: { groups: [], hidden: [] } },
   plugins: { disabled: [] },
   programs: { python: '' },
 };

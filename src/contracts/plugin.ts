@@ -505,9 +505,22 @@ export interface ModeContext {
   detail: string | null;
 }
 
+// A mode's suggested place in the activity bar: `group` and `order` lower
+// first, `at` the bar's edge the group sits against (`top` when left out).
+// Modes sharing an `at` and a `group` form one group.
+export interface ModePlace {
+  group: number;
+  order: number;
+  at?: 'top' | 'bottom';
+}
+
 // A view that fills the window's content sheet; the core shows one mode at a
 // time. `icon` is a Codicon name the activity bar draws for the mode, with
-// `title` as its label and tooltip. `sideBar`, when set, shows in the window's
+// `title` as its label and tooltip. `place` is the mode's suggested place in
+// the activity bar, which the `shell.activityBar` setting overrides; a mode
+// without it joins a last top group. `showCommand` is the plugin's own command
+// id (unqualified, as `id` is) that shows the mode; the bar shows its key.
+// `sideBar`, when set, shows in the window's
 // side bar while this mode shows. `shown` runs each time this mode becomes the
 // shown one, the first mode's at its `add` included; the mode's plugin sets
 // its base key scope there, so a hidden view never keeps the scope. `hidden`
@@ -548,6 +561,8 @@ export interface Mode {
   icon: string;
   element: HTMLElement;
   sideBar?: HTMLElement;
+  place?: ModePlace;
+  showCommand?: string;
   shown(): void;
   hidden(): void;
   sideBarHidden?(): void;

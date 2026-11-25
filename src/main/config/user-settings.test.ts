@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { coreDefaultSettings } from '../../config/settings';
 import type { Settings } from '../../contracts/settings';
 import { mergeUserSettings, type SettingsSchema } from './user-settings';
 
@@ -164,6 +165,37 @@ describe('mergeUserSettings', () => {
   ])('mergeUserSettings_UnknownKey_IsAProblem: $case', ({ text }) => {
     expect(() => mergeUserSettings(text, SCHEMA)).toThrow('is not a setting.');
   });
+
+  // Breaks when the core default gives `groups` a model element, which rejects
+  // a group leaving out `at`, or when `shell` stops merging key by key.
+  it.each([
+    {
+      case: 'only hidden set',
+      text: '{"shell":{"activityBar":{"hidden":["docs.docs"]}}}',
+      activityBar: { groups: [], hidden: ['docs.docs'] },
+    },
+    {
+      case: 'two groups set',
+      text: '{"shell":{"activityBar":{"groups":[{"modes":["sessions.sessions","work-inbox.main"]},{"modes":["settings.settings"],"at":"bottom"}]}}}',
+      activityBar: {
+        groups: [
+          { modes: ['sessions.sessions', 'work-inbox.main'] },
+          { modes: ['settings.settings'], at: 'bottom' },
+        ],
+        hidden: [],
+      },
+    },
+  ])(
+    'mergeUserSettings_ActivityBar_MergesOverDefaults: $case',
+    ({ text, activityBar }) => {
+      const defaults = coreDefaultSettings();
+      const schema = { ...SCHEMA, defaults };
+      expect(mergeUserSettings(text, schema).settings.shell).toEqual({
+        layout: defaults.shell.layout,
+        activityBar,
+      });
+    },
+  );
 
   it('an empty default array takes elements of any kind', () => {
     expect(pluginSettings('{"p":{"anything":[1,"a",{}]}}')).toMatchObject({

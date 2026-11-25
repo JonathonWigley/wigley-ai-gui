@@ -8,7 +8,7 @@ export function coreDefaultSettings(): Settings {
     transparency: 'system',
     fonts: {},
     keySequenceTimeoutMs: 1000,
-    shell: { layout: 'default' },
+    shell: { layout: 'default', activityBar: { groups: [], hidden: [] } },
     plugins: {
       disabled: [
         'agent-lines',
@@ -105,6 +105,16 @@ export const settingInfo: SettingInfos<Settings> = {
     label: 'Shell layout',
     description:
       'The layout that draws the title bar, activity bar, side bar, right bar and status bar: a folder in the layouts/shell folder, or default.',
+  },
+  'shell.activityBar.groups': {
+    label: 'Activity bar groups',
+    description:
+      "The activity bar's groups, top to bottom, each listing mode ids (sessions.sessions, work-inbox.main) and an optional at: bottom. Empty keeps each plugin's suggested order.",
+  },
+  'shell.activityBar.hidden': {
+    label: 'Hidden activity bar modes',
+    description:
+      'Mode ids the activity bar leaves out; their keys still show them.',
   },
   'plugins.disabled': {
     label: 'Disabled plugins',

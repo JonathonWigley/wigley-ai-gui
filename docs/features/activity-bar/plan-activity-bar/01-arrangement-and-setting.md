@@ -1,6 +1,6 @@
 # 01 — Arrangement rule and the override setting
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: hard · adds the `ModePlace`, `ActivityBarSetting` and `arrangeActivityItems` contracts that 02 and 03 consume
 Wave: 1 · Depends on: none

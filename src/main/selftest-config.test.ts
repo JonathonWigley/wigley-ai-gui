@@ -154,7 +154,10 @@ describe('applySelfTestConfig', () => {
           transparency: 'system',
           fonts: {},
           keySequenceTimeoutMs: 1,
-          shell: { layout: 'default' },
+          shell: {
+            layout: 'default',
+            activityBar: { groups: [], hidden: [] },
+          },
           plugins: { disabled: ['p'] },
           programs: { python: '' },
         },
