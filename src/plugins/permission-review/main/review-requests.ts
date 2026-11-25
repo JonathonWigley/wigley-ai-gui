@@ -209,7 +209,8 @@ export function watchReviewRequests(
     });
   }
 
-  // Sets the preview session's sample reviews over `entries`.
+  // Sets the preview session's sample reviews over `entries`, writing only a
+  // key that does not hold its sample already.
   function showPreviewReviews(
     sessionId: string,
     entries: readonly ChatEntry[],
@@ -217,7 +218,9 @@ export function watchReviewRequests(
     for (const [entryId, review] of previewReviews(entries)) {
       const key = chatReviewKey(sessionId, entryId);
       seen.set(key, { sessionId, entryId });
-      reviews.set(key, review);
+      if (reviews.get(key) !== review) {
+        reviews.set(key, review);
+      }
     }
   }
 

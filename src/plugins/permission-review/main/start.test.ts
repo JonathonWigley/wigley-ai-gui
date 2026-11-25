@@ -469,6 +469,17 @@ describe('permissionReviewMainPart', () => {
     expect(test.messages()).toEqual([]);
   });
 
+  it('preview_PutOverSamplesAlreadyHeld_WritesNothing', () => {
+    const test = startReviewing();
+    test.entries.replace(PREVIEW, previewSample());
+    const written: string[] = [];
+    test.reviews.on((key) => written.push(key));
+
+    test.entries.put(PREVIEW, permission('p3'));
+
+    expect(written).toEqual([]);
+  });
+
   it('preview_SessionEnded_DeletesTheSampleReviews', () => {
     const test = startReviewing();
     test.entries.replace(PREVIEW, previewSample());

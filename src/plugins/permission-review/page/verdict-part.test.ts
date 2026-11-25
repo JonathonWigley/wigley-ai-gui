@@ -196,7 +196,7 @@ describe('createVerdictParts', () => {
     expect(logged).toEqual([]);
   });
 
-  it('redraws every connected part of a key when its review changes, and logs the heading once', () => {
+  it('redraws every built part of a key when its review changes, and logs the heading once', () => {
     const { attached, buildEntry, setReview, headings, logged } = setUp();
     setReview(REVIEWING);
     const first = attached();
@@ -245,22 +245,42 @@ describe('createVerdictParts', () => {
     ]);
   });
 
-  it('forgets the logged heading of a key once its last build is disposed', () => {
-    const { attached, buildEntry, setReview, logged } = setUp();
-    setReview(APPROVE_LOW);
-    const first = buildEntry(attached());
-    const second = buildEntry(attached());
+  it.each<{
+    case: string;
+    act: (setUpResult: ReturnType<typeof setUp>) => void;
+    expected: string[];
+  }>([
+    {
+      case: 'DisposeThenBuildOfADoneReview_LogsOnce',
+      act: ({ attached, buildEntry }) => {
+        const first = buildEntry(attached());
+        const second = buildEntry(attached());
+        first.dispose?.();
+        second.dispose?.();
+        buildEntry(attached());
+      },
+      expected: ['verdict s1/e3: Approve · low risk'],
+    },
+    {
+      case: 'ReviewDeletedWhileUnheldThenSetAgain_LogsAgain',
+      act: ({ attached, buildEntry, setReview }) => {
+        buildEntry(attached()).dispose?.();
+        setReview(null);
+        setReview(APPROVE_LOW);
+        buildEntry(attached());
+      },
+      expected: [
+        'verdict s1/e3: Approve · low risk',
+        'verdict s1/e3: Approve · low risk',
+      ],
+    },
+  ])('logHeading_$case', ({ act, expected }) => {
+    const harness = setUp();
+    harness.setReview(APPROVE_LOW);
 
-    first.dispose?.();
-    const third = buildEntry(attached());
-    second.dispose?.();
-    third.dispose?.();
-    buildEntry(attached());
+    act(harness);
 
-    expect(logged).toEqual([
-      'verdict s1/e3: Approve · low risk',
-      'verdict s1/e3: Approve · low risk',
-    ]);
+    expect(harness.logged).toEqual(expected);
   });
 
   it('empties every holder when its review is deleted, and logs nothing', () => {
@@ -339,6 +359,49 @@ describe('createVerdictParts', () => {
       updates: updates.map(({ heading }) => heading),
       headings: harness.headings(parent),
       isFirstDrawDisposed: harness.anchors[0]?.isDisposed,
+    }).toEqual(expected);
+  });
+
+  it.each<{
+    case: string;
+    act: (setUpResult: ReturnType<typeof setUp>) => void;
+    expected: { builtBy: string[]; headings: (string | undefined)[] };
+  }>([
+    {
+      case: 'ReviewChanged_DrawsTheNewReview',
+      act: ({ setReview }) => setReview(DENY_HIGH),
+      expected: { builtBy: ['mine', 'mine'], headings: ['Deny · high risk'] },
+    },
+    {
+      case: 'SetLayouts_DrawsThroughTheNewLayout',
+      act: ({ parts, records }) =>
+        parts.setLayouts(
+          withUser<Layout>(
+            defaultLayout,
+            recordingLayout('second', records),
+            'second',
+          ),
+        ),
+      expected: {
+        builtBy: ['mine', 'second'],
+        headings: ['Approve · low risk'],
+      },
+    },
+  ])('redrawDetached_$case_SoAViewPutBackShowsIt', ({ act, expected }) => {
+    const harness = setUp();
+    harness.setReview(APPROVE_LOW);
+    const view = harness.attached();
+    const parent = new FakeElement('div');
+    view.append(parent);
+    harness.buildEntry(parent);
+    view.remove();
+
+    act(harness);
+    harness.attached().append(view);
+
+    expect({
+      builtBy: harness.records.map(({ layout }) => layout),
+      headings: harness.headings(parent),
     }).toEqual(expected);
   });
 

@@ -53,11 +53,11 @@ interface Holder {
 }
 
 // Each build holds its wrapper by its review key until chat or forms disposes
-// the build, which disposes its draw and drops it; the last holder of a key to
-// go forgets the key's logged heading. A change redraws every holder of its
-// key. A wrapper with no review stays empty. After a draw it logs
+// the build, which disposes its draw and drops it. A change redraws every
+// holder of its key. A wrapper with no review stays empty. After a draw it logs
 // `verdict <key>: <heading>` when the heading differs from the last logged for
-// that key; an empty draw forgets the key's heading.
+// that key, across disposes and rebuilds; an empty draw, or a deleted review
+// held or not, forgets the key's heading.
 export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: permissionReviewManifest.id,
@@ -125,8 +125,8 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
     callEach([...(held.get(key) ?? [])], redraw);
   };
 
-  // Drops `holder` and disposes its draw; its key's logged heading goes with
-  // the key's last holder. Nothing for a holder already dropped.
+  // Drops `holder` and disposes its draw. Nothing for a holder already
+  // dropped.
   const release = (holder: Holder) => {
     const holders = held.get(holder.key);
     if (holders === undefined || !holders.delete(holder)) {
@@ -134,7 +134,6 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
     }
     if (holders.size === 0) {
       held.delete(holder.key);
-      loggedHeadings.delete(holder.key);
     }
     disposeDrawn(holder);
   };
@@ -186,6 +185,9 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
       },
     },
     reviewChanged(key) {
+      if (deps.review(key) === undefined) {
+        loggedHeadings.delete(key);
+      }
       redrawKey(key);
     },
     confirmChanged(roundId) {
