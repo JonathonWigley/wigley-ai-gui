@@ -54,10 +54,7 @@ export interface ReviewRequestDeps extends Omit<ReviewerDeps, 'chatSessions'> {
 // its own harness and profile, in its project folder; any other on chat's
 // default profile for it, searched in every registered harness, with no
 // project folder. `profileDir` is the profile's `configDir` as published.
-export function findReviewer(
-  sessionId: string,
-  deps: ReviewerDeps,
-): Reviewer {
+export function findReviewer(sessionId: string, deps: ReviewerDeps): Reviewer {
   const session = deps.chatSessions.get(sessionId);
   if (session !== undefined) {
     const harness = deps.harnesses.get(session.harness);

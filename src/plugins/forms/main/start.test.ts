@@ -816,7 +816,12 @@ describe('forms main part', () => {
     await flush();
     const abort = new AbortController();
 
-    const confirmed = forms.confirm('app-a', CONFIRM_REQUEST, abort.signal, null);
+    const confirmed = forms.confirm(
+      'app-a',
+      CONFIRM_REQUEST,
+      abort.signal,
+      null,
+    );
     await flush();
     expect(confirms.all().size).toBe(0);
 
