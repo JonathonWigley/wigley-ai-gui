@@ -204,13 +204,19 @@ describe('arrangeActivityItems', () => {
     {
       row: 'groups holding no well-formed group keep the suggestions',
       modes: MODES,
-      setting: { groups: ['m.alpha'], hidden: [] } as unknown as ActivityBarSetting,
+      setting: {
+        groups: ['m.alpha'],
+        hidden: [],
+      } as unknown as ActivityBarSetting,
       groups: {
         top: [['m.alpha', 'm.eps'], ['m.beta'], ['m.delta']],
         bottom: [['m.gamma']],
       },
     },
-  ])('arrangeActivityItems_SortsAndGroupsModes: $row', ({ modes, setting, groups }) => {
-    expect(arrangeActivityItems(modes, setting)).toEqual(groups);
-  });
+  ])(
+    'arrangeActivityItems_SortsAndGroupsModes: $row',
+    ({ modes, setting, groups }) => {
+      expect(arrangeActivityItems(modes, setting)).toEqual(groups);
+    },
+  );
 });

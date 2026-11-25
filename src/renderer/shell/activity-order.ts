@@ -106,7 +106,9 @@ function bySuggestion(a: ActivityModeEntry, b: ActivityModeEntry): number {
 }
 
 function suggestedGroupKey(place: ModePlace | undefined): string {
-  return place === undefined ? 'unplaced' : `${edgeOf(place.at)}:${place.group}`;
+  return place === undefined
+    ? 'unplaced'
+    : `${edgeOf(place.at)}:${place.group}`;
 }
 
 function edgeRank(place: ModePlace): number {
