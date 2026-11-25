@@ -120,7 +120,8 @@ export type ChatEntry =
       toolName: string;
       input: unknown;
       // The call's one-line target, as a tool entry's `summary` shows it: a Bash command's first line, an edited
-      // file's path; '' when the input names none.
+      // file's path, or for a tool with no named field the input's first string field, cut to 80 characters with an
+      // ellipsis; '' when the input holds no string field.
       summary: string;
       answer: PermissionDecision | null;
       raw: unknown[];

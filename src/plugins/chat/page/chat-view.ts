@@ -46,11 +46,11 @@ import {
   type ChatChannel,
   type ChatComposerPart,
   chatDenyEntryCommand,
+  type ChatEntryPart,
   type ChatFocus,
   type ChatMount,
   type ChatPlace,
   chatMoveFocusCommand,
-  type ChatEntryPart,
   chatOpenImageCommand,
   chatPullBackMessageCommand,
   chatRemoveImageAtCommand,
@@ -253,9 +253,8 @@ export type ChatTabScope = 'chat' | 'hub';
 // the composer draw with, and `renderers` the plugins' entry renderers, which
 // draw an entry whose kind the user's layout does not name; `entryParts` holds
 // the parts other plugins draw inside entries, wherever a layout places them;
-// `paths` names each
-// tab by its project folder, and with
-// `homeDir` shows that folder in the hub's Session section. `placeOf` hands
+// `paths` names each tab by its project folder, and with `homeDir` shows that
+// folder in the hub's Session section. `placeOf` hands
 // each tab made its session's place: the tab puts the saved draft, images and
 // entry place back, and writes its place on each change.
 // `slashCommands` reads the app slash commands registered now, which the `/`

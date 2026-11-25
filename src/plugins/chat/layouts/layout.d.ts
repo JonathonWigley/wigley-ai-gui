@@ -75,7 +75,8 @@ export interface ToolInput {
   raw: unknown[];
 }
 // `summary` is the call's target line, the same text a tool entry shows (a Bash command's first line, an edited
-// file's path); empty when the tool has none.
+// file's path, or for a tool with no named field the input's first string field), cut to 80 characters with an
+// ellipsis; empty when the input holds no string field.
 export interface PermissionInput {
   kind: 'permission';
   id: string;
@@ -308,7 +309,8 @@ export interface CollapsibleCard {
   setOpen(open: boolean): void;
 }
 
-// Chat's parts over the shared base kit. Every part appends itself to `parent` and returns what it appended;
+// Chat's parts over the shared base kit. Every part but `entryParts` and `tokens` appends itself to `parent` and
+// returns what it appended;
 // `markdown`, `card`, `statusDot`, `setDotStatus` and `sectionHeader` are the base kit's.
 export interface ChatKit extends BaseKit {
   json(parent: HTMLElement, value: unknown): HTMLElement; // pretty-printed, in a <pre>

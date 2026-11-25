@@ -23,6 +23,9 @@ const ENTRY = 'e3';
 const KEY = chatReviewKey(SESSION, ENTRY);
 const ROUND = 'round-7';
 
+// The permission entry's input as chat hands it to the part.
+type PermissionInput = ChatEntryPartContext<'permission'>['input'];
+
 const REVIEWING: Review = { state: 'reviewing' };
 const APPROVE_LOW: Review = {
   state: 'done',
@@ -30,9 +33,6 @@ const APPROVE_LOW: Review = {
   verdict: 'approve',
   risk: 'low',
 };
-// The permission entry's input as chat hands it to the part.
-type PermissionInput = ChatEntryPartContext<'permission'>['input'];
-
 const DENY_HIGH: Review = {
   state: 'done',
   summary: 'Deletes the home folder.',
