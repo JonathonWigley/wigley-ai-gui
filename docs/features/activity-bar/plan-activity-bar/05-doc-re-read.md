@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · doc-only: checks prose against landed code
 Wave: 4 · Depends on: 03 (its places are the order the docs state), 04 (the doc re-read runs after every code task)
@@ -31,3 +31,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 480367ad · proof: diff read: two stale lines fixed (peek ends on any click in the bar; shell-chrome draws dividers and Pin button); DESIGN.md, keymap.md, layouts design and README checked true; lint passes · concerns: the Pin button shows only while expanded, so the keyboard reaches it only through Space v p

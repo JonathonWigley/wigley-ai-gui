@@ -160,7 +160,7 @@ Critical path: 01 → 02 → 03 → 05
 - [x] [Self-test steps for the pin](04-selftest-pin.md) — after 02
 
 ### Wave 4
-- [ ] [Doc re-read](05-doc-re-read.md) — after 03, 04
+- [x] [Doc re-read](05-doc-re-read.md) — after 03, 04
 - [ ] [Final verification](06-final-verification.md)
 
 ## Run log
@@ -172,6 +172,7 @@ Review base: c22d3488
 - 02 · deep · c17f4869 · diff read: every Produces present (setCount, counted, ACTIVITY_BAR_TOGGLE_PIN, <Leader>vp, the three log lines, both tokens, activityDivider and activityPin parts); pin and pinned codicons exist in the shipped set; oxfmt, tsc and npm run lint pass · concerns: shell-chrome tests now filter key-hint anchors by command because the Pin button anchors one; two long comment lines left unwrapped in src/contracts/plugin.ts; .shell gained position: relative
 - 03 · standard (Inbox test: standard → hard: blocked, harness outside the brief) · 1cb6016a · diff read: place and showCommand on all 11 built-ins match the table; Inbox count beside view.stateChanged at start and on change; tsc and npm run lint pass for the wave · concerns: test named as a sentence per the file's style, not workInboxPagePart_NeedsYouItems_SetsModeCount
 - 04 · standard · f448bb26 · diff read: group 'activity bar pin' last after transparency, width start, Space v p twice expecting pinned then unpinned with both screenshots; tsc and lint pass; the self-test runs at the test gate · concerns: the start in Docs rests on transparency ending in Docs
+- 05 · standard · 480367ad · diff read: two stale lines fixed (peek ends on any click in the bar; shell-chrome draws dividers and Pin button); DESIGN.md, keymap.md, layouts design and README checked true; lint passes · concerns: the Pin button shows only while expanded, so the keyboard reaches it only through Space v p
 ### Contract changes
 - Shell: planned pin toggle, listener and narrow input → landed togglePin(), isPinned(), onPinnedChanged(listener): Disposable, activityBarNarrowChanged(isNarrow); isPinned is extra, for the chrome's starting pin state · consumers: renderer.ts · group 02
 - mountShell: gained a sixth param log: (message) => void, renderer passes (m) => log('page', m) · consumers: renderer.ts, shell.test.ts · group 02
