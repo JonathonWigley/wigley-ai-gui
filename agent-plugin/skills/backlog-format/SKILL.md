@@ -29,7 +29,7 @@ section. It names:
 - `homes` — folder templates for a repo's **features folder**, in order. `{repo}` is the repo's clone root and
   `{name}` its origin repo name. The first that exists is the features folder.
 - `file` — the follow-ups file in a features folder, such as `followups.md`.
-- `areaFolder` — optional: a folder in a features folder holding one follow-ups file per area, such as `followups/`.
+- `areaFolder` — optional: a subfolder of the features folder holding one follow-ups file per area, such as `followups/`.
 
 With no backlog strategy, Backlog lists nothing. Read the plugin's `auri.json` to find the paths before writing a
 follow-up.
@@ -99,5 +99,5 @@ session.`
   Pass every chunk the repo keeps. A chunk passed under its current name keeps its headless flag, and a started chunk
   cannot change. A refusal reads `Refused: <reason>`.
 
-The assistant edits the files directly, in their own shape, commits each change and merges or pushes it as that repo's own rules say, and reports
+The assistant edits the files directly, in their own shape, commits each change, merges or pushes it only where that repo's own rules say to, and reports
 each change by repo and title.

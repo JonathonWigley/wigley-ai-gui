@@ -1,7 +1,7 @@
 // Moves the `## Unreleased` entries of `CHANGELOG.md` under a new
 // `## <version> — <YYYY-MM-DD>` heading and writes that version to
 // `package.json` and both agent-plugin manifests (`AGENTS.md` § README,
-// changelog and boundary). `wigley-land` runs it after rebasing the branch onto `main`.
+// changelog and boundary). `wigley-push` runs it after rebasing the branch onto `main`.
 // MINOR when Added, Changed or Removed hold an entry, PATCH when only Fixed
 // does; a MAJOR bump is the user's, made by hand. Run from the app's root; it
 // takes no arguments.

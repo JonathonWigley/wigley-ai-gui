@@ -1,6 +1,6 @@
 ---
 name: primer
-description: "Showing a checklist pass over a spec's tasks to the user in the Auri app's primer popup and reading back the edited checklist pass: the `auri` server's `open_primer` and `collect_last_primer` tools, their entries, payload, outcomes and saved files. Use when a skill hands the user a list of candidate tasks to tick, edit and comment on, or when a primer call returns a draft."
+description: "Showing a checklist pass over a spec's tasks to the user in the Auri app's primer popup and reading back the edited checklist: the `auri` server's `open_primer` and `collect_last_primer` tools, their entries, payload, outcomes and saved files. Use when a skill hands the user a list of candidate tasks to tick, edit and comment on, or when a primer call returns a draft."
 ---
 
 **Contents**
@@ -15,7 +15,7 @@ description: "Showing a checklist pass over a spec's tasks to the user in the Au
 
 A **primer** is a checklist pass over a feature spec: the tasks the feature may need, each with its work items and whether the
 agent thinks it is needed. The user ticks the tasks the feature needs, edits the work items, adds tasks, and comments,
-then submits. The edited checklist pass comes back as the tool result. A primer shares the lifecycle of a form, so the
+then submits. The edited checklist comes back as the tool result. A primer shares the lifecycle of a form, so the
 `forms` skill's Outcomes hold for it with the primer's names. A session holds one open primer and one open form at
 the same time, each in its own popup.
 

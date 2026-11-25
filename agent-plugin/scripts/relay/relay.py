@@ -172,7 +172,7 @@ def _deadline_seconds(value: str | None) -> int | None:
 
 def not_started(reason: str, tool: str | None) -> dict[str, Any]:
     """The needs_manual_open payload for a call to `tool`: the relay could not start the app, so the call did not
-    run. Only a round's payload carries the empty answer lists: a primer's carries no feature or entries, and a tool
+    run. Only a form's payload carries the empty answer lists: a primer's carries no feature or entries, and a tool
     that opens no form has neither."""
     words = _words(tool)
     payload = {

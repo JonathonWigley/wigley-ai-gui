@@ -173,7 +173,7 @@ checklist: every box in the file, no groups, the title from the first `# ` headi
 | `label`      | The Settings choice's text.                                                                                      |
 | `homes`      | Folder templates for a repo's features folder, in order: `{repo}` the clone root, `{name}` the origin repo name. |
 | `file`       | The follow-ups file in a features folder.                                                                        |
-| `areaFolder` | Optional: a folder in a features folder holding per-area follow-up files.                                        |
+| `areaFolder` | Optional: a subfolder of the features folder holding per-area follow-up files.                                   |
 | `assistant`  | Optional `{ "instructions": "…" }`, added after the Backlog assistant's own instructions.                        |
 
 The file format is the `backlog-format` skill's.

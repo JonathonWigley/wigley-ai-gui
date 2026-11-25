@@ -1293,7 +1293,7 @@ stay true on every change:
   `agent-plugin/.claude-plugin/plugin.json` and `agent-plugin/.codex-plugin/plugin.json` together, MINOR when Added,
   Changed or Removed hold entries and PATCH when only Fixed does. `wigley-push` runs it after rebasing the branch
   onto `main` and commits what it wrote as `Release auri <version>`, the branch's last commit before the secrets
-  scan (`~/wigley-agents/tools/wigley-push/README.md` § Steps); the landing session neither runs nor commits it.
+  scan (`~/wigley-agents/tools/wigley-push/README.md` § Steps); the pushing session neither runs nor commits it.
   `npm run lint:changelog` fails when the three versions disagree.
 
 **Boundary.** The app works for anyone, so no code names one user's setup: every personal binding comes from a

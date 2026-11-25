@@ -83,7 +83,7 @@ Each of these requires a post, with its kind:
 ## Claims
 
 Claim a path glob, a branch or a named resource with `chatroom_claim` before work that would collide with a peer's,
-and free it with `chatroom_release` when the work is committed. A claim expires unless claimed again. Before an edit or
+and release it with `chatroom_release` when the work is committed and merged or pushed where it goes. A claim expires unless claimed again. Before an edit or
 commit that touches another session's claim or uncommitted files, the chatroom hook's note names the holder: ask the
 holder in the room, or go ahead when the user directed the edit. A resource another tool hands out, such as a pool
 of clones, stays that tool's; the board only shows it.
