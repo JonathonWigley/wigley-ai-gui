@@ -1,6 +1,6 @@
 # 01 — Arrangement rule and the override setting
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: hard · adds the `ModePlace`, `ActivityBarSetting` and `arrangeActivityItems` contracts that 02 and 03 consume
 Wave: 1 · Depends on: none
@@ -60,3 +60,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 3755a76b (+ef08f2df layer fix, 5075429f format) · proof: diff read: every Produces present; tsc and npm run lint pass after a layer fix and an oxfmt pass · concerns: ModeHandle doc comment still calls first-add order the activity bar's order (carried to 02); nothing pins the shipped shell.activityBar default empty since the merge test left src/config

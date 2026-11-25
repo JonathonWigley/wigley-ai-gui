@@ -1,6 +1,6 @@
 # 02 — Grouped bar, counts, peek and pin
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the mode registry, the shell chrome, the shell's room math and lifecycle (hot-reloaded setting, plugin restart, page reload of the pin)
 Wave: 2 · Depends on: 01
