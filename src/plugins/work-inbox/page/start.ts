@@ -35,7 +35,8 @@ type WorkInboxApi = PageApi<typeof workInboxManifest, ChannelShape>;
 // `work.state` with the threads `work.details` holds, and acts only through work's commands. `showMode` shows the
 // mode, and does nothing while it shows. The place (section, filter, cursor, unsent drafts, whether the pane is open)
 // goes to `work-inbox.place` on each change, and a page load puts the last page's back once the first state lands.
-// Registers the Inbox demo step.
+// It sets its mode's activity bar count to the open Needs you items, none until the first state. Registers the
+// Inbox demo step.
 export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
   manifest: workInboxManifest,
   start(api: WorkInboxApi) {

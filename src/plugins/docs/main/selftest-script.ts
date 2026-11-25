@@ -1125,6 +1125,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       width: 'start',
       keys: [' ', 'v', 'p'],
       expect: '[page] activity bar pinned',
+      checksFit: 'held',
       screenshot: 'activity-bar-pinned',
     },
     {

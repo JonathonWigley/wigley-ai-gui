@@ -109,7 +109,7 @@ export const settingInfo: SettingInfos<Settings> = {
   'shell.activityBar.groups': {
     label: 'Activity bar groups',
     description:
-      "The activity bar's groups, top to bottom, each listing mode ids (sessions.sessions, work-inbox.main) and an optional at: bottom. Empty keeps each plugin's suggested order.",
+      "The activity bar's groups, top to bottom, each `{ modes: [mode ids such as sessions.sessions, work-inbox.main], at?: bottom }`. Empty keeps each plugin's suggested order.",
   },
   'shell.activityBar.hidden': {
     label: 'Hidden activity bar modes',

@@ -142,11 +142,10 @@ export function liveKeysFor(
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds (their `id` and
-// `showCommand`) are qualified by it. Its areas are the title bar, panel, status bar, left bar, right bar and
-// overlay:
-// they leave out `main`, which only the mode registry fills, and the activity
-// bar and side bar, which the core draws from the modes. Its
-// settings are its own entry in the config's plugin settings, and its ui state
+// `showCommand`) are qualified by it. Its areas are the title bar, panel,
+// status bar, left bar, right bar and overlay: they leave out `main`, which
+// only the mode registry fills, and the activity bar and side bar, which the
+// core draws from the modes. Its settings are its own entry in the config's plugin settings, and its ui state
 // and `services.log` are scoped to its id. Its layout shows run under its id,
 // and each show's `draw` draws with a base kit made from this API's own
 // markdown, key hints, commands, platform, layout state and log.
