@@ -29,7 +29,15 @@ import {
   type ListedProcess,
   SESSION_HOST_PROTOCOL,
   type SubscribeMessage,
+  type TermAttachMessage,
+  type TermAttachReply,
 } from '../../contracts/session-host-protocol';
+import type {
+  TerminalEvents,
+  TerminalExit,
+  TerminalInfo,
+  TerminalSpawn,
+} from '../../contracts/terminals';
 import { channelPath } from '../../shared/local-channel/channel-path';
 import { jsonLine, readLines } from '../../shared/local-channel/line-framing';
 import {
@@ -122,6 +130,9 @@ interface HostScript {
   heldList?: Promise<void>; // each `list` reply waits for it
   closesOnDrain?: boolean; // closes the connection that sent `drain`, as an older host exiting on it
   subscribed?(message: SubscribeMessage, host: ScriptedHost): void;
+  terminals?: TerminalInfo[]; // what `termList` answers
+  termListAnswered?: boolean;
+  termAttached?(message: TermAttachMessage, host: ScriptedHost): void;
 }
 
 // Writes `reply` once `held` has settled, or at once with none.
@@ -141,6 +152,8 @@ interface ScriptedHost {
   got: ClientMessage[];
   sockets: Socket[];
   push(message: HostMessage): void;
+  // Writes every message's line in one socket write, so the client reads them in one chunk.
+  pushTogether(messages: HostMessage[]): void;
   stop(): Promise<void>;
 }
 
@@ -157,6 +170,11 @@ async function startScriptedHost(
     push(message) {
       for (const socket of sockets) {
         socket.write(jsonLine(message));
+      }
+    },
+    pushTogether(messages) {
+      for (const socket of sockets) {
+        socket.write(messages.map((message) => jsonLine(message)).join(''));
       }
     },
     stop: async () => {
@@ -192,6 +210,19 @@ async function startScriptedHost(
       writeAfter(socket, reply, script.heldList);
     } else if (message.type === 'subscribe') {
       script.subscribed?.(message, host);
+    } else if (message.type === 'termAttach') {
+      script.termAttached?.(message, host);
+    } else if (
+      message.type === 'termList' &&
+      script.termListAnswered !== false
+    ) {
+      socket.write(
+        jsonLine({
+          type: 'termList',
+          requestId: message.requestId,
+          terminals: script.terminals ?? [],
+        }),
+      );
     } else if (message.type === 'stopAll' && script.stopAllAnswered !== false) {
       socket.write(jsonLine({ type: 'stopAll', requestId: message.requestId }));
     } else if (message.type === 'drain' && script.closesOnDrain) {
@@ -275,6 +306,62 @@ function recordedEvents() {
     seqs: () => lines.map((line) => line.seq),
     errors: () => closed.map((exit) => exit.error),
   };
+}
+
+// `calls` holds each call in order: `data:<chunk>` or `closed:<error>`.
+function recordedTerminalEvents() {
+  const data: string[] = [];
+  const closed: TerminalExit[] = [];
+  const calls: string[] = [];
+  const events: TerminalEvents = {
+    data: (chunk) => {
+      data.push(chunk);
+      calls.push(`data:${chunk}`);
+    },
+    closed: (exit) => {
+      closed.push(exit);
+      calls.push(`closed:${exit.error}`);
+    },
+  };
+  return {
+    events,
+    data,
+    closed,
+    calls,
+    errors: () => closed.map((exit) => exit.error),
+  };
+}
+
+function terminalRequest(id: string): TerminalSpawn {
+  return {
+    id,
+    command: '/bin/zsh',
+    args: ['-l'],
+    cwd: '/work',
+    cols: 80,
+    rows: 24,
+  };
+}
+
+function termData(id: string, data: string): HostMessage {
+  return { type: 'termData', id, data };
+}
+
+function attachReply(
+  message: TermAttachMessage,
+  terminal: TermAttachReply['terminal'],
+): HostMessage {
+  return {
+    type: 'termAttach',
+    requestId: message.requestId,
+    id: message.id,
+    terminal,
+  };
+}
+
+// The `term*` messages `host` got, in order.
+function termMessages(host: ScriptedHost): ClientMessage[] {
+  return host.got.filter((message) => message.type.startsWith('term'));
 }
 
 function spawnRequest(id: string): HostedSpawn {
@@ -595,6 +682,14 @@ describe('createSessionHostClient', () => {
     const attaching = expect(
       client.attach('b', recordedEvents().events),
     ).rejects.toThrow('did not start');
+    const terminal = recordedTerminalEvents();
+    client.terminals.spawn(terminalRequest('t'), terminal.events);
+    const terminalListing = expect(client.terminals.list()).rejects.toThrow(
+      'did not start',
+    );
+    const terminalAttaching = expect(
+      client.terminals.attach('u', recordedTerminalEvents().events),
+    ).rejects.toThrow('did not start');
 
     await vi.waitFor(() => expect(rig.timers.pending(POLL_MS)).toBe(1));
     rig.moveClock(START_LIMIT_MS - 1);
@@ -607,8 +702,13 @@ describe('createSessionHostClient', () => {
 
     await vi.waitFor(() => expect(queued.closed).toHaveLength(1));
     expect(queued.errors()[0]).toMatch(/^the session host did not start:/);
+    expect(terminal.errors()).toEqual([
+      expect.stringMatching(/^the session host did not start:/),
+    ]);
     await listing;
     await attaching;
+    await terminalListing;
+    await terminalAttaching;
     expect(rig.fake.detachedStarts).toHaveLength(1);
   });
 
@@ -813,6 +913,252 @@ describe('createSessionHostClient', () => {
     await vi.waitFor(() => expect(first.seqs()).toEqual([1]));
     expect(second.lines).toEqual([]);
     expect(first.closed).toEqual([]);
+  });
+
+  it('terminal_Messages_ReachTheHostInCallOrderUntilDetached', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+
+    const terminal = client.terminals.spawn(
+      terminalRequest('a'),
+      recordedTerminalEvents().events,
+    );
+    terminal.write('ls');
+    terminal.resize(90, 20);
+    terminal.kill();
+    terminal.detach();
+    terminal.write('x');
+    await client.list();
+
+    expect(termMessages(host)).toEqual([
+      { type: 'termSpawn', request: terminalRequest('a') },
+      { type: 'termWrite', id: 'a', data: 'ls' },
+      { type: 'termResize', id: 'a', cols: 90, rows: 20 },
+      { type: 'termKill', id: 'a' },
+      { type: 'termDetach', id: 'a' },
+    ]);
+  });
+
+  it('terminal_Pushes_RouteByIdToTheLiveEvents', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const a = recordedTerminalEvents();
+    const b = recordedTerminalEvents();
+    const aTerminal = client.terminals.spawn(terminalRequest('a'), a.events);
+    const bTerminal = client.terminals.spawn(terminalRequest('b'), b.events);
+    await client.list();
+    const exit: TerminalExit = { code: 0, signal: null, error: null };
+
+    host.push(termData('a', 'x'));
+    host.push(termData('b', 'y'));
+    host.push({ type: 'termClosed', id: 'a', exit });
+    host.push(termData('a', 'z'));
+    // The list reply follows the pushes on the same connection.
+    await client.list();
+
+    expect(a.data).toEqual(['x']);
+    expect(a.closed).toEqual([exit]);
+    expect(b.data).toEqual(['y']);
+    expect(b.closed).toEqual([]);
+
+    aTerminal.write('late');
+    bTerminal.detach();
+    host.push({ type: 'termClosed', id: 'b', exit });
+    await client.list();
+
+    expect(sentOfType(host, 'termWrite')).toEqual([]);
+    expect(b.closed).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'replay',
+      answer: (message: TermAttachMessage, host: ScriptedHost) => {
+        host.push(attachReply(message, { replay: 'abc', running: true }));
+        host.push(termData('a', 'd'));
+      },
+      replay: 'abc',
+      live: ['d'],
+      rejection: null,
+    },
+    {
+      name: 'same chunk',
+      answer: (message: TermAttachMessage, host: ScriptedHost) =>
+        host.pushTogether([
+          attachReply(message, { replay: 'abc', running: true }),
+          termData('a', 'd'),
+        ]),
+      replay: 'abc',
+      live: ['d'],
+      rejection: null,
+    },
+    {
+      name: 'unknown',
+      answer: (message: TermAttachMessage, host: ScriptedHost) =>
+        host.push(attachReply(message, null)),
+      replay: null,
+      live: [],
+      rejection: null,
+    },
+    {
+      name: 'no reply',
+      answer: () => {},
+      replay: null,
+      live: [],
+      rejection: /did not answer the attach of terminal a/,
+    },
+  ])(
+    'terminalAttach_Cases: $name',
+    async ({ answer, replay, live, rejection }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const host = await startScriptedHost(channel, { termAttached: answer });
+      const rig = clientRig(dir, channel);
+      const client = rig.create();
+      const attached = recordedTerminalEvents();
+
+      const attaching = client.terminals.attach('a', attached.events);
+      if (rejection !== null) {
+        const settled = expect(attaching).rejects.toThrow(rejection);
+        await vi.waitFor(() =>
+          expect(sentOfType(host, 'termAttach')).toHaveLength(1),
+        );
+        rig.timers.fire(REPLY_LIMIT_MS);
+        await settled;
+        await client.list();
+        expect(sentOfType(host, 'termDetach')).toEqual([
+          { type: 'termDetach', id: 'a' },
+        ]);
+        return;
+      }
+      const result = await attaching;
+
+      expect(result?.replay ?? null).toBe(replay);
+      expect(attached.data).toEqual([]);
+      // The list reply follows every push the answer wrote.
+      await client.list();
+      expect(attached.data).toEqual([]);
+      rig.timers.fire(0);
+      expect(attached.data).toEqual(live);
+    },
+  );
+
+  it('terminalAttach_PushesBeforeTheReply_AreDropped', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    await startScriptedHost(channel, {
+      termAttached: (message, host) =>
+        host.pushTogether([
+          termData('a', 'old'),
+          attachReply(message, { replay: 'old', running: true }),
+        ]),
+    });
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const attached = recordedTerminalEvents();
+
+    await client.terminals.attach('a', attached.events);
+    rig.timers.fire(0);
+    await client.list();
+
+    expect(attached.data).toEqual([]);
+  });
+
+  it.each([
+    { name: 'second attach', attachesAgain: true },
+    { name: 'detach', attachesAgain: false },
+  ])(
+    'terminalAttach_BeforeTheFlush_FirstEventsGetNothing: $name',
+    async ({ attachesAgain }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const host = await startScriptedHost(channel, {
+        termAttached: (message, scripted) =>
+          scripted.pushTogether([
+            attachReply(message, { replay: 'r', running: true }),
+            termData('a', 'd'),
+          ]),
+      });
+      const rig = clientRig(dir, channel);
+      const client = rig.create();
+      const first = recordedTerminalEvents();
+      const second = recordedTerminalEvents();
+      const firstResult = await client.terminals.attach('a', first.events);
+
+      if (attachesAgain) {
+        await client.terminals.attach('a', second.events);
+      } else {
+        firstResult?.process.detach();
+      }
+      rig.timers.fire(0);
+      await client.list();
+
+      expect(first.data).toEqual([]);
+      expect(second.data).toEqual(attachesAgain ? ['d'] : []);
+      expect(sentOfType(host, 'termDetach')).toEqual(
+        attachesAgain ? [] : [{ type: 'termDetach', id: 'a' }],
+      );
+    },
+  );
+
+  it('terminalSpawn_LiveEntryUnderThatId_ClosesTheNewEvents', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const first = recordedTerminalEvents();
+    const second = recordedTerminalEvents();
+    client.terminals.spawn(terminalRequest('a'), first.events);
+
+    client.terminals.spawn(terminalRequest('a'), second.events);
+    await client.list();
+
+    expect(second.errors()).toEqual(['a terminal with id a already exists']);
+    expect(first.closed).toEqual([]);
+    expect(sentOfType(host, 'termSpawn')).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      name: 'answered',
+      answered: true,
+      outcome: [{ id: 'a', startedAt: 7, running: true }],
+    },
+    {
+      name: 'silent',
+      answered: false,
+      outcome: /did not answer its terminal list/,
+    },
+  ])('terminalList_Cases: $name', async ({ answered, outcome }) => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel, {
+      terminals: [{ id: 'a', startedAt: 7, running: true }],
+      termListAnswered: answered,
+    });
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+
+    const listing = client.terminals.list();
+    const settled =
+      outcome instanceof RegExp
+        ? expect(listing).rejects.toThrow(outcome)
+        : expect(listing).resolves.toEqual(outcome);
+    if (!answered) {
+      await vi.waitFor(() =>
+        expect(sentOfType(host, 'termList')).toHaveLength(1),
+      );
+      rig.timers.fire(REPLY_LIMIT_MS);
+    }
+
+    await settled;
   });
 
   it('spawn_DetachedEntryUnderThatId_LeavesTheAnswerToTheHost', async () => {
@@ -1045,8 +1391,10 @@ describe('createSessionHostClient', () => {
     const spawned = recordedEvents();
     const attached = recordedEvents();
     const detached = recordedEvents();
+    const terminal = recordedTerminalEvents();
     client.spawn(spawnRequest('spawned'), spawned.events);
     client.spawn(spawnRequest('detached'), detached.events).detach();
+    client.terminals.spawn(terminalRequest('terminal'), terminal.events);
     await client.attach('attached', attached.events);
     rig.timers.fire(0);
 
@@ -1055,6 +1403,7 @@ describe('createSessionHostClient', () => {
     await vi.waitFor(() => expect(spawned.errors()).toEqual([EXITED]));
     expect(attached.errors()).toEqual([EXITED]);
     expect(detached.closed).toEqual([]);
+    expect(terminal.errors()).toEqual([EXITED]);
   });
 
   it('hostExits_BeforeTheAttachFlush_ClosedFollowsTheBufferedLines', async () => {
@@ -1066,21 +1415,30 @@ describe('createSessionHostClient', () => {
         scripted.push(linePush('a', 2));
         replySubscribed(scripted, message, log);
       },
+      termAttached: (message, scripted) =>
+        scripted.pushTogether([
+          attachReply(message, { replay: '', running: true }),
+          termData('t', 'd'),
+        ]),
     });
     const rig = clientRig(dir, channel);
     const client = rig.create();
     const attached = recordedEvents();
+    const terminal = recordedTerminalEvents();
     const sentinel = recordedEvents();
     client.spawn(spawnRequest('sentinel'), sentinel.events);
     await client.attach('a', attached.events);
+    await client.terminals.attach('t', terminal.events);
 
     await host.stop();
     await vi.waitFor(() => expect(sentinel.errors()).toEqual([EXITED]));
 
     expect(attached.closed).toEqual([]);
+    expect(terminal.closed).toEqual([]);
     rig.timers.fire(0);
     expect(attached.seqs()).toEqual([2]);
     expect(attached.errors()).toEqual([EXITED]);
+    expect(terminal.calls).toEqual(['data:d', `closed:${EXITED}`]);
   });
 
   it('hostExits_PendingCalls_ListAndAttachRejectAndStopAllResolves', async () => {
@@ -1102,16 +1460,25 @@ describe('createSessionHostClient', () => {
       client.attach('a', attached.events),
     ).rejects.toThrow();
     const listing = expect(client.list()).rejects.toThrow();
+    const terminal = recordedTerminalEvents();
+    const terminalAttach = expect(
+      client.terminals.attach('t', terminal.events),
+    ).rejects.toThrow(/did not answer the attach of terminal t/);
     const stopAll = client.stopAll();
     await vi.waitFor(() => expect(stopping).toBe(true));
     await vi.waitFor(() => expect(sentOfType(host, 'stopAll')).toHaveLength(1));
     await vi.waitFor(() => expect(sentOfType(host, 'list')).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(sentOfType(host, 'termAttach')).toHaveLength(1),
+    );
     await host.stop();
 
     await attach;
     await listing;
+    await terminalAttach;
     await expect(stopAll).resolves.toBeUndefined();
     expect(attached.closed).toEqual([]);
+    expect(terminal.closed).toEqual([]);
   });
 
   it('stopAll_HostReplies_Resolves', async () => {

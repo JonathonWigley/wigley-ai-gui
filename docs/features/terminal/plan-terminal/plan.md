@@ -344,11 +344,11 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 ### Wave 1
 - [x] [Packages](01-packages.md)
 - [ ] [Host terminal table and protocol 5](02-host-terminal-table.md)
-- [ ] [Sessions drawer slot](07-sessions-drawer.md)
+- [x] [Sessions drawer slot](07-sessions-drawer.md)
 
 ### Wave 2
 - [ ] [Client terminals](03-client-terminals.md) — after 02
-- [ ] [xterm adapter and layer rules](05-xterm-adapter.md) — after 01
+- [x] [xterm adapter and layer rules](05-xterm-adapter.md) — after 01
 
 ### Wave 3
 - [ ] [node-pty adapter and packaging](04-node-pty-packaging.md) — after 01, 02, 05
@@ -373,9 +373,13 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 
 ### Groups
 - 01 · main agent: a check and a commit, no code · eff7c2fa · npm ls lists the three at the pinned versions; package.json diff adds only the three dependencies entries, exact · concerns: npm replaced the worktree's node_modules symlink with a full install, so the app clone's own node_modules lacks the three packages until it is installed there
+- 05 · hard · 373e8453 · diff read: every Produces present (contract, createXtermEmulator, passesToPage, both layer entries); typecheck clean in its files; layers lint clean · concerns: whether a subscription or options change before xterm opens takes effect is left to the live session (task 12)
+- 07 · hard · 16bd1ef9 · diff read: SessionDrawerView, SessionDrawerHandle, addDrawer and the drawer layout part present as planned; typecheck clean in its files; oxfmt applied (main agent, tooling) · concerns: no CHANGELOG line (task 10 owns it); one-pane tree move rows assume pane-tree-view returns false for down/up/left, unchecked; layout.js drawer leaves its input unused
 ### Contract changes
 - session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
 - TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
 ### Rulings
+- onInput and onResize return xterm's IDisposable directly — it already has Disposable's shape — a wrapper would be needed if the contract grows · group 05
+- row-order test checks which of the four row classes each frame child holds, not its first class, since sheet() puts ui-sheet first — group 07 · group 07
 ### Review rounds
 ### Test gate

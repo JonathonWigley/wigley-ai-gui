@@ -1,6 +1,6 @@
 # 07 — Sessions drawer slot
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `addDrawer` contract that 09 consumes, and a frame lifetime (open, shown, moved, dropped)
 Wave: 1 · Depends on: none
@@ -340,3 +340,5 @@ Commit:    one commit: "sessions: a drawer row under each session's tabs (addDra
            height, and Alt+j/k into and out of it"
 
 ## Proof
+
+Commit 16bd1ef9 · proof: diff read: SessionDrawerView, SessionDrawerHandle, addDrawer and the drawer layout part present as planned; typecheck clean in its files; oxfmt applied (main agent, tooling) · concerns: no CHANGELOG line (task 10 owns it); one-pane tree move rows assume pane-tree-view returns false for down/up/left, unchecked; layout.js drawer leaves its input unused

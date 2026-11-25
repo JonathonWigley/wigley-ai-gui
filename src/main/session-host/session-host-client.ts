@@ -20,7 +20,18 @@ import {
   type PipeLogRecord,
   SESSION_HOST_PROTOCOL,
   type SpawnedEvent,
+  type TermAttachReply,
+  type TermClosedEvent,
+  type TermDataEvent,
 } from '../../contracts/session-host-protocol';
+import type {
+  TerminalAttach,
+  TerminalEvents,
+  TerminalExit,
+  TerminalHost,
+  TerminalInfo,
+  TerminalProcess,
+} from '../../contracts/terminals';
 import { errorText } from '../../shared/error-text';
 import {
   HOST_REPLY_LIMIT_MS,
@@ -37,6 +48,8 @@ const HOST_START_LIMIT_MS = 10_000;
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 // SIGTERM, the grace to SIGKILL, the grace from an exit to destroying held pipes, and a margin for the reply.
 const STOP_ALL_REPLY_LIMIT_MS = 2 * HOST_END_GRACE_MS + 2000;
+// The `closed` error of every process and shell open when the host's connection drops.
+const HOST_EXITED = 'the session host exited';
 
 export interface SessionHostClientDeps {
   folder: string; // <app instance user data>/session-host
@@ -47,6 +60,11 @@ export interface SessionHostClientDeps {
   clock: Clock;
   timers: Timers;
   log: Log;
+}
+
+// The session host client: the hosted processes, and the shells as `terminals`.
+export interface SessionHostClient extends SessionHost {
+  readonly terminals: TerminalHost;
 }
 
 // A message the host pushes for one process.
@@ -131,6 +149,304 @@ function flushBuffer(
   }
 }
 
+// A message the host pushes for one shell.
+type TerminalPush = TermDataEvent | TermClosedEvent;
+
+// One events object a terminal `spawn` or `attach` was given.
+interface TerminalSubscriber {
+  events: TerminalEvents;
+  detached: boolean;
+  // The `termAttach` request that made it; null for a `spawn`'s.
+  attachRequestId: number | null;
+  // False until the host's attach reply has come; a push before it is output the reply's replay holds.
+  replied: boolean;
+  // Pushes held back from the attach reply until its flush. Null once they flow live.
+  buffer: TerminalPush[] | null;
+}
+
+// One shell id this client holds. Every `TerminalProcess` of the id shares it.
+interface TerminalEntry {
+  id: string;
+  ended: boolean; // closed, or its host is gone
+  subscriber: TerminalSubscriber | null; // the one live events object
+}
+
+interface TerminalClientDeps {
+  timers: Timers;
+  whenConnected: (run: ConnectedRun) => void;
+}
+
+// The shells side of the client: its `TerminalHost`, and what its links and a host death call.
+interface TerminalClient {
+  host: TerminalHost;
+  pushed: (message: TerminalPush) => void;
+  attachReceived: (reply: TermAttachReply) => void;
+  hostDied: () => void;
+}
+
+function terminalSubscriber(
+  events: TerminalEvents,
+  fromSpawn: boolean,
+): TerminalSubscriber {
+  return {
+    events,
+    detached: false,
+    attachRequestId: null,
+    replied: fromSpawn,
+    buffer: null,
+  };
+}
+
+function endTerminalEntry(
+  terminals: Map<string, TerminalEntry>,
+  entry: TerminalEntry,
+) {
+  entry.ended = true;
+  if (terminals.get(entry.id) === entry) {
+    terminals.delete(entry.id);
+  }
+}
+
+// Gives `message` to `subscriber` while it is still the live events object of the entry.
+function deliverToTerminal(
+  terminals: Map<string, TerminalEntry>,
+  entry: TerminalEntry,
+  subscriber: TerminalSubscriber,
+  message: TerminalPush,
+) {
+  if (entry.subscriber !== subscriber) {
+    return;
+  }
+  if (message.type === 'termData') {
+    subscriber.events.data(message.data);
+    return;
+  }
+  entry.subscriber = null;
+  endTerminalEntry(terminals, entry);
+  subscriber.events.closed(message.exit);
+}
+
+// Buffers `message` while the subscriber's attach flush is ahead; else delivers it.
+function holdOrDeliverToTerminal(
+  terminals: Map<string, TerminalEntry>,
+  entry: TerminalEntry,
+  subscriber: TerminalSubscriber,
+  message: TerminalPush,
+) {
+  if (subscriber.buffer !== null) {
+    subscriber.buffer.push(message);
+  } else {
+    deliverToTerminal(terminals, entry, subscriber, message);
+  }
+}
+
+function flushTerminalBuffer(
+  terminals: Map<string, TerminalEntry>,
+  entry: TerminalEntry,
+  subscriber: TerminalSubscriber,
+) {
+  const buffered = subscriber.buffer ?? [];
+  subscriber.buffer = null;
+  for (const message of buffered) {
+    deliverToTerminal(terminals, entry, subscriber, message);
+  }
+}
+
+function createTerminalClient(deps: TerminalClientDeps): TerminalClient {
+  const { timers, whenConnected } = deps;
+  const terminals = new Map<string, TerminalEntry>();
+
+  const sendWhenConnected = (message: ClientMessage) => {
+    whenConnected((link) => link?.send(message));
+  };
+
+  const subscribe = (id: string, subscriber: TerminalSubscriber) => {
+    const entry = terminals.get(id) ?? { id, ended: false, subscriber: null };
+    terminals.set(id, entry);
+    entry.subscriber = subscriber;
+    return entry;
+  };
+
+  const terminalProcess = (
+    entry: TerminalEntry,
+    subscriber: TerminalSubscriber,
+  ): TerminalProcess => {
+    const { id } = entry;
+    const sendWhileActive = (message: ClientMessage) => {
+      if (!entry.ended && !subscriber.detached) {
+        sendWhenConnected(message);
+      }
+    };
+    return {
+      id,
+      write: (data) => sendWhileActive({ type: 'termWrite', id, data }),
+      resize: (cols, rows) =>
+        sendWhileActive({ type: 'termResize', id, cols, rows }),
+      kill: () => sendWhileActive({ type: 'termKill', id }),
+      detach() {
+        if (entry.subscriber === subscriber) {
+          sendWhileActive({ type: 'termDetach', id });
+          entry.subscriber = null;
+        }
+        subscriber.detached = true;
+      },
+    };
+  };
+
+  // Live output starts in a timer after the resolve, so the caller writes `replay` before any live chunk.
+  const attachOver = async (
+    link: HostLink,
+    entry: TerminalEntry,
+    subscriber: TerminalSubscriber,
+  ): Promise<TerminalAttach | null> => {
+    const { id } = entry;
+    const reply = await link.request((requestId) => {
+      subscriber.attachRequestId = requestId;
+      return { type: 'termAttach', requestId, id };
+    }, HOST_REPLY_LIMIT_MS);
+    const isLive = entry.subscriber === subscriber;
+    if (reply?.type !== 'termAttach') {
+      if (isLive) {
+        link.send({ type: 'termDetach', id });
+        entry.subscriber = null;
+      }
+      throw new Error(
+        `the session host did not answer the attach of terminal ${id}`,
+      );
+    }
+    if (reply.terminal === null) {
+      if (isLive) {
+        entry.subscriber = null;
+        endTerminalEntry(terminals, entry);
+      }
+      return null;
+    }
+    timers.set(() => flushTerminalBuffer(terminals, entry, subscriber), 0);
+    return {
+      process: terminalProcess(entry, subscriber),
+      replay: reply.terminal.replay,
+    };
+  };
+
+  const listOver = async (link: HostLink): Promise<TerminalInfo[]> => {
+    const reply = await link.request(
+      (requestId) => ({ type: 'termList', requestId }),
+      HOST_REPLY_LIMIT_MS,
+    );
+    if (reply?.type !== 'termList') {
+      throw new Error('the session host did not answer its terminal list');
+    }
+    return reply.terminals;
+  };
+
+  const host: TerminalHost = {
+    spawn(request, events) {
+      if (terminals.get(request.id)?.subscriber) {
+        queueMicrotask(() =>
+          events.closed({
+            code: null,
+            signal: null,
+            error: `a terminal with id ${request.id} already exists`,
+          }),
+        );
+        return terminalProcess(
+          { id: request.id, ended: true, subscriber: null },
+          { ...terminalSubscriber(events, true), detached: true },
+        );
+      }
+      const subscriber = terminalSubscriber(events, true);
+      const entry = subscribe(request.id, subscriber);
+      whenConnected((link, failure) => {
+        if (link !== null) {
+          link.send({ type: 'termSpawn', request });
+          return;
+        }
+        deliverToTerminal(terminals, entry, subscriber, {
+          type: 'termClosed',
+          id: request.id,
+          exit: {
+            code: null,
+            signal: null,
+            error: `the session host did not start: ${failure}`,
+          },
+        });
+      });
+      return terminalProcess(entry, subscriber);
+    },
+    attach(id, events) {
+      const subscriber = terminalSubscriber(events, false);
+      const entry = subscribe(id, subscriber);
+      return new Promise((resolve, reject) => {
+        whenConnected((link, failure) => {
+          if (link === null) {
+            if (entry.subscriber === subscriber) {
+              entry.subscriber = null;
+            }
+            reject(new Error(`the session host did not start: ${failure}`));
+            return;
+          }
+          attachOver(link, entry, subscriber).then(resolve, reject);
+        });
+      });
+    },
+    list() {
+      return new Promise((resolve, reject) => {
+        whenConnected((link, failure) => {
+          if (link === null) {
+            reject(new Error(`the session host did not start: ${failure}`));
+            return;
+          }
+          listOver(link).then(resolve, reject);
+        });
+      });
+    },
+  };
+
+  return {
+    host,
+    pushed(message) {
+      const entry = terminals.get(message.id);
+      const subscriber = entry?.subscriber;
+      if (entry === undefined || !subscriber?.replied) {
+        return;
+      }
+      holdOrDeliverToTerminal(terminals, entry, subscriber, message);
+    },
+    attachReceived(reply) {
+      const subscriber = terminals.get(reply.id)?.subscriber;
+      const isThisSubscribersReply =
+        subscriber?.attachRequestId === reply.requestId;
+      if (!subscriber || !isThisSubscribersReply || reply.terminal === null) {
+        return;
+      }
+      subscriber.replied = true;
+      subscriber.buffer = [];
+    },
+    hostDied() {
+      const exit: TerminalExit = {
+        code: null,
+        signal: null,
+        error: HOST_EXITED,
+      };
+      const entries = [...terminals.values()];
+      terminals.clear();
+      for (const entry of entries) {
+        entry.ended = true;
+        const { subscriber } = entry;
+        // An attach with no reply yet is left to its request, which the link's close settles.
+        if (!subscriber?.replied) {
+          continue;
+        }
+        holdOrDeliverToTerminal(terminals, entry, subscriber, {
+          type: 'termClosed',
+          id: entry.id,
+          exit,
+        });
+      }
+    },
+  };
+}
+
 // The command that starts the session host the client would start: `execPath` with `hostScript`, `folder` and
 // `channel` as its arguments, and `ELECTRON_RUN_AS_NODE` set to `1`.
 export function sessionHostLaunch(
@@ -154,9 +470,13 @@ async function readPipeLog(file: string): Promise<PipeLine[]> {
 
 export function createSessionHostClient(
   deps: SessionHostClientDeps,
-): SessionHost {
+): SessionHostClient {
   const { timers } = deps;
   const processes = new Map<string, ProcessEntry>();
+  const terminalClient = createTerminalClient({
+    timers,
+    whenConnected: (run) => whenConnected(run),
+  });
   let current: HostLink | null = null;
   let attempt: ConnectAttempt | null = null;
   const waiting: ConnectedRun[] = [];
@@ -189,7 +509,7 @@ export function createSessionHostClient(
     const exit: HostedExit = {
       code: null,
       signal: null,
-      error: 'the session host exited',
+      error: HOST_EXITED,
     };
     const entries = [...processes.values()];
     processes.clear();
@@ -211,6 +531,7 @@ export function createSessionHostClient(
         });
       }
     }
+    terminalClient.hostDied();
   };
 
   const dropPending = (ids: readonly string[]) => {
@@ -240,6 +561,8 @@ export function createSessionHostClient(
       timers,
       log: deps.log,
       pushed,
+      terminalPushed: terminalClient.pushed,
+      terminalAttachReceived: terminalClient.attachReceived,
       runStarted,
       disconnected,
     });
@@ -549,6 +872,7 @@ export function createSessionHostClient(
   startConnecting();
 
   return {
+    terminals: terminalClient.host,
     spawn(request, events) {
       if (processes.get(request.id)?.subscriber) {
         queueMicrotask(() =>

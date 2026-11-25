@@ -1,6 +1,6 @@
 # 05 — xterm adapter and layer rules
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `TerminalEmulator` seam that 06 and 09 consume
 Wave: 2 · Depends on: 01
@@ -137,3 +137,5 @@ Commit:    one commit: "Add the TerminalEmulator contract, its xterm.js adapter 
            rule for the xterm adapter"
 
 ## Proof
+
+Commit 373e8453 · proof: diff read: every Produces present (contract, createXtermEmulator, passesToPage, both layer entries); typecheck clean in its files; layers lint clean · concerns: whether a subscription or options change before xterm opens takes effect is left to the live session (task 12)
