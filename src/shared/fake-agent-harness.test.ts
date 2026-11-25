@@ -1730,15 +1730,25 @@ describe('createFakeAgentHarness', () => {
   });
 
   it.each([
-    { given: 'a command', input: { command: 'ls' }, summary: 'ls' },
-    { given: 'no command', input: { file_path: '/a.ts' }, summary: '' },
+    {
+      given: 'a multi-line Bash command',
+      toolName: 'Bash',
+      input: { command: 'ls -la\necho done' },
+      summary: 'ls -la',
+    },
+    {
+      given: 'a Write after another string field',
+      toolName: 'Write',
+      input: { content: 'body', file_path: '/a.ts' },
+      summary: '/a.ts',
+    },
   ])(
-    'askPermission_SummaryIsTheCommandField given $given',
-    async ({ input, summary }) => {
+    'askPermission_SummaryFollowsToolSummary given $given',
+    async ({ toolName, input, summary }) => {
       const { harness, heard } = await startedProcess();
 
       void harness.askPermission('row-1', {
-        toolName: 'Bash',
+        toolName,
         input,
         toolUseId: 'tu-1',
       });

@@ -37,6 +37,7 @@ import {
   SAMPLE_VISUALS_TEXT,
 } from './sample-visuals';
 import { SESSION_ROW_ENV } from './session-env';
+import { toolSummary } from './tool-summary';
 import { typedSkill } from './typed-skill';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
@@ -298,8 +299,8 @@ const FAKE_IDLE_RULE: IdleRule = {
 // reject `message`, and `askCalls` lists every `ask` request in call order,
 // failed ones included. The fake ignores the ask's `signal`.
 // `timers` runs the `fake: visual` hold. Each process numbers its permission
-// requests `fake-permission-<n>`, each entry's `summary` the input's
-// `command` field when it is a string, else ''; `answerPermission` emits the
+// requests `fake-permission-<n>`, each entry's `summary` built by
+// `toolSummary`, as the real harness builds it; `answerPermission` emits the
 // answered entry and settles the request in a later microtask, and an interrupt of an open turn,
 // the process's end, kill or `FAKE_END_TEXT` exit cancel every waiting request
 // with `FAKE_CANCELLED_REASON`, emitting its cancelled entry (before
@@ -799,7 +800,7 @@ function emitToolTurn(
     toolUseId: `fake-tool-${turn}`,
     name: 'Bash',
     input: { command: run.command },
-    summary: run.command.split('\n')[0],
+    summary: toolSummary('Bash', { command: run.command }),
   };
   startFakeTool(events, emitEntry, clock, tool, 'tool');
   finishFakeTool(events, emitEntry, clock, tool, 'tool', run.result);
@@ -1148,16 +1149,6 @@ function emitWorkflowSkill(
   finishFakeTool(events, emitEntry, clock, call, 'workflow', WORKFLOW_TOOL_OK);
 }
 
-// A permission entry's `summary`: `input`'s `command` field when it is a
-// string, else ''.
-function commandFieldOf(input: unknown): string {
-  const command =
-    typeof input === 'object' && input !== null
-      ? (input as Record<string, unknown>).command
-      : undefined;
-  return typeof command === 'string' ? command : '';
-}
-
 // The Bash call a `FAKE_PERMISSION_TEXT` turn asks permission for.
 function permissionToolCall(turn: number): ToolCall {
   return {
@@ -1420,7 +1411,7 @@ export function createFakeAgentHarness(
         at: clock.now(),
         toolName: call.toolName,
         input: call.input,
-        summary: commandFieldOf(call.input),
+        summary: toolSummary(call.toolName, call.input),
         answer: null,
         raw: [{ fake: 'permission', toolUseId: call.toolUseId }],
       };
@@ -1721,7 +1712,11 @@ export function createFakeAgentHarness(
       const change = await runWorkflowChange(
         turn,
         n,
-        { name: toolName, input: { file_path: planPath }, summary: planPath },
+        {
+          name: toolName,
+          input: { file_path: planPath },
+          summary: toolSummary(toolName, { file_path: planPath }),
+        },
         planPath,
         async () => {
           await files.write(
@@ -1841,7 +1836,11 @@ export function createFakeAgentHarness(
       const change = await runWorkflowChange(
         turn,
         1,
-        { name: 'Bash', input: { command }, summary: command },
+        {
+          name: 'Bash',
+          input: { command },
+          summary: toolSummary('Bash', { command }),
+        },
         folder,
         async () => {
           await files.trash(folder);

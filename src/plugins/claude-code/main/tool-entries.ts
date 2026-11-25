@@ -1,6 +1,6 @@
 import type { EntryDraft } from '../../../shared/entry-stamp';
+import { toolSummary } from '../../../shared/tool-summary';
 import { asArray, asJson, asString, type Json } from './json-fields';
-import { toolSummary } from './tool-summary';
 
 export type ToolEntry = Extract<EntryDraft, { kind: 'tool' }>;
 

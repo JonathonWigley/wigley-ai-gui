@@ -112,6 +112,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
                  `bash-command.ts`: `bashCommandOf`, a Bash call input's command, which chat and live-view read,
+                 `tool-summary.ts`: `toolSummary`, a tool call's one-line summary, which claude-code and the fake
+                 harness build,
                  `harness-folders.ts`: each registered profile's harness folders and plugin installs,
                  `sample-plugin.ts`: `SAMPLE_PLUGIN_NAME` and `sampleQualified`, the one name the sample workflows,
                  the fake harness, the sample self-tests and the previews qualify their skills and agents under,

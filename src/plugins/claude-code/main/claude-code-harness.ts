@@ -37,6 +37,7 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { programNotFoundMessage } from '../../../shared/program-lookup';
+import { toolSummary } from '../../../shared/tool-summary';
 import {
   type AgentDefinitions,
   loadAgentDefinitions,
@@ -86,7 +87,6 @@ import {
   type PermissionTarget,
 } from './permission-route';
 import { readPlanUsage } from './plan-usage';
-import { toolSummary } from './tool-summary';
 import {
   advanceFold,
   APP_COMPACT_TEXT,
