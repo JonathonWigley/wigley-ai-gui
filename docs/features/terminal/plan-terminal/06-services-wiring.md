@@ -1,6 +1,6 @@
 # 06 — Services wiring
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds `services.terminals` on both sides, the fake shell host and the fake emulator that 08, 09 and 10
 consume, and a drive-run option through main, the drive CLI and its doc

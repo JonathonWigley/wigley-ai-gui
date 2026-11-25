@@ -9,6 +9,7 @@ import type {
   SpawnedProcess,
   SpawnOptions,
 } from '../contracts/processes';
+import type { TerminalEmulator } from '../contracts/terminal-emulator';
 import type { UserConfig } from '../contracts/user-config';
 import { callEach } from './call-each';
 import { createRegistrations } from './registrations';
@@ -181,6 +182,25 @@ export function trackedEditor(
       registrations.track(editor.onPendingKeys(listener)),
     defineEx: (name, prefix, handler) =>
       registrations.track(editor.defineEx(name, prefix, handler)),
+  };
+}
+
+// The live screens are one store entry, so a disposed screen is not held. A
+// screen made after the store's `dispose` is disposed at once, and a screen's
+// `dispose` runs its own once.
+export function trackedTerminals(
+  terminals: TerminalEmulator,
+  registrations: Registrations,
+): TerminalEmulator {
+  const live = registrations.track(createRegistrations());
+  return {
+    create: (options) => {
+      const screen = terminals.create(options);
+      const ownDispose = screen.dispose;
+      const entry = live.track({ dispose: () => ownDispose.call(screen) });
+      screen.dispose = () => entry.dispose();
+      return screen;
+    },
   };
 }
 

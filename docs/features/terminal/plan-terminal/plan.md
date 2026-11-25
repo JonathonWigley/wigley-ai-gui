@@ -343,11 +343,11 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 
 ### Wave 1
 - [x] [Packages](01-packages.md)
-- [ ] [Host terminal table and protocol 5](02-host-terminal-table.md)
+- [x] [Host terminal table and protocol 5](02-host-terminal-table.md)
 - [x] [Sessions drawer slot](07-sessions-drawer.md)
 
 ### Wave 2
-- [ ] [Client terminals](03-client-terminals.md) — after 02
+- [x] [Client terminals](03-client-terminals.md) — after 02
 - [x] [xterm adapter and layer rules](05-xterm-adapter.md) — after 01
 
 ### Wave 3
@@ -375,11 +375,17 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - 01 · main agent: a check and a commit, no code · eff7c2fa · npm ls lists the three at the pinned versions; package.json diff adds only the three dependencies entries, exact · concerns: npm replaced the worktree's node_modules symlink with a full install, so the app clone's own node_modules lacks the three packages until it is installed there
 - 05 · hard · 373e8453 · diff read: every Produces present (contract, createXtermEmulator, passesToPage, both layer entries); typecheck clean in its files; layers lint clean · concerns: whether a subscription or options change before xterm opens takes effect is left to the live session (task 12)
 - 07 · hard · 16bd1ef9 · diff read: SessionDrawerView, SessionDrawerHandle, addDrawer and the drawer layout part present as planned; typecheck clean in its files; oxfmt applied (main agent, tooling) · concerns: no CHANGELOG line (task 10 owns it); one-pane tree move rows assume pane-tree-view returns false for down/up/left, unchecked; layout.js drawer leaves its input unused
+- 02 · deep · f4995ac3 · diff read: pty.ts, terminals.ts, keepTail, terminal table and protocol 5 messages present as planned; typecheck, oxlint, oxfmt and layers clean at e560a1d0 (host-link error fixed by 03) · concerns: shellEnvOf repeats two steps of process-table's private childEnvOf; AGENTS.md src map does not name the terminal table, pty.ts or terminals.ts yet
+- 03 · deep · e560a1d0 · diff read: SessionHostClient with terminals: TerminalHost, HostLinkDeps terminalPushed and terminalAttachReceived present; typecheck, oxlint, oxfmt and layers clean · concerns: the planned row create_HostNeverAnswers attached the spawned id, which would replace its subscriber, so the test attaches another id; AGENTS.md session-host tree entry says only hosted processes
 ### Contract changes
 - session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
 - TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
 ### Rulings
 - onInput and onResize return xterm's IDisposable directly — it already has Disposable's shape — a wrapper would be needed if the contract grows · group 05
 - row-order test checks which of the four row classes each frame child holds, not its first class, since sheet() puts ui-sheet first — group 07 · group 07
+- spawn refusal order: draining, held id, shape, then a PtySpawn that throws; a termSpawn with no request throws into host-server's per-message catch — group 02 · group 02
+- a throw from Pty.kill goes to diagnostics and still arms the SIGKILL, so one bad pty does not stop endAll or stopAll — group 02 · group 02
+- the test defines its own terminalRequest, since importing the host's test doubles breaks the src/main/session-host layer rule — group 03 · group 03
+- node-pty 1.1.0's published darwin spawn-helper files lack the execute bit, so the forge hook chmods the copied helper to 0o755 before signing, and a repo postinstall script (scripts/node-pty-helper-mode.mts, added to package.json) sets it in node_modules after every install; the main agent set it once in this run's node_modules — why: the plan's First step stop; makes the mode impossible to forget for the package and for npm start — cost if wrong: one more script on every install · main agent
 ### Review rounds
 ### Test gate

@@ -64,6 +64,8 @@ import type { SessionHost } from '../contracts/session-host';
 import type { ConfigProblem } from '../contracts/settings';
 import type { SlotKey, SlotWriter } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
+import type { TerminalEmulator } from '../contracts/terminal-emulator';
+import type { TerminalHost } from '../contracts/terminals';
 import type { UiState } from '../contracts/ui-state';
 import type { UserConfig } from '../contracts/user-config';
 import type { VisualFrames } from '../contracts/visual-frames';
@@ -99,6 +101,7 @@ import {
   trackedEditor,
   trackedFiles,
   trackedMarkdown,
+  trackedTerminals,
   trackedUserConfig,
 } from './plugin-service-views';
 import {
@@ -286,8 +289,8 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 }
 
 // `invoke` answers the `channel.invoke` of the part under test, which otherwise
-// never settles. A replaced `editor`, `markdown` or `demoSteps` still runs
-// through its per-plugin view, as `createPageApi` does; left out, `demoSteps` is
+// never settles. A replaced `editor`, `markdown`, `terminals` or `demoSteps`
+// still runs through its per-plugin view, as `createPageApi` does; left out, `demoSteps` is
 // a fresh registry. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
 // added. `holdsRestores` holds the restore window each start of the part under
@@ -1086,6 +1089,7 @@ function fakeMainApi(
       git: notFaked<Git>('git'),
       pullRequests: notFaked<PullRequests>('pullRequests'),
       sessionHost: notFaked<SessionHost>('sessionHost'),
+      terminals: notFaked<TerminalHost>('terminals'),
       images: notFaked<ImageEncoder>('images'),
       systemStats: notFaked<SystemStats>('systemStats'),
       screenCapture: notFaked<ScreenCapture>('screenCapture'),
@@ -1733,6 +1737,10 @@ function fakePageApi(
         replaced.markdown === undefined
           ? fakeMarkdown(world, record.counts, context.registrations)
           : trackedMarkdown(replaced.markdown, context.registrations),
+      terminals: trackedTerminals(
+        replaced.terminals ?? notFaked<TerminalEmulator>('terminals'),
+        context.registrations,
+      ),
       demoSteps: pluginDemoSteps(
         replaced.demoSteps ?? createDemoStepRegistry<DemoStep>(),
         manifest.id,

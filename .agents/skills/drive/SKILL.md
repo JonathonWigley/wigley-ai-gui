@@ -91,7 +91,7 @@ opens the doc at that line, or toasts that the machine index does not list it. `
 positive whole number, or the command rejects with `line must be a positive whole number`. A
 path the first index read does not list waits for the pending rebuild before it toasts. A start
 with an unusable environment (a relative `WIGLEY_DRIVE_DIR`, a `WIGLEY_DRIVE_HARNESS` other than
-`fake` or `claude`) exits 1 with the reason on stderr before any window opens.
+`fake` or `claude`, a `WIGLEY_DRIVE_TERMINALS` other than `fake` or `live`) exits 1 with the reason on stderr before any window opens.
 
 The app runs commands one at a time, so a command that never returns blocks every later one, and
 the CLI then says the run did not answer. A script the drive runs in the page rejects
@@ -184,6 +184,10 @@ fixture cannot stand in (real tool cards, real stream shapes), and name it in th
 `start --system-stats live` gives the system stats panel this machine's real readings in place of
 the fake's fixed processes; `restart` keeps it. Use it for a check on real numbers or on a real
 session's process tree (with `--harness claude`).
+
+`start --terminals live` runs each session's shell as a real shell in the run's session host in
+place of the fake shell, which echoes and answers `ran: <line>`; `restart` keeps it. Use it for a
+check on a real shell.
 
 ## What stays the user's
 

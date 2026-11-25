@@ -39,6 +39,7 @@ describe('parseDriveArgs', () => {
       packaged: true,
       harness: 'claude',
       systemStats: 'fake',
+      terminals: 'fake',
       userConfig: false,
       namesFlags: true,
       run: 'x',
@@ -53,11 +54,20 @@ describe('parseDriveArgs', () => {
     });
   });
 
+  it("GIVEN argv ['start', '--terminals', 'live'] WHEN parsed THEN it is start with live terminals", () => {
+    expect(parseDriveArgs(['start', '--terminals', 'live'])).toMatchObject({
+      kind: 'start',
+      systemStats: 'fake',
+      terminals: 'live',
+    });
+  });
+
   it.each([
     { argv: ['start', '--run', 'x'], namesFlags: false },
     { argv: ['start', '--packaged'], namesFlags: true },
     { argv: ['start', '--harness', 'fake'], namesFlags: true },
     { argv: ['start', '--system-stats', 'fake'], namesFlags: true },
+    { argv: ['start', '--terminals', 'fake'], namesFlags: true },
     { argv: ['start', '--user-config'], namesFlags: true },
   ])(
     'GIVEN argv $argv WHEN parsed THEN namesFlags is $namesFlags',
@@ -120,6 +130,11 @@ describe('parseDriveArgs', () => {
     const parse = () => parseDriveArgs(['start', '--system-stats', 'real']);
     expect(parse).toThrow(/fake/);
     expect(parse).toThrow(/live/);
+  });
+
+  it("GIVEN argv ['start', '--terminals', 'real'] WHEN parsed THEN it throws naming fake and live", () => {
+    const parse = () => parseDriveArgs(['start', '--terminals', 'real']);
+    expect(parse).toThrow(/--terminals.*fake.*live/);
   });
 
   it("GIVEN argv ['query', '--run', 'x', '--', ':root', '--wg-accent'] WHEN parsed THEN --wg-accent is a style and the run is x", () => {

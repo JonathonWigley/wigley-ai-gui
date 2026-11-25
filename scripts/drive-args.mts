@@ -6,12 +6,15 @@ export type DriveHarness = 'fake' | 'claude';
 
 export type DriveSystemStats = 'fake' | 'live';
 
+export type DriveTerminals = 'fake' | 'live';
+
 export type DriveInvocation =
   | {
       kind: 'start';
       packaged: boolean;
       harness: DriveHarness;
       systemStats: DriveSystemStats;
+      terminals: DriveTerminals;
       userConfig: boolean;
       // Whether the command line named a flag beyond `--run`.
       namesFlags: boolean;
@@ -32,6 +35,7 @@ interface Flags {
   packaged: boolean;
   harness: string | null;
   systemStats: string | null;
+  terminals: string | null;
   userConfig: boolean;
   hold: boolean;
   keepSessions: boolean;
@@ -47,7 +51,9 @@ const HARNESSES: readonly DriveHarness[] = ['fake', 'claude'];
 
 const SYSTEM_STATS: readonly DriveSystemStats[] = ['fake', 'live'];
 
-const VALUE_FLAGS = ['--run', '--harness', '--system-stats'];
+const TERMINALS: readonly DriveTerminals[] = ['fake', 'live'];
+
+const VALUE_FLAGS = ['--run', '--harness', '--system-stats', '--terminals'];
 
 // Every argument after it is positional, so a value such as `--wg-accent`
 // reaches its command.
@@ -55,7 +61,13 @@ const END_OF_FLAGS = '--';
 
 // The flags each command accepts beyond `--run`, which every command takes.
 const COMMAND_FLAGS: Record<string, string[]> = {
-  start: ['--packaged', '--harness', '--system-stats', '--user-config'],
+  start: [
+    '--packaged',
+    '--harness',
+    '--system-stats',
+    '--terminals',
+    '--user-config',
+  ],
   drag: ['--hold'],
   quit: ['--keep-sessions'],
 };
@@ -202,7 +214,7 @@ const POSITIONAL_FORMS: Record<string, PositionalForm> = {
 export const CLI_FORMS = [
   'npm run drive -- <command> [--run <id>]',
   '',
-  'start [--packaged] [--harness fake|claude] [--system-stats fake|live] [--user-config]',
+  'start [--packaged] [--harness fake|claude] [--system-stats fake|live] [--terminals fake|live] [--user-config]',
   'restart',
   'quit [--keep-sessions]',
   'help',
@@ -216,8 +228,8 @@ export const CLI_FORMS = [
 // What `argv` (the arguments after `npm run drive --`) asks the CLI to do.
 // Arguments after a lone `--` are positional. Throws naming the problem: an
 // unknown or misplaced flag, a harness other than fake or claude, system stats
-// other than fake or live, or arguments
-// that fit no form of the command.
+// or terminals other than fake or live, or arguments that fit no form of the
+// command.
 export function parseDriveArgs(argv: string[]): DriveInvocation {
   const { flags, positionals } = splitFlags(argv);
   const [command = 'help', ...rest] = positionals;
@@ -230,11 +242,13 @@ export function parseDriveArgs(argv: string[]): DriveInvocation {
       packaged: flags.packaged,
       harness: harnessOf(flags.harness),
       systemStats: systemStatsOf(flags.systemStats),
+      terminals: terminalsOf(flags.terminals),
       userConfig: flags.userConfig,
       namesFlags:
         flags.packaged ||
         flags.harness !== null ||
         flags.systemStats !== null ||
+        flags.terminals !== null ||
         flags.userConfig,
       run,
     };
@@ -268,6 +282,7 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
     packaged: false,
     harness: null,
     systemStats: null,
+    terminals: null,
     userConfig: false,
     hold: false,
     keepSessions: false,
@@ -312,8 +327,10 @@ function setValueFlag(flags: Flags, flag: string, value: string): void {
     flags.run = runIdOf(value);
   } else if (flag === '--harness') {
     flags.harness = value;
-  } else {
+  } else if (flag === '--system-stats') {
     flags.systemStats = value;
+  } else {
+    flags.terminals = value;
   }
 }
 
@@ -372,6 +389,17 @@ function systemStatsOf(systemStats: string | null): DriveSystemStats {
   const known = SYSTEM_STATS.find((name) => name === systemStats);
   if (known === undefined) {
     throw new Error(`--system-stats is fake or live, not ${systemStats}`);
+  }
+  return known;
+}
+
+function terminalsOf(terminals: string | null): DriveTerminals {
+  if (terminals === null) {
+    return 'fake';
+  }
+  const known = TERMINALS.find((name) => name === terminals);
+  if (known === undefined) {
+    throw new Error(`--terminals is fake or live, not ${terminals}`);
   }
   return known;
 }

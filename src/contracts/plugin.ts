@@ -61,6 +61,8 @@ import type {
   SlotWriter,
 } from './state';
 import type { SystemStats } from './system-stats';
+import type { TerminalEmulator } from './terminal-emulator';
+import type { TerminalHost } from './terminals';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -777,6 +779,8 @@ export interface PageServices {
   markup: MarkupEditor;
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;
+  // Makes terminal screens; stopping the plugin disposes every screen it made and has not disposed.
+  terminals: TerminalEmulator;
   toast(text: string, tone: ToastTone): void;
   // Logs under the plugin's id, called as `log(message)`.
   log: PluginLog;
@@ -1222,6 +1226,8 @@ export interface MainServices {
   agentEnvironment: Readonly<Record<string, string>>;
   agentHomeDir: string;
   sessionHost: SessionHost;
+  // The session's shells: the session host's terminal table, or a fake shell in the self-test and a drive run.
+  terminals: TerminalHost;
   loginStart: LoginStart;
   window: {
     show(): void;

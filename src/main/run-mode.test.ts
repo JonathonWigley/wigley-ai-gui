@@ -29,6 +29,7 @@ describe('runEnvironmentOf', () => {
       runDir,
       harness: 'fake',
       systemStats: 'fake',
+      terminals: 'fake',
     });
   });
 
@@ -43,6 +44,7 @@ describe('runEnvironmentOf', () => {
       runDir,
       harness: 'claude',
       systemStats: 'fake',
+      terminals: 'fake',
     });
   });
 
@@ -53,6 +55,15 @@ describe('runEnvironmentOf', () => {
         WIGLEY_DRIVE_SYSTEM_STATS: 'live',
       }),
     ).toMatchObject({ mode: 'drive', systemStats: 'live' });
+  });
+
+  it('a drive run over the terminals WIGLEY_DRIVE_TERMINALS names', () => {
+    expect(
+      runEnvironmentOf({
+        WIGLEY_DRIVE_DIR: runDir,
+        WIGLEY_DRIVE_TERMINALS: 'live',
+      }),
+    ).toMatchObject({ mode: 'drive', terminals: 'live' });
   });
 
   it('throws on a relative WIGLEY_DRIVE_DIR', () => {
@@ -77,5 +88,14 @@ describe('runEnvironmentOf', () => {
         WIGLEY_DRIVE_SYSTEM_STATS: 'real',
       }),
     ).toThrow(/WIGLEY_DRIVE_SYSTEM_STATS.*real/);
+  });
+
+  it('throws on a WIGLEY_DRIVE_TERMINALS it does not know', () => {
+    expect(() =>
+      runEnvironmentOf({
+        WIGLEY_DRIVE_DIR: runDir,
+        WIGLEY_DRIVE_TERMINALS: 'real',
+      }),
+    ).toThrow(/WIGLEY_DRIVE_TERMINALS.*real/);
   });
 });

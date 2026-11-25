@@ -32,22 +32,40 @@ const WINDOWS_PROGRAMS: PlatformPrograms = {
     { command: 'unity', args: [] },
     { command: '~/.unity/bin/unity', args: [] },
   ],
+  shell: [
+    { command: 'pwsh', args: ['-NoLogo'] },
+    { command: 'powershell.exe', args: ['-NoLogo'] },
+  ],
 };
 
-const POSIX_PROGRAMS: PlatformPrograms = {
-  python: [
-    { command: 'python3', args: [] },
-    { command: 'python', args: [] },
-  ],
-  claude: [
-    { command: 'claude', args: [] },
-    { command: '~/.local/bin/claude', args: [] },
-  ],
-  unity: [
-    { command: 'unity', args: [] },
-    { command: '~/.unity/bin/unity', args: [] },
-  ],
-};
+const ZSH_LOGIN = { command: '/bin/zsh', args: ['-l'] };
+
+// `$SHELL` as a login shell, then `/bin/zsh`, which still finds a shell when
+// `$SHELL` names a path that no longer exists.
+function posixPrograms(env: NodeJS.ProcessEnv): PlatformPrograms {
+  const userShell = env.SHELL;
+  const hasOtherShell =
+    userShell !== undefined &&
+    userShell !== '' &&
+    userShell !== ZSH_LOGIN.command;
+  return {
+    python: [
+      { command: 'python3', args: [] },
+      { command: 'python', args: [] },
+    ],
+    claude: [
+      { command: 'claude', args: [] },
+      { command: '~/.local/bin/claude', args: [] },
+    ],
+    unity: [
+      { command: 'unity', args: [] },
+      { command: '~/.unity/bin/unity', args: [] },
+    ],
+    shell: hasOtherShell
+      ? [{ command: userShell, args: ['-l'] }, ZSH_LOGIN]
+      : [ZSH_LOGIN],
+  };
+}
 
 // The server key of the `auri` plugin's manifests, which the app's MCP server
 // also gives as its name.
@@ -104,7 +122,7 @@ export function createMacPlatform(inputs: PlatformInputs): Platform {
       hidesFromDockBesideApp: true,
     },
     { optionMatchesByCode: true, altGraphTypes: false },
-    POSIX_PROGRAMS,
+    posixPrograms(inputs.env),
     inputs,
   );
 }
@@ -132,7 +150,7 @@ export function createLinuxPlatform(inputs: PlatformInputs): Platform {
       hidesFromDockBesideApp: false,
     },
     { optionMatchesByCode: false, altGraphTypes: true },
-    POSIX_PROGRAMS,
+    posixPrograms(inputs.env),
     inputs,
   );
 }

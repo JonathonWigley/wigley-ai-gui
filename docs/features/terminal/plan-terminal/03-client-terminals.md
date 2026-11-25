@@ -1,6 +1,6 @@
 # 03 — Client terminals
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · async across the link: replies, pushes racing an attach, reconnects and a host death
 Wave: 2 · Depends on: 02
@@ -172,3 +172,5 @@ Commit: one commit — "Session host client: a TerminalHost over the same link, 
 listing shells, routing their pushed output by id, and closing them when the host dies".
 
 ## Proof
+
+Commit e560a1d0 · proof: diff read: SessionHostClient with terminals: TerminalHost, HostLinkDeps terminalPushed and terminalAttachReceived present; typecheck, oxlint, oxfmt and layers clean · concerns: the planned row create_HostNeverAnswers attached the spawned id, which would replace its subscriber, so the test attaches another id; AGENTS.md session-host tree entry says only hosted processes

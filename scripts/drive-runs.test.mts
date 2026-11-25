@@ -118,18 +118,21 @@ describe('startPlanOf', () => {
     packaged: true,
     harness: 'claude',
     systemStats: 'live',
+    terminals: 'live',
     userConfig: true,
   };
   const DEFAULTS: StartOptions = {
     packaged: false,
     harness: 'fake',
     systemStats: 'fake',
+    terminals: 'fake',
     userConfig: false,
   };
   const NAMED: StartOptions = {
     packaged: false,
     harness: 'fake',
     systemStats: 'fake',
+    terminals: 'fake',
     userConfig: true,
   };
 

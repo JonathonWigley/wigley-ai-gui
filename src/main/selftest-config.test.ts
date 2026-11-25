@@ -625,6 +625,7 @@ describe('fakeRunPluginSettings', () => {
     runDir: '/r',
     harness,
     systemStats: 'fake',
+    terminals: 'fake',
   });
 
   it.each<{

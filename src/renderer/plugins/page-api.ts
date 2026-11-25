@@ -51,6 +51,7 @@ import {
 import {
   trackedEditor,
   trackedMarkdown,
+  trackedTerminals,
 } from '../../shared/plugin-service-views';
 import { createRegistrations } from '../../shared/registrations';
 import {
@@ -156,7 +157,8 @@ export function liveKeysFor(
 // editor or a run timer leaves nothing in the store;
 // `services.picker` builds lists under its scopes, log, editor and overlay,
 // owned by its id for the picker commands; its demo steps are filed with its
-// registrations;
+// registrations; a screen it makes through `services.terminals` is disposed
+// at its stop;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -278,6 +280,7 @@ export function createPageApi(
         pickerCommands: deps.pickerCommands,
       }),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
+      terminals: trackedTerminals(deps.services.terminals, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
       uiState: deps.uiState.scoped(manifest.id),
       demoSteps: pluginDemoSteps(

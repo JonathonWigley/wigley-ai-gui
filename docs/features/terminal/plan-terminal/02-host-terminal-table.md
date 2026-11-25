@@ -1,6 +1,6 @@
 # 02 — Host terminal table and protocol 5
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the host's lifecycle: exit rule, drain, stopAll, leftover ending and the held-message order
 Wave: 1 · Depends on: none
@@ -273,3 +273,5 @@ Commit: one commit — "Session host protocol 5: a terminal table runs each shel
 with a 256 KB replay, its own messages, and the exit rule, drain, stopAll and children record counting shells".
 
 ## Proof
+
+Commit f4995ac3 · proof: diff read: pty.ts, terminals.ts, keepTail, terminal table and protocol 5 messages present as planned; typecheck, oxlint, oxfmt and layers clean at e560a1d0 (host-link error fixed by 03) · concerns: shellEnvOf repeats two steps of process-table's private childEnvOf; AGENTS.md src map does not name the terminal table, pty.ts or terminals.ts yet

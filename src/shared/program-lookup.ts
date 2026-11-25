@@ -34,6 +34,8 @@ const NOT_FOUND_MESSAGES: Record<ProgramName, string> = {
   claude:
     'claude was not found on PATH or in ~/.local/bin; set claude-code.command',
   unity: 'unity was not found on PATH or in ~/.unity/bin',
+  shell:
+    'no shell was found: checked $SHELL and /bin/zsh, or pwsh and powershell.exe on Windows',
 };
 
 // The value of `name` in `env`. Windows' names ignore case, which a copied

@@ -40,6 +40,11 @@ import {
   type RuntimeCatalog,
 } from '../../contracts/core-state';
 import type { SlotKey } from '../../contracts/state';
+import type {
+  TerminalEmulator,
+  TerminalScreen,
+  TerminalScreenOptions,
+} from '../../contracts/terminal-emulator';
 import type { BaseKit } from '../../shared/page/layout-host/kit';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
@@ -874,6 +879,21 @@ function countingEditors() {
   return { editor, destroys };
 }
 
+function countingTerminals() {
+  const disposes: number[] = [];
+  const terminals: TerminalEmulator = {
+    create: () => {
+      const index = disposes.push(0) - 1;
+      return {
+        dispose: () => {
+          disposes[index] += 1;
+        },
+      } as TerminalScreen;
+    },
+  };
+  return { terminals, disposes };
+}
+
 describe('createPageApi services.picker', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -1367,6 +1387,28 @@ describe('createPageApi recording', () => {
 
     api.services.editor.create(parent, '', {} as EditorEvents);
     expect(destroys).toEqual([1, 1, 1, 1]);
+  });
+
+  it('disposes the screens the plugin made and has not disposed when its registrations are disposed', () => {
+    const { terminals, disposes } = countingTerminals();
+    const registrations = createRegistrations();
+    const api = createPageApi(
+      manifest,
+      deps({
+        registrations,
+        services: { terminals } as PageApiDeps['services'],
+      }),
+    );
+    const options = {} as TerminalScreenOptions;
+
+    const first = api.services.terminals.create(options);
+    api.services.terminals.create(options);
+    first.dispose();
+    registrations.dispose();
+    expect(disposes).toEqual([1, 1]);
+
+    api.services.terminals.create(options);
+    expect(disposes).toEqual([1, 1, 1]);
   });
 
   it('releases each pane target the plugin set when its registrations are disposed', () => {

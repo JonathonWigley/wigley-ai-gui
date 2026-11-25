@@ -53,6 +53,7 @@ describe('platformFor', () => {
       { command: 'unity', args: [] },
       { command: '~/.unity/bin/unity', args: [] },
     ],
+    shell: [{ command: '/bin/zsh', args: ['-l'] }],
   };
 
   // The order decides which Python runs.
@@ -74,6 +75,10 @@ describe('platformFor', () => {
           { command: 'unity', args: [] },
           { command: '~/.unity/bin/unity', args: [] },
         ],
+        shell: [
+          { command: 'pwsh', args: ['-NoLogo'] },
+          { command: 'powershell.exe', args: ['-NoLogo'] },
+        ],
       },
     },
     { os: 'linux', programs: posixPrograms },
@@ -81,6 +86,31 @@ describe('platformFor', () => {
     'gives $os its program candidates in lookup order',
     ({ os, programs }) => {
       expect(platformFor(os, INPUTS).programs).toEqual(programs);
+    },
+  );
+
+  const SHELL_ROWS = [
+    {
+      shell: '/opt/homebrew/bin/fish',
+      candidates: [
+        { command: '/opt/homebrew/bin/fish', args: ['-l'] },
+        { command: '/bin/zsh', args: ['-l'] },
+      ],
+    },
+    { shell: '/bin/zsh', candidates: [{ command: '/bin/zsh', args: ['-l'] }] },
+    { shell: '', candidates: [{ command: '/bin/zsh', args: ['-l'] }] },
+  ];
+
+  it.each(
+    (['macos', 'linux'] as const).flatMap((os) =>
+      SHELL_ROWS.map((row) => ({ os, ...row })),
+    ),
+  )(
+    'gives $os a shell from SHELL, then /bin/zsh: SHELL $shell',
+    ({ os, shell, candidates }) => {
+      const inputs = { ...INPUTS, env: { ...INPUTS.env, SHELL: shell } };
+
+      expect(platformFor(os, inputs).programs.shell).toEqual(candidates);
     },
   );
 });

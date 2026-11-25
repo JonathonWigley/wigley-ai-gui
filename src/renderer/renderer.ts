@@ -116,6 +116,7 @@ import { startPageCoreSlots } from './state/core-slots';
 import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
+import { createXtermEmulator } from './xterm/xterm-emulator';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
@@ -451,6 +452,7 @@ async function start() {
     fuzzy,
     markup: createFabricMarkupEditor(),
     visualFrames,
+    terminals: createXtermEmulator(),
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,

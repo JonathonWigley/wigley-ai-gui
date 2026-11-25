@@ -6,7 +6,11 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import path from 'node:path';
-import type { DriveHarness, DriveSystemStats } from './drive-args.mts';
+import type {
+  DriveHarness,
+  DriveSystemStats,
+  DriveTerminals,
+} from './drive-args.mts';
 
 // The run folder's entries `quit` deletes: the app's home, which holds the
 // fixtures' test repos, and Chromium's profile. Captures and `app.log` stay.
@@ -33,6 +37,7 @@ export interface StartOptions {
   packaged: boolean;
   harness: DriveHarness;
   systemStats: DriveSystemStats;
+  terminals: DriveTerminals;
   userConfig: boolean;
 }
 
@@ -98,17 +103,24 @@ export function startPlanOf(
   copiesUserConfig: boolean;
   skipsUserConfigCopy: boolean;
 } {
-  const { packaged, harness, systemStats, userConfig, namesFlags } = named;
+  const { packaged, harness, systemStats, terminals, userConfig, namesFlags } =
+    named;
   if (kept === null) {
     return {
-      options: { packaged, harness, systemStats, userConfig },
+      options: { packaged, harness, systemStats, terminals, userConfig },
       copiesUserConfig: true,
       skipsUserConfigCopy: false,
     };
   }
   return {
     options: namesFlags
-      ? { packaged, harness, systemStats, userConfig: kept.userConfig }
+      ? {
+          packaged,
+          harness,
+          systemStats,
+          terminals,
+          userConfig: kept.userConfig,
+        }
       : kept,
     copiesUserConfig: false,
     skipsUserConfigCopy: userConfig,

@@ -57,6 +57,7 @@ import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig, ConfigProblem, Settings } from '../contracts/settings';
 import type { SlotChange } from '../contracts/state';
 import type { SystemStats } from '../contracts/system-stats';
+import type { TerminalHost } from '../contracts/terminals';
 import type { UserConfig } from '../contracts/user-config';
 import type {
   CommandHandler,
@@ -80,6 +81,7 @@ import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { createFakeScreenCapture } from '../shared/fake-screen-capture';
 import { createFakeSystemStats } from '../shared/fake-system-stats';
+import { createFakeTerminalHost } from '../shared/fake-terminal-host';
 import { isSameJson } from '../shared/json';
 import { createListeners } from '../shared/listeners';
 import { osPlatform } from '../shared/os-platform';
@@ -208,6 +210,7 @@ import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
   type DriveSystemStatsName,
+  type DriveTerminalsName,
   type RunEnvironment,
   runEnvironmentOf,
 } from './run-mode';
@@ -286,6 +289,7 @@ interface ModeServices {
     | 'systemStats'
     | 'screenCapture'
     | 'agentHomeDir'
+    | 'terminals'
   > &
     RunAgents;
 }
@@ -294,6 +298,7 @@ interface ModeServicesContext {
   window: BrowserWindow;
   homeDir: string;
   log: Log;
+  liveTerminals: TerminalHost;
 }
 
 // The harnesses the composition root registers in a run, and the home folder
@@ -355,11 +360,12 @@ function screenCaptureFor(
 
 // The user's app: the OS Trash, the icon badge, native dialogs, the agent
 // harnesses its plugins register, run as the user, links opened in the user's
-// browser, the machine's own readings, and the OS's own windows to stream.
+// browser, the machine's own readings, the OS's own windows to stream, and real
+// shells in the session host.
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
-    forWindow: ({ window, homeDir }) => ({
+    forWindow: ({ window, homeDir, liveTerminals }) => ({
       alerts: alertsFor(platform.os, window),
       harnesses: [],
       agentHomeDir: homeDir,
@@ -369,6 +375,7 @@ function liveServices(): ModeServices {
       revealPath: (file) => shell.showItemInFolder(file),
       systemStats: systemStatsFor(platform.os, processes),
       screenCapture: screenCaptureFor(platform.os, processes),
+      terminals: liveTerminals,
     }),
   };
 }
@@ -380,12 +387,13 @@ function liveServices(): ModeServices {
 // the line a window not shown, a link not opened or a path not revealed logs; sessions run over the
 // harnesses `agents` builds for the run's home, as the home it names, and
 // plugins read the machine `systemStats` builds and the windows `screenCapture`
-// builds.
+// builds, and shells run on the host `terminals` picks.
 function offscreenRunServices(
   runName: string,
   agents: (homeDir: string) => RunAgents,
   systemStats: () => SystemStats,
   screenCapture: () => ScreenCapture,
+  terminals: (live: TerminalHost) => TerminalHost,
 ): ModeServices {
   return {
     trashItem: (file) => rm(file, { recursive: true }),
@@ -401,6 +409,7 @@ function offscreenRunServices(
         context.log('main', `path not revealed in ${runName}: ${file}`),
       systemStats: systemStats(),
       screenCapture: screenCapture(),
+      terminals: terminals(context.liveTerminals),
     }),
   };
 }
@@ -431,6 +440,14 @@ function driveSystemStats(name: DriveSystemStatsName): SystemStats {
     : systemStatsFor(platform.os, processes);
 }
 
+// A drive run's shells, as WIGLEY_DRIVE_TERMINALS named them: the fake shell, or real shells in the session host.
+function driveTerminals(
+  name: DriveTerminalsName,
+  live: TerminalHost,
+): TerminalHost {
+  return name === 'fake' ? createFakeTerminalHost(clock) : live;
+}
+
 function modeServicesOf(environment: RunEnvironment): ModeServices {
   switch (environment.mode) {
     case 'live':
@@ -441,6 +458,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
         fakeAgents,
         () => createFakeSystemStats(clock),
         () => createFakeScreenCapture(),
+        () => createFakeTerminalHost(clock),
       );
     case 'drive':
       return offscreenRunServices(
@@ -448,6 +466,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
         (homeDir) => driveAgents(environment.harness, homeDir),
         () => driveSystemStats(environment.systemStats),
         () => createFakeScreenCapture(),
+        (live) => driveTerminals(environment.terminals, live),
       );
   }
 }
@@ -1114,6 +1133,7 @@ function createWindow(
   userConfig: UserConfig,
   applied: AppliedPlugins,
   sessionHost: SessionHost,
+  terminalHost: TerminalHost,
 ) {
   const startConfig = store.current();
   const window = createMainWindow(
@@ -1259,6 +1279,7 @@ function createWindow(
     window,
     homeDir: inputs.homeDir,
     log,
+    liveTerminals: terminalHost,
   });
   // Registered before the main parts start, so every part and page finds them;
   // the registrations live as long as the window, as the shell layout's does.
@@ -1703,7 +1724,15 @@ function startApp() {
         timers,
         log: pageLog.log,
       });
-      createWindow(inputs, catalog, store, userConfig, applied, sessionHost);
+      createWindow(
+        inputs,
+        catalog,
+        store,
+        userConfig,
+        applied,
+        sessionHost,
+        sessionHost.terminals,
+      );
       // Starts with createWindow's quit tasks, ahead of every part but the first
       // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());
