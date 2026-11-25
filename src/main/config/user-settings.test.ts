@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { coreDefaultSettings } from '../../config/settings';
 import type { Settings } from '../../contracts/settings';
 import { mergeUserSettings, type SettingsSchema } from './user-settings';
 
@@ -166,7 +165,7 @@ describe('mergeUserSettings', () => {
     expect(() => mergeUserSettings(text, SCHEMA)).toThrow('is not a setting.');
   });
 
-  // Breaks when the core default gives `groups` a model element, which rejects
+  // Breaks when an empty default array stops taking any elements, which rejects
   // a group leaving out `at`, or when `shell` stops merging key by key.
   it.each([
     {
@@ -188,10 +187,13 @@ describe('mergeUserSettings', () => {
   ])(
     'mergeUserSettings_ActivityBar_MergesOverDefaults: $case',
     ({ text, activityBar }) => {
-      const defaults = coreDefaultSettings();
+      const defaults = {
+        ...CORE_DEFAULTS,
+        shell: { layout: 'base', activityBar: { groups: [], hidden: [] } },
+      } as Settings;
       const schema = { ...SCHEMA, defaults };
       expect(mergeUserSettings(text, schema).settings.shell).toEqual({
-        layout: defaults.shell.layout,
+        layout: 'base',
         activityBar,
       });
     },
