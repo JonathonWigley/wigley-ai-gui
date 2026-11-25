@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  DetailMessage,
-  WorkCard,
-  WorkColumnSetting,
-  WorkItem,
-  WorkJob,
+import {
+  type DetailMessage,
+  isUnseen,
+  type WorkCard,
+  type WorkColumnSetting,
+  type WorkItem,
+  type WorkJob,
 } from '../contract';
 import {
   jiraCard,
@@ -170,17 +171,31 @@ describe('restore', () => {
 });
 
 describe('markSeen', () => {
-  it.each<{ name: string; item: WorkItem }>([
-    { name: 'never seen', item: p1() },
+  const AHEAD_ISO = '2026-11-23T12:05:00.000Z';
+
+  it.each<{ name: string; item: WorkItem; seenAt: string }>([
+    { name: 'never seen', item: p1(), seenAt: NOW_ISO },
     {
       name: 'seen before its latest message',
       item: p1({ seenAt: '2026-11-23T09:00:00.000Z' }),
+      seenAt: NOW_ISO,
     },
-  ])('markSeen stamps now ($name)', ({ item }) => {
-    expect(markSeen(ofItems(item), 'p1', NOW)).toEqual(
-      result(ofItems(p1({ seenAt: NOW_ISO })), null, 'seen p1'),
-    );
-  });
+    {
+      name: 'dated ahead of the clock, stamped at its own time',
+      item: p1({ at: AHEAD_ISO }),
+      seenAt: AHEAD_ISO,
+    },
+  ])(
+    'markSeen stamps the later of now and its time ($name)',
+    ({ item, seenAt }) => {
+      const marked = markSeen(ofItems(item), 'p1', NOW);
+
+      expect(marked).toEqual(
+        result(ofItems({ ...item, seenAt }), null, 'seen p1'),
+      );
+      expect(isUnseen((marked as ActionResult).file.items[0])).toBe(false);
+    },
+  );
 
   it.each<{ name: string; seenAt: string }>([
     { name: 'at its latest message', seenAt: '2026-11-23T10:00:00.000Z' },
@@ -270,6 +285,14 @@ describe('expireSnoozes', () => {
       ],
       end: Date.parse('2026-11-24T00:00:00.000Z'),
     },
+    {
+      name: 'an end that does not parse is skipped',
+      items: [
+        snoozedUntil('a', 'soon'),
+        snoozedUntil('b', '2026-11-24T00:00:00.000Z'),
+      ],
+      end: Date.parse('2026-11-24T00:00:00.000Z'),
+    },
     { name: 'none snoozed', items: [workItem('c')], end: null },
   ])('nextSnoozeEnd ($name)', ({ items, end }) => {
     expect(nextSnoozeEnd(ofItems(...items))).toBe(end);
@@ -325,6 +348,18 @@ describe('send', () => {
       item: p1({ sending: 'On it' }),
       text: 'Again',
       expected: refused('p1 is sending'),
+    },
+    {
+      name: 'an around digest item',
+      item: p1({ section: 'around' }),
+      text: 'On it',
+      expected: refused('p1 takes no reply'),
+    },
+    {
+      name: 'a worth_knowing digest item',
+      item: p1({ section: 'worth_knowing' }),
+      text: 'On it',
+      expected: refused('p1 takes no reply'),
     },
   ])('send ($name)', ({ item, text, expected }) => {
     expect(send(ofItems(item), { itemId: 'p1', text })).toEqual(expected);
@@ -892,6 +927,7 @@ describe('jobEnded', () => {
     jiraCard('ABC-12', 'To Do', { commenting: texts, note: 'Comment failed' });
   const message = (at: string, text: string): DetailMessage => ({
     author: 'Bo',
+    byUser: false,
     at,
     text,
   });
@@ -976,7 +1012,12 @@ describe('jobEnded', () => {
       end: { ok: true, note: null },
       expected: fileWith({
         cards: [jiraCard('ABC-12', 'To Do')],
-        details: detailOf(newer, { author: 'You', at: NOW_ISO, text: 'A' }),
+        details: detailOf(newer, {
+          author: 'You',
+          at: NOW_ISO,
+          text: 'A',
+          byUser: true,
+        }),
       }),
     },
     {
@@ -1037,7 +1078,12 @@ describe('jobEnded', () => {
       end: { ok: true, note: null },
       expected: fileWith({
         cards: [jiraCard('ABC-12', 'To Do', { commenting: ['B'] })],
-        details: detailOf(older, { author: 'You', at: NOW_ISO, text: 'A' }),
+        details: detailOf(older, {
+          author: 'You',
+          at: NOW_ISO,
+          text: 'A',
+          byUser: true,
+        }),
       }),
     },
     {

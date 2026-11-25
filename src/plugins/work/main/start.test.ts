@@ -187,6 +187,8 @@ interface OpenOptions {
   chatProjects?: ChatProject[];
   // Files written once the first start loaded; the part then restarts over them, and the restart calls `ready`.
   files?: Record<string, string>;
+  // The clock in place of the harness's, which reads each timer's due time.
+  clock?: { now(): number };
 }
 
 // The work part over fake chat and sessions, a fake runner and watch, and an alerts service recording each badge.
@@ -216,6 +218,7 @@ async function open(options: OpenOptions = {}) {
     services: {
       runMode: options.runMode ?? 'selfTest',
       ...(options.isStable === true ? { appInstance: STABLE_APP } : {}),
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
       alerts: { setOpenCount: (_source, count) => badge.push(count) },
     },
     drive: options.drive,
@@ -331,6 +334,7 @@ describe('workMainPart', () => {
       columns: ['Backlog', 'Todo', 'In Progress', 'In QA', 'Done', 'Other'],
       job: { running: null, last: null },
       lastSweepAt: null,
+      sweepFailedAt: null,
       problem: null,
     });
     await harness.stop();
@@ -886,6 +890,29 @@ describe('workMainPart', () => {
     await settled();
     expect(itemOf(harness, 'a')?.state).toBe('snoozed');
     harness.advance(1);
+    await settled();
+
+    expect(itemOf(harness, 'a')).toMatchObject({
+      state: 'open',
+      snoozedUntil: null,
+    });
+    await harness.stop();
+  });
+
+  it('snoozeTimer — a fire before the clock reaches the end arms again and expires the item at the end', async () => {
+    let clockNow = 0;
+    const { harness } = await open({
+      clock: { now: () => clockNow },
+      files: { [WORK_PATH]: fileText({ items: [workItem('a')] }) },
+    });
+    await call(harness, 'snooze', 'a');
+
+    clockNow = SNOOZE_MS - 5;
+    harness.advance(SNOOZE_MS);
+    await settled();
+    expect(itemOf(harness, 'a')?.state).toBe('snoozed');
+    clockNow = SNOOZE_MS;
+    harness.advance(5);
     await settled();
 
     expect(itemOf(harness, 'a')).toMatchObject({

@@ -45,6 +45,7 @@ function board(
     columns: [...COLUMNS, OTHER_COLUMN],
     job: { running: null, last: null },
     lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
     ...overrides,
   };
@@ -238,6 +239,11 @@ describe('boardReducer', () => {
   ];
   const work = board(cards);
   const without = (id: string) => board(cards.filter((card) => card.id !== id));
+  // The board with local task `local-1` from thread `t1`, that item laid over with `overrides`.
+  const withTask = (overrides: Partial<WorkItem>) =>
+    board([...cards, localCard('local-1', 'Todo', { sourceItemId: 't1' })], {
+      items: [workItem('t1', overrides)],
+    });
 
   it.each<{
     case: string;
@@ -445,6 +451,42 @@ describe('boardReducer', () => {
       expected: { paneOpen: false, focus: 'board', drafts: { 'Q-1': 'y' } },
     },
     {
+      case: 'stateChanged keeps a reply draft through a failed send, its source item still open',
+      state: { drafts: { 'local-1': 'On it' } },
+      action: { type: 'stateChanged', previous: work },
+      after: withTask({ note: 'Send failed: offline' }),
+      expected: {
+        paneOpen: false,
+        focus: 'board',
+        drafts: { 'local-1': 'On it' },
+      },
+    },
+    {
+      case: 'stateChanged keeps a reply draft while its send runs',
+      state: { drafts: { 'local-1': 'On it' } },
+      action: { type: 'stateChanged', previous: work },
+      after: withTask({ sending: 'On it' }),
+      expected: {
+        paneOpen: false,
+        focus: 'board',
+        drafts: { 'local-1': 'On it' },
+      },
+    },
+    {
+      case: 'stateChanged drops a reply draft once its source item is cleared',
+      state: { drafts: { 'local-1': 'On it' } },
+      action: { type: 'stateChanged', previous: work },
+      after: withTask({ state: 'cleared' }),
+      expected: { paneOpen: false, focus: 'board', drafts: {} },
+    },
+    {
+      case: 'stateChanged drops a reply draft once its source item is gone',
+      state: { drafts: { 'local-1': 'On it' } },
+      action: { type: 'stateChanged', previous: work },
+      after: board([localCard('local-1', 'Todo', { sourceItemId: 't1' })]),
+      expected: { paneOpen: false, focus: 'board', drafts: {} },
+    },
+    {
       case: 'focus moves to the box',
       state: {},
       action: { type: 'focus', focus: 'box' },
@@ -535,8 +577,18 @@ describe('paneInputOf', () => {
           updated: '2026-11-23T11:20:00.000Z',
           priority: 'High',
           comments: [
-            { author: 'Bo', at: '2026-11-23T11:59:30.000Z', text: 'Seen it.' },
-            { author: 'Ann', at: '2026-11-23T09:00:00.000Z', text: '`x`' },
+            {
+              author: 'Bo',
+              at: '2026-11-23T11:59:30.000Z',
+              text: 'Seen it.',
+              byUser: false,
+            },
+            {
+              author: 'Ann',
+              at: '2026-11-23T09:00:00.000Z',
+              text: '`x`',
+              byUser: false,
+            },
           ],
           subtasks: [ISSUE],
           links: [LINK],
@@ -623,10 +675,25 @@ describe('paneInputOf', () => {
       details: [
         threadDetail('t1', {
           fetchedAt: '2026-11-23T11:57:00.000Z',
-          root: { author: 'Ann', at: '2026-11-23T11:00:00.000Z', text: 'Q?' },
+          root: {
+            author: 'Ann',
+            at: '2026-11-23T11:00:00.000Z',
+            text: 'Q?',
+            byUser: false,
+          },
           replies: [
-            { author: 'Bo', at: '2026-11-23T11:30:00.000Z', text: 'A.' },
-            { author: 'Ann', at: '2026-11-23T11:58:00.000Z', text: 'B.' },
+            {
+              author: 'Bo',
+              at: '2026-11-23T11:30:00.000Z',
+              text: 'A.',
+              byUser: false,
+            },
+            {
+              author: 'Ann',
+              at: '2026-11-23T11:58:00.000Z',
+              text: 'B.',
+              byUser: false,
+            },
           ],
           replyCount: 4,
         }),
@@ -648,6 +715,12 @@ describe('paneInputOf', () => {
       case: 'a local task whose source item is cleared has no box',
       card: task,
       items: [sourceItem({ state: 'cleared' })],
+      expected: { ...TASK, box: null },
+    },
+    {
+      case: 'a local task whose source item is a digest item has no box',
+      card: task,
+      items: [sourceItem({ section: 'around' })],
       expected: { ...TASK, box: null },
     },
     {

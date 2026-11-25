@@ -285,7 +285,8 @@ export const workMainPart: MainPart<typeof workManifest> = {
       }
     };
 
-    // One timer at the earliest snooze end, replacing the last; its fire expires the snoozes then due.
+    // One timer at the earliest snooze end, replacing the last; its fire expires the snoozes then due, and arms again
+    // when none was due yet, since an unchanged store tells no `onChange` listener.
     const armSnoozeTimer = (file: WorkFile) => {
       clearSnoozeTimer();
       const end = nextSnoozeEnd(file);
@@ -295,7 +296,18 @@ export const workMainPart: MainPart<typeof workManifest> = {
       snoozeTimer = timers.set(
         () => {
           snoozeTimer = null;
-          void store.update((current) => expireSnoozes(current, clock.now()));
+          let isUnchanged = false;
+          void store
+            .update((current) => {
+              const next = expireSnoozes(current, clock.now());
+              isUnchanged = next === current;
+              return next;
+            })
+            .then((next) => {
+              if (isUnchanged) {
+                armSnoozeTimer(next);
+              }
+            });
         },
         Math.max(0, end - clock.now()),
       );

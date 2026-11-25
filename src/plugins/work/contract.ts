@@ -31,6 +31,10 @@ export const DIGEST_SECTIONS: readonly WorkSection[] = [
 export const isDigest = (section: WorkSection): boolean =>
   DIGEST_SECTIONS.includes(section);
 
+// Whether `item` takes a reply: open, and in a thread section rather than the digest.
+export const takesReply = (item: WorkItem): boolean =>
+  item.state === 'open' && !isDigest(item.section);
+
 // Whether `item` has a message the user has not seen: never seen, or a message newer than when it was.
 export function isUnseen(item: WorkItem): boolean {
   return item.seenAt === null || Date.parse(item.at) > Date.parse(item.seenAt);
@@ -151,6 +155,7 @@ export interface WorkState {
   columns: string[]; // work.columns' names in order, then OTHER_COLUMN
   job: { running: WorkJobStatus | null; last: WorkJobStatus | null };
   lastSweepAt: string | null; // ISO start of the last sweep that finished well; null for none
+  sweepFailedAt: string | null; // ISO end of the last sweep while it failed; null once a sweep ends well
   problem: string | null; // why work.json was not read at start, so nothing saves this run; else null
 }
 
@@ -282,21 +287,24 @@ function agoText(at: string, now: number): string {
 }
 
 // The status line both views draw: when the work was last updated, aged against `now` (epoch ms). `Updating…` while a
-// sweep runs, `Update failed <ago>` while the last sweep failed, else `Updated <ago>` from the last good sweep.
+// sweep runs, `Update failed <ago>` while the last sweep failed, `Update queued` while a sweep waits to launch, else
+// `Updated <ago>` from the last good sweep.
 export function statusLine(work: WorkState, now: number): WorkStatusLine {
-  const { job, lastSweepAt } = work;
+  const { job, lastSweepAt, sweepFailedAt } = work;
   const hasRow = job.last !== null && job.last.rowId !== null;
-  if (job.running?.kind === 'sweep' && job.running.state === 'running') {
+  const sweepState = job.running?.kind === 'sweep' ? job.running.state : null;
+  if (sweepState === 'running') {
     return { text: 'Updating…', tone: 'running', hasRow };
   }
-  const isSweepFailed =
-    job.last?.kind === 'sweep' && job.last.state === 'failed';
-  if (isSweepFailed && job.last !== null) {
+  if (sweepFailedAt !== null) {
     return {
-      text: `Update failed ${agoText(job.last.at, now)}`,
+      text: `Update failed ${agoText(sweepFailedAt, now)}`,
       tone: 'error',
       hasRow,
     };
+  }
+  if (sweepState === 'queued') {
+    return { text: 'Update queued', tone: 'idle', hasRow };
   }
   if (lastSweepAt === null) {
     return { text: 'Not updated yet', tone: 'idle', hasRow };
@@ -319,6 +327,7 @@ export interface DetailMessage {
   readonly author: string;
   readonly at: string; // ISO time
   readonly text: string; // markdown
+  readonly byUser: boolean; // the user's own message, as the worker marked it
 }
 
 export interface LinkedIssue {

@@ -199,6 +199,7 @@ describe('statusLine', () => {
     running: WorkJobStatus | null;
     last: WorkJobStatus | null;
     lastSweepAt: string | null;
+    sweepFailedAt?: string;
     expected: WorkStatusLine;
   }>([
     {
@@ -216,11 +217,19 @@ describe('statusLine', () => {
       expected: { text: 'Updating…', tone: 'running', hasRow: true },
     },
     {
+      case: 'a sweep running after a failed one',
+      running: job('sweep', 'running', MINUTE),
+      last: job('sweep', 'failed', 3 * MINUTE),
+      lastSweepAt: null,
+      sweepFailedAt: agoIso(3 * MINUTE),
+      expected: { text: 'Updating…', tone: 'running', hasRow: false },
+    },
+    {
       case: 'a queued sweep, which is not updating yet',
       running: job('sweep', 'queued', MINUTE),
       last: null,
       lastSweepAt: agoIso(2 * HOUR),
-      expected: { text: 'Updated 2h ago', tone: 'idle', hasRow: false },
+      expected: { text: 'Update queued', tone: 'idle', hasRow: false },
     },
     {
       case: 'a running send, which is no update',
@@ -234,6 +243,23 @@ describe('statusLine', () => {
       running: null,
       last: job('sweep', 'failed', 3 * MINUTE, { note: 'x' }),
       lastSweepAt: agoIso(3 * DAY),
+      sweepFailedAt: agoIso(3 * MINUTE),
+      expected: { text: 'Update failed 3m ago', tone: 'error', hasRow: false },
+    },
+    {
+      case: 'a failed sweep with a later send, which does not hide it',
+      running: null,
+      last: job('send', 'done', MINUTE, { rowId: 'row-3' }),
+      lastSweepAt: agoIso(3 * DAY),
+      sweepFailedAt: agoIso(HOUR),
+      expected: { text: 'Update failed 1h ago', tone: 'error', hasRow: true },
+    },
+    {
+      case: 'a failed sweep with the next one queued',
+      running: job('sweep', 'queued', MINUTE),
+      last: job('sweep', 'failed', 3 * MINUTE),
+      lastSweepAt: null,
+      sweepFailedAt: agoIso(3 * MINUTE),
       expected: { text: 'Update failed 3m ago', tone: 'error', hasRow: false },
     },
     {
@@ -250,19 +276,23 @@ describe('statusLine', () => {
       lastSweepAt: agoIso(MINUTE - 1),
       expected: { text: 'Updated just now', tone: 'idle', hasRow: false },
     },
-  ])('describes $case', ({ running, last, lastSweepAt, expected }) => {
-    const work: WorkState = {
-      items: [],
-      cards: [],
-      suggestions: [],
-      columns: [],
-      job: { running, last },
-      lastSweepAt,
-      problem: null,
-    };
+  ])(
+    'describes $case',
+    ({ running, last, lastSweepAt, sweepFailedAt, expected }) => {
+      const work: WorkState = {
+        items: [],
+        cards: [],
+        suggestions: [],
+        columns: [],
+        job: { running, last },
+        lastSweepAt,
+        sweepFailedAt: sweepFailedAt ?? null,
+        problem: null,
+      };
 
-    expect(statusLine(work, NOW)).toEqual(expected);
-  });
+      expect(statusLine(work, NOW)).toEqual(expected);
+    },
+  );
 });
 
 describe('isUnseen', () => {

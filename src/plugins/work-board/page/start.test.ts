@@ -31,6 +31,7 @@ const STATE: WorkState = {
   columns: ['Backlog', 'Todo', 'In Progress', 'In QA', 'Done', OTHER_COLUMN],
   job: { running: null, last: null },
   lastSweepAt: null,
+  sweepFailedAt: null,
   problem: null,
 };
 

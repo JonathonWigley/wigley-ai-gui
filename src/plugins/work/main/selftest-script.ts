@@ -85,10 +85,13 @@ const needsYouLine = (count: number) =>
 const inboxLine = (text: string) => `[work-inbox] ${text}`;
 const boardLine = (text: string) => `[work-board] ${text}`;
 
-// Titles from `selftest-fixture.ts`: the newest item, the second and the oldest.
+// Titles from `selftest-fixture.ts`: the newest item, the second, the oldest thread, and the newest and oldest digest
+// items.
 const NEEDS_YOU_TITLE = 'Can you look at WRK-1?';
 const SECOND_TITLE = 'Notes from the planning call';
 const DISMISSED_TITLE = 'Lunch order';
+const AROUND_TITLE = 'Tidy pass on WRK-3';
+const LAST_DIGEST_TITLE = 'Release freeze';
 
 // A key typed in a view once its mode shows: raw presses, the line they log, and optionally more lines and a why.
 const viewStep = (
@@ -174,13 +177,20 @@ const GROUPS: SelfTestGroup[] = [
       ]),
       viewStep(
         ['G'],
-        inboxLine(`selected ${DISMISSED_TITLE}`),
+        inboxLine(`selected ${LAST_DIGEST_TITLE}`),
         undefined,
-        'All lists newest first, so the dismissed item, the oldest, ends it.',
+        'All lists the threads newest first, then the digest newest first, so the oldest digest item ends it.',
       ),
       viewStep(['g', 'g'], inboxLine(`selected ${NEEDS_YOU_TITLE}`)),
       viewStep(['j'], inboxLine(`selected ${SECOND_TITLE}`)),
-      viewStep(['G'], inboxLine(`selected ${DISMISSED_TITLE}`)),
+      viewStep(['G'], inboxLine(`selected ${LAST_DIGEST_TITLE}`)),
+      viewStep(['k'], inboxLine(`selected ${AROUND_TITLE}`)),
+      viewStep(
+        ['k'],
+        inboxLine(`selected ${DISMISSED_TITLE}`),
+        undefined,
+        'The dismissed item is the oldest thread, so it sits just above the digest.',
+      ),
       viewStep(['u'], line(`restored ${FIXTURE_ITEM_IDS.dismissed}`)),
       viewStep(['<A-h>'], inboxLine('sections focused')),
       viewStep(['g', 'g'], inboxLine('section cursor Needs you')),
@@ -298,7 +308,12 @@ export function workSelfTestScript(deps: WorkSelfTestDeps): SelfTestScript {
   return {
     pageBinds: PAGE_BINDS,
     settings: {},
-    scrollsItself: ['.work-board-columns'],
+    scrollsItself: [
+      '.work-board-columns',
+      '.work-inbox-card-latest',
+      '.work-inbox-card-title',
+      '.work-inbox-card-source',
+    ],
     open() {
       return { shownLine: SEEDED_LINE, result: deps.seed() };
     },

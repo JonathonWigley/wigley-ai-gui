@@ -1,6 +1,7 @@
 import {
   cardColumn,
   comparableName,
+  isDigest,
   isUnseen,
   namedColumn,
   OTHER_COLUMN,
@@ -125,7 +126,8 @@ export function restore(
   return done(withItem(file, restored), null, `restored ${itemId}`);
 }
 
-// Stamps item `itemId` seen at `now` (epoch ms); `file` itself when it is already seen at or after its `at`.
+// Stamps item `itemId` seen at the later of `now` (epoch ms) and its `at`, so an item dated ahead of the clock reads
+// seen; `file` itself when it is already seen at or after its `at`.
 export function markSeen(
   file: WorkFile,
   itemId: string,
@@ -138,7 +140,8 @@ export function markSeen(
   if (!isUnseen(item)) {
     return done(file, null, `${itemId} already seen`);
   }
-  const seen: WorkItem = { ...item, seenAt: isoAt(now) };
+  const seenAt = isoAt(Math.max(now, Date.parse(item.at)));
+  const seen: WorkItem = { ...item, seenAt };
   return done(withItem(file, seen), null, `seen ${itemId}`);
 }
 
@@ -183,7 +186,7 @@ export function expireSnoozes(file: WorkFile, now: number): WorkFile {
   };
 }
 
-// The earliest `snoozedUntil` of a snoozed item, in epoch ms; null when none is snoozed.
+// The earliest `snoozedUntil` of a snoozed item, in epoch ms, skipping one that does not parse; null when none is.
 export function nextSnoozeEnd(file: WorkFile): number | null {
   let earliest: number | null = null;
   for (const item of file.items) {
@@ -191,6 +194,9 @@ export function nextSnoozeEnd(file: WorkFile): number | null {
       continue;
     }
     const end = Date.parse(item.snoozedUntil);
+    if (Number.isNaN(end)) {
+      continue;
+    }
     if (earliest === null || end < earliest) {
       earliest = end;
     }
@@ -198,7 +204,8 @@ export function nextSnoozeEnd(file: WorkFile): number | null {
   return earliest;
 }
 
-// Marks an open item sending `arg.text` and queues its send, or its nudge for a Waiting on others item.
+// Marks an open thread item sending `arg.text` and queues its send, or its nudge for a Waiting on others item; a
+// digest item takes no reply.
 export function send(file: WorkFile, arg: WorkSendArg): ActionResult | Refusal {
   const item = pressableItem(file, arg.itemId);
   if ('refused' in item) {
@@ -206,6 +213,9 @@ export function send(file: WorkFile, arg: WorkSendArg): ActionResult | Refusal {
   }
   if (item.state !== 'open') {
     return refuse(`${arg.itemId} is not open`);
+  }
+  if (isDigest(item.section)) {
+    return refuse(`${arg.itemId} takes no reply`);
   }
   if (arg.text.trim() === '') {
     return refuse('Nothing to send');
@@ -505,7 +515,10 @@ function commentEnded(
     return posted;
   }
   const comments = newestMessages(
-    [...stored.comments, { author: 'You', at: isoAt(now), text: job.text }],
+    [
+      ...stored.comments,
+      { author: 'You', at: isoAt(now), text: job.text, byUser: true },
+    ],
     caps.comments,
   );
   return {

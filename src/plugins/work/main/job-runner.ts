@@ -207,7 +207,8 @@ function closedOutcome(
 // when its process ends, past `JOB_TIMEOUT_MS`, or by the user; a close is matched by row or host id, so a `/clear`
 // on the row still ends it. The running job follows its row to each new host, and a restart claims its row by row id
 // or host. With `launchesWorkers` false the head is never launched, and `job.running` notes so. Each change writes
-// `job.running` to the store, and each end `job.last` (and a good sweep's `lastSweepAt`), then calls `ended`.
+// `job.running` to the store, and each end `job.last` (and a sweep's `lastSweepAt` or `sweepFailedAt`), then calls
+// `ended`.
 export function createJobRunner(deps: JobRunnerDeps): JobRunner {
   const { chat, rows, sessionInfo, clock, timers, log } = deps;
   let queue: JobQueue = EMPTY_JOB_QUEUE;
@@ -312,11 +313,15 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
       if (end === null) {
         return { ...file, job: { ...file.job, running } };
       }
-      const isGoodSweep = end.job.kind === 'sweep' && end.outcome.ok;
+      if (end.job.kind !== 'sweep') {
+        return { ...file, job: { running, last: endStatus(end) } };
+      }
+      const isGood = end.outcome.ok;
       return {
         ...file,
         job: { running, last: endStatus(end) },
-        lastSweepAt: isGoodSweep ? end.outcome.startedAt : file.lastSweepAt,
+        lastSweepAt: isGood ? end.outcome.startedAt : file.lastSweepAt,
+        sweepFailedAt: isGood ? null : end.at,
       };
     });
   };
