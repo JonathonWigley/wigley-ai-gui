@@ -1134,13 +1134,12 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     }).catch((error) => logRefusal(errorText(error)));
   };
 
-  // In a room not the reader's own (`isOwnRoom` false) the cursor moves only
-  // while a message there sits in a thread the reader takes part in.
+  // Moves the reader's cursor in memory and says whether it moved; the read
+  // saves `cursors.json` once.
   const unreadInTurn = async (
     room: string,
     reader: Participant,
-    isOwnRoom: boolean,
-  ): Promise<ReadItem[]> => {
+  ): Promise<{ readonly items: ReadItem[]; readonly moved: boolean }> => {
     const messages = await deps.store.read(room, 0);
     const cursors = await agentCursors.value();
     const readerKey = participantKey(reader);
@@ -1151,15 +1150,11 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       readItem(message, firstLine(message.body)),
     );
     const highest = messages.at(-1)?.id ?? 0;
-    const isInvolved =
-      isOwnRoom ||
-      messages.some((message) => view.takingPart.has(message.thread));
-    if (highest > cursor && isInvolved) {
+    if (highest > cursor) {
       roomCursors.set(readerKey, highest);
       cursors.set(room, roomCursors);
-      agentCursors.save(cursors);
     }
-    return items;
+    return { items, moved: highest > cursor };
   };
 
   const liveClaims = async (): Promise<Claims> => {
@@ -1228,9 +1223,9 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     async read(room, reader, query) {
       if (query.kind === 'unread') {
         // The reader's own room takes its turn before anything is awaited.
-        const items = await inRoomTurn(room, () =>
-          unreadInTurn(room, reader, true),
-        );
+        const own = await inRoomTurn(room, () => unreadInTurn(room, reader));
+        const items = [...own.items];
+        let moved = own.moved;
         // The own room's items are marked read: a failure elsewhere is logged
         // so they still reach the reader.
         try {
@@ -1239,11 +1234,11 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
           );
           for (const other of others) {
             try {
-              items.push(
-                ...(await inRoomTurn(other, () =>
-                  unreadInTurn(other, reader, false),
-                )),
+              const read = await inRoomTurn(other, () =>
+                unreadInTurn(other, reader),
               );
+              items.push(...read.items);
+              moved ||= read.moved;
             } catch (error) {
               deps.log(
                 `unread read of room ${other} failed: ${errorText(error)}`,
@@ -1252,6 +1247,9 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
           }
         } catch (error) {
           deps.log(`unread read could not list the rooms: ${errorText(error)}`);
+        }
+        if (moved) {
+          agentCursors.save(await agentCursors.value());
         }
         return { ok: true, items };
       }

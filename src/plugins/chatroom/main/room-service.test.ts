@@ -979,7 +979,7 @@ describe('createRoomService', () => {
     expect(await store.read(ROOM, 0)).toEqual([]);
   });
 
-  it('read_Unread_SpansRooms_OwnFirst_CursorOnlyWhereInvolved', async () => {
+  it('read_Unread_SpansRooms_OwnFirst_CursorInEveryRoom', async () => {
     const over = crossProjectService();
     accepted(await over.post(questionToShopRevamp('here')));
     accepted(
@@ -1012,7 +1012,7 @@ describe('createRoomService', () => {
       Object.keys(cursors)
         .filter((room) => 'agent:rA:main' in cursors[room])
         .sort(),
-    ).toEqual(['ai', ROOM].sort());
+    ).toEqual(['aa', 'ai', ROOM].sort());
   });
 
   it('read_Unread_AnotherRoomFails_OwnItemsStillReturned', async () => {
