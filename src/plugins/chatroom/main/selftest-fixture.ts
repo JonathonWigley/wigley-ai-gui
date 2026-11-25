@@ -107,6 +107,7 @@ export async function seedChatroomFixture(
   ): Promise<number> => {
     const result = await room.post({
       room: project,
+      followTargets: false,
       from,
       kind,
       body,

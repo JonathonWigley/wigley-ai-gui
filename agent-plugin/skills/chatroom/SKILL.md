@@ -1,6 +1,6 @@
 ---
 name: chatroom
-description: "Talking to other agent sessions and the user through the project's chatroom in the Auri app: what to post, when, and to whom, and reading the board instead of asking. Use when another session holds, edits or needs what this session works on, before a long hold, a land or push on a shared branch, or an install, when waiting on a peer, when handing off work or a tree, or when a background worker reports progress."
+description: "Talking to other agent sessions and the user through the project's chatroom in the Auri app, sessions in other projects included: what to post, when, and to whom, and reading the board instead of asking. Use when another session holds, edits or needs what this session works on, before a long hold, a land or push on a shared branch, or an install, when waiting on a peer, when handing off work or a tree, or when a background worker reports progress."
 ---
 
 **Contents**
@@ -15,7 +15,8 @@ description: "Talking to other agent sessions and the user through the project's
 
 ## Intent
 
-Each project has one room, shared by its agent sessions, their subagents and the user, who reads all of it. A good
+Each project has one room, shared by its agent sessions, their subagents and the user, who reads all of it. A
+session in another project that posts there joins it as a visitor. A good
 room is short: every message is an event another participant acts on. Everything that is state — who is working,
 done or waiting, each session's branch, folder, uncommitted files, unpushed commits and claims — sits on the
 **board**, which the app keeps current. Every message costs each reader context, so a post that changes nothing for
@@ -44,7 +45,7 @@ Each of these requires a post, with its kind:
 - **Before a land or push on a branch other sessions in the project work on**, post a `heads-up` naming what lands
   and the checks peers should re-run; after it, post a `result` with the commit.
 - **When work or findings another session needs are finished**, post a `handoff` to that session by its title, with
-  refs. A title the room does not know goes to the room's thread for the topic.
+  refs, in whichever project it runs. A title no room knows goes to the room's thread for the topic.
 - **When leaving a tree that holds uncommitted or unpushed work**, post a `handoff` stating each, whether it is
   finished, and who pushes it. A session pushes only on its own user's yes, so "the peer will push" is never assumed.
 - **When blocked**, post a `blocker` naming who can unblock it; the user is a participant (`you`).
@@ -58,6 +59,14 @@ Each of these requires a post, with its kind:
 - Address a participant by its session title (`to`); leave `to` empty to post to the thread. Questions, blockers and
   handoffs are addressed, and a question names at least one participant; results, decisions and heads-ups go to the
   thread. An `answer` sets `replyTo` to the question it answers.
+- A session in another project is addressed the same way, by title alone: the post goes to that project's room, and
+  the conversation stays there. When the title is in several projects, the refusal names them; pass `room` to pick
+  one.
+- A message from another room names its room (`#4 in room ai`, `in thread x of room ai`). Reply with `room` set to
+  it: `replyTo` ids belong to one room, and with `room` the post goes there. `chatroom_read` and `chatroom_board` take
+  `room` too, to read that room's thread or board.
+- The user never relays a message between sessions: when `chatroom_post` refuses a title, read the refusal's
+  candidates and post again.
 - Post in the thread for the plan, branch or topic the message is about.
 - Open with one line that stands alone; the reader sees it first.
 - Keep a body under the cap. Put anything longer in a file and post its path with a three-line summary.

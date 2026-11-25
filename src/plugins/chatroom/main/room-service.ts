@@ -37,23 +37,33 @@ export interface ChatroomLimits {
   readonly claimMinutes: number;
 }
 
+// A live session's main agent and the room of its project.
+export interface RoomMember {
+  readonly room: string;
+  readonly participant: Participant;
+}
+
 // `limits` is read at each call, so a settings change applies to the next
-// one. `participants` returns the main agents of the room's live sessions and
-// `USER_PARTICIPANT`: the only participants a post may name in `to`.
+// one. `directory` returns the main agent of every live session with a room.
+// A post in a room may name in `to` only that room's members, the members of
+// other rooms who posted talk in it (its visitors), and `USER_PARTICIPANT`.
 export interface RoomServiceDeps {
   readonly store: RoomStore;
   readonly files: Pick<Files, 'read' | 'write'>;
   readonly clock: Clock;
   readonly randomHex: RandomHex;
   limits(): ChatroomLimits;
-  participants(room: string): readonly Participant[];
+  directory(): readonly RoomMember[];
   readonly log: PluginLog;
 }
 
 // `to` holds participant names; `thread` null takes the `replyTo` message's
 // thread, else `session:<rowId>` for an agent, else `general`.
+// `followTargets` true lets a `to` name that no participant of `room` carries
+// move the post to the one other room whose member carries it.
 export interface PostRequest {
   readonly room: string;
+  readonly followTargets: boolean;
   readonly from: Participant;
   readonly kind: PostKind;
   readonly body: string;
@@ -66,12 +76,14 @@ export interface PostRequest {
   readonly key: string | null;
 }
 
-export type HumanPostRequest = Omit<PostRequest, 'from'>;
+export type HumanPostRequest = Omit<PostRequest, 'from' | 'followTargets'>;
 
+// `room` is the room the post went to.
 export type PostResult =
   | {
       readonly ok: true;
       readonly id: number;
+      readonly room: string;
       readonly thread: string;
       readonly duplicate: boolean;
     }
@@ -95,6 +107,7 @@ export type ReadQuery =
 // cut, for an unread read, and the whole body otherwise.
 export interface ReadItem {
   readonly id: number;
+  readonly room: string;
   readonly thread: string;
   readonly from: string;
   readonly to: readonly string[];
@@ -150,8 +163,10 @@ export type ReleaseResult =
 export interface RoomService {
   // Refuses, writing nothing, a post a check or guard holds back, or one the
   // store fails to save; a retry with an accepted post's `key` returns that
-  // post's id as a duplicate. Rejects, writing nothing, when reading the room
-  // or `threads.json` fails.
+  // post's id as a duplicate. A post that follows its targets refuses a `to`
+  // name no room's member carries, one carried in several other rooms, and
+  // names that lead to two rooms. Rejects, writing nothing, when reading the
+  // room or `threads.json` fails.
   post(request: PostRequest): Promise<PostResult>;
   // A post from `USER_PARTICIPANT`, the user's word: the body cap applies;
   // the identical-body drop and the rate cap do not. Fails as `post` does.
@@ -159,16 +174,22 @@ export interface RoomService {
   // Writes an entry with no check, its body cut to the body cap; rejects when
   // the store does.
   addEntry(entry: EntryRequest): Promise<RoomMessage>;
-  // An unread read moves the reader's cursor; a thread or message read does
-  // not. Rejects when reading the room or a state file fails.
+  // An unread read spans every room, `room` (the reader's own) first, then
+  // the others in name order, and moves the reader's cursor in each; a thread
+  // or message read reads `room` alone and moves no cursor. Rejects when
+  // reading a room or a state file fails.
   read(
     room: string,
     reader: Participant,
     query: ReadQuery,
   ): Promise<ReadResult>;
-  // The unread messages that name the reader, or carry the user's word to an
-  // open thread the reader takes part in; moves no cursor.
-  unreadAddressed(room: string, reader: Participant): Promise<RoomMessage[]>;
+  // The unread messages in every room, or in `onlyRoom` alone, that name the
+  // reader, or carry the user's word to an open thread the reader takes part
+  // in; moves no cursor.
+  unreadAddressed(
+    reader: Participant,
+    onlyRoom?: string | null,
+  ): Promise<RoomMessage[]>;
   // Posts above the user's cursor of their thread, the user's own left out:
   // those from `USER_PARTICIPANT` and from a mirror.
   userUnread(room: string): Promise<RoomMessage[]>;
@@ -272,6 +293,7 @@ function names(message: RoomMessage, key: string): boolean {
 function readItem(message: RoomMessage, text: string): ReadItem {
   return {
     id: message.id,
+    room: message.room,
     thread: message.thread,
     from: message.from.name,
     to: message.to.map((target) => target.name),
@@ -332,6 +354,99 @@ function questionRefusal(request: PostRequest, now: number): string | null {
     return 'answerBy must be later than now';
   }
   return null;
+}
+
+// The participants a post in `room` may name: its members, then its
+// visitors, then the user. A session visits when its main agent or one of its
+// subagents posted talk in the room.
+function roomParticipants(
+  room: string,
+  messages: readonly RoomMessage[],
+  directory: readonly RoomMember[],
+): Participant[] {
+  const talkingRows = new Set(
+    messages
+      .filter((message) => isTalk(message) && message.from.kind === 'agent')
+      .map((message) => message.from.rowId),
+  );
+  const members = directory
+    .filter((member) => member.room === room)
+    .map((member) => member.participant);
+  const visitors = directory
+    .filter(
+      (member) =>
+        member.room !== room && talkingRows.has(member.participant.rowId),
+    )
+    .map((member) => member.participant);
+  return [...members, ...visitors, USER_PARTICIPANT];
+}
+
+// The room a post that follows its targets goes to: its own, unless a `to`
+// name matches none of the room's participants; then the one other room whose
+// member carries every such name. A post that would leave its room is refused
+// while it also names a session of its room, or sets `replyTo`, whose id
+// belongs to its room.
+function routedRoom(
+  request: PostRequest,
+  messages: readonly RoomMessage[],
+  directory: readonly RoomMember[],
+): { readonly ok: true; readonly room: string } | Refusal {
+  const home = request.room;
+  const here = roomParticipants(home, messages, directory);
+  const isHere = (name: string) =>
+    here.some((participant) => nameKey(participant.name) === nameKey(name));
+  const strangers = request.to.filter((name) => !isHere(name));
+  if (strangers.length === 0) {
+    return { ok: true, room: home };
+  }
+  const found: { readonly name: string; readonly room: string }[] = [];
+  for (const name of strangers) {
+    const rooms = new Set(
+      directory
+        .filter(
+          (member) =>
+            member.room !== home &&
+            nameKey(member.participant.name) === nameKey(name),
+        )
+        .map((member) => member.room),
+    );
+    if (rooms.size === 0) {
+      const roster = here.map((participant) => participant.name).join(', ');
+      return refused(
+        `no participant named "${name}" in this room or another project's; the room holds: ${roster}`,
+      );
+    }
+    if (rooms.size > 1) {
+      return refused(
+        `"${name}" names sessions in several projects' rooms (${[...rooms].sort(compareText).join(', ')}); pass room to pick one`,
+      );
+    }
+    found.push({ name, room: [...rooms][0] });
+  }
+  const rooms = new Set(found.map((each) => each.room));
+  if (rooms.size > 1) {
+    const where = found
+      .map((each) => `"${each.name}" is in ${each.room}`)
+      .join(', ');
+    return refused(`a post goes to one room: ${where}; post to each`);
+  }
+  const away = found[0].room;
+  const homeNames = request.to.filter(
+    (name) => isHere(name) && nameKey(name) !== nameKey(USER_PARTICIPANT.name),
+  );
+  if (homeNames.length > 0) {
+    const where = [
+      ...homeNames.map((name) => `"${name}" is in ${home}`),
+      ...found.map((each) => `"${each.name}" is in ${each.room}`),
+    ].join(', ');
+    return refused(`a post goes to one room: ${where}; post to each`);
+  }
+  if (request.replyTo !== null) {
+    return refused(
+      `"${found[0].name}" is in room ${away}, and replyTo #${request.replyTo} names a message of ${home}; pass room ${away} to reply to a message there`,
+    );
+  }
+  return { ok: true, room: away };
 }
 
 // Each name to the one participant it names, each participant once, in the
@@ -933,6 +1048,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       return {
         ok: true,
         id: earlier.id,
+        room: earlier.room,
         thread: earlier.thread,
         duplicate: true,
       };
@@ -944,7 +1060,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       messages,
       now,
       limits.bodyCap,
-      deps.participants(request.room),
+      roomParticipants(request.room, messages, deps.directory()),
     );
     if (!checked.ok) {
       return checked;
@@ -981,6 +1097,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     return {
       ok: true,
       id: stored.id,
+      room: stored.room,
       thread: stored.thread,
       duplicate: false,
     };
@@ -995,6 +1112,7 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
   ) => {
     const request: PostRequest = {
       room,
+      followTargets: false,
       from: sender,
       kind: 'note',
       body,
@@ -1016,10 +1134,12 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     }).catch((error) => logRefusal(errorText(error)));
   };
 
+  // Moves the reader's cursor in memory and says whether it moved; the read
+  // saves `cursors.json` once.
   const unreadInTurn = async (
     room: string,
     reader: Participant,
-  ): Promise<ReadItem[]> => {
+  ): Promise<{ readonly items: ReadItem[]; readonly moved: boolean }> => {
     const messages = await deps.store.read(room, 0);
     const cursors = await agentCursors.value();
     const readerKey = participantKey(reader);
@@ -1033,9 +1153,8 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
     if (highest > cursor) {
       roomCursors.set(readerKey, highest);
       cursors.set(room, roomCursors);
-      agentCursors.save(cursors);
     }
-    return items;
+    return { items, moved: highest > cursor };
   };
 
   const liveClaims = async (): Promise<Claims> => {
@@ -1058,11 +1177,28 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
   };
 
   return {
-    post: (request) =>
-      inRoomTurn(request.room, () => postInTurn(request, false, true)),
+    async post(request) {
+      const routed = request.followTargets
+        ? routedRoom(
+            request,
+            await deps.store.read(request.room, 0),
+            deps.directory(),
+          )
+        : { ok: true as const, room: request.room };
+      if (!routed.ok) {
+        return routed;
+      }
+      return inRoomTurn(routed.room, () =>
+        postInTurn({ ...request, room: routed.room }, false, true),
+      );
+    },
     postHuman: (request) =>
       inRoomTurn(request.room, () =>
-        postInTurn({ ...request, from: USER_PARTICIPANT }, true, false),
+        postInTurn(
+          { ...request, followTargets: false, from: USER_PARTICIPANT },
+          true,
+          false,
+        ),
       ),
     addEntry: (entry) =>
       inRoomTurn(entry.room, async () => {
@@ -1086,7 +1222,35 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
       }),
     async read(room, reader, query) {
       if (query.kind === 'unread') {
-        const items = await inRoomTurn(room, () => unreadInTurn(room, reader));
+        // The reader's own room takes its turn before anything is awaited.
+        const own = await inRoomTurn(room, () => unreadInTurn(room, reader));
+        const items = [...own.items];
+        let moved = own.moved;
+        // The own room's items are marked read: a failure elsewhere is logged
+        // so they still reach the reader.
+        try {
+          const others = (await deps.store.rooms()).filter(
+            (other) => other !== room,
+          );
+          for (const other of others) {
+            try {
+              const read = await inRoomTurn(other, () =>
+                unreadInTurn(other, reader),
+              );
+              items.push(...read.items);
+              moved ||= read.moved;
+            } catch (error) {
+              deps.log(
+                `unread read of room ${other} failed: ${errorText(error)}`,
+              );
+            }
+          }
+        } catch (error) {
+          deps.log(`unread read could not list the rooms: ${errorText(error)}`);
+        }
+        if (moved) {
+          agentCursors.save(await agentCursors.value());
+        }
         return { ok: true, items };
       }
       const messages = await deps.store.read(room, 0);
@@ -1103,14 +1267,20 @@ export function createRoomService(deps: RoomServiceDeps): RoomService {
         ? refused(`no message #${query.id} in ${room}`)
         : { ok: true, items: [readItem(message, message.body)] };
     },
-    async unreadAddressed(room, reader) {
-      const messages = await deps.store.read(room, 0);
-      const cursor =
-        (await agentCursors.value()).get(room)?.get(participantKey(reader)) ??
-        0;
-      return addressedOf(
-        readerView(messages, reader, cursor, await resolvedIn(room)),
-      );
+    async unreadAddressed(reader, onlyRoom = null) {
+      const cursors = await agentCursors.value();
+      const addressed: RoomMessage[] = [];
+      const rooms = onlyRoom === null ? await deps.store.rooms() : [onlyRoom];
+      for (const room of rooms) {
+        const messages = await deps.store.read(room, 0);
+        const cursor = cursors.get(room)?.get(participantKey(reader)) ?? 0;
+        addressed.push(
+          ...addressedOf(
+            readerView(messages, reader, cursor, await resolvedIn(room)),
+          ),
+        );
+      }
+      return addressed;
     },
     async userUnread(room) {
       const messages = await deps.store.read(room, 0);

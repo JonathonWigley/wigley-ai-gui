@@ -3,9 +3,13 @@ import { qualify } from '../../../shared/plugin-manifests';
 import {
   ageText,
   type DetailMessage,
+  isDigest,
+  isUnseen,
+  takesReply,
   type ThreadDetail,
   WORK_SECTIONS,
   type WorkItem,
+  type WorkSection,
   type WorkState,
 } from '../../work/contract';
 import type { InboxSectionId, WorkInboxPlace } from '../contract';
@@ -36,6 +40,28 @@ export const SECTION_TITLES: Record<InboxSectionId, string> = {
   worth_knowing: 'Worth knowing',
   all: 'All',
 };
+
+// The two kinds of item: threads the user is part of, and the digest's summaries of channel posts.
+export type InboxGroupId = 'threads' | 'digest';
+
+export const GROUP_TITLES: Record<InboxGroupId, string> = {
+  threads: 'Threads',
+  digest: 'Digest',
+};
+
+export const groupOf = (section: WorkSection): InboxGroupId =>
+  isDigest(section) ? 'digest' : 'threads';
+
+// The nav group section `id` opens: its kind's group on the first section of each, `all` on All, null on the rest.
+export function navGroupStart(id: InboxSectionId): InboxGroupId | 'all' | null {
+  if (id === 'all') {
+    return 'all';
+  }
+  const first = WORK_SECTIONS.find(
+    (section) => groupOf(section) === groupOf(id),
+  );
+  return first === id ? groupOf(id) : null;
+}
 
 // Where the keys act: the side bar's sections, the card list, or the detail pane's reply box.
 export type InboxFocus = 'sections' | 'list' | 'box';
@@ -81,7 +107,6 @@ export type InboxAction =
   | { type: 'select'; id: string; work: WorkState }
   | { type: 'focus'; focus: InboxFocus }
   | { type: 'draftEdited'; id: string; text: string }
-  | { type: 'draftDropped'; id: string }
   | { type: 'pane'; open: boolean }
   | { type: 'placed'; place: WorkInboxPlace; work: WorkState }
   | { type: 'reset'; state: InboxViewState };
@@ -154,14 +179,6 @@ export function inboxReducer(
       return state.drafts[action.id] === action.text
         ? state
         : { ...state, drafts: { ...state.drafts, [action.id]: action.text } };
-    case 'draftDropped': {
-      if (!Object.hasOwn(state.drafts, action.id)) {
-        return state;
-      }
-      const drafts = { ...state.drafts };
-      delete drafts[action.id];
-      return { ...state, drafts };
-    }
     case 'pane':
       return state.paneOpen === action.open
         ? state
@@ -248,16 +265,20 @@ function workChanged(
   return withCursor(pruned, next ?? previous ?? null);
 }
 
-const newestFirst = (a: WorkItem, b: WorkItem) =>
+const GROUP_ORDER: Record<InboxGroupId, number> = { threads: 0, digest: 1 };
+
+// Threads before the digest, each newest first.
+const listOrder = (a: WorkItem, b: WorkItem) =>
+  GROUP_ORDER[groupOf(a.section)] - GROUP_ORDER[groupOf(b.section)] ||
   Date.parse(b.at) - Date.parse(a.at);
 
-// The open items of each section, and every item under `all`.
+// The unseen open items of each section, and every item under `all`.
 export function sectionCounts(work: WorkState): Record<InboxSectionId, number> {
   const counts = Object.fromEntries(
     INBOX_SECTIONS.map((section) => [section, 0]),
   ) as Record<InboxSectionId, number>;
   for (const item of work.items) {
-    if (item.state === 'open') {
+    if (item.state === 'open' && isUnseen(item)) {
       counts[item.section] += 1;
     }
   }
@@ -265,8 +286,8 @@ export function sectionCounts(work: WorkState): Record<InboxSectionId, number> {
   return counts;
 }
 
-// The cards the list shows, newest `at` first: the open items holding the filter key across sections while a filter
-// is set, else every item under `all`, else the section's open items.
+// The cards the list shows, threads before the digest and each newest `at` first: the open items holding the filter
+// key across sections while a filter is set, else every item under `all`, else the section's open items.
 export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
   const { ticketFilter, section } = view;
   const isShown = (item: WorkItem) => {
@@ -277,12 +298,35 @@ export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
       section === 'all' || (item.state === 'open' && item.section === section)
     );
   };
-  return work.items.filter(isShown).sort(newestFirst);
+  return work.items.filter(isShown).sort(listOrder);
 }
 
-// The detail pane's buttons in draw order. Every open item sends its reply (a Waiting on others reply is the nudge), a
-// Waiting item also snoozes, every open item dismisses and spins up a session or a Board task, and an item that is not
-// open only restores.
+// Whether the list mixes sections: All, or a ticket filter.
+export function isMixedList(view: InboxViewState): boolean {
+  return view.ticketFilter !== null || view.section === 'all';
+}
+
+// The group heading a mixed list draws before each shown item: the item's group where it differs from the item
+// before, else null; all null while the list shows one section.
+export function groupStarts(
+  items: readonly WorkItem[],
+  view: InboxViewState,
+): (InboxGroupId | null)[] {
+  if (!isMixedList(view)) {
+    return items.map(() => null);
+  }
+  return items.map((item, index) => {
+    const group = groupOf(item.section);
+    const before = items[index - 1];
+    return before !== undefined && groupOf(before.section) === group
+      ? null
+      : group;
+  });
+}
+
+// The detail pane's buttons in draw order. Every open thread sends its reply (a Waiting on others reply is the nudge),
+// a digest item takes none, a Waiting item also snoozes, every open item dismisses and spins up a session or a Board
+// task, and an item that is not open only restores.
 export function cardActions(
   item: WorkItem,
   _view: InboxViewState,
@@ -291,7 +335,7 @@ export function cardActions(
     return ['restore'];
   }
   return [
-    'send',
+    ...(isDigest(item.section) ? [] : (['send'] as const)),
     ...(item.section === 'waiting' ? (['snooze'] as const) : []),
     'dismiss',
     'startSession',
@@ -315,22 +359,27 @@ export function emptyReason(
   return view.ticketFilter === null ? 'section' : 'filter';
 }
 
-// `drafts` without the edits of items `work` no longer holds; an item in any state keeps its edit. `drafts` itself
-// when it drops none.
+// `drafts` without the edits of items `work` no longer holds or has cleared (a good send or a sweep clears an item, so
+// a sent edit goes then, and a failed send keeps it); a dismissed or snoozed item keeps its edit. `drafts` itself when
+// it drops none.
 export function prunedDrafts(
   drafts: Record<string, string>,
   work: WorkState,
 ): Record<string, string> {
-  const ids = new Set(work.items.map((item) => item.id));
+  const ids = new Set(
+    work.items
+      .filter((item) => item.state !== 'cleared')
+      .map((item) => item.id),
+  );
   const kept = Object.entries(drafts).filter(([id]) => ids.has(id));
   return kept.length === Object.keys(drafts).length
     ? drafts
     : Object.fromEntries(kept);
 }
 
-// The text Send sends for `item`: the user's edit, else the worker's draft, else empty.
+// The text Send sends for `item`: the user's edit, else empty.
 export function draftText(item: WorkItem, view: InboxViewState): string {
-  return view.drafts[item.id] ?? item.draft ?? '';
+  return view.drafts[item.id] ?? '';
 }
 
 // The item the cursor is on, among the shown cards; null for none.
@@ -418,8 +467,7 @@ function cardPrompt(
 
 // Its section's name while the list mixes sections (All, or a ticket filter), else null.
 function sectionTitleOf(item: WorkItem, view: InboxViewState): string | null {
-  const isMixed = view.ticketFilter !== null || view.section === 'all';
-  return isMixed ? SECTION_TITLES[item.section] : null;
+  return isMixedList(view) ? SECTION_TITLES[item.section] : null;
 }
 
 // What the `card` part draws for `item`, aged against `now`.
@@ -437,12 +485,14 @@ export function cardInput(
     author: item.author,
     age: cardAge(item.at, now),
     title: item.title,
-    summary: view.paneOpen ? null : item.summary,
     latest: item.latest,
+    why: item.why,
     state: item.state,
     stateTag: stateTag(item),
     isSending: item.sending !== null,
     isDirect: item.section === 'needs_you',
+    isDigest: isDigest(item.section),
+    isUnseen: isUnseen(item),
     isCursor,
     note: item.note,
     prompt: isCursor ? cardPrompt(item, cardActions(item, view)) : [],
@@ -455,11 +505,50 @@ function fetchedText(fetchedAt: string, now: number): string {
   return age === 'now' ? 'Fetched just now' : `Fetched ${age} ago`;
 }
 
-function messageInput(message: DetailMessage, now: number): DetailMessageInput {
+// How many colours a person's icon picks from; the layout's CSS maps each tone to a status colour.
+export const PERSON_TONES = 5;
+
+// A name's icon tone: the same name lands on the same one of `PERSON_TONES` in every thread.
+export function personTone(name: string): number {
+  let hash = 0;
+  for (const char of name) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  }
+  return hash % PERSON_TONES;
+}
+
+// A name's icon letters: the first characters of its first two words, else its first two characters, upper-cased;
+// `?` for a blank name.
+export function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  const letters =
+    words.length > 1
+      ? words.slice(0, 2).map((word) => [...word][0])
+      : [...(words[0] ?? '?')].slice(0, 2);
+  return letters.join('').toUpperCase();
+}
+
+// `message` as the pane draws it; it starts a run unless `previous` is by the same person.
+function messageInput(
+  message: DetailMessage,
+  previous: DetailMessage | null,
+  now: number,
+): DetailMessageInput {
+  const isSamePerson =
+    previous !== null &&
+    previous.byUser === message.byUser &&
+    (message.byUser || previous.author === message.author);
   return {
-    author: message.author,
+    author: message.byUser ? 'You' : message.author,
     age: cardAge(message.at, now),
     text: message.text,
+    byUser: message.byUser,
+    initials: initialsOf(message.author),
+    tone: personTone(message.author),
+    startsRun: !isSamePerson,
   };
 }
 
@@ -470,12 +559,23 @@ export function detailInput(
   detail: ThreadDetail | null,
   now: number,
 ): DetailInput {
+  const hasHiddenReplies =
+    detail !== null && detail.replyCount > detail.replies.length;
+  // The reply count line between the root and the replies breaks a run.
   const replies =
     detail === null
       ? []
-      : detail.replies.map((reply) => messageInput(reply, now));
-  const hasHiddenReplies =
-    detail !== null && detail.replyCount > replies.length;
+      : detail.replies.map((reply, index) =>
+          messageInput(
+            reply,
+            index > 0
+              ? detail.replies[index - 1]
+              : hasHiddenReplies
+                ? null
+                : detail.root,
+            now,
+          ),
+        );
   return {
     id: item.id,
     channel: item.channel,
@@ -489,14 +589,14 @@ export function detailInput(
     tickets: item.ticketKeys.map((key) => ({ key, reason: item.linkReason })),
     summary: item.summary,
     why: item.why,
-    root: detail === null ? null : messageInput(detail.root, now),
+    root: detail === null ? null : messageInput(detail.root, null, now),
     replies,
     replyCountText: hasHiddenReplies
       ? `${replies.length} of ${detail.replyCount} replies`
       : null,
-    draft:
-      item.state === 'open' ? (item.sending ?? draftText(item, view)) : null,
+    draft: takesReply(item) ? (item.sending ?? draftText(item, view)) : null,
     isSending: item.sending !== null,
+    isDigest: isDigest(item.section),
     note: item.note,
     url: item.url,
     actions: [...cardActions(item, view)],

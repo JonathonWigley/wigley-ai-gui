@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { jiraCard, localCard } from './contract.test-support';
+import { jiraCard, localCard, workItem } from './contract.test-support';
 import {
   ageText,
   cardColumn,
   columnForStatus,
+  isUnseen,
   namedColumn,
   readColumns,
   readProjects,
@@ -11,6 +12,7 @@ import {
   ticketKeysIn,
   type WorkColumnSetting,
   type WorkJobStatus,
+  type WorkState,
   type WorkStatusLine,
 } from './contract';
 import { workManifest } from './manifest';
@@ -191,90 +193,116 @@ describe('readProjects', () => {
 });
 
 describe('statusLine', () => {
+  const agoIso = (ago: number) => new Date(NOW - ago).toISOString();
   it.each<{
     case: string;
     running: WorkJobStatus | null;
     last: WorkJobStatus | null;
+    lastSweepAt: string | null;
+    sweepFailedAt?: string;
     expected: WorkStatusLine;
   }>([
     {
-      case: 'no job',
+      case: 'no sweep yet',
       running: null,
       last: null,
-      expected: { text: 'No job yet', tone: 'idle', hasRow: false },
+      lastSweepAt: null,
+      expected: { text: 'Not updated yet', tone: 'idle', hasRow: false },
     },
     {
-      case: 'a queued send',
-      running: job('send', 'queued', 10 * MINUTE),
-      last: null,
-      expected: { text: 'Send queued', tone: 'running', hasRow: false },
-    },
-    {
-      case: 'a queued sweep this run does not launch',
-      running: job('sweep', 'queued', 10 * MINUTE, {
-        note: 'Not launched: this run launches no worker.',
-      }),
-      last: null,
-      expected: {
-        text: 'Sweep queued · Not launched: this run launches no worker.',
-        tone: 'running',
-        hasRow: false,
-      },
-    },
-    {
-      case: 'a sweep running 3 minutes',
+      case: 'a sweep running over a last with a row',
       running: job('sweep', 'running', 3 * MINUTE),
-      last: null,
-      expected: {
-        text: 'Sweep running · started 3m ago',
-        tone: 'running',
-        hasRow: false,
-      },
+      last: job('sweep', 'done', HOUR, { rowId: 'row-1' }),
+      lastSweepAt: agoIso(HOUR),
+      expected: { text: 'Updating…', tone: 'running', hasRow: true },
     },
     {
-      case: 'a move done 2 hours ago with a row',
+      case: 'a sweep running after a failed one',
+      running: job('sweep', 'running', MINUTE),
+      last: job('sweep', 'failed', 3 * MINUTE),
+      lastSweepAt: null,
+      sweepFailedAt: agoIso(3 * MINUTE),
+      expected: { text: 'Updating…', tone: 'running', hasRow: false },
+    },
+    {
+      case: 'a queued sweep, which is not updating yet',
+      running: job('sweep', 'queued', MINUTE),
+      last: null,
+      lastSweepAt: agoIso(2 * HOUR),
+      expected: { text: 'Update queued', tone: 'idle', hasRow: false },
+    },
+    {
+      case: 'a running send, which is no update',
+      running: job('send', 'running', MINUTE),
+      last: null,
+      lastSweepAt: null,
+      expected: { text: 'Not updated yet', tone: 'idle', hasRow: false },
+    },
+    {
+      case: 'a failed sweep after a good one',
       running: null,
-      last: job('move', 'done', 2 * HOUR, { rowId: 'row-1' }),
-      expected: { text: 'Move done 2h ago', tone: 'success', hasRow: true },
+      last: job('sweep', 'failed', 3 * MINUTE, { note: 'x' }),
+      lastSweepAt: agoIso(3 * DAY),
+      sweepFailedAt: agoIso(3 * MINUTE),
+      expected: { text: 'Update failed 3m ago', tone: 'error', hasRow: false },
     },
     {
-      case: 'a nudge failed 3 days ago with a note',
+      case: 'a failed sweep with a later send, which does not hide it',
       running: null,
-      last: job('nudge', 'failed', 3 * DAY, { note: 'x' }),
-      expected: {
-        text: 'Nudge failed 3d ago · x',
-        tone: 'error',
-        hasRow: false,
-      },
+      last: job('send', 'done', MINUTE, { rowId: 'row-3' }),
+      lastSweepAt: agoIso(3 * DAY),
+      sweepFailedAt: agoIso(HOUR),
+      expected: { text: 'Update failed 1h ago', tone: 'error', hasRow: true },
     },
     {
-      case: 'a running job over a last with a row',
-      running: job('sweep', 'running', 3 * MINUTE),
-      last: job('send', 'done', HOUR, { rowId: 'row-1' }),
-      expected: {
-        text: 'Sweep running · started 3m ago',
-        tone: 'running',
-        hasRow: true,
-      },
+      case: 'a failed sweep with the next one queued',
+      running: job('sweep', 'queued', MINUTE),
+      last: job('sweep', 'failed', 3 * MINUTE),
+      lastSweepAt: null,
+      sweepFailedAt: agoIso(3 * MINUTE),
+      expected: { text: 'Update failed 3m ago', tone: 'error', hasRow: false },
     },
     {
-      case: 'a running job over a last with no row',
-      running: job('sweep', 'running', 3 * MINUTE),
-      last: job('send', 'done', HOUR),
-      expected: {
-        text: 'Sweep running · started 3m ago',
-        tone: 'running',
-        hasRow: false,
-      },
+      case: 'a failed send after a good sweep',
+      running: null,
+      last: job('send', 'failed', MINUTE, { rowId: 'row-2' }),
+      lastSweepAt: agoIso(3 * DAY),
+      expected: { text: 'Updated 3d ago', tone: 'idle', hasRow: true },
     },
     {
-      case: 'under a minute',
+      case: 'a sweep under a minute ago',
       running: null,
       last: job('sweep', 'done', MINUTE - 1),
-      expected: { text: 'Sweep done just now', tone: 'success', hasRow: false },
+      lastSweepAt: agoIso(MINUTE - 1),
+      expected: { text: 'Updated just now', tone: 'idle', hasRow: false },
     },
-  ])('describes $case', ({ running, last, expected }) => {
-    expect(statusLine({ running, last }, NOW)).toEqual(expected);
+  ])(
+    'describes $case',
+    ({ running, last, lastSweepAt, sweepFailedAt, expected }) => {
+      const work: WorkState = {
+        items: [],
+        cards: [],
+        suggestions: [],
+        columns: [],
+        job: { running, last },
+        lastSweepAt,
+        sweepFailedAt: sweepFailedAt ?? null,
+        problem: null,
+      };
+
+      expect(statusLine(work, NOW)).toEqual(expected);
+    },
+  );
+});
+
+describe('isUnseen', () => {
+  it.each<{ seenAt: string | null; expected: boolean }>([
+    { seenAt: null, expected: true },
+    { seenAt: '2026-11-23T09:00:00.000Z', expected: true },
+    { seenAt: '2026-11-23T10:00:00.000Z', expected: false },
+    { seenAt: '2026-11-23T11:00:00.000Z', expected: false },
+  ])('seenAt $seenAt on an item at 10:00', ({ seenAt, expected }) => {
+    expect(isUnseen(workItem('a', { seenAt }))).toBe(expected);
   });
 });
 

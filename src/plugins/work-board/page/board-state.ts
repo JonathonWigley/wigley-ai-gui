@@ -2,6 +2,7 @@ import {
   ageText,
   type DetailMessage,
   OTHER_COLUMN,
+  takesReply,
   type ThreadDetail,
   type TicketDetail,
   type WorkCard,
@@ -56,7 +57,8 @@ export type CardStep = 'down' | 'up' | 'top' | 'bottom';
 
 // `stateChanged`: `work.state` (or the sample drawn in its place) changed from `previous`. `restore`: a page load's
 // saved place, or null on the first show with none. `reset`: back to `state`, as a demo sample's end does. `pane`
-// opens or closes the detail pane. `draftEdited` sets card `cardId`'s box text; `draftDropped` removes it once sent.
+// opens or closes the detail pane. `draftEdited` sets card `cardId`'s box text; `draftDropped` removes it once main
+// takes its comment.
 export type BoardAction =
   | { type: 'stateChanged'; previous: WorkState }
   | { type: 'restore'; place: WorkBoardPlace | null }
@@ -185,17 +187,29 @@ function sourceItemOf(card: WorkLocalCard, work: WorkState): WorkItem | null {
   return work.items.find((item) => item.id === card.sourceItemId) ?? null;
 }
 
-// The text a card's box holds: the user's unsent edit, else a local task's source thread draft, else empty.
-export function draftText(
-  card: WorkCard,
-  state: BoardViewState,
-  work: WorkState,
-): string {
-  const edit = state.drafts[card.id];
-  if (edit !== undefined) {
-    return edit;
+// Whether a card's pane has a box: a Jira card's comment box always, a local task's reply box while its source item
+// takes a reply.
+function hasBox(card: WorkCard, work: WorkState): boolean {
+  if (card.kind === 'jira') {
+    return true;
   }
-  return card.kind === 'local' ? (sourceItemOf(card, work)?.draft ?? '') : '';
+  const item = sourceItemOf(card, work);
+  return item !== null && takesReply(item);
+}
+
+// Whether a card's unsent edit is kept: a Jira card's always, a local task's while its source item is held and not
+// cleared.
+function keepsDraft(card: WorkCard, work: WorkState): boolean {
+  if (card.kind === 'jira') {
+    return true;
+  }
+  const item = sourceItemOf(card, work);
+  return item !== null && item.state !== 'cleared';
+}
+
+// The text a card's box holds: the user's unsent edit, else empty.
+export function draftText(card: WorkCard, state: BoardViewState): string {
+  return state.drafts[card.id] ?? '';
 }
 
 // `<age> ago`, or `just now` under a minute, for ISO time `at`.
@@ -289,7 +303,7 @@ function taskPaneInput(
             hidden: Math.max(0, detail.replyCount - detail.replies.length),
           },
     box:
-      item !== null && item.state === 'open'
+      item !== null && hasBox(card, work)
         ? { kind: 'reply', sending: item.sending }
         : null,
     note: card.note,
@@ -298,7 +312,7 @@ function taskPaneInput(
 
 // What the detail pane draws for `card`: its stored detail from `details` (a record of the other kind reads as none),
 // with ages as of `now` in epoch milliseconds. A Jira card adds the open threads naming it and its queued comments; a
-// local task its source thread and, while that thread is open, its reply box.
+// local task its source thread and, while that thread takes a reply (open, and no digest item), its reply box.
 export function paneInputOf(
   card: WorkCard,
   work: WorkState,
@@ -312,13 +326,17 @@ export function paneInputOf(
     : taskPaneInput(card, work, stored, now);
 }
 
-// `drafts` without the edits of cards `work` no longer holds; `drafts` itself when it drops none.
+// `drafts` without the edits of cards that are gone: a card `work` no longer holds, or a local task whose source item
+// is gone or cleared (a good send clears it). A failed send, a snooze or a dismiss keeps the edit. `drafts` itself
+// when it drops none.
 function prunedDrafts(
   drafts: Record<string, string>,
   work: WorkState,
 ): Record<string, string> {
-  const ids = new Set(work.cards.map((card) => card.id));
-  const kept = Object.entries(drafts).filter(([id]) => ids.has(id));
+  const kept = Object.entries(drafts).filter(([id]) => {
+    const card = cardNamed(work, id);
+    return card !== null && keepsDraft(card, work);
+  });
   return kept.length === Object.keys(drafts).length
     ? drafts
     : Object.fromEntries(kept);

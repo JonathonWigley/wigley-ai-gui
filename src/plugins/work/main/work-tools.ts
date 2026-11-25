@@ -56,8 +56,12 @@ const MESSAGE_SCHEMA = {
     author: { type: 'string' },
     at: { type: 'string', description: 'ISO time.' },
     text: { type: 'string', description: 'Markdown.' },
+    by_user: {
+      type: 'boolean',
+      description: "True on the user's own message, false on anyone else's.",
+    },
   },
-  required: ['author', 'at', 'text'],
+  required: ['author', 'at', 'text', 'by_user'],
   additionalProperties: false,
 };
 
@@ -141,11 +145,6 @@ export const RECORD_WORK_ITEMS_TOOL: ToolDefinition = {
               type: 'string',
               description:
                 'For around and worth_knowing: one line on why it matters to the user.',
-            },
-            draft: {
-              type: 'string',
-              description:
-                "For needs_you a reply, for waiting a nudge, in the user's voice.",
             },
             thread: {
               type: 'object',
@@ -336,7 +335,6 @@ export interface RecordedItem {
   ticketKeys: string[];
   linkReason: string | null;
   why: string | null;
-  draft: string | null;
   thread: RecordedThread | null;
 }
 
@@ -399,7 +397,7 @@ function mergedItem(
   if (stored === undefined) {
     return {
       ...recordedFields,
-      draft: recorded.draft,
+      seenAt: null,
       state: 'open',
       snoozedUntil: null,
       firstSeen: now,
@@ -410,7 +408,7 @@ function mergedItem(
   const hasNewerMessages = isLaterThan(recorded.at, stored.at);
   return {
     ...recordedFields,
-    draft: recorded.draft ?? stored.draft,
+    seenAt: stored.seenAt,
     state: isClosed(stored) && hasNewerMessages ? 'open' : stored.state,
     snoozedUntil: stored.snoozedUntil,
     firstSeen: stored.firstSeen,
@@ -702,6 +700,7 @@ function readMessage(raw: JsonObject, at: string): DetailMessage {
     author: requiredString(raw.author, `${at}.author`),
     at: isoTime(raw.at, `${at}.at`),
     text: requiredString(raw.text, `${at}.text`),
+    byUser: readBoolean(raw.by_user, `${at}.by_user`),
   };
 }
 
@@ -792,7 +791,6 @@ function readItem(raw: JsonObject, at: string, caps: DetailCaps): RecordedItem {
     ),
     linkReason: optionalString(raw.link_reason, `${at}.link_reason`),
     why: optionalString(raw.why, `${at}.why`),
-    draft: optionalString(raw.draft, `${at}.draft`),
     thread: readThread(raw.thread, `${at}.thread`, caps),
   };
 }

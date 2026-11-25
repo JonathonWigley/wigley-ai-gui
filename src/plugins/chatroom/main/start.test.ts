@@ -967,7 +967,7 @@ describe('chatroom demo step', () => {
       clock: { now: () => 1_000 },
       randomHex: () => 'abcd',
       limits: () => ({ bodyCap: 2_000, postsPerMinute: 60, claimMinutes: 30 }),
-      participants: () => [lead],
+      directory: () => [{ room: 'p', participant: lead }],
       log: () => undefined,
       rewriteRoom: () => undefined,
       released: (roomName) => released.push(roomName),
@@ -977,6 +977,7 @@ describe('chatroom demo step', () => {
     const second = demoRooms.hold('p');
     const posted = await first.post({
       room: 'p',
+      followTargets: false,
       from: lead,
       kind: 'note',
       body: 'held once',

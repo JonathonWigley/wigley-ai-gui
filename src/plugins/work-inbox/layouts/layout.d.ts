@@ -11,16 +11,18 @@ import type {
 //
 // Slots. A slot member places an element the app owns or fills:
 // - `sections` → `ol.work-inbox-sections`; the app replaces its children on each render that changes them: one
-//   `sectionRow` per section, in the nav's order (Needs you … Worth knowing, then All).
+//   `sectionRow` per section, in the nav's order (Needs you … Worth knowing, then All), with a `sectionGroup` before
+//   the first row of each group (Threads before Needs you, Digest before Around Slack, and one before All).
 // - `status` → `div.work-inbox-status-slot`; the app draws the `status` part into it, then the `problem` part while
 //   `work.json` was not read at start.
 // - `filter` → `div.work-inbox-filter-slot`; the app draws the `filter` part into it while a ticket filter is set,
 //   and empties it otherwise.
-// - `cards` → `ol.work-inbox-cards`; the app draws one `card` per shown item into it, newest first, or the `empty`
-//   part when none shows.
+// - `cards` → `ol.work-inbox-cards`; the app draws one `card` per shown item into it, threads before the digest and
+//   each newest first, or the `empty` part when none shows. While the list mixes sections (All, a ticket filter) a
+//   `cardGroup` goes before the first card of each group.
 // - `draftBox` (the detail kit) appends the cursor item's reply box to `parent` and returns it: the vim box holding
-//   the draft, or the sending text read-only while `isSending`, with the box's key hints. It throws `no draft box`
-//   while the detail's `draft` is null.
+//   the user's reply, or the sending text read-only while `isSending`, with the box's key hints. It throws `no draft
+//   box` while the detail's `draft` is null.
 // Each slot places once per draw: a slot called twice throws `<slot> placed twice`, which fails the part, so it draws
 // with `default`. A slot the part leaves out the app appends at the end of the part's root.
 // The detail pane: the sheet splits into the cards and the app-owned `div.work-inbox-detail` beside them, which
@@ -37,8 +39,8 @@ export interface InboxPane {
   element: HTMLElement;
 }
 
-// One nav row: `count` is the section's open items, every item for `all`; `isHot` is true for Needs you while its
-// count is over 0.
+// One nav row: `count` is the section's unseen open items, every item for `all`; `isHot` is true for Needs you while
+// its count is over 0.
 export interface SectionRowInput {
   id: string;
   title: string;
@@ -46,9 +48,24 @@ export interface SectionRowInput {
   isHot: boolean;
 }
 
-// The worker job line: `text` reads as `Sweep running · started 3m ago`; `hasRow` is true while the last finished
-// job has a transcript to show, and the line then draws a Show transcript button running `work-inbox.showJobRow`.
+// The heading before a nav group's first row: `threads` (title `Threads`: conversations the user is part of),
+// `digest` (title `Digest`: summaries of channel posts, which take no reply), or `all` before All, with a null title.
+export interface SectionGroupInput {
+  id: 'threads' | 'digest' | 'all';
+  title: string | null;
+}
+
+// The heading before a group's first card in a mixed list, as the nav's: `Threads` or `Digest`.
+export interface CardGroupInput {
+  id: 'threads' | 'digest';
+  title: string;
+}
+
+// The list's head line: `title` is the shown list's name (the section, or the filter key); `text` reads `Updated 7m
+// ago`, `Updating…` while a sweep runs, `Update queued`, `Update failed 2m ago` or `Not updated yet`, in `tone`;
+// `hasRow` is true while the last finished job has a transcript, and the line then anchors `work-inbox.showJobRow`.
 export interface InboxStatusInput {
+  title: string;
   text: string;
   tone: DotStatus;
   hasRow: boolean;
@@ -79,11 +96,13 @@ export interface CardTicket {
   reason: string | null;
 }
 
-// One Slack thread's card in the list. `sectionTitle` is its section's name under All and under a ticket filter, else
-// null; `age` reads `now`, `5m`, `3h` or `2d`; `summary` is null while the detail pane is open, which shows it;
-// `latest` is empty for none; `stateTag` is `cleared`, `dismissed` or `snoozed until <MMM d>` when the item is not
-// open, else null; `isSending` is true while a reply is being sent; `isDirect` is true on a Needs you card; `note` is
-// the last failed Send's, null for none. `prompt` is the cursor card's key prompts, empty off the cursor card.
+// One item's row in the list. `sectionTitle` is its section's name under All and under a ticket filter, else null;
+// `age` reads `now`, `5m`, `3h` or `2d`; `latest` is empty for none; `why` is a digest item's line on why it matters,
+// null for none; `stateTag` is `cleared`, `dismissed` or `snoozed until <MMM d>` when the item is not open, else null;
+// `isSending` is true while a reply is being sent; `isDirect` is true on a Needs you card; `isDigest` on an Around
+// Slack or Worth knowing item, which takes no reply; `isUnseen` while it holds a message the user has not seen;
+// `note` is the last failed Send's, null for none. `prompt` is the cursor card's key prompts, empty off the cursor
+// card.
 export interface CardInput {
   id: string;
   section: string;
@@ -92,22 +111,31 @@ export interface CardInput {
   author: string;
   age: string;
   title: string;
-  summary: string | null;
   latest: string;
+  why: string | null;
   state: 'open' | 'cleared' | 'dismissed' | 'snoozed';
   stateTag: string | null;
   isSending: boolean;
   isDirect: boolean;
+  isDigest: boolean;
+  isUnseen: boolean;
   isCursor: boolean;
   note: string | null;
   prompt: PromptActionInput[];
 }
 
-// One message of a thread: `age` reads as a card's does; `text` is markdown.
+// One message of a thread: `author` reads `You` on the user's own message (`byUser`); `age` reads as a card's does;
+// `text` is markdown. `initials` (up to two characters, upper-cased; `?` for a blank name) and `tone` (0–4, the same for a name in every thread) draw the
+// author's icon. `startsRun` is false while the message before it is by the same person, so a run of one person's
+// messages shares one icon and name line.
 export interface DetailMessageInput {
   author: string;
   age: string;
   text: string;
+  byUser: boolean;
+  initials: string;
+  tone: number;
+  startsRun: boolean;
 }
 
 // The cursor item's detail pane. `channel`, `author`, `age`, `title`, `sectionTitle`, `stateTag` and `note` read as
@@ -115,10 +143,10 @@ export interface DetailMessageInput {
 // `participants` are the thread's people; `why` is null for none. `root` is the thread's first message, null while it
 // has no stored detail; `replies` are the shown replies, oldest first; `replyCountText` reads `2 of 4 replies` while
 // the thread holds more replies than it shows, else null. `draft` is the text the reply box shows (the user's edit,
-// else the worker's draft, else empty; the sending text while `isSending`), null when the item is not open. `url`
-// opens the thread in Slack (`core.openLink`). `actions` are the buttons in order, each running its `work-inbox`
-// command with the item's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`, `restore`
-// `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. A ticket chip runs
+// else empty; the sending text while `isSending`), null when the item is not open or `isDigest`, which takes no
+// reply. `url` opens the thread in Slack (`core.openLink`). `actions` are the buttons in order, each running its
+// `work-inbox` command with the item's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`,
+// `restore` `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. A ticket chip runs
 // `work-inbox.openTicket` with its key.
 export interface DetailInput {
   id: string;
@@ -138,6 +166,7 @@ export interface DetailInput {
   replyCountText: string | null;
   draft: string | null;
   isSending: boolean;
+  isDigest: boolean;
   note: string | null;
   url: string;
   actions: InboxCardAction[];
@@ -171,13 +200,18 @@ export interface DetailKit extends InboxKit {
 }
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `sideBar` and `main` panes are drawn
-// into app-owned containers once per layout set; the rows, `status`, `problem`, `filter`, `card`, `empty`, `detail`
-// and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes: `sideBar` and
-// `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty` included, `work-inbox.list`. Of the
-// `draftBox`'s own hints, `edit` anchors in `work-inbox.list`, where it opens the box, and `send` fires in
-// `work-inbox.box`.
+// into app-owned containers once per layout set; the rows, the group headings, `status`, `problem`, `filter`, `card`,
+// `empty`, `detail` and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes:
+// `sideBar`, `sectionGroup` and `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty`
+// included, `work-inbox.list`. Of the `draftBox`'s own hints, `edit` anchors in `work-inbox.list`, where it opens the
+// box, and `send` fires in `work-inbox.box`.
 export interface InboxLayout {
   sideBar?(parent: HTMLElement, kit: SideBarKit): InboxPane;
+  sectionGroup?(
+    parent: HTMLElement,
+    input: SectionGroupInput,
+    kit: InboxKit,
+  ): HTMLElement;
   sectionRow?(
     parent: HTMLElement,
     input: SectionRowInput,
@@ -197,6 +231,11 @@ export interface InboxLayout {
   filter?(
     parent: HTMLElement,
     input: InboxFilterInput,
+    kit: InboxKit,
+  ): HTMLElement;
+  cardGroup?(
+    parent: HTMLElement,
+    input: CardGroupInput,
     kit: InboxKit,
   ): HTMLElement;
   card?(parent: HTMLElement, input: CardInput, kit: InboxKit): HTMLElement;

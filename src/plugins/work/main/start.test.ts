@@ -187,6 +187,8 @@ interface OpenOptions {
   chatProjects?: ChatProject[];
   // Files written once the first start loaded; the part then restarts over them, and the restart calls `ready`.
   files?: Record<string, string>;
+  // The clock in place of the harness's, which reads each timer's due time.
+  clock?: { now(): number };
 }
 
 // The work part over fake chat and sessions, a fake runner and watch, and an alerts service recording each badge.
@@ -216,6 +218,7 @@ async function open(options: OpenOptions = {}) {
     services: {
       runMode: options.runMode ?? 'selfTest',
       ...(options.isStable === true ? { appInstance: STABLE_APP } : {}),
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
       alerts: { setOpenCount: (_source, count) => badge.push(count) },
     },
     drive: options.drive,
@@ -330,6 +333,8 @@ describe('workMainPart', () => {
       suggestions: [],
       columns: ['Backlog', 'Todo', 'In Progress', 'In QA', 'Done', 'Other'],
       job: { running: null, last: null },
+      lastSweepAt: null,
+      sweepFailedAt: null,
       problem: null,
     });
     await harness.stop();
@@ -595,9 +600,9 @@ describe('workMainPart', () => {
     await stopping;
   });
 
-  it('badge — set from the loaded file, counts open needs_you items, and logs each change from 0', async () => {
+  it('badge — set from the loaded file, counts unseen open needs_you items, and logs each change from 0', async () => {
     const needsYouLines = (harness: WorkHarness) =>
-      workLines(harness).filter((line) => line.startsWith('needs you'));
+      workLines(harness).filter((line) => line.startsWith('unseen needs you'));
     const empty = await open({ files: { [WORK_PATH]: fileText({}) } });
     expect(needsYouLines(empty.harness)).toEqual([]);
     await empty.harness.stop();
@@ -606,16 +611,45 @@ describe('workMainPart', () => {
       workItem('a'),
       workItem('b', { state: 'dismissed' }),
       workItem('c', { section: 'waiting' }),
+      // At the harness clock's start, so a mark at its now covers the item's latest message.
+      workItem('d', { at: new Date(0).toISOString() }),
+      workItem('e', { seenAt: '2026-11-23T11:00:00.000Z' }),
     ];
     const { harness, badge } = await open({
       files: { [WORK_PATH]: fileText({ items }) },
     });
-    expect(needsYouLines(harness)).toEqual(['needs you: 1']);
-    expect(badge.at(-1)).toBe(1);
+    expect(needsYouLines(harness)).toEqual(['unseen needs you: 2']);
+    expect(badge.at(-1)).toBe(2);
+    await call(harness, 'markSeen', 'd');
     await call(harness, 'dismiss', 'a');
 
-    expect(needsYouLines(harness)).toEqual(['needs you: 1', 'needs you: 0']);
+    expect(needsYouLines(harness)).toEqual([
+      'unseen needs you: 2',
+      'unseen needs you: 1',
+      'unseen needs you: 0',
+    ]);
     expect(badge.at(-1)).toBe(0);
+    await harness.stop();
+  });
+
+  it('markSeen — stamps the clock once, and a re-mark writes nothing', async () => {
+    const start = new Date(0).toISOString();
+    const { harness } = await open({
+      files: {
+        [WORK_PATH]: fileText({ items: [workItem('a', { at: start })] }),
+      },
+    });
+    const writes = vi.spyOn(harness.files, 'write');
+
+    await call(harness, 'markSeen', 'a');
+    await call(harness, 'markSeen', 'a');
+    await settled();
+
+    expect(itemOf(harness, 'a')?.seenAt).toBe(start);
+    expect(workWrites(writes)).toBe(1);
+    expect(workLines(harness)).toEqual(
+      expect.arrayContaining(['seen a', 'a already seen']),
+    );
     await harness.stop();
   });
 
@@ -627,6 +661,7 @@ describe('workMainPart', () => {
     },
     { method: 'dismiss', arg: 'nope', refused: 'No item nope' },
     { method: 'restore', arg: 'nope', refused: 'No item nope' },
+    { method: 'markSeen', arg: 'nope', refused: 'No item nope' },
     { method: 'snooze', arg: 'nope', refused: 'No item nope' },
     { method: 'addToBoard', arg: 'nope', refused: 'No item nope' },
     {
@@ -855,6 +890,29 @@ describe('workMainPart', () => {
     await settled();
     expect(itemOf(harness, 'a')?.state).toBe('snoozed');
     harness.advance(1);
+    await settled();
+
+    expect(itemOf(harness, 'a')).toMatchObject({
+      state: 'open',
+      snoozedUntil: null,
+    });
+    await harness.stop();
+  });
+
+  it('snoozeTimer — a fire before the clock reaches the end arms again and expires the item at the end', async () => {
+    let clockNow = 0;
+    const { harness } = await open({
+      clock: { now: () => clockNow },
+      files: { [WORK_PATH]: fileText({ items: [workItem('a')] }) },
+    });
+    await call(harness, 'snooze', 'a');
+
+    clockNow = SNOOZE_MS - 5;
+    harness.advance(SNOOZE_MS);
+    await settled();
+    expect(itemOf(harness, 'a')?.state).toBe('snoozed');
+    clockNow = SNOOZE_MS;
+    harness.advance(5);
     await settled();
 
     expect(itemOf(harness, 'a')).toMatchObject({

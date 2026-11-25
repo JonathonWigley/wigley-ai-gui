@@ -19,7 +19,7 @@
 }
 
 .work-inbox-cards {
-  padding: var(--wg-space-2) var(--wg-space-4);
+  padding: 0;
 }
 
 /* The sheet is the main cell's direct child: its margins lie outside the box, so it takes the cell's height less its

@@ -294,7 +294,6 @@ describe('post', () => {
       await handlers.post(SESSION, request({ agentId: 'agent-7' })),
     ).toEqual({ text: expected });
     expect(room.unreadAddressed).toHaveBeenCalledWith(
-      'game',
       agent('rA', 'agent-7', 'Lead ▸ subagent'),
     );
   });

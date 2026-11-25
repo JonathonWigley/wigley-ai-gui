@@ -35,7 +35,7 @@ type WorkInboxApi = PageApi<typeof workInboxManifest, ChannelShape>;
 // `work.state` with the threads `work.details` holds, and acts only through work's commands. `showMode` shows the
 // mode, and does nothing while it shows. The place (section, filter, cursor, unsent drafts, whether the pane is open)
 // goes to `work-inbox.place` on each change, and a page load puts the last page's back once the first state lands.
-// It sets its mode's activity bar count to the open Needs you items, none until the first state. Registers the
+// It sets its mode's activity bar count to the unseen open Needs you items, none until the first state. Registers the
 // Inbox demo step.
 export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
   manifest: workInboxManifest,
@@ -133,7 +133,7 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
     });
 
     const state = api.state.read(workStateSlot);
-    // The activity bar count: the Needs you items, none while the state is unread.
+    // The activity bar count: the unseen Needs you items, none while the state is unread.
     const countNeedsYou = (value: WorkState | undefined) =>
       mode?.setCount(
         value === undefined ? null : sectionCounts(value).needs_you,

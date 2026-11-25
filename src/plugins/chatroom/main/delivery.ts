@@ -35,16 +35,29 @@ function addresses(message: RoomMessage, participant: Participant): boolean {
   return message.to.some((target) => participantKey(target) === key);
 }
 
-function wakeText(message: RoomMessage, isUserWord: boolean): string {
+function isMessage(message: RoomMessage, room: string, id: number): boolean {
+  return message.room === room && message.id === id;
+}
+
+// Names the room only when it is not the session's own.
+function wakeText(
+  message: RoomMessage,
+  isUserWord: boolean,
+  ownRoom: string | null,
+): string {
+  const where =
+    message.room === ownRoom
+      ? `thread ${message.thread}`
+      : `thread ${message.thread} of room ${message.room}`;
   return isUserWord
-    ? `Chatroom: the user wrote to you in thread ${message.thread}. Call chatroom_read to read it.`
-    : `Chatroom: ${message.from.name} sent you a ${message.kind} in thread ${message.thread}. Call chatroom_read to read it.`;
+    ? `Chatroom: the user wrote to you in ${where}. Call chatroom_read to read it.`
+    : `Chatroom: ${message.from.name} sent you a ${message.kind} in ${where}. Call chatroom_read to read it.`;
 }
 
 // Wakes an app-run session's main agent with a chat message when a question,
-// blocker or handoff names it, or the user's word reaches it: at once when the
-// session is idle with its process running, else at its next idle turn end if
-// still unread. A resting session (no process running: stopped, exited, or not
+// blocker or handoff in any room names it, or the user's word reaches it: at
+// once when the session is idle with its process running, else at its next
+// idle turn end if still unread. A resting session (no process running: stopped, exited, or not
 // started since the app opened) is never woken, so a wake never starts a resting
 // session's process.
 export function startDelivery(deps: DeliveryDeps): Disposable {
@@ -54,10 +67,10 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
     const state = deps.chatState(rowId);
     return state?.running === true && state.activity === 'idle';
   };
-  // Row id → message id → the wake text, for rows that were busy.
+  // Row id → `<room>#<message id>` → the wake, for rows that were busy.
   const pending = new Map<
     string,
-    Map<number, { room: string; text: string }>
+    Map<string, { room: string; id: number; text: string }>
   >();
   let isStopped = false;
 
@@ -72,11 +85,15 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
 
   const keepPending = (
     rowId: string,
-    messageId: number,
-    wake: { room: string; text: string },
+    message: RoomMessage,
+    text: string,
   ): void => {
     const wakes = pending.get(rowId) ?? new Map();
-    wakes.set(messageId, wake);
+    wakes.set(`${message.room}#${message.id}`, {
+      room: message.room,
+      id: message.id,
+      text,
+    });
     pending.set(rowId, wakes);
   };
 
@@ -84,41 +101,42 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
   const wakeFor = async (
     message: RoomMessage,
     mainAgent: Participant,
+    ownRoom: string | null,
   ): Promise<string | null> => {
     const isAddressed = addresses(message, mainAgent);
     const isAddressedAsk =
       isAddressed && WAKING_KINDS.includes(message.kind as PostKind);
     if (message.userWord) {
       if (isAddressed) {
-        return wakeText(message, true);
+        return wakeText(message, true, ownRoom);
       }
       if (message.to.length === 0) {
-        const unread = await room.unreadAddressed(message.room, mainAgent);
-        if (unread.some(({ id }) => id === message.id)) {
-          return wakeText(message, true);
+        const unread = await room.unreadAddressed(mainAgent, message.room);
+        if (unread.some((each) => isMessage(each, message.room, message.id))) {
+          return wakeText(message, true, ownRoom);
         }
       }
     }
-    return isAddressedAsk ? wakeText(message, false) : null;
+    return isAddressedAsk ? wakeText(message, false, ownRoom) : null;
   };
 
   const heard = async (message: RoomMessage): Promise<void> => {
     const rows = roster
       .sessions()
-      .filter(
-        ({ rowId }) =>
-          roster.roomOf(rowId) === message.room &&
-          chat.profileOf(rowId) !== null,
-      );
+      .filter(({ rowId }) => chat.profileOf(rowId) !== null);
     for (const { rowId } of rows) {
-      const text = await wakeFor(message, roster.participant(rowId, null));
+      const text = await wakeFor(
+        message,
+        roster.participant(rowId, null),
+        roster.roomOf(rowId),
+      );
       if (text === null || isStopped) {
         continue;
       }
       if (isIdle(rowId)) {
         send(rowId, text);
       } else {
-        keepPending(rowId, message.id, { room: message.room, text });
+        keepPending(rowId, message, text);
       }
     }
   };
@@ -129,10 +147,9 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
       return;
     }
     pending.delete(rowId);
-    const mainAgent = roster.participant(rowId, null);
-    for (const [messageId, wake] of wakes) {
-      const unread = await room.unreadAddressed(wake.room, mainAgent);
-      if (unread.some(({ id }) => id === messageId)) {
+    const unread = await room.unreadAddressed(roster.participant(rowId, null));
+    for (const wake of wakes.values()) {
+      if (unread.some((each) => isMessage(each, wake.room, wake.id))) {
         send(rowId, wake.text);
       }
     }

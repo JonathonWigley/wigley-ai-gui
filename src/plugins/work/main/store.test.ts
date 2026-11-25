@@ -192,7 +192,7 @@ describe('createWorkStore', () => {
         workItem('a', {
           ticketKeys: ['WS-1'],
           linkReason: 'Names the board',
-          draft: 'On it',
+          seenAt: '2026-11-23T10:30:00.000Z',
           state: 'snoozed',
           snoozedUntil: '2026-11-24T10:00:00.000Z',
           sending: 'On it',
@@ -244,6 +244,7 @@ describe('createWorkStore', () => {
         },
       },
       lastSweepAt: '2026-11-23T11:00:00.000Z',
+      sweepFailedAt: '2026-11-23T11:40:00.000Z',
       details: {
         'WS-1': ticketDetail('WS-1', {
           priority: 'High',
@@ -317,6 +318,52 @@ describe('createWorkStore', () => {
     ]);
   });
 
+  it('parse_itemSavedWithoutSeenAt_readsNullAndDropsDraft', () => {
+    const { seenAt: _seenAt, ...saved } = workItem('a');
+    const text = JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      items: [{ ...saved, draft: 'On it' }],
+    });
+
+    const parsed = parseWorkFile(text);
+
+    expect(text).not.toContain('seenAt');
+    expect(parsed.items).toEqual([workItem('a', { seenAt: null })]);
+  });
+
+  it('update_changeReturnsSameFile_writesAndTellsNothing', async () => {
+    const { store, writes } = storeOver();
+    const listener = vi.fn();
+    store.onChange(listener);
+    const before = await store.update(withItem('a'));
+    listener.mockClear();
+    writes.length = 0;
+
+    const after = await store.update((file) => file);
+
+    expect(after).toBe(before);
+    expect(writes).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('parse_savedWithoutSweepFailedAt_readsNull', () => {
+    const text = JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      sweepFailedAt: undefined,
+    });
+
+    const parsed = parseWorkFile(text);
+
+    expect(text).not.toContain('sweepFailedAt');
+    expect(parsed.sweepFailedAt).toBeNull();
+  });
+
+  it('parse_sweepFailedAtNotAString_throws', () => {
+    const text = JSON.stringify({ ...EMPTY_WORK_FILE, sweepFailedAt: 3 });
+
+    expect(() => parseWorkFile(text)).toThrow('work.json is not a work file');
+  });
+
   it('parse_savedWithoutDetails_readsEmptyDetails', () => {
     const text = JSON.stringify({ ...EMPTY_WORK_FILE, details: undefined });
 
@@ -332,6 +379,7 @@ describe('newestMessages', () => {
     `2026-11-23T${String(hour).padStart(2, '0')}:00:00.000Z`;
   const message = (text: string, hour: number): DetailMessage => ({
     author: 'Ann',
+    byUser: false,
     at: at(hour),
     text,
   });
@@ -373,7 +421,7 @@ describe('newestMessages', () => {
       case: 'a time that does not parse counts as oldest',
       messages: [
         message('b', 11),
-        { author: 'Ann', at: 'yesterday', text: 'unparsed' },
+        { author: 'Ann', at: 'yesterday', text: 'unparsed', byUser: false },
         message('a', 9),
       ],
       cap: 2,
@@ -470,11 +518,17 @@ describe('buildWorkState', () => {
       expected: { cards: [localCard('local-1', 'Other')] },
     },
     {
-      case: 'the columns end in Other, and the problem passes through',
-      file: EMPTY_WORK_FILE,
+      case: 'the columns end in Other, and the problem and the sweep times pass through',
+      file: {
+        ...EMPTY_WORK_FILE,
+        lastSweepAt: '2026-11-23T11:00:00.000Z',
+        sweepFailedAt: '2026-11-23T11:40:00.000Z',
+      },
       problem: 'work.json could not be read',
       expected: {
         columns: ['Todo', 'Review', 'Other'],
+        lastSweepAt: '2026-11-23T11:00:00.000Z',
+        sweepFailedAt: '2026-11-23T11:40:00.000Z',
         problem: 'work.json could not be read',
       },
     },

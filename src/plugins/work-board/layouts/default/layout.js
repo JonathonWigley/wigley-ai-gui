@@ -386,7 +386,9 @@ const layout = {
   },
   status(parent, input, kit) {
     const line = kit.el(parent, 'div', 'work-board-status');
-    kit.statusDot(line, input.tone);
+    if (input.tone !== 'idle') {
+      kit.statusDot(line, input.tone);
+    }
     kit.el(line, 'span', 'work-board-status-text', input.text);
     if (input.hasRow) {
       const button = kit.button(

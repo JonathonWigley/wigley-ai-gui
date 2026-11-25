@@ -41,6 +41,12 @@ export const workManifest = definePlugin({
       runsIn: 'page',
       arg: 'string',
     },
+    markSeen: {
+      label: 'mark the item seen',
+      group: 'work',
+      runsIn: 'page',
+      arg: 'string',
+    },
     snooze: {
       label: 'snooze the item for a day',
       group: 'work',

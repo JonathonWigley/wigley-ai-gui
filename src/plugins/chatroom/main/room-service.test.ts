@@ -24,6 +24,7 @@ import {
   type PostRequest,
   type PostResult,
   type RoomService,
+  type RoomMember,
   type RoomServiceDeps,
 } from './room-service';
 import { newMessage } from './room-store.test-support';
@@ -70,6 +71,13 @@ const PARTICIPANTS: readonly Participant[] = [
   USER_PARTICIPANT,
 ];
 
+// The agents among `participants`, each a member of ROOM.
+function membersOf(participants: readonly Participant[]): RoomMember[] {
+  return participants
+    .filter((participant) => participant.kind === 'agent')
+    .map((participant) => ({ room: ROOM, participant }));
+}
+
 const SAVED_FILES = [
   'cursors.json',
   'user-cursors.json',
@@ -93,7 +101,7 @@ function serviceOver(overrides: Partial<RoomServiceDeps> = {}): RoomService {
     clock: { now: () => now },
     randomHex: () => (hexCount++).toString(16).padStart(8, '0'),
     limits: () => limits,
-    participants: () => PARTICIPANTS,
+    directory: () => membersOf(PARTICIPANTS),
     log: (message) => logged.push(message),
     ...overrides,
   });
@@ -119,7 +127,7 @@ function postBy(
   from: Participant,
   fields: Partial<PostRequest> = {},
 ): PostRequest {
-  return { ...humanPost(), from, ...fields };
+  return { ...humanPost(), followTargets: false, from, ...fields };
 }
 
 function questionToShopRevamp(body: string): PostRequest {
@@ -132,11 +140,15 @@ function questionToShopRevamp(body: string): PostRequest {
 }
 
 // The id and thread of an accepted post; fails the test on a refusal.
-function accepted(result: PostResult): { id: number; thread: string } {
+function accepted(result: PostResult): {
+  id: number;
+  room: string;
+  thread: string;
+} {
   if (!result.ok) {
     throw new Error(`refused: ${result.reason}`);
   }
-  return { id: result.id, thread: result.thread };
+  return { id: result.id, room: result.room, thread: result.thread };
 }
 
 function reasonOf(result: { ok: boolean; reason?: string }): string {
@@ -344,12 +356,14 @@ describe('createRoomService', () => {
     expect(result).toEqual({
       ok: true,
       id: 1,
+      room: ROOM,
       thread: 'session:rB',
       duplicate: false,
     });
     expect(await store.read(ROOM, 0)).toEqual([
       {
-        ...postBy(docsFix, { kind: 'question' }),
+        ...humanPost({ kind: 'question' }),
+        from: docsFix,
         id: 1,
         thread: 'session:rB',
         to: [shopRevamp],
@@ -381,7 +395,7 @@ describe('createRoomService', () => {
       stored: [{ ...cafe, name: 'Café'.normalize('NFC') }],
     },
   ])('post_Stamps: $row', async ({ to, roster, stored }) => {
-    const over = serviceOver({ participants: () => roster });
+    const over = serviceOver({ directory: () => membersOf(roster) });
 
     accepted(await over.post(postBy(docsFix, { to })));
 
@@ -881,6 +895,218 @@ describe('createRoomService', () => {
     expect(second).toEqual([]);
   });
 
+  const auditor: Participant = {
+    kind: 'agent',
+    rowId: 'rX',
+    agentId: null,
+    mirrorId: null,
+    name: 'Agent Docs Audit',
+  };
+
+  // PARTICIPANTS in ROOM, the auditor in `ai`, and `extra` beside them.
+  function crossProjectService(extra: RoomMember[] = []): RoomService {
+    return serviceOver({
+      directory: () => [
+        ...membersOf(PARTICIPANTS),
+        { room: 'ai', participant: auditor },
+        ...extra,
+      ],
+    });
+  }
+
+  it('post_FollowTargets_ConversationStaysInTheTargetsRoom', async () => {
+    const over = crossProjectService();
+
+    const asked = await over.post(
+      postBy(shopRevamp, {
+        kind: 'question',
+        to: ['agent docs audit'],
+        body: 'Skill landed: re-run the audit?',
+        followTargets: true,
+      }),
+    );
+    const answered = await over.post(
+      postBy(auditor, {
+        room: 'ai',
+        kind: 'answer',
+        to: ['Shop Revamp'],
+        replyTo: 1,
+        body: 'Re-running now.',
+        followTargets: true,
+      }),
+    );
+
+    expect(accepted(asked)).toEqual({
+      id: 1,
+      room: 'ai',
+      thread: 'session:rA',
+    });
+    expect(accepted(answered)).toEqual({
+      id: 2,
+      room: 'ai',
+      thread: 'session:rA',
+    });
+    expect(await store.read(ROOM, 0)).toEqual([]);
+    expect(idsOf(await over.unreadAddressed(shopRevamp))).toEqual([2]);
+    expect(await over.read(ROOM, shopRevamp, { kind: 'unread' })).toMatchObject(
+      { ok: true, items: [{ id: 2, room: 'ai', from: 'Agent Docs Audit' }] },
+    );
+  });
+
+  it('post_FollowTargets_SubagentAsks_AnswerStaysInTheTargetsRoom', async () => {
+    const over = crossProjectService();
+
+    accepted(
+      await over.post(
+        postBy(workerOfShopRevamp, {
+          kind: 'question',
+          to: ['Agent Docs Audit'],
+          followTargets: true,
+        }),
+      ),
+    );
+    const answered = await over.post(
+      postBy(auditor, {
+        room: 'ai',
+        kind: 'answer',
+        to: ['Shop Revamp'],
+        replyTo: 1,
+        followTargets: true,
+      }),
+    );
+
+    expect(accepted(answered)).toMatchObject({ id: 2, room: 'ai' });
+    expect(await store.read(ROOM, 0)).toEqual([]);
+  });
+
+  it('read_Unread_SpansRooms_OwnFirst_CursorInEveryRoom', async () => {
+    const over = crossProjectService();
+    accepted(await over.post(questionToShopRevamp('here')));
+    accepted(
+      await over.post(
+        postBy(shopRevamp, { room: 'ai', to: ['Agent Docs Audit'] }),
+      ),
+    );
+    accepted(
+      await over.post(
+        postBy(auditor, { room: 'ai', kind: 'question', to: ['Shop Revamp'] }),
+      ),
+    );
+    accepted(
+      await over.post(postBy(auditor, { room: 'aa', body: 'elsewhere' })),
+    );
+
+    const result = await over.read(ROOM, shopRevamp, { kind: 'unread' });
+    await over.settled();
+
+    expect(
+      result.ok && result.items.map(({ id, room }) => ({ id, room })),
+    ).toEqual([
+      { id: 1, room: ROOM },
+      { id: 2, room: 'ai' },
+    ]);
+    const cursors: Record<string, Record<string, number>> = JSON.parse(
+      await files.read('cursors.json'),
+    );
+    expect(
+      Object.keys(cursors)
+        .filter((room) => 'agent:rA:main' in cursors[room])
+        .sort(),
+    ).toEqual(['aa', 'ai', ROOM].sort());
+  });
+
+  it('read_Unread_AnotherRoomFails_OwnItemsStillReturned', async () => {
+    accepted(await service.post(questionToShopRevamp('here')));
+    accepted(await service.post(postBy(docsFix, { room: 'ai' })));
+    const failing: RoomStore = {
+      ...store,
+      read: (room, afterId) =>
+        room === 'ai'
+          ? Promise.reject(new Error('EIO'))
+          : store.read(room, afterId),
+    };
+
+    const result = await serviceOver({ store: failing }).read(
+      ROOM,
+      shopRevamp,
+      { kind: 'unread' },
+    );
+
+    expect(result.ok && result.items.map((item) => item.id)).toEqual([1]);
+    expect(logged).toContain('unread read of room ai failed: EIO');
+  });
+
+  it.each([
+    {
+      row: 'a title no room has',
+      to: ['Nobody'],
+      replyTo: null,
+      extra: [],
+      reasonHas: ['no participant named "Nobody" in this room or another'],
+    },
+    {
+      row: 'a title here and a title in another room',
+      to: ['Docs Fix', 'Agent Docs Audit'],
+      replyTo: null,
+      extra: [],
+      reasonHas: ['a post goes to one room', '"Docs Fix" is in shop'],
+    },
+    {
+      row: 'a reply routed away from the room of its replyTo',
+      to: ['Agent Docs Audit'],
+      replyTo: 1,
+      extra: [],
+      reasonHas: ['replyTo #1 names a message of shop', 'pass room ai'],
+    },
+    {
+      row: 'a title in two other rooms',
+      to: ['Agent Docs Audit'],
+      replyTo: null,
+      extra: [{ room: 'web', participant: { ...auditor, rowId: 'rY' } }],
+      reasonHas: ['several projects', 'ai, web', 'pass room'],
+    },
+    {
+      row: 'titles in two other rooms',
+      to: ['Agent Docs Audit', 'Site Fix'],
+      replyTo: null,
+      extra: [
+        {
+          room: 'web',
+          participant: { ...auditor, rowId: 'rY', name: 'Site Fix' },
+        },
+      ],
+      reasonHas: ['a post goes to one room', 'post to each'],
+    },
+  ])(
+    'post_FollowTargets_Refuses: $row',
+    async ({ to, replyTo, extra, reasonHas }) => {
+      const over = crossProjectService(extra);
+      if (replyTo !== null) {
+        accepted(await over.post(postBy(docsFix)));
+      }
+      const roomsBefore = await over.rooms();
+
+      const result = await over.post(
+        postBy(shopRevamp, { to, replyTo, followTargets: true }),
+      );
+
+      for (const part of reasonHas) {
+        expect(reasonOf(result)).toContain(part);
+      }
+      expect(await over.rooms()).toEqual(roomsBefore);
+    },
+  );
+
+  it('post_NotFollowingTargets_RefusesAnotherRoomsTitle', async () => {
+    const over = crossProjectService();
+
+    const result = await over.post(
+      postBy(shopRevamp, { to: ['Agent Docs Audit'] }),
+    );
+
+    expect(reasonOf(result)).toContain('no participant named');
+  });
+
   it('read_Unread_PostDuringRead: a post made during the read shows in the next one', async () => {
     accepted(await service.post(questionToShopRevamp('first')));
 
@@ -1001,8 +1227,8 @@ describe('createRoomService', () => {
       await step();
     }
 
-    const addressed = idsOf(await service.unreadAddressed(ROOM, shopRevamp));
-    const again = idsOf(await service.unreadAddressed(ROOM, shopRevamp));
+    const addressed = idsOf(await service.unreadAddressed(shopRevamp));
+    const again = idsOf(await service.unreadAddressed(shopRevamp));
     const unread = await unreadIds(shopRevamp);
 
     expect(addressed).toEqual([1, 6]);
