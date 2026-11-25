@@ -125,7 +125,7 @@ export interface CardInput {
 }
 
 // One message of a thread: `author` reads `You` on the user's own message (`byUser`); `age` reads as a card's does;
-// `text` is markdown. `initials` (up to two capitals) and `tone` (0–4, the same for a name in every thread) draw the
+// `text` is markdown. `initials` (up to two characters, upper-cased; `?` for a blank name) and `tone` (0–4, the same for a name in every thread) draw the
 // author's icon. `startsRun` is false while the message before it is by the same person, so a run of one person's
 // messages shares one icon and name line.
 export interface DetailMessageInput {

@@ -197,6 +197,16 @@ function hasBox(card: WorkCard, work: WorkState): boolean {
   return item !== null && takesReply(item);
 }
 
+// Whether a card's unsent edit is kept: a Jira card's always, a local task's while its source item is held and not
+// cleared.
+function keepsDraft(card: WorkCard, work: WorkState): boolean {
+  if (card.kind === 'jira') {
+    return true;
+  }
+  const item = sourceItemOf(card, work);
+  return item !== null && item.state !== 'cleared';
+}
+
 // The text a card's box holds: the user's unsent edit, else empty.
 export function draftText(card: WorkCard, state: BoardViewState): string {
   return state.drafts[card.id] ?? '';
@@ -316,16 +326,16 @@ export function paneInputOf(
     : taskPaneInput(card, work, stored, now);
 }
 
-// `drafts` without the edits of cards whose box is gone: a card `work` no longer holds, or a local task whose source
-// item no longer takes a reply, as a good send clears it. A send that fails keeps its edit. `drafts` itself when it
-// drops none.
+// `drafts` without the edits of cards that are gone: a card `work` no longer holds, or a local task whose source item
+// is gone or cleared (a good send clears it). A failed send, a snooze or a dismiss keeps the edit. `drafts` itself
+// when it drops none.
 function prunedDrafts(
   drafts: Record<string, string>,
   work: WorkState,
 ): Record<string, string> {
   const kept = Object.entries(drafts).filter(([id]) => {
     const card = cardNamed(work, id);
-    return card !== null && hasBox(card, work);
+    return card !== null && keepsDraft(card, work);
   });
   return kept.length === Object.keys(drafts).length
     ? drafts

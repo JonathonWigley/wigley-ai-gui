@@ -307,6 +307,10 @@ export const workMainPart: MainPart<typeof workManifest> = {
               if (isUnchanged) {
                 armSnoozeTimer(next);
               }
+            })
+            .catch((error: unknown) => {
+              log(`snoozes not expired: ${errorText(error)}`);
+              armSnoozeTimer(store.file());
             });
         },
         Math.max(0, end - clock.now()),

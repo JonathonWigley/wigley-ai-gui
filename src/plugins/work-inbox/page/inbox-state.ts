@@ -359,8 +359,8 @@ export function emptyReason(
   return view.ticketFilter === null ? 'section' : 'filter';
 }
 
-// `drafts` without the edits of items `work` no longer holds or has cleared (a good send clears its item, so its
-// sent edit goes then, and a failed one keeps it); a dismissed or snoozed item keeps its edit. `drafts` itself when
+// `drafts` without the edits of items `work` no longer holds or has cleared (a good send or a sweep clears an item, so
+// a sent edit goes then, and a failed send keeps it); a dismissed or snoozed item keeps its edit. `drafts` itself when
 // it drops none.
 export function prunedDrafts(
   drafts: Record<string, string>,
@@ -517,7 +517,8 @@ export function personTone(name: string): number {
   return hash % PERSON_TONES;
 }
 
-// A name's icon letters: the first letters of its first two words, else its first two letters, in capitals.
+// A name's icon letters: the first characters of its first two words, else its first two characters, upper-cased;
+// `?` for a blank name.
 export function initialsOf(name: string): string {
   const words = name
     .trim()
@@ -539,7 +540,7 @@ function messageInput(
   const isSamePerson =
     previous !== null &&
     previous.byUser === message.byUser &&
-    previous.author === message.author;
+    (message.byUser || previous.author === message.author);
   return {
     author: message.byUser ? 'You' : message.author,
     age: cardAge(message.at, now),

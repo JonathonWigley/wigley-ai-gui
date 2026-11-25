@@ -473,6 +473,17 @@ describe('boardReducer', () => {
       },
     },
     {
+      case: 'stateChanged keeps a reply draft while its source item is snoozed',
+      state: { drafts: { 'local-1': 'On it' } },
+      action: { type: 'stateChanged', previous: work },
+      after: withTask({ state: 'snoozed' }),
+      expected: {
+        paneOpen: false,
+        focus: 'board',
+        drafts: { 'local-1': 'On it' },
+      },
+    },
+    {
       case: 'stateChanged drops a reply draft once its source item is cleared',
       state: { drafts: { 'local-1': 'On it' } },
       action: { type: 'stateChanged', previous: work },

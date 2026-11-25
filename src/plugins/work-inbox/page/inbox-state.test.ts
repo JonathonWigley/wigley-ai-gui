@@ -399,6 +399,21 @@ describe('the thread as a chat', () => {
     },
   );
 
+  it('detailInput keeps a run of the user own messages under different author names', () => {
+    const detail = threadDetail('a', {
+      root: message('Ann'),
+      replies: [message('Me', true), message('Jon W', true)],
+      replyCount: 2,
+    });
+
+    const input = detailInput(workItem('a'), view(), detail, NOW);
+
+    expect(input.replies.map((shown) => shown.startsRun)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
   it.each([
     { name: 'Ann', initials: 'AN' },
     { name: 'Ann Lee', initials: 'AL' },

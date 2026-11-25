@@ -140,7 +140,8 @@ export function markSeen(
   if (!isUnseen(item)) {
     return done(file, null, `${itemId} already seen`);
   }
-  const seenAt = isoAt(Math.max(now, Date.parse(item.at)));
+  const itemAt = Date.parse(item.at);
+  const seenAt = isoAt(Number.isNaN(itemAt) ? now : Math.max(now, itemAt));
   const seen: WorkItem = { ...item, seenAt };
   return done(withItem(file, seen), null, `seen ${itemId}`);
 }

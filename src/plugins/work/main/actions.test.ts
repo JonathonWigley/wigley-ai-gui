@@ -185,6 +185,11 @@ describe('markSeen', () => {
       item: p1({ at: AHEAD_ISO }),
       seenAt: AHEAD_ISO,
     },
+    {
+      name: 'a time that does not parse, stamped now',
+      item: p1({ at: 'soon' }),
+      seenAt: NOW_ISO,
+    },
   ])(
     'markSeen stamps the later of now and its time ($name)',
     ({ item, seenAt }) => {
