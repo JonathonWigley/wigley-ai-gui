@@ -7638,9 +7638,9 @@ describe('createChatSessions unheld processes', () => {
       const onceEnded = await test.chat.loadHistory(ROW_ID);
 
       expect(onceEnded).toBe(true);
-      expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual(
-        [null],
-      );
+      expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual([
+        null,
+      ]);
     },
   );
 
