@@ -529,6 +529,14 @@ User-facing features, those other work builds on first.
   topic; the signals stay in the `wigley:orient` skill alone and the sweep reads them from there. Open: how a flagged
   item looks in the Work list. Source session: Claude Code 49101bd7-da5e-4e9a-9a9c-f8f54fe393d4 in
   /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes
+- **A session posts to a session in another project's chatroom** — *needs a feature plan*: `chatroom_post` reaches only
+  the room of the project the session runs in, so a session whose work lands in another project's repo cannot tell
+  the session working there. Seen 2026-11-25: a New Games session landed a skill in the `ai` repo and its post to the
+  "Agent Docs Audit" session was refused (`no participant named "Agent Docs Audit"; the room holds: …`), which left
+  the user to relay it. Wanted: a post addressed to a session title in any project reaches that session, and the board
+  can show another project's sessions. Open: how the target project is named, and whether the message shows in both
+  rooms. Source session: Claude Code 49101bd7-da5e-4e9a-9a9c-f8f54fe393d4 in
+  /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes
 
 ## Code cleanup
 
