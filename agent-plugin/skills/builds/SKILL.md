@@ -25,7 +25,7 @@ background watch on the build spends a subagent or a shell for nothing the app d
   `{ "backend": "<backend id>", "game": "<game id>", "kind": "<kind or set id>", "branch": "<branch>" }`.
   The ids are the ones in `builds.snapshot`. A set id (such as `rc`) queues every kind of the set on
   one revision.
-- The command is risky: the user's Allow in the app is the yes. The user's own ask to build is
+- The command is risky: the user's Allow in the app is the approval. The user's own ask to build is
   still needed before the call, since a queue spends shared build machines and reaches testers.
 - For a backend that chooses the branch (TeamCity), the app pins the revision to the branch's origin
   head, read from the game's clone, and refuses a branch origin does not hold; for a set the branch

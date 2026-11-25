@@ -1,22 +1,22 @@
 ---
 name: primer
-description: "Showing a triage of a spec's tasks to the user in the Auri app's primer popup and reading back the edited triage: the `auri` server's `open_primer` and `collect_last_primer` tools, their entries, payload, outcomes and saved files. Use when a skill hands the user a list of candidate tasks to tick, edit and comment on, or when a primer call returns a draft."
+description: "Showing a checklist pass over a spec's tasks to the user in the Auri app's primer popup and reading back the edited checklist pass: the `auri` server's `open_primer` and `collect_last_primer` tools, their entries, payload, outcomes and saved files. Use when a skill hands the user a list of candidate tasks to tick, edit and comment on, or when a primer call returns a draft."
 ---
 
 **Contents**
 
-- **Intent** — the user edits a triage in place instead of answering it question by question.
+- **Intent** — the user edits a checklist pass in place instead of answering it question by question.
 - **open_primer** — the call's arguments and each entry's fields.
 - **What comes back** — the payload and what the user may change.
-- **Outcomes** — the round outcomes, with the primer's names.
+- **Outcomes** — the form outcomes, with the primer's names.
 - **Saved primers** — where the app keeps each primer.
 
 ## Intent
 
-A **primer** is a triage of a feature spec: the tasks the feature may need, each with its work items and whether the
+A **primer** is a checklist pass over a feature spec: the tasks the feature may need, each with its work items and whether the
 agent thinks it is needed. The user ticks the tasks the feature needs, edits the work items, adds tasks, and comments,
-then submits. The edited triage comes back as the tool result. A primer shares the lifecycle of a forms round, so the
-`forms` skill's Outcomes hold for it with the primer's names. A session holds one open primer and one open round at
+then submits. The edited checklist pass comes back as the tool result. A primer shares the lifecycle of a form, so the
+`forms` skill's Outcomes hold for it with the primer's names. A session holds one open primer and one open form at
 the same time, each in its own popup.
 
 ## open_primer
@@ -50,18 +50,18 @@ primer.
 
 ## Outcomes
 
-`outcome` takes the forms round values (`forms` skill, Outcomes), with three differences:
+`outcome` takes the form outcome values (`forms` skill, Outcomes), with three differences:
 
 - A primer is never `auto_answered`: in a headless session it waits on the user like any other.
 - `no_primer` takes the place of `no_round`.
-- Call the `auri` server's `collect_last_primer` tool where the round table names `collect_last_round`, and
+- Call the `auri` server's `collect_last_primer` tool where the form outcomes table names `collect_last_round`, and
   `open_primer` where it names `ask_round`. `collect_last_primer` takes an optional `wait` boolean.
 
 A `needs_manual_open` reply carries no `feature` or `entries`.
 
 ## Saved primers
 
-The app saves each primer in `~/.agents/wigley-primer/primers/`, in the saved-round file format
-([`../../scripts/relay/README.md`](../../scripts/relay/README.md), Saved rounds): `args` holds the `open_primer`
+The app saves each primer in `~/.agents/wigley-primer/primers/`, in the saved form file format
+([`../../scripts/relay/README.md`](../../scripts/relay/README.md), Saved forms): `args` holds the `open_primer`
 arguments as sent, and `body` holds `feature` and `entries` as last saved. A re-sent primer opens pre-filled from its
 newest file.

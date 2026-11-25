@@ -1,6 +1,6 @@
 ---
 name: visuals
-description: 'Drawing a live visual or showing an image or video in an Auri reply or forms round — an html code block the app renders in a sandboxed frame, or a render, screenshot or recorded clip on disk shown by its path. Use when a UI mockup, a mock of a look decision, a systems flowchart or architecture diagram, a rendered image, a flow worth showing in motion, or any picture would explain better than prose, in a session the app started.'
+description: 'Drawing a live visual or showing an image or video in an Auri reply or form — an html code block the app renders in a sandboxed frame, or a render, screenshot or recorded clip on disk shown by its path. Use when a UI mockup, a mock of a look decision, a systems flowchart or architecture diagram, a rendered image, a flow worth showing in motion, or any picture would explain better than prose, in a session the app started.'
 ---
 
 **Contents**
@@ -21,7 +21,7 @@ visual or image shows at a glance what prose would take a paragraph to say, and 
 
 ## What the app does
 
-- A block, an image or a video renders in chat replies, forms rounds, the primer and the docs browser's markdown
+- A block, an image or a video renders in chat replies, forms, the primer and the docs browser's markdown
   files. A block renders once the closing fence arrives; the user sees a "drawing visual…" card until then.
 - The frame is sandboxed: scripts run, but there is no network, no `fetch`, no popups, no forms that post, and no
   navigation. Everything the visual needs is inline — `<style>`, `<script>`, inline SVG, `data:` fonts — apart from
@@ -39,7 +39,7 @@ The app serves an image file to the page by its absolute path, so an image the a
 with no copy of its bytes in the reply. Name the path; never transcribe an image into a `data:` URI. A hand-copied
 base64 string runs to thousands of characters, and a slip in it draws a black square.
 
-- **In markdown** — a chat reply, any markdown field of a forms round (a question's `context`, a finding's
+- **In markdown** — a chat reply, any markdown field of a form (a question's `context`, a finding's
   `finding`, a notice's `context`), a primer or a doc: `![Sign-in screen](/abs/path/SignIn.png)`. Images on one line
   sit side by side. A path with a space goes in angle brackets, `![alt](</abs/my renders/a.png>)`.
 - **Inside a visual** — `<img src="/abs/path/SignIn.png">`, or the same path in a CSS `url()`. Use it when the

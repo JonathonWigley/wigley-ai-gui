@@ -6,11 +6,11 @@ description: "The follow-up file format the Auri app's Backlog reads and edits: 
 **Contents**
 
 - **Intent** — one file shape that Backlog, the docs index and every agent read alike.
-- **Where the files are** — features homes, the follow-ups file and the area folder, from a plugin's `auri.json`.
+- **Where the files are** — features folders, the follow-ups file and the area folder, from a plugin's `auri.json`.
 - **The two shapes** — a sections file with a Contents list, or a list file.
 - **The item line** — the bold title, the tags span and the one line.
 - **Tags** — how tags are read, and the tags the app offers.
-- **Done items** — struck through or shipped.
+- **Done items** — struck through or marked `shipped`.
 - **The body** — what a section holds so it stands as a task brief, images and the source-session line.
 - **The Backlog assistant** — `read_backlog_state` and `set_backlog_chunks`.
 
@@ -26,10 +26,10 @@ shows in Backlog at once, and one written in any other shape is lost to it.
 The backlog strategy picked in Settings (`backlog.strategy`) comes from an agent plugin's `auri.json` `backlog`
 section. It names:
 
-- `homes` — folder templates for a repo's **features home**, in order. `{repo}` is the repo's clone root and
-  `{name}` its origin repo name. The first that exists is the home.
-- `file` — the follow-ups file in a home, such as `followups.md`.
-- `areaFolder` — optional: a folder in a home holding one follow-ups file per area, such as `followups/`.
+- `homes` — folder templates for a repo's **features folder**, in order. `{repo}` is the repo's clone root and
+  `{name}` its origin repo name. The first that exists is the features folder.
+- `file` — the follow-ups file in a features folder, such as `followups.md`.
+- `areaFolder` — optional: a folder in a features folder holding one follow-ups file per area, such as `followups/`.
 
 With no backlog strategy, Backlog lists nothing. Read the plugin's `auri.json` to find the paths before writing a
 follow-up.
@@ -72,7 +72,7 @@ text and no top-level list item. Fenced code never counts.
 ## Done items
 
 An item is done when its title is struck through (`~~**<title>**~~`) or its one line starts with `shipped`. Backlog
-hides done items until the user shows them. Remove an item whose work has landed, unless the file's own convention
+hides done items until the user shows them. Remove an item whose work is done, unless the file's own convention
 keeps done items struck through.
 
 ## The body
@@ -81,8 +81,8 @@ The section, or a list item's indented continuation, stands on its own as a task
 it, with what it links.
 
 - State every decision already settled, so the implementer finds it there.
-- Images live in the home's `followups-images/<folder>/<n>.png`, linked from the body as `![<n>](<path>)` with the
-  path relative to the follow-ups file. Only a link into a direct subfolder of `<home>/followups-images/` counts.
+- Images live in the features folder's `followups-images/<folder>/<n>.png`, linked from the body as `![<n>](<path>)` with the
+  path relative to the follow-ups file. Only a link into a direct subfolder of `<features folder>/followups-images/` counts.
 - A `Source session: <harness> <session id> in <folder>` line names the session the item came from, `<harness>`
   being `Claude Code` or `Codex`.
 
@@ -99,5 +99,5 @@ session.`
   Pass every chunk the repo keeps. A chunk passed under its current name keeps its headless flag, and a started chunk
   cannot change. A refusal reads `Refused: <reason>`.
 
-The assistant edits the files directly, in their own shape, lands each change per that repo's own rules, and reports
+The assistant edits the files directly, in their own shape, commits each change and merges or pushes it as that repo's own rules say, and reports
 each change by repo and title.

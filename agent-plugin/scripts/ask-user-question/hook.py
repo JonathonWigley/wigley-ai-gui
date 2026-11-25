@@ -1,4 +1,4 @@
-"""The AskUserQuestion hook for app sessions: denies the call and points the agent at a forms round, which the app
+"""The AskUserQuestion hook for app sessions: denies the call and points the agent at a form, which the app
 answers and AskUserQuestion does not. A session with no app row (`WIGLEY_SESSION_ROW`) keeps the tool and gets nothing.
 It ignores its input and always exits 0. Standard library only.
 """
@@ -10,7 +10,7 @@ import os
 import sys
 
 DENIAL = (
-    "AskUserQuestion gets no answer in an app session. Ask through a forms round instead: load the auri server's "
+    "AskUserQuestion gets no answer in an app session. Ask through a form instead: load the auri server's "
     "ask_round tool (ToolSearch \"select:mcp__plugin_auri_auri__ask_round\") and send every open question in one call, "
     "each with its context, numbered choices, the recommended number and why. The auri:forms skill holds the format."
 )

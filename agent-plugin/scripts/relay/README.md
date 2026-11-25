@@ -5,8 +5,8 @@
 - **The two tools** — `ask_round` and `collect_last_round`: their arguments, the grouped finding card, the payload
   they return with its grouped finding answers, layouts, and what the caller does on each outcome; also the
   server's six form tools, the audio picker's two named there.
-- **Saved rounds** — the folder, the file format readers of the saved files read, replay, hand-back, restart, and pruning.
-- **What the markdown fields render** — the markdown a caller may write in a round, and what shows as literal text.
+- **Saved forms** — the folder, the file format readers of the saved files read, replay, hand-back, restart, and pruning.
+- **What the markdown fields render** — the markdown a caller may write in a form, and what shows as literal text.
 - **Don't ask me this** — the per-item control, what a press does, and where it is kept.
 - **The feature primer** — `open_primer` and `collect_last_primer`: their arguments, the payload, the outcomes, and
   the saved-primer files.
@@ -18,14 +18,14 @@
 - **Boundary rules** — what the relay and the starter may and may not hold.
 
 A local questionnaire for the questions an agent skill would otherwise ask one at a time
-in chat. A skill sends a round of questions to one MCP tool, the user answers them
+in chat. A skill sends a form of questions to one MCP tool, the user answers them
 in the **wigley-ai-gui** desktop app (on macOS and Windows), and the answers come back as the tool result. Nothing is
 hosted, no model session is created, and there is no API key and no second bill. The same
-server carries the feature primer's two tools, which open the triage of the skill that calls `open_primer`
+server carries the feature primer's two tools, which open the checklist pass of the skill that calls `open_primer`
 in the app for the user to edit ([The feature primer](#the-feature-primer)), and the audio picker's two tools,
 which open the user's pick between candidate sounds ([The two tools](#the-two-tools)).
 
-The round, primer and audio picker logic — validation, re-send, hand-back, the deadline, the saved files —
+The form, primer and audio picker logic — validation, re-send, hand-back, the deadline, the saved files —
 is TypeScript in the app. This folder holds only `relay.py`, the process each session's host
 starts as the `auri` MCP server, which forwards the session's MCP messages to the
 app, `endpoint.py`, which finds the app's channel and connects to it, and `start_app.py`,
@@ -34,7 +34,7 @@ starter hold no forms logic ([Boundary rules](#boundary-rules)).
 
 ## The two tools
 
-The server, `auri`, registers six form tools: the two round tools below, the
+The server, `auri`, registers six form tools: the two forms tools below, the
 feature primer's two ([The feature primer](#the-feature-primer)) and the audio picker's two
 (`open_audio_picker` and `collect_last_audio_picker`; their arguments and payload are in
 the app's `docs/features/audio-picker/design.md` § Tool contract). The app's tool list also holds
@@ -44,11 +44,11 @@ app command and read any app state; a command marked risky asks the user Allow o
 own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
 `mcp__auri__<tool>` — so the skills name them by server and bare tool name.
 
-- **`ask_round`** — takes `heading` (one line naming what the round settles), `overview`
-  (one or two short, low-detail sentences: the work underway, then what this round
+- **`ask_round`** — takes `heading` (one line naming what the form settles), `overview`
+  (one or two short, low-detail sentences: the work underway, then what this form
   focuses on), an optional `layout` (a layout name, see [Layouts](#layouts)), `questions`,
-  `findings` and `notices` (lists of any length), opens the round in the app, and waits for the answers. The overview
-  draws under the heading, through inline markdown only. A round needs at least one
+  `findings` and `notices` (lists of any length), opens the form in the app, and waits for the answers. The overview
+  draws under the heading, through inline markdown only. A form needs at least one
   question, finding or notice, and may carry any mix of the three; the app shows findings
   first, then questions, then every notice together on one page. How each item's text is
   worded is the `auri` plugin's forms skill. Each question object carries six required fields —
@@ -57,15 +57,15 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
   (the 1-based number of the recommended choice), and `rationale` — and two optional fields:
   `layout`, and `approves`, a list of `{ "choice": <1-based>, "action": "<exact action>" }`
   objects that tag a choice with the action auto mode gates that picking it approves. When the
-  user submits a round with a tagged choice picked, in a session the app's chat owns, the app
+  user submits a form with a tagged choice picked, in a session the app's chat owns, the app
   first writes one user message into the session's running turn, one
   `Approved in form: <action>` line per approved action, and returns the answers once the
-  agent has queued it, or after a few seconds without that, so the agent takes the yes in as
+  agent has queued it, or after a few seconds without that, so the agent takes the approval in as
   the user's own message before its next call. Each answered question with a tagged pick
-  carries `approval_posted`: false when nothing reached the running turn (a headless round, a
-  session the app did not start, a compaction, a round finished while no call waited, a failed
+  carries `approval_posted`: false when nothing reached the running turn (a headless form, a
+  session the app did not start, a compaction, a form finished while no call waited, a failed
   or timed-out send, a Claude Code that reports no message lifecycle), and then the agent asks
-  for the yes in chat. A message that cannot join the running turn is never written later, but
+  for the approval in chat. A message that cannot join the running turn is never written later, but
   a line the CLI already holds may still fold in after a timeout, or run as its own turn after
   an interrupt. A cancel sends none. An action must be one line, and a
   choice number outside the question's choices fails the call. Each tagged choice's card shows
@@ -134,16 +134,16 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
   `recommend` choice, or the `recommend_action` header when that action has no choices —
   is tagged Recommended; the user takes it with Accept, or picks any other entry.
 
-  No field outside those named here is accepted on the round or on any item — the app
-  draws the not-applicable control, the Notes box, the round note and a Don't ask me this
+  No field outside those named here is accepted on the form or on any item — the app
+  draws the not-applicable control, the Notes box, the form note and a Don't ask me this
   control by itself, so a caller never describes them as questions or choices. A press
   comes back on the answer (see [Don't ask me this](#dont-ask-me-this)).
   Each notice object carries two required fields, `title` and `context` — no choices, no
   recommendation, nothing to decide — and two optional fields: `layout`, and `badge`,
-  one of `"Applied"` (the default, a fix already landed), `"Dispatched"` (a fix still in flight)
+  one of `"Applied"` (the default, a fix already done), `"Dispatched"` (a fix still in flight)
   or `"Decided"` (a decision the agent took alone, its `title` the decision and its
   `context` one line of what and why), no other value accepted. A notice is a finding already fixed or
-  otherwise settled before the round opened. The round's notices share one page, after every
+  otherwise settled before the form opened. The form's notices share one page, after every
   finding and question: each is one line, its badge and title, that opens to its context and one
   optional comment box. Use `findings` for review
   findings still open, `questions` for any other open decision, and `notices` for what is
@@ -151,18 +151,18 @@ own way — Claude Code as `mcp__plugin_auri_auri__<tool>`, Codex as
 
 - **`collect_last_round`** — takes no required arguments (an optional `wait` boolean;
   `false` returns the current draft at once instead of waiting) and re-attaches to the
-  round already open, or returns the last finished round's answers again. When to call it
+  form already open, or returns the last finished form's answers again. When to call it
   is under [Outcomes](#outcomes).
 
-One round is open per session at a time. While the user is still answering a round, an
-`ask_round` for a different round — queued behind another call, a re-send, or a fresh
-call — waits until the user submits or cancels the open round in the app, then opens. When
-no call has returned the open round's answers yet, the woken call returns them instead,
-with `earlier_heading`, and opens nothing; the caller sends its round again (see
-[Saved rounds](#saved-rounds)). If its own deadline passes first, it returns a `draft` that
-opened nothing (see [Outcomes](#outcomes)). A new round never closes an unfinished one: the user cancels a
-round the agent left open after a draft. A call the host cancels closes its own round (see
-[Saved rounds](#saved-rounds)), so the session's next round opens at once.
+One form is open per session at a time. While the user is still answering a form, an
+`ask_round` for a different form — queued behind another call, a re-send, or a fresh
+call — waits until the user submits or cancels the open form in the app, then opens. When
+no call has returned the open form's answers yet, the woken call returns them instead,
+with `earlier_heading`, and opens nothing; the caller sends its form again (see
+[Saved forms](#saved-forms)). If its own deadline passes first, it returns a `draft` that
+opened nothing (see [Outcomes](#outcomes)). A new form never closes an unfinished one: the user cancels a
+form the agent left open after a draft. A call the host cancels closes its own form (see
+[Saved forms](#saved-forms)), so the session's next form opens at once.
 
 Both tools return the same payload shape: `outcome`, `summary`, `note`, `next`, an
 `answers` array that is index-parallel with the questions sent, a `findings` array that
@@ -187,21 +187,21 @@ true, and a finding also gets `took_action_recommendation` true. Each notice car
 (echoing what the caller sent or the default), and `comment` when the user wrote one — nothing else, since a notice has no
 decision to report. A notice never appears in `answers`, never counts toward `summary`'s
 counts, and never blocks or delays any outcome. A handed-back result (see
-[Saved rounds](#saved-rounds)) also carries `earlier_heading`.
+[Saved forms](#saved-forms)) also carries `earlier_heading`.
 
 The free-text keys — an answer's `notes` and `dont_ask_reason`, a notice's
-`comment`, and the round's `note` — are omitted when empty, so an absent key means the
+`comment`, and the form's `note` — are omitted when empty, so an absent key means the
 box was left blank; every other key is always present, except `dont_ask`, which appears
 only on a pressed answer. `notes` is the user's own free text and is **never
 required**: the app refuses no submit over an empty box. It holds the user's own answer,
 the reasoning behind a choice, or both. It is the escape hatch for an item none of the
 listed choices covers: a user can type an answer there without picking a number at all,
 and it comes back as `status: "untouched"` carrying that text — which is an answer, not a
-blank. An item left blank throughout is the caller's to re-ask in a follow-up round.
+blank. An item left blank throughout is the caller's to re-ask in a follow-up form.
 
 ### Layouts
 
-A layout is the look the app draws a round in. Forms layouts live in the app's user config
+A layout is the look the app draws a form in. Forms layouts live in the app's user config
 folder, `~/.config/wigley-ai-gui/layouts/forms/` on macOS and Windows alike, shared by the
 stable and dev apps. A layout is a folder
 `<name>/` holding `layout.js` and an optional `layout.css`, and defines only the cards and
@@ -210,78 +210,78 @@ imports, `kit.d.ts` one folder up, at each start. `default` is the app's built-i
 folder there is ignored.
 
 A card comes from the first layout that defines its kind among the item's `layout`, the
-round's `layout`, the user's `forms.layout` setting and `default`; the head, rail, review
+form's `layout`, the user's `forms.layout` setting and `default`; the head, rail, review
 and notices panes come the same way without the item. A name with no folder holding
 `layout.js` fails the call, and the error lists the names the folder holds:
 `Finding 2: layout 'compact' is not in the layouts folder, which holds 'default' and
 'wide'. Write compact/layout.js there first, or leave layout out.`
 
-- Name a layout only when the round's look matters; a round with no `layout` draws in
+- Name a layout only when the form's look matters; a form with no `layout` draws in
   the user's own layout.
 - For a look no layout has, write a new layout folder before the call (an unknown name
-  fails it), name it in the round or the item, and list each layout written or changed in
-  a notice on that round: the notice's `title` names the layout, its `context` the file
+  fails it), name it in the form or the item, and list each layout written or changed in
+  a notice on that form: the notice's `title` names the layout, its `context` the file
   path. The user then sees the file while its look is on screen.
-- A re-send keeps the layouts the round opened with, since layout names stay out of the
-  fingerprint ([Saved rounds](#saved-rounds)).
+- A re-send keeps the layouts the form opened with, since layout names stay out of the
+  fingerprint ([Saved forms](#saved-forms)).
 
 ### Outcomes
 
 `outcome` holds one of six values, and each tells the caller what to do next:
 
-| `outcome`           | Means                                                                                                                                                                      | The caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `submitted`         | The user sent the round.                                                                                                                                                   | Reads the answers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `draft`             | The user is still answering; the deadline handed back the answers so far.                                                                                                  | Calls `collect_last_round`, again after every `draft`, however many come back in a row. The deadline hands back a draft every few minutes by design: a wait is the user still writing, so the caller never stops the call, and a caller that stops leaves the user to announce the submission by hand. A `draft` whose `next` says the round was not opened (another round is still open) has no answers: the caller sends the same round again with `ask_round`, never `collect_last_round`, which would return the other round's answers. |
-| `cancelled`         | The user stopped the round on purpose.                                                                                                                                     | Leaves the round closed and reports what it settled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `needs_manual_open` | The relay could not start the app, so no round exists; `summary` gives the reason.                                                                                         | Sends the same round again with `ask_round` once — the relay tries the start again. On a second `needs_manual_open`, tells the user the reason in `summary` and asks the round's questions and findings in the reply. Never calls `collect_last_round` for it.                                                                                                                                                                                                                                                                              |
-| `auto_answered`     | The session is headless: the app showed no form and answered every question and finding with its recommendation.                                                           | Reads the answers as its own picks, lists each as a Decided notice in the reply, and sends no more rounds while the session stays headless (the `auri` plugin's forms skill § Headless). `collect_last_round` returns the same result again.                                                                                                                                                                                                                                                                                                |
-| `no_round`          | No round is open for this session and no finished answers wait for it: the round was never sent, a restart lost it, or its call was cancelled. A draft may still be saved. | Sends the same round again with `ask_round`; the user's saved answers fill in. Never calls `collect_last_round` for it, which holds nothing to return, and never tells the user a round is open that was not sent.                                                                                                                                                                                                                                                                                                                          |
+| `outcome`           | Means                                                                                                                                                                    | The caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitted`         | The user sent the form.                                                                                                                                                  | Reads the answers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `draft`             | The user is still answering; the deadline handed back the answers so far.                                                                                                | Calls `collect_last_round`, again after every `draft`, however many come back in a row. The deadline hands back a draft every few minutes by design: a wait is the user still writing, so the caller never stops the call, and a caller that stops leaves the user to announce the submission by hand. A `draft` whose `next` says the form was not opened (another form is still open) has no answers: the caller sends the same form again with `ask_round`, never `collect_last_round`, which would return the other form's answers. |
+| `cancelled`         | The user stopped the form on purpose.                                                                                                                                    | Leaves the form closed and reports what it settled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `needs_manual_open` | The relay could not start the app, so no form exists; `summary` gives the reason.                                                                                        | Sends the same form again with `ask_round` once — the relay tries the start again. On a second `needs_manual_open`, tells the user the reason in `summary` and asks the form's questions and findings in the reply. Never calls `collect_last_round` for it.                                                                                                                                                                                                                                                                            |
+| `auto_answered`     | The session is headless: the app showed no form and answered every question and finding with its recommendation.                                                         | Reads the answers as its own picks, lists each as a Decided notice in the reply, and sends no more forms while the session stays headless (the `auri` plugin's forms skill § Headless). `collect_last_round` returns the same result again.                                                                                                                                                                                                                                                                                             |
+| `no_round`          | No form is open for this session and no finished answers wait for it: the form was never sent, a restart lost it, or its call was cancelled. A draft may still be saved. | Sends the same form again with `ask_round`; the user's saved answers fill in. Never calls `collect_last_round` for it, which holds nothing to return, and never tells the user a form is open that was not sent.                                                                                                                                                                                                                                                                                                                        |
 
-No hook holds the `draft` rule: the prose does, for rounds and primers alike
+No hook holds the `draft` rule: the prose does, for forms and primers alike
 ([The feature primer](#the-feature-primer) gives the primer's names). The user may end a session
-while a round is open, and a re-sent round re-attaches to the same round file.
+while a form is open, and a re-sent form re-attaches to the same form file.
 
 **The wake.** In a session the wigley-ai-gui app started from its chat, a submit or cancel that no
 call is waiting for — the agent ended its turn after a `draft` — sends the session a message:
 `The user submitted the round "<heading>" in the forms app. Call collect_last_round for its answers.`
 (`cancelled` in place of `submitted` after a cancel; a primer says `primer` and names
 `collect_last_primer`). The caller calls the named tool, which returns the finished answers, and
-when it already holds them the call replays them and nothing changes. A wake naming a round the
-caller already read, after a newer round opened, is ignored: calling the tool then would return the
-newer round. A session whose conversation was cleared after the round opened gets no wake. The wake is a safety net:
+when it already holds them the call replays them and nothing changes. A wake naming a form the
+caller already read, after a newer form opened, is ignored: calling the tool then would return the
+newer form. A session whose conversation was cleared after the form opened gets no wake. The wake is a safety net:
 the `draft` rule above still holds, and a session the app did not start, such as a terminal
 session, gets no message.
 
 `needs_manual_open` and `no_round` carry empty `answers`, `findings` and `notices`.
 
-A result carrying `earlier_heading` holds the answers to that earlier round, not to the
-round just sent: the caller reads them as the earlier round's answers, then sends its
-round again.
+A result carrying `earlier_heading` holds the answers to that earlier form, not to the
+form just sent: the caller reads them as the earlier form's answers, then sends its
+form again.
 
-A call that fails, or a round whose reply was lost, is not an absent tool. The caller
+A call that fails, or a form whose reply was lost, is not an absent tool. The caller
 calls `collect_last_round` first and reads its outcome by this table: the lost reply may
-have handed back an earlier round with `earlier_heading`, and re-sending the current round
+have handed back an earlier form with `earlier_heading`, and re-sending the current form
 first would open it over those answers unseen. A second failure in a row is read the same
-way again. The caller asks the round in its reply only when the tool is absent or
+way again. The caller asks the form in its reply only when the tool is absent or
 `needs_manual_open` came back twice.
 
 A `collect_last_round` or `ask_round` can instead return an error result, not an outcome,
-when an earlier finished round's saved answers no longer parse (see [Saved
-rounds](#saved-rounds)). The caller tells the user those answers were not returned and
-sends its round again with `ask_round`. A call waiting on an unanswered round also returns
+when an earlier finished form's saved answers no longer parse (see [Saved
+forms](#saved-forms)). The caller tells the user those answers were not returned and
+sends its form again with `ask_round`. A call waiting on an unanswered form also returns
 an error result when its session ends while the app keeps running, as when its relay
-disconnects: the round has closed, and sending it again with `ask_round` opens it
-pre-filled. An app quit answers no waiting call and leaves its round open, so the relay
+disconnects: the form has closed, and sending it again with `ask_round` opens it
+pre-filled. An app quit answers no waiting call and leaves its form open, so the relay
 sends the call again to the next app run (App gone mid-call, under [The relay](#the-relay)).
 
-## Saved rounds
+## Saved forms
 
-The app keeps one JSON file per round in `~/.agents/wigley-forms/rounds/`, written whole
+The app keeps one JSON file per form in `~/.agents/wigley-forms/rounds/`, written whole
 through a temp file and a rename on every save. It saves each draft as the user answers,
 and the submit or cancel marks the file finished; a draft arriving after that is dropped,
-so the file keeps the body it finished with. A round counts as returned once a tool reply
-carries its finished answers. A disk failure is logged and never fails the round. Files
+so the file keeps the body it finished with. A form counts as returned once a tool reply
+carries its finished answers. A disk failure is logged and never fails the form. Files
 older than 90 days are deleted when the app starts: readers of the saved files, such as a retro tool, read these
 files as the record of the user's answers, reaching back at most 90 days.
 
@@ -293,19 +293,19 @@ which read it as plain JSON. Each file holds `id` (`<epoch>-<8 hex>`),
 `findings` and `layout` when the call carried them) and `body`.
 `session_id` is the relay hello's ([The relay](#the-relay)): the Claude Code session id, or for a Codex
 session the app did not start, the relay's own per-process id, `codex-<32 hex>` (`null` on a Codex
-round saved before the relay made one). A new Codex process makes a new id, so its rounds do not
+form saved before the relay made one). A new Codex process makes a new id, so its forms do not
 match an earlier process's. A Codex session the app started, and a Claude session with no
 `CLAUDE_CODE_SESSION_ID`, save `null`.
-`auto_answered` is `true` on a round the app answered itself in a headless session, whose `outcome` reads `submitted` and `returned` true, and `false` on every other file, or absent on a file saved before the field existed. Readers of the saved files skip a file with it `true`, since its picks are not the user's.
+`auto_answered` is `true` on a form the app answered itself in a headless session, whose `outcome` reads `submitted` and `returned` true, and `false` on every other file, or absent on a file saved before the field existed. Readers of the saved files skip a file with it `true`, since its picks are not the user's.
 A change to any of these names changes those readers in the same change; the app's
-saved-round tests pin the names.
+saved-form tests pin the names.
 
 `body` holds the user's answers as last saved:
 
-- `note` — the round note, as a string.
+- `note` — the form note, as a string.
 - `answers` — one entry per question: `index` (1-based), `choice` (1-based, `0` for
   none), `not_applicable`, `notes`, `dont_ask`, `dont_ask_reason`. A
-  not-applicable answer keeps the choice it had, so a reopened round restores it;
+  not-applicable answer keeps the choice it had, so a reopened form restores it;
   `not_applicable` wins, and a reader treats that answer as not applicable whatever
   `choice` holds.
 - `finding_answers` — one entry per finding, in the same shape as `answers` plus
@@ -331,54 +331,54 @@ answer loses its text.
 
 `tool_use_id` is the tool-use id of the `ask_round` call that created the file, read from
 the request's `_meta["claudecode/toolUseId"]`, or `null` when the host sends none. A
-re-send that re-attaches, replays or hands back an earlier round adds no id: the file
+re-send that re-attaches, replays or hands back an earlier form adds no id: the file
 keeps its creating call's, and a reader of the saved files places the answers under that call.
 
-A round is matched by its fingerprint: a hash of its questions, notices and findings,
-every field but `layout`, and never the heading, the overview or the round's `layout`. A
+A form is matched by its fingerprint: a hash of its questions, notices and findings,
+every field but `layout`, and never the heading, the overview or the form's `layout`. A
 choice's `action` is hashed only when it is not `fix_now`, so an omitted `action` and
 `fix_now` hash alike; `action_reasons` is hashed only when it holds an entry, a
 question's `approves` only when it holds an entry, and `recommend` only when sent. `proof` is hashed only when sent and not blank; every file
 saved while the tool required `proof` carries it, so its hash stays. A finding using none of them hashes as it did before they
-existed, and a round with no findings as it did before findings existed, so older files
+existed, and a form with no findings as it did before findings existed, so older files
 still match. A file saved before the `summary` rename loads, its `question` read as the
 summary, but the fingerprint keys a question's headline as `summary`, so it matches a re-send
-only when the round holds no questions.
+only when the form holds no questions.
 
-- **Re-send of the open round** — re-attaches to it in the app.
-- **Re-send of the round just submitted** — returns its answers again, as
-  `collect_last_round` does, until a new round opens. A re-send of the round just
-  cancelled opens a fresh round pre-filled from it; `collect_last_round` still replays it.
-- **A new round while a finished one was never returned** — the call returns that
-  finished round (submitted or cancelled) with `earlier_heading` and a `next` line, and
-  opens nothing; the caller sends its round again. A draft left open after its call
-  returned stays open, and the new round waits for the user to finish it.
-- **Any other round** — opens pre-filled from the newest file with its fingerprint, open
+- **Re-send of the open form** — re-attaches to it in the app.
+- **Re-send of the form just submitted** — returns its answers again, as
+  `collect_last_round` does, until a new form opens. A re-send of the form just
+  cancelled opens a fresh form pre-filled from it; `collect_last_round` still replays it.
+- **A new form while a finished one was never returned** — the call returns that
+  finished form (submitted or cancelled) with `earlier_heading` and a `next` line, and
+  opens nothing; the caller sends its form again. A draft left open after its call
+  returned stays open, and the new form waits for the user to finish it.
+- **Any other form** — opens pre-filled from the newest file with its fingerprint, open
   or finished. A finished file's Don't ask me this presses are left out: a press belongs
-  to the round it was made in.
+  to the form it was made in.
 - **After a restart** — `collect_last_round`, or the next `ask_round` (plainly when it
-  re-sends that round, handed back with `earlier_heading` otherwise), returns the newest
-  finished, unreturned round of this session (the hello's `session_id`: `CLAUDE_CODE_SESSION_ID`,
+  re-sends that form, handed back with `earlier_heading` otherwise), returns the newest
+  finished, unreturned form of this session (the hello's `session_id`: `CLAUDE_CODE_SESSION_ID`,
   or for a Codex session the app did not start the relay's per-process `codex-` id, so such a session gets the
   hand-back while its relay process lives); with no session id, of this project folder
-  (`CLAUDE_PROJECT_DIR`), and with neither, none. With no such round, a `collect_last_round` that holds
-  no round of its own connection reopens the session's newest round when an earlier
+  (`CLAUDE_PROJECT_DIR`), and with neither, none. With no such form, a `collect_last_round` that holds
+  no form of its own connection reopens the session's newest form when an earlier
   connection left it open and no live session holds it, pre-filled from its file, and
-  waits on it as on the open round: the relay's re-sent call after an app quit lands here.
-  An open round that no longer parses gets the error result below, naming it left open.
-- **A finished, unreturned round the app can no longer parse** — its `args` fail the app's
-  current parser (saved in an older shape): the round is not returned and not marked
+  waits on it as on the open form: the relay's re-sent call after an app quit ends up here.
+  An open form that no longer parses gets the error result below, naming it left open.
+- **A finished, unreturned form the app can no longer parse** — its `args` fail the app's
+  current parser (saved in an older shape): the form is not returned and not marked
   returned, and its file stays as it was. The first `collect_last_round`, or `ask_round`
-  that would hand back an earlier round, to reach it in the session gets an error result
-  (`isError`, text starting `Error:`) naming the round's heading, its file and the
+  that would hand back an earlier form, to reach it in the session gets an error result
+  (`isError`, text starting `Error:`) naming the form's heading, its file and the
   parser's reason, and opens nothing. Later calls in that session pass over it and reach
-  any older unreturned round behind it; after an app restart or a relay reconnect it is
+  any older unreturned form behind it; after an app restart or a relay reconnect it is
   reported once more.
-- **A session that disconnects** — its open round closes in the app at once; the answers
-  stay in its file, and re-sending the round opens it pre-filled.
-- **A call the host cancels** — when no other call of the session waits on that round, its
-  round closes in the app at once, as on a disconnect; the answers stay in its file,
-  `collect_last_round` from that connection returns `no_round`, and re-sending the round
+- **A session that disconnects** — its open form closes in the app at once; the answers
+  stay in its file, and re-sending the form opens it pre-filled.
+- **A call the host cancels** — when no other call of the session waits on that form, its
+  form closes in the app at once, as on a disconnect; the answers stay in its file,
+  `collect_last_round` from that connection returns `no_round`, and re-sending the form
   opens it pre-filled.
 
 ## What the markdown fields render
@@ -412,16 +412,16 @@ Each question and finding carries a **Don't ask me this** control with a "why no
 this" box. It says the agent should have settled the item alone, and it changes nothing about the
 choice: the choice still counts. A press comes back in the answers payload as `dont_ask`
 (`true`) on that answer, with `dont_ask_reason` beside it when the box held text, and is
-kept in the round's [saved file](#saved-rounds), where readers of the saved files read it.
+kept in the form's [saved file](#saved-forms), where readers of the saved files read it.
 
 ## The feature primer
 
-The skill that calls `open_primer` shows its triage of a feature spec in the app's primer popup: the
-user ticks the tasks the feature needs and edits the work items, and the edited triage comes
-back as the tool result. The primer shares the rounds' lifecycle: the deadline, re-send,
+The skill that calls `open_primer` shows its checklist pass over a feature spec in the app's primer popup: the
+user ticks the tasks the feature needs and edits the work items, and the edited checklist pass comes
+back as the tool result. The primer shares the forms' lifecycle: the deadline, re-send,
 hand-back, restart and the saved files behave as [Outcomes](#outcomes) and
-[Saved rounds](#saved-rounds) say, with the primer's names in place of the round's. A
-session holds one open primer and one open round at the same time, each in its own popup.
+[Saved forms](#saved-forms) say, with the primer's names in place of the form's. A
+session holds one open primer and one open form at the same time, each in its own popup.
 
 - **`open_primer`** — takes `feature` (`name` and `slug` required; `spec` and `summary`
   optional; `slug` is lowercase letters, digits and dashes) and `entries` (1 to 60
@@ -453,10 +453,10 @@ takes the place of `no_round`, and the caller acts as that table says, calling
 `needs_manual_open` reply comes from the relay and carries no `feature` or `entries`.
 
 The app saves each primer in `~/.agents/wigley-primer/primers/`, in the file format of
-[Saved rounds](#saved-rounds): `args` holds the `open_primer` arguments as sent, and `body`
+[Saved forms](#saved-forms): `args` holds the `open_primer` arguments as sent, and `body`
 holds `feature` and `entries` as last saved, in the payload's shape. The fingerprint is a
 hash of the parsed `feature` (`name`, `slug`, `spec`, `summary`) and `entries`. Readers of
-the saved files, such as a retro tool, read these files as they read the round files.
+the saved files, such as a retro tool, read these files as they read the form files.
 
 ## The relay
 
@@ -488,7 +488,7 @@ open live in `endpoint.py`, which `relay.py` and `hook_client.py` (the hook scri
   `CLAUDECODE` is `1`, else `codex`. It waits up to 10 s for the app's reply line.
   `harness`, `config_dir` and `row_id` are optional to the app, which reads an older relay
   that leaves them out as no harness, the default config folder and no row. The app keeps one
-  open round, one open primer and one open audio picker per connection.
+  open form, one open primer and one open audio picker per connection.
 - **Hook calls.** A hello with a `hook` field (the hook's name) and protocol 2 (`endpoint.py`'s `HOOK_PROTOCOL`) is
   one request, not an MCP session; the relay's own hello keeps protocol 1. An app that predates hook calls knows only
   protocol 1, so it refuses a hook hello at once rather than opening a session for it; this app also refuses a hello
@@ -581,7 +581,7 @@ open live in `endpoint.py`, which `relay.py` and `hook_client.py` (the hook scri
 - **App refuses the hello.** When the app answers `ok: false` — the first line is not a
   JSON hello, a hello field has the wrong type, its relay protocol differs from the
   relay's, or it could not start the session — a tool call returns a tool error
-  naming the app's reason and saying to send the round again with `ask_round`, or the
+  naming the app's reason and saying to send the form again with `ask_round`, or the
   primer again with `open_primer`, the audio picker again with `open_audio_picker`, or any other tool's call again,
   to tell the user the reason if it repeats, and, for a protocol mismatch, to update the app, which carries the
   `auri` plugin. A `permission_prompt` call
@@ -595,9 +595,9 @@ open live in `endpoint.py`, which `relay.py` and `hook_client.py` (the hook scri
   drop, since a restart or `install-app` brings the app back on its own and a start in
   between would race the install; past that it starts the app as on a tool call. Once
   connected it says hello, replays the late-connection messages, and sends the waiting call
-  again, so a permission prompt shows again and a round, primer or audio picker opens pre-filled. When the
+  again, so a permission prompt shows again and a form, primer or audio picker opens pre-filled. When the
   app does not come back (the start fails), the relay answers the call with a tool error
-  saying the app closed and to send the round again with `ask_round`, the primer again
+  saying the app closed and to send the form again with `ask_round`, the primer again
   with `open_primer`, the audio picker again with `open_audio_picker`, or any other tool's call again
   once the app is back or tell the user it failed; a `permission_prompt` call gets a deny saying the app closed (see
   Boundary rules), so the tool it asked about does not run. A hello the app refuses after
@@ -685,7 +685,7 @@ call being killed:
 - **Codex** — the variable is unset, so the deadline is the app's 240 s default. The
   entry sets `"tool_timeout_sec": 330`, which covers a drop at the call's start: the
   relay's 30 s hold, the app's 45 s start and that deadline. A re-sent call gets a fresh
-  deadline, so a round open for a while before a drop can still pass 330 s;
+  deadline, so a form open for a while before a drop can still pass 330 s;
   `collect_last_round` recovers it. Codex's 60 s default would cut `ask_round` off before
   the deadline hands back a draft.
 
@@ -693,7 +693,7 @@ To pre-approve every tool of the server in Claude Code, add `"mcp__plugin_auri_a
 under `permissions.allow` in `~/.claude/settings.json`. That entry also approves
 `start_session`, which starts a real agent session spending the user's plan, so the calling
 session's permission mode is the only gate on it. It also approves `run_command`, where the app's own Allow or
-Deny round on a risky command is the gate. Even with that entry in place, Claude Code
+Deny form on a risky command is the gate. Even with that entry in place, Claude Code
 still prompts on the first invocation in each new session — a known defect
 (issue #5140, still open when checked on 2026-10-18) — so expect to approve once per
 session until that is fixed.
@@ -712,12 +712,12 @@ Run from `agent-plugin/scripts/relay`:
   hello, and offline mode's table answers and calls file, against a fake app on a local channel,
   `endpoint.py`'s channels and endpoint lookup, `start_app.py` with an
   injected spawn and channel probe. Stdlib `unittest` only: the plugin takes no
-  third-party dependency. The round logic's own tests live in the app's `src/` (`npm test`).
+  third-party dependency. The form logic's own tests live in the app's `src/` (`npm test`).
 
 ## Boundary rules
 
 - `relay.py`, `endpoint.py` and `start_app.py` hold no forms logic: they never validate, store or
-  render a round. A change to what a tool does is a change in the app. Offline mode holds
+  render a form. A change to what a tool does is a change in the app. Offline mode holds
   none either: every offline answer comes from the app's `offline.json`, and the relay only
   serves and logs it.
 - One exception: when the relay cannot deliver a `permission_prompt` call and answers it

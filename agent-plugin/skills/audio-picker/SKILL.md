@@ -1,6 +1,6 @@
 ---
 name: audio-picker
-description: "Letting the user choose between candidate sounds in the Auri app's audio picker: the `auri` server's `open_audio_picker` and `collect_last_audio_picker` tools, each moment's candidates and play modes, and the picks that come back. Use once a shortlist of sound effects or music exists for a feature's moments, before wiring any sound."
+description: "Letting the user choose between candidate sounds in the Auri app's audio picker: the `auri` server's `open_audio_picker` and `collect_last_audio_picker` tools, each moment's candidates and play modes, and the picks that come back. Use once a shortlist of sound effects or music exists for a feature's moments, before hooking up any sound."
 ---
 
 **Contents**
@@ -8,13 +8,13 @@ description: "Letting the user choose between candidate sounds in the Auri app's
 - **Intent** — the user picks a sound by hearing it played the way the product will play it.
 - **open_audio_picker** — moments, candidates, play modes, volume and pitch.
 - **What comes back** — one pick per moment, and None of these.
-- **Outcomes** — the round outcomes, with the picker's names.
+- **Outcomes** — the form outcomes, with the picker's names.
 
 ## Intent
 
 The **audio picker** is a popup over the session that plays each candidate sound the way the product will play it —
 once, looped, or one variant at random — so the user picks by ear. One picker covers every moment of a feature. A
-good picker holds 2 to 5 real candidates per moment, each set up as it will ship.
+good picker holds 2 to 5 real candidates per moment, each set up as the released product will play it.
 
 ## open_audio_picker
 
@@ -39,7 +39,7 @@ search again with that pick's note, then open a new picker for those moments onl
 
 ## Outcomes
 
-`outcome` takes the forms round values (`forms` skill, Outcomes), with the picker's names:
+`outcome` takes the form outcome values (`forms` skill, Outcomes), with the picker's names:
 
 - On `draft`, call the `auri` server's `collect_last_audio_picker` tool, which takes an optional `wait` boolean.
 - `auto_answered` means no one chose: the session is headless, and each pick is your own recommendation.

@@ -52,11 +52,11 @@ OFFLINE_LEFT_OUT = APP_IS_CLOSED + ": {tool} did not run."
 OFFLINE_NO_TOOL = APP_IS_CLOSED + ": this call named no tool, so it did not run."
 BUILT_IN_TOOLS = {"tools": [
     {"name": "ask_round",
-     "description": ("Open a round of questions, findings and notices in the wigley-ai-gui app and wait for the "
+     "description": ("Open a form of questions, findings and notices in the wigley-ai-gui app and wait for the "
                      "answers. The app is not running, so this is a stand-in for its full description."),
      "inputSchema": {"type": "object"}},
     {"name": "collect_last_round",
-     "description": ("Re-attach to the round open in the wigley-ai-gui app, or return the last finished round's "
+     "description": ("Re-attach to the form open in the wigley-ai-gui app, or return the last finished form's "
                      "answers again."),
      "inputSchema": {"type": "object", "properties": {"wait": {"type": "boolean"}}}},
     {"name": "open_primer",
@@ -99,8 +99,8 @@ def _no_form_words(tool: str) -> _RetryWords:
                        NO_FORM_REFUSED_NEXT.format(tool=tool))
 
 
-_ROUND_WORDS = _form_words("round", "ask_round", "collect_last_round",
-                           "ask the round's questions and findings in the reply")
+_ROUND_WORDS = _form_words("form", "ask_round", "collect_last_round",
+                           "ask the form's questions and findings in the reply")
 _PRIMER_WORDS = _form_words("primer", "open_primer", "collect_last_primer",
                             "work through the primer's rows in chat")
 _AUDIO_PICKER_WORDS = _form_words(

@@ -1,5 +1,5 @@
 {
-  "description": "Auri hooks: the chatroom's edit and commit warnings, the task-list edit gate and its turn-end and compaction reminders, and AskUserQuestion sent to a forms round",
+  "description": "Auri hooks: the chatroom's edit and commit warnings, the task-list edit gate and its turn-end and compaction reminders, and AskUserQuestion sent to a form",
   "hooks": {
     "PreToolUse": [
       {

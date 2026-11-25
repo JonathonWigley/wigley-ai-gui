@@ -11,7 +11,7 @@ description: "Writing an agent plugin's `auri.json`, the file that binds the Aur
 - **workflows** — workflow, stage, trigger, predicate, counter, action and template fields.
 - **planFormat** — the plan reader's knobs.
 - **retro** — the auto-retro command, folder and triggers.
-- **backlog** — features homes, the follow-ups file, the assistant's extra instructions.
+- **backlog** — features folders, the follow-ups file, the assistant's extra instructions.
 - **docs** — global folders, the wiki main page, skill link prefixes.
 - **liveView** — command patterns and the probe.
 - **Checking it** — what done looks like.
@@ -168,13 +168,13 @@ checklist: every box in the file, no groups, the title from the first `# ` headi
 
 ## backlog
 
-| Field        | Meaning                                                                                                        |
-| ------------ | -------------------------------------------------------------------------------------------------------------- |
-| `label`      | The Settings choice's text.                                                                                    |
-| `homes`      | Folder templates for a repo's features home, in order: `{repo}` the clone root, `{name}` the origin repo name. |
-| `file`       | The follow-ups file in a home.                                                                                 |
-| `areaFolder` | Optional: a folder in a home holding per-area follow-up files.                                                 |
-| `assistant`  | Optional `{ "instructions": "…" }`, added after the Backlog assistant's own instructions.                      |
+| Field        | Meaning                                                                                                          |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `label`      | The Settings choice's text.                                                                                      |
+| `homes`      | Folder templates for a repo's features folder, in order: `{repo}` the clone root, `{name}` the origin repo name. |
+| `file`       | The follow-ups file in a features folder.                                                                        |
+| `areaFolder` | Optional: a folder in a features folder holding per-area follow-up files.                                        |
+| `assistant`  | Optional `{ "instructions": "…" }`, added after the Backlog assistant's own instructions.                        |
 
 The file format is the `backlog-format` skill's.
 

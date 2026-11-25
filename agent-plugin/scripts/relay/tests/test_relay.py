@@ -31,14 +31,14 @@ TOOLS_CHANGED = {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}
 
 
 ROUND_NOT_STARTED_NEXT = (
-    "No round exists. Send the same round again with ask_round once: the relay tries the start again. If "
-    "needs_manual_open comes back a second time, tell the user the reason in summary and ask the round's questions "
+    "No form exists. Send the same form again with ask_round once: the relay tries the start again. If "
+    "needs_manual_open comes back a second time, tell the user the reason in summary and ask the form's questions "
     "and findings in the reply. collect_last_round is never the answer to this outcome.")
 PRIMER_NOT_STARTED_NEXT = (
     "No primer exists. Send the same primer again with open_primer once: the relay tries the start again. If "
     "needs_manual_open comes back a second time, tell the user the reason in summary and work through the "
     "primer's rows in chat. collect_last_primer is never the answer to this outcome.")
-ROUND_APP_GONE = ("The wigley-ai-gui app closed while this call waited; send the round again with ask_round "
+ROUND_APP_GONE = ("The wigley-ai-gui app closed while this call waited; send the form again with ask_round "
                   "— it opens pre-filled.")
 AUDIO_PICKER_NOT_STARTED_NEXT = (
     "No audio picker exists. Send the same audio picker again with open_audio_picker once: the relay tries the start "
@@ -48,7 +48,7 @@ AUDIO_PICKER_NOT_STARTED_NEXT = (
 PRIMER_APP_GONE = ("The wigley-ai-gui app closed while this call waited; send the primer again with open_primer "
                    "— it opens pre-filled.")
 ROUND_REFUSED = (
-    "The wigley-ai-gui app refused this relay: boom. Send the round again with ask_round: the relay says hello again "
+    "The wigley-ai-gui app refused this relay: boom. Send the form again with ask_round: the relay says hello again "
     "on each call. If the refusal comes back, tell the user the app's reason. When the reason is a protocol mismatch, "
     "the user updates the app, which carries the auri plugin, so both speak one relay protocol.")
 ROUND_NOT_STARTED = {"outcome": "needs_manual_open", "summary": "The wigley-ai-gui app could not be started: boom",
@@ -890,7 +890,7 @@ class HeldCallTests(RelayTestCase):
         self.assertTrue(message["result"]["isError"])
         text = message["result"]["content"][0]["text"]
         self.assertIn("relay protocol 1, app protocol 2", text)
-        self.assertIn("Send the round again with ask_round", text)
+        self.assertIn("Send the form again with ask_round", text)
         self.assertEqual(self.spawned, [])
 
     def test_a_call_whose_write_fails_is_held_and_sent_again(self):
@@ -962,7 +962,7 @@ class RefusedTests(RelayTestCase):
 
         text = self.next_message()["result"]["content"][0]["text"]
         self.assertIn("the app could not start the session: boom", text)
-        self.assertIn("send the round again", text.lower())
+        self.assertIn("send the form again", text.lower())
         self.assertIn("When the reason is a protocol mismatch", text)
 
     def test_a_refused_primer_call_names_open_primer(self):
