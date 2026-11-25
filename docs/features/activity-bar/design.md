@@ -42,9 +42,10 @@ names each one on demand, and marks a mode that holds something for the user.
 - **Pin.** `Space v p` (`activityBar.togglePin`) or the Pin button keeps the bar wide: the grid track takes
   `activitybar-expanded-width` and the side bar and content move over. Pressed again, or Unpin, it collapses. The
   pinned state is kept in `uiState` (`shell` scope, `activity-bar-pinned`) across reloads and restarts.
-- **Narrow window.** While the side bar is narrow (below 680px, or crowded by the left bar), a pinned bar lies
-  collapsed and peeks on hover as an unpinned one does, and takes its pinned width again when the room returns. The
-  pin itself stays set.
+- **Narrow window.** Below 680px (`SIDE_BAR_OVER_QUERY`), a pinned bar lies collapsed and peeks on hover as an
+  unpinned one does, and takes its pinned width again when the window widens. The pin itself stays set. The left
+  bar's crowding plays no part here: the pinned width counts in the side bar's room, so a pinned bar may crowd the
+  side bar over the content, and a crowding that unpinned the bar would undo itself and flicker.
 - Names, counts and keys draw in every item at all times; the layout's CSS shows them only while the bar is expanded
   (`is-expanded` on the bar), so a peek redraws nothing. Keys draw through the core's key anchors, so the `showHints`
   setting hides them as it hides every hint.
