@@ -3,7 +3,8 @@ import {
   editableTitle,
   type SessionsMainExports,
 } from '../../sessions/contract';
-import { type Participant, USER_PARTICIPANT } from '../contract';
+import type { Participant } from '../contract';
+import type { RoomMember } from './room-service';
 
 // A live session in the roster. `rowId` is the app's id for the session
 // (`AgentSession.id`), with or without a sessions row; `harness` the harness
@@ -35,9 +36,8 @@ export interface Roster {
   participant(rowId: string, agentId: string | null): Participant;
   // The session's project, null for none.
   roomOf(rowId: string): string | null;
-  // The main agent of each roster session in `room`, in roster order, then
-  // `USER_PARTICIPANT`.
-  participants(room: string): Participant[];
+  // The main agent of each roster session with a room, in roster order.
+  directory(): RoomMember[];
   subagentSpawned(rowId: string, agentId: string, agentType: string): void;
   subagentFinished(rowId: string, agentId: string): void;
   // Drops the session and its subagents' types.
@@ -106,11 +106,13 @@ export function createRoster(deps: RosterDeps): Roster {
     sessions: () => [...entries.values()].map((entry) => entry.session),
     participant,
     roomOf: (rowId) => sessions.project(rowId),
-    participants(room) {
-      const mainAgents = [...entries.keys()]
-        .filter((rowId) => sessions.project(rowId) === room)
-        .map((rowId) => participant(rowId, null));
-      return [...mainAgents, USER_PARTICIPANT];
+    directory() {
+      return [...entries.keys()].flatMap((rowId) => {
+        const room = sessions.project(rowId);
+        return room === null
+          ? []
+          : [{ room, participant: participant(rowId, null) }];
+      });
     },
     subagentSpawned(rowId, agentId, agentType) {
       entries.get(rowId)?.subagentTypes.set(agentId, agentType);

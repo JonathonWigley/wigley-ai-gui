@@ -1,6 +1,7 @@
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { Git } from '../../../contracts/git';
 import type { Paths } from '../../../contracts/paths';
+import { compareText } from '../../../shared/key-hints';
 import {
   isJsonObject,
   isStringArray,
@@ -36,13 +37,14 @@ import type { Roster } from './roster';
 const POST_TOOL: ToolDefinition = {
   name: 'chatroom_post',
   description:
-    "Posts a message in this project's chatroom, where its agent sessions and the user talk. `kind` is one of question, answer, blocker, heads-up, handoff, decision, result, progress, note. `to` names participants by session title (or `you` for the user); only a main agent or the user is a target, and empty means the thread. `thread` defaults to the thread of `replyTo`, else this session's own thread. A question may set `answerBy` (ISO 8601) and `onNoAnswer` (what you do if no answer comes). `key` makes a retry post once. Returns the message id, or why the post was refused.",
+    "Posts a message in this project's chatroom, where its agent sessions and the user talk, or to a session in another project. `kind` is one of question, answer, blocker, heads-up, handoff, decision, result, progress, note. `to` names participants by session title (or `you` for the user); only a main agent or the user is a target, and empty means the thread. A title no session in this project has is looked up in every other project, and the post goes to that session's room, where its reply comes back to you. `room` posts in another project's room by name: give it when a title is in several projects, or to reply there with no `to`. `thread` defaults to the thread of `replyTo`, else this session's own thread. A question may set `answerBy` (ISO 8601) and `onNoAnswer` (what you do if no answer comes). `key` makes a retry post once. Returns the message id and its room, or why the post was refused.",
   inputSchema: {
     type: 'object',
     properties: {
       kind: { type: 'string', enum: [...POST_KINDS] },
       body: { type: 'string' },
       to: { type: 'array', items: { type: 'string' } },
+      room: { type: 'string' },
       thread: { type: 'string' },
       refs: {
         type: 'array',
@@ -69,12 +71,13 @@ const POST_TOOL: ToolDefinition = {
 const READ_TOOL: ToolDefinition = {
   name: 'chatroom_read',
   description:
-    "Reads this project's chatroom. With no argument: your unread messages, those addressed to you or in your open threads, one line each, and marks them read. `thread` reads one thread whole; `id` one message whole. Give at most one of them.",
+    "Reads the chatroom. With no argument: your unread messages, those addressed to you or in your open threads, in this project's room and every other room you were written to or posted in, one line each with the room when it is not this project's, and marks them read. `thread` reads one thread whole; `id` one message whole. Give at most one of them; `room` reads them in another project's room.",
   inputSchema: {
     type: 'object',
     properties: {
       thread: { type: 'string' },
       id: { type: 'integer' },
+      room: { type: 'string' },
     },
     additionalProperties: false,
   },
@@ -83,10 +86,12 @@ const READ_TOOL: ToolDefinition = {
 const BOARD_TOOL: ToolDefinition = {
   name: 'chatroom_board',
   description:
-    "The board of this project's chatroom: each live session's state (working, idle, waiting, done, connected), folder, branch, pool clone, uncommitted files with the session that wrote each, unpushed changes and claims.",
+    "The board of this project's chatroom, or of another project's with `room`: each live session's state (working, idle, waiting, done, connected), folder, branch, pool clone, uncommitted files with the session that wrote each, unpushed changes and claims.",
   inputSchema: {
     type: 'object',
-    properties: {},
+    properties: {
+      room: { type: 'string' },
+    },
     additionalProperties: false,
   },
 };
@@ -136,6 +141,9 @@ const KIND_ERROR = `kind must be one of ${POST_KINDS.join(', ')}.`;
 const BODY_ERROR = 'body must be a string.';
 const TO_ERROR = 'to must be an array of participant names.';
 const THREAD_ERROR = 'thread must be a string.';
+const ROOM_ERROR = 'room must be a string.';
+const ROOM_READ_ERROR =
+  'room goes with thread or id: an unread read already spans every room.';
 const REFS_ERROR = `refs must be an array of { type, value }, type one of ${MESSAGE_REF_TYPES.join(', ')} and value a string.`;
 const REPLY_TO_ERROR = 'replyTo must be a message id, a whole number.';
 const ANSWER_BY_ERROR = 'answerBy must be an ISO 8601 date-time.';
@@ -155,8 +163,11 @@ const RELEASE_FORM_ERROR = 'Give claimId or all: true, one of them.';
 const NO_UNREAD_TEXT = 'No unread chatroom messages.';
 
 export interface ChatroomToolsDeps {
-  readonly room: Pick<RoomService, 'post' | 'read' | 'claim' | 'release'>;
-  readonly roster: Pick<Roster, 'participant' | 'roomOf'>;
+  readonly room: Pick<
+    RoomService,
+    'post' | 'read' | 'claim' | 'release' | 'rooms'
+  >;
+  readonly roster: Pick<Roster, 'participant' | 'roomOf' | 'directory'>;
   readonly boardFeed: Pick<BoardFeed, 'refresh' | 'rows'>;
   readonly git: Pick<Git, 'topLevel'>;
   readonly paths: Pick<Paths, 'isAbsolute' | 'join' | 'segmentsBelow'>;
@@ -166,7 +177,17 @@ export interface ChatroomToolsDeps {
   arrive(session: AgentSession): void;
 }
 
-type PostFields = Omit<PostRequest, 'room' | 'from'>;
+// `room` is the room asked for, null for none.
+type PostFields = Omit<PostRequest, 'room' | 'from' | 'followTargets'> & {
+  readonly room: string | null;
+};
+
+// A thread or message read in `room`, null for the caller's own; an unread
+// read takes none.
+type ReadArgs = {
+  readonly query: ReadQuery;
+  readonly room: string | null;
+};
 
 type ArgsOrError<T> = { readonly args: T } | { readonly error: string };
 
@@ -239,6 +260,10 @@ function parsePostArgs(args: unknown): ArgsOrError<PostFields> {
   if (to === undefined) {
     return { error: TO_ERROR };
   }
+  const room = optionalString(fields.room);
+  if (room === undefined) {
+    return { error: ROOM_ERROR };
+  }
   const thread = optionalString(fields.thread);
   if (thread === undefined) {
     return { error: THREAD_ERROR };
@@ -268,6 +293,7 @@ function parsePostArgs(args: unknown): ArgsOrError<PostFields> {
       kind: kind as PostKind,
       body,
       to,
+      room,
       thread,
       refs,
       replyTo,
@@ -278,8 +304,8 @@ function parsePostArgs(args: unknown): ArgsOrError<PostFields> {
   };
 }
 
-function parseReadArgs(args: unknown): ArgsOrError<ReadQuery> {
-  const { thread, id } = fieldsOf(args);
+function parseReadQuery(fields: JsonObject): ArgsOrError<ReadQuery> {
+  const { thread, id } = fields;
   if (!isAbsent(thread) && !isAbsent(id)) {
     return { error: READ_FORM_ERROR };
   }
@@ -294,6 +320,28 @@ function parseReadArgs(args: unknown): ArgsOrError<ReadQuery> {
       : { error: ID_ERROR };
   }
   return { args: { kind: 'unread' } };
+}
+
+function parseReadArgs(args: unknown): ArgsOrError<ReadArgs> {
+  const fields = fieldsOf(args);
+  const query = parseReadQuery(fields);
+  if ('error' in query) {
+    return query;
+  }
+  const room = optionalString(fields.room);
+  if (room === undefined) {
+    return { error: ROOM_ERROR };
+  }
+  if (room !== null && query.args.kind === 'unread') {
+    return { error: ROOM_READ_ERROR };
+  }
+  return { args: { query: query.args, room } };
+}
+
+// The room asked for, null for none.
+function parseBoardArgs(args: unknown): ArgsOrError<string | null> {
+  const room = optionalString(fieldsOf(args).room);
+  return room === undefined ? { error: ROOM_ERROR } : { args: room };
 }
 
 interface ClaimArgs {
@@ -369,26 +417,35 @@ function refsText(refs: readonly MessageRef[]): string {
     : ` · refs: ${refs.map(({ type, value }) => `${type}:${value}`).join(', ')}`;
 }
 
-function unreadText(items: readonly ReadItem[]): string {
+// ` in room <room>` for an item outside the reader's own room, else ''.
+function roomText(item: ReadItem, ownRoom: string): string {
+  return item.room === ownRoom ? '' : ` in room ${item.room}`;
+}
+
+function unreadText(items: readonly ReadItem[], ownRoom: string): string {
   if (items.length === 0) {
     return NO_UNREAD_TEXT;
   }
   return items
     .map(
       (item) =>
-        `#${item.id} ${item.from} · ${item.kind} · ${item.thread} · ${item.text}${refsText(item.refs)}`,
+        `#${item.id}${roomText(item, ownRoom)} ${item.from} · ${item.kind} · ${item.thread} · ${item.text}${refsText(item.refs)}`,
     )
     .join('\n');
 }
 
-function wholeText(items: readonly ReadItem[], query: ReadQuery): string {
+function wholeText(
+  items: readonly ReadItem[],
+  query: ReadQuery,
+  ownRoom: string,
+): string {
   if (items.length === 0 && query.kind === 'thread') {
     return `No messages in thread ${query.thread}.`;
   }
   return items
     .map(
       (item) =>
-        `#${item.id} ${item.from} · ${item.kind} · ${new Date(item.at).toISOString()}\n${item.text}`,
+        `#${item.id}${roomText(item, ownRoom)} ${item.from} · ${item.kind} · ${new Date(item.at).toISOString()}\n${item.text}`,
     )
     .join('\n\n');
 }
@@ -403,7 +460,10 @@ function targetText(target: ClaimTarget): string {
 }
 
 // The five chatroom tools, in every session, subagents included: each call
-// runs as the agent chat's stream names for it.
+// runs as the agent chat's stream names for it. `chatroom_post`,
+// `chatroom_read` and `chatroom_board` reach another project's room by its
+// name; a post also follows a `to` title to the room of the session carrying
+// it.
 export function createChatroomTools(deps: ChatroomToolsDeps): {
   definitions: readonly ToolDefinition[];
   startSession(session: AgentSession): ToolSession;
@@ -443,6 +503,26 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
     });
   };
 
+  // Every room holding a message or a live session, in name order.
+  const knownRooms = async (): Promise<string[]> => {
+    const rooms = new Set(await room.rooms());
+    for (const member of roster.directory()) {
+      rooms.add(member.room);
+    }
+    return [...rooms].sort(compareText);
+  };
+
+  // Why `asked` names no room, or null when it names one.
+  const unknownRoom = async (asked: string | null): Promise<string | null> => {
+    if (asked === null) {
+      return null;
+    }
+    const rooms = await knownRooms();
+    return rooms.includes(asked)
+      ? null
+      : `no room named "${asked}"; the rooms are: ${rooms.join(', ')}`;
+  };
+
   const post = async (
     session: AgentSession,
     roomName: string,
@@ -453,18 +533,31 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
     if ('error' in parsed) {
       return errorResult(parsed.error);
     }
+    const { room: askedRoom, ...fields } = parsed.args;
+    const roomError = await unknownRoom(askedRoom);
+    if (roomError !== null) {
+      return errorResult(roomError);
+    }
     const result = await room.post({
-      ...parsed.args,
-      room: roomName,
+      ...fields,
+      room: askedRoom ?? roomName,
+      followTargets: askedRoom === null,
       from: await callerOf(session, context),
     });
     if (!result.ok) {
       return errorResult(result.reason);
     }
+    const where =
+      result.room === roomName
+        ? result.thread
+        : `${result.thread} of room ${result.room}`;
     const text = result.duplicate
-      ? `Already posted as #${result.id}.`
-      : `Posted #${result.id} in ${result.thread}.`;
-    return { ...textResult(text), structuredContent: { id: result.id } };
+      ? `Already posted as #${result.id} in ${where}.`
+      : `Posted #${result.id} in ${where}.`;
+    return {
+      ...textResult(text),
+      structuredContent: { id: result.id, room: result.room },
+    };
   };
 
   const read = async (
@@ -477,9 +570,13 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
     if ('error' in parsed) {
       return errorResult(parsed.error);
     }
-    const query = parsed.args;
+    const { query, room: askedRoom } = parsed.args;
+    const roomError = await unknownRoom(askedRoom);
+    if (roomError !== null) {
+      return errorResult(roomError);
+    }
     const result = await room.read(
-      roomName,
+      askedRoom ?? roomName,
       await callerOf(session, context),
       query,
     );
@@ -488,12 +585,25 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
     }
     const text =
       query.kind === 'unread'
-        ? unreadText(result.items)
-        : wholeText(result.items, query);
+        ? unreadText(result.items, roomName)
+        : wholeText(result.items, query, roomName);
     return { ...textResult(text), structuredContent: { items: result.items } };
   };
 
-  const board = async (roomName: string): Promise<ToolResult> => {
+  const board = async (
+    _session: AgentSession,
+    ownRoom: string,
+    args: unknown,
+  ): Promise<ToolResult> => {
+    const parsed = parseBoardArgs(args);
+    if ('error' in parsed) {
+      return errorResult(parsed.error);
+    }
+    const roomError = await unknownRoom(parsed.args);
+    if (roomError !== null) {
+      return errorResult(roomError);
+    }
+    const roomName = parsed.args ?? ownRoom;
     await boardFeed.refresh(roomName);
     const rows = boardFeed.rows(roomName);
     const lines = [JSON.stringify({ room: roomName, rows }, null, 2)];
@@ -584,7 +694,7 @@ export function createChatroomTools(deps: ChatroomToolsDeps): {
   > = {
     [POST_TOOL.name]: post,
     [READ_TOOL.name]: read,
-    [BOARD_TOOL.name]: (_session, roomName) => board(roomName),
+    [BOARD_TOOL.name]: board,
     [CLAIM_TOOL.name]: claim,
     [RELEASE_TOOL.name]: release,
   };

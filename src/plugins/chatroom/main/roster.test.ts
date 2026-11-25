@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentSession, SessionTitles } from '../../sessions/contract';
-import { type Participant, USER_PARTICIPANT } from '../contract';
+import type { Participant } from '../contract';
 import { createRoster, type Roster } from './roster';
 
 const NO_TITLES: SessionTitles = {
@@ -46,7 +46,7 @@ function mainAgent(rowId: string, name: string): Participant {
 }
 
 describe('roster', () => {
-  it('participants_OfRoom', () => {
+  it('directory_ListsMainAgentsWithARoom', () => {
     const roster = rosterOver({
       projects: { r1: 'a', r2: 'b', r3: 'a', r4: null },
       titles: {
@@ -59,10 +59,10 @@ describe('roster', () => {
     }
     roster.subagentSpawned('r1', 'agent-7', 'worker');
 
-    expect(roster.participants('a')).toEqual([
-      mainAgent('r1', 'One'),
-      mainAgent('r3', 'Three'),
-      USER_PARTICIPANT,
+    expect(roster.directory()).toEqual([
+      { room: 'a', participant: mainAgent('r1', 'One') },
+      { room: 'b', participant: mainAgent('r2', 'session r2') },
+      { room: 'a', participant: mainAgent('r3', 'Three') },
     ]);
   });
 
@@ -185,6 +185,6 @@ describe('roster', () => {
     roster.ended('r1');
     expect(roster.has('r1')).toBe(false);
     expect(roster.sessions()).toEqual([]);
-    expect(roster.participants('a')).toEqual([USER_PARTICIPANT]);
+    expect(roster.directory()).toEqual([]);
   });
 });

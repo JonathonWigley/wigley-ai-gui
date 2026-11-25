@@ -104,7 +104,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
         const { bodyCap, postsPerMinute, claimMinutes } = api.settings();
         return { bodyCap, postsPerMinute, claimMinutes };
       },
-      participants: (roomName) => roster.participants(roomName),
+      directory: () => roster.directory(),
       log,
     });
     const tracker = createTouchTracker(services.paths);
@@ -141,7 +141,7 @@ export const chatroomMainPart: MainPart<typeof chatroomManifest> = {
         const { bodyCap, postsPerMinute, claimMinutes } = api.settings();
         return { bodyCap, postsPerMinute, claimMinutes };
       },
-      participants: (roomName) => roster.participants(roomName),
+      directory: () => roster.directory(),
       log,
       rewriteRoom: (roomName) => rewriteRoom(roomName),
       released: (roomName) => {

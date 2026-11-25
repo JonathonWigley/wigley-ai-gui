@@ -202,7 +202,6 @@ export function createHookHandlers(deps: HookHandlersDeps): {
         );
       }
       const unread = await room.unreadAddressed(
-        call.roomName,
         roster.participant(session.id, agentId),
       );
       return reply([...warnings, unreadLine(unread.length)]);

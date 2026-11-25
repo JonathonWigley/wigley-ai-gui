@@ -54,16 +54,21 @@ function newRoster(): Roster {
   return roster;
 }
 
-type FakeRoom = Pick<RoomService, 'post' | 'read' | 'claim' | 'release'>;
+type FakeRoom = Pick<
+  RoomService,
+  'post' | 'read' | 'claim' | 'release' | 'rooms'
+>;
 
 function fakeRoom(): FakeRoom {
   return {
     post: vi.fn<RoomService['post']>(async () => ({
       ok: true,
       id: 1,
+      room: ROOM,
       thread: 'general',
       duplicate: false,
     })),
+    rooms: vi.fn<RoomService['rooms']>(async () => [ROOM]),
     read: vi.fn<RoomService['read']>(async () => ({ ok: true, items: [] })),
     claim: vi.fn<RoomService['claim']>(),
     release: vi.fn<RoomService['release']>(),
@@ -197,6 +202,7 @@ describe('chatroom_post', () => {
 
     expect(vi.mocked(room.post).mock.calls[0][0]).toEqual<PostRequest>({
       room: ROOM,
+      followTargets: true,
       from: agent('rA', null, 'Lead'),
       kind: 'note',
       body: 'x',
@@ -212,17 +218,44 @@ describe('chatroom_post', () => {
 
   it.each<{ result: PostResult; expected: ToolResult }>([
     {
-      result: { ok: true, id: 4, thread: 'plan-x', duplicate: false },
+      result: {
+        ok: true,
+        id: 4,
+        room: ROOM,
+        thread: 'plan-x',
+        duplicate: false,
+      },
       expected: {
         content: [{ type: 'text', text: 'Posted #4 in plan-x.' }],
-        structuredContent: { id: 4 },
+        structuredContent: { id: 4, room: ROOM },
       },
     },
     {
-      result: { ok: true, id: 4, thread: 'plan-x', duplicate: true },
+      result: {
+        ok: true,
+        id: 4,
+        room: ROOM,
+        thread: 'plan-x',
+        duplicate: true,
+      },
       expected: {
-        content: [{ type: 'text', text: 'Already posted as #4.' }],
-        structuredContent: { id: 4 },
+        content: [{ type: 'text', text: 'Already posted as #4 in plan-x.' }],
+        structuredContent: { id: 4, room: ROOM },
+      },
+    },
+    {
+      result: {
+        ok: true,
+        id: 2,
+        room: 'ai',
+        thread: 'session:rA',
+        duplicate: false,
+      },
+      expected: {
+        content: [
+          { type: 'text', text: 'Posted #2 in session:rA of room ai.' },
+        ],
+        structuredContent: { id: 2, room: 'ai' },
       },
     },
     {
@@ -259,6 +292,54 @@ describe('chatroom_post', () => {
     ).toEqual(expected);
   });
 
+  it('post_GivenRoom_PostsThereWithoutFollowingTargets', async () => {
+    const room = fakeRoom();
+    vi.mocked(room.rooms).mockResolvedValue([ROOM, 'ai']);
+
+    await call(toolsOver({ room }), 'chatroom_post', {
+      kind: 'note',
+      body: 'x',
+      room: 'ai',
+    });
+
+    expect(vi.mocked(room.post).mock.calls[0][0]).toMatchObject({
+      room: 'ai',
+      followTargets: false,
+    });
+  });
+
+  it.each([
+    {
+      tool: 'chatroom_post',
+      args: { kind: 'note', body: 'x', room: 'nowhere' },
+      text: 'no room named "nowhere"; the rooms are: game',
+    },
+    {
+      tool: 'chatroom_board',
+      args: { room: 'nowhere' },
+      text: 'no room named "nowhere"; the rooms are: game',
+    },
+    {
+      tool: 'chatroom_read',
+      args: { thread: 'plan-x', room: 'nowhere' },
+      text: 'no room named "nowhere"; the rooms are: game',
+    },
+    {
+      tool: 'chatroom_read',
+      args: { room: ROOM },
+      text: 'room goes with thread or id: an unread read already spans every room.',
+    },
+  ])('room_Refusals: $tool $args', async ({ tool, args, text }) => {
+    const room = fakeRoom();
+
+    expect(await call(toolsOver({ room }), tool, args)).toEqual({
+      content: [{ type: 'text', text }],
+      isError: true,
+    });
+    expect(room.post).not.toHaveBeenCalled();
+    expect(room.read).not.toHaveBeenCalled();
+  });
+
   it('replies an error for a session with no room', async () => {
     const room = fakeRoom();
     const result = await call(
@@ -283,13 +364,14 @@ describe('chatroom_read', () => {
       clock: { now: () => now },
       randomHex: () => '00000001',
       limits: () => ({ bodyCap: 1500, postsPerMinute: 10, claimMinutes: 30 }),
-      participants: (roomName) => roster.participants(roomName),
+      directory: () => roster.directory(),
       log: () => undefined,
     });
     const peer = agent('rB', null, 'Peer');
     const post = (fields: Partial<PostRequest>) =>
       room.post({
         room: ROOM,
+        followTargets: false,
         from: peer,
         kind: 'note',
         body: 'x',

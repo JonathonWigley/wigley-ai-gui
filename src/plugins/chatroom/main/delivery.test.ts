@@ -50,6 +50,7 @@ function mainAgent(rowId: string): Participant {
 function post(from: string, fields: Partial<PostRequest>) {
   return room.post({
     room: ROOM,
+    followTargets: false,
     from: mainAgent(from),
     kind: 'note',
     body: `${from} ${bodyCount++}`,
@@ -113,7 +114,7 @@ beforeEach(() => {
     clock: { now: () => 1_700_000_000_000 },
     randomHex: () => '00000001',
     limits: () => ({ bodyCap: 1500, postsPerMinute: 100, claimMinutes: 30 }),
-    participants: (roomName) => roster.participants(roomName),
+    directory: () => roster.directory(),
     log: () => undefined,
   });
   sends = [];
@@ -156,6 +157,19 @@ describe('startDelivery', () => {
         [
           'rA',
           'Chatroom: Peer sent you a question in thread plan-x. Call chatroom_read to read it.',
+        ],
+      ],
+    },
+    {
+      case: "question in another project's room the row posted in",
+      act: async () => {
+        await post('rA', { room: 'ai' });
+        await post('rB', { room: 'ai', kind: 'question', to: ['Lead'] });
+      },
+      expected: [
+        [
+          'rA',
+          'Chatroom: Peer sent you a question in thread plan-x of room ai. Call chatroom_read to read it.',
         ],
       ],
     },
