@@ -19,6 +19,7 @@ import {
 } from '../../../shared/plugin-part-harness.test-support';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
+  CHAT_PREVIEW_HOST_ID,
   type ChatMainExports,
   type ChatSessionInfo,
   chatEntriesSlot,
@@ -32,10 +33,13 @@ import {
   type OpenConfirm,
 } from '../../forms/contract';
 import {
+  type SessionRow,
   type SessionsMainExports,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import { permissionReviewsSlot, type Review } from '../contract';
+import { PREVIEW_REVIEWS } from './preview-reviews';
 import {
   findReviewer,
   REVIEW_TIMEOUT_MS,
@@ -44,6 +48,7 @@ import {
 import { permissionReviewMainPart } from './start';
 
 const SESSION = 's1';
+const PREVIEW = 'preview';
 const WORK = { name: 'work', configDir: '~/.claude-work' };
 
 const DONE: Review = {
@@ -117,14 +122,25 @@ function assistant(id: string): ChatEntry {
   };
 }
 
+// Session `sessionId`'s row as sessions writes chat's layout preview's.
+function previewRow(sessionId: string): SessionRow {
+  return {
+    sessionId,
+    hostSessionId: CHAT_PREVIEW_HOST_ID,
+  } as SessionRow;
+}
+
 // A slot store holding chat session `s1` on harness `claude`, whose profile
-// `work` is published, with the writers of the slots the part reads.
+// `work` is published, and the row of chat preview session `preview`, which
+// has no chat session yet, with the writers of the slots the part reads.
 function seedSlots() {
   const state = createSlotStore(() => undefined);
   const infos = state.publish(coreAgentHarnessesSlot);
   infos.set('claude', harnessInfo({ profiles: [WORK] }));
   const chatSessions = state.publish(chatSessionSlot);
   chatSessions.set(SESSION, chatSession(SESSION));
+  const rows = state.publish(sessionsRowsSlot);
+  rows.set(PREVIEW, previewRow(PREVIEW));
   return {
     state,
     chatSessions,
@@ -182,6 +198,17 @@ function startReviewing(
 }
 
 type Test = ReturnType<typeof startReviewing>;
+
+// Five permission entries, answered and not, among other kinds: one more than
+// `PREVIEW_REVIEWS` holds.
+const previewSample = () => [
+  permission('p1', true),
+  assistant('a1'),
+  permission('p2', true),
+  permission('p3'),
+  permission('p4'),
+  permission('p5'),
+];
 
 // `findReviewer`'s deps over chat session `session`, chat's default profile
 // `fallback`, harness `claude` publishing `work` and the unregistered harness
@@ -248,8 +275,8 @@ describe('permissionReviewMainPart', () => {
     {
       case: 'a replace holding an unanswered permission',
       act: (test: Test) => test.entries.replace(SESSION, [permission('p1')]),
-      asks: 0,
-      keys: [],
+      asks: 1,
+      keys: ['s1/p1'],
     },
     {
       case: 'an answer put while the review runs',
@@ -390,15 +417,65 @@ describe('permissionReviewMainPart', () => {
     expect(test.messages()).toEqual([]);
   });
 
-  it('replace_StillHoldingTheEntry_KeepsItsReview', async () => {
+  it('replace_StillHoldingTheEntry_KeepsItsAndTheSessionsConfirmReview', async () => {
     const test = startReviewing();
     test.entries.put(SESSION, permission('p1'));
+    test.confirms.set('r1', CONFIRM);
 
     test.entries.replace(SESSION, [permission('p1'), assistant('a1')]);
     await settled();
 
-    expect(test.signal(0).aborted).toBe(false);
-    expect(test.reviews.get('s1/p1')).toEqual(REVIEWING);
+    expect(test.ask).toHaveBeenCalledTimes(2);
+    expect([test.signal(0).aborted, test.signal(1).aborted]).toEqual([
+      false,
+      false,
+    ]);
+    expect(test.reviews.all()).toEqual(
+      reviewsOf([
+        ['s1/p1', REVIEWING],
+        ['confirm/r1', REVIEWING],
+      ]),
+    );
+  });
+
+  it.each([
+    {
+      case: 'a replace',
+      seed: undefined,
+      act: (test: Test) => test.entries.replace(PREVIEW, previewSample()),
+    },
+    {
+      case: 'entries held at start',
+      seed: (slots: Slots) => {
+        slots.entries.replace(PREVIEW, previewSample());
+        slots.chatSessions.set(PREVIEW, chatSession(PREVIEW));
+      },
+      act: () => undefined,
+    },
+  ])('preview_$case_TakesTheSampleReviewsAndAsksNothing', ({ seed, act }) => {
+    const test = startReviewing({ seed });
+
+    act(test);
+
+    expect(test.ask).not.toHaveBeenCalled();
+    expect(test.reviews.all()).toEqual(
+      reviewsOf([
+        ['preview/p1', PREVIEW_REVIEWS[0]],
+        ['preview/p2', PREVIEW_REVIEWS[1]],
+        ['preview/p3', PREVIEW_REVIEWS[2]],
+        ['preview/p4', PREVIEW_REVIEWS[3]],
+      ]),
+    );
+    expect(test.messages()).toEqual([]);
+  });
+
+  it('preview_SessionEnded_DeletesTheSampleReviews', () => {
+    const test = startReviewing();
+    test.entries.replace(PREVIEW, previewSample());
+
+    test.harness.emit('sessions.ended', { sessionId: PREVIEW });
+
+    expect(test.reviews.all()).toEqual(reviewsOf([]));
   });
 
   it.each([
@@ -460,6 +537,8 @@ describe('permissionReviewMainPart', () => {
       seed: (slots: Slots) => slots.entries.put(SESSION, permission('p1')),
       asks: 2,
       reviews: reviewsOf([['s1/p1', REVIEWING]]),
+      aborted: [true, false],
+      logs: [],
     },
     {
       case: 'a done review of an entry still present',
@@ -467,6 +546,8 @@ describe('permissionReviewMainPart', () => {
       seed: (slots: Slots) => slots.entries.put(SESSION, permission('p1')),
       asks: 1,
       reviews: reviewsOf([['s1/p1', DONE]]),
+      aborted: [false],
+      logs: ['reviewed Bash in gamma: deny · medium'],
     },
     {
       case: 'a confirms key open at start',
@@ -474,6 +555,8 @@ describe('permissionReviewMainPart', () => {
       seed: (slots: Slots) => slots.confirms.set('r1', CONFIRM),
       asks: 1,
       reviews: reviewsOf([['confirm/r1', DONE]]),
+      aborted: [false],
+      logs: ['reviewed run_command in gamma: deny · medium'],
     },
     {
       case: 'reviews whose session and round went',
@@ -486,15 +569,24 @@ describe('permissionReviewMainPart', () => {
       },
       asks: 0,
       reviews: reviewsOf([]),
+      aborted: [],
+      logs: [],
     },
-  ])('restart_$case', async ({ answer, seed, asks, reviews }) => {
-    const test = startReviewing({ answer, seed });
-    await settled();
+  ])(
+    'restart_$case',
+    async ({ answer, seed, asks, reviews, aborted, logs }) => {
+      const test = startReviewing({ answer, seed });
+      await settled();
 
-    await test.harness.restart();
-    await settled();
+      await test.harness.restart();
+      await settled();
 
-    expect(test.ask).toHaveBeenCalledTimes(asks);
-    expect(test.reviews.all()).toEqual(reviews);
-  });
+      expect(test.ask).toHaveBeenCalledTimes(asks);
+      expect(test.reviews.all()).toEqual(reviews);
+      expect(
+        test.ask.mock.calls.map(([request]) => request.signal.aborted),
+      ).toEqual(aborted);
+      expect(test.messages()).toEqual(logs);
+    },
+  );
 });

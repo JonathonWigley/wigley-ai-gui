@@ -1,6 +1,7 @@
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
+import { errorText } from '../../../shared/error-text';
 import {
   FAKE_PERMISSION_TEXT,
   type FakeAgentHarness,
@@ -18,6 +19,7 @@ export interface PermissionReviewSelfTestDeps {
   paths: Paths;
   chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
+  log(line: string): void;
   // The fake harness the session runs on; null when it runs on another.
   fakeOf(sessionId: string): FakeAgentHarness | null;
 }
@@ -46,11 +48,12 @@ const GROUPS: SelfTestGroup[] = [
 // Each run closes an earlier run's rows and launches a new chat session in the
 // project folder, then raises a Write permission on it whose review's ask is
 // armed to fail: a step only types keys, so the failure is opened here. The
-// request is left unanswered; the next run's close cancels it.
+// request is left unanswered; the next run's close cancels it. A request the
+// fake refuses logs why, and the open's `alsoShown` line never comes.
 export function permissionReviewSelfTestScript(
   deps: PermissionReviewSelfTestDeps,
 ): SelfTestScript {
-  const { homeDir, files, paths, chat, sessions, fakeOf } = deps;
+  const { homeDir, files, paths, chat, sessions, log, fakeOf } = deps;
   let made: Promise<string> | null = null;
 
   async function makeProject(): Promise<string> {
@@ -93,11 +96,15 @@ export function permissionReviewSelfTestScript(
           throw new Error('the self-test session runs on no fake harness');
         }
         fake.failNextAsk('fake ask failed');
-        void fake.askPermission(sessionId, {
-          toolName: 'Write',
-          input: { file_path: 'notes.md', content: 'fixture' },
-          toolUseId: 'permission-review-fixture',
-        });
+        void fake
+          .askPermission(sessionId, {
+            toolName: 'Write',
+            input: { file_path: 'notes.md', content: 'fixture' },
+            toolUseId: 'permission-review-fixture',
+          })
+          .catch((error: unknown) =>
+            log(`self-test permission request failed: ${errorText(error)}`),
+          );
       });
       return {
         shownLine: `[chat] Chat tab shown in ${SELFTEST_PROJECT_NAME}`,

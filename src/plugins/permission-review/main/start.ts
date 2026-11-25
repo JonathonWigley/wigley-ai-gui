@@ -7,6 +7,7 @@ import type {
 } from '../../../contracts/plugin';
 import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import {
+  CHAT_PREVIEW_HOST_ID,
   chatEntriesSlot,
   chatMainKey,
   chatSessionSlot,
@@ -15,6 +16,7 @@ import { formsConfirmsSlot } from '../../forms/contract';
 import {
   type SessionsMainEvents,
   sessionsMainKey,
+  sessionsRowsSlot,
 } from '../../sessions/contract';
 import { permissionReviewsSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -32,7 +34,9 @@ type PermissionReviewApi = MainApi<
 
 // Registers permission-review's layouts, reviews each unanswered permission
 // entry in `chat.entries` and each round in `forms.confirms` through its
-// session's harness `ask` into `permission-review.reviews`, forgets a
+// session's harness `ask` into `permission-review.reviews`, gives chat's
+// layout preview session (its row's host id `CHAT_PREVIEW_HOST_ID`) sample
+// reviews in place of asks, forgets a
 // session's reviews on `sessions.ended`, registers the verdict demo step's
 // main half, and hands the self-test its script.
 export const permissionReviewMainPart: MainPart<
@@ -43,6 +47,7 @@ export const permissionReviewMainPart: MainPart<
     api.layouts.register({ layoutTypes });
     const reviews = api.state.publish(permissionReviewsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
+    const sessionRows = api.state.read(sessionsRowsSlot);
     const chat = api.dependency(chatMainKey);
     const sessions = api.dependency(sessionsMainKey);
     const { services } = api;
@@ -55,6 +60,8 @@ export const permissionReviewMainPart: MainPart<
       defaultProfile: (sessionId) => chat.defaultProfile(sessionId),
       reviews,
       label: (sessionId) => sessions.label(sessionId),
+      isPreview: (sessionId) =>
+        sessionRows.get(sessionId)?.hostSessionId === CHAT_PREVIEW_HOST_ID,
       timers: services.timers,
       log: services.log,
     });
@@ -69,6 +76,7 @@ export const permissionReviewMainPart: MainPart<
         paths: services.paths,
         chat,
         sessions,
+        log: services.log,
         fakeOf(sessionId) {
           const harnessId = chatSessions.get(sessionId)?.harness;
           const harness =

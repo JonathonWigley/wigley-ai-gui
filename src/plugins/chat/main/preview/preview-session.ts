@@ -40,9 +40,10 @@ const previewAt = (index: number) =>
   PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
 
 // One entry of every kind, a harness's own kind among them, a user message in
-// each delivery state, a tool and a permission in each of their states, both
-// notice tones, a reply holding two
-// visuals, and a streaming reply last, its visual still open.
+// each delivery state, a tool and a permission in each of their states, a
+// fourth permission so each of a review's four states has an entry to draw on,
+// both notice tones, a reply holding two visuals, and a streaming reply last,
+// its visual still open.
 export function previewEntries(): ChatEntry[] {
   return [
     {
@@ -153,6 +154,16 @@ export function previewEntries(): ChatEntry[] {
       toolName: 'Write',
       input: { file_path: 'notes.md' },
       summary: 'notes.md',
+      answer: null,
+      raw: [{ preview: 'permission' }],
+    },
+    {
+      kind: 'permission',
+      id: 'preview-permission-2',
+      at: previewAt(8) + PREVIEW_ENTRY_STEP_MS / 2,
+      toolName: 'WebFetch',
+      input: { url: 'https://example.com' },
+      summary: 'https://example.com',
       answer: null,
       raw: [{ preview: 'permission' }],
     },

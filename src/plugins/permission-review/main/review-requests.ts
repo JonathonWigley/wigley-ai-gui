@@ -17,6 +17,7 @@ import type { ChatMainExports, ChatSessionInfo } from '../../chat/contract';
 import type { OpenConfirm } from '../../forms/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
 import { chatReviewKey, confirmReviewKey, type Review } from '../contract';
+import { previewReviews } from './preview-reviews';
 import {
   parseReviewReply,
   REVIEW_INSTRUCTIONS,
@@ -46,6 +47,8 @@ export interface ReviewRequestDeps extends Omit<ReviewerDeps, 'chatSessions'> {
   confirms: Pick<KeyedSlotReader<OpenConfirm>, 'all' | 'on'>;
   reviews: KeyedSlotWriter<Review>;
   label: SessionsMainExports['label'];
+  // Whether `sessionId` is chat's layout preview session.
+  isPreview(sessionId: string): boolean;
   timers: Pick<Timers, 'set' | 'clear'>;
   log(line: string): void;
 }
@@ -90,25 +93,33 @@ export function findReviewer(sessionId: string, deps: ReviewerDeps): Reviewer {
   return { harness, profileDir: profile.configDir, projectDir: null };
 }
 
-const CONFIRM_KEY_PREFIX = confirmReviewKey('');
 const TIMED_OUT: Review = {
   state: 'unavailable',
   reason: `the review took longer than ${REVIEW_TIMEOUT_MS / 1000} s`,
 };
 
+// The request a held review key is for: a chat permission entry of
+// `sessionId`, or (`entryId` null) a confirm round asked in `sessionId`.
+interface ReviewedRequest {
+  sessionId: string;
+  entryId: string | null;
+}
+
 // Reviews each request once, on arrival, into `reviews`: each unanswered
-// permission entry `chatEntries` puts under a chat session, and each round
-// `confirms` sets. A review whose request goes (a `replace` that drops its
-// entry, its round leaving `confirms`, `forgetSession` of its session) is
-// aborted and deleted, and an aborted review writes and logs nothing. At start
-// it deletes the held reviews still `reviewing` and those whose request went,
-// then reviews every request waiting with no review. `dispose` aborts every
-// running review.
+// permission entry `chatEntries` puts under a chat session, or a `replace`
+// holds that it has not seen for that session, and each round `confirms`
+// sets. A review whose request goes (a `replace` that drops its entry, its
+// round leaving `confirms`, `forgetSession` of its session) is aborted and
+// deleted, and an aborted review writes and logs nothing. The `isPreview`
+// session is never reviewed: its permission entries get `previewReviews`'
+// samples instead, which go as its reviews do. At start it deletes the held
+// reviews still `reviewing` and those whose request went, then reviews every
+// request waiting with no review. `dispose` aborts every running review.
 export function watchReviewRequests(
   deps: ReviewRequestDeps,
 ): { forgetSession(sessionId: string): void } & Disposable {
   const { chatSessions, chatEntries, confirms, reviews } = deps;
-  const seen = new Set<string>();
+  const seen = new Map<string, ReviewedRequest>();
   // Each running ask's stop, by review key.
   const running = new Map<string, () => void>();
 
@@ -191,11 +202,35 @@ export function watchReviewRequests(
     if (!isWaitingPermission || seen.has(key)) {
       return;
     }
-    seen.add(key);
+    seen.set(key, { sessionId, entryId: entry.id });
     startReview(key, sessionId, {
       toolName: entry.toolName,
       input: entry.input,
     });
+  }
+
+  // Sets the preview session's sample reviews over `entries`.
+  function showPreviewReviews(
+    sessionId: string,
+    entries: readonly ChatEntry[],
+  ) {
+    for (const [entryId, review] of previewReviews(entries)) {
+      const key = chatReviewKey(sessionId, entryId);
+      seen.set(key, { sessionId, entryId });
+      reviews.set(key, review);
+    }
+  }
+
+  // Reviews `entries` of `sessionId`; the preview session instead takes its
+  // samples over every entry it holds.
+  function reviewEntries(sessionId: string, entries: readonly ChatEntry[]) {
+    if (deps.isPreview(sessionId)) {
+      showPreviewReviews(sessionId, chatEntries.get(sessionId));
+      return;
+    }
+    for (const entry of entries) {
+      reviewEntry(sessionId, entry);
+    }
   }
 
   function reviewConfirm(roundId: string, confirm: OpenConfirm) {
@@ -203,7 +238,7 @@ export function watchReviewRequests(
     if (seen.has(key)) {
       return;
     }
-    seen.add(key);
+    seen.set(key, { sessionId: confirm.sessionId, entryId: null });
     startReview(key, confirm.sessionId, confirm.subject);
   }
 
@@ -214,51 +249,60 @@ export function watchReviewRequests(
     seen.delete(key);
   }
 
-  // The chat keys of `sessionId`'s reviews, with each one's entry id.
-  function chatKeysOf(sessionId: string): { key: string; entryId: string }[] {
-    const prefix = chatReviewKey(sessionId, '');
+  // The keys of `sessionId`'s chat entry reviews.
+  function chatKeysOf(sessionId: string): string[] {
     return [...seen]
-      .filter((key) => key.startsWith(prefix))
-      .map((key) => ({ key, entryId: key.slice(prefix.length) }));
+      .filter(
+        ([, request]) =>
+          request.sessionId === sessionId && request.entryId !== null,
+      )
+      .map(([key]) => key);
   }
 
   function dropReviewsLeftBy(sessionId: string, items: readonly ChatEntry[]) {
-    const keptIds = new Set(items.map(({ id }) => id));
-    for (const { key, entryId } of chatKeysOf(sessionId)) {
-      if (!keptIds.has(entryId)) {
+    const keptKeys = new Set(
+      items.map(({ id }) => chatReviewKey(sessionId, id)),
+    );
+    for (const key of chatKeysOf(sessionId)) {
+      if (!keptKeys.has(key)) {
         drop(key);
       }
     }
   }
 
-  function isRequestOpen(key: string): boolean {
-    if (key.startsWith(CONFIRM_KEY_PREFIX)) {
-      return confirms.all().has(key.slice(CONFIRM_KEY_PREFIX.length));
+  // Each open request's review key, with the request.
+  function openRequests(): Map<string, ReviewedRequest> {
+    const open = new Map<string, ReviewedRequest>();
+    for (const sessionId of chatSessions.all().keys()) {
+      for (const entry of chatEntries.get(sessionId)) {
+        if (entry.kind === 'permission') {
+          open.set(chatReviewKey(sessionId, entry.id), {
+            sessionId,
+            entryId: entry.id,
+          });
+        }
+      }
     }
-    const at = key.indexOf('/');
-    const sessionId = key.slice(0, at);
-    const entryId = key.slice(at + 1);
-    const isChatSession = at !== -1 && chatSessions.all().has(sessionId);
-    return (
-      isChatSession &&
-      chatEntries
-        .get(sessionId)
-        .some((entry) => entry.kind === 'permission' && entry.id === entryId)
-    );
+    for (const [roundId, confirm] of confirms.all()) {
+      open.set(confirmReviewKey(roundId), {
+        sessionId: confirm.sessionId,
+        entryId: null,
+      });
+    }
+    return open;
   }
 
+  const open = openRequests();
   for (const [key, held] of reviews.all()) {
-    const isHeldResult = held.state !== 'reviewing' && isRequestOpen(key);
-    if (isHeldResult) {
-      seen.add(key);
+    const request = open.get(key);
+    if (held.state !== 'reviewing' && request !== undefined) {
+      seen.set(key, request);
     } else {
       reviews.delete(key);
     }
   }
   for (const sessionId of chatSessions.all().keys()) {
-    for (const entry of chatEntries.get(sessionId)) {
-      reviewEntry(sessionId, entry);
-    }
+    reviewEntries(sessionId, chatEntries.get(sessionId));
   }
   for (const [roundId, confirm] of confirms.all()) {
     reviewConfirm(roundId, confirm);
@@ -267,9 +311,10 @@ export function watchReviewRequests(
   const listeners = [
     chatEntries.on((sessionId, change) => {
       if (change.kind === 'put') {
-        reviewEntry(sessionId, change.item);
+        reviewEntries(sessionId, [change.item]);
       } else if (change.kind === 'replace') {
         dropReviewsLeftBy(sessionId, change.items);
+        reviewEntries(sessionId, change.items);
       }
     }),
     confirms.on((roundId, confirm) => {
@@ -283,7 +328,7 @@ export function watchReviewRequests(
 
   return {
     forgetSession(sessionId) {
-      for (const { key } of chatKeysOf(sessionId)) {
+      for (const key of chatKeysOf(sessionId)) {
         drop(key);
       }
     },
