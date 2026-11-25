@@ -1,6 +1,6 @@
 # 08 — Terminal plugin main
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the session host's lifecycle: shells adopted after an app restart, killed on a row's close, detached on a part stop
 Wave: 4 · Depends on: 06
@@ -356,3 +356,5 @@ Done when: `npm run typecheck` passes; the tests above exist; the test gate runs
 Commit:    one commit: "terminal: main part — shells per session over the session host, terminal.type, the output slot and the session note"
 
 ## Proof
+
+Commit 59f1e38d · proof: diff read: TerminalOpened, TerminalChannel, terminalOutputSlot match plan.md; manifest registered in manifests.ts and main.ts; wave 4 typecheck, layers, boundary, styles clean; oxfmt commit 759901e2 · concerns: no layouts/default until 09; page commands toggle/back/restart declared before 09's page part; demo self-test fails until 10 adds a demo step; README Settings row, CHANGELOG and AGENTS.md src map wait for 10; oxlint no-useless-spread warning at shells.ts killAll (the copy guards deletion while iterating, harmless)

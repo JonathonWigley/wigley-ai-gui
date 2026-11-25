@@ -1,0 +1,22 @@
+/* The default layout's drawer header: one row over the screen, the folder in
+   mono and dim, taking the room and ellipsized, then the state tag and, once
+   the shell has exited, the Restart button. */
+
+[data-layout-owner='terminal'][data-layout='default'].terminal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  padding: var(--wg-space-1) 0;
+}
+
+[data-layout-owner='terminal'][data-layout='default'] .terminal-header-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wg-fg-secondary);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

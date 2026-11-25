@@ -1,6 +1,6 @@
 # 09 — Terminal plugin page
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · orders replayed and live output by shell id and sequence number across an async channel, through drawer open, exit, restart and a restart of the main part alone
 Wave: 5 · Depends on: 06, 07, 08

@@ -1,0 +1,21 @@
+/* A session's terminal drawer: the header the layout draws over the screen,
+   which takes the rest of the drawer's frame. */
+
+.terminal-drawer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.terminal-drawer-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.terminal-drawer-screen > .terminal-screen {
+  height: 100%;
+  width: 100%;
+}

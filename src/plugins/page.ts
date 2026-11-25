@@ -36,6 +36,7 @@ import { systemStatsPagePart } from './system-stats/page/start';
 import { unityPoolPagePart } from './unity-pool/page/start';
 import { usagePagePart } from './usage/page/start';
 import { usageTabLinePagePart } from './usage-tab-line/page/start';
+import { terminalPagePart } from './terminal/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workPagePart } from './work/page/start';
 import { workBoardPagePart } from './work-board/page/start';
@@ -87,6 +88,7 @@ export const pageParts: readonly PagePart[] = [
   usagePagePart,
   usageTabLinePagePart,
   visualPagePart,
+  terminalPagePart,
   demoPagePart,
   appUpdatePagePart,
 ];
