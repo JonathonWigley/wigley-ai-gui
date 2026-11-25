@@ -1,6 +1,6 @@
 # 02 — Grouped bar, counts, peek and pin
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses the mode registry, the shell chrome, the shell's room math and lifecycle (hot-reloaded setting, plugin restart, page reload of the pin)
 Wave: 2 · Depends on: 01
@@ -116,3 +116,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit c17f4869 · proof: diff read: every Produces present (setCount, counted, ACTIVITY_BAR_TOGGLE_PIN, <Leader>vp, the three log lines, both tokens, activityDivider and activityPin parts); pin and pinned codicons exist in the shipped set; oxfmt, tsc and npm run lint pass · concerns: shell-chrome tests now filter key-hint anchors by command because the Pin button anchors one; two long comment lines left unwrapped in src/contracts/plugin.ts; .shell gained position: relative

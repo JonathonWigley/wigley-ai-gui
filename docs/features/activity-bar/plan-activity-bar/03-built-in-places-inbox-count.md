@@ -1,6 +1,6 @@
 # 03 — Built-in places and the Inbox count
 
-Status: not started
+Status: in progress
 Type: Parallel
 Rung: standard · each edit adds two fields to an existing `api.modes.add` call, and the count follows `setContext`'s pattern in `src/plugins/work-board/page/start.ts`
 Wave: 3 · Depends on: 02

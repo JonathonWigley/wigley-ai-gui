@@ -153,7 +153,7 @@ Critical path: 01 → 02 → 03 → 05
 - [x] [Arrangement rule and the override setting](01-arrangement-and-setting.md)
 
 ### Wave 2
-- [ ] [Grouped bar, counts, peek and pin](02-grouped-bar-peek-pin.md) — after 01
+- [x] [Grouped bar, counts, peek and pin](02-grouped-bar-peek-pin.md) — after 01
 
 ### Wave 3
 - [ ] [Built-in places and the Inbox count](03-built-in-places-inbox-count.md) — after 02
@@ -169,9 +169,17 @@ Review base: c22d3488
 
 ### Groups
 - 01 · hard · 3755a76b (+ef08f2df layer fix, 5075429f format) · diff read: every Produces present; tsc and npm run lint pass after a layer fix and an oxfmt pass · concerns: ModeHandle doc comment still calls first-add order the activity bar's order (carried to 02); nothing pins the shipped shell.activityBar default empty since the merge test left src/config
+- 02 · deep · c17f4869 · diff read: every Produces present (setCount, counted, ACTIVITY_BAR_TOGGLE_PIN, <Leader>vp, the three log lines, both tokens, activityDivider and activityPin parts); pin and pinned codicons exist in the shipped set; oxfmt, tsc and npm run lint pass · concerns: shell-chrome tests now filter key-hint anchors by command because the Pin button anchors one; two long comment lines left unwrapped in src/contracts/plugin.ts; .shell gained position: relative
 ### Contract changes
+- Shell: planned pin toggle, listener and narrow input → landed togglePin(), isPinned(), onPinnedChanged(listener): Disposable, activityBarNarrowChanged(isNarrow); isPinned is extra, for the chrome's starting pin state · consumers: renderer.ts · group 02
+- mountShell: gained a sixth param log: (message) => void, renderer passes (m) => log('page', m) · consumers: renderer.ts, shell.test.ts · group 02
+- ShellChrome: gained setCount(modeId, count), setActivityBar(setting), setActivityPinned(pinned); CorePageCommand in src/plugins/keymap.ts gained activityBar.togglePin · consumers: renderer.ts · group 02
 ### Rulings
 - A groups value with no well-formed group keeps the suggested layout; a well-formed group of only unknown ids still counts as a setting group — fallback to the default look on malformed input — one row and one check change if wrong · group 01 · group 01
 - The mergeUserSettings case builds on the test's own defaults, not coreDefaultSettings, to stay in its layer — the test no longer guards the shipped default — group 01 · group 01
+- The modes registry keeps no count copy; the chrome holds it on the item and a re-added mode starts at null — nothing reads counts from the registry — group 02 · group 02
+- A narrow pinned bar still peeks on hover; the pin stays set but does not apply below 680px — the bar behaves as unpinned there — group 02 · group 02
+- The peek look is CSS on .shell-activity-bar.is-peeking with the dense chrome background, not the material-chrome--dense class — keeps the state classes to the three the contract names — group 02 · group 02
+- The activity bar uses overflow-x: hidden so the 40px icon column shows no scrollbar — a wide item's ellipsis clips at the bar edge if wrong — group 02 · group 02
 ### Review rounds
 ### Test gate

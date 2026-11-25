@@ -1,6 +1,6 @@
 # 04 — Self-test steps for the pin
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · follows the existing activity bar steps in `src/plugins/docs/main/selftest-script.ts` (the `marked Docs in the activity bar` steps)
 Wave: 3 · Depends on: 02
