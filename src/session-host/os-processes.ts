@@ -11,8 +11,9 @@ export interface ProcessReport {
   command: string;
 }
 
-// The processes of this machine, by pid. `signal` reaches any pid it is given: `host-children` alone calls it, each
-// time on a pid it has just compared with its record.
+// The processes of this machine, by pid. `signal` reaches any pid it is given: `host-children` alone calls it, on a
+// leftover's pid it has just compared with its record, or, through `RecordedPty.kill` and `killAll`, on a shell's pid
+// the terminal table still holds.
 export interface OsProcesses {
   // Null when no process has that pid. Rejects when the OS could not be asked.
   report(pid: number): Promise<ProcessReport | null>;

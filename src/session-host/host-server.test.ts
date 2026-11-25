@@ -31,9 +31,12 @@ import {
 import { startSessionHost } from './host-server';
 import {
   type FakeChild,
+  type FakePty,
   fakeChild,
+  fakePty,
   manualTime,
   spawnRequest,
+  terminalRequest,
 } from './session-host-test-doubles';
 
 const hostSockets = vi.hoisted(() => [] as Socket[]);
@@ -92,6 +95,7 @@ function host(
   const { folder, channel } = existing ?? tempFolder();
   const time = manualTime();
   const spawned: FakeChild[] = [];
+  const ptys: FakePty[] = [];
   const childEnvs: NodeJS.ProcessEnv[] = [];
   const exits: number[] = [];
   const started = startSessionHost({
@@ -105,23 +109,32 @@ function host(
         childEnvs.push(options.env);
         return fake.child;
       },
+      recordPid: () => ({ kill: () => {}, dispose: () => {} }),
       endLeftovers,
       killAll: () => {},
     },
     env,
     clock: time.clock,
     timers: time.timers,
+    ptySpawn: () => {
+      const fake = fakePty();
+      ptys.push(fake);
+      return fake.pty;
+    },
     exit: (code) => exits.push(code),
   });
-  return { folder, channel, time, spawned, childEnvs, exits, started };
+  return { folder, channel, time, spawned, ptys, childEnvs, exits, started };
 }
 
 type Host = ReturnType<typeof host>;
 
-// Ends a host that the test left running: every child closes, then a drain.
+// Ends a host that the test left running: every child closes and every shell exits, then a drain.
 async function stopHost(running: Host) {
   for (const fake of running.spawned) {
     fake.close();
+  }
+  for (const fake of running.ptys) {
+    fake.exit();
   }
   await new Promise((resolve) => setImmediate(resolve));
   if (running.exits.length === 0) {
@@ -167,6 +180,14 @@ async function client(channel: string) {
     linesOf: () =>
       received.flatMap((message) =>
         message.type === 'line' ? [message.line.text] : [],
+      ),
+    terminalMessages: () =>
+      received.filter(
+        ({ type }) => type === 'termData' || type === 'termClosed',
+      ),
+    terminalDataOf: () =>
+      received.flatMap((message) =>
+        message.type === 'termData' ? [message.data] : [],
       ),
   };
 }
@@ -219,6 +240,17 @@ async function spawned(
   connection.send({ type: 'spawn', request: spawnRequest(id) });
   await vi.waitFor(() => expect(running.spawned.length).toBe(before + 1));
   return running.spawned[before];
+}
+
+async function spawnedShell(
+  running: Host,
+  connection: Client,
+  id: string,
+): Promise<FakePty> {
+  const before = running.ptys.length;
+  connection.send({ type: 'termSpawn', request: terminalRequest(id) });
+  await vi.waitFor(() => expect(running.ptys.length).toBe(before + 1));
+  return running.ptys[before];
 }
 
 function pendingEntry(id: string, at: number): PendingSpawn {
@@ -496,6 +528,41 @@ describe('host protocol', () => {
     );
   });
 
+  it.each([
+    { first: 'the process', processClosesFirst: true },
+    { first: 'the shell', processClosesFirst: false },
+  ])(
+    'stopAll_Cases_RepliesOnceEveryProcessClosed: a shell and a process, $first ending first',
+    async ({ processClosesFirst }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
+      const child = await spawned(running, connection, 'a');
+      const shell = await spawnedShell(running, connection, 't');
+
+      connection.send({ type: 'stopAll', requestId: 1 });
+      await vi.waitFor(() => expect(child.signals).toEqual(['SIGTERM']));
+      expect(shell.kills()).toBe(1);
+
+      const endings = [() => child.close(), () => shell.exit()];
+      const [endFirst, endSecond] = processClosesFirst
+        ? endings
+        : endings.reverse();
+      endFirst();
+      await settled(connection);
+      expect(connection.received.some(({ type }) => type === 'stopAll')).toBe(
+        false,
+      );
+
+      endSecond();
+      await vi.waitFor(() =>
+        expect(connection.received).toContainEqual({
+          type: 'stopAll',
+          requestId: 1,
+        }),
+      );
+    },
+  );
+
   it('stopAll_Cases_RepliesOnceEveryProcessClosed: empty table', async () => {
     const running = await runningHost();
     const connection = await client(running.channel);
@@ -603,6 +670,77 @@ describe('host protocol', () => {
     // Not being a message, the line made no client: the first-client wait still ends the host.
     running.time.advanceTo(30_000);
     await vi.waitFor(() => expect(running.exits).toEqual([0]));
+  });
+});
+
+describe('host terminals', () => {
+  it('termSpawn_ThenOutputAndExit_PushesToTheSubscribedConnectionOnly', async () => {
+    const running = await runningHost();
+    const owner = await client(running.channel);
+    const other = await client(running.channel);
+    const shell = await spawnedShell(running, owner, 'a');
+
+    shell.emitData('hi');
+    shell.exit();
+
+    await vi.waitFor(() =>
+      expect(owner.terminalMessages()).toEqual([
+        { type: 'termData', id: 'a', data: 'hi' },
+        {
+          type: 'termClosed',
+          id: 'a',
+          exit: { code: 0, signal: null, error: null },
+        },
+      ]),
+    );
+    await settled(other);
+    expect(other.terminalMessages()).toEqual([]);
+  });
+
+  it('termAttach_SecondConnection_RepliesTheReplayAndTakesTheOutput', async () => {
+    const running = await runningHost();
+    const owner = await client(running.channel);
+    const shell = await spawnedShell(running, owner, 'a');
+    shell.emitData('before');
+    const second = await client(running.channel);
+
+    const reply = await replyTo(second, {
+      type: 'termAttach',
+      requestId: 1,
+      id: 'a',
+    });
+
+    expect(reply).toEqual({
+      type: 'termAttach',
+      requestId: 1,
+      id: 'a',
+      terminal: { replay: 'before', running: true },
+    });
+    shell.emitData('after');
+    await vi.waitFor(() => expect(second.terminalDataOf()).toEqual(['after']));
+    await settled(owner);
+    expect(owner.terminalDataOf()).toEqual(['before']);
+    expect(
+      await replyTo(second, { type: 'termAttach', requestId: 2, id: 'nope' }),
+    ).toEqual({ type: 'termAttach', requestId: 2, id: 'nope', terminal: null });
+  });
+
+  it('termList_RepliesEachShell', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    await spawnedShell(running, connection, 'a');
+    await spawnedShell(running, connection, 'b');
+
+    const reply = await replyTo(connection, { type: 'termList', requestId: 1 });
+
+    expect(reply).toEqual({
+      type: 'termList',
+      requestId: 1,
+      terminals: [
+        { id: 'a', startedAt: 0, running: true },
+        { id: 'b', startedAt: 0, running: true },
+      ],
+    });
   });
 });
 
@@ -806,6 +944,36 @@ describe('host lifetime', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(running.exits).toEqual([]);
+  });
+
+  it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: a running shell and no client', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    const shell = await spawnedShell(running, connection, 'a');
+
+    connection.socket.destroy();
+    await vi.waitFor(() => expect(hostSockets[0].destroyed).toBe(true));
+    running.time.advanceTo(30_000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(running.exits).toEqual([]);
+
+    shell.exit();
+
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
+  });
+
+  it('drain_Shell_KillsAtOnceThenExits', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+    const shell = await spawnedShell(running, connection, 'a');
+
+    connection.send({ type: 'drain' });
+    await settled(connection);
+
+    expect(shell.kills()).toBe(1);
+    expect(running.exits).toEqual([]);
+    shell.exit({ exitCode: 0, signal: 1 });
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
   });
 
   it('exitRule_Cases_ExitsOnlyWithNoProcessAndNoClient: run records and no client', async () => {
@@ -1099,6 +1267,23 @@ describe('host start', () => {
     expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
       false,
     );
+  });
+
+  it('start_EndingLeftovers_AnswersTermListAndHoldsTermSpawn', async () => {
+    const { endLeftovers, finish } = leftoversEndedByTest();
+    const running = await runningHost(undefined, endLeftovers);
+    const connection = await client(running.channel);
+
+    connection.send({ type: 'termSpawn', request: terminalRequest('a') });
+    const list = await replyTo(connection, { type: 'termList', requestId: 1 });
+
+    expect(list).toEqual({ type: 'termList', requestId: 1, terminals: [] });
+    expect(running.ptys).toEqual([]);
+
+    finish();
+    await running.started;
+
+    expect(running.ptys).toHaveLength(1);
   });
 
   it('start_PendingFileWithNoClient_SpawnsAfterLeftoversAndStaysAlive', async () => {

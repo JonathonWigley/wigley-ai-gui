@@ -268,13 +268,22 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
       cwd: tmpdir(),
       env: {},
     });
-    const exits = [once(first, 'exit'), once(second, 'exit')];
+    // A shell's pty, which the host starts outside `spawn`.
+    const shell = await runningShell(ENDS_ON_SIGTERM);
+    children.recordPid(shell.pid);
+    const exits = [
+      once(first, 'exit'),
+      once(second, 'exit'),
+      once(shell.child, 'exit'),
+    ];
     await vi.waitFor(() => {
       const record = JSON.parse(
         readFileSync(file, 'utf8'),
       ) as HostChildrenRecord;
       const pids = record.children.map(({ pid }) => pid);
-      expect(new Set(pids)).toEqual(new Set([first.pid, second.pid]));
+      expect(new Set(pids)).toEqual(
+        new Set([first.pid, second.pid, shell.pid]),
+      );
     });
 
     children.killAll();
@@ -283,9 +292,10 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
     expect(ended.map(([, signal]) => signal as string)).toEqual([
       'SIGTERM',
       'SIGTERM',
+      'SIGTERM',
     ]);
-    // The handles did this, so the guarded route stays for the next host.
-    expect(signals).toEqual([]);
+    // The children's handles sent theirs; only the shell, which has none, goes through the OS.
+    expect(signals).toEqual(['SIGTERM']);
     expect(existsSync(file)).toBe(true);
   });
 });
@@ -331,6 +341,47 @@ describe('the children record', () => {
     spawned[0].close();
 
     expect(readFileSync(other, 'utf8')).toBe(otherText);
+  });
+
+  it('recordPid_ToDispose_RecordHoldsThePidOnlyUntilDisposed', async () => {
+    const own = { startedAt: 'own start', command: '/bin/host' };
+    const { processes } = fakeMachine(
+      new Map([
+        [OWN_PID, own],
+        [77, REPORT],
+      ]),
+    );
+    const { children, ownFile } = setUp(processes);
+
+    const recorded = children.recordPid(77);
+    await vi.waitFor(() => expect(existsSync(ownFile)).toBe(true));
+    expect(JSON.parse(readFileSync(ownFile, 'utf8'))).toEqual({
+      writer: { pid: OWN_PID, startedAt: own.startedAt },
+      children: [{ pid: 77, ...REPORT }],
+    });
+
+    recorded.dispose();
+
+    expect(existsSync(ownFile)).toBe(false);
+  });
+
+  it('recordPid_Kill_SendsSIGKILLUntilDisposed', () => {
+    const { processes, signals } = fakeMachine(
+      new Map([
+        [OWN_PID, REPORT],
+        [77, REPORT],
+      ]),
+      () => {},
+    );
+    const { children } = setUp(processes);
+    const recorded = children.recordPid(77);
+
+    recorded.kill();
+    expect(signals).toEqual(['77 SIGKILL']);
+
+    recorded.dispose();
+    recorded.kill();
+    expect(signals).toEqual(['77 SIGKILL']);
   });
 
   it('spawn_ClosesBeforeTheOSReports_RecordsNothing', async () => {

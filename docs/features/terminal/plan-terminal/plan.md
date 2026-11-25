@@ -342,7 +342,7 @@ Manifest (task 08): id `terminal`; commands `terminal.type` (main, arg `'string'
 Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 
 ### Wave 1
-- [ ] [Packages](01-packages.md)
+- [x] [Packages](01-packages.md)
 - [ ] [Host terminal table and protocol 5](02-host-terminal-table.md)
 - [ ] [Sessions drawer slot](07-sessions-drawer.md)
 
@@ -372,6 +372,7 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 
 ### Groups
+- 01 · main agent: a check and a commit, no code · eff7c2fa · npm ls lists the three at the pinned versions; package.json diff adds only the three dependencies entries, exact · concerns: npm replaced the worktree's node_modules symlink with a full install, so the app clone's own node_modules lacks the three packages until it is installed there
 ### Contract changes
 ### Rulings
 ### Review rounds

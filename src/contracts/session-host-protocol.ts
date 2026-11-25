@@ -5,10 +5,15 @@ import type {
   PendingSpawn,
   PipeLine,
 } from './session-host';
+import type {
+  TerminalExit,
+  TerminalInfo,
+  TerminalSpawn,
+} from './terminals';
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.
-export const SESSION_HOST_PROTOCOL = 4;
+export const SESSION_HOST_PROTOCOL = 5;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
 export interface HelloMessage {
@@ -116,7 +121,7 @@ export interface SetKeepIdleMessage {
   type: 'setKeepIdle';
   minutes: number;
 }
-// Asks the host to stop every process it holds.
+// Asks the host to stop every process and shell it holds.
 export interface StopAllMessage {
   type: 'stopAll';
   requestId: number;
@@ -171,6 +176,72 @@ export interface RunStartedEvent {
   run: HostedRun;
 }
 
+// Asks the host to start the shell `request` describes, in a pty; subscribes this connection to it.
+export interface TermSpawnMessage {
+  type: 'termSpawn';
+  request: TerminalSpawn;
+}
+// Raw input for shell `id`'s pty.
+export interface TermWriteMessage {
+  type: 'termWrite';
+  id: string;
+  data: string;
+}
+// Resizes shell `id`'s pty.
+export interface TermResizeMessage {
+  type: 'termResize';
+  id: string;
+  cols: number;
+  rows: number;
+}
+// Asks the host to end shell `id`: SIGHUP through its pty, then SIGKILL after `HOST_END_GRACE_MS`.
+export interface TermKillMessage {
+  type: 'termKill';
+  id: string;
+}
+// Asks for shell `id`'s replay, and its live `termData` and `termClosed` on this connection.
+export interface TermAttachMessage {
+  type: 'termAttach';
+  requestId: number;
+  id: string;
+}
+// Answers the `termAttach` with `requestId`: null, with nothing subscribed, when the host holds no shell `id`;
+// otherwise its replay and whether it runs and is not ending.
+export interface TermAttachReply {
+  type: 'termAttach';
+  requestId: number;
+  id: string;
+  terminal: { replay: string; running: boolean } | null;
+}
+// Asks to stop shell `id`'s events on this connection.
+export interface TermDetachMessage {
+  type: 'termDetach';
+  id: string;
+}
+// Asks the host for every shell it holds.
+export interface TermListMessage {
+  type: 'termList';
+  requestId: number;
+}
+// Every shell the host holds, answering the `termList` with `requestId`.
+export interface TermListReply {
+  type: 'termList';
+  requestId: number;
+  terminals: TerminalInfo[];
+}
+// A live chunk of shell `id`'s output.
+export interface TermDataEvent {
+  type: 'termData';
+  id: string;
+  data: string;
+}
+// Shell `id` exited with `exit`, or its spawn was refused.
+export interface TermClosedEvent {
+  type: 'termClosed';
+  id: string;
+  exit: TerminalExit;
+}
+
 // Every message an app sends a host.
 export type ClientMessage =
   | HelloMessage
@@ -186,7 +257,14 @@ export type ClientMessage =
   | StopAllMessage
   | SetPendingMessage
   | ListRunsMessage
-  | ForgetRunsMessage;
+  | ForgetRunsMessage
+  | TermSpawnMessage
+  | TermWriteMessage
+  | TermResizeMessage
+  | TermKillMessage
+  | TermAttachMessage
+  | TermDetachMessage
+  | TermListMessage;
 // Every message a host sends an app.
 export type HostMessage =
   | HelloReply
@@ -197,7 +275,11 @@ export type HostMessage =
   | ClosedEvent
   | SpawnedEvent
   | ListRunsReply
-  | RunStartedEvent;
+  | RunStartedEvent
+  | TermAttachReply
+  | TermListReply
+  | TermDataEvent
+  | TermClosedEvent;
 
 const HOST_RECORD_NAME = /^host-v(\d+)\.json$/;
 const RUNS_FILE_NAME = /^runs-v(\d+)\.json$/;

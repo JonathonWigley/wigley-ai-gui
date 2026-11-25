@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import type { Timers } from '../contracts/ambient';
+import type { Disposable } from '../contracts/disposable';
 import {
   HOST_END_GRACE_MS,
   type HostChildrenRecord,
@@ -16,18 +17,29 @@ import { replaceFile } from './replace-file';
 
 const LEFTOVER_POLL_MS = 200;
 
+// A shell's pid in the children record, from `recordPid` until disposed.
+export interface RecordedPty extends Disposable {
+  // Sends the pid SIGKILL through `deps.processes.signal`. A throw is reported, not passed on. Does nothing once disposed.
+  kill(): void;
+}
+
 // A host's children, and what a host that died left of its own. A host that dies does not take its children with it,
 // so each child stays on its host's own record file from spawn to close, for a later host to end.
 export interface HostChildren {
   // Starts a child as the `spawn` dep does, and records it. The record gains it once the OS has reported it.
   spawn: HostSpawn;
+  // Records a process the host started outside `spawn` (a shell's pty) until disposed, as `spawn` records a child:
+  // once the OS has reported it.
+  recordPid(pid: number): RecordedPty;
   // Reads every protocol's record. One whose writer may still run stays as it is, its children untouched, and is
   // reported, as is one it cannot read. Of each other, ends each process that is still the one recorded: SIGTERM, then
   // SIGKILL after `HOST_END_GRACE_MS`. A process it cannot confirm is left alone and reported. Resolves once each is
   // gone or its steps have run, with that record removed. Never rejects. Call it once, while owning the channel, before
   // the first `spawn`.
   endLeftovers(): Promise<void>;
-  // For a host on its way down: sends each running child SIGTERM, leaving the record for the next host.
+  // For a host on its way down: sends each running child SIGTERM through its handle, and each `recordPid` pid not yet
+  // disposed SIGTERM through `deps.processes.signal`, leaving the record for the next host. An interactive shell
+  // ignores SIGTERM; the next host's `endLeftovers` ends it.
   killAll(): void;
 }
 
@@ -75,6 +87,7 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     hostChildrenFile(SESSION_HOST_PROTOCOL, deps.pid),
   );
   const running = new Set<ChildProcessWithoutNullStreams>();
+  const recordedPtyPids = new Set<number>();
   const recorded = new Map<number, RecordedHostChild>();
   let ownWriter: RecordWriter | null = null;
 
@@ -105,21 +118,27 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     return ownWriter;
   }
 
-  async function recordChild(
-    child: ChildProcessWithoutNullStreams,
+  async function recordOnceReported(
     pid: number,
+    isStillRunning: () => boolean,
   ) {
     try {
       const [writer, reported] = await Promise.all([
         askOwnWriter(),
         processes.report(pid),
       ]);
-      if (reported !== null && running.has(child)) {
+      if (reported !== null && isStillRunning()) {
         recorded.set(pid, { pid, ...reported });
         saveRecord(writer);
       }
     } catch (error) {
       report(`child ${pid} not recorded: ${(error as Error).message}`);
+    }
+  }
+
+  function dropFromRecord(pid: number) {
+    if (ownWriter !== null && recorded.delete(pid)) {
+      saveRecord(ownWriter);
     }
   }
 
@@ -250,12 +269,35 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
       running.add(child);
       child.once('close', () => {
         running.delete(child);
-        if (ownWriter !== null && recorded.delete(pid)) {
-          saveRecord(ownWriter);
-        }
+        dropFromRecord(pid);
       });
-      void recordChild(child, pid);
+      void recordOnceReported(pid, () => running.has(child));
       return child;
+    },
+    recordPid(pid) {
+      recordedPtyPids.add(pid);
+      void recordOnceReported(pid, () => recordedPtyPids.has(pid));
+      let isDisposed = false;
+      return {
+        kill() {
+          if (isDisposed) {
+            return;
+          }
+          try {
+            processes.signal(pid, 'SIGKILL');
+          } catch (error) {
+            report(`pid ${pid} SIGKILL: ${(error as Error).message}`);
+          }
+        },
+        dispose() {
+          if (isDisposed) {
+            return;
+          }
+          isDisposed = true;
+          recordedPtyPids.delete(pid);
+          dropFromRecord(pid);
+        },
+      };
     },
     async endLeftovers() {
       try {
@@ -270,6 +312,13 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     killAll() {
       for (const child of running) {
         child.kill('SIGTERM');
+      }
+      for (const pid of recordedPtyPids) {
+        try {
+          processes.signal(pid, 'SIGTERM');
+        } catch (error) {
+          report(`pid ${pid} SIGTERM: ${(error as Error).message}`);
+        }
       }
     },
   };

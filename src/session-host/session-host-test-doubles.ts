@@ -2,12 +2,14 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { Clock, Timers } from '../contracts/ambient';
+import type { Pty, PtyExit } from '../contracts/pty';
 import type {
   HostedExit,
   HostedSpawn,
   IdleRule,
   PipeLine,
 } from '../contracts/session-host';
+import type { TerminalSpawn } from '../contracts/terminals';
 import type { ProcessSubscriber } from './process-table';
 
 export const IDLE_RULE: IdleRule = {
@@ -34,6 +36,17 @@ export function spawnRequest(id: string): HostedSpawn {
     stdin: [],
     idleRule: IDLE_RULE,
     droppedOutKeys: [],
+  };
+}
+
+export function terminalRequest(id: string): TerminalSpawn {
+  return {
+    id,
+    command: '/bin/zsh',
+    args: ['-l'],
+    cwd: '/work',
+    cols: 80,
+    rows: 24,
   };
 }
 
@@ -111,6 +124,58 @@ export function fakeChild(ran = true) {
 }
 
 export type FakeChild = ReturnType<typeof fakeChild>;
+
+// A shell's pty. `kill()` only counts: the test calls `exit` to end the shell, which fires once, as node-pty's does.
+export function fakePty(pid = 5151) {
+  const dataListeners: ((chunk: string) => void)[] = [];
+  const exitListeners: ((exit: PtyExit) => void)[] = [];
+  const written: string[] = [];
+  const resizes: { cols: number; rows: number }[] = [];
+  let killCount = 0;
+  let hasExited = false;
+  const pty: Pty = {
+    pid,
+    onData: (listener) => {
+      dataListeners.push(listener);
+    },
+    onExit: (listener) => {
+      exitListeners.push(listener);
+    },
+    write: (data) => {
+      written.push(data);
+    },
+    resize: (cols, rows) => {
+      resizes.push({ cols, rows });
+    },
+    kill: () => {
+      killCount += 1;
+    },
+  };
+  return {
+    pty,
+    // Each write's data, in order.
+    written,
+    resizes,
+    // How many times `kill` ran.
+    kills: () => killCount,
+    emitData(chunk: string) {
+      for (const listener of dataListeners) {
+        listener(chunk);
+      }
+    },
+    exit(exit: PtyExit = { exitCode: 0, signal: null }) {
+      if (hasExited) {
+        return;
+      }
+      hasExited = true;
+      for (const listener of exitListeners) {
+        listener(exit);
+      }
+    },
+  };
+}
+
+export type FakePty = ReturnType<typeof fakePty>;
 
 export function recordingSubscriber() {
   const lines: PipeLine[] = [];

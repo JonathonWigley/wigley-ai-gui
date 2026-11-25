@@ -51,9 +51,9 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    │   services.loginStart.set(any task active)
    ▼
  session host (detached; started by the app, or at login through the app's --start-session-host entry)
-   │ pending-v4.json ── timer at `at` ──► skip when `skipWhileBusy` is busy, else spawn
+   │ pending-v<protocol>.json ── timer at `at` ──► skip when `skipWhileBusy` is busy, else spawn
    │   env = own env − ELECTRON_RUN_AS_NODE − unsetEnv + overlay; then writes stdin lines
-   │ runs-v4.json ◄── { id, record, startedAt, skipped, exit }
+   │ runs-v<protocol>.json ◄── { id, record, startedAt, skipped, exit }
    │ pushes runStarted to connected apps; stays alive while pending or runs is non-empty
    ▼
  claude -p … (headless note, task controls)

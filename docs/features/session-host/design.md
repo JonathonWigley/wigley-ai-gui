@@ -22,7 +22,7 @@ session under it.
 
 The host also starts the runs the app queues for later, so a scheduled task fires while the app is quit
 (`docs/features/scheduled-tasks/design.md`). It keeps a pending queue of deferred spawns and a runs record of what it
-started from that queue, persisted in `pending-v4.json` and `runs-v4.json` in its folder. It still knows no harness
+started from that queue, persisted in `pending-v<protocol>.json` and `runs-v<protocol>.json` in its folder. It still knows no harness
 and no MCP: every harness fact a queued run needs arrives in its spawn.
 
 ## Vocabulary

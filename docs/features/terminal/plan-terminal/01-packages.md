@@ -1,6 +1,6 @@
 # 01 — Packages
 
-Status: not started
+Status: done
 Type: Task
 Rung: rote · checks the user's install of three packages and commits it; it writes no code and decides nothing
 Wave: 1 · Depends on: none
@@ -50,3 +50,5 @@ Commit:    one commit, `package.json` and `package-lock.json` only, by pathspec:
            6.0.0 and @xterm/addon-fit 0.11.0 as dependencies for the session terminal"
 
 ## Proof
+
+Commit eff7c2fa · proof: npm ls lists the three at the pinned versions; package.json diff adds only the three dependencies entries, exact · concerns: npm replaced the worktree's node_modules symlink with a full install, so the app clone's own node_modules lacks the three packages until it is installed there

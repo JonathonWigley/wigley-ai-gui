@@ -1,6 +1,6 @@
 # 02 — Host terminal table and protocol 5
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the host's lifecycle: exit rule, drain, stopAll, leftover ending and the held-message order
 Wave: 1 · Depends on: none

@@ -50,5 +50,8 @@ void startSessionHost({
   env: process.env,
   clock,
   timers,
+  ptySpawn: () => {
+    throw new Error('this host build has no pty adapter');
+  },
   exit: (code) => process.exit(code),
 });
