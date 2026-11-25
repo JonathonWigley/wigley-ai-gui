@@ -1,6 +1,6 @@
 # 03 — Built-in places and the Inbox count
 
-Status: in progress
+Status: done
 Type: Parallel
 Rung: standard · each edit adds two fields to an existing `api.modes.add` call, and the count follows `setContext`'s pattern in `src/plugins/work-board/page/start.ts`
 Wave: 3 · Depends on: 02
@@ -60,3 +60,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 1cb6016a · proof: diff read: place and showCommand on all 11 built-ins match the table; Inbox count beside view.stateChanged at start and on change; tsc and npm run lint pass for the wave · concerns: test named as a sentence per the file's style, not workInboxPagePart_NeedsYouItems_SetsModeCount

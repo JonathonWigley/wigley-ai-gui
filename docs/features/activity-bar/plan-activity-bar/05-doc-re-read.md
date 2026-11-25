@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · doc-only: checks prose against landed code
 Wave: 4 · Depends on: 03 (its places are the order the docs state), 04 (the doc re-read runs after every code task)

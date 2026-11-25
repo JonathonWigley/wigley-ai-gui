@@ -156,8 +156,8 @@ Critical path: 01 → 02 → 03 → 05
 - [x] [Grouped bar, counts, peek and pin](02-grouped-bar-peek-pin.md) — after 01
 
 ### Wave 3
-- [ ] [Built-in places and the Inbox count](03-built-in-places-inbox-count.md) — after 02
-- [ ] [Self-test steps for the pin](04-selftest-pin.md) — after 02
+- [x] [Built-in places and the Inbox count](03-built-in-places-inbox-count.md) — after 02
+- [x] [Self-test steps for the pin](04-selftest-pin.md) — after 02
 
 ### Wave 4
 - [ ] [Doc re-read](05-doc-re-read.md) — after 03, 04
@@ -170,10 +170,13 @@ Review base: c22d3488
 ### Groups
 - 01 · hard · 3755a76b (+ef08f2df layer fix, 5075429f format) · diff read: every Produces present; tsc and npm run lint pass after a layer fix and an oxfmt pass · concerns: ModeHandle doc comment still calls first-add order the activity bar's order (carried to 02); nothing pins the shipped shell.activityBar default empty since the merge test left src/config
 - 02 · deep · c17f4869 · diff read: every Produces present (setCount, counted, ACTIVITY_BAR_TOGGLE_PIN, <Leader>vp, the three log lines, both tokens, activityDivider and activityPin parts); pin and pinned codicons exist in the shipped set; oxfmt, tsc and npm run lint pass · concerns: shell-chrome tests now filter key-hint anchors by command because the Pin button anchors one; two long comment lines left unwrapped in src/contracts/plugin.ts; .shell gained position: relative
+- 03 · standard (Inbox test: standard → hard: blocked, harness outside the brief) · 1cb6016a · diff read: place and showCommand on all 11 built-ins match the table; Inbox count beside view.stateChanged at start and on change; tsc and npm run lint pass for the wave · concerns: test named as a sentence per the file's style, not workInboxPagePart_NeedsYouItems_SetsModeCount
+- 04 · standard · f448bb26 · diff read: group 'activity bar pin' last after transparency, width start, Space v p twice expecting pinned then unpinned with both screenshots; tsc and lint pass; the self-test runs at the test gate · concerns: the start in Docs rests on transparency ending in Docs
 ### Contract changes
 - Shell: planned pin toggle, listener and narrow input → landed togglePin(), isPinned(), onPinnedChanged(listener): Disposable, activityBarNarrowChanged(isNarrow); isPinned is extra, for the chrome's starting pin state · consumers: renderer.ts · group 02
 - mountShell: gained a sixth param log: (message) => void, renderer passes (m) => log('page', m) · consumers: renderer.ts, shell.test.ts · group 02
 - ShellChrome: gained setCount(modeId, count), setActivityBar(setting), setActivityPinned(pinned); CorePageCommand in src/plugins/keymap.ts gained activityBar.togglePin · consumers: renderer.ts · group 02
+- PagePartHarness: gained modeCount(id): number | null, recording ModeHandle.setCount · consumers: work-inbox start.test.ts · group 03
 ### Rulings
 - A groups value with no well-formed group keeps the suggested layout; a well-formed group of only unknown ids still counts as a setting group — fallback to the default look on malformed input — one row and one check change if wrong · group 01 · group 01
 - The mergeUserSettings case builds on the test's own defaults, not coreDefaultSettings, to stay in its layer — the test no longer guards the shipped default — group 01 · group 01
@@ -181,5 +184,6 @@ Review base: c22d3488
 - A narrow pinned bar still peeks on hover; the pin stays set but does not apply below 680px — the bar behaves as unpinned there — group 02 · group 02
 - The peek look is CSS on .shell-activity-bar.is-peeking with the dense chrome background, not the material-chrome--dense class — keeps the state classes to the three the contract names — group 02 · group 02
 - The activity bar uses overflow-x: hidden so the 40px icon column shows no scrollbar — a wide item's ellipsis clips at the bar edge if wrong — group 02 · group 02
+- The page-part harness records counts and gains modeCount(id), like modeContext — the Inbox test had no mode fake of its own — group 03 · group 03
 ### Review rounds
 ### Test gate

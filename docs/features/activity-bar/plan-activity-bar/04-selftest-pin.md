@@ -1,6 +1,6 @@
 # 04 — Self-test steps for the pin
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · follows the existing activity bar steps in `src/plugins/docs/main/selftest-script.ts` (the `marked Docs in the activity bar` steps)
 Wave: 3 · Depends on: 02
@@ -26,3 +26,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit f448bb26 · proof: diff read: group 'activity bar pin' last after transparency, width start, Space v p twice expecting pinned then unpinned with both screenshots; tsc and lint pass; the self-test runs at the test gate · concerns: the start in Docs rests on transparency ending in Docs
