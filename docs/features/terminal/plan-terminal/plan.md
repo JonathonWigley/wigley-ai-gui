@@ -358,7 +358,7 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 - [x] [Terminal plugin main](08-terminal-main.md) — after 06
 
 ### Wave 5
-- [ ] [Terminal plugin page](09-terminal-page.md) — after 06, 07, 08
+- [x] [Terminal plugin page](09-terminal-page.md) — after 06, 07, 08
 
 ### Wave 6
 - [ ] [Demo, self-test, skill and docs](10-demo-selftest-docs.md) — after 08, 09
@@ -380,6 +380,7 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - 04 · deep → deep: the plan's helper-mode stop, settled by a main-agent ruling · 16718672 · diff read: createNodePtySpawn and nodePtySpawn, external node-pty, packageAfterCopy copy, asar unpack glob and both layer entries present; typecheck, oxlint, oxfmt, layers clean; the bundle, unpacked files and codesign checks wait for the live session · concerns: Windows conout worker path rewrites only node_modules.asar (outside this run); AGENTS.md src map says src/session-host imports only contracts and shared; install-app's npm ci now runs the repo postinstall
 - 06 · hard · 02eb873f · diff read: MainServices.terminals, PageServices.terminals, PlatformPrograms.shell, trackedTerminals, fake terminal host and fake emulator present; typecheck, oxlint, layers, boundary, styles clean; oxfmt applied to two files (8d tooling commit) · concerns: AGENTS.md does not name services.terminals or the two fakes yet (task 10)
 - 08 · deep · 59f1e38d · diff read: TerminalOpened, TerminalChannel, terminalOutputSlot match plan.md; manifest registered in manifests.ts and main.ts; wave 4 typecheck, layers, boundary, styles clean; oxfmt commit 759901e2 · concerns: no layouts/default until 09; page commands toggle/back/restart declared before 09's page part; demo self-test fails until 10 adds a demo step; README Settings row, CHANGELOG and AGENTS.md src map wait for 10; oxlint no-useless-spread warning at shells.ts killAll (the copy guards deletion while iterating, harmless)
+- 09 · deep · 8da257e4 · diff read: terminalPagePart with toggle/back/restart, readTerminalLook, default drawerHeader layout, page.ts entry after visualPagePart, the three binds after <Leader>bh, keymap.md rows; wave 5 typecheck, oxlint, layers, boundary, styles clean; oxfmt commit 5acfe63b · concerns: <C-`> is a chord in scope any with no key-hint anchor, so the self-test's placement check fails until one is placed (main-agent ruling: task 10 adds it); layouts design.md owner list lacks terminal's drawerHeader (task 10/11); typed for a session with no row reaches addDrawer unchecked; the view's shown closure reads drawer before it is set, safe only because a drawer starts closed
 ### Contract changes
 - session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
 - TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
@@ -396,5 +397,9 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - after detachAll/killAll every waiting or later open, restart, type rejects 'the shell start for <id> was cancelled' · group 08
 - a shell attached after stop is detached (restart/quit) or killed (end), not adopted · group 08
 - type on a closed shell skips the write and still sends typed · group 08
+- layouts.show built as show<Layout>, since readTerminalLayout returns the optional-part Layout, as agent-skills does · group 09
+- page test runs on startDrawingPagePart so headers draw through the real default layout.js · group 09
+- a rejected write or resize logs '<write|resize> failed in <label>: <error>', outside the pinned log list · group 09
+- main agent: task 10 places the Ctrl+backtick key-hint anchor (a kit.keyHint for terminal.toggle in the default drawer header, or wherever AGENTS.md § Key hints puts a chord with no other home) · group 09
 ### Review rounds
 ### Test gate

@@ -402,16 +402,6 @@ User-facing features, those other work builds on first.
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
   the keys). Builds on the runtime command API (command labels) and the core picker service (`services.picker`), both landed. Deferred from the docs
   browser (`docs-browser/design.md`).
-- **Terminal in the app** — *needs a feature plan*: a real interactive shell inside the app, so the user runs terminal
-  commands without leaving it: a sign-in such as `gcloud auth login`, and the commands print mode refuses. The app has
-  no terminal today: `package.json` holds no pty or terminal emulator, and `ProcessRunner` only runs a program to its
-  exit and returns its output. It needs a pty and an emulator, each behind a contract and its own adapter, with the
-  default shell picked per platform for macOS and Windows; each package is a third-party ask, and a pty is a native
-  module the Electron build must compile. Open for the plan: where it lives (a session tab that starts in the session's
-  folder, the shell's `panel` area, or a mode of its own); whether a shell outlives an app restart through the session
-  host; how keys reach it, since chord binds fire ahead of a text box and a shell needs most of them; and what the
-  layout draws, since the emulator draws its own grid. Source session: Claude Code
-  b35fd8f9-6b58-4dd4-b32c-fc67f930e763 in ~/Documents/ai-dev.
 - **Codex harness adapter** — *needs a feature plan*: a Codex adapter behind `AgentHarness`, declaring Codex's own
   session controls (`agent-chat/design.md`). With it: a Codex process started from a shell Claude Code spawned
   inherits `CLAUDECODE=1`, so its row reads `Claude`; and Codex last-loaded times in the docs index (docs-browser

@@ -1,6 +1,6 @@
 /* The default layout's drawer header: one row over the screen, the folder in
    mono and dim, taking the room and ellipsized, then the state tag and, once
-   the shell has exited, the Restart button. */
+   the shell has exited, the Restart button, and the close hint. */
 
 [data-layout-owner='terminal'][data-layout='default'].terminal-header {
   display: flex;

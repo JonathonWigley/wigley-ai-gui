@@ -1,6 +1,6 @@
 # 10 — Demo, self-test, skill and docs
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: standard · follows agent-skills' demo step and self-test pattern and the docs' existing tables
 Wave: 6 · Depends on: 08, 09

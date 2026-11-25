@@ -6,11 +6,14 @@ import type {
 import { chatMainKey } from '../../chat/contract';
 import {
   type SessionsMainEvents,
+  sessionsMainKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
 import { type TerminalChannel, terminalOutputSlot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { terminalManifest } from '../manifest';
+import { registerDemoSteps } from './demo-steps';
+import { terminalSelfTestScript } from './selftest-script';
 import { TERMINAL_SESSION_NOTE } from './session-note';
 import { createShells } from './shells';
 
@@ -23,7 +26,8 @@ type TerminalApi = MainApi<
 
 const LINE_BREAK = /[\r\n]/;
 
-// Registers terminal's layouts, hands chat the session note, and runs each
+// Registers terminal's layouts and the Terminal demo step's main half, hands
+// the self-test the drawer's script, hands chat the session note, and runs each
 // session's shell: the page's channel calls, `terminal.type` for the calling
 // session, and a kill on `sessions.closed`. Once chat's restore settles it
 // adopts the host's shells. A restart or quit leaves the shells running in the
@@ -49,6 +53,16 @@ export const terminalMainPart: MainPart<typeof terminalManifest> = {
       timers: services.timers,
       log: services.log,
     });
+    registerDemoSteps(services, { shells });
+    services.selfTest?.run(
+      terminalSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        chat,
+        sessions: api.dependency(sessionsMainKey),
+      }),
+    );
     api.channel.handle('open', (sessionId, cols, rows) =>
       shells.open(sessionId, cols, rows),
     );

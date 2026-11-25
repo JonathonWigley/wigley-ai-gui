@@ -1,6 +1,6 @@
 # 09 — Terminal plugin page
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · orders replayed and live output by shell id and sequence number across an async channel, through drawer open, exit, restart and a restart of the main part alone
 Wave: 5 · Depends on: 06, 07, 08
@@ -236,3 +236,5 @@ Done when: `npm run typecheck` passes; the tests above exist; the test gate runs
 Commit:    one commit: "terminal: page part — the drawer per session with its screen, header layout and keys"
 
 ## Proof
+
+Commit 8da257e4 · proof: diff read: terminalPagePart with toggle/back/restart, readTerminalLook, default drawerHeader layout, page.ts entry after visualPagePart, the three binds after <Leader>bh, keymap.md rows; wave 5 typecheck, oxlint, layers, boundary, styles clean; oxfmt commit 5acfe63b · concerns: <C-`> is a chord in scope any with no key-hint anchor, so the self-test's placement check fails until one is placed (main-agent ruling: task 10 adds it); layouts design.md owner list lacks terminal's drawerHeader (task 10/11); typed for a session with no row reaches addDrawer unchecked; the view's shown closure reads drawer before it is set, safe only because a drawer starts closed

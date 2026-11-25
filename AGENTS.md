@@ -101,13 +101,13 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
                  `PluginCatalog` the host, the plugin switch and the config read;
                  `list-picker.ts`: the shared list picker's contract behind `services.picker`; `system-stats.ts`: the
                  `SystemStats` service behind `services.systemStats` and its raw sample; `pull-requests.ts`: the `PullRequests` service behind `services.pullRequests`; `screen-capture.ts`: the
-                 `ScreenCapture` service behind `services.screenCapture`, the windows the OS can stream; `demo.ts`: the demo's step records — `DemoStep` and `DemoMainStep`, the `DemoStepRegistry` behind `services.demoSteps`, `DEMO_SECTIONS` in run order, `DEMO_HARNESS_ID` and `DEMO_PROFILE`); imports nothing
+                 `ScreenCapture` service behind `services.screenCapture`, the windows the OS can stream; `demo.ts`: the demo's step records — `DemoStep` and `DemoMainStep`, the `DemoStepRegistry` behind `services.demoSteps`, `DEMO_SECTIONS` in run order, `DEMO_HARNESS_ID` and `DEMO_PROFILE`; `terminals.ts`: the `TerminalHost` behind main `services.terminals`, a session's shells; `pty.ts`: the pty spawn the session host's terminal table runs over; `terminal-emulator.ts`: the `TerminalEmulator` behind page `services.terminals`, which makes a terminal screen); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `plugin-url.ts`: the `wigley-plugin:` URLs of a user plugin's files and the path each
                  serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-login-start.ts`: the
-                 login start's test double, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
+                 login start's test double, `fake-terminal-host.ts` and `fake-terminal-emulator.ts`: the `TerminalHost`'s and the `TerminalEmulator`'s doubles, the self-test's and a drive run's shells, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
@@ -239,7 +239,7 @@ src/main/        core main process; main.ts is its composition root
   processes/     runs a program to its end, killed past an optional timeout, and returns its exit code and output;
                  spawns one with its stdin, stdout and stderr as text, its exit and its kill; or starts one detached,
                  its output appended to a log file when one is given, so it outlives the app's quit, behind
-                 ProcessRunner; `resolveProgram` finds a program (`python`, `claude`, `unity`) from the Platform
+                 ProcessRunner; `resolveProgram` finds a program (`python`, `claude`, `unity`, `shell`) from the Platform
                  record's per-OS candidates, `python` from the core `programs.python` setting first; on Windows a bare name is looked up over PATH × PATHEXT and a
                  `.cmd` or `.bat` starts through `cmd.exe /d /s /c` (`src/shared/program-lookup.ts`);
                  `limitRuns` caps how many of a runner's runs go at once (git's runner and gh's runner each hold their own limiter of 4), not its spawns;
@@ -247,7 +247,7 @@ src/main/        core main process; main.ts is its composition root
                  run, times out or exits non-zero
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers through `ProcessRunner.startDetached`, drains an older protocol's host, and hands out hosted
-                 processes;
+                 processes and, beside them, the terminals (`TerminalHost`, a session's shells);
                  `docs/features/session-host/design.md`
   login-start/   the adapters behind LoginStart, which start the session host at login: Electron's `agentService`
                  login item, which `main.ts` uses in the live stable app on macOS; a LaunchAgent file, built and tested
@@ -272,9 +272,12 @@ src/main/        core main process; main.ts is its composition root
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
                  logs their pipes, ends idle ones while no app is connected, and starts the app's pending runs at
-                 their time (`pending-queue.ts`: the persisted pending table, run records, timers and skip rule)
+                 their time (`pending-queue.ts`: the persisted pending table, run records, timers and skip rule), and
+                 keeps each session's shell (`terminal-table.ts`: the terminal table, its output buffer and its
+                 adoption by the next app run)
                  → imports only src/contracts,
-                 and src/shared; no electron import
+                 and src/shared, plus `node-pty/` (the node-pty adapter, the only file that imports `node-pty`;
+                 `check-layers.mts` names its own entry); no electron import
 src/preload/     exposes only a one-time claim (`bridge-claim.ts`, as `window.wigley.claim()`) that hands the Bridge to the
                  page's first caller
 src/renderer/    core page; renderer.ts is its composition root
@@ -286,6 +289,8 @@ src/renderer/    core page; renderer.ts is its composition root
                  and `core-slots.ts`, which writes `core.mode`, `core.scope` and `core.theme`
   page-restores.ts the page's restore windows behind `api.restores`, one per page load and live start: the tracked
                  restores, and when each window settles (§ A slot)
+  xterm/         the xterm.js adapter behind `TerminalEmulator` (`xterm-emulator.ts`; `key-rule.ts`: which keys the
+                 screen leaves to the app) → the only `@xterm` import
   key-anchors.ts the anchors: draws a command's keys into an element a view names (§ Key hints); `anchor-wiring.ts`
                  redraws and shows or hides them on a keymap or scope change, and `box-focus.ts` tells whether focus is in
                  a text box
@@ -333,6 +338,12 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   agent-skills/  main/ (registers its layouts, hands its self-test script), page/ (the session hub's Skills section,
                  through chat's `addSidePart`), layouts/ (its Layout contract and `default` layout);
                  `docs/features/chat-bar/design.md`
+  terminal/      main/ (one shell per session, kept in the session host: owns `terminal.type` and the
+                 `terminal.output` slot, hands chat the session note and its self-test script, registers its demo
+                 step), page/ (the drawer under the session's tabs
+                 through sessions' `addDrawer`, its screen drawn by the `TerminalEmulator` service), layouts/ (its
+                 Layout contract and `default` layout, the drawer's header, which holds the chord's key hint);
+                 `docs/features/terminal/design.md`
   context-sources/ manifest.ts, contract.ts (the `context-sources.breakdowns` slot: each session's last main-agent
                  `contextBreakdown` agent event), main/ (folds `chat.agentEvent` into the slot, deletes on
                  `sessions.ended`, hands its self-test script), page/ (the session hub's Context section through chat's
@@ -1089,7 +1100,7 @@ old path for one release, a script that exits 0 and prints nothing, and the next
   away. Claude Code keeps the tool schemas a session started with, so a new tool reaches only sessions started after it
   lands. An agent reaches every app action through `agent-commands`' three tools, `list_commands`, `run_command` and
   `read_state`, so a new agent ability is a new command, never a new tool.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), pull requests (`pullRequests`, main only, through the `gh` CLI), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), starting the session host at login (`loginStart`, main only), the demo step registry (`demoSteps`, both processes: the core owns it, so no plugin depends on `demo`), the plugin switch's `mayDisable` and `runDisabledForNow` (`pluginSwitch`, main only), the clone the app was built from (`cloneDir`, main only, null when none resolves), opening a link in the default browser, the Downloads folder and showing a file in Finder or Explorer (`downloadsDir` and `revealPath`, main only), how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), pull requests (`pullRequests`, main only, through the `gh` CLI), image re-encoding (`images`, main only), the machine's CPU, GPU, memory, network and disk readings (`systemStats`, main only), the windows the OS can stream (`screenCapture`, main only), starting the session host at login (`loginStart`, main only), the session's shells (`terminals`, both processes: main's `TerminalHost`, the page's `TerminalEmulator`), the demo step registry (`demoSteps`, both processes: the core owns it, so no plugin depends on `demo`), the plugin switch's `mayDisable` and `runDisabledForNow` (`pluginSwitch`, main only), the clone the app was built from (`cloneDir`, main only, null when none resolves), opening a link in the default browser, the Downloads folder and showing a file in Finder or Explorer (`downloadsDir` and `revealPath`, main only), how the app was started (`runMode`: live, self-test or drive), the `Platform` record of the OS the app runs on (`platform`, with the OS string as `platform.os`; a page reads the same record as `api.platform`) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
   its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
   watches, aborts its running processes and kills its spawned ones (a detached start outlives it), destroys its
@@ -1341,7 +1352,8 @@ name and prints its file and line.
 - `npm run install-app` builds and installs the stable app from a committed ref (`main` unless `--ref` names
   another). It packages in a build-only worktree beside the git checkout, `.wigley-ai-gui-build`, so neither
   uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when its `node_modules` is
-  missing or the lockfile changed since the last one. It copies the packaged app beside the install while the
+  missing or the lockfile changed since the last one; the repo's `postinstall` (`scripts/node-pty-helper-mode.mts`)
+  runs with it and makes node-pty's macOS `spawn-helper` executable. It copies the packaged app beside the install while the
   stable app still runs, then quits that app, never force-killing it: one still running after 15 s fails the install
   and leaves the installed app untouched, the staged copy waiting for the next run, which deletes it. Quitting ends
   no session: the session host keeps running from the old build (`docs/features/session-host/design.md`). On macOS

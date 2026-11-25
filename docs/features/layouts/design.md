@@ -153,6 +153,7 @@ does.
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `live-view` | `live-view.layout` | the session hub's Live section: its line and button above the stream, and the place the stream's video goes |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: a chip per skill, grouped by namespace |
+| `terminal` | `terminal.layout` | the session terminal drawer's header: the shell's folder, its state tag, a Restart button once it exited, and the close key hint |
 | `context-sources` | `context-sources.layout` | the session hub's Context section: the sources' bar, the window's fill and a row per source with its items, the largest five until the more line shows them all |
 | `permission-review` | `permission-review.layout` | the verdict on a permission card and a confirm round: reviewing, the verdict with its risk and summary, or review unavailable with its reason |
 | `gallery` | `gallery.layout` | each primitive's sample block |
