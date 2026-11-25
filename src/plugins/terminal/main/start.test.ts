@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgramCandidate } from '../../../contracts/platform';
 import type { PartStop } from '../../../contracts/plugin';
-import type { TerminalExit, TerminalHost } from '../../../contracts/terminals';
+import type {
+  TerminalEvents,
+  TerminalExit,
+  TerminalHost,
+} from '../../../contracts/terminals';
 import {
   createFakeTerminalHost,
   type FakeTerminalHost,
@@ -36,6 +40,31 @@ const ALPHA = sessionRow('s1', { label: 'alpha', projectDir: '/work/alpha' });
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// The host with its writes through the spawned handle counted into `writes`,
+// which the fake handle alone hides: it drops a write to a closed record. Runs
+// `afterSpawn` with the spawn's events once the host has spawned.
+function writeCountingTerminals(
+  host: FakeTerminalHost,
+  writes: string[],
+  afterSpawn: (events: TerminalEvents) => void = () => undefined,
+): TerminalHost {
+  return {
+    spawn(request, events) {
+      const process = host.spawn(request, events);
+      afterSpawn(events);
+      return {
+        ...process,
+        write(data) {
+          writes.push(data);
+          process.write(data);
+        },
+      };
+    },
+    attach: (id, events) => host.attach(id, events),
+    list: () => host.list(),
+  };
 }
 
 interface StartOptions {
@@ -83,6 +112,7 @@ function startOnHarness(options: StartOptions = {}) {
   const part = {
     harness,
     host,
+    rows,
     notes,
     open: (sessionId: string, cols: number, rowCount: number) =>
       harness.invoke(
@@ -164,13 +194,13 @@ describe('terminalMainPart', () => {
       case: 'LineFeed',
       arg: 'a\nb',
       caller: 's1',
-      error: 'terminal.type takes one line: the text holds a line break',
+      error: 'a line break',
     },
     {
-      case: 'CarriageReturn',
-      arg: 'a\rb',
+      case: 'ControlCharacter',
+      arg: 'a\x0fb',
       caller: 's1',
-      error: 'terminal.type takes one line: the text holds a line break',
+      error: 'control character',
     },
   ])('type_Refused_$case', async ({ arg, caller, error }) => {
     const part = startOnHarness();
@@ -265,13 +295,6 @@ describe('terminalMainPart', () => {
         await part.open('s1', 0, 24);
       },
     },
-    {
-      case: 'WriteToAnExitedShell',
-      act: async (part: ReturnType<typeof startOnHarness>) => {
-        part.host.close('s1', EXITED);
-        part.harness.invoke('write', 's1', 'x');
-      },
-    },
   ])('ignored_$case', async ({ act }) => {
     const part = startOnHarness();
     await part.openShell();
@@ -280,6 +303,37 @@ describe('terminalMainPart', () => {
 
     expect(part.record(0).resizes).toEqual([]);
     expect(part.record(0).writes).toEqual([]);
+  });
+
+  it('write_ToAnExitedShell_ReachesNoHandle', async () => {
+    const writes: string[] = [];
+    const part = startOnHarness({
+      terminals: (host) => writeCountingTerminals(host, writes),
+    });
+    await part.openShell();
+    part.host.close('s1', EXITED);
+
+    part.harness.invoke('write', 's1', 'x');
+
+    expect(writes).toEqual([]);
+  });
+
+  it('type_ShellClosedBeforeTheWrite_SendsTypedAndWritesNothing', async () => {
+    const writes: string[] = [];
+    const part = startOnHarness({
+      terminals: (host) =>
+        writeCountingTerminals(host, writes, (events) =>
+          queueMicrotask(() => events.closed(EXITED)),
+        ),
+    });
+    await part.ready();
+
+    await part.type('ls');
+
+    expect(writes).toEqual([]);
+    expect(part.sentOf('typed')).toEqual([
+      { sessionId: 's1', shell: shellId(1), text: 'ls' },
+    ]);
   });
 
   // `resolveProgram` answers only when the test resolves it, after the open
@@ -318,6 +372,39 @@ describe('terminalMainPart', () => {
     const { program, opening } = await resolvingShell(part);
 
     part.harness.emit('sessions.closed', { sessionId: 's1' });
+    program.resolve(ZSH);
+
+    await expect(opening).rejects.toThrow(
+      'terminal: the shell start for s1 was cancelled',
+    );
+    expect(part.host.terminals).toEqual([]);
+  });
+
+  it.each(
+    (['restart', 'end'] satisfies PartStop[]).flatMap((stop) =>
+      (['open', 'restart', 'type'] as const).map((call) => ({ stop, call })),
+    ),
+  )('stop_$stop_WhileAdopting_Rejects_$call', async ({ stop, call }) => {
+    const part = startOnHarness();
+    const calling =
+      call === 'type' ? part.type('ls') : part[call]('s1', 100, 30);
+    const rejected = expect(calling).rejects.toThrow(
+      'terminal: the shell start for s1 was cancelled',
+    );
+
+    await part.harness.stop(stop);
+
+    await rejected;
+    expect(part.host.terminals).toEqual([]);
+  });
+
+  it.each([{ stop: 'restart' }, { stop: 'end' }] satisfies {
+    stop: PartStop;
+  }[])('stop_$stop_WhileResolving_RejectsTheStart', async ({ stop }) => {
+    const part = startOnHarness();
+    const { program, opening } = await resolvingShell(part);
+
+    await part.harness.stop(stop);
     program.resolve(ZSH);
 
     await expect(opening).rejects.toThrow(
@@ -480,6 +567,98 @@ describe('terminalMainPart', () => {
     });
     expect(part.host.terminals).toHaveLength(1);
     expect(part.record(0).request).toMatchObject({ cols: 100, rows: 30 });
+  });
+
+  // The host's attach answers only once the test opens the gate; `attached`
+  // lists the ids it was asked for.
+  function gatedAttach(attached: string[]) {
+    const gate = deferred<undefined>();
+    return {
+      gate,
+      terminals: (host: FakeTerminalHost): TerminalHost => ({
+        spawn: (request, events) => host.spawn(request, events),
+        attach: async (id, events) => {
+          attached.push(id);
+          await gate.promise;
+          return host.attach(id, events);
+        },
+        list: () => host.list(),
+      }),
+    };
+  }
+
+  it.each([
+    { stop: 'restart', detaches: 1, kills: 0 },
+    { stop: 'quit', detaches: 1, kills: 0 },
+    { stop: 'end', detaches: 0, kills: 1 },
+  ] satisfies { stop: PartStop; detaches: number; kills: number }[])(
+    'adopt_AttachResolvesAfterStop_$stop_ReleasesItAndAttachesNoMore',
+    async ({ stop, detaches, kills }) => {
+      const attached: string[] = [];
+      const { gate, terminals } = gatedAttach(attached);
+      const part = startOnHarness({
+        rows: [ALPHA, sessionRow('s2')],
+        running: [
+          { id: 's1', output: 'one' },
+          { id: 's2', output: 'two' },
+        ],
+        terminals,
+      });
+      await part.ready();
+
+      await part.harness.stop(stop);
+      gate.resolve(undefined);
+      await flush();
+
+      expect(attached).toEqual(['s1']);
+      expect(part.record(0).detaches).toBe(detaches);
+      expect(part.record(0).kills).toBe(kills);
+      expect(part.record(1)).toMatchObject({ detaches: 0, kills: 0 });
+      expect(part.sentOf('data')).toEqual([]);
+    },
+  );
+
+  it('adopt_RowClosedDuringAttach_KillsTheShell', async () => {
+    const { gate, terminals } = gatedAttach([]);
+    const part = startOnHarness({
+      running: [{ id: 's1', output: 'one' }],
+      terminals,
+    });
+    await part.ready();
+
+    part.rows.delete('s1');
+    part.harness.emit('sessions.closed', { sessionId: 's1' });
+    gate.resolve(undefined);
+    await flush();
+
+    expect(part.record(0).kills).toBe(1);
+  });
+
+  it('ready_AttachRejects_LogsAndAttachesNoMore', async () => {
+    const attached: string[] = [];
+    const part = startOnHarness({
+      rows: [ALPHA, sessionRow('s2')],
+      running: [
+        { id: 's1', output: 'one' },
+        { id: 's2', output: 'two' },
+      ],
+      terminals: (host) => ({
+        spawn: (request, events) => host.spawn(request, events),
+        attach: (id) => {
+          attached.push(id);
+          return Promise.reject(new Error('host gone'));
+        },
+        list: () => host.list(),
+      }),
+    });
+
+    await part.ready();
+
+    expect(attached).toEqual(['s1']);
+    expect(part.harness.logs).toContainEqual({
+      source: 'terminal',
+      message: 'adoption failed: host gone',
+    });
   });
 
   it('outputSlot_CoalescesWithin250Ms', async () => {

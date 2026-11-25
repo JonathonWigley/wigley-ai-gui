@@ -44,9 +44,12 @@ export interface ShellsDeps {
 // at 80×24, writes the text with no Enter and sends `typed`. `kill` ends a
 // session's shell and deletes its `terminal.output` key, and cancels a start
 // still resolving, whose callers then reject. `adopt` subscribes to the host's
-// shells whose session has a row, and kills the rest. `detachAll` leaves every
-// shell running in the host for the next start to adopt; `killAll` ends every
-// shell. After either, every call rejects.
+// shells whose session has a row, and kills the rest; once the part stopped it
+// attaches no more shells, and a shell it attached meanwhile is detached after
+// `detachAll` and killed after `killAll`. `detachAll` leaves every shell running
+// in the host for the next start to adopt; `killAll` ends every shell. After
+// either, every `open`, `restart` and `type` rejects; `write`, `resize` and
+// `kill` do nothing.
 export interface Shells {
   open(sessionId: string, cols: number, rows: number): Promise<TerminalOpened>;
   write(sessionId: string, data: string): void;
@@ -322,7 +325,8 @@ export function createShells(deps: ShellsDeps): Shells {
   };
 
   // Subscribes to a listed shell whose session has a row; false when the host
-  // no longer holds it, or the part stopped while it attached.
+  // no longer holds it, the part stopped while it attached, or the row closed
+  // while it attached (its shell is then killed).
   const adoptOne = async (sessionId: string): Promise<boolean> => {
     const events = eventsOf(sessionId);
     const attached = await deps.terminals.attach(sessionId, events);
@@ -335,6 +339,10 @@ export function createShells(deps: ShellsDeps): Shells {
       } else {
         attached.process.detach();
       }
+      return false;
+    }
+    if (!deps.hasRow(sessionId)) {
+      attached.process.kill();
       return false;
     }
     const { process, replay } = attached;
@@ -368,6 +376,9 @@ export function createShells(deps: ShellsDeps): Shells {
     let adoptedCount = 0;
     let endedCount = 0;
     for (const { id } of listed) {
+      if (stopped !== null) {
+        break;
+      }
       if (deps.hasRow(id)) {
         adoptedCount += (await adoptOne(id)) ? 1 : 0;
       } else {
@@ -446,7 +457,7 @@ export function createShells(deps: ShellsDeps): Shells {
     killAll() {
       stopped = 'killed';
       cancelStarts();
-      for (const sessionId of [...table.keys()]) {
+      for (const sessionId of table.keys()) {
         kill(sessionId);
       }
       markAdopted();

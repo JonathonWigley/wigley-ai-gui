@@ -24,7 +24,9 @@ type TerminalApi = MainApi<
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-const LINE_BREAK = /[\r\n]/;
+// A line break, any other C0 control character or DEL: the shell's line editor
+// acts on each before the user presses Enter.
+const CONTROL_CHARACTER = /[\x00-\x1f\x7f]/;
 
 // Registers terminal's layouts and the Terminal demo step's main half, hands
 // the self-test the drawer's script, hands chat the session note, and runs each
@@ -83,9 +85,9 @@ export const terminalMainPart: MainPart<typeof terminalManifest> = {
           if (callerSessionId === undefined) {
             throw new Error('terminal.type needs a calling session');
           }
-          if (LINE_BREAK.test(arg)) {
+          if (CONTROL_CHARACTER.test(arg)) {
             throw new Error(
-              'terminal.type takes one line: the text holds a line break',
+              'terminal.type takes one line of plain text: the text holds a line break or another control character',
             );
           }
           await shells.type(callerSessionId, arg);

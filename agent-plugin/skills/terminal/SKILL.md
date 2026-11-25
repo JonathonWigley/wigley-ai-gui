@@ -34,7 +34,8 @@ prompt, a browser hand-off. A command the agent can run in its own shell runs th
 
 ## Limits
 
-- The text is one line: a line break is refused.
+- The text is one line of plain text: a line break or any other control character (a tab, Esc,
+  Ctrl+O) is refused.
 - No Enter is sent.
 - The output slot is plain text: a full-screen program, or a key such as Esc, does not read well
   through it.
