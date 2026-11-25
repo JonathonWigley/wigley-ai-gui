@@ -128,7 +128,7 @@ does.
 
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
-| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; each toast; the five chrome frames take the layout's CSS |
+| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item, the dividers between its groups and its Pin button; each toast; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards, `cards.kinds` (a card per plugin kind id) and `cards.other` (the card of a plugin kind with no `kinds` builder); head, rail, review and notices panes; the rail's head and foot strips (`railHead`, `railFoot`) and the item pager (`pager`); the cancel prompt's frame (`dialogFrame`) and body (`confirmBody`), picked by the setting alone |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session header; the composer and its status line, a `/` completion row's description (`completionDescription`), the attachments, the picker rows and section headings (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time and profile on its side-bar row (`rowClock`, `rowProfile`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes; the column strips (`tasksHead`, `itemsHead`, `tasksFoot`, `cardEdge`, `reviewFooter`); the cancel confirm's frame (`dialogFrame`) and body (`confirmBody`) |

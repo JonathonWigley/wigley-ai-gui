@@ -776,10 +776,13 @@ old path for one release, a script that exits 0 and prints nothing, and the next
   over `main`'s end and the left bar against the activity bar over `main`'s start (a side bar over `main` is laid
   past it). Only the side bar resizes by keys; the left and right bars by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
-  title and an optional side bar element, through the page plugin API, and binds the command that shows it
+  title, an optional side bar element, its suggested `place` in the activity bar and the `showCommand` whose key the
+  bar shows, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`, Schedules on `Space k t`; pressed while its mode already shows, the same command toggles the
-  side bar). The activity bar lists every mode, the side bar slot shows the shown mode's side bar, and the mode's
-  handle sets the title bar's context. In a narrow window — below 680 px, or with the left bar crowding the side bar,
+  side bar). The activity bar lists every mode in groups, by the plugins' suggested places or wholly by the core
+  `shell.activityBar` setting, peeks its names on hover and pins open on `Space v p`
+  (`docs/features/activity-bar/design.md`); the side bar slot shows the shown mode's side bar, and the mode's
+  handle sets the title bar's context and the count on its activity item. In a narrow window — below 680 px, or with the left bar crowding the side bar,
   as the Demo panel opening can — the side bar opens over the content, and a plugin
   calls its handle's `picked()` when the user picks something in its side bar, which closes that overlay. The core tells the
   shown mode when its side bar hides (`sideBarHidden`) or opens over the content (`sideBarOpenedOver`), and its plugin

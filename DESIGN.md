@@ -175,7 +175,7 @@ means something.
 
 - **Spacing** is the `space-*` scale only (2, 4, 6, 8, 12, 16, 24, 32 in Mocha).
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
-  bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
+  bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width` (`activitybar-expanded-width` while it peeks or is pinned),
   the side bar's opening width `sidebar-width`, the left bar's `leftbar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
   `icon-size`, the docs page's right column `docs.aside-width`, the system stats panel's number columns `system-stats.column-width`, the body a session hub section keeps while a `shrinksLast` section takes the room `chat.side-section-floor`, the body a `shrinksLast` section itself keeps `chat.side-shrinks-last-floor`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
@@ -371,7 +371,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `Space ?` prompt inside it (hidden at 640px window width and narrower, where the bar's end track is too
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
-- **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
+- **Activity bar:** L1, icons in groups split by a `border-default` hairline, the last group against the bar's bottom; the shown mode carries a 2px accent mark on its window-side edge, and a mode with a count above zero an `accent` dot on its icon. Resting the pointer for `activitybar-peek-delay` peeks the bar out over the content at `activitybar-expanded-width` with the floating shadow, each item then showing its title, its count as an accent pill and its key, and the Pin button at the bar's end; pinned, the bar keeps that width beside the content (`docs/features/activity-bar/design.md`).
 - **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections, then flat under each section a plugin registers (Retro), whose rows draw muted with a dashed accent edge. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
