@@ -188,4 +188,5 @@ Review base: c22d3488
 - The page-part harness records counts and gains modeCount(id), like modeContext — the Inbox test had no mode fake of its own — group 03 · group 03
 ### Review rounds
 - Round 1: review of c22d3488..9dfcef67 — NEEDS FIXES (1 Important: peek/pin transitions untested; 8 Minor). Fixes bfbeb6bf (standard, determined docs/tests) and f2bc2e4d (hard: Pin click keeps a peek, peek-delay grammar, no bar scrollbar, transition rows). Tier: Medium — the Pin click handling and the delay grammar change behaviour; re-review correctness on the fix commits
+- Round 2: re-review (correctness) of bfbeb6bf..f2bc2e4d — NEEDS FIXES (1 Important: no test that the chrome marks the pin slot, repeat of R1#4; 2 Minor: settings description backticks, ragged rewraps). Fix e9706f59 (standard, determined). Tier: Low — a test, a description string and comment/doc reflows; closes on commit and compile
 ### Test gate
