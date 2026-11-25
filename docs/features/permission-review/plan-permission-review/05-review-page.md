@@ -1,6 +1,6 @@
 # 05 — permission-review page: verdict part and layout
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · its parts live through chat's and forms' redraw lifecycles with no dispose, held by connection, across two async slots
 Wave: 3 · Depends on: 02, 03, 04

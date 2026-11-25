@@ -17,6 +17,7 @@ import {
   sessionsMainKey,
 } from '../../sessions/contract';
 import { permissionReviewsSlot } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { permissionReviewManifest } from '../manifest';
 import { registerDemoSteps } from './demo-steps';
 import { watchReviewRequests } from './review-requests';
@@ -29,16 +30,17 @@ type PermissionReviewApi = MainApi<
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Reviews each unanswered permission entry in `chat.entries` and each round in
-// `forms.confirms` through its session's harness `ask` into
-// `permission-review.reviews`, forgets a session's reviews on
-// `sessions.ended`, registers the verdict demo step's main half, and hands the
-// self-test its script.
+// Registers permission-review's layouts, reviews each unanswered permission
+// entry in `chat.entries` and each round in `forms.confirms` through its
+// session's harness `ask` into `permission-review.reviews`, forgets a
+// session's reviews on `sessions.ended`, registers the verdict demo step's
+// main half, and hands the self-test its script.
 export const permissionReviewMainPart: MainPart<
   typeof permissionReviewManifest
 > = {
   manifest: permissionReviewManifest,
   start(api: PermissionReviewApi) {
+    api.layouts.register({ layoutTypes });
     const reviews = api.state.publish(permissionReviewsSlot);
     const chatSessions = api.state.read(chatSessionSlot);
     const chat = api.dependency(chatMainKey);

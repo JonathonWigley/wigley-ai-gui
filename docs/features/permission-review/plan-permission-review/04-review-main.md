@@ -1,6 +1,6 @@
 # 04 — permission-review main: watcher, ask, reviews slot
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · crosses chat, forms, sessions and the harness registry through async asks, a 60 s timeout, aborts on key removal and session end, and a restart
 Wave: 2 · Depends on: 01, 03
@@ -305,3 +305,4 @@ Commit: one commit for the group, by pathspec (the eleven files above), no co-au
 
 ## Proof
 
+Commit a61e9b8a, 2157d0b2 · proof: diff read: permissionReviewsSlot, Review, chatReviewKey, confirmReviewKey, watcher, findReviewer present; wave typecheck and lint pass after themeTokens fix on the same rung; lead ran the repo's oxfmt --write on review-requests.ts and forms start.test.ts (tooling) · concerns: until 05 the layout setting names no layouts and the demo step has no page half; registerDemoSteps' Disposable is not kept; key parsing misreads a chat session id holding '/' or named confirm

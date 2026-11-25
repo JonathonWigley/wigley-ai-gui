@@ -1,0 +1,46 @@
+/* The default layout's verdict: its heading in the risk's status colour (quiet while reviewing and when unavailable),
+   the summary or reason under it, standing off the card's head below it. */
+
+[data-layout-owner='permission-review'][data-layout='default'].permission-review-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  margin-bottom: var(--wg-space-1);
+  min-width: 0;
+  font-size: var(--wg-text-12);
+}
+
+[data-layout-owner='permission-review'][data-layout='default']
+  .permission-review-verdict-heading {
+  font-weight: var(--wg-weight-semibold);
+}
+
+[data-layout-owner='permission-review'][data-layout='default'][data-risk='low']
+  .permission-review-verdict-heading {
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='permission-review'][data-layout='default'][data-risk='medium']
+  .permission-review-verdict-heading {
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='permission-review'][data-layout='default'][data-risk='high']
+  .permission-review-verdict-heading {
+  color: var(--wg-status-error);
+}
+
+[data-layout-owner='permission-review'][data-layout='default'][data-state='reviewing']
+  .permission-review-verdict-heading {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='permission-review'][data-layout='default'][data-state='unavailable']
+  .permission-review-verdict-heading {
+  color: var(--wg-fg-secondary);
+}
+
+[data-layout-owner='permission-review'][data-layout='default']
+  .permission-review-verdict-detail {
+  color: var(--wg-fg-secondary);
+}

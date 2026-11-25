@@ -1,6 +1,6 @@
 # 02 — Chat entry parts and the redrawn permission card
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds the `addEntryPart` seam and `kit.entryParts` that 05 consumes
 Wave: 2 · Depends on: 01
@@ -232,3 +232,7 @@ and its parts build again with the answered input.
 
 One commit for the group, by pathspec over the Files above, with no co-author trailer:
 `chat: addEntryPart and kit.entryParts; permission card shows its target line and folds the call into Full call`
+
+## Proof
+
+Commit 2c084001, b4773ef2 · proof: diff read: addEntryPart, ChatEntryPart(Context), kit.entryParts, PermissionInput.summary present; wave typecheck and lint pass after test-typing fix on the same rung · concerns: entryParts returns void though the ChatKit header says every part returns what it appended; the entry-parts onChanged keeps toastedKinds

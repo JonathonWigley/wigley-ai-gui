@@ -34,7 +34,10 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: sendKeys(FAKE_PERMISSION_TEXT),
         expect: `[permission-review] reviewed Bash in ${SELFTEST_PROJECT_NAME}: deny · medium`,
-        why: "The fake turn's Bash permission is reviewed by the fake harness's default ask reply.",
+        alsoExpect: [/^\[permission-review\] verdict .+: Deny · medium risk$/],
+        checksFit: true,
+        screenshot: 'permission-review-verdict',
+        why: "The fake turn's Bash permission is reviewed by the fake harness's default ask reply, and its card shows the verdict.",
       },
     ],
   },

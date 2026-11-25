@@ -6,7 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // slot, and the page draws the verdict inside chat's permission entry and on
 // forms' confirm card through the `layout` setting's permission-review layout.
 // It names `sessions` for the session it forgets on `sessions.ended`, the names
-// in its log lines and its self-test's activation.
+// in its log lines, its self-test's activation and its demo step's.
 export const permissionReviewManifest = definePlugin({
   id: 'permission-review',
   label: 'Permission review',
@@ -14,7 +14,7 @@ export const permissionReviewManifest = definePlugin({
     'Reviews each approval with a separate model: a one-line summary and an approve-or-deny verdict on the card.',
   dependsOn: {
     main: ['chat', 'forms', 'sessions'],
-    page: ['chat', 'forms'],
+    page: ['chat', 'forms', 'sessions'],
   },
   reads: { main: [], page: [] },
   commands: {},

@@ -7,6 +7,7 @@ import { agentSkillsPagePart } from './agent-skills/page/start';
 import { contextSourcesPagePart } from './context-sources/page/start';
 import { contributionsPagePart } from './contributions/page/start';
 import { liveViewPagePart } from './live-view/page/start';
+import { permissionReviewPagePart } from './permission-review/page/start';
 import { agentStripPagePart } from './agent-strip/page/start';
 import { agentsPagePart } from './agents/page/start';
 import { autoCompactPagePart } from './auto-compact/page/start';
@@ -68,6 +69,7 @@ export const pageParts: readonly PagePart[] = [
   agentStripPagePart,
   agentSkillsPagePart,
   contextSourcesPagePart,
+  permissionReviewPagePart,
   liveViewPagePart,
   docsPagePart,
   docsSessionTabPagePart,
