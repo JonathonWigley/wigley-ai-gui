@@ -520,6 +520,15 @@ User-facing features, those other work builds on first.
   whose rounds leave independent work, and compare their wall time and any work an answer undid against runs that
   wait. Adopt it when the time saved holds and nothing needs redoing. Accepted in planning-execution watch
   2026-11-24 (`~/planning-execution-watch/decisions.md`).
+- **Slack sweep flags a thread where the user is out of their own area** — *needs a feature plan*: the Work plugin's
+  Slack sweep (`sweepMessage` in `src/plugins/work/main/job-text.ts`) reads the user's threads but says nothing when
+  one shows the user is lost: the other person reverses or corrects something already built, is guessing themselves,
+  or the thread runs past three round trips on one point. `wigley:orient` already names these signals for a session;
+  the sweep would apply the same table and mark the work item, so the user opens a session on it and gets the
+  orientation before replying. Settled: the sweep only flags, it writes no orientation and keeps no notes about the
+  topic; the signals stay in the `wigley:orient` skill alone and the sweep reads them from there. Open: how a flagged
+  item looks in the Work list. Source session: Claude Code 49101bd7-da5e-4e9a-9a9c-f8f54fe393d4 in
+  /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes
 
 ## Code cleanup
 
