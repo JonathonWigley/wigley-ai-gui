@@ -5,7 +5,7 @@
 - **Intent** — sessions keep running through a quit, a relaunch and `install-app`.
 - **Vocabulary** — session host, hosted process, pipe log, replay, drain.
 - **Flow** — start, quit, relaunch and re-attach, idle end.
-- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, one host per channel, and its pending runs.
+- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, one host per channel, its pending runs, and its terminals.
 - **Protocol** — the operations, which of them never change, the queue messages, and the pipe log format.
 - **Re-attach** — replay through the harness's pipe fold, the history cut, replayed events, queued messages.
 - **Older hosts** — drain after an update that changed the protocol.
@@ -192,6 +192,28 @@ harness.
 - **`forgetRuns`** drops the runs with the given ids from the runs record, once the app has adopted them.
 - **The runs file is frozen.** `runs-v<protocol>.json`'s name form and the `HostedRun` shape keep their form in every
   protocol version, as the children record does, so a newer host can import an older host's runs (§ Older hosts).
+
+### Terminals
+
+> Planned in `docs/features/terminal/plan-terminal/`, not built yet. The plan's doc re-read task checks this
+> section against the landed code and drops this note.
+
+The host also runs the terminal plugin's shells (`docs/features/terminal/design.md`), one per app session, each in a
+pseudo-terminal behind the pty contract (`src/contracts/pty.ts`, adapter `src/session-host/node-pty/`).
+
+- **Their own table.** Shells live in a terminal table beside the process table, never in it. A shell prints no JSON,
+  so the idle rule would read it idle forever, and the keep window and `drain` end idle processes. No keep window,
+  idle rule or pipe log applies to a shell: it runs until the app ends it, its process exits, or the host drains.
+- **Replay.** The table keeps the last 256 KB of each shell's raw output in memory, cut at a character boundary.
+  `termAttach` answers with that buffer and subscribes the connection; live `termData` follows it. A shell's output is
+  pushed only to the connection subscribed to it, as a hosted process's lines are.
+- **Lifetime.** The host's exit rule counts shells as it counts hosted processes, so a host with a running shell stays
+  up while no app is connected. The children record lists each shell's pid, so a later host ends a shell a dead host
+  left. `stopAll` and a drive run's or self-test's teardown end shells with the processes.
+- **Drain.** `drain` ends every shell at once: a newer app cannot reach an older host's shells, since it speaks only
+  its own protocol. So a shell survives an app restart, but not an update that changes the host protocol.
+- **Messages**, since protocol 5: `termSpawn`, `termWrite`, `termResize`, `termKill`, `termAttach` (its reply carries
+  the replay), `termDetach`, `termList`, and the pushed `termData` and `termClosed`.
 
 ## Protocol
 
