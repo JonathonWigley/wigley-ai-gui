@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.10.0 — 2026-11-25
+
 ### Changed
 
 - The `auri` skills, the relay README and the relay's and AskUserQuestion hook's messages to the agent call a batch of questions a form rather than a round, and use the user's other agreed words (approval, main agent, checklist pass, features folder, commit, merge or push); no rule or behaviour changes, and tool names such as `ask_round` stay, and the app's own tool descriptions and results still say round.
