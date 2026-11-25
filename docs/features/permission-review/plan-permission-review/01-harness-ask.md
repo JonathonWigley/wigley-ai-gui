@@ -1,6 +1,6 @@
 # 01 — Harness one-shot ask and permission summary
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · spawns a child process whose abort, exit and output the ask settles once (async lifecycle across the process boundary)
 Wave: 1 · Depends on: none

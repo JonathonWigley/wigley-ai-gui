@@ -100,6 +100,7 @@ function started(
     settings?: typeof claudeCodeManifest.settings;
     agentHomeDir?: string;
     agentEnvironment?: Readonly<Record<string, string>>;
+    tempFolders?: readonly string[];
   } = {},
 ) {
   const stops: string[] = [];
@@ -116,6 +117,9 @@ function started(
       ...(overrides.agentEnvironment === undefined
         ? {}
         : { agentEnvironment: overrides.agentEnvironment }),
+      ...(overrides.tempFolders === undefined
+        ? {}
+        : { tempFolders: overrides.tempFolders }),
     },
   });
   return {
@@ -190,7 +194,11 @@ describe('claudeCodeMainPart', () => {
 
   it('accountStatus_CommandSetting_SpawnsItInTheAgentHomeWithTheAgentEnvironment_EmptyLooksClaudeUp', async () => {
     const { harness, harnesses } = started({
-      settings: { command: '~/bin/claude', profiles: DEFAULT_PROFILES },
+      settings: {
+        command: '~/bin/claude',
+        profiles: DEFAULT_PROFILES,
+        askModel: 'sonnet',
+      },
       agentHomeDir: '/Users/u',
       agentEnvironment: { PATH: '/bin', WIGLEY_AI_GUI_ENDPOINT_DIR: '/e' },
     });
@@ -202,7 +210,11 @@ describe('claudeCodeMainPart', () => {
 
     void registered.accountStatus(null);
     await settle();
-    harness.pushSettings({ command: '', profiles: DEFAULT_PROFILES });
+    harness.pushSettings({
+      command: '',
+      profiles: DEFAULT_PROFILES,
+      askModel: 'sonnet',
+    });
     void registered.accountStatus(null);
     await settle();
 
@@ -224,9 +236,29 @@ describe('claudeCodeMainPart', () => {
     expect(registered.info().profiles).toEqual(DEFAULT_PROFILES);
     const lab = [{ name: 'lab', configDir: '~/.lab' }];
 
-    harness.pushSettings({ command: '', profiles: lab });
+    harness.pushSettings({ command: '', profiles: lab, askModel: 'sonnet' });
 
     expect(counts.refreshes).toBe(1);
     expect(registered.info().profiles).toEqual(lab);
+  });
+
+  it('ask_RunsOnTheAskModelSettingInTheFirstTempFolder', async () => {
+    const { harness, harnesses } = started({
+      settings: { command: '', profiles: DEFAULT_PROFILES, askModel: 'haiku' },
+      tempFolders: ['/tmp/a', '/tmp/b'],
+    });
+    const [registered] = harnesses;
+
+    void registered.ask({
+      profileDir: null,
+      instructions: 'Be brief.',
+      prompt: 'Tool: Bash',
+      signal: new AbortController().signal,
+    });
+    await settle();
+
+    const [spawn] = harness.processes.spawns;
+    expect(spawn.args.slice(-2)).toEqual(['--model', 'haiku']);
+    expect(spawn.cwd).toBe('/tmp/a/claude-code-ask');
   });
 });

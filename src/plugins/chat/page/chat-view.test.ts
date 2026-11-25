@@ -1318,6 +1318,7 @@ describe('mountChatView click sites', () => {
     at: 1000,
     toolName: 'Bash',
     input: {},
+    summary: '',
     answer: null,
     raw: [],
   };

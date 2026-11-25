@@ -44,6 +44,7 @@ function entry(kind: EntryKind, id: string, at = 1000): ChatEntry {
         at,
         toolName: 'Bash',
         input: {},
+        summary: '',
         answer: null,
         raw: [],
       };

@@ -1,6 +1,7 @@
 import type { AgentStart } from '../../../contracts/agent';
 import type { Paths } from '../../../contracts/paths';
 import type { ProgramCandidate } from '../../../contracts/platform';
+import type { SpawnStartError } from '../../../contracts/processes';
 import type {
   HostedSpawn,
   IdleRule,
@@ -128,6 +129,27 @@ export function claudeEnv(
 
 export function defaultConfigFolder(homeDir: string, paths: Paths): string {
   return paths.join(homeDir, '.claude');
+}
+
+// How a `claude` process ended, as a message names it.
+export function exitText(code: number | null, signal: string | null): string {
+  return code === null ? `signal ${signal}` : `code ${code}`;
+}
+
+// The one-shot commands run in a folder the app chose, so ENOENT names the
+// binary alone.
+export function cliSpawnError(
+  startError: SpawnStartError,
+  command: string,
+): string {
+  return startError.notFound
+    ? `claude was not found at ${command}; set claude-code.command`
+    : startError.message;
+}
+
+// `message`, then `: <stderr>` when `stderr` is not empty.
+export function withStderr(message: string, stderr: string): string {
+  return stderr === '' ? message : `${message}: ${stderr}`;
 }
 
 // The arguments, folder and environment `claude` runs one session with:

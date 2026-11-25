@@ -17,7 +17,9 @@ import {
 // too. A `.cmd` or `.bat` command set on Windows reaches the session host's
 // spawn unwrapped, so it starts the one-shots but no session. A settings
 // change refreshes the registration, so the registry re-reads the `profiles`
-// setting. Contributes `permission_prompt` to every session,
+// setting. An ask reads the `askModel` setting at each ask and runs in the
+// first of `services.tempFolders`. Contributes `permission_prompt` to every
+// session,
 // routed by the row id to the row's process, denying while the app is closed
 // (`PERMISSION_OFFLINE`); the contribution lives and dies
 // with the part, and its dispose ends every tool session, cancelling each
@@ -52,6 +54,8 @@ export const claudeCodeMainPart: MainPart<typeof claudeCodeManifest> = {
       clock: services.clock,
       randomUuid: services.randomUuid,
       profiles: () => api.settings().profiles,
+      askModel: () => api.settings().askModel,
+      tempFolders: services.tempFolders,
     });
     const registration = services.agentHarnesses.register(harness);
     api

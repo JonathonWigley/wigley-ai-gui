@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAIN_AGENT_ID,
+  type AgentAsk,
   type AgentEvent,
   type AgentHarness,
   type AgentProcess,
@@ -19,6 +20,7 @@ import {
   FAKE_AGENT_COMMAND,
   FAKE_AGENT_PID,
   FAKE_AGENTS_TEXT,
+  FAKE_ASK_REPLY,
   FAKE_BLOCKS_REPLY,
   FAKE_BLOCKS_TEXT,
   FAKE_CANCELLED_REASON,
@@ -563,6 +565,7 @@ describe('createFakeAgentHarness', () => {
         at: 1000,
         toolName: 'Bash',
         input: tool.input,
+        summary: 'rm fake.txt',
         answer: null,
         raw: [{ fake: 'permission', toolUseId: 'fake-permission-1' }],
       };
@@ -678,6 +681,7 @@ describe('createFakeAgentHarness', () => {
         at: 1000,
         toolName: 'Bash',
         input: { command: 'ls' },
+        summary: 'ls',
         answer: null,
         raw: [{ fake: 'permission', toolUseId: 'tu-1' }],
       };
@@ -1701,6 +1705,49 @@ describe('createFakeAgentHarness', () => {
       },
     ]);
   });
+
+  it('ask_AnswersTheScriptedReply_FailNextAskRejectsOnce', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const askOf = (prompt: string): AgentAsk => ({
+      profileDir: '/profile',
+      instructions: 'Review it.',
+      prompt,
+      signal: new AbortController().signal,
+    });
+    const asks = ['first', 'second', 'third', 'fourth'].map(askOf);
+
+    expect(await harness.ask(asks[0])).toBe(FAKE_ASK_REPLY);
+    harness.setAskReply('x');
+    expect(await harness.ask(asks[1])).toBe('x');
+    harness.failNextAsk('m');
+    await expect(harness.ask(asks[2])).rejects.toHaveProperty('message', 'm');
+    expect(await harness.ask(asks[3])).toBe('x');
+    expect(harness.askCalls).toEqual(asks);
+  });
+
+  it.each([
+    { given: 'a command', input: { command: 'ls' }, summary: 'ls' },
+    { given: 'no command', input: { file_path: '/a.ts' }, summary: '' },
+  ])(
+    'askPermission_SummaryIsTheCommandField given $given',
+    async ({ input, summary }) => {
+      const { harness, heard } = await startedProcess();
+
+      void harness.askPermission('row-1', {
+        toolName: 'Bash',
+        input,
+        toolUseId: 'tu-1',
+      });
+      await flush();
+
+      const [raised] = heard.filter(([name]) => name === 'permission');
+      expect(raised[1]).toMatchObject({ entry: { summary } });
+    },
+  );
 
   it('planUsage_ResolvesFakeRows_FailNextRejectsOnce', async () => {
     const harness = createFakeAgentHarness(

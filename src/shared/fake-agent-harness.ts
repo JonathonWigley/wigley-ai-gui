@@ -2,6 +2,7 @@ import {
   CONTROL_ROLES,
   MAIN_AGENT_ID,
   type AccountStatus,
+  type AgentAsk,
   type AgentEvent,
   type AgentHarness,
   type AgentProcess,
@@ -136,6 +137,9 @@ export const FAKE_AGENT_PID = 4242;
 // The link every `logIn` reports, and the one code that finishes it.
 export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in';
 export const FAKE_SIGN_IN_CODE = 'fake-code';
+// The text every `ask` answers until `setAskReply` sets another.
+export const FAKE_ASK_REPLY =
+  '{"summary":"Deletes the file fake.txt from the project folder.","verdict":"deny","risk":"medium"}';
 // The account every profile is signed in as until `logOut`.
 const FAKE_ACCOUNT = 'fake@example.invalid';
 const SIGNED_OUT: AccountStatus = { signedIn: false, account: null };
@@ -289,9 +293,14 @@ const FAKE_IDLE_RULE: IdleRule = {
 // and `holdNextLastUsage` makes the next one wait until the release it returns
 // runs. `lastUsageCalls` lists every `lastUsage` call's session id in call
 // order, failed ones included. The fake's processes emit no startup `usage`.
+// `ask` resolves, in a later microtask, the reply set when it was called:
+// `FAKE_ASK_REPLY` before any `setAskReply`. `failNextAsk` makes the next one
+// reject `message`, and `askCalls` lists every `ask` request in call order,
+// failed ones included. The fake ignores the ask's `signal`.
 // `timers` runs the `fake: visual` hold. Each process numbers its permission
-// requests `fake-permission-<n>`; `answerPermission` emits the answered entry
-// and settles the request in a later microtask, and an interrupt of an open turn,
+// requests `fake-permission-<n>`, each entry's `summary` the input's
+// `command` field when it is a string, else ''; `answerPermission` emits the
+// answered entry and settles the request in a later microtask, and an interrupt of an open turn,
 // the process's end, kill or `FAKE_END_TEXT` exit cancel every waiting request
 // with `FAKE_CANCELLED_REASON`, emitting its cancelled entry (before
 // `sessionEnded` on an exit); a detach cancels them emitting nothing.
@@ -312,6 +321,9 @@ export interface FakeAgentHarness extends AgentHarness {
   failNextStart(message: string): void;
   failNextHistory(message: string): void;
   failNextPlanUsage(message: string): void;
+  setAskReply(text: string): void;
+  failNextAsk(message: string): void;
+  readonly askCalls: readonly AgentAsk[];
   readonly lastUsageCalls: readonly string[];
   setLastUsage(sessionId: string, event: UsageAgentEvent | null): void;
   failNextLastUsage(message: string): void;
@@ -1136,6 +1148,16 @@ function emitWorkflowSkill(
   finishFakeTool(events, emitEntry, clock, call, 'workflow', WORKFLOW_TOOL_OK);
 }
 
+// A permission entry's `summary`: `input`'s `command` field when it is a
+// string, else ''.
+function commandFieldOf(input: unknown): string {
+  const command =
+    typeof input === 'object' && input !== null
+      ? (input as Record<string, unknown>).command
+      : undefined;
+  return typeof command === 'string' ? command : '';
+}
+
 // The Bash call a `FAKE_PERMISSION_TEXT` turn asks permission for.
 function permissionToolCall(turn: number): ToolCall {
   return {
@@ -1265,6 +1287,9 @@ export function createFakeAgentHarness(
   let mintedSessionIds = 0;
   let nextHistoryFailure: string | null = null;
   let nextPlanUsageFailure: string | null = null;
+  let askReply = FAKE_ASK_REPLY;
+  let nextAskFailure: string | null = null;
+  const askCalls: AgentAsk[] = [];
   const lastUsages = new Map<string, UsageAgentEvent | null>();
   const lastUsageCalls: string[] = [];
   let nextLastUsageFailure: string | null = null;
@@ -1395,6 +1420,7 @@ export function createFakeAgentHarness(
         at: clock.now(),
         toolName: call.toolName,
         input: call.input,
+        summary: commandFieldOf(call.input),
         answer: null,
         raw: [{ fake: 'permission', toolUseId: call.toolUseId }],
       };
@@ -2372,6 +2398,24 @@ export function createFakeAgentHarness(
     },
     failNextPlanUsage(message) {
       nextPlanUsageFailure = message;
+    },
+    askCalls,
+    async ask(request) {
+      askCalls.push(request);
+      const reply = askReply;
+      const failure = nextAskFailure;
+      nextAskFailure = null;
+      await Promise.resolve();
+      if (failure !== null) {
+        throw new Error(failure);
+      }
+      return reply;
+    },
+    setAskReply(text) {
+      askReply = text;
+    },
+    failNextAsk(message) {
+      nextAskFailure = message;
     },
     holdEnd() {
       isEndHeld = true;

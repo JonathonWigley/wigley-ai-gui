@@ -34,6 +34,7 @@ function permission(id: string, answered: boolean): ChatEntry {
     at: 1000,
     toolName: 'Bash',
     input: {},
+    summary: '',
     answer: answered ? { allowed: true, reason: null } : null,
     raw: [],
   };

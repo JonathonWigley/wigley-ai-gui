@@ -447,6 +447,7 @@ const permission = (id: string): ChatEntry => ({
   at: 1000,
   toolName: 'Bash',
   input: {},
+  summary: '',
   answer: null,
   raw: [],
 });

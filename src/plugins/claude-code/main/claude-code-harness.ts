@@ -25,7 +25,6 @@ import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
   ProcessRunner,
   SpawnedProcess,
-  SpawnStartError,
 } from '../../../contracts/processes';
 import type {
   HostedExit,
@@ -42,6 +41,7 @@ import {
   type AgentDefinitions,
   loadAgentDefinitions,
 } from './agent-definitions';
+import { askClaude } from './claude-ask';
 import { readAccountStatus, signInLink } from './claude-auth';
 import {
   CLAUDE_CARRIED_ENV,
@@ -49,7 +49,10 @@ import {
   claudeConfigFolder,
   claudeEnv,
   claudeSpawn,
+  cliSpawnError,
   defaultConfigFolder,
+  exitText,
+  withStderr,
 } from './claude-launch';
 import {
   CLAUDE_OPENING_REQUESTS,
@@ -83,6 +86,7 @@ import {
   type PermissionTarget,
 } from './permission-route';
 import { readPlanUsage } from './plan-usage';
+import { toolSummary } from './tool-summary';
 import {
   advanceFold,
   APP_COMPACT_TEXT,
@@ -130,9 +134,14 @@ export const CLAUDE_CLEAR_ALIASES: readonly string[] = ['reset', 'new'];
 // gives each stdin user message its `uuid`. `files` also
 // reads the profile's `settings.json` and the agent definitions at each session
 // start. `profiles` reads the harness's profiles at each `info()` call.
+// `askModel` reads the model an `ask` runs on at each ask, '' for the CLI's
+// default; `tempFolders` holds the OS temp folders, the first of which holds
+// the ask's own folder (`claude-ask.ts`).
 export interface ClaudeCodeHarnessDeps {
   command(): Promise<ProgramCandidate | null>;
   profiles(): readonly HarnessProfile[];
+  askModel(): string;
+  tempFolders: readonly string[];
   permissions: PermissionRoute;
   env: Readonly<Record<string, string>>;
   log: Log;
@@ -160,10 +169,6 @@ const PLAN_USAGE_ARGS = [
   '--verbose',
   '--no-session-persistence',
 ];
-
-function exitText(code: number | null, signal: string | null): string {
-  return code === null ? `signal ${signal}` : `code ${code}`;
-}
 
 function exitError(
   code: number | null,
@@ -521,6 +526,7 @@ function createClaudeSession(
         at: deps.clock.now(),
         toolName: call.toolName,
         input: call.input,
+        summary: toolSummary(call.toolName, call.input),
         answer: null,
         raw: [call.args],
       };
@@ -1107,18 +1113,6 @@ interface CliRun {
   stderr: string;
 }
 
-// The one-shot commands run in the home folder, so ENOENT names the binary
-// alone.
-function cliSpawnError(startError: SpawnStartError, command: string): string {
-  return startError.notFound
-    ? `claude was not found at ${command}; set claude-code.command`
-    : startError.message;
-}
-
-function withStderr(message: string, stderr: string): string {
-  return stderr === '' ? message : `${message}: ${stderr}`;
-}
-
 // The command `args` run, up to its first `--` option, as a message names it.
 function commandLabel(args: readonly string[]): string {
   const optionAt = args.findIndex((arg) => arg.startsWith('--'));
@@ -1454,7 +1448,8 @@ function toolUseIdOf(
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
 // session on the session host, the one-shot runs, the only place the app asks
 // for either, the sessions and project folders
-// it saved, its `claude auth` sign-in, and each profile's `/usage` poll.
+// it saved, its `claude auth` sign-in, each profile's `/usage` poll, and the
+// isolated `claude -p` run of an `ask`.
 export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
 ): AgentHarness {
@@ -1516,6 +1511,7 @@ export function createClaudeCodeHarness(
         projectsRoot(deps, profileDir),
       ),
     planUsage: (profileDir) => readProfilePlanUsage(deps, profileDir),
+    ask: (request) => askClaude(deps, request),
     prepareRun: (request, firstMessage, env) =>
       prepareClaudeRun(deps, request, firstMessage, env),
     startControls: claudeStartControls,

@@ -13,7 +13,8 @@ export const DEFAULT_PROFILES: HarnessProfile[] = [
 // no commands and no layout, and reads only services. It depends on sessions,
 // whose sessions it serves the `permission_prompt` tool. Its `command` setting
 // names the `claude` program, empty to look it up; its `profiles` setting is
-// the harness's profiles.
+// the harness's profiles; its `askModel` setting is the model `ask` runs on,
+// empty for the CLI's default.
 export const claudeCodeManifest = definePlugin({
   id: 'claude-code',
   label: 'Claude Code',
@@ -23,7 +24,7 @@ export const claudeCodeManifest = definePlugin({
   reads: { main: [], page: [] },
   commands: {},
   scopes: {},
-  settings: { command: '', profiles: DEFAULT_PROFILES },
+  settings: { command: '', profiles: DEFAULT_PROFILES, askModel: 'sonnet' },
   settingInfo: {
     command: {
       label: 'Claude command',
@@ -34,6 +35,11 @@ export const claudeCodeManifest = definePlugin({
       label: 'Profiles',
       description:
         'The Claude Code profiles a new session can start in: a name and its config folder each. A name another harness already has is left out.',
+    },
+    askModel: {
+      label: 'Ask model',
+      description:
+        "The model one-shot asks run on, such as the permission review: a Claude model alias or full name. Empty, the ask runs on Claude Code's default model. Applies to the next ask.",
     },
   },
   themeTokens: {},

@@ -99,6 +99,7 @@ const pendingPermission: ChatEntry = {
   kind: 'permission',
   toolName: 'Bash',
   input: {},
+  summary: '',
   answer: null,
   raw: [],
 };

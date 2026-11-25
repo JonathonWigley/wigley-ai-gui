@@ -119,6 +119,9 @@ export type ChatEntry =
       at: number;
       toolName: string;
       input: unknown;
+      // The call's one-line target, as a tool entry's `summary` shows it: a Bash command's first line, an edited
+      // file's path; '' when the input names none.
+      summary: string;
       answer: PermissionDecision | null;
       raw: unknown[];
     }
@@ -207,6 +210,15 @@ export interface AgentStart {
   idleCompactMinTokens: number | null;
   rowId: string;
   permissions: 'default' | 'auto';
+}
+
+// One prompt run by itself: `profileDir` as `AgentStart` holds it, `instructions` the system prompt, `prompt` the
+// user's text, and `signal` the abort that kills the run.
+export interface AgentAsk {
+  profileDir: string | null;
+  instructions: string;
+  prompt: string;
+  signal: AbortSignal;
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';
@@ -661,6 +673,10 @@ export interface AgentHarness {
   listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
   // Runs one poll of `profileDir`'s plan usage, or rejects with the reason.
   planUsage(profileDir: string | null): Promise<PlanUsage>;
+  // Runs `request.prompt` once under `request.instructions`, on `request.profileDir`, with no tools and no session,
+  // saving nothing; the adapter picks the model. Resolves with the model's reply text. Rejects with a reason the user
+  // can read, and kills the run and rejects when `request.signal` aborts.
+  ask(request: AgentAsk): Promise<string>;
   // A start of `request` that the session host runs later. Its `stdin` holds the lines `start` writes when a process
   // opens, then `firstMessage`. Its `env` holds `env`, the harness's own values and the names the adapter carries from
   // the app's environment; its `unsetEnv` the names the child must not inherit. Spawns and writes nothing; it may
