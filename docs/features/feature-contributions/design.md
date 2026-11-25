@@ -323,10 +323,10 @@ with it. Small, Medium and Spike follow one shape. Small:
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
     { "id": "scope", "label": "Explore", "status": "busy", "enter": [{ "skill": "wigley:small" }] },
-    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
-      "enter": [{ "step": "build" }] },
-    { "id": "check", "label": "Review", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
-    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "build", "label": "Make", "step": "make", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+      "enter": [{ "step": "make" }] },
+    { "id": "check", "label": "Review", "step": "review", "status": "busy", "enter": [{ "step": "review" }] },
+    { "id": "land", "label": "Close", "step": "close", "slot": "land", "status": "busy", "enter": [{ "step": "close" }] },
     { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] },
     { "id": "answered", "label": "Answered", "step": "answered", "inStepper": false, "status": "none",
@@ -347,12 +347,12 @@ Medium adds its counter, and its fix stage shows it:
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
     { "id": "interview", "label": "Interview", "status": "busy", "enter": [{ "skill": "wigley:medium" }] },
-    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
-      "enter": [{ "step": "build" }] },
+    { "id": "build", "label": "Make", "step": "make", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+      "enter": [{ "step": "make" }] },
     { "id": "review", "label": "Review", "step": "review", "status": "busy", "enter": [{ "step": "review" }] },
     { "id": "fix", "label": "Fix", "step": "fix", "status": "busy", "progress": " · cycle {counter.fix}",
       "enter": [{ "step": "fix" }] },
-    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "land", "label": "Close", "step": "close", "slot": "land", "status": "busy", "enter": [{ "step": "close" }] },
     { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] }
   ]
@@ -369,10 +369,10 @@ Spike's interview takes both triggers, so a new ask returns the flow to it:
   "stages": [
     { "id": "interview", "label": "Interview", "step": "interview", "status": "busy",
       "enter": [{ "skill": "wigley:spike" }, { "step": "interview" }] },
-    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
-      "enter": [{ "step": "build" }] },
-    { "id": "check", "label": "Review", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
-    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "build", "label": "Make", "step": "make", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+      "enter": [{ "step": "make" }] },
+    { "id": "check", "label": "Review", "step": "review", "status": "busy", "enter": [{ "step": "review" }] },
+    { "id": "land", "label": "Close", "step": "close", "slot": "land", "status": "busy", "enter": [{ "step": "close" }] },
     { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] }
   ]

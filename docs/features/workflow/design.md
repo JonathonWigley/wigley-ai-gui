@@ -127,9 +127,9 @@ reports each step as it reaches it. The status line is the label, the status and
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
 | scope | `wigley:small` starts, the first time or again in the session | Explore, running or paused | `Explore · running` | none | none |
-| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
-| check | the agent reports `check` | Review, running or paused | `Review · running` | none | none |
-| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| build | the agent reports `make` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| check | the agent reports `review` | Review, running or paused | `Review · running` | none | none |
+| land | the agent reports `close` | Close, running or paused | `Close · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 | answered | the agent reports `answered` for a session that only answered and built nothing, which writes the run log line | Answered, no status: a neutral tag with no check, off the trail, so every step reads pending; a turn ending here while another session is viewed reads `answered` on the row until the user views it (Row label, below) | `Answered` | none | none |
 
@@ -141,24 +141,24 @@ the fix count.
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
 | interview | `wigley:medium` starts, the first time or again in the session | Interview, running or paused | `Interview · running` | none | none |
-| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| build | the agent reports `make` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
 | review | the agent reports `review` | Review, running or paused | `Review · running` | none | none |
 | fix | the agent reports `fix`; entering fix from another stage counts one fix cycle | Fix, running or paused | `Fix · running · cycle 2` after the first cycle | none | none |
-| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| land | the agent reports `close` | Close, running or paused | `Close · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 
 ## Spike's stages
 
 The first claim of `wigley:spike` puts the flow in interview. Each stage answers its own reported step from any stage,
-so the flow loops: build and check repeat for each ask, and a round in the middle of the loop goes back to interview.
+so the flow loops: make and review repeat for each ask, and a round in the middle of the loop goes back to interview.
 A second claim in the session, or a claim after done, returns the flow to interview.
 
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
 | interview | `wigley:spike` starts, the first time or again in the session, or the agent reports `interview` | Interview, running or paused | `Interview · running` | none | none |
-| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
-| check | the agent reports `check` | Review, running or paused | `Review · running` | none | none |
-| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| build | the agent reports `make` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| check | the agent reports `review` | Review, running or paused | `Review · running` | none | none |
+| land | the agent reports `close` | Close, running or paused | `Close · running` | none | none |
 | done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 
 Small's, Medium's and Spike's entries declare no actions, so `Space w w` logs `nothing to run` there. `done` shares its trail slot with `land`, so the trail still ends at Close.
@@ -254,8 +254,8 @@ session's agent can call them. A wigley skill calls the step tool at each step b
 leaves the flow in its last step.
 
 - `set_workflow_step`'s one required string `step` takes a `reportedAs` value of any registered workflow: Large's are
-  `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `build`, `check`, `land`, `done` and `answered`, Medium's `build`,
-  `review`, `fix`, `land` and `done`, Spike's `interview`, `build`, `check`, `land` and `done`. The flow's current workflow's stage rules answer the report, so a value outside that
+  `explore`, `interview`, `plan`, `cold_read` and `fix`, Small's `make`, `review`, `close`, `done` and `answered`, Medium's `make`,
+  `review`, `fix`, `close` and `done`, Spike's `interview`, `make`, `review`, `close` and `done`. Small, Medium and Spike all report `review`; each session's own workflow resolves it. The flow's current workflow's stage rules answer the report, so a value outside that
   workflow's stages is ignored.
 - `set_workflow_checklist`'s one required `items` is an array of `{ text, done, running? }`. Each call replaces the
   whole list, so a missed call cannot leave the app out of step. In the side pane's current group, an open item marked

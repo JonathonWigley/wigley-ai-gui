@@ -1813,9 +1813,9 @@ describe('workflowMainPart › declared workflows', () => {
 
     expect(declaredIds(workflow)).toEqual(['wigley:small']);
     expect(stepsOffered(workflow)).toEqual([
-      'build',
-      'check',
-      'land',
+      'make',
+      'review',
+      'close',
       'done',
       'answered',
     ]);
@@ -1833,12 +1833,11 @@ describe('workflowMainPart › declared workflows', () => {
       layout: 'default',
     });
 
-    expect(stepsBefore).toEqual(expect.arrayContaining(['check', 'answered']));
+    expect(stepsBefore).toContain('answered');
     expect(declaredIds(workflow)).toEqual(['wigley:medium']);
     expect(stepsOffered(workflow)).toEqual(
-      expect.arrayContaining(['build', 'review', 'fix', 'land', 'done']),
+      expect.arrayContaining(['make', 'review', 'fix', 'close', 'done']),
     );
-    expect(stepsOffered(workflow)).not.toContain('check');
     expect(stepsOffered(workflow)).not.toContain('answered');
   });
 

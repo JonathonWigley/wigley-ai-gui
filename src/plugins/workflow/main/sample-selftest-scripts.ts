@@ -39,10 +39,10 @@ const SMALL: SampleLevelSpec = {
     SMALL_SEND,
     reportSend('answered'),
     SMALL_SEND,
-    reportSend('build'),
+    reportSend('make'),
     CHECKLIST_SEND,
-    reportSend('check'),
-    reportSend('land'),
+    reportSend('review'),
+    reportSend('close'),
     reportSend('done'),
   ],
   groups: [
@@ -73,7 +73,7 @@ const SMALL: SampleLevelSpec = {
       steps: [
         { keys: sendKeys(SMALL_SEND), expect: small.line('shows scope') },
         {
-          keys: sendKeys(reportSend('build')),
+          keys: sendKeys(reportSend('make')),
           expect: small.line('shows build'),
         },
         {
@@ -88,11 +88,11 @@ const SMALL: SampleLevelSpec = {
         },
         { keys: [' ', 'w', 'h'], expect: small.line('headless off') },
         {
-          keys: sendKeys(reportSend('check')),
+          keys: sendKeys(reportSend('review')),
           expect: small.line('shows check'),
         },
         {
-          keys: sendKeys(reportSend('land')),
+          keys: sendKeys(reportSend('close')),
           expect: small.line('shows land'),
         },
         {
@@ -115,13 +115,13 @@ const MEDIUM: SampleLevelSpec = {
   projectName: MEDIUM_PROJECT_NAME,
   sendsAfterLaunch: [
     MEDIUM_SEND,
-    reportSend('build'),
+    reportSend('make'),
     CHECKLIST_SEND,
     reportSend('review'),
     reportSend('fix'),
     reportSend('review'),
     reportSend('fix'),
-    reportSend('land'),
+    reportSend('close'),
     reportSend('done'),
   ],
   groups: [
@@ -146,7 +146,7 @@ const MEDIUM: SampleLevelSpec = {
       why: 'Reports move the trail forward and back, the checklist draws with its count, and a fix cycle may return to review.',
       steps: [
         {
-          keys: sendKeys(reportSend('build')),
+          keys: sendKeys(reportSend('make')),
           expect: medium.line('shows build'),
         },
         {
@@ -172,7 +172,7 @@ const MEDIUM: SampleLevelSpec = {
           expect: medium.line('shows fix'),
         },
         {
-          keys: sendKeys(reportSend('land')),
+          keys: sendKeys(reportSend('close')),
           expect: medium.line('shows land'),
         },
         {
@@ -197,12 +197,12 @@ const SPIKE: SampleLevelSpec = {
     SPIKE_SEND,
     reportSend('done'),
     SPIKE_SEND,
-    reportSend('build'),
+    reportSend('make'),
     CHECKLIST_SEND,
-    reportSend('check'),
-    reportSend('build'),
-    reportSend('check'),
-    reportSend('land'),
+    reportSend('review'),
+    reportSend('make'),
+    reportSend('review'),
+    reportSend('close'),
     reportSend('done'),
   ],
   groups: [
@@ -229,14 +229,14 @@ const SPIKE: SampleLevelSpec = {
     },
     {
       name: 'Spike: full run',
-      why: 'Reports move the trail through each step, the checklist draws with its count, a second Spike ask starts at Interview, and a build reported after check moves the trail back to Make. The key turns headless on and off, and the strip chip and row tag show it.',
+      why: 'Reports move the trail through each step, the checklist draws with its count, a second Spike ask starts at Interview, and a make reported after review moves the trail back to Make. The key turns headless on and off, and the strip chip and row tag show it.',
       steps: [
         {
           keys: sendKeys(SPIKE_SEND),
           expect: spike.line('shows interview'),
         },
         {
-          keys: sendKeys(reportSend('build')),
+          keys: sendKeys(reportSend('make')),
           expect: spike.line('shows build'),
         },
         {
@@ -251,20 +251,20 @@ const SPIKE: SampleLevelSpec = {
         },
         { keys: [' ', 'w', 'h'], expect: spike.line('headless off') },
         {
-          keys: sendKeys(reportSend('check')),
+          keys: sendKeys(reportSend('review')),
           expect: spike.line('shows check'),
         },
         {
-          keys: sendKeys(reportSend('build')),
+          keys: sendKeys(reportSend('make')),
           expect: spike.line('shows build'),
           screenshot: 'spike-build-again',
         },
         {
-          keys: sendKeys(reportSend('check')),
+          keys: sendKeys(reportSend('review')),
           expect: spike.line('shows check'),
         },
         {
-          keys: sendKeys(reportSend('land')),
+          keys: sendKeys(reportSend('close')),
           expect: spike.line('shows land'),
         },
         {

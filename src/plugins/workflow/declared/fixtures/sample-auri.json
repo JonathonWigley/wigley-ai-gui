@@ -20,26 +20,26 @@
         {
           "id": "build",
           "label": "Make",
-          "step": "build",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "check",
           "label": "Review",
-          "step": "check",
+          "step": "review",
           "status": "busy",
-          "enter": [{ "step": "check" }]
+          "enter": [{ "step": "review" }]
         },
         {
           "id": "land",
           "label": "Close",
-          "step": "land",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
@@ -83,11 +83,11 @@
         {
           "id": "build",
           "label": "Make",
-          "step": "build",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "review",
@@ -107,10 +107,10 @@
         {
           "id": "land",
           "label": "Close",
-          "step": "land",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
@@ -356,26 +356,26 @@
         {
           "id": "build",
           "label": "Make",
-          "step": "build",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "check",
           "label": "Review",
-          "step": "check",
+          "step": "review",
           "status": "busy",
-          "enter": [{ "step": "check" }]
+          "enter": [{ "step": "review" }]
         },
         {
           "id": "land",
           "label": "Close",
-          "step": "land",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
