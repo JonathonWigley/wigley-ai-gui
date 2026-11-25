@@ -32,7 +32,9 @@ export function relativeSegments(path: string): string[] | null {
 // I/O: `read`, `modified`, `readStart`, `readEnd`, `readBytes`, `write`,
 // `writeBytes`, `append`, `list`, `stat`, `realPath`, `makeFolder`, `rename`
 // (either path), `copy` (either path), `trash`, `deleteFile` and
-// `removeFolder` reject, and `watch` throws.
+// `removeFolder` reject, and `watch` throws. `removeFolder` also rejects
+// before any I/O for a path that folds to `root` itself (`''`, `.`, `a/..`),
+// since the folder holding `root` is outside it.
 // `realPath` returns the resolved path relative to `root`'s own real path (``
 // for `root` itself), as `paths` compares them, its segments joined with `/`,
 // and rejects `<path> is outside <root>` when a link leads out of `root`.
@@ -75,6 +77,11 @@ export function scopedFiles(files: Files, root: string, paths: Paths): Files {
     copy: async (from, to) => files.copy(inside(from), inside(to)),
     trash: async (path) => files.trash(inside(path)),
     deleteFile: async (path) => files.deleteFile(inside(path)),
-    removeFolder: async (path) => files.removeFolder(inside(path)),
+    removeFolder: async (path) => {
+      if (relativeSegments(path)?.length === 0) {
+        throw new Error(`${path} is ${root} itself, which is not removed`);
+      }
+      return files.removeFolder(inside(path));
+    },
   };
 }

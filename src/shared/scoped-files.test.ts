@@ -92,6 +92,27 @@ describe('scopedFiles', () => {
     expect(calls).toEqual([]);
   });
 
+  it.each(['', '.', 'a/..'])(
+    'removeFolder rejects %j, the root itself, before any I/O',
+    async (path) => {
+      const calls: string[] = [];
+      const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
+
+      await expect(scoped.removeFolder(path)).rejects.toThrow(ROOT);
+      expect(calls).toEqual([]);
+    },
+  );
+
+  it('removeFolder_FolderUnderRoot_KeepsRoot', async () => {
+    await inner.write(`${ROOT}/a/x.md`, 'x');
+    await inner.write(`${ROOT}/keep.md`, 'k');
+
+    await scopedFiles(inner, ROOT, posixPaths).removeFolder('a');
+
+    expect(await inner.stat(`${ROOT}/a`)).toBeNull();
+    expect(await inner.read(`${ROOT}/keep.md`)).toBe('k');
+  });
+
   it('watch_WriteUnderFolder_ReportsRelativePath', async () => {
     const scoped = scopedFiles(inner, ROOT, posixPaths);
     const reports: string[] = [];
@@ -252,6 +273,10 @@ function recordingCalls(calls: string[]): MemoryFiles {
     append: async (path, text) => {
       calls.push(path);
       return inner.append(path, text);
+    },
+    removeFolder: async (path) => {
+      calls.push(path);
+      return inner.removeFolder(path);
     },
   };
 }

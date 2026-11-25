@@ -74,8 +74,10 @@ off, the permission card still draws its target line and its folded full call, j
 - The ask runs with the profile's `CLAUDE_CONFIG_DIR`, as every one-shot does, so it signs in with the session's own
   account. Each ask runs in a folder of its own, `claude-code-ask-<random>` inside the first OS temp folder, made
   before the spawn and holding only the instructions file, so no project file is near it and no other user can make
-  the folder first. The folder is removed with the instructions file in it once the ask settles, however it settles;
-  a failed removal is logged and leaves the outcome alone. With no temp folder (the self-test), the ask rejects.
+  the folder first. The folder is removed with the instructions file in it however the ask settles: an abort rejects
+  at once, and the removal waits for the killed child to close, since Windows refuses to remove a folder a running
+  process works in. A failed removal is logged and leaves the outcome alone. With no temp folder (the self-test), the
+  ask rejects.
 - The reply is the JSON object on the last non-empty line of stdout, so a line the CLI prints before it is skipped.
 - **Checked at plan time, 2026-11-25:** with these flags and the personal profile, the model said no text mentioned
   the profile's `CLAUDE.md` content. Without `--setting-sources ""` it said yes. Subscription sign-in worked without

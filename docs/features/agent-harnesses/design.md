@@ -98,7 +98,8 @@ or output format. Every decision below serves that.
   `docs/features/permission-review/design.md` § The one-shot ask.
 - The ask runs with the profile's `CLAUDE_CONFIG_DIR`, so it signs in with the session's own account, in a folder of
   its own inside the OS temp folder, made per ask with a random name and holding only the instructions file it passes
-  with `--system-prompt-file`, so no project file is near it. The folder is removed once the ask settles.
+  with `--system-prompt-file`, so no project file is near it. The folder is removed once the ask settles and its
+  child, if one started, has closed.
 - The fake harness answers `ask` with a scripted reply, `setAskReply(text)`, and fails the next one with
   `failNextAsk(message)`, so no test or demo spawns a model.
 

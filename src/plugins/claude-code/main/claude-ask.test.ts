@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { AgentAsk } from '../../../contracts/agent';
 import type { SpawnExit } from '../../../contracts/processes';
 import { FakeProcesses, type FakeSpawn } from '../../../shared/fake-processes';
-import { createMemoryFiles } from '../../../shared/memory-files';
+import {
+  createMemoryFiles,
+  type MemoryFiles,
+} from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   programNotFoundMessage,
@@ -374,24 +377,79 @@ describe('askClaude', () => {
 
   it.each<{
     name: string;
-    end: (spawn: FakeSpawn, controller: AbortController) => void;
+    arrange?: (files: MemoryFiles, controller: AbortController) => void;
+    end?: (spawn: FakeSpawn, controller: AbortController) => void;
   }>([
     { name: 'Resolves', end: exits(SUCCESS_LINE, '', 0) },
     { name: 'Rejects', end: exits('', 'bad flag\n', 2) },
-    { name: 'IsAborted', end: (_spawn, controller) => controller.abort() },
-  ])('removes the ask folder once the ask $name', async ({ end }) => {
+    {
+      name: 'IsAbortedDuringMakeFolder',
+      arrange: (files, controller) => {
+        const makeFolder = files.makeFolder;
+        files.makeFolder = async (path) => {
+          controller.abort();
+          await makeFolder(path);
+        };
+      },
+    },
+    {
+      name: 'InstructionsWriteRejects',
+      arrange: (files) => {
+        files.write = () => Promise.reject(new Error('ENOSPC'));
+      },
+    },
+    {
+      name: 'IsAbortedDuringInstructionsWrite',
+      arrange: (files, controller) => {
+        const write = files.write;
+        files.write = async (path, text) => {
+          controller.abort();
+          await write(path, text);
+        };
+      },
+    },
+    {
+      name: 'IsAbortedAfterInstructionsWrite',
+      arrange: (files, controller) => {
+        const write = files.write;
+        files.write = (path, text) =>
+          write(path, text).then(() => controller.abort());
+      },
+    },
+  ])('removes the ask folder once the ask $name', async ({ arrange, end }) => {
     const controller = new AbortController();
     const { deps, processes, files, logs } = askDeps();
+    arrange?.(files, controller);
 
     const outcome = askClaude(deps, askOf(controller.signal)).catch(
       () => undefined,
     );
     await settle();
-    end(processes.spawns[0], controller);
+    end?.(processes.spawns[0], controller);
     await outcome;
 
     expect(await files.stat(ASK_FOLDER)).toBeNull();
     expect(logs).toEqual([]);
+  });
+
+  it('removes the ask folder of an aborted run only once the child closes', async () => {
+    const controller = new AbortController();
+    const { deps, processes, files } = askDeps();
+
+    const outcome = askClaude(deps, askOf(controller.signal)).catch(
+      (error: unknown) => error,
+    );
+    await settle();
+    const [spawn] = processes.spawns;
+    controller.abort();
+
+    expect(await outcome).toHaveProperty('message', 'the ask was stopped');
+    await settle();
+    expect(await files.stat(ASK_FOLDER)).not.toBeNull();
+
+    spawn.close({ code: null, signal: 'SIGKILL', startError: null });
+    await settle();
+    expect(await files.stat(ASK_FOLDER)).toBeNull();
   });
 
   it('logs a failed removal of the ask folder and resolves', async () => {

@@ -122,21 +122,31 @@ function askReply(
   return reply.result;
 }
 
-// Spawns the ask in `cwd`, writes the prompt to its stdin and ends it, and
-// settles once: on the close, or on `request.signal`'s abort, which kills the
-// child with SIGKILL and rejects at once.
+// One spawned ask: `reply` settles once, `closed` resolves on the child's
+// close, and `isChildRunning` is true from the spawn's return until that close.
+interface AskRun {
+  reply: Promise<string>;
+  closed: Promise<void>;
+  isChildRunning(): boolean;
+}
+
+// Spawns the ask in `cwd`, writes the prompt to its stdin and ends it. The
+// reply settles once: on the close, or on `request.signal`'s abort, which
+// kills the child with SIGKILL and rejects at once, before the child closes.
 function runAsk(
   deps: ClaudeAskDeps,
   program: ProgramCandidate,
   cwd: string,
   instructionsFile: string,
   request: AgentAsk,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
+): AskRun {
+  let child: SpawnedProcess | null = null;
+  let hasClosed = false;
+  const closed = Promise.withResolvers<void>();
+  const reply = new Promise<string>((resolve, reject) => {
     let stdout = '';
     let stderr = '';
     let isSettled = false;
-    let child: SpawnedProcess | null = null;
     const onAbort = () => {
       if (isSettled) {
         return;
@@ -146,6 +156,8 @@ function runAsk(
       reject(new Error(STOPPED_MESSAGE));
     };
     const onClosed = (exit: SpawnExit) => {
+      hasClosed = true;
+      closed.resolve();
       request.signal.removeEventListener('abort', onAbort);
       if (isSettled) {
         return;
@@ -180,6 +192,11 @@ function runAsk(
     child.write(request.prompt);
     child.endInput();
   });
+  return {
+    reply,
+    closed: closed.promise,
+    isChildRunning: () => child !== null && !hasClosed,
+  };
 }
 
 async function removeAskFolderOrLog(
@@ -204,9 +221,12 @@ async function removeAskFolderOrLog(
 // no temp folder, an abort (at the call, during the lookup, the folder make or
 // the instructions write), no program found, and a lookup, folder make or
 // write that rejects, with its own error. Once the folder is made, it is
-// removed with everything in it when the ask settles, however it settles; a
-// failed removal is logged and leaves the outcome alone. The caller's `signal`
-// is the only time limit.
+// removed with everything in it, however the ask settles: as it settles when
+// no child is running, and otherwise (an abort mid-run, which rejects at once)
+// after the killed child closes, since the child holds the folder as its
+// working folder and Windows refuses to remove it until then. A failed
+// removal is logged and leaves the outcome alone. The caller's `signal` is the
+// only time limit.
 export async function askClaude(
   deps: ClaudeAskDeps,
   request: AgentAsk,
@@ -226,12 +246,18 @@ export async function askClaude(
   );
   await deps.files.makeFolder(cwd);
   const instructionsFile = deps.paths.join(cwd, ASK_INSTRUCTIONS_FILE_NAME);
+  let run: AskRun | null = null;
   try {
     throwIfStopped(request.signal);
     await deps.files.write(instructionsFile, request.instructions);
     throwIfStopped(request.signal);
-    return await runAsk(deps, program, cwd, instructionsFile, request);
+    run = runAsk(deps, program, cwd, instructionsFile, request);
+    return await run.reply;
   } finally {
-    await removeAskFolderOrLog(deps, cwd);
+    if (run?.isChildRunning() === true) {
+      void run.closed.then(() => removeAskFolderOrLog(deps, cwd));
+    } else {
+      await removeAskFolderOrLog(deps, cwd);
+    }
   }
 }
