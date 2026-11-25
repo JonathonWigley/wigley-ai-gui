@@ -10,6 +10,7 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { writeLoginItemPlist } from './scripts/login-item-plist.mts';
 import { AD_HOC_IDENTITY, macSigningIdentity } from './scripts/mac-signing.mts';
+import { copyNodePty } from './scripts/node-pty-files.mts';
 import {
   copyDeclarationInputs,
   nodeDeclarationFiles,
@@ -20,7 +21,9 @@ const PLUGIN_TYPES_FOLDER = '.plugin-types';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    // node-pty's `pty.node`, `spawn-helper` and Windows conpty files must be real
+    // files; node-pty rewrites its helper's `app.asar` path to `app.asar.unpacked`.
+    asar: { unpack: '**/node_modules/node-pty/**' },
     win32metadata: { ProductName: 'Auri', FileDescription: 'Auri' },
     // Packager adds `.ico` on Windows and `.icns` on macOS.
     icon: 'assets/icon/icon',
@@ -45,6 +48,24 @@ const config: ForgeConfig = {
     // than ship stale or missing types.
     generateAssets: async () => {
       emitPluginTypes();
+    },
+    // The Vite plugin ships only `.vite`, and the session host's bundle keeps
+    // node-pty external, so node-pty is copied in by hand. Forge's rebuild step
+    // runs next and rebuilds only a module holding `binding.gyp`, which the copy
+    // leaves out.
+    packageAfterCopy: async (
+      _forgeConfig,
+      buildPath,
+      _electronVersion,
+      platform,
+      arch,
+    ) => {
+      copyNodePty(
+        path.join(import.meta.dirname, 'node_modules', 'node-pty'),
+        buildPath,
+        platform,
+        arch,
+      );
     },
     // @electron/packager sets CFBundleName and CFBundleDisplayName from the app name after applying
     // `extendInfo`, so the shown name is written into the packaged Info.plist here instead.

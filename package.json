@@ -23,7 +23,8 @@
     "test": "vitest run",
     "drive": "node scripts/drive.mts",
     "install-app": "node scripts/install-app.mts",
-    "create-signing-identity": "node scripts/create-signing-identity.mts"
+    "create-signing-identity": "node scripts/create-signing-identity.mts",
+    "postinstall": "node scripts/node-pty-helper-mode.mts"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",

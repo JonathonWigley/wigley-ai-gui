@@ -588,8 +588,18 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   },
   // The session host process: no electron import (`docs/features/session-host/design.md`).
   'src/session-host': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/local-channel',
+      'src/session-host/node-pty',
+    ],
     packages: ['node:'],
+  },
+  // The node-pty adapter: the only file that imports node-pty.
+  'src/session-host/node-pty': {
+    layers: ['src/contracts'],
+    packages: ['node:', 'node-pty'],
   },
   'src/main/main.ts': {
     layers: [

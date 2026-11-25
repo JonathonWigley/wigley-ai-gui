@@ -1,6 +1,6 @@
 # 04 — node-pty adapter and packaging
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · rests on low-confidence packaging claims: node-pty's runtime files, spawn-helper's executable bit, asar unpacking and Windows prebuilds are unverified
 Wave: 3 · Depends on: 01, 02, 05

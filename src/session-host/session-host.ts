@@ -5,6 +5,7 @@ import { osPlatform } from '../shared/os-platform';
 import { createDiagnosticLog } from './diagnostic-log';
 import { createHostChildren } from './host-children';
 import { startSessionHost } from './host-server';
+import { nodePtySpawn } from './node-pty/node-pty-spawn';
 import { createOsProcesses } from './os-processes';
 
 const folder = process.argv[2];
@@ -50,8 +51,6 @@ void startSessionHost({
   env: process.env,
   clock,
   timers,
-  ptySpawn: () => {
-    throw new Error('this host build has no pty adapter');
-  },
+  ptySpawn: nodePtySpawn,
   exit: (code) => process.exit(code),
 });
