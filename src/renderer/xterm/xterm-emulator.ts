@@ -73,7 +73,13 @@ function createScreen(options: TerminalScreenOptions): TerminalScreen {
   // Output written before xterm opens, laid out at the real width on open.
   let pending = '';
   let isDisposed = false;
+  // A focus asked for before xterm opens, applied when it opens.
+  let wantsFocus = false;
 
+  const focusOpened = (): void => {
+    terminal.focus();
+    wantsFocus = false;
+  };
   const fit = (): void => {
     const hasBox =
       element.isConnected &&
@@ -91,6 +97,9 @@ function createScreen(options: TerminalScreenOptions): TerminalScreen {
     fitAddon.fit();
     terminal.write(pending);
     pending = '';
+    if (wantsFocus) {
+      focusOpened();
+    }
   };
   const observer = new ResizeObserver(() => fit());
   observer.observe(element);
@@ -113,9 +122,10 @@ function createScreen(options: TerminalScreenOptions): TerminalScreen {
         : { cols: START_COLS, rows: START_ROWS },
     fit,
     focus: () => {
+      wantsFocus = true;
       fit();
       if (isOpen) {
-        terminal.focus();
+        focusOpened();
       }
     },
     setPalette: (palette, fontFamily, fontSize) => {
@@ -148,12 +158,12 @@ function createScreen(options: TerminalScreenOptions): TerminalScreen {
 }
 
 // The xterm.js adapter behind TerminalEmulator. Each screen opens xterm on its
-// first fit with a box, since `create` runs before the caller places it.
+// first fit with a box, since `create` runs before the caller places it. The
+// stylesheet links here, at renderer start, so it has usually loaded by the
+// time the first screen is created.
 export function createXtermEmulator(): TerminalEmulator {
+  linkStylesheet();
   return {
-    create: (options) => {
-      linkStylesheet();
-      return createScreen(options);
-    },
+    create: (options) => createScreen(options),
   };
 }
