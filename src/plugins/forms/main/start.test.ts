@@ -851,16 +851,20 @@ describe('forms main part', () => {
     const { harness, sessions, forms } = startWithToolSessions();
     sessions.connect('app-a');
     const confirms = harness.state.read(formsConfirmsSlot, 'test');
+    const abort = new AbortController();
     const confirmed = forms.confirm(
       'app-a',
       CONFIRM_REQUEST,
-      new AbortController().signal,
+      abort.signal,
       null,
     );
     await flush();
     expect(confirms.all().size).toBe(1);
 
+    // Stopping does not settle the open confirm, so the test settles it once
+    // the part is down; the key stays standing.
     await harness.stop();
+    abort.abort();
     await Promise.allSettled([confirmed]);
     expect(confirms.all().size).toBe(1);
 
