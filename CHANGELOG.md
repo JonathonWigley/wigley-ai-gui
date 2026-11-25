@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.12.0 — 2026-11-25
+
 ### Changed
 
 - The sample Small, Medium and Spike workflows take the reported steps `make`, `review` and `close` in place of `build`, `check` and `land`, matching their stepper words; stage ids and slots are unchanged, so saved flows keep their place.
