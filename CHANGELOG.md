@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.11.0 — 2026-11-25
+
 ### Changed
 
 - The sample workflows' stepper words follow the sample plugin's renamed steps: Small reads Explore › Make › Review › Close, Medium Interview › Make › Review › Fix › Close, and Spike Interview › Make › Review › Close; the reported step values stay `build`, `check` and `land`.
