@@ -532,7 +532,10 @@ interview on 2026-10-23; this file is the record of both.
   and routes by the row id to the session's process; the process raises a permission request and chat shows it as a
   permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen. A row launched `unattended` answers each
-  prompt itself with a deny at once, naming the unattended run as the reason, and shows the denied entry.
+  prompt itself with a deny at once, naming the unattended run as the reason, and shows the denied entry. The entry
+  shows the call's target line (its `summary`, which the harness writes) with the input folded under a Full call
+  expander. Other plugins draw inside an entry through `addEntryPart`, placed by `kit.entryParts`: permission-review's
+  verdict (`docs/features/permission-review/design.md` § The card).
 - **Status**: a row's activity reads what the chat is doing — `working`, or a needs-you word while it waits for a
   permission — and shows `done` or `error` for a finished turn the user has not viewed; it is empty while idle and
   seen.
@@ -554,6 +557,9 @@ interview on 2026-10-23; this file is the record of both.
   name alone. Chat adds its own
   draw through the same export: the description in a dim column after the name: most names fit one width, so their descriptions line up, a longer name pushes only its own, and each is cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
+- **Entry parts**: chat's page exports `addEntryPart(part)`, returning a `Disposable`. A part has an `id`, the `kinds` it
+  draws in, and `build(parent, { sessionId, input })`, which returns an optional `update(input)`. A layout places the
+  parts with `kit.entryParts(parent)`; a user layout that leaves the call out shows none.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).

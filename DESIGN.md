@@ -559,7 +559,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   summary, `Thinking`, `Raw event`; under a layout that sets `activityInTranscript`, each tool and thinking row ending
   with its time, dim, in tabular numerals), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
-  `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
+  `status-attention` edge and plain verbs (Allow once, Deny). A card's head is the tool name and its target line in
+  the mono font, with the full call folded under a closed Full call expander, wrapping rather than scrolling sideways;
+  the permission review's verdict sits above the head: `Reviewing…`, then `Approve · low risk` or `Deny · high risk`
+  with its summary, coloured by risk (low success, medium warning, high error). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
   composer parts (the build offer, the agent strip, the context line, the workflow strip), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`

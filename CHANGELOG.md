@@ -6,6 +6,11 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- A permission review: each approval, a chat permission card or a risky app-command confirm, is read by a separate model, `sonnet` by default (`claude-code.askModel`), that sees only the call. The card shows its one-line summary and an approve or deny verdict with the risk.
+- Permission cards show the call's target line and fold the full call into a Full call dropdown that wraps instead of scrolling sideways.
+
 ## 1.6.0 — 2026-11-25
 
 ### Added

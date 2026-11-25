@@ -121,7 +121,8 @@ calling session's tabs, as `ask_round` shows, or, for a caller with no tab (a te
 round marks it. The round has one question, Allow or Deny, with Deny recommended, so a stray Enter and the headless
 auto-answer never allow. Every confirm is a fresh round: a per-call nonce in its question title keeps the forms service
 from replaying an earlier answer or pre-picking a saved choice. The command runs only on a submitted Allow of that
-round; a cancel, a host abort or any other outcome is a denial, and `run_command` answers `The user denied <id>.` A
+round; the `ConfirmRequest` carries the subject `{ toolName: app command <id>, input: <arg> }`, which forms publishes in
+`forms.confirms` for permission-review's verdict on the card; a cancel, a host abort or any other outcome is a denial, and `run_command` answers `The user denied <id>.` A
 deadline's draft re-opens the same round. A confirm that fails (no forms session for the caller) refuses the command
 with its error text. While a confirm waits, `run_command` refuses every `forms.*` command, so no agent picks Allow for
 the user. The round is saved with the session's other rounds.

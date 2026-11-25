@@ -1514,7 +1514,8 @@ after turn 1's `completed` lifecycle line, the transcript holds no `compact_boun
 attempt. The machine stayed awake: the driver's 60 s heartbeat never gapped past 61 s, so the timer was not `lapsed`. The
 idle waits ran about 3,900 s, past the 54 minutes the binary's code gives.
 
-The second run added `--setting-sources project,local --permission-mode default`, as the app launches, with no project or
+The second run added `--setting-sources project,local` (which the app's launch does not pass) and `--permission-mode default`
+(a mode the app's launch also passes), with no project or
 local settings file, so the profile's `settings.json` `env` (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `CLAUDE_AFK_TIMEOUT_MS`)
 did not reach it. Its turn 1 read 153,532 tokens of context (`2 + 142146 + 11384`), on the 1-hour cache, above the floor.
 So those settings did not hold it off. Not settled: whether this mode never starts the timer or another condition does.

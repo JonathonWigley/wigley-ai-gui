@@ -378,10 +378,15 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `read_state` tools through sessions' `contributeTools`, for every session, subagents included; a
                  risky command asks the user through forms' `confirm` and is refused for a headless or unattended
                  caller; its drive actions call a tool as a session; `confirmRequest` builds that confirm, which the demo step shows through forms' `confirmSample`); `docs/features/agent-commands/design.md`
-  claude-code/   manifest.ts (the `command` and `profiles` settings), main/ (the Claude Code CLI adapter behind
+  permission-review/ manifest.ts, contract.ts (the `permission-review.reviews` slot), main/ (watches `chat.entries` and
+                 `forms.confirms`, runs each review through the session harness's `ask`, logs outcomes, registers its demo
+                 step, hands its self-test script), page/ (the verdict part, through chat's `addEntryPart` and forms'
+                 `addCardPart`), layouts/ (its Layout contract and `default` layout); `docs/features/permission-review/design.md`
+  claude-code/   manifest.ts (the `command`, `profiles` and `askModel` settings), main/ (the Claude Code CLI adapter behind
                  AgentHarness, registered through `services.agentHarnesses`: it resolves a profile's config folder,
                  lists and reads Claude's saved sessions and project folders, runs `claude auth` sign-in, sign-out and
-                 status and `claude -p /usage` (the plan usage poll), each one-shot started through
+                 status and `claude -p /usage` (the plan usage poll) and `ask` (an isolated one-shot `claude -p` for
+                 `AgentHarness.ask`), each one-shot started through
                  `ProcessRunner.spawn`, asks each session for `get_context_usage` and `get_settings`, and contributes
                  Claude's `permission_prompt` MCP tool, routed to the session's process; an empty `command` looks
                  `claude` up on PATH, then in `~/.local/bin`) → the only place the app spawns `claude`;
@@ -390,7 +395,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  agents' service auto-answers a headless chat session's rounds with every item's recommendation,
                  outcome `auto_answered`, and the preview's never does), page/ (the round popup), layouts/ (the
                  Layout contract and the built-in `default` layout); main exports `confirm` (an Allow or Deny round
-                 in the calling session's own forms session, a fresh round each call) and `confirmSample` (the same round as a sample that saves nothing and wakes no session, for a demo step) to agent-commands
+                 in the calling session's own forms session, a fresh round each call; its request carries an optional subject, published in the `forms.confirms` slot while the round is open) and `confirmSample` (the same round as a sample that saves nothing and wakes no session, for a demo step) to agent-commands
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures, `DEMO_PRIMER_ARGS` (the demo step's sample primer),
                  preview/: the layout preview's sample primer in a session of its own),
                  page/ (the primer popup: the tasks, items and card columns, the feature, task and item cards, and
@@ -1192,7 +1197,8 @@ old path for one release, a script that exits 0 and prints nothing, and the next
   `addEntryRenderer({ kind, match?, build })`, whose `build` takes an entry builder's arguments. An entry draws with
   the user's layout when it names the kind; else with the plugin renderers, the latest added first, the first whose
   `kind` matches and whose `match` passes when given; else with `default`, whose `raw` builder draws a harness kind. A
-  harness kind joins no activity run.
+  harness kind joins no activity run. A plugin draws a part inside an entry kind through the `chat` page export
+  `addEntryPart({ id, kinds, build })`, placed by a layout's `kit.entryParts(parent)`: permission-review's verdict.
 - **A forms layout** draws the forms view: the three named cards (`question`, `finding`, `notice`), `cards.kinds` (a
   builder per plugin kind id), `cards.other` (the card of a plugin kind no layout in the chain has a `kinds` builder
   for), the `head`, `rail`, `review` and `notices` panes, the rail's `railHead` and `railFoot` and the `pager` over
@@ -1389,7 +1395,7 @@ name and prints its file and line.
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
   primer, `src/plugins/audio-picker/main/selftest-script.ts` for the audio picker,
   `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/sample-large-selftest-script.ts` for
-  the sample Large, `src/plugins/workflow/main/sample-selftest-scripts.ts` for the sample Spike, Small and Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/plugins/work/main/selftest-script.ts` for the work plugin, Inbox mode and Board mode, `src/plugins/demo/main/selftest-script.ts` for the demo's keys, its walk through every step before the Live section and its coverage check (every built-in plugin has a demo step or a `demoSkip`, and no step failed), `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
+  the sample Large, `src/plugins/workflow/main/sample-selftest-scripts.ts` for the sample Spike, Small and Medium, `src/plugins/unity-pool/main/selftest-script.ts` for the pool badge and panel, `src/plugins/chatroom/main/selftest-script.ts` for Chatroom mode, the row badge and the composer, `src/plugins/session-log/main/selftest-script.ts` for Recently closed, `src/plugins/session-stash/main/selftest-script.ts` for Stashed, `src/plugins/context-sources/main/selftest-script.ts` for the hub's Context section, `src/plugins/permission-review/main/selftest-script.ts` for the permission card's verdict, `src/plugins/live-view/main/selftest-script.ts` for the hub's Live section, `src/plugins/app-update/main/selftest-script.ts` for the update button, `src/plugins/system-stats/main/selftest-script.ts` for the system stats panel, `src/plugins/scheduling/main/selftest-script.ts` for Schedules mode and the Scheduled runs section, `src/plugins/work/main/selftest-script.ts` for the work plugin, Inbox mode and Board mode, `src/plugins/demo/main/selftest-script.ts` for the demo's keys, its walk through every step before the Live section and its coverage check (every built-in plugin has a demo step or a `demoSkip`, and no step failed), `src/main/selftest-user-plugin.ts` for the runtime plugin loader, handed over by `main.ts` under the fixture's id `selftest-user`); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, a step's `remove` deletes a file or folder there after the
   write and before the keys, a step's `click` (a CSS selector) clicks its first match once with the left button
   after the removal and before the keys, failing the step without pressing them when the click cannot land, and a

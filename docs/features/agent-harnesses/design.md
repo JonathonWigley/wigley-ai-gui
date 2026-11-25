@@ -8,6 +8,7 @@
 - **Profiles and the default harness** — who owns profiles, and how a new session picks its harness.
 - **Joining an app-started session** — the row id in the relay's hello.
 - **Permission prompts** — the adapter owns the MCP route and the reply.
+- **One-shot asks** — `AgentHarness.ask`, a prompt with no tools and no session, and Claude Code's isolated run of it.
 - **Docs and a harness's folders** — what docs asks an adapter, and why the index file keeps its list.
 - **A harness reloading** — what happens to running sessions.
 - **Rejected** — approaches weighed and dropped, with the reason.
@@ -38,7 +39,8 @@ or output format. Every decision below serves that.
 
 - The built-in plugin `claude-code` holds the Claude adapter and registers it. Its harness keeps the id `claude`,
   which relay hellos and saved sessions already carry.
-- It owns its settings: `claude-code.command` (the program a session runs) and `claude-code.profiles`.
+- It owns its settings: `claude-code.command` (the program a session runs), `claude-code.profiles` and
+  `claude-code.askModel` (the model a one-shot ask runs on, default `sonnet`).
 - The core hands every main part what the adapter used to take from `main.ts`: the session host
   (`services.sessionHost`, already a service), a streaming spawn on `services.processes` that a plugin stop kills like
   its other runs, the agent environment (`services.agentEnvironment`: the app's environment plus the relay's
@@ -80,6 +82,24 @@ or output format. Every decision below serves that.
   is chat's rule, answered the same way.
 - Sessions hands each call's raw MCP `_meta` to the adapter registered under the hello's harness id, which reads its
   own tool-use id key. The MCP server's own name comes from the endpoint the composition root hands sessions.
+
+## One-shot asks
+
+- `AgentHarness.ask(request: AgentAsk): Promise<string>` runs one prompt with its own instructions on a profile. It
+  has no tools and no session, and it saves nothing. It resolves with the model's reply text and rejects with a reason
+  the user can read.
+- `AgentAsk` is `{ profileDir, instructions, prompt, signal }`: the profile's config folder, the system prompt, the
+  prompt and an abort signal that kills the run.
+- Model names stay in the adapter. Claude Code reads its `claude-code.askModel` setting, default `sonnet`, so no caller
+  names a model.
+- Claude Code runs `claude -p` with the prompt on stdin and flags that replace its system prompt and turn off
+  tools, MCP servers, settings, slash commands and session saving. Each flag keeps something that is not the call
+  (a project's `CLAUDE.md`, a hook, a skill) away from the model. The full list, with the reason for each, is in
+  `docs/features/permission-review/design.md` § The one-shot ask.
+- The ask runs with the profile's `CLAUDE_CONFIG_DIR`, so it signs in with the session's own account, in an empty
+  folder of its own inside the OS temp folder, so no project file is near it.
+- The fake harness answers `ask` with a scripted reply, `setAskReply(text)`, and fails the next one with
+  `failNextAsk(message)`, so no test or demo spawns a model.
 
 ## Docs and a harness's folders
 
