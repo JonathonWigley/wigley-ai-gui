@@ -3,9 +3,12 @@ import { qualify } from '../../../shared/plugin-manifests';
 import {
   ageText,
   type DetailMessage,
+  isDigest,
+  isUnseen,
   type ThreadDetail,
   WORK_SECTIONS,
   type WorkItem,
+  type WorkSection,
   type WorkState,
 } from '../../work/contract';
 import type { InboxSectionId, WorkInboxPlace } from '../contract';
@@ -36,6 +39,28 @@ export const SECTION_TITLES: Record<InboxSectionId, string> = {
   worth_knowing: 'Worth knowing',
   all: 'All',
 };
+
+// The two kinds of item: threads the user is part of, and the digest's summaries of channel posts.
+export type InboxGroupId = 'threads' | 'digest';
+
+export const GROUP_TITLES: Record<InboxGroupId, string> = {
+  threads: 'Threads',
+  digest: 'Digest',
+};
+
+export const groupOf = (section: WorkSection): InboxGroupId =>
+  isDigest(section) ? 'digest' : 'threads';
+
+// The nav group section `id` opens: its kind's group on the first section of each, `all` on All, null on the rest.
+export function navGroupStart(id: InboxSectionId): InboxGroupId | 'all' | null {
+  if (id === 'all') {
+    return 'all';
+  }
+  const first = WORK_SECTIONS.find(
+    (section) => groupOf(section) === groupOf(id),
+  );
+  return first === id ? groupOf(id) : null;
+}
 
 // Where the keys act: the side bar's sections, the card list, or the detail pane's reply box.
 export type InboxFocus = 'sections' | 'list' | 'box';
@@ -248,16 +273,20 @@ function workChanged(
   return withCursor(pruned, next ?? previous ?? null);
 }
 
-const newestFirst = (a: WorkItem, b: WorkItem) =>
+const GROUP_ORDER: Record<InboxGroupId, number> = { threads: 0, digest: 1 };
+
+// Threads before the digest, each newest first.
+const listOrder = (a: WorkItem, b: WorkItem) =>
+  GROUP_ORDER[groupOf(a.section)] - GROUP_ORDER[groupOf(b.section)] ||
   Date.parse(b.at) - Date.parse(a.at);
 
-// The open items of each section, and every item under `all`.
+// The unseen open items of each section, and every item under `all`.
 export function sectionCounts(work: WorkState): Record<InboxSectionId, number> {
   const counts = Object.fromEntries(
     INBOX_SECTIONS.map((section) => [section, 0]),
   ) as Record<InboxSectionId, number>;
   for (const item of work.items) {
-    if (item.state === 'open') {
+    if (item.state === 'open' && isUnseen(item)) {
       counts[item.section] += 1;
     }
   }
@@ -265,7 +294,7 @@ export function sectionCounts(work: WorkState): Record<InboxSectionId, number> {
   return counts;
 }
 
-// The cards the list shows, newest `at` first: the open items holding the filter key across sections while a filter
+// The cards the list shows, threads before the digest and each newest `at` first: the open items holding the filter key across sections while a filter
 // is set, else every item under `all`, else the section's open items.
 export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
   const { ticketFilter, section } = view;
@@ -277,12 +306,35 @@ export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
       section === 'all' || (item.state === 'open' && item.section === section)
     );
   };
-  return work.items.filter(isShown).sort(newestFirst);
+  return work.items.filter(isShown).sort(listOrder);
 }
 
-// The detail pane's buttons in draw order. Every open item sends its reply (a Waiting on others reply is the nudge), a
-// Waiting item also snoozes, every open item dismisses and spins up a session or a Board task, and an item that is not
-// open only restores.
+// Whether the list mixes sections: All, or a ticket filter.
+export function isMixedList(view: InboxViewState): boolean {
+  return view.ticketFilter !== null || view.section === 'all';
+}
+
+// The group heading a mixed list draws before each shown item: the item's group where it differs from the item
+// before, else null; all null while the list shows one section.
+export function groupStarts(
+  items: readonly WorkItem[],
+  view: InboxViewState,
+): (InboxGroupId | null)[] {
+  if (!isMixedList(view)) {
+    return items.map(() => null);
+  }
+  return items.map((item, index) => {
+    const group = groupOf(item.section);
+    const before = items[index - 1];
+    return before !== undefined && groupOf(before.section) === group
+      ? null
+      : group;
+  });
+}
+
+// The detail pane's buttons in draw order. Every open thread sends its reply (a Waiting on others reply is the nudge),
+// a digest item takes none, a Waiting item also snoozes, every open item dismisses and spins up a session or a Board
+// task, and an item that is not open only restores.
 export function cardActions(
   item: WorkItem,
   _view: InboxViewState,
@@ -291,7 +343,7 @@ export function cardActions(
     return ['restore'];
   }
   return [
-    'send',
+    ...(isDigest(item.section) ? [] : (['send'] as const)),
     ...(item.section === 'waiting' ? (['snooze'] as const) : []),
     'dismiss',
     'startSession',
@@ -328,9 +380,14 @@ export function prunedDrafts(
     : Object.fromEntries(kept);
 }
 
-// The text Send sends for `item`: the user's edit, else the worker's draft, else empty.
+// The text Send sends for `item`: the user's edit, else empty.
 export function draftText(item: WorkItem, view: InboxViewState): string {
-  return view.drafts[item.id] ?? item.draft ?? '';
+  return view.drafts[item.id] ?? '';
+}
+
+// Whether `item` takes a reply: an open thread; a digest item never does.
+export function takesReply(item: WorkItem): boolean {
+  return item.state === 'open' && !isDigest(item.section);
 }
 
 // The item the cursor is on, among the shown cards; null for none.
@@ -418,8 +475,7 @@ function cardPrompt(
 
 // Its section's name while the list mixes sections (All, or a ticket filter), else null.
 function sectionTitleOf(item: WorkItem, view: InboxViewState): string | null {
-  const isMixed = view.ticketFilter !== null || view.section === 'all';
-  return isMixed ? SECTION_TITLES[item.section] : null;
+  return isMixedList(view) ? SECTION_TITLES[item.section] : null;
 }
 
 // What the `card` part draws for `item`, aged against `now`.
@@ -437,12 +493,14 @@ export function cardInput(
     author: item.author,
     age: cardAge(item.at, now),
     title: item.title,
-    summary: view.paneOpen ? null : item.summary,
     latest: item.latest,
+    why: item.why,
     state: item.state,
     stateTag: stateTag(item),
     isSending: item.sending !== null,
     isDirect: item.section === 'needs_you',
+    isDigest: isDigest(item.section),
+    isUnseen: isUnseen(item),
     isCursor,
     note: item.note,
     prompt: isCursor ? cardPrompt(item, cardActions(item, view)) : [],
@@ -494,9 +552,9 @@ export function detailInput(
     replyCountText: hasHiddenReplies
       ? `${replies.length} of ${detail.replyCount} replies`
       : null,
-    draft:
-      item.state === 'open' ? (item.sending ?? draftText(item, view)) : null,
+    draft: takesReply(item) ? (item.sending ?? draftText(item, view)) : null,
     isSending: item.sending !== null,
+    isDigest: isDigest(item.section),
     note: item.note,
     url: item.url,
     actions: [...cardActions(item, view)],

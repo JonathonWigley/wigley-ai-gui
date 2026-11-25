@@ -6,6 +6,22 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- Inbox marks an item seen once the cursor rests on it, and shows unseen items with a dot and a bold title.
+- Inbox groups its sections and the All list into Threads and Digest, with a `digest` tag on channel summaries.
+
+### Changed
+
+- Inbox shows compact one-line rows, and its head reads only when the work was last updated.
+- Inbox section counts, the activity bar count and the Dock badge count only unseen items.
+- The Board's status line reads only when the work was last updated.
+
+### Removed
+
+- The worker no longer writes draft replies: the reply box starts empty.
+- Digest items in the Inbox take no reply.
+
 ## 1.6.0 — 2026-11-25
 
 ### Added

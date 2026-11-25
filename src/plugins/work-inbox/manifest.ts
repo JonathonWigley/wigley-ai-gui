@@ -1,7 +1,8 @@
 import { definePlugin } from '../../shared/define-plugin';
 
-// Inbox mode: the work plugin's Slack threads, sorted into sections by what needs the user, in a side bar of
-// sections and a sheet of cards, with the cursor card's thread and its draft reply in a detail pane beside the cards.
+// Inbox mode: the work plugin's Slack threads and digest, sorted into sections by what needs the user, in a side bar
+// of sections grouped as Threads and Digest and a sheet of rows, with the cursor row's thread and a reply box in a
+// detail pane beside the rows. A row the cursor rests on is marked seen.
 // It reads `work.state` and `work.details` and runs `work` commands only, each through its own commands, so a refusal
 // toasts. `layout` names the layout Inbox draws with. The commands taking an arg are the clicks on the detail pane's
 // buttons and chips, on a card and on a row, and the run from another view (`filterTicket`), so they have no key.
@@ -9,7 +10,7 @@ export const workInboxManifest = definePlugin({
   id: 'work-inbox',
   label: 'Inbox',
   description:
-    'Adds Inbox mode: Slack threads sorted by what needs you, with each thread and its draft reply in a detail pane beside the cards.',
+    'Adds Inbox mode: Slack threads sorted by what needs you, apart from a digest of channel posts, with each thread and a reply box in a detail pane beside the rows.',
   dependsOn: { main: [], page: ['work'] },
   reads: { main: [], page: [] },
   commands: {

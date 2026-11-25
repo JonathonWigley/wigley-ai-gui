@@ -18,7 +18,7 @@
 ## Intent
 
 The user's work arrives in Slack threads and Jira tickets, and ends in commits, pull requests and Auri sessions. The
-work plugins bring the two sources into the app, sorted by what needs the user, with drafts written ahead, and watch
+work plugins bring the two sources into the app, sorted by what needs the user and marked once seen, and watch
 the user's own git, PR and session activity so the Board suggests the moves Jira is waiting on. The data stays local, in
 the `work` plugin's data folder, and works for any Slack workspace and Jira site. Nothing reaches Slack or Jira on its
 own: every post, transition or comment runs only when the user presses for it.
@@ -84,8 +84,11 @@ Auri sessions (chat.session, sessions.rows) ─┘
 - **Harness-neutral text.** The instructions name capabilities ("your Slack tools", "your Jira tools"), never one
   harness's tool names.
 - **Status.** The status line in both views (the Board's layout also has an optional `problem` part, drawn in the status
-  slot under it while `work.json` was not read at start) shows the running or last job, its time and outcome, and links to the last
-  finished job's transcript. A running job's row is hidden and owned, so it has no link until it ends.
+  slot under it while `work.json` was not read at start) shows only when the work was last updated: `Updated 7m ago`
+  from the last finished sweep (`lastSweepAt` in `work.state`), `Updating…` while a sweep runs, `Update failed <age>
+  ago` when the last sweep failed, or `Not updated yet`. `gs` opens the last finished job's transcript: a `log` hint in
+  the Inbox, a Show transcript Button on the Board. A running job's row is hidden and owned, so it has no link until it
+  ends.
 - **When.** Only while the app runs: one sweep at start, then a one-shot timer re-armed after each sweep. Interval 0
   turns the timer off; `W` still sweeps.
 
@@ -95,19 +98,25 @@ Sections, in order: **Needs you** (DMs, @mentions, direct asks), **You promised*
 **Waiting on others** (the user's questions and owed replies gone quiet past `work.stallHours`), **My threads** (threads
 the user posted in with new replies), **Around Slack** (watched-channel posts tied to the user's tickets or keywords,
 each with a why), **Worth knowing** (important posts in broadcast channels, each with a why), and **All**, the
-seventh nav row. The side bar lists the seven as rows with their open counts (All counts every item); the shown section
-fills the sheet, newest first.
+seventh nav row. The first four are **Threads**: conversations the user is part of, which take a reply. Around Slack and
+Worth knowing are the **Digest**: the worker's summaries of channel posts the user should know about, which take no
+reply. The side bar lists the sections under Threads and Digest headings, then All, each with its unseen open count
+(All counts every item); the shown section fills the sheet, newest first. All and a ticket filter list the threads
+first, then the digest, each under its heading.
 
-A card shows its meta line, title, summary (only while the pane is closed), latest line, key prompts and a failed
-Send's note; the people, ticket chips, thread, draft and Buttons sit in the detail pane ([Detail pane](#detail-pane)).
-Needs you cards have a warning-colour edge (drawn in the layout's CSS, since the Card primitive has no such variant),
-and their count drives the Dock badge. Needs you cards carry an editable draft; Waiting on others cards carry an
-editable nudge, Snooze 1 day and Dismiss. Send is offered on every open item, in the pane. Every other open item has
-Dismiss, Start session and Add to Board. A ticket chip opens the Board on that ticket.
+A row shows an unseen dot, its meta line (with a `digest` Tag on a digest item), the title, one line (the latest
+message on a thread, the why on a digest item), key prompts and a failed Send's note; the people, ticket chips, summary,
+thread, reply box and Buttons sit in the detail pane ([Detail pane](#detail-pane)). The unseen Needs you count drives
+the Dock badge and the activity bar count. Waiting on others items carry Snooze 1 day. Send is offered on every open
+thread, in the pane; a digest item has none. Every open item has Dismiss, Start session and Add to Board. A ticket
+chip opens the Board on that ticket.
 
-- **The draft** is the user's edit, else the worker's. Edits are kept per item in `work-inbox.place` while the item is
-  in `work.state`, so a reload keeps them. Send posts the draft and drops the edit; an empty draft toasts and sends
-  nothing. A card being sent shows its draft read-only and takes no other press.
+- **Seen.** An item is seen once the list cursor rests on it for 1.5 s while Inbox is on screen with real work (not
+  the demo sample): the page runs `work.markSeen`, which stamps the item's `seenAt` in `work.json`. A message newer than
+  `seenAt` makes the item unseen again. Unseen rows carry the dot and a semibold title.
+- **The reply** is the user's own text: the worker writes no draft. Edits are kept per item in `work-inbox.place` while
+  the item is in `work.state`, so a reload keeps them. Send posts the reply and drops the edit; an empty reply toasts
+  and sends nothing. A row being sent shows its reply read-only and takes no other press.
 - **The ticket filter** (the Board's `N thread` chip, `t` on a Board card, or a ticket chip) lists the open items
   holding one ticket key across every section, shown as a chip reading `<key> ✕`. `Esc` in the list or a click on the
   chip clears it and returns to the section shown before.
@@ -155,12 +164,12 @@ same card, and the minute age refresh waits while the box is focused or text in 
   behind the first; it never replaces it. A comment equal to one still posting is refused (`Already posting that
   comment`). The open ticket pane lists its Inbox threads before its detail is fetched.
 - **A thread's pane** (the Inbox, and a local task on the Board): channel, participants, ticket chips, the worker's
-  summary, the root message and the `work.threadReplies` most recent replies (author, time, text), then a reply box on
-  every open thread, filled with the worker's draft where one exists; a local task whose thread is not open in the
+  why on a digest item, the summary, the root message and the `work.threadReplies` most recent replies (author, time,
+  text), then an empty reply box on every open thread (none on a digest item); a local task whose thread is not open in the
   Inbox shows a line saying it takes no reply from the Board. `Cmd+Enter` sends through the Send job, as before. A
   Board task whose Slack thread left the Inbox reads `Its Slack thread is no longer in the Inbox.`
-- **Inbox cards slim down** while the pane is open: meta line, title and latest line. With the pane closed a card
-  also shows its summary. The draft box, people, ticket chips, thread and Buttons draw in the pane, not on the card.
+- **Inbox rows stay one line each** whether or not the pane is open: meta line, title and one line. The summary,
+  reply box, people, ticket chips, thread and Buttons draw in the pane, not on the row.
 - **Where detail comes from.** Each sweep stores a detail record per ticket and per thread in its own section of
   `work.json`, published as the keyed `work.details` slot that only the panes read. `read_work_state` hands the worker
   each stored record's updated stamp, and the worker refetches only tickets and threads that moved since. Description,
@@ -215,7 +224,7 @@ card, so its branch and work count as signals.
 ## Keys
 
 - `<Leader>ki` Inbox, `<Leader>kj` Board, in the `k` go-to group.
-- `W` sweeps now in both views (in the Inbox's sections and list, not in a draft box, where it types), matching
+- `W` sweeps now in both views (in the Inbox's sections and list, not in a reply box, where it types), matching
   Backlog's sweep. `gs` shows the last job's transcript row.
 - Ctrl+n opens the new-session prompt from both views, as in every main view.
 

@@ -32,8 +32,9 @@ export interface BoardPane {
   element: HTMLElement;
 }
 
-// The worker job line: `text` reads as `Sweep running · started 3m ago`; `hasRow` is true while the last finished
-// job has a transcript to show, and the line then draws a Show transcript button running `work-board.showJobRow`.
+// The update line: `text` reads `Updated 7m ago`, `Updating…` while a sweep runs, `Update failed 2m ago` or `Not
+// updated yet`; `hasRow` is true while the last finished job has a transcript to show, and the line then draws a Show
+// transcript button running `work-board.showJobRow`.
 export interface BoardStatusInput {
   text: string;
   tone: DotStatus;

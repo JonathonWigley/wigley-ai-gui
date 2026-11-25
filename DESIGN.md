@@ -606,26 +606,33 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   started; the last card reads `New chunk`. An empty table shows one empty-state line saying why, and `Space v b` when
   nothing is left to show.
 - **Inbox** (`docs/features/work-inbox/design.md`): the section nav is the side bar, under an `Inbox` SectionHeader and
-  the `sweep` key hint: a `row-list` row per section (Needs you, You promised, Waiting on others, My threads, Around
-  Slack, Worth knowing, All) with its open count at the end, in `fg-tertiary`; Needs you draws its count in a `warning`
-  Tag while it is over 0, and All counts every item. The sheet is one pane: a head (the `Inbox` heading, the ticket
-  filter chip as a `secondary` Button reading `<key> ✕` while a filter is set, the `sweep` hint), the status line under
-  it (a StatusDot in the job's tone, then the job line, and a `ghost` Show transcript Button with its hint while the
-  last job has a transcript), then the cards, which scroll. A card is a Card with a meta line (`channel · author`, a
-  neutral Tag for its section under All and a ticket filter, a Tag for `cleared`, `dismissed` or `snoozed until <date>`,
-  a `sending` Tag while a reply sends, the age at the end), the title as a heading, the summary (only while the pane is
-  closed), the latest reply, then the cursor card's key prompts and a failed Send's note last. The sheet is a split (the
-  split primitive, pane at the end and hideable): cards left and the cursor card's detail pane right, opened and closed
-  by `Enter`. The pane heads with the title, the meta line and `Fetched <age> ago` (`Fetched just now` under a minute),
-  then `With <participants>`, a ghost Button per ticket key, the summary, `Why:` while the worker gave one, the thread
-  (root message, replies, markdown), the draft in its vim box with the box's hints (read-only on a sending item) and the
-  Buttons in this order: Open in Slack (`ghost`), then Send (`primary`), Snooze 1 day, Dismiss (`ghost`), Start session
-  and Add to Board, or Restore alone on an item that is not open, with a failed Send's note last
-  (`docs/features/work-inbox/design.md` § Detail pane). A Needs you card carries a `status-warning` edge on its left,
-  drawn in the layout's CSS, since the Card primitive's edges are attention and error only. An empty list shows one
+  the `sweep` key hint: a `row-list` row per section with its unseen open count at the end, in `fg-tertiary`, under two
+  group headings in `text-11` semibold capitals in `fg-tertiary`: Threads (Needs you, You promised, Waiting on others,
+  My threads) and Digest (Around Slack, Worth knowing), then a `border-subtle` hairline and All. Needs you draws its
+  count in a `warning` Tag while it is over 0, and All counts every item. The sheet is one pane: one head line over a
+  `border-subtle` rule (the shown list's name as a heading, the update status in `fg-tertiary` reading `Updated 7m
+  ago`, `Updating…`, `Update failed <age> ago` or `Not updated yet` with a StatusDot only while running or failed, a
+  `log` key hint for `gs` while the last job has a transcript, the ticket filter chip as a `secondary` Button reading
+  `<key> ✕` while a filter is set, the `sweep` hint at the end), then the rows, which scroll. A row is a compact
+  mail-style row with a `border-subtle` rule under it, edge to edge: an `accent` dot in its own column while the item is
+  unseen, a meta line (`channel · author`, an `info` `digest` Tag on an Around Slack or Worth knowing item, a neutral
+  Tag for its section under All and a ticket filter, a Tag for `cleared`, `dismissed` or `snoozed until <date>`, a
+  `sending` Tag while a reply sends, the age at the end), the title on one line (semibold while unseen), one line of the
+  latest reply, or a digest item's why in italics, then the cursor row's key prompts and a failed Send's note last. The
+  cursor row draws in `accent-tint` with an `accent` edge at `indicator-width`, the selected row in the list's inactive
+  selection colour. Under All and a ticket filter the rows group under Threads and Digest headings, threads first. The
+  sheet is a split (the split primitive, pane at the end and hideable): rows left and the cursor row's detail pane
+  right, opened and closed by `Enter`. The pane heads with the title, the meta line and `Fetched <age> ago` (`Fetched
+  just now` under a minute), then `With <participants>`, a ghost Button per ticket key, `Why:` while the worker gave
+  one (a `status-info` edge), the summary (a `border-default` edge, in `fg-secondary`), the thread (root message,
+  replies, markdown), the reply box in its vim box with the box's hints on an open thread (read-only on a sending
+  item; none on a digest item) and the Buttons in this order: Open in Slack (`ghost`), then Send (`primary`, threads
+  only), Snooze 1 day, Dismiss (`ghost`), Start session and Add to Board, or Restore alone on an item that is not
+  open, with a failed Send's note last (`docs/features/work-inbox/design.md` § Detail pane). An empty list shows one
   empty-state line saying why, with the `sweep` hint when nothing was ever gathered.
 - **Board** (`docs/features/work-inbox/design.md`): no side bar. The sheet is one pane: a head (the `Board` heading, the
-  status line as in Inbox, the `sweep` hint) over one row of columns that scrolls sideways, each column `9 × space-8`
+  update status as in Inbox with a `ghost` Show transcript Button while the last job has a transcript, the `sweep`
+  hint) over one row of columns that scrolls sideways, each column `9 × space-8`
   wide and scrolling its own cards; a column head is its name and card count, and the Other column shows only while it
   holds a card. A card is a Card in `space-2` rows, the cursor card with the focus ring and the card another view just
   showed (an Inbox ticket chip or key) flashed in `accent-tint`; a card being dragged is half transparent and a column

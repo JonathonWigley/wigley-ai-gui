@@ -65,9 +65,9 @@ export function sampleInboxDetails(now: number): ThreadDetail[] {
 }
 
 // The Inbox demo's work state, its times counted back from `now` (epoch ms). Newest first: the dismissed item, so All
-// opens on it; the Needs you item with a ticket key and a worker draft; a second Needs you item; then one item in each
-// other section, Waiting on others with a nudge. Three items hold ticket keys, and the last job is a finished sweep
-// with a row, so every card action's and the status line's anchors draw. Ids are sample ids main never holds.
+// opens on it; the unseen Needs you item with a ticket key; a second Needs you item, seen; then one item in each other
+// section, the promise and the Worth knowing item seen. Three items hold ticket keys, and the last job is a finished
+// sweep with a row, so every card action's and the status line's anchors draw. Ids are sample ids main never holds.
 export function sampleInboxState(now: number): WorkState {
   const ago = (minutes: number) =>
     new Date(now - minutes * MINUTE_MS).toISOString();
@@ -86,7 +86,7 @@ export function sampleInboxState(now: number): WorkState {
     ticketKeys: [],
     linkReason: null,
     why: null,
-    draft: null,
+    seenAt: null,
     state: 'open',
     snoozedUntil: null,
     firstSeen: ago(minutes + 5),
@@ -115,7 +115,6 @@ export function sampleInboxState(now: number): WorkState {
         latest: 'Ann: any chance today?',
         participants: ['Ann', 'Bo'],
         ticketKeys: ['PLAT-142'],
-        draft: 'On it now, comments within the hour.',
       }),
       item('dm', 25, {
         section: 'needs_you',
@@ -124,6 +123,7 @@ export function sampleInboxState(now: number): WorkState {
         title: 'Lunch on Thursday?',
         summary: 'Bo asks whether Thursday lunch still works.',
         latest: 'Bo: still on for Thursday?',
+        seenAt: ago(20),
       }),
       item('promise', 90, {
         section: 'promised',
@@ -133,6 +133,7 @@ export function sampleInboxState(now: number): WorkState {
         summary: 'You said you would post the release notes by end of day.',
         latest: 'You: will post them by five',
         ticketKeys: ['REL-9'],
+        seenAt: ago(60),
       }),
       item('nudge', 180, {
         section: 'waiting',
@@ -141,7 +142,6 @@ export function sampleInboxState(now: number): WorkState {
         title: 'Schema sign-off',
         summary: 'You asked Dee to sign off the schema change two days ago.',
         latest: 'You: does the schema look right?',
-        draft: 'Any word on the schema? Happy to walk through it.',
       }),
       item('thread', 300, {
         section: 'my_threads',
@@ -169,6 +169,7 @@ export function sampleInboxState(now: number): WorkState {
         summary: 'CI jobs move to the new runners next Monday.',
         latest: 'Gus: expect a short outage at nine',
         why: 'Your release build runs that morning.',
+        seenAt: ago(1000),
       }),
     ],
     cards: [],
@@ -184,6 +185,7 @@ export function sampleInboxState(now: number): WorkState {
         note: null,
       },
     },
+    lastSweepAt: ago(7),
     problem: null,
   };
 }

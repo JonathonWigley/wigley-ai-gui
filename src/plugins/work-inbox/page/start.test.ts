@@ -31,6 +31,7 @@ const STATE: WorkState = {
   suggestions: [],
   columns: [],
   job: { running: null, last: null },
+  lastSweepAt: null,
   problem: null,
 };
 

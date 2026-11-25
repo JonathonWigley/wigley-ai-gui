@@ -40,6 +40,7 @@ import { createSplit } from '../../../shared/page/ui/split';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { qualify } from '../../../shared/plugin-manifests';
 import {
+  isUnseen,
   statusLine,
   type ThreadDetail,
   type WorkItem,
@@ -63,9 +64,12 @@ import {
   detailInput,
   draftText,
   emptyReason,
+  GROUP_TITLES,
+  groupStarts,
   type InboxAction,
   type InboxCardAction,
   type InboxFocus,
+  type InboxGroupId,
   type InboxSectionId,
   type InboxViewState,
   INBOX_SECTIONS,
@@ -73,9 +77,11 @@ import {
   initialInboxState,
   listTitle,
   type Move,
+  navGroupStart,
   SECTION_TITLES,
   sectionCounts,
   shownItems,
+  takesReply,
 } from './inbox-state';
 import { createInboxKit } from './layout/inbox-kit';
 
@@ -83,6 +89,9 @@ const PLUGIN_ID = 'work-inbox';
 const TITLE = 'Inbox';
 const DRAFT_FORM = 'work-inbox-draft';
 const STATUS_REDRAW_MS = 60_000;
+// How long the cursor rests on an unseen item before it counts as seen.
+const SEEN_REST_MS = 1_500;
+const MARK_SEEN: CommandId = 'work.markSeen';
 const PLACEHOLDER = 'Write a reply…';
 // Where the split keeps the detail pane's width, in this plugin's own uiState.
 const PANE_WIDTH_KEY = 'pane-width';
@@ -116,6 +125,7 @@ const EMPTY_WORK: WorkState = {
   suggestions: [],
   columns: [],
   job: { running: null, last: null },
+  lastSweepAt: null,
   problem: null,
 };
 
@@ -211,7 +221,7 @@ export interface InboxView {
   selectItem(id: string): void;
   // Shows section `id`, the list focused.
   selectSection(id: string): void;
-  // Sends item `id`'s draft: the user's edit, else the worker's.
+  // Sends item `id`'s reply: the user's edit in its box.
   sendItem(id: string): void;
   // Shows ticket `key` on the Board.
   openTicket(key: string): void;
@@ -307,10 +317,14 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   const cardsList = element('ol', 'work-inbox-cards');
 
   // ── Drawing ────────────────────────────────────────────────────────────
+  // The rows in the nav's order, and the group headings between them.
   let sectionDraws: DrawnRoot[] = [];
+  let sectionGroupDraws: DrawnRoot[] = [];
   let statusDraws: DrawnRoot[] = [];
   let filterDraw: DrawnRoot | null = null;
+  // The cards in the list's order, and the group headings between them.
   let cardDraws: DrawnRoot[] = [];
+  let cardGroupDraws: DrawnRoot[] = [];
   let detailDraw: DrawnRoot | null = null;
   // What each part was drawn from; null to draw again.
   let drawnSectionsKey: string | null = null;
@@ -376,11 +390,32 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     const key = JSON.stringify(inputs);
     if (key !== drawnSectionsKey) {
       drawnSectionsKey = key;
-      const held = sectionDraws;
+      const held = [...sectionDraws, ...sectionGroupDraws];
       sectionDraws = [];
+      sectionGroupDraws = [];
       disposeDraws(held);
       sectionsList.replaceChildren();
       for (const input of inputs) {
+        const group = navGroupStart(input.id);
+        if (group !== null) {
+          const groupInput = {
+            id: group,
+            title: group === 'all' ? null : GROUP_TITLES[group],
+          };
+          sectionGroupDraws.push(
+            parts.draw(
+              'sectionGroup',
+              sectionsList,
+              (sectionGroup, into, rollback) => ({
+                element: requireElementIn(
+                  into,
+                  sectionGroup(into, groupInput, kitFor('sections', rollback)),
+                  'sectionGroup',
+                ),
+              }),
+            ),
+          );
+        }
         const drawn = parts.draw(
           'sectionRow',
           sectionsList,
@@ -411,8 +446,8 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     });
   };
 
-  const drawStatus = (work: WorkState) => {
-    const line = statusLine(work.job, deps.now());
+  const drawStatus = (state: InboxViewState, work: WorkState) => {
+    const line = { title: listTitle(state), ...statusLine(work, deps.now()) };
     const key = JSON.stringify([line, work.problem]);
     if (key === drawnStatusKey) {
       return;
@@ -539,13 +574,27 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     return drawn;
   };
 
-  // Draws the cards; no card holds a box, so the redraw leaves the reply box alone.
+  const drawCardGroup = (group: InboxGroupId): DrawnRoot => {
+    const input = { id: group, title: GROUP_TITLES[group] };
+    return parts.draw('cardGroup', cardsList, (cardGroup, into, rollback) => ({
+      element: requireElementIn(
+        into,
+        cardGroup(into, input, kitFor('list', rollback)),
+        'cardGroup',
+      ),
+    }));
+  };
+
+  // Draws the cards, with a group heading before each group in a mixed list; no card holds a box, so the redraw leaves
+  // the reply box alone.
   const drawCards = (state: InboxViewState, work: WorkState) => {
     const items = shownItems(work, state);
     const now = deps.now();
     const inputs = items.map((item) => cardInput(item, state, now));
+    const starts = groupStarts(items, state);
     const key = JSON.stringify([
       inputs,
+      starts,
       items.length === 0 ? emptyReason(work, state) : null,
       listTitle(state),
     ]);
@@ -553,8 +602,9 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       drawnCardsKey = key;
       isRedrawing = true;
       try {
-        const held = cardDraws;
+        const held = [...cardDraws, ...cardGroupDraws];
         cardDraws = [];
+        cardGroupDraws = [];
         disposeDraws(held);
         cardsList.replaceChildren();
         if (items.length === 0) {
@@ -572,7 +622,13 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
             })),
           );
         } else {
-          cardDraws = inputs.map(drawCard);
+          inputs.forEach((input, index) => {
+            const group = starts[index];
+            if (group !== null && group !== undefined) {
+              cardGroupDraws.push(drawCardGroup(group));
+            }
+            cardDraws.push(drawCard(input));
+          });
         }
       } finally {
         isRedrawing = false;
@@ -801,11 +857,66 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     }
   };
 
+  // The pending rest on the cursor item, and the item it waits on.
+  let seenTimer: number | null = null;
+  let seenTimerFor: string | null = null;
+  // Each item a mark ran for, with the `at` it marked, so a rest runs no second mark until a newer message.
+  const markedAt = new Map<string, string>();
+
+  const clearSeenTimer = () => {
+    if (seenTimer !== null) {
+      deps.timers.clear(seenTimer);
+      seenTimer = null;
+    }
+    seenTimerFor = null;
+  };
+
+  // The cursor item while it waits to be seen: the mode shows real work, and the item is unseen and not yet marked.
+  const unseenCursorItem = (): WorkItem | null => {
+    if (!deps.isShown() || sample !== null) {
+      return null;
+    }
+    const item = cursorItem(shownWork(), store.get());
+    const isWaiting =
+      item !== null && isUnseen(item) && markedAt.get(item.id) !== item.at;
+    return isWaiting ? item : null;
+  };
+
+  // Marks the cursor item seen once the cursor rests on it for `SEEN_REST_MS` while the mode shows; a move restarts
+  // the rest. A refused mark is forgotten, so the next rest tries again.
+  const restOnCursor = () => {
+    const item = unseenCursorItem();
+    if (item === null) {
+      clearSeenTimer();
+      return;
+    }
+    if (seenTimerFor === item.id) {
+      return;
+    }
+    clearSeenTimer();
+    seenTimerFor = item.id;
+    seenTimer = deps.timers.set(() => {
+      seenTimer = null;
+      seenTimerFor = null;
+      const rested = unseenCursorItem();
+      if (rested?.id !== item.id) {
+        return;
+      }
+      markedAt.set(rested.id, rested.at);
+      log(`seen ${rested.title}`);
+      void runWork(MARK_SEEN, rested.id).then((isMarked) => {
+        if (!isMarked) {
+          markedAt.delete(rested.id);
+        }
+      });
+    }, SEEN_REST_MS);
+  };
+
   const render = (always = false) => {
     const state = store.get();
     const work = shownWork();
     drawSections(state, work);
-    drawStatus(work);
+    drawStatus(state, work);
     drawFilter(state);
     drawCards(state, work);
     if (drawDetail(state, work) && state.focus === 'box') {
@@ -817,6 +928,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
     writePlace(state);
     syncTargets(state, always);
     syncFocus(state, always);
+    restOnCursor();
     cardsList
       .querySelector('.is-selected')
       ?.scrollIntoView({ block: 'nearest' });
@@ -832,7 +944,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
   const redrawStatus = () => {
     const state = store.get();
     const work = shownWork();
-    drawStatus(work);
+    drawStatus(state, work);
     if (drawDetail(state, work) && state.focus === 'box') {
       changeFocus('list', true);
     }
@@ -958,7 +1070,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
 
   // Opens the pane when it is closed, which places the reply box, then hands the box the keys.
   const editDraft = onCursor((item) => {
-    if (item.state !== 'open' || item.sending !== null) {
+    if (!takesReply(item) || item.sending !== null) {
       log(`no editDraft for ${item.id}`);
       return;
     }
@@ -1047,6 +1159,7 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       render(true);
     },
     hidden() {
+      clearSeenTimer();
       boxes.leave();
     },
     focusMain: () => setFocus('list'),
@@ -1124,16 +1237,21 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
         deps.timers.clear(statusTimer);
         statusTimer = null;
       }
+      clearSeenTimer();
       const draws = [
         ...sectionDraws,
+        ...sectionGroupDraws,
         ...statusDraws,
         ...cardDraws,
+        ...cardGroupDraws,
         ...(filterDraw === null ? [] : [filterDraw]),
         ...(detailDraw === null ? [] : [detailDraw]),
       ];
       sectionDraws = [];
+      sectionGroupDraws = [];
       statusDraws = [];
       cardDraws = [];
+      cardGroupDraws = [];
       filterDraw = null;
       detailDraw = null;
       callEach<() => void>(
