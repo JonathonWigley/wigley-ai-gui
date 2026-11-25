@@ -238,6 +238,13 @@ describe('createTerminalTable', () => {
       error: 'terminal a has no well-formed spawn',
     },
     {
+      name: 'an id that is not a string',
+      prepare: () => {},
+      request: { ...terminalRequest('a'), id: 7 } as unknown as TerminalSpawn,
+      closedId: 7,
+      error: 'terminal 7 has no well-formed spawn',
+    },
+    {
       name: 'args not an array',
       prepare: () => {},
       request: {
@@ -254,7 +261,7 @@ describe('createTerminalTable', () => {
       request: terminalRequest('a'),
       error: 'no such file',
     },
-  ])('refuses a spawn: $name', ({ prepare, request, error }) => {
+  ])('refuses a spawn: $name', ({ prepare, request, error, closedId }) => {
     const s = setUp();
     s.spawnShell('held');
     prepare(s);
@@ -265,7 +272,7 @@ describe('createTerminalTable', () => {
     s.table.spawn(request, refused.subscriber);
 
     expect(refused.closed).toEqual([
-      { id: 'a', exit: { code: null, signal: null, error } },
+      { id: closedId ?? 'a', exit: { code: null, signal: null, error } },
     ]);
     expect(s.ptys).toHaveLength(ptyCount);
     expect(s.ptys.map((pty) => pty.kills())).toEqual(killsBefore);

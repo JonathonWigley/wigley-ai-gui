@@ -725,6 +725,83 @@ describe('host terminals', () => {
     ).toEqual({ type: 'termAttach', requestId: 2, id: 'nope', terminal: null });
   });
 
+  it.each([
+    {
+      name: 'termWrite',
+      message: { type: 'termWrite', id: 'a', data: 'ls' },
+      effect: (shell: FakePty) => ({ written: shell.written }),
+      expected: { written: ['ls'] },
+    },
+    {
+      name: 'termResize',
+      message: { type: 'termResize', id: 'a', cols: 90, rows: 20 },
+      effect: (shell: FakePty) => ({ resizes: shell.resizes }),
+      expected: { resizes: [{ cols: 90, rows: 20 }] },
+    },
+    {
+      name: 'termKill',
+      message: { type: 'termKill', id: 'a' },
+      effect: (shell: FakePty) => ({ kills: shell.kills() }),
+      expected: { kills: 1 },
+    },
+  ])(
+    'termMessage_Cases_ReachTheShell: $name',
+    async ({ message, effect, expected }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
+      const shell = await spawnedShell(running, connection, 'a');
+
+      connection.send(message);
+      await settled(connection);
+
+      expect(effect(shell)).toEqual(expected);
+    },
+  );
+
+  it('termDetach_ThenOutput_IsKeptForTheNextAttach', async () => {
+    const running = await runningHost();
+    const owner = await client(running.channel);
+    const shell = await spawnedShell(running, owner, 'a');
+
+    owner.send({ type: 'termDetach', id: 'a' });
+    await settled(owner);
+    shell.emitData('unseen');
+    await settled(owner);
+
+    expect(owner.terminalDataOf()).toEqual([]);
+    expect(
+      await replyTo(owner, { type: 'termAttach', requestId: 1, id: 'a' }),
+    ).toEqual({
+      type: 'termAttach',
+      requestId: 1,
+      id: 'a',
+      terminal: { replay: 'unseen', running: true },
+    });
+  });
+
+  it('disconnect_Subscriber_OutputAfterIsKeptForTheNextAttach', async () => {
+    const running = await runningHost();
+    const owner = await client(running.channel);
+    const shell = await spawnedShell(running, owner, 'a');
+    const closed = new Promise((resolve) =>
+      hostSockets[0].once('close', resolve),
+    );
+
+    owner.socket.destroy();
+    await closed;
+    shell.emitData('unseen');
+    const next = await client(running.channel);
+
+    expect(
+      await replyTo(next, { type: 'termAttach', requestId: 1, id: 'a' }),
+    ).toEqual({
+      type: 'termAttach',
+      requestId: 1,
+      id: 'a',
+      terminal: { replay: 'unseen', running: true },
+    });
+  });
+
   it('termList_RepliesEachShell', async () => {
     const running = await runningHost();
     const connection = await client(running.channel);

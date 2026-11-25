@@ -78,6 +78,7 @@ function isPositiveInteger(value: unknown): boolean {
 }
 
 function isWellFormedSpawn({
+  id,
   command,
   args,
   cwd,
@@ -87,6 +88,7 @@ function isWellFormedSpawn({
   const hasStringArgs =
     Array.isArray(args) && args.every((arg) => typeof arg === 'string');
   return (
+    typeof id === 'string' &&
     typeof command === 'string' &&
     typeof cwd === 'string' &&
     hasStringArgs &&

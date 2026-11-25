@@ -1125,6 +1125,37 @@ describe('createSessionHostClient', () => {
     expect(sentOfType(host, 'termSpawn')).toHaveLength(1);
   });
 
+  it('terminalSpawn_DetachedEntryUnderThatId_LeavesTheAnswerToTheHost', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const second = recordedTerminalEvents();
+    client.terminals
+      .spawn(terminalRequest('a'), recordedTerminalEvents().events)
+      .detach();
+
+    client.terminals.spawn(terminalRequest('a'), second.events);
+    await vi.waitFor(() =>
+      expect(sentOfType(host, 'termSpawn')).toHaveLength(2),
+    );
+    expect(second.closed).toEqual([]);
+    host.push({
+      type: 'termClosed',
+      id: 'a',
+      exit: {
+        code: null,
+        signal: null,
+        error: 'a terminal with id a already exists',
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(second.errors()).toEqual(['a terminal with id a already exists']),
+    );
+  });
+
   it.each([
     {
       name: 'answered',
@@ -1447,6 +1478,7 @@ describe('createSessionHostClient', () => {
     let stopping = false;
     const host = await startScriptedHost(channel, {
       listAnswered: false,
+      termListAnswered: false,
       stopAllAnswered: false,
       subscribed: () => {
         stopping = true;
@@ -1460,6 +1492,9 @@ describe('createSessionHostClient', () => {
       client.attach('a', attached.events),
     ).rejects.toThrow();
     const listing = expect(client.list()).rejects.toThrow();
+    const terminalListing = expect(client.terminals.list()).rejects.toThrow(
+      /did not answer its terminal list/,
+    );
     const terminal = recordedTerminalEvents();
     const terminalAttach = expect(
       client.terminals.attach('t', terminal.events),
@@ -1469,12 +1504,16 @@ describe('createSessionHostClient', () => {
     await vi.waitFor(() => expect(sentOfType(host, 'stopAll')).toHaveLength(1));
     await vi.waitFor(() => expect(sentOfType(host, 'list')).toHaveLength(1));
     await vi.waitFor(() =>
+      expect(sentOfType(host, 'termList')).toHaveLength(1),
+    );
+    await vi.waitFor(() =>
       expect(sentOfType(host, 'termAttach')).toHaveLength(1),
     );
     await host.stop();
 
     await attach;
     await listing;
+    await terminalListing;
     await terminalAttach;
     await expect(stopAll).resolves.toBeUndefined();
     expect(attached.closed).toEqual([]);
