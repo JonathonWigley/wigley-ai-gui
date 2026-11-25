@@ -255,8 +255,11 @@ export interface ChatSessions {
   // with none pending. It waits out a running attach. It reads nothing, leaving
   // the history pending, while the row waits on its harness, while its harness
   // or profile is missing, and while its unheld process runs in another app
-  // version or the host cannot be listed.
-  loadHistory(sessionId: string): Promise<void>;
+  // version or the host cannot be listed. Resolves true once the history pends
+  // no more (read now or earlier, a failed read's notice included, or none
+  // pending); false when it read nothing: in each case above, and for a
+  // session chat does not hold.
+  loadHistory(sessionId: string): Promise<boolean>;
   // The sessions plugin's `titleChanged` event: a row chat holds is saved with
   // its new titles; any other row is left alone.
   titleChanged(sessionId: string): void;
@@ -4233,38 +4236,41 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // An attach that finds no process drops the history's cut, so the read waits
   // for its result.
-  async function loadHistory(sessionId: string): Promise<void> {
-    await afterAttach(held.get(sessionId), () => loadHistorySettled(sessionId));
+  async function loadHistory(sessionId: string): Promise<boolean> {
+    return afterAttach(held.get(sessionId), () =>
+      loadHistorySettled(sessionId),
+    );
   }
 
-  async function loadHistorySettled(sessionId: string): Promise<void> {
+  async function loadHistorySettled(sessionId: string): Promise<boolean> {
     const session = held.get(sessionId);
     if (session === undefined) {
-      return;
+      return false;
     }
     if (!session.historyPending) {
       // Another caller's read may still be running: the export resolves once its entries land.
       await session.historyRead;
-      return;
+      return true;
     }
     // A row waiting on its harness, or with a missing harness or profile, reads
     // nothing and leaves the history pending: its notice says why.
     if (session.waiting !== null) {
-      return;
+      return false;
     }
     const { harness: harnessId, profile: profileName } = session.slots.info();
     const harness = deps.harnesses.get(harnessId);
     const profile = registeredProfile(harnessId, profileName);
     if (harness === null || profile === undefined) {
-      return;
+      return false;
     }
     if (isUnheld(session)) {
       const settled = await settleUnheld(session, harness, profile);
       if (!settled.readsHistory || held.get(sessionId) !== session) {
-        return;
+        return false;
       }
     }
     await historyReadOf(session, profile, harness);
+    return true;
   }
 
   // A file that cannot be read marks no row archived, so every saved session

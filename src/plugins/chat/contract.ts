@@ -773,8 +773,12 @@ export interface ChatMainExports {
   // restore is about to reopen.
   restored(): Promise<void>;
   // Once chat's restore ends, reads a restored session's earlier conversation into chat.entries, as the page's
-  // loadHistory does; a session with none pending, or one chat does not hold, reads nothing.
-  loadHistory(sessionId: string): Promise<void>;
+  // loadHistory does. Resolves true once the history pends no more: read now or by an earlier call (a failed read's
+  // notice included), or none pending. Resolves false when it read nothing and the history stays pending: while the
+  // row waits on its harness, while its harness or profile is missing, while its unheld process runs in another app
+  // version or the host cannot be listed; and false for a session chat does not hold. After a false a later call
+  // tries again.
+  loadHistory(sessionId: string): Promise<boolean>;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.

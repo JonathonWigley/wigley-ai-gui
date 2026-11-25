@@ -394,7 +394,10 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         prepared: new Map(),
         nextRuns: new Map(),
         retryAts: [],
-        want: planned.length > 0,
+        // An attended run never starts with the app closed, so only an unattended one wants the host at login.
+        want: planned.some(
+          (run) => !tasks.find((each) => each.id === run.taskId)!.attended,
+        ),
         dueFailures: new Set(),
       };
       for (const run of planned) {

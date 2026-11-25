@@ -13,7 +13,7 @@
 - **With the app closed** — an attended run waits for the app; for the rest, what each tool answers, and what replays
   when the app opens.
 - **Adoption** — how a run the host started becomes a row.
-- **Login start** — the host starting at login while any task is active.
+- **Login start** — the host starting at login while any unattended task is active.
 - **Schedules mode and Scheduled runs** — the mode, its keys and history lines, the section, the finished mark.
 - **MCP tools** — the four tools main agents manage tasks with.
 - **History** — where each task's runs are kept.
@@ -51,7 +51,7 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    │   planRuns(tasks, history, runNow, now) → one PlannedRun per active task
    │   chat.prepareLaunch(request, attended ? {} : sessions.offlineEnv()) → { spawn, adopt }
    │   services.sessionHost.setPending([{ at, spawn, record, skipWhileBusy, needsClient: attended }])
-   │   services.loginStart.set(any task active)
+   │   services.loginStart.set(any unattended task active)
    ▼
  session host (detached; started by the app, or at login through the app's --start-session-host entry)
    │ pending-v5.json ── timer at `at` ──► drop when `needsClient` and no app is connected,
@@ -291,8 +291,9 @@ session does.
 
 ## Login start
 
-While any task is active (`services.loginStart.set(any task active)`; active means not paused with a planned run,
-so a spent one-time task does not count), the session host starts when the user logs in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
+While any unattended task is active (`services.loginStart.set(any unattended task active)`; active means not paused
+with a planned run, so a spent one-time task does not count; an attended task does not count either, since the host
+drops its runs while no app is open), the session host starts when the user logs in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
 flag `--start-session-host` (`LOGIN_START_FLAG`). `main.ts` checks the flag before the single-instance lock, sets the
 accessory activation policy so no Dock icon shows, starts the host detached through `sessionHostLaunch` as the app
 would, and exits; so the host's folder and channel are worked out in one place and no plist holds them. A host

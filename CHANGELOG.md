@@ -11,9 +11,14 @@ changes for the user.
 - `docs_index.py loads-check <session id>` lists each file the session's folder loads at launch that a main, subagent or post-compaction instructions load left out.
 - A scheduled task can be attended: its runs start with headless off, so a form waits for you, and run only while the app is open; a time missed while it is closed runs when the app next opens.
 
+### Changed
+
+- The session host starts at login only while an unattended scheduled task is active; attended tasks alone no longer turn it on.
+
 ### Fixed
 
 - A restored retro row whose process ended before its history was read no longer closes as start-failed.
+- A restored retro row whose history could not be read yet (its harness or profile missing, or its process running in another app version) stays open until the history is read, instead of closing as start-failed.
 - A retro whose session ends before its first turn, or a restored retro row that never ran, closes with a log line naming the lost retro, and the next queued retro starts; before, the queue waited forever or the row read finished.
 
 ## 1.10.0 — 2026-11-25

@@ -4838,14 +4838,15 @@ describe('createChatSessions saved sessions', () => {
     const historyCalls = () =>
       test.harness.pastSessionCalls.filter((call) => call.method === 'history');
 
-    await test.chat.loadHistory(ROW_ID);
+    const whileMissing = await test.chat.loadHistory(ROW_ID);
     const callsWhileMissing = historyCalls().length;
     test.setProfiles([
       ...PROFILES,
       { name: 'gone', configDir: '/Users/u/.claude-gone' },
     ]);
-    await test.chat.loadHistory(ROW_ID);
+    const onceBack = await test.chat.loadHistory(ROW_ID);
 
+    expect([whileMissing, onceBack]).toEqual([false, true]);
     expect(callsWhileMissing).toBe(0);
     expect(historyCalls()).toHaveLength(1);
     expect(
@@ -7607,22 +7608,41 @@ describe('createChatSessions unheld processes', () => {
     expect(startsOf(test).map((start) => start.request.resume)).toEqual([true]);
   });
 
-  it('loadHistory_OlderHostRow_ReadsNothing', async () => {
-    const test = setUp();
-    const older = [hostedP1({ current: false })];
-    restoreOne(test, hostedRecord({ sent: true }), older);
+  // Breaks: an unheld row's read that read nothing resolving true, so auto-retro reads a restored retro lost.
+  it.each([
+    {
+      given: 'its process runs in another app version',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.sessionHost.setList([hostedP1({ current: false })]),
+    },
+    {
+      given: 'the host cannot be listed',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        test.sessionHost.failList('no host'),
+    },
+  ])(
+    'loadHistory_UnheldRow_ReadsNothingAndResolvesFalse given $given',
+    async ({ arrange }) => {
+      const test = setUp();
+      restoreOne(test, hostedRecord({ sent: true }), [
+        hostedP1({ current: false }),
+      ]);
 
-    test.sessionHost.setList(older);
-    await test.chat.loadHistory(ROW_ID);
-    expect(test.harness.pastSessionCalls).toEqual([]);
+      arrange(test);
+      const whileUnheld = await test.chat.loadHistory(ROW_ID);
+      expect(whileUnheld).toBe(false);
+      expect(test.harness.pastSessionCalls).toEqual([]);
 
-    test.sessionHost.setList([hostedP1({ running: false })]);
-    await test.chat.loadHistory(ROW_ID);
+      test.sessionHost.failList(null);
+      test.sessionHost.setList([hostedP1({ running: false })]);
+      const onceEnded = await test.chat.loadHistory(ROW_ID);
 
-    expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual([
-      null,
-    ]);
-  });
+      expect(onceEnded).toBe(true);
+      expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual(
+        [null],
+      );
+    },
+  );
 
   it('send_RestingRowWithSavedQueued_WritesTheSavedFirst', async () => {
     const test = setUp();
@@ -10637,14 +10657,16 @@ describe('createChatSessions harness leave and return', () => {
     const test = restoredResting();
     test.leave(FAKE_HARNESS_ID);
 
-    await test.chat.loadHistory(ROW_ID);
+    const whileWaiting = await test.chat.loadHistory(ROW_ID);
 
+    expect(whileWaiting).toBe(false);
     expect(historyCallsOf(test)).toEqual([]);
 
     test.register(test.harness);
     await test.chat.harnessReturned(FAKE_HARNESS_ID);
-    await test.chat.loadHistory(ROW_ID);
+    const onceBack = await test.chat.loadHistory(ROW_ID);
 
+    expect(onceBack).toBe(true);
     expect(historyCallsOf(test)).toHaveLength(1);
   });
 

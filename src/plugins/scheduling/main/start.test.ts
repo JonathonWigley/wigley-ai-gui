@@ -889,6 +889,17 @@ describe('schedulingMainPart', () => {
     expected: boolean[];
   }>([
     { case: 'one active task', tasks: [task()], expected: [true] },
+    // Breaks: the host started at login for an attended run, which starts only while the app is open.
+    {
+      case: 'only an attended task',
+      tasks: [task({ attended: true })],
+      expected: [false],
+    },
+    {
+      case: 'an attended and an unattended task',
+      tasks: [task({ attended: true }), task({ id: 'task-2' })],
+      expected: [true],
+    },
     {
       case: 'only paused tasks',
       tasks: [task({ paused: true })],

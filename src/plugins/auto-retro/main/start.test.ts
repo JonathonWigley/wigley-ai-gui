@@ -200,8 +200,10 @@ const RETRO_HISTORY: readonly ChatEntry[] = [
 // sessions that records each title set, and a contributions that serves `strategies` (by default the wigley strategy
 // alone), holds each registered reader in `features` and tells `onChanged` listeners on `setStrategies`. Every fake
 // lives across a restart. `enterDemoStep` enters the registered `auto-retro.section` step, its demo session `row-demo`.
-// Chat's `loadHistory` puts the row's `histories` entries ahead of its `chat.entries` and resolves; while
-// `holdsHistory` is true each read waits for `settleHistory`, which writes and resolves, or rejects with its error.
+// Chat's `loadHistory` puts the row's `histories` entries ahead of its `chat.entries` and resolves true; while
+// `readsNothing` is true it writes nothing and resolves false, as chat does for a row whose history stays pending;
+// while `holdsHistory` is true each read waits for `settleHistory`, which writes and resolves, or rejects with its
+// error. `historyCalls` counts the calls.
 // `holdRestore` keeps the next start's `chat.restored()` pending.
 function startPart(
   options: {
@@ -315,10 +317,16 @@ function startPart(
     entries,
     histories,
     holdsHistory: false,
-    loadHistory(sessionId: string): Promise<void> {
+    readsNothing: false,
+    historyCalls: 0,
+    loadHistory(sessionId: string): Promise<boolean> {
+      part.historyCalls += 1;
+      if (part.readsNothing) {
+        return Promise.resolve(false);
+      }
       if (!part.holdsHistory) {
         readHistory(sessionId);
-        return Promise.resolve();
+        return Promise.resolve(true);
       }
       return new Promise((resolve, reject) => {
         heldHistories.set(sessionId, (error) => {
@@ -327,7 +335,7 @@ function startPart(
             return;
           }
           readHistory(sessionId);
-          resolve();
+          resolve(true);
         });
       });
     },
@@ -940,6 +948,30 @@ describe('autoRetroMainPart', () => {
     await settled();
     part.harness.advance(SETTLE_MS);
 
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+  });
+
+  // Breaks: a read that read nothing (the row waits on its harness, its profile is missing, its process runs in
+  // another app version) taken as the history read, closing a retro that ran as start-failed.
+  it('restart_HistoryReadsNothing_StaysOpenUntilALaterReadThenClosesFinished', async () => {
+    const part = await restartWithHistoryHeld();
+    part.holdsHistory = false;
+    part.readsNothing = true;
+    await part.harness.restart();
+    await settled();
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+
+    part.readsNothing = false;
+    const callsBefore = part.historyCalls;
+    part.sessions.set('retro-9', { ...restingInfo('retro-9'), pid: null });
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.historyCalls).toBe(callsBefore + 1);
     expect(part.closes).toEqual([['retro-9', 'finished']]);
   });
 

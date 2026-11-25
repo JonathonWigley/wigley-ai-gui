@@ -91,8 +91,11 @@ A retro row is done when its main turn has ended and no subagent or task still r
 the analysts still run. A process that ended (clean or crash) after its first turn started is done too. A restored row
 counts as started once its history holds an agent entry (a reply, thinking or a tool call): chat opens a restored row
 with no entries and reads its transcript only later, so the plugin asks chat's `loadHistory` for it, which waits for
-chat's restore to end and the row's attach, and reads the entries after that read. The transcript holds the turns run
-while the app was closed, so a retro that finished then reads done.
+chat's restore to end and the row's attach, and reads the entries after that read. A `loadHistory` that resolves false
+read nothing (the row waits on its harness, its harness or profile is missing, or its process runs in another app
+version): the row stays unread, and the plugin asks again at the row's next `chat.session` or `chat.entries` change,
+since chat sends no event when the history becomes readable. The transcript holds the turns run while the app was
+closed, so a retro that finished then reads done.
 
 A retro row that never ran its first turn is lost, for one of two causes: its process exited before any turn
 (`chat.processEnded` for the row's current host id, recorded at the emit so an exit before the launch resolves still
