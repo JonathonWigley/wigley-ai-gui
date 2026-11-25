@@ -15,6 +15,7 @@ const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 const SUCCESS_LINE = '{"type":"result","is_error":false,"result":"hello"}';
 const SUCCESS_EXIT: SpawnExit = { code: 0, signal: null, startError: null };
 const ASK_FOLDER = '/tmp/t/claude-code-ask-u1';
+const INSTRUCTIONS_FILE = `${ASK_FOLDER}/instructions.md`;
 
 function askDeps(overrides: Partial<ClaudeAskDeps> = {}) {
   const processes = new FakeProcesses();
