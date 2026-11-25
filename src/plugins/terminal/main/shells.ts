@@ -253,9 +253,7 @@ export function createShells(deps: ShellsDeps): Shells {
       cancelled: false,
       promise: deps
         .resolveShell()
-        .then((program) =>
-          spawnResolved(sessionId, program, cols, rows, start),
-        )
+        .then((program) => spawnResolved(sessionId, program, cols, rows, start))
         .finally(() => starts.delete(sessionId)),
     };
     starts.set(sessionId, start);

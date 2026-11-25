@@ -10,7 +10,8 @@ import { definePlugin } from '../../shared/define-plugin';
 export const terminalManifest = definePlugin({
   id: 'terminal',
   label: 'Terminal',
-  description: "A shell for each session, in a drawer under the session's tabs.",
+  description:
+    "A shell for each session, in a drawer under the session's tabs.",
   dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

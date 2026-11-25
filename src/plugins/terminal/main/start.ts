@@ -61,9 +61,7 @@ export const terminalMainPart: MainPart<typeof terminalManifest> = {
     api.channel.handle('restart', (sessionId, cols, rows) =>
       shells.restart(sessionId, cols, rows),
     );
-    api.events.on('sessions.closed', ({ sessionId }) =>
-      shells.kill(sessionId),
-    );
+    api.events.on('sessions.closed', ({ sessionId }) => shells.kill(sessionId));
     let isStopped = false;
     return {
       commands: {

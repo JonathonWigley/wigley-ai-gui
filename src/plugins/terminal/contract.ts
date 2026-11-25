@@ -19,7 +19,11 @@ export interface TerminalOpened {
 // to, and a `data` message's `seq` counts within that shell only.
 export interface TerminalChannel extends ChannelShape {
   invoke: {
-    open(sessionId: string, cols: number, rows: number): Promise<TerminalOpened>;
+    open(
+      sessionId: string,
+      cols: number,
+      rows: number,
+    ): Promise<TerminalOpened>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
     restart(

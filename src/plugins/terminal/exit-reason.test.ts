@@ -8,7 +8,11 @@ describe('exitReason', () => {
       exit: { code: 1, signal: null, error: 'spawn failed' },
       reason: 'spawn failed',
     },
-    { case: 'code', exit: { code: 0, signal: null, error: null }, reason: 'code 0' },
+    {
+      case: 'code',
+      exit: { code: 0, signal: null, error: null },
+      reason: 'code 0',
+    },
     {
       case: 'signal',
       exit: { code: null, signal: 1, error: null },
