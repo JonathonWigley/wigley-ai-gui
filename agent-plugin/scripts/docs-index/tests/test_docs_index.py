@@ -15,7 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
+import docs_index
 import session
+from contributions import Contributions, load_contributions
 from docs_index import INDEX_PATH_PARTS, main
 from environment import Environment
 from loads import LOADS_PATH_PARTS
@@ -451,6 +453,46 @@ class DocsIndexTests(unittest.TestCase):
         transcript.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows),
                               encoding="utf-8")
         return transcript
+
+    def test_loads_check_prints_the_contract_shape(self):
+        repo = self._repo_with_agents_md("a")
+        self._write_transcript(
+            "s1",
+            {"type": "user", "cwd": str(repo)},
+            {"type": "attachment", "attachment": {"type": "instructions", "files": []}},
+        )
+
+        code, out, _ = self._run(["loads-check", "s1"])
+
+        self.assertEqual(code, 0)
+        agents_md = str(repo / "AGENTS.md")
+        self.assertEqual(json.loads(out), {"session": "s1", "folder": str(repo),
+                                           "missing": [{"id": agents_md, "path": agents_md, "where": "main"}]})
+
+    def test_loads_check_exits_1(self):
+        no_cwd = self._write_transcript("s2", {"type": "user", "message": {"role": "user", "content": "go"}})
+        rows = [("x", ["session x"]), ("s2", ["session s2", str(no_cwd), "cwd"])]
+
+        for session_id, reason_parts in rows:
+            with self.subTest(session_id):
+                code, out, err = self._run(["loads-check", session_id])
+
+                self.assertEqual((code, out), (1, ""))
+                for part in reason_parts:
+                    self.assertIn(part, err)
+
+    def test_loads_check_passes_contributions_to_discovery(self):
+        repo = self._repo_with_agents_md("a")
+        self._write_transcript("s1", {"type": "user", "cwd": str(repo)})
+        rows = [(True, load_contributions(self.contributions, self.home)), (False, Contributions())]
+
+        for with_file, expected in rows:
+            with self.subTest(with_file=with_file):
+                with mock.patch("docs_index.discover_folder", wraps=docs_index.discover_folder) as discovering:
+                    code, _, _ = self._run(["loads-check", "s1"], contributions=with_file)
+
+                self.assertEqual(code, 0)
+                self.assertEqual(discovering.call_args.args[2], expected)
 
     def test_build_writes_last_loaded_and_the_loads_cache(self):
         repo = self._repo_with_agents_md("a")

@@ -1,5 +1,6 @@
 """read_loads, LoadTimes, the machine and session scans and last_loaded on
-transcripts each test writes in its own temp home."""
+transcripts each test writes in its own temp home, some from the real rows in
+fixtures/attachment-rows."""
 
 import json
 import os
@@ -11,10 +12,13 @@ from unittest import mock
 
 import loads
 from environment import Environment
-from loads import LOADS_PATH_PARTS, LoadTimes, last_loaded, machine_load_times, read_loads, session_load_times
+from loads import (LOADS_PATH_PARTS, SKILL_BASE_PREFIX, LoadTimes, _may_hold_loads, last_loaded, machine_load_times,
+                   read_loads, session_load_times)
 from model import Entry, Installed, Location, Owner
 
 FIXED_NOW = datetime(2026, 10, 26, tzinfo=timezone.utc)
+# One real Claude Code attachment row per load type, its strings trimmed and its paths moved under /home/user.
+ATTACHMENT_ROWS = Path(__file__).parent / "fixtures" / "attachment-rows"
 
 
 def _time(n):
@@ -132,6 +136,31 @@ class ReadLoadsTests(unittest.TestCase):
             "subagent:scout": _time(8),
             "command:wigley:make": _time(9),
         })
+
+    def test_each_real_attachment_row_holds_its_load(self):
+        def skill_files(attachment):
+            return [os.path.join(skill["content"].split("\n", 1)[0].removeprefix(SKILL_BASE_PREFIX), "SKILL.md")
+                    for skill in attachment["skills"]]
+        cases = {
+            "instructions.jsonl": lambda attachment: [file["path"] for file in attachment["files"]],
+            "nested_memory.jsonl": lambda attachment: [attachment["path"]],
+            "file.jsonl": lambda attachment: [attachment["filename"]],
+            "compact_file_reference.jsonl": lambda attachment: [attachment["filename"]],
+            "invoked_skills.jsonl": skill_files,
+        }
+
+        for name, recorded_paths in cases.items():
+            with self.subTest(name):
+                line = (ATTACHMENT_ROWS / name).read_bytes()
+                row = json.loads(line)
+                transcript = self.home / name
+                transcript.write_bytes(line)
+
+                loaded, _ = read_loads(transcript)
+
+                self.assertTrue(_may_hold_loads(line))
+                self.assertEqual(loaded.paths, {os.path.realpath(path): row["timestamp"]
+                                                for path in recorded_paths(row["attachment"])})
 
     def test_rows_that_are_not_loads_add_nothing(self):
         self._append(

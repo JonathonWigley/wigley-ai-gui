@@ -1,16 +1,17 @@
 """The docs index's command line: build writes ~/.agents/wigley-docs/index.json,
 context prints the index document for one folder, session the one for one
-Claude Code session. build and context also read every Claude Code transcript
-for each entry's last-loaded time and write the loads cache; session reads
-its own transcripts' times alone. All three read each entry's headings and
-links from its file.
+Claude Code session, and loads-check the files a session's folder is
+predicted to load at launch that its instructions loads left out. build and
+context also read every Claude Code transcript for each entry's last-loaded
+time and write the loads cache; session reads its own transcripts' times
+alone. Those three read each entry's headings and links from its file.
 
 The composition root: the only module that builds an Environment over the real
 home and clock. Every other module takes the Environment it is handed, so a
 test passes main a temp home and a fixed clock. Each command reads the config
 and hands on the Environment with its Claude config folders: build and
-context judge Claude Code against the first, session against the folder
-that holds the transcript. The --contributions file, read once before the
+context judge Claude Code against the first, session and loads-check against
+the folder that holds the transcript. The --contributions file, read once before the
 command, gives the walks their global folders and features homes and the
 links their skill link prefixes; with none, the index has neither.
 """
@@ -34,6 +35,7 @@ from discover import Discovery, discover, discover_folder
 from doc_fields import with_doc_fields
 from environment import Environment
 from loads import LoadTimes, last_loaded, machine_load_times, session_load_times
+from loads_check import check_points, missing_loads
 from model import Context, Entry, Owner, State, document
 from rules import LoadRules, repo_roots_holding
 from session import SessionNotFound, read_session, session_context
@@ -65,6 +67,8 @@ def main(argv: list[str] | None = None, env: Environment | None = None) -> int:
         return _build(env, contributions, args.stdout)
     if args.command == "context":
         return _context(env, contributions, args.dir)
+    if args.command == "loads-check":
+        return _loads_check(env, contributions, args.id)
     return _session(env, contributions, args.id)
 
 
@@ -79,6 +83,9 @@ def _parser() -> argparse.ArgumentParser:
     context.add_argument("dir")
     session = commands.add_parser("session", help="print the index document for one Claude Code session")
     session.add_argument("id")
+    loads_check = commands.add_parser(
+        "loads-check", help="print each launch file a Claude Code session's instructions loads left out")
+    loads_check.add_argument("id")
     return parser
 
 
@@ -130,6 +137,26 @@ def _session(env: Environment, contributions: Contributions, session_id: str) ->
     times = session_load_times(session.transcript)
     entries = _finished_entries(env, contributions, [*discovery.entries, *new_entries], times)
     print(_serialize(document(entries, [context], _generated_at(env))))
+    return 0
+
+
+def _loads_check(env: Environment, contributions: Contributions, session_id: str) -> int:
+    """Print each entry Claude Code's rules predict at launch for the
+    session's folder that a check point of its transcripts leaves out; every
+    point, a subagent's included, is checked against that one folder."""
+    env, config = _configured(env)
+    try:
+        session = read_session(env, session_id)
+    except SessionNotFound as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    env = env.judged_by(session.config_dir)
+    discovery = discover_folder(env, config, contributions, session.folder)
+    context = build_context(env, session.folder, discovery, [ClaudeRules(env)])
+    launch = [entry for entry in discovery.entries
+              if entry.id in context.states and context.states[entry.id][ClaudeRules.harness].state == "launch"]
+    missing = missing_loads(check_points(session.transcript), launch)
+    print(_serialize({"session": session_id, "folder": str(session.folder), "missing": missing}))
     return 0
 
 

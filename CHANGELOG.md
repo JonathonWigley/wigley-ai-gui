@@ -6,6 +6,10 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- `docs_index.py loads-check <session id>` lists each file the session's folder loads at launch that a main, subagent or post-compaction instructions load left out.
+
 ## 1.10.0 — 2026-11-25
 
 ### Changed

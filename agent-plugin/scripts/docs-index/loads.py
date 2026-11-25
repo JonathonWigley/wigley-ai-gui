@@ -114,15 +114,19 @@ def session_load_times(transcript: Path) -> LoadTimes:
     transcript beside it, each read whole; a transcript that cannot be read,
     gone since the glob or refused, is skipped as the machine scan skips it."""
     times = LoadTimes()
-    subagents = sorted(transcript.with_suffix("").glob("subagents/**/*.jsonl"))
-    for file in [transcript, *subagents]:
-        if file.name == JOURNAL_NAME:
-            continue
+    for file in [transcript, *subagent_transcripts(transcript)]:
         try:
             times.merge(read_loads(file, 0)[0])
         except OSError:
             continue
     return times
+
+
+def subagent_transcripts(transcript: Path) -> list[Path]:
+    """The subagent and workflow agent transcripts beside a main transcript,
+    <id>/subagents/**/*.jsonl, in sorted path order, journal.jsonl left out."""
+    return [path for path in sorted(transcript.with_suffix("").glob("subagents/**/*.jsonl"))
+            if path.name != JOURNAL_NAME]
 
 
 def last_loaded(env: Environment, entry: Entry, times: LoadTimes) -> str | None:
