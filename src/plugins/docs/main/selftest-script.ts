@@ -1120,6 +1120,19 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       screenshot: 'docs-full',
     },
   ];
+  const activityBarPin: SelfTestStep[] = [
+    {
+      width: 'start',
+      keys: [' ', 'v', 'p'],
+      expect: '[page] activity bar pinned',
+      screenshot: 'activity-bar-pinned',
+    },
+    {
+      keys: [' ', 'v', 'p'],
+      expect: '[page] activity bar unpinned',
+      screenshot: 'activity-bar-collapsed',
+    },
+  ];
   return [
     {
       name: 'wiki start',
@@ -1245,6 +1258,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       name: 'transparency',
       why: 'Docs mode shows under reduced and full transparency, each set in Gallery mode.',
       steps: transparency,
+    },
+    {
+      name: 'activity bar pin',
+      why: 'The pin key widens the activity bar and the same key collapses it again, at the start width, since below 680px the pin is not applied.',
+      steps: activityBarPin,
     },
   ];
 }
