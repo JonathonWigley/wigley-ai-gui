@@ -92,16 +92,17 @@ describe('scopedFiles', () => {
     expect(calls).toEqual([]);
   });
 
-  it.each(['', '.', 'a/..'])(
-    'removeFolder rejects %j, the root itself, before any I/O',
-    async (path) => {
-      const calls: string[] = [];
-      const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
+  it.each(
+    (['trash', 'deleteFile', 'removeFolder'] as const).flatMap((method) =>
+      ['', '.', 'a/..'].map((path) => [method, path] as const),
+    ),
+  )('%s rejects %j, the root itself, before any I/O', async (method, path) => {
+    const calls: string[] = [];
+    const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
 
-      await expect(scoped.removeFolder(path)).rejects.toThrow(ROOT);
-      expect(calls).toEqual([]);
-    },
-  );
+    await expect(scoped[method](path)).rejects.toThrow(ROOT);
+    expect(calls).toEqual([]);
+  });
 
   it('removeFolder_FolderUnderRoot_KeepsRoot', async () => {
     await inner.write(`${ROOT}/a/x.md`, 'x');
@@ -277,6 +278,14 @@ function recordingCalls(calls: string[]): MemoryFiles {
     removeFolder: async (path) => {
       calls.push(path);
       return inner.removeFolder(path);
+    },
+    trash: async (path) => {
+      calls.push(path);
+      return inner.trash(path);
+    },
+    deleteFile: async (path) => {
+      calls.push(path);
+      return inner.deleteFile(path);
     },
   };
 }

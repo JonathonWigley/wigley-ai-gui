@@ -245,4 +245,7 @@ Review base: 5665fe5c
 - 05: a card holder reads null unless its round is in forms.confirms, so both parts share one redraw path · group 05
 - 05: manifest page dependsOn gains sessions for the demo step's activate · group 05
 ### Review rounds
+- Round 1 · pinned e4d1ecf8 · NEEDS FIXES, 21 findings (2 Important, 19 Minor; 3–8 and 21 lead-applied in 7ba14203, 20 no change) · fixes 7214fedc..acb10286 (workers A–E, B2; 8865654e oxfmt) · risk tier: High — a new Files contract member across every implementer, the entry and card part lifecycle in chat and forms, and the ask's spawn arguments · re-review: correctness, two lanes
+- Round 2 · re-review pinned acb10286 · NEEDS FIXES, 7 Minor + 3 recommendations (3, 4, 6 lead-applied in fa751b9e; R2 no change, the plan folder goes at close) · fixes 044a47fa, 1d4de0a6 · risk tier: Medium — the ask's folder removal moves after the child's close, and the verdict log's heading memory changes · re-review: correctness, one lane (cycle 2 of 2)
+- Round 3 · re-review pinned 1d4de0a6 · PASS · 1 pre-existing determined (scopedFiles.trash of the root), fixed in the last fix round at Low risk, closed by its commit and compile
 ### Test gate

@@ -32,9 +32,9 @@ export function relativeSegments(path: string): string[] | null {
 // I/O: `read`, `modified`, `readStart`, `readEnd`, `readBytes`, `write`,
 // `writeBytes`, `append`, `list`, `stat`, `realPath`, `makeFolder`, `rename`
 // (either path), `copy` (either path), `trash`, `deleteFile` and
-// `removeFolder` reject, and `watch` throws. `removeFolder` also rejects
-// before any I/O for a path that folds to `root` itself (`''`, `.`, `a/..`),
-// since the folder holding `root` is outside it.
+// `removeFolder` reject, and `watch` throws. `trash`, `deleteFile` and
+// `removeFolder` also reject before any I/O for a path that folds to `root`
+// itself (`''`, `.`, `a/..`), since the folder holding `root` is outside it.
 // `realPath` returns the resolved path relative to `root`'s own real path (``
 // for `root` itself), as `paths` compares them, its segments joined with `/`,
 // and rejects `<path> is outside <root>` when a link leads out of `root`.
@@ -46,6 +46,12 @@ export function scopedFiles(files: Files, root: string, paths: Paths): Files {
       throw outside(path);
     }
     return segments.length === 0 ? root : paths.join(root, ...segments);
+  };
+  const insideNotRoot = (path: string): string => {
+    if (relativeSegments(path)?.length === 0) {
+      throw new Error(`${path} is ${root} itself, which is not removed`);
+    }
+    return inside(path);
   };
   return {
     read: async (path) => files.read(inside(path)),
@@ -75,13 +81,8 @@ export function scopedFiles(files: Files, root: string, paths: Paths): Files {
     makeFolder: async (path) => files.makeFolder(inside(path)),
     rename: async (from, to) => files.rename(inside(from), inside(to)),
     copy: async (from, to) => files.copy(inside(from), inside(to)),
-    trash: async (path) => files.trash(inside(path)),
-    deleteFile: async (path) => files.deleteFile(inside(path)),
-    removeFolder: async (path) => {
-      if (relativeSegments(path)?.length === 0) {
-        throw new Error(`${path} is ${root} itself, which is not removed`);
-      }
-      return files.removeFolder(inside(path));
-    },
+    trash: async (path) => files.trash(insideNotRoot(path)),
+    deleteFile: async (path) => files.deleteFile(insideNotRoot(path)),
+    removeFolder: async (path) => files.removeFolder(insideNotRoot(path)),
   };
 }
