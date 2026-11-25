@@ -759,18 +759,6 @@ because the earlier items rewrite many of these tests anyway.
   roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
-- **A retro row whose process ends before its first turn never reads done** — *needs a feature plan*: `isRetroDone`
-  (`src/plugins/auto-retro/main/retro-done.ts`) returns false while `hasStarted` is false, even when `info.running` is
-  false, and `closeIfStillDone` / `checkDone` (`src/plugins/auto-retro/main/start.ts`) only run for a done row. A retro
-  row whose process dies before its first turn (a failed launch, a crash) therefore never settles, and the queue waits
-  on it forever. To decide: treat a row whose process ended with no turn as done (closed `finished`), or as failed
-  (closed with a log naming the lost retro), and move the queue on either way. Check that a row not yet attached
-  (`running` false before the process starts) is not read as ended.
-- **A restored retro row resting idle reads done** — *needs a feature plan*: on restore, `begin` in
-  `src/plugins/auto-retro/main/start.ts` (the `followRows` `added` callback) adds the row to `startedRows` so a retro
-  that finished while the app was down closes. A restored row resting idle also reads done, so it is closed `finished`
-  though the retro never ran (an app stop before its first turn). To decide: settle a restored row only after a turn
-  seen in this app run, or relaunch the retro when the restored row has no turn.
 - **One rule for returning a dropped message once** — *needs a feature plan*: `clear` silently loses a message a replay
   left held, since the row has moved to a new process when the harness reports it at close (`chat-sessions.ts` `clear`,
   `claude-code-harness.ts` close). A resume that attaches has no `returnedDrops`, so its replay returns placed messages
