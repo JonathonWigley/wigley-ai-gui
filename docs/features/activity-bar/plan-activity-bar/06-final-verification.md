@@ -16,17 +16,18 @@ Decisions:
 Checks:
 1. Expected — the collapsed bar shows the built-in order: Sessions, Inbox, Board, Builds | Docs, Backlog, Schedules,
    Chatroom, with Practice, Gallery, Settings against the bottom and hairlines between groups. Capture it.
-2. Expected — hovering the bar past the peek delay widens it over the side bar with names, and the side bar does not
-   move (compare its left edge in two captures); moving off collapses it. Low-confidence: pointer events through the
-   drive driver; if the driver cannot hover, the agent names it under Not checked.
+2. Low-confidence — the peek. The drive has no hover command (`click` and `drag --hold` only), so: `eval` a
+   `pointerenter` (or whichever event `shell.ts` listens to) on `.shell-activity-bar`, wait past the peek delay, then
+   capture: the bar is wide with names and the side bar's left edge (`query`) is where it was before. `eval` the
+   leave event and capture it collapsed. The real pointer's hover is named under Not checked.
 3. Expected — `Space v p` pins: the bar stays wide and the side bar moves over; the Pin button reads Unpin; pressing
-   again collapses. After a page reload while pinned, it opens pinned.
-4. Low-confidence — the window resized below 680px while pinned shows the collapsed bar; widened again, pinned.
-5. Low-confidence — a `shell.activityBar` setting written into the drive home's `settings.json` (two groups, Docs
-   hidden) redraws the bar live with Docs gone and the unlisted modes in a group after the last top group; `Space k d`
-   still opens Docs.
-6. Expected — with the work fixture seeding Needs you items (`work.seed` drive action), Inbox's item shows its dot
-   collapsed and its count expanded.
+   again collapses. Pinned again, `eval` `location.reload()`, wait for `ready`, and the bar opens pinned.
+4. Low-confidence — `resize 600` while pinned shows the collapsed bar; `resize` back to the start width, pinned.
+5. Low-confidence — `setting shell.activityBar '{"groups":[{"modes":["sessions.sessions","work-inbox.main"]},{"modes":["settings.main"],"at":"bottom"}],"hidden":["docs.docs"]}'`
+   redraws the bar live: Sessions, Inbox | the other modes but Docs, in suggestion order | Settings at the bottom;
+   `Space k d` still opens Docs. Write the default back after.
+6. Expected — with the work fixture seeding Needs you items (`do work.seed`), Inbox's item shows its dot collapsed
+   and, pinned, a count equal to the Needs you count Inbox's own section nav shows (`query` both).
 7. Low-confidence — the look against `DESIGN.md`: tokens only, the divider and dot colours, the count pill, no
    layout shift of item icons between collapsed and expanded.
 

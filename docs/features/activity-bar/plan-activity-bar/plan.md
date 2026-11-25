@@ -31,8 +31,8 @@ Core page shell only, plus each built-in mode's registration:
 - The branch `activity-bar` starts from `origin/main` 30ee04cb: `git merge-base --is-ancestor origin/main HEAD` in the
   worktree.
 - Every built-in mode's show command is `showMode` in its manifest:
-  `grep -n "showMode" src/plugins/{sessions,docs,settings,backlog,work-inbox,work-board,practice,scheduling,chatroom,builds,gallery}/manifest.ts`
-  (11 hits, measured at plan time, re-verify).
+  `grep -n "showMode:" src/plugins/{sessions,docs,settings,backlog,work-inbox,work-board,practice,scheduling,chatroom,builds,gallery}/manifest.ts`
+  (11 declarations, measured at plan time, re-verify).
 - Mode ids as `modes.show` takes them (measured at plan time, re-verify with
   `grep -n -A3 "api.modes.add({" src/plugins/*/page/start.ts`): `sessions.sessions`, `docs.docs`, `gallery.gallery`,
   and `<plugin>.main` for backlog, builds, chatroom, practice, scheduling, settings, work-board, work-inbox.
@@ -50,7 +50,7 @@ Commit e69a9461 on `activity-bar`, plus the narrow-window correction to `design.
 - `AGENTS.md` — § Architecture › A mode
 - `docs/keymap.md` — the `v` view group's `vp`
 - `docs/features/layouts/design.md` — the shell owner's parts
-- `README.md` — the `shell.activityBar` core setting
+- `README.md` — the `shell.activityBar.groups` and `shell.activityBar.hidden` core settings
 
 ## Mandatory Reads
 
@@ -107,13 +107,14 @@ Out of scope: new icons; counts for Chatroom or Builds; the activity bar as a ke
 Modified:
 
 - `src/contracts/plugin.ts` — `ModePlace`, `Mode.place`, `Mode.showCommand` (01); `ModeHandle.setCount` (02)
-- `src/contracts/settings.ts`, `src/config/settings.ts`, `src/config/settings.test.ts` — `shell.activityBar` (01)
+- `src/contracts/settings.ts`, `src/config/settings.ts`, `src/main/config/user-settings.test.ts` — `shell.activityBar` (01)
 - `src/contracts/commands.ts`, `src/config/keymap.ts`, `src/plugins/keymap.ts` — `activityBar.togglePin` (02)
 - `src/config/theme-tokens.ts`, `src/config/themes/catppuccin-mocha.json` — the two tokens (02)
 - `src/renderer/shell/shell-chrome.ts`, `modes.ts`, `shell.ts`, `shell.css` and their tests (02)
-- `src/renderer/shell/layouts/layout.d.ts`, `layouts/default/layout.js`, `layouts/default/layout.css` (02)
+- `src/renderer/shell/layouts/layout.d.ts`, `layouts/default/layout.js`, `layouts/default/layout.css`,
+  `src/renderer/shell/read-shell-layout.ts` and its test, `src/shared/plugin-part-harness.test-support.ts` (02)
 - `src/renderer/renderer.ts`, `src/renderer/plugins/page-api.ts` (02)
-- Each built-in mode plugin's `page/start.ts` (03)
+- Each built-in mode plugin's `page/start.ts`, and `src/plugins/work-inbox/page/start.test.ts` (03)
 - `src/plugins/docs/main/selftest-script.ts` (04)
 - `CHANGELOG.md` (01, 02, 03)
 
@@ -137,6 +138,7 @@ Shared names (used by more than one task, word for word):
   `export function arrangeActivityItems(modes: readonly ActivityModeEntry[], setting: ActivityBarSetting): ActivityGroups`
   in `src/renderer/shell/activity-order.ts`
 - `ModeHandle.setCount(count: number | null): void` in `src/contracts/plugin.ts`
+- `ModesDeps.counted(modeId: string, count: number | null): void` in `src/renderer/shell/modes.ts`
 - `export const ACTIVITY_BAR_TOGGLE_PIN: CommandKey<void, 'activityBar.togglePin'>` in `src/contracts/commands.ts`
 - Page log lines `activity bar pinned`, `activity bar unpinned`, `activity bar peeked`, logged under `page`
 

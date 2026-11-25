@@ -8,7 +8,7 @@ Plan: [plan.md](plan.md)
 
 Files:
 - modify `src/plugins/sessions/page/start.ts`
-- modify `src/plugins/work-inbox/page/start.ts`
+- modify `src/plugins/work-inbox/page/start.ts` · test `src/plugins/work-inbox/page/start.test.ts`
 - modify `src/plugins/work-board/page/start.ts`
 - modify `src/plugins/builds/page/start.ts`
 - modify `src/plugins/docs/page/start.ts`
@@ -44,14 +44,18 @@ Decisions:
 
 - Inbox count: `work-inbox`'s page part sets its mode handle's count to `sectionCounts(work).needs_you`
   (`src/plugins/work-inbox/page/inbox-state.ts`) at start and on every `work.state` change, from the same slot read the
-  view draws from; it reads the real `work.state`, never the demo's sample state.
+  view draws from; it reads the real `work.state`, never the demo's sample state. While the state is `undefined`
+  (before the first lands) it sets `null`. The call sits beside `view.stateChanged` in the existing `stateListener`
+  callback and the immediate `view.stateChanged(state.get())` call, after `mode` is assigned; dispose needs nothing,
+  since the handle's disposal drops the item and its count.
 - CHANGELOG `### Added`: `Inbox marks its activity bar item with its Needs you count.`
 
 GIVEN no `shell.activityBar` setting WHEN the app starts THEN the bar reads Sessions, Inbox, Board, Builds | Docs, Backlog, Schedules, Chatroom, and Practice, Gallery, Settings at the bottom
 GIVEN two items in Needs you WHEN the Inbox state lands THEN Inbox's item has count 2, and 0 when the section empties
 
-Tests:     none: the places are design values (`wigley:writing-tests` § What earns neither), the order rule is pinned in 01's table, and the count wiring is one call checked live in 06
-Done when: compiles; lint passes
+Tests:     `workInboxPagePart_NeedsYouItems_SetsModeCount` in `src/plugins/work-inbox/page/start.test.ts`, against the existing mode fake with 02's `setCount` added: undefined state sets null, two Needs you items set 2, an emptied section sets 0.
+           The places get no test: they are design values (`wigley:writing-tests` § What earns neither), the order rule is pinned in 01's table, and the built-in order is checked live in 06 check 1.
+Done when: compiles; lint passes; the test gate runs the test above
 Commit:    one commit for the group
 
 ## Proof

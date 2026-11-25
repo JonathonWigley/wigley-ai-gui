@@ -11,10 +11,11 @@ Consumes:  `<Leader>vp` bound to `activityBar.togglePin` and the page log lines 
 Produces:  nothing other tasks read
 
 Decisions:
-- One new group in docs' script, after its existing activity bar steps, with a `why` saying it proves the pin key
-  toggles the bar wide and back: `Space v p` expects `[page] activity bar pinned` with screenshot `activity-bar-pinned`,
+- One new group, `activity bar pin`, appended last in docs' script after `transparency`, starting in Docs at the
+  start width (below 680px the pin is not applied, so the first step carries `width: 'start'`), with a `why` saying
+  it proves the pin key toggles the bar wide and back: `Space v p` expects `[page] activity bar pinned` with screenshot `activity-bar-pinned`,
   then `Space v p` again expects `[page] activity bar unpinned` with screenshot `activity-bar-collapsed`. The group
-  leaves the bar unpinned for the steps after it.
+  leaves the bar unpinned; a failed step stops the run, so no cleanup step is needed.
 - The keys are written as the script writes its other leader presses.
 
 GIVEN the self-test page WHEN `Space v p` is pressed twice THEN the log shows pinned, then unpinned, and both screenshots save

@@ -6,7 +6,7 @@ Rung: hard · adds the `ModePlace`, `ActivityBarSetting` and `arrangeActivityIte
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
 
-Files:     create `src/renderer/shell/activity-order.ts` · test `src/renderer/shell/activity-order.test.ts` · modify `src/contracts/plugin.ts` · modify `src/contracts/settings.ts` · modify `src/config/settings.ts` · test `src/config/settings.test.ts` · modify `CHANGELOG.md`
+Files:     create `src/renderer/shell/activity-order.ts` · test `src/renderer/shell/activity-order.test.ts` · modify `src/contracts/plugin.ts` · modify `src/contracts/settings.ts` · modify `src/config/settings.ts` · test `src/main/config/user-settings.test.ts` · modify `CHANGELOG.md`
 Consumes:  nothing
 Produces:  `export interface ModePlace { group: number; order: number; at?: 'top' | 'bottom' }` in `src/contracts/plugin.ts`
            `Mode.place?: ModePlace` and `Mode.showCommand?: string` in `src/contracts/plugin.ts`
@@ -29,22 +29,32 @@ Decisions:
     its listed ids that name an added mode, in the setting's order. Every added mode listed in no group and not in
     `hidden` forms one group after the last top group, sorted as the suggestions sort (edge ignored: `at`, then
     `group`, then `order`, then `firstAdd`, modes with no `place` last).
-  - `hidden` removes its ids in both cases. A group left empty is dropped. An id listed twice keeps its first place.
-- `shell.activityBar` default `{ groups: [], hidden: [] }`; `settingInfo` label `Activity bar`, description
-  `The activity bar's groups, top to bottom, and the modes it hides, by mode id (sessions.sessions, work-inbox.main). Empty groups keep each plugin's suggested order.`;
-  its control kind `json` in the `settingControls` map beside `'shell.layout': 'layout'`.
-- Main checks a written value by the default's shape. Confirm that check accepts a `groups` array of
-  `{ modes, at }` records against the empty-array default; if it refuses one, widen the check the way the nearest
-  existing array-of-records setting is declared (find one with a grep of `src/config/settings.ts` and plugin
-  manifests' `settings`), and name the route taken in the commit.
+  - `hidden` removes its ids in both cases. A group left empty is dropped, one whose ids are all unknown included.
+    An id listed twice keeps its first place.
+  - With every setting group on the bottom edge, the unlisted modes' group is the first top group.
+- `ActivityModeEntry.id` is the qualified mode id, the one `modes.show` takes and the setting names
+  (`work-inbox.main`).
+- Main does not check the setting's shape: `checkElements` in `src/main/config/user-settings.ts` takes any elements
+  against an empty default array, and the default must stay empty. So `arrangeActivityItems` takes what main hands
+  it and tolerates a malformed value: a group that is no object or has no `modes` array is skipped, an id that is no
+  string is skipped, an `at` other than `'bottom'` reads as `'top'`, and a `hidden` that is no array reads as empty.
+- `shell.activityBar` default `{ groups: [], hidden: [] }`. `SettingPath` recurses into the object, so it has two
+  leaves, each with a `settingInfo` row and no `settingControls` entry (an array leaf already takes the `json`
+  control in `settingControl`, `src/main/config/user-config.ts`):
+  - `shell.activityBar.groups`: label `Activity bar groups`, description
+    `The activity bar's groups, top to bottom, each listing mode ids (sessions.sessions, work-inbox.main) and an optional at: bottom. Empty keeps each plugin's suggested order.`
+  - `shell.activityBar.hidden`: label `Hidden activity bar modes`, description
+    `Mode ids the activity bar leaves out; their keys still show them.`
+- `README.md` already names both leaves (written ahead with this plan); `scripts/readme-coverage.test.mts` checks
+  every `settingInfo` key against it.
 - CHANGELOG `### Added`: `The shell.activityBar setting orders, groups and hides the activity bar's modes, overriding each plugin's suggested place.`
 
 GIVEN modes with places in two top groups and one bottom group, added out of order WHEN arranged with an empty setting THEN the groups come back sorted by edge, group and order
 GIVEN a setting listing two groups that leave one added mode out WHEN arranged THEN the left-out mode forms a group after the last top group
 GIVEN a hidden id WHEN arranged with or without setting groups THEN no group holds it
 
-Tests:     `arrangeActivityItems_SortsAndGroupsModes` in `activity-order.test.ts` — one `it.each` table over (modes, setting) → literal `ActivityGroups`, rows: suggestions only across both edges with ties broken by `firstAdd`; a mode with no place; setting groups with a bottom group; an unlisted mode with a bottom suggestion landing after the last top group; an unknown id skipped; an id listed twice; `hidden` with and without groups; a group emptied by `hidden` dropped. Rows use general values: distinct `group` and `order` numbers, `firstAdd` out of id order.
-           A row in the existing settings test that owns the shape check (`src/config/settings.test.ts`): a `shell.activityBar` value with two groups and a hidden id passes, and one whose `groups` holds a string fails.
+Tests:     `arrangeActivityItems_SortsAndGroupsModes` in `activity-order.test.ts` — one `it.each` table over (modes, setting) → literal `ActivityGroups`, rows: suggestions only across both edges with ties broken by `firstAdd`; a mode with no place; setting groups with a bottom group; an unlisted mode with a bottom suggestion landing after the last top group; an unknown id skipped; an id listed twice; `hidden` with and without groups; a group emptied by `hidden` dropped; a group of only unknown ids dropped; every setting group at the bottom, the unlisted modes forming the first top group; malformed values (a string in `groups`, a group with no `modes`, a number among the ids, `at: 'left'`, `hidden` not an array) skipped or read as the decisions say. Rows use general values: distinct `group` and `order` numbers, `firstAdd` out of id order.
+           A case in `mergeUserSettings`'s tests (`src/main/config/user-settings.test.ts`): a `shell` holding only `activityBar.hidden` merges over the defaults, keeping `groups` at `[]` and `shell.layout` at its default; a two-group value comes back as written.
 Done when: compiles; lint passes; the test gate runs the tests above
 Commit:    one commit for the group
 

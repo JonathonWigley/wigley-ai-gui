@@ -161,7 +161,7 @@ Core:
 - `fonts.ui`, `fonts.mono`, `fonts.uiSize`, `fonts.monoSize`, `fonts.proseSize` — font families and sizes.
 - `keySequenceTimeoutMs` — how long a key sequence waits for its next key.
 - `shell.layout` — the shell's layout.
-- `shell.activityBar` — the activity bar's groups and hidden modes, overriding each plugin's suggested place.
+- `shell.activityBar.groups`, `shell.activityBar.hidden` — the activity bar's groups and the modes it hides, overriding each plugin's suggested place.
 - `plugins.disabled` — plugin ids the app does not run. Default: `agent-lines`, `usage-tab-line`,
   `docs-session-tab`, `unity-pool`.
 - `programs.python` — the Python the docs index and unity-pool run.
