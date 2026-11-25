@@ -1696,15 +1696,17 @@ describe('mountShell', () => {
   });
 
   // `steps` drive the bar, which holds an item and a Pin button in a slot
-  // marked by `keepPeekOnClick`: `enter`, `leave` and the clicks go to the
-  // mounted bar, `enter old` to the bar of the first mount, `toggle` pins or
-  // unpins, `wide` widens the window and `swap` swaps in a layout. `state`,
-  // `waits` and `logs` follow. Breaks if a peek fires at once or never, a leave
-  // leaves its wait running, a click on an item keeps the peek or one on the
-  // Pin button ends it, a peek moves the column, a pinned bar peeks, a pin
-  // applying keeps the peek or its wait or one that does not apply ends the
-  // peek, a swap keeps the peek or its wait or leaves the old bar listened to,
-  // or a dispose leaves the wait running.
+  // marked by `keepPeekOnClick`: `enter` and `leave` go to the mounted bar,
+  // `enter old` to the bar of the first mount, and the clicks bubble from the
+  // item or the Pin button, whose own listener pins or unpins and redraws its
+  // slot, detaching itself, as the chrome's does; `toggle` pins or unpins,
+  // `wide` widens the window and `swap` swaps in a layout. `state`, `waits` and
+  // `logs` follow. Breaks if a peek fires at once or never, a leave leaves its
+  // wait running, a click on an item keeps the peek or one on the Pin button
+  // ends it once its redraw detached it, a peek moves the column, a pinned bar
+  // peeks, a pin applying keeps the peek or its wait or one that does not apply
+  // ends the peek, a swap keeps the peek or its wait or leaves the old bar
+  // listened to, or a dispose leaves the wait running.
   it.each<{
     row: string;
     pinned?: boolean;
@@ -1763,9 +1765,17 @@ describe('mountShell', () => {
     {
       row: 'the Pin button clicked while peeking',
       steps: ['enter', 'wait', 'click pin'],
+      state: PINNED,
+      waits: [],
+      logs: ['activity bar peeked', 'activity bar pinned'],
+    },
+    {
+      row: 'the Pin button clicked while peeking in a narrow window',
+      narrow: true,
+      steps: ['enter', 'wait', 'click pin'],
       state: PEEKING,
       waits: [],
-      logs: ['activity bar peeked'],
+      logs: ['activity bar peeked', 'activity bar pinned'],
     },
     {
       row: 'a pinned bar',
@@ -1862,8 +1872,15 @@ describe('mountShell', () => {
       const item = new FakeElement('button');
       mounted.shell.areas.activityBar.contribute(asHtml(item));
       const pinSlot = new FakeElement('span');
-      const pinButton = new FakeElement('button');
-      pinSlot.append(pinButton);
+      const drawPin = () => {
+        const pinButton = new FakeElement('button');
+        pinButton.addEventListener('click', () => {
+          mounted.shell.togglePin();
+          drawPin();
+        });
+        pinSlot.replaceChildren(pinButton);
+      };
+      drawPin();
       keepPeekOnClick(asHtml(pinSlot));
       mounted.shell.areas.activityBar.contribute(asHtml(pinSlot), {
         align: 'end',
@@ -1879,9 +1896,9 @@ describe('mountShell', () => {
         } else if (step === 'leave') {
           bar.fire('pointerleave', {});
         } else if (step === 'click') {
-          bar.fire('click', { target: item });
+          item.bubble('click');
         } else if (step === 'click pin') {
-          bar.fire('click', { target: pinButton });
+          pinSlot.children[0].bubble('click');
         } else if (step === 'toggle') {
           mounted.shell.togglePin();
         } else if (step === 'wide') {

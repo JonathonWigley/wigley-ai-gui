@@ -243,7 +243,8 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
   };
 
   // A click on the Pin button keeps a peek, so `Pin open` in a narrow window,
-  // where the pin does not apply, leaves the bar open.
+  // where the pin does not apply, leaves the bar open; the mark sits on the
+  // slot, which outlives the redraw the click's pin change runs.
   const pinSlot = emptySlot();
   keepPeekOnClick(pinSlot.element);
   const drawPin = () => {

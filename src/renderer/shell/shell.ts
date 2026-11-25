@@ -286,14 +286,22 @@ function peekDelayToken(root: HTMLElement): number {
   return match[2] === 's' ? amount * 1000 : amount;
 }
 
-// The mark `keepPeekOnClick` sets: a click inside a marked element leaves the
-// activity bar's peek as it is.
-const PEEK_KEEPER = '[data-keeps-peek]';
-
 // Marks `element`, an app-owned part of the activity bar, so a click inside it
-// does not end the bar's peek.
+// does not end the bar's peek, even one whose own listener redrew `element`'s
+// children and so detached the clicked node.
 export function keepPeekOnClick(element: HTMLElement): void {
   element.dataset.keepsPeek = '';
+}
+
+// Whether `event` passed through an element `keepPeekOnClick` marked, read
+// from the path its dispatch fixed rather than the target's current ancestors.
+function isInPeekKeeper(event: Event): boolean {
+  return event
+    .composedPath()
+    .some(
+      (node) =>
+        node instanceof HTMLElement && node.dataset.keepsPeek !== undefined,
+    );
 }
 
 // `uiState` with a missing or non-finite stored width read as `openWidth()`,
@@ -594,8 +602,7 @@ export function mountShell(
   };
 
   const endPeekOnClick = (event: Event) => {
-    const isInKeeper = (event.target as Element).closest(PEEK_KEEPER) !== null;
-    if (!isInKeeper) {
+    if (!isInPeekKeeper(event)) {
       endPeek();
     }
   };

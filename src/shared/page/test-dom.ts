@@ -1,8 +1,8 @@
 // The DOM surface the page builders and plugin views use, for tests that run
 // in `node`: `installFakeDom` stubs `document`, `window` and `HTMLElement` with
 // it. A string appended becomes a text node; `click` and `fire` run the
-// listeners. An element is connected while it or an ancestor has `isPageRoot`
-// set.
+// listeners, and `bubble` runs them up the parent chain. An element is
+// connected while it or an ancestor has `isPageRoot` set.
 // `installFocusFakeDom` opts into focus, text selection and scroll resets.
 export class FakeElement {
   tagName: string;
@@ -257,18 +257,27 @@ export class FakeElement {
   // among them stands for a bubbled event), and returns it, so a test reads
   // whether a listener called `preventDefault`.
   fire(type: string, fields: Record<string, unknown> = {}): FakeEvent {
-    const event: FakeEvent = {
-      target: this,
-      ...fields,
-      defaultPrevented: false,
-      preventDefault() {
-        event.defaultPrevented = true;
-      },
-    };
+    const event = fakeEvent(this, fields);
+    this.runListeners(type, event);
+    return event;
+  }
+
+  // Dispatches a bubbling `type` event at this element: the listeners of this
+  // element, then of each element over it as the dispatch found them, so a
+  // listener that detaches this element still lets the event reach its old
+  // ancestors.
+  bubble(type: string): FakeEvent {
+    const event = fakeEvent(this, {});
+    for (const node of event.composedPath()) {
+      node.runListeners(type, event);
+    }
+    return event;
+  }
+
+  private runListeners(type: string, event: FakeEvent) {
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event);
     }
-    return event;
   }
 
   // An empty client rect at the client's origin, as an element with no
@@ -296,11 +305,37 @@ export interface FakeRect {
   height: number;
 }
 
-// The event `fire` hands each listener.
+// The event `fire` and `bubble` hand each listener. `composedPath` is the
+// target and each element over it at dispatch, as a real event fixes it.
 export interface FakeEvent {
   target: FakeElement;
   defaultPrevented: boolean;
   preventDefault(): void;
+  composedPath(): FakeElement[];
+}
+
+// An event at `origin`, or at a `target` among `fields`, carrying the rest of
+// `fields` too; a stand-in `target` that is no element has an empty path.
+function fakeEvent(
+  origin: FakeElement,
+  fields: Record<string, unknown>,
+): FakeEvent {
+  const path: FakeElement[] = [];
+  const event: FakeEvent = {
+    target: origin,
+    ...fields,
+    defaultPrevented: false,
+    preventDefault() {
+      event.defaultPrevented = true;
+    },
+    composedPath: () => [...path],
+  };
+  const pathStart = event.target instanceof FakeElement ? event.target : null;
+  for (let node = pathStart; node !== null;) {
+    path.push(node);
+    node = node.parentNode;
+  }
+  return event;
 }
 
 // An element's inline style; `setProperty` sets a custom property too.
