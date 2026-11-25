@@ -134,7 +134,7 @@ function listenForRounds(
       }
       places.formsRead(forms.map((form) => form.formId));
     })
-    .catch((error) => log(`open rounds not read: ${errorText(error)}`));
+    .catch((error) => log(`open forms not read: ${errorText(error)}`));
   api.restores.track(openFormsRead);
   return {
     dispose() {

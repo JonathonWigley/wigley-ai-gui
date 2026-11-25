@@ -63,7 +63,7 @@ function decodeAnswers(
     return answers;
   }
   log(
-    `round ${formId}: page kind ${kind.spec.id} decoded ${answerCount(answers.length)} where its items need ${items.length}; its draft starts empty`,
+    `form ${formId}: page kind ${kind.spec.id} decoded ${answerCount(answers.length)} where its items need ${items.length}; its draft starts empty`,
   );
   const empty = kind.restore.decode(items, []);
   if (empty.length !== items.length) {

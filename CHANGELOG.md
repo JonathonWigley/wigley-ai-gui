@@ -6,6 +6,10 @@ changes for the user.
 
 ## Unreleased
 
+### Changed
+
+- The app's own tool descriptions, tool results, wake message and UI (labels, buttons, prompts, toasts, settings and the layout preview's sample) call a batch of questions a form rather than a round, so an agent and the user see one word; tool names, outcome values, saved files and command ids are unchanged.
+
 ## 1.12.0 — 2026-11-25
 
 ### Changed

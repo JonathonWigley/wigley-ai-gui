@@ -39,11 +39,11 @@ export const AUTO_ANSWER_GATE_CLAUSE =
 // row is headless no longer.
 export const HEADLESS_NOTE =
   'This session is headless until a tool result says the session is no ' +
-  'longer headless: nobody answers forms rounds. Build no round: take each ' +
+  'longer headless: nobody answers forms. Build no form: take each ' +
   "item's recommended pick and list every pick as a Decided notice in your " +
   `reply. ${AUTO_ANSWER_GATE_CLAUSE}`;
 export const HEADLESS_OFF_NOTE =
-  'This session is no longer headless: send each round to the form again.';
+  'This session is no longer headless: send each form to the app again.';
 
 // `harness` is the id of the harness the folder's session ran on.
 export interface RecentFolder {

@@ -336,7 +336,7 @@ describe('restoring a draft', () => {
 
       expect(after.itemAnswers.poll).toEqual([untouched]);
       expect(lines).toEqual([
-        'round r1: page kind poll decoded 0 answers where its items need 1; its draft starts empty',
+        'form r1: page kind poll decoded 0 answers where its items need 1; its draft starts empty',
       ]);
     },
   );

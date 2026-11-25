@@ -18,8 +18,7 @@ description: "Asking the user through a form in the Auri app: the `auri` server'
 A **form** is one batch of questions, findings and notices the agent sends to the user. The Auri app shows it in a
 popup over the session, the user answers there, and the answers come back as the tool result. A good form reads
 like a colleague giving the user the rundown: what is being asked, why, and what the user needs to know to answer,
-with a mock of each option when the question decides a look. The app's own tool
-descriptions and results still say "round" for a form.
+with a mock of each option when the question decides a look.
 
 ## The form
 
@@ -139,14 +138,14 @@ Notices ride in a form already being sent. With no form to send, they go in the 
 
 ## Outcomes
 
-| `outcome`           | The caller                                                                                                                                                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `submitted`         | Reads the answers.                                                                                                                                                                                                                          |
-| `draft`             | Calls `collect_last_round`, again after every `draft`, however many come back in a row: a draft is the user still writing. A `draft` whose `next` says this round was not opened has no answers: send the same form again with `ask_round`. |
-| `cancelled`         | Leaves the form closed and reports what it settled.                                                                                                                                                                                         |
-| `needs_manual_open` | Sends the same form again with `ask_round` once. On a second one, tells the user the `summary`'s reason and asks the form in the reply (Written fallback).                                                                                  |
-| `auto_answered`     | Reads each pick as its own, lists each as a Decided notice in the reply, and sends no more forms while the session stays headless (Headless).                                                                                               |
-| `no_round`          | Sends the same form again with `ask_round`; the user's saved answers fill in.                                                                                                                                                               |
+| `outcome`           | The caller                                                                                                                                                                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `submitted`         | Reads the answers.                                                                                                                                                                                                                        |
+| `draft`             | Calls `collect_last_round`, again after every `draft`, however many come back in a row: a draft is the user still writing. A `draft` whose `next` says the form was not opened has no answers: send the same form again with `ask_round`. |
+| `cancelled`         | Leaves the form closed and reports what it settled.                                                                                                                                                                                       |
+| `needs_manual_open` | Sends the same form again with `ask_round` once. On a second one, tells the user the `summary`'s reason and asks the form in the reply (Written fallback).                                                                                |
+| `auto_answered`     | Reads each pick as its own, lists each as a Decided notice in the reply, and sends no more forms while the session stays headless (Headless).                                                                                             |
+| `no_round`          | Sends the same form again with `ask_round`; the user's saved answers fill in.                                                                                                                                                             |
 
 - A result carrying `earlier_heading` holds the answers to that earlier form. Read them as that form's answers,
   then send the current form again.

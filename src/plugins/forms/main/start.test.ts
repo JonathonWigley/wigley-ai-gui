@@ -335,7 +335,7 @@ describe('forms main part', () => {
       offline: {
         ask_round: {
           result: textResult(
-            "The app is closed, so no round was shown. Take each item's recommended pick and list every pick as a Decided notice in your reply.",
+            "The app is closed, so no form was shown. Take each item's recommended pick and list every pick as a Decided notice in your reply.",
           ),
           replay: false,
         },
@@ -475,7 +475,7 @@ describe('forms main part', () => {
       .map((sent) => sent.data as { formId: string; label: string });
 
     expect(harness.started().mayStop?.()).toBe(
-      `Finish or cancel ${shown.label}'s round first`,
+      `Finish or cancel ${shown.label}'s form first`,
     );
     harness.invoke('finish', shown.formId, { kind: 'cancelled', body: {} });
     expect(harness.started().mayStop?.()).toBeNull();

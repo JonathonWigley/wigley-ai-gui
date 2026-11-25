@@ -355,7 +355,7 @@ export interface SessionFormsStore<Form extends SessionForm> {
   dispatch(action: LifecycleCommand): void;
 }
 
-// How the log and toasts name a form: `noun` as in `round`, `sent` as the
+// How the log and toasts name a form: `noun` as in `form`, `sent` as the
 // toast after a submit, as in `Answers sent`.
 export interface SessionFormWords {
   noun: string;

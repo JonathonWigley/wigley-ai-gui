@@ -57,7 +57,7 @@ function logFirstShow(round: RoundState, log: PluginLog): void {
   for (const { kind, count } of unregisteredKinds(round)) {
     const items = count === 1 ? 'item' : 'items';
     log(
-      `round ${round.formId} holds ${count} ${kind} ${items} with no page kind`,
+      `form ${round.formId} holds ${count} ${kind} ${items} with no page kind`,
     );
   }
   for (const kind of round.kinds.kinds()) {

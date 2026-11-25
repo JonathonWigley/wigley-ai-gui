@@ -150,7 +150,7 @@ const ERROR_ROWS: ErrorRow[] = [
     expected:
       "ask_round takes an object with 'heading', 'overview', 'layout', " +
       "'notices', 'findings', and 'questions'. Each list is optional, but " +
-      'the round needs at least one item.',
+      'the form needs at least one item.',
   },
   {
     name: 'an unknown round field',
@@ -665,13 +665,13 @@ const DRAFT_SUMMARY =
 
 function notShownNext(other: string): string {
   return (
-    `The user has not finished ${other} in the app, so this round was not ` +
-    'opened and has no answers. Send this round again with ask_round, and ' +
+    `The user has not finished ${other} in the app, so this form was not ` +
+    'opened and has no answers. Send this form again with ask_round, and ' +
     `again after every draft like this one. Once the user finishes ${other}, ` +
-    "a send may return that round's answers instead, marked with " +
-    `earlier_heading: act on them, then send this round again. If ${other} ` +
+    "a send may return that form's answers instead, marked with " +
+    `earlier_heading: act on them, then send this form again. If ${other} ` +
     'is no longer needed, ask the user to cancel it in the app. Do not call ' +
-    "collect_last_round for this round: that returns the other round's " +
+    "collect_last_round for this form: that returns the other form's " +
     'answers.'
   );
 }
@@ -722,7 +722,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
       next:
         'The user has not submitted yet. Call collect_last_round to keep ' +
         'waiting. Do not re-ask these questions and do not open a second ' +
-        'round.',
+        'form.',
       ...DRAFT_LISTS,
     },
   },
@@ -734,8 +734,8 @@ const PAYLOAD_ROWS: PayloadRow[] = [
       outcome: 'submitted',
       summary: ANSWERED_SUMMARY,
       next:
-        "These answers are for an earlier round, 'Cache review', that you " +
-        "never received. Read them as that round's answers. The round you " +
+        "These answers are for an earlier form, 'Cache review', that you " +
+        "never received. Read them as that form's answers. The form you " +
         'just sent was not opened: send it again with ask_round.',
       ...ANSWERED_LISTS,
       earlier_heading: 'Cache review',
@@ -746,11 +746,11 @@ const PAYLOAD_ROWS: PayloadRow[] = [
     payload: () => roundType.noFormPayload(),
     expected: {
       outcome: 'no_round',
-      summary: 'No round is open.',
+      summary: 'No form is open.',
       next:
-        'No round is open for this session, and no finished answers are ' +
-        'waiting for it. If you sent a round whose answers you never ' +
-        'received, send the same round again with ask_round: the ' +
+        'No form is open for this session, and no finished answers are ' +
+        'waiting for it. If you sent a form whose answers you never ' +
+        'received, send the same form again with ask_round: the ' +
         "user's saved answers fill in. Do not move the questions into the " +
         'reply.',
       answers: [],
@@ -764,9 +764,9 @@ const PAYLOAD_ROWS: PayloadRow[] = [
     expected: {
       outcome: 'draft',
       summary:
-        "This round, 'Cache review', was not shown: the round 'Other round' " +
+        "This form, 'Cache review', was not shown: the form 'Other round' " +
         'is still open in the app.',
-      next: notShownNext("the round 'Other round'"),
+      next: notShownNext("the form 'Other round'"),
       ...DRAFT_LISTS,
     },
   },
@@ -776,9 +776,9 @@ const PAYLOAD_ROWS: PayloadRow[] = [
     expected: {
       outcome: 'draft',
       summary:
-        "This round, 'Cache review', was not shown: another round is still " +
+        "This form, 'Cache review', was not shown: another form is still " +
         'open in the app.',
-      next: notShownNext('another round'),
+      next: notShownNext('another form'),
       ...DRAFT_LISTS,
     },
   },
@@ -797,7 +797,7 @@ const PAYLOAD_ROWS: PayloadRow[] = [
       next:
         'This session is headless until a tool result says the session is ' +
         'no longer headless: the app showed no form and answered every item ' +
-        'with its recommendation. Build no more rounds, and list every pick ' +
+        'with its recommendation. Build no more forms, and list every pick ' +
         'as a Decided notice in your reply. An auto-answered pick never ' +
         "approves an action that needs the user's own yes (an install, a " +
         "step that deletes the user's data, a push, or any action the " +

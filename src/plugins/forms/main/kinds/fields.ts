@@ -24,7 +24,7 @@ export function requireText(
 }
 
 const ITEM_LAYOUT_DESCRIPTION =
-  "The layout that draws this item's card, over the round's layout: a " +
+  "The layout that draws this item's card, over the form's layout: a " +
   "folder name in the app's forms layouts folder.";
 
 // The optional `layout` of a question, notice or finding in the tool schema.

@@ -50,8 +50,8 @@ const NOTICE_BADGE_DESCRIPTION =
 
 const NOTICES_DESCRIPTION =
   'Fixes already made, dispatched, decisions you took alone, or anything ' +
-  'otherwise settled before this round opened — one object per notice. Each ' +
-  "draws as one line, its badge and title, on the round's notices page, " +
+  'otherwise settled before this form opened — one object per notice. Each ' +
+  "draws as one line, its badge and title, on the form's notices page, " +
   'after every other item; the line opens to its context and one ' +
   "comment box. Each is badged 'Applied', 'Dispatched' or 'Decided', and has " +
   'no choices, no recommendation, nothing for the user to decide.';

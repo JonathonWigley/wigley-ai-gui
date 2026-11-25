@@ -239,9 +239,7 @@ describe('roundType', () => {
       null,
     );
 
-    expect(payload.summary).toContain(
-      'another round is still open in the app.',
-    );
+    expect(payload.summary).toContain('another form is still open in the app.');
   });
 
   // Breaks if a user-folder plugin, which cannot construct the class, loses

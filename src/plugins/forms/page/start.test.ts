@@ -637,11 +637,9 @@ describe('forms page part', () => {
       ],
     });
     const messages = () => harness.logs.map((line) => line.message);
+    expect(messages()).toContain('form r2 holds 1 poll item with no page kind');
     expect(messages()).toContain(
-      'round r2 holds 1 poll item with no page kind',
-    );
-    expect(messages()).toContain(
-      'round r2 holds 2 vote items with no page kind',
+      'form r2 holds 2 vote items with no page kind',
     );
     expect(messages().filter((line) => line.startsWith('toast'))).toEqual([]);
     await harness.stop();
