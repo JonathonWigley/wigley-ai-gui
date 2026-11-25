@@ -8,13 +8,13 @@ import {
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile`, `removeFolder` and `remove` report
-// each changed file's and folder's path to the watches over it at once, with no
-// debounce, so a test drives a save by writing; a rename reports each moved
-// file's and folder's old path and its new one. A watch with
-// `recursive: false` reports a change under a subfolder as the subfolder's
-// name, once per call. A watch never fails or misses a change, so
-// it never calls its `onError` or `onMissed`. There are no links, so `stat`
+// `append`, `makeFolder`, `rename`, `copy`, `trash`, `deleteFile`,
+// `removeFolder` and `remove` report each changed file's and folder's path to
+// the watches over it at once, with no debounce, so a test drives a save by
+// writing; a rename reports each moved file's and folder's old path and its
+// new one. A watch with `recursive: false` reports a change under a subfolder
+// as the subfolder's name, once per call. A watch never fails or misses a
+// change, so it never calls its `onError` or `onMissed`. There are no links, so `stat`
 // reports none and `realPath` returns the path's stored spelling. Names are
 // case-sensitive.
 export interface MemoryFiles extends Files {
@@ -33,13 +33,13 @@ interface MemoryWatch {
 }
 
 // A folder exists when `makeFolder` made it, it held a file or folder that
-// `rename`, `trash`, `removeFolder` or `remove` took away, or any file or made folder lies
-// under it; the top folder always exists. A path's leading `/` is optional:
-// `/a/b` and `a/b` name one file. Each call that meets a file where a folder
-// must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write`, `writeBytes`, `append` and `copy` stamps the file's `modified`
-// time with `clock.now()`, or `0` with no clock; `rename` carries a file's
-// stamp to its new path.
+// `rename`, `trash`, `removeFolder` or `remove` took away, or any file or made
+// folder lies under it; the top folder always exists. A path's leading `/` is
+// optional: `/a/b` and `a/b` name one file. Each call that meets a file where a
+// folder must be, or a folder where a file must be, rejects with the code
+// Node's fs gives. Each `write`, `writeBytes`, `append` and `copy` stamps the
+// file's `modified` time with `clock.now()`, or `0` with no clock; `rename`
+// carries a file's stamp to its new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const contents = new Map<string, string | Uint8Array>();
   const modifiedTimes = new Map<string, number>();

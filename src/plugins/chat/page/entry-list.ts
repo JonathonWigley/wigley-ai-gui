@@ -1553,10 +1553,10 @@ function buildSlot(
 // view with an update runs it after the kit's own parts updated, then the
 // entry parts' updates; a view with none is drawn again, its new expanders
 // opening as the old ones were and its old kit disposed, its entry parts
-// with it, before they are built anew. An update that throws from a user layout, a renderer or a live default is
-// logged under the name of what the slot drew with, and the slot is drawn with
-// the bundled default layout from then on; the bundled default's is logged and
-// the entry drawn again.
+// with it, before they are built anew. An update that throws from a user
+// layout, a renderer or a live default is logged under the name of what the
+// slot drew with, and the slot is drawn with the bundled default layout from
+// then on; the bundled default's is logged and the entry drawn again.
 function redrawSlot(
   slot: Slot,
   entry: ChatEntry,
