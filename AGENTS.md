@@ -277,7 +277,7 @@ src/preload/     exposes only a one-time claim (`bridge-claim.ts`, as `window.wi
                  page's first caller
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the
-                 title bar's context, dev tag and config problems, the activity bar's items and each toast through
+                 title bar's context, dev tag and config problems, the activity bar's items, dividers and Pin button, and each toast through
                  the shell's layout (`layouts/`, the `shell.layout` setting)
   plugins/       the page-side plugin API
   state/         the page mirror (`page-state.ts`: main's snapshot, then each push, and the page's own writes sent back)

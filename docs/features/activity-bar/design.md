@@ -38,7 +38,7 @@ names each one on demand, and marks a mode that holds something for the user.
 - **Peek.** The pointer resting on the bar for `activitybar-peek-delay` widens it to `activitybar-expanded-width`
   over the content, with a shadow: the grid track stays at its collapsed width, so nothing under it moves. Each item
   then shows its title, its count and the key of its show command; the bar's end shows the Pin button. The pointer
-  leaving the bar ends the peek at once, and a click on an item shows that mode and ends it.
+  leaving the bar ends the peek at once, and a click in the bar ends it too (a click on an item also shows that mode).
 - **Pin.** `Space v p` (`activityBar.togglePin`) or the Pin button keeps the bar wide: the grid track takes
   `activitybar-expanded-width` and the side bar and content move over. Pressed again, or Unpin, it collapses. The
   pinned state is kept in `uiState` (`shell` scope, `activity-bar-pinned`) across reloads and restarts.
