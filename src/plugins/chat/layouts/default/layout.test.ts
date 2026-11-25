@@ -117,12 +117,14 @@ function part(parent: HTMLElement, tag: string, name: string): HTMLElement {
 }
 
 // A kit whose parts append tagged fake elements and record each call; each
-// collapsible row keeps its options, so a test opens it by calling `body()`.
+// collapsible row keeps its options and each expander its summary and body,
+// so a test opens it by calling `body()`.
 // `markdown` tags a draw with live fences off ` (fences off)` and records
 // how many children its parent held when called.
 function fakeKit() {
   const calls = {
     collapsibleRows: [] as CollapsibleCardOptions[],
+    expanders: [] as { summary: string; body: () => HTMLElement }[],
     setOpen: [] as boolean[],
     setDotStatus: [] as [string | undefined, string][],
     markdownSiblings: [] as number[],
@@ -153,7 +155,14 @@ function fakeKit() {
       calls.setDotStatus.push([dot.dataset.part, status]);
     },
     sectionHeader: (parent, text) => part(parent, 'h3', `section:${text}`),
+    expander(parent, summary, body) {
+      calls.expanders.push({ summary, body });
+      return part(parent, 'div', `expander:${summary}`);
+    },
     permissionActions: (parent) => part(parent, 'div', 'permissionActions'),
+    entryParts(parent) {
+      part(parent, 'div', 'entryParts');
+    },
     images: (parent) => part(parent, 'div', 'images'),
     duration: (ms) => `${Math.floor(ms / 1000)}s`,
     tokens: (count) => `${Math.round(count / 1000)}k`,
@@ -574,23 +583,61 @@ describe('default chat layout', () => {
     kind: 'permission' as const,
     id: 'p1',
     toolName: 'Bash',
+    summary: 'rm x',
     input: { command: 'rm x' } as unknown,
     answer: null as { allowed: boolean; reason: string | null } | null,
     raw: [] as unknown[],
   };
 
-  it('permission_unanswered_holdsTheInputAndActions_noUpdate', () => {
+  it.each([
+    {
+      case: 'a target line',
+      summary: 'rm x',
+      head: [
+        'span.chat-permission-tool:Bash',
+        'span.chat-permission-target:rm x',
+      ],
+    },
+    {
+      case: 'no target line',
+      summary: '',
+      head: ['span.chat-permission-tool:Bash'],
+    },
+  ])('permission_draws: $case', ({ summary, head }) => {
     const { kit } = fakeKit();
 
-    const view = draw(permissionEntry, kit);
+    const view = draw({ ...permissionEntry, summary }, kit);
+
     const card = asFake(view.element).children[0];
-    expect(describeChildren(card)).toEqual(
-      expect.arrayContaining([
-        `json:${JSON.stringify({ command: 'rm x' })}`,
-        'permissionActions',
-      ]),
-    );
+    expect(
+      card.children.map(
+        (child) =>
+          child.dataset.part ??
+          `${child.tagName.toLowerCase()}.${child.className}`,
+      ),
+    ).toEqual([
+      'entryParts',
+      'div.chat-permission-head',
+      'expander:Full call',
+      'permissionActions',
+    ]);
+    expect(describeChildren(card.children[1])).toEqual(head);
     expect(view.update).toBeUndefined();
+  });
+
+  it('permission_fullCallBody_holdsTheInputJson_sameElementEachOpen', () => {
+    const { kit, calls } = fakeKit();
+    draw(permissionEntry, kit);
+    const [fullCall] = calls.expanders;
+
+    const first = asFake(fullCall.body());
+    const second = asFake(fullCall.body());
+
+    expect(second).toBe(first);
+    expect(first.className).toBe('chat-permission-call');
+    expect(describeChildren(first)).toEqual([
+      `json:${JSON.stringify({ command: 'rm x' })}`,
+    ]);
   });
 
   it('permission_answeredPlainCard', () => {

@@ -12,12 +12,18 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { ChatEntryPart, ChatEntryPartContext } from '../contract';
 import { chatCommand } from '../ids';
+import type { AnyEntryKind, EntryInput } from '../layouts/layout';
 import { createEntryKit } from './chat-kit';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../../shared/page/layout-host/fake-layout-state.test-support';
+import type { PermissionEntry } from './chat-state';
 
-const ASSISTANT: ChatEntry = {
+// An entry that is also its own input, as each fixture here is.
+type KitEntry = ChatEntry & EntryInput<AnyEntryKind>;
+
+const ASSISTANT: KitEntry = {
   kind: 'assistant',
   id: 'a1',
   at: 1000,
@@ -27,7 +33,7 @@ const ASSISTANT: ChatEntry = {
   raw: [],
 };
 
-const PERMISSION: ChatEntry = {
+const PERMISSION: PermissionEntry = {
   kind: 'permission',
   id: 'p1',
   at: 1000,
@@ -48,15 +54,24 @@ describe('createEntryKit', () => {
     vi.unstubAllGlobals();
   });
 
-  // `entry`'s kit; each anchor's dispose records its command in `disposed`,
-  // then throws when the command is `throwsOn`; each thumbnail click records
-  // its entry id and index in `opened`, and each expander head click its entry
-  // id and place in `expanderClicks`.
-  function kitOf(entry: ChatEntry = ASSISTANT, throwsOn?: CommandId) {
+  // `entry`'s kit, its input the entry itself, in session `s1`, drawing
+  // `parts`; each anchor's dispose records its command in `disposed`, then
+  // throws when the command is `throwsOn`; each thumbnail click records its
+  // entry id and index in `opened`, each expander head click its entry id and
+  // place in `expanderClicks`, and each log line goes to `logged`.
+  function kitOf(
+    entry: KitEntry = ASSISTANT,
+    throwsOn?: CommandId,
+    parts: readonly ChatEntryPart[] = [],
+  ) {
     const disposed: CommandId[] = [];
     const opened: [string, number][] = [];
     const expanderClicks: [string, number][] = [];
-    const entryKit = createEntryKit(entry, {
+    const logged: string[] = [];
+    const entryKit = createEntryKit(entry, entry, {
+      sessionId: 's1',
+      entryParts: () => parts,
+      log: (message) => logged.push(message),
       markdown: {
         block: (text) => text,
         inline: (text) => text,
@@ -87,8 +102,169 @@ describe('createEntryKit', () => {
       expanderClicked: (entryId, place) =>
         expanderClicks.push([entryId, place]),
     });
-    return { entryKit, disposed, opened, expanderClicks };
+    return { entryKit, disposed, opened, expanderClicks, logged };
   }
+
+  // A part of `kinds` that records each build's context in `builds` and each
+  // update's input in `updates`; its build throws `buildThrows` and its update
+  // `updateThrows` when given.
+  function recordingPart(
+    id: string,
+    kinds: readonly AnyEntryKind[],
+    throws: { buildThrows?: string; updateThrows?: string } = {},
+  ) {
+    const builds: ChatEntryPartContext<AnyEntryKind>[] = [];
+    const updates: EntryInput<AnyEntryKind>[] = [];
+    const part: ChatEntryPart = {
+      id,
+      kinds,
+      build(_parent, context) {
+        if (throws.buildThrows !== undefined) {
+          throw new Error(throws.buildThrows);
+        }
+        builds.push(context);
+        return {
+          update(input) {
+            if (throws.updateThrows !== undefined) {
+              throw new Error(throws.updateThrows);
+            }
+            updates.push(input);
+          },
+        };
+      },
+    };
+    return { part, builds, updates };
+  }
+
+  // The `data-part` ids of the wrappers in `parent`'s holder, null for none.
+  function wrapperIds(parent: FakeElement): string[] | null {
+    const holders = findAll(parent, 'chat-entry-parts');
+    if (holders.length === 0) {
+      return null;
+    }
+    return findAll(holders[0], 'chat-entry-part').map(
+      (wrapper) => asHtml(wrapper).dataset.part ?? '',
+    );
+  }
+
+  const HARNESS: KitEntry = { kind: 'fake:card', id: 'h1', at: 1000, raw: [] };
+
+  it.each([
+    {
+      case: 'a permission entry draws the parts of its kind',
+      entry: PERMISSION,
+      parts: [
+        { id: 'a', kinds: ['permission'] },
+        { id: 'b', kinds: ['tool'] },
+        { id: 'c', kinds: ['permission', 'tool'] },
+      ],
+      wrappers: ['a', 'c'],
+      logs: [],
+    },
+    {
+      case: 'an assistant entry has no part of its kind',
+      entry: ASSISTANT,
+      parts: [
+        { id: 'a', kinds: ['permission'] },
+        { id: 'b', kinds: ['tool'] },
+        { id: 'c', kinds: ['permission', 'tool'] },
+      ],
+      wrappers: null,
+      logs: [],
+    },
+    {
+      case: 'no parts added',
+      entry: PERMISSION,
+      parts: [],
+      wrappers: null,
+      logs: [],
+    },
+    {
+      case: 'a build that throws',
+      entry: PERMISSION,
+      parts: [
+        { id: 'a', kinds: ['permission'], buildThrows: 'boom' },
+        { id: 'c', kinds: ['permission'] },
+      ],
+      wrappers: ['c'],
+      logs: ['entry part a failed: boom'],
+    },
+    {
+      case: 'a harness kind',
+      entry: HARNESS,
+      parts: [{ id: 'a', kinds: ['fake:card'] }],
+      wrappers: ['a'],
+      logs: [],
+    },
+  ] satisfies {
+    case: string;
+    entry: KitEntry;
+    parts: {
+      id: string;
+      kinds: AnyEntryKind[];
+      buildThrows?: string;
+    }[];
+    wrappers: string[] | null;
+    logs: string[];
+  }[])(
+    'entryParts_PlacesPartsOfTheKindInAddOrder: $case',
+    ({ entry, parts, wrappers, logs }) => {
+      const { entryKit, logged } = kitOf(
+        entry,
+        undefined,
+        parts.map(
+          (each) =>
+            recordingPart(each.id, each.kinds, {
+              buildThrows: each.buildThrows,
+            }).part,
+        ),
+      );
+      const parent = new FakeElement('div');
+
+      entryKit.kit.entryParts(asHtml(parent));
+
+      expect(wrapperIds(parent)).toEqual(wrappers);
+      expect(logged).toEqual(logs);
+    },
+  );
+
+  it('entryParts_Build_GetsSessionIdAndInput', () => {
+    const a = recordingPart('a', ['permission']);
+    const { entryKit } = kitOf(PERMISSION, undefined, [a.part]);
+    const parent = new FakeElement('div');
+
+    entryKit.kit.entryParts(asHtml(parent));
+
+    expect(a.builds).toEqual([{ sessionId: 's1', input: PERMISSION }]);
+    expect(wrapperIds(parent)).toEqual(['a']);
+  });
+
+  it('entryParts_CalledTwice_Throws', () => {
+    const { entryKit } = kitOf(PERMISSION);
+    const parent = asHtml(new FakeElement('div'));
+    entryKit.kit.entryParts(parent);
+
+    expect(() => entryKit.kit.entryParts(parent)).toThrow(
+      'permission entry placed entry parts twice',
+    );
+  });
+
+  it('updateParts_RunsEachPartsUpdate_LogsAThrowOnce', () => {
+    const a = recordingPart('a', ['permission'], { updateThrows: 'boom' });
+    const b = recordingPart('b', ['permission']);
+    const { entryKit, logged } = kitOf(PERMISSION, undefined, [a.part, b.part]);
+    entryKit.kit.entryParts(asHtml(new FakeElement('div')));
+    const next: PermissionEntry = {
+      ...PERMISSION,
+      answer: { allowed: true, reason: null },
+    };
+
+    entryKit.updateParts(next);
+    entryKit.updateParts(next);
+
+    expect(b.updates).toEqual([next, next]);
+    expect(logged).toEqual(['entry part a update failed: boom']);
+  });
 
   const body = () => asHtml(new FakeElement('div'));
 
@@ -162,9 +338,11 @@ describe('createEntryKit', () => {
       kind: 'user',
       id: 'u1',
       at: 1000,
+      from: null,
       text: 'look',
       images: [png, jpeg, gif],
       delivery: null,
+      isLatestDelivery: false,
       raw: [],
     });
     const strip = entryKit.kit.images(asHtml(new FakeElement('div')));

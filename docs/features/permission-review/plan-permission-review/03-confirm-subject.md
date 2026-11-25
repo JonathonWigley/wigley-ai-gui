@@ -1,6 +1,6 @@
 # 03 — Confirm subject and the forms.confirms slot
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · ties a slot key to an async round's lifecycle across forms and agent-commands (queued, shown, submitted, cancelled, aborted, session end), and adds `ConfirmSubject`, `OpenConfirm` and `formsConfirmsSlot`, which 04 and 05 consume
 Wave: 1 · Depends on: none
@@ -137,3 +137,4 @@ Commit: one commit for the group, by pathspec (the seven files above), no co-aut
 
 ## Proof
 
+Commit a4479b69, 9b8741f0 · proof: diff read: every Produces present (ConfirmSubject, ConfirmRequest.subject, OpenConfirm, formsConfirmsSlot, ConfirmTracker, createConfirmTracker, confirmRequest subject); wave typecheck passes after the demo-steps.test literal fix on the same rung · concerns: formatted by hand without oxfmt; the failed row relies on the tool session's end() rejecting the open; design.md says 'when the round finishes' and AGENTS.md calls subject 'optional', both left for 06

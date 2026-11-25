@@ -578,6 +578,13 @@ const NEWER_CARD_FOCUSED_STEPS: SelfTestStep[] = [
 const PERMISSION_CURSOR_STEPS: SelfTestStep[] = [
   ...NEWER_CARD_FOCUSED_STEPS,
   {
+    keys: ['Enter'],
+    expect: '[chat] expanded permission entry',
+    screenshot: 'permission-full-call',
+    checksFit: true,
+  },
+  { keys: ['Enter'], expect: '[chat] collapsed permission entry' },
+  {
     keys: ['y'],
     expect: '[chat] result entry added in chat-selftest',
     alsoExpect: [/^\[chat\] allowed Bash in chat-selftest$/],
@@ -1211,7 +1218,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'permission cursor',
-    why: "y and n answer the waiting card under the cursor, not the oldest: two fake permission turns each make a newer card, the cursor's card is allowed and then denied while the fixture's card stays waiting for the next group's y.",
+    why: "y and n answer the waiting card under the cursor, not the oldest: two fake permission turns each make a newer card, the cursor's card is allowed and then denied while the fixture's card stays waiting for the next group's y. Enter on the focused card opens its Full call and Enter again closes it.",
     steps: PERMISSION_CURSOR_STEPS,
   },
   {

@@ -1,6 +1,6 @@
 # 04 — permission-review main: watcher, ask, reviews slot
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses chat, forms, sessions and the harness registry through async asks, a 60 s timeout, aborts on key removal and session end, and a restart
 Wave: 2 · Depends on: 01, 03

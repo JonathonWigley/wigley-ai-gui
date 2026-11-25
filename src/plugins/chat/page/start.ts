@@ -28,6 +28,7 @@ import {
   chatCommandsSlot,
   type ChatComposerPart,
   chatControlsSlot,
+  type ChatEntryPart,
   chatDraftImagesSlot,
   chatEntriesSlot,
   chatFocusSlot,
@@ -267,6 +268,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     );
     const statusParts = createPartStore<ChatStatusPart>();
     const sideParts = createPartStore<ChatSidePart>();
+    const entryParts = createPartStore<ChatEntryPart>();
     const sideSections = createSideSections({
       layouts,
       kit: partDeps,
@@ -329,6 +331,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       state: api.state.forLayouts,
       layouts,
       renderers: entryRenderers,
+      entryParts,
       composerParts,
       statusParts,
       sideParts,
@@ -444,6 +447,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         consumer.track(view.mount(element, sessionId)),
       addEntryRenderer: (renderer) =>
         consumer.track(entryRenderers.add(renderer)),
+      addEntryPart: (part) =>
+        // TypeScript cannot tie a part's kinds to its build's input.
+        consumer.track(entryParts.add(part as unknown as ChatEntryPart)),
       showHubForNow: (sectionId) => {
         const hold = sideSections.showForNow(sectionId);
         view.hub.hiddenChanged();

@@ -1,6 +1,6 @@
 # 01 — Harness one-shot ask and permission summary
 
-Status: in progress
+Status: done
 Type: Batch
 Rung: deep · spawns a child process whose abort, exit and output the ask settles once (async lifecycle across the process boundary)
 Wave: 1 · Depends on: none
@@ -219,3 +219,4 @@ isolated claude -p run and the askModel setting, and mint a summary target line 
 
 ## Proof
 
+Commit e52a8d7d · proof: diff read: every Produces present (AgentAsk, AgentHarness.ask, permission summary, fake ask hooks, askClaude, askModel setting); wave typecheck passes · concerns: toolSummary falls back to the input's first string field, so a Claude permission entry's summary is not always a target line (02 must not read non-empty as a target); the claude-code-ask folder is made once and reused, never emptied; withStderr moved to claude-launch.ts beside exitText and cliSpawnError

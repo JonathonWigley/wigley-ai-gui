@@ -1,6 +1,8 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import type { PluginLog } from '../../../contracts/log';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import { formatTokens } from '../../../shared/format-tokens';
 import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
@@ -11,8 +13,9 @@ import {
   createCollapsibleCard,
 } from '../../../shared/page/ui/card';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
+import type { ChatEntryPart } from '../contract';
 import { type ChatCommandName, chatCommand, chatScope } from '../ids';
-import type { ChatKit } from '../layouts/layout';
+import type { AnyEntryKind, ChatKit, EntryInput } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import { type SurfaceKitDeps, surfaceBaseKit } from './chat-layouts';
 import type { PermissionEntry } from './chat-state';
@@ -21,8 +24,12 @@ import type { PermissionEntry } from './chat-state';
 // `allow` and `deny` with the permission entry, `openImages` with the user
 // entry's id and the thumbnail's index, `expanderClicked` with the entry's id
 // and the expander's creation-order place. `keys` also anchors the permission
-// actions' key hints.
+// actions' key hints. `entryParts` reads the parts other plugins added, each
+// built for session `sessionId`; `log` takes a part's failure.
 export interface KitDeps extends SurfaceKitDeps {
+  sessionId: string;
+  entryParts(): readonly ChatEntryPart[];
+  log: PluginLog;
   allow(entry: PermissionEntry): void;
   deny(entry: PermissionEntry): void;
   openImages(entryId: string, index: number): void;
@@ -51,20 +58,29 @@ export interface Expanders {
 }
 
 // One built entry's kit: the parts the layout drew from it, kept up to date by
-// `update` with each later version of the entry. `dispose` disposes the key
+// `update` with each later version of the entry. `updateParts` runs each
+// placed entry part's `update` with the entry's later input, in place order;
+// only a part's first update failure is logged. `dispose` disposes the key
 // anchors the base kit's parts named and those a waiting permission entry's
 // actions still hold; its owner calls it when it drops the kit.
 export interface EntryKit {
   kit: ChatKit;
   update(entry: ChatEntry): void;
+  updateParts(input: EntryInput<AnyEntryKind>): void;
   expanders: Expanders;
   dispose(): void;
 }
 
 // The base kit, its key hints anchored in the Chat tab's scope, under chat's
-// own parts.
-export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
+// own parts; `input` is the entry's input as its builder gets it.
+export function createEntryKit(
+  entry: ChatEntry,
+  input: EntryInput<AnyEntryKind>,
+  deps: KitDeps,
+): EntryKit {
   let current = entry;
+  // Null until the layout places the entry parts.
+  let placedParts: PlacedPart[] | null = null;
   const expanders: Expander[] = [];
   const permissionParts: PermissionPart[] = [];
   const anchors: Disposable[] = [];
@@ -107,6 +123,12 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       permissionParts.push(part);
       return appended(parent, part.element);
     },
+    entryParts(parent) {
+      if (placedParts !== null) {
+        throw new Error(`${entry.kind} entry placed entry parts twice`);
+      }
+      placedParts = placeEntryParts(parent, input, deps);
+    },
     images(parent) {
       if (current.kind !== 'user') {
         throw new Error('images is only for a user entry');
@@ -126,6 +148,11 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
         for (const part of permissionParts) {
           part.draw(next);
         }
+      }
+    },
+    updateParts(next) {
+      for (const part of placedParts ?? []) {
+        updateEntryPart(part, next, deps.log);
       }
     },
     dispose() {
@@ -166,6 +193,65 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
         expanders.filter((expander) => container.contains(expander.element)),
     },
   };
+}
+
+// An entry part built in the entry, with the update it returned.
+interface PlacedPart {
+  id: string;
+  update: ((input: EntryInput<AnyEntryKind>) => void) | undefined;
+  isUpdateFailureLogged: boolean;
+}
+
+// `div.chat-entry-parts` at the end of `parent`, holding one
+// `div.chat-entry-part` (`data-part="<id>"`) per part of the entry's kind, in
+// add order, each built for `input` and the session; nothing when no part is
+// of the kind. A part that throws is logged and its wrapper removed; the rest
+// still draw.
+function placeEntryParts(
+  parent: HTMLElement,
+  input: EntryInput<AnyEntryKind>,
+  deps: Pick<KitDeps, 'sessionId' | 'entryParts' | 'log'>,
+): PlacedPart[] {
+  const placed: PlacedPart[] = [];
+  const parts = deps
+    .entryParts()
+    .filter((part) => part.kinds.includes(input.kind));
+  if (parts.length === 0) {
+    return placed;
+  }
+  const holder = appended(parent, element('div', 'chat-entry-parts'));
+  for (const part of parts) {
+    const wrapper = appended(holder, element('div', 'chat-entry-part'));
+    wrapper.dataset.part = part.id;
+    try {
+      const built = part.build(wrapper, { sessionId: deps.sessionId, input });
+      placed.push({
+        id: part.id,
+        update: built.update?.bind(built),
+        isUpdateFailureLogged: false,
+      });
+    } catch (error) {
+      wrapper.remove();
+      deps.log(`entry part ${part.id} failed: ${errorText(error)}`);
+    }
+  }
+  return placed;
+}
+
+// Runs the part's update with `input`; only its first throw is logged.
+function updateEntryPart(
+  part: PlacedPart,
+  input: EntryInput<AnyEntryKind>,
+  log: PluginLog,
+) {
+  try {
+    part.update?.(input);
+  } catch (error) {
+    if (!part.isUpdateFailureLogged) {
+      part.isUpdateFailureLogged = true;
+      log(`entry part ${part.id} update failed: ${errorText(error)}`);
+    }
+  }
 }
 
 // One permission entry's actions. `draw` takes each later version of the

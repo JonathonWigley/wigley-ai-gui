@@ -13,11 +13,16 @@ import {
   asFake,
   FakeElement,
   fakeWindow,
+  findAll,
   FocusFakeElement,
   installFakeDom,
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
-import type { ChatEntryRenderer, QueuedMessage } from '../contract';
+import type {
+  ChatEntryPart,
+  ChatEntryRenderer,
+  QueuedMessage,
+} from '../contract';
 import { frameAgentMessage } from '../agent-frame';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
@@ -499,15 +504,19 @@ function activityShown(
   );
 }
 
-// A list over `shown`, its layouts, entry renderers, logs, toasts, disposed
-// anchors, timers, a clock whose `time` the test sets, the ids each pending
-// row click pulled back, and the counts of `placeChanged` and `focusChanged`
-// calls.
+// A list over `shown`, in session `s1`, drawing `entryParts` wherever a layout
+// places them, its layouts, entry renderers, logs, toasts, disposed anchors,
+// timers, a clock whose `time` the test sets, the ids each pending row click
+// pulled back, and the counts of `placeChanged` and `focusChanged` calls.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 const TURN_LINE_CLASS = 'chat-turn-line-slot';
 
-function setUpList(shown: ShownLayouts<ChatLayout>, throwsOn?: CommandId) {
+function setUpList(
+  shown: ShownLayouts<ChatLayout>,
+  throwsOn?: CommandId,
+  entryParts: readonly ChatEntryPart[] = [],
+) {
   const logs: string[] = [];
   const pulled: string[] = [];
   const toasts: string[] = [];
@@ -554,6 +563,9 @@ function setUpList(shown: ShownLayouts<ChatLayout>, throwsOn?: CommandId) {
       },
       platform: 'macos',
       state: noLayoutState,
+      sessionId: 's1',
+      entryParts: () => entryParts,
+      log,
       allow: () => undefined,
       deny: () => undefined,
       openImages: () => undefined,
@@ -1020,6 +1032,82 @@ describe('entry list', () => {
 
     expect(list.toggleExpander('gone', 0)).toBe('nothing');
   });
+
+  // Draws `div.fancy` holding the entry parts, with an update that does
+  // nothing, or throws when `updateThrows`.
+  const placesParts =
+    (updateThrows: boolean): AnyBuilder =>
+    (parent, _input, kit) => {
+      const root = kit.el(parent, 'div', 'fancy');
+      kit.entryParts(root);
+      return {
+        element: root,
+        update() {
+          if (updateThrows) {
+            throw new Error('broken update');
+          }
+        },
+      };
+    };
+  const answered: ChatEntry = {
+    ...permission('p1'),
+    answer: { allowed: true, reason: null },
+  };
+
+  it.each([
+    {
+      case: 'a view with an update updates the parts in place',
+      shown: activityShown(
+        fancyLayout({ assistant: placesParts(false) }),
+        'fancy',
+      ),
+      first: assistant('one'),
+      second: assistant('two'),
+      builds: [assistant('one')],
+      updates: [assistant('two')],
+    },
+    {
+      case: 'the default permission view builds the parts again',
+      shown: defaultShown(),
+      first: permission('p1'),
+      second: answered,
+      builds: [permission('p1'), answered],
+      updates: [],
+    },
+    {
+      case: 'a view whose update throws builds the parts again',
+      shown: activityShown(
+        fancyLayout({ permission: placesParts(true) }),
+        'fancy',
+      ),
+      first: permission('p1'),
+      second: answered,
+      builds: [permission('p1'), answered],
+      updates: [],
+    },
+  ])(
+    'redraw_EntryParts_UpdateInPlaceOrBuildAgain: $case',
+    ({ shown, first, second, builds, updates }) => {
+      const built: EntryInput<AnyEntryKind>[] = [];
+      const updated: EntryInput<AnyEntryKind>[] = [];
+      const part: ChatEntryPart = {
+        id: 'counts',
+        kinds: [first.kind],
+        build(_parent, context) {
+          built.push(context.input);
+          return { update: (input) => updated.push(input) };
+        },
+      };
+      const { list, put } = setUpList(shown, undefined, [part]);
+
+      put(first);
+      put(second);
+
+      expect(built).toEqual(builds);
+      expect(updated).toEqual(updates);
+      expect(findAll(asFake(list.element), 'chat-entry-part')).toHaveLength(1);
+    },
+  );
 });
 
 describe('activity lines', () => {

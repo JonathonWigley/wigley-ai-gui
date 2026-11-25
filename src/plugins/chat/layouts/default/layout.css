@@ -285,11 +285,32 @@
   white-space: pre-wrap;
 }
 
-/* Permissions: the tool and its input, then Allow once / Deny or the
-   answer. */
+/* Permissions: other plugins' parts, the tool and its target, the full call
+   folded under an expander, then Allow once / Deny or the answer. */
 .chat-permission-head {
-  font-weight: var(--wg-weight-semibold);
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
   margin-bottom: var(--wg-space-1);
+}
+
+.chat-permission-tool {
+  font-weight: var(--wg-weight-semibold);
+}
+
+.chat-permission-target {
+  color: var(--wg-fg-secondary);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-permission-call .chat-json {
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  white-space: pre-wrap;
 }
 
 /* The composer: other plugins' parts, the activity line, the attached

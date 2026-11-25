@@ -768,17 +768,29 @@ const layout = {
       };
     },
     // No update: an answer builds the entry again, its card losing the
-    // attention edge.
+    // attention edge and its parts built anew.
     permission(parent, input, kit) {
       const entry = root(parent, 'chat-entry chat-permission');
       const prompt = kit.edgeCard(
         entry,
         input.answer === null ? 'attention' : null,
       );
-      prompt.append(
-        el('div', 'chat-permission-head', `Allow ${input.toolName}?`),
-      );
-      kit.json(prompt, input.input);
+      kit.entryParts(prompt);
+      const head = el('div', 'chat-permission-head');
+      head.append(el('span', 'chat-permission-tool', input.toolName));
+      if (input.summary !== '') {
+        head.append(el('span', 'chat-permission-target', input.summary));
+      }
+      prompt.append(head);
+      /** @type {HTMLElement | null} */
+      let call = null;
+      kit.expander(prompt, 'Full call', () => {
+        if (call === null) {
+          call = el('div', 'chat-permission-call');
+          kit.json(call, input.input);
+        }
+        return call;
+      });
       kit.permissionActions(prompt);
       return { element: entry };
     },

@@ -50,6 +50,7 @@ import {
   type ChatMount,
   type ChatPlace,
   chatMoveFocusCommand,
+  type ChatEntryPart,
   chatOpenImageCommand,
   chatPullBackMessageCommand,
   chatRemoveImageAtCommand,
@@ -250,7 +251,9 @@ export type ChatTabScope = 'chat' | 'hub';
 // row or an attached image's remove, each naming the tab's session; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with, and `renderers` the plugins' entry renderers, which
-// draw an entry whose kind the user's layout does not name; `paths` names each
+// draw an entry whose kind the user's layout does not name; `entryParts` holds
+// the parts other plugins draw inside entries, wherever a layout places them;
+// `paths` names each
 // tab by its project folder, and with
 // `homeDir` shows that folder in the hub's Session section. `placeOf` hands
 // each tab made its session's place: the tab puts the saved draft, images and
@@ -292,6 +295,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   runKey<A>(key: CommandKey<A>, arg: A): void;
   layouts: ChatLayouts;
   renderers: Pick<EntryRenderers, 'pick' | 'onChanged'>;
+  entryParts: Pick<PartStore<ChatEntryPart>, 'parts' | 'onChanged'>;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts' | 'onChanged'>;
   sideParts: Pick<PartStore<ChatSidePart>, 'onChanged'>;
@@ -457,6 +461,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }),
     deps.renderers.onChanged(() => {
       toastedKinds.clear();
+      for (const tab of tabs.values()) {
+        tab.entries.rebuild(tab.state.entries);
+      }
+    }),
+    deps.entryParts.onChanged(() => {
       for (const tab of tabs.values()) {
         tab.entries.rebuild(tab.state.entries);
       }
@@ -1330,6 +1339,9 @@ function createTab(
       commands: deps.commands,
       platform: deps.platform,
       state: deps.state,
+      sessionId,
+      entryParts: () => deps.entryParts.parts(),
+      log: deps.log,
       allow: (entry) =>
         deps.runKey(chatAllowEntryCommand, { sessionId, entryId: entry.id }),
       deny: (entry) =>

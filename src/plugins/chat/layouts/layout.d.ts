@@ -74,10 +74,13 @@ export interface ToolInput {
   result: { text: string; isError: boolean } | null;
   raw: unknown[];
 }
+// `summary` is the call's target line, the same text a tool entry shows (a Bash command's first line, an edited
+// file's path); empty when the tool has none.
 export interface PermissionInput {
   kind: 'permission';
   id: string;
   toolName: string;
+  summary: string;
   input: unknown;
   answer: { allowed: boolean; reason: string | null } | null;
   raw: unknown[];
@@ -333,6 +336,12 @@ export interface ChatKit extends BaseKit {
   // Allow once / Deny with their keys beside them (anchors the core draws); Deny opens the reason box. Draws the
   // answer instead once the entry carries one; the part keeps itself up to date as the entry's answer arrives.
   permissionActions(parent: HTMLElement): HTMLElement;
+  // `div.chat-entry-parts`, holding one `div.chat-entry-part` (`data-part="<id>"`) per part other plugins added
+  // for this entry's kind, in the order they were added, each built for the entry and its session; appends nothing
+  // when no part draws in the kind. Call it once, where the parts go: a layout that leaves it out shows no parts. A
+  // part that throws is logged and draws nothing. A second call throws `<kind> entry placed entry parts twice`, so
+  // the entry draws with `default`. A view's `update` updates the parts after it; a view drawn again builds them again.
+  entryParts(parent: HTMLElement): void;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.
   // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.
   // Call it again in `update` for the entry's later images.

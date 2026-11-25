@@ -1,6 +1,6 @@
 # 02 — Chat entry parts and the redrawn permission card
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `addEntryPart` seam and `kit.entryParts` that 05 consumes
 Wave: 2 · Depends on: 01

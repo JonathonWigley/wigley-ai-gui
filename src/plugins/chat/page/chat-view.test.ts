@@ -32,6 +32,7 @@ import type { ChatLayout } from '../layouts/layout';
 import {
   chatCommandsSlot,
   type ChatComposerPart,
+  type ChatEntryPart,
   chatControlsSlot,
   chatEntriesSlot,
   type ChatFocus,
@@ -152,7 +153,7 @@ const returnedTwo: ReturnedMessage = {
 // `sessionRested` message. `box` is the one tab's box text, null before a tab
 // mounts, `tab` its element, `tabElements` each session's tab element, `invoked`
 // each call to main, `activities` each row activity word set, and `toasts` each
-// toast. `sideParts` and `composerParts` are the view's part stores, `layouts` its
+// toast. `sideParts`, `composerParts` and `entryParts` are the view's part stores, `layouts` its
 // chat layouts, `removeSession` closes a session's tab as the sessions plugin
 // does, and `setActive` names the focused pane's session. `keyCalls` records
 // each `setScope`, `setResizeTarget` and `setFocusTarget` in order, a
@@ -209,6 +210,7 @@ function mounted(
   const sideTabs: SideTab[] = [];
   const sideParts = createPartStore<ChatSidePart>();
   const composerParts = createPartStore<ChatComposerPart>();
+  const entryParts = createPartStore<ChatEntryPart>();
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
       listeners.set(message, listener);
@@ -392,6 +394,11 @@ function mounted(
       onChanged: (listener: () => void) =>
         counted('renderers', renderers.onChanged(listener)),
     },
+    entryParts: {
+      ...entryParts,
+      onChanged: (listener: () => void) =>
+        counted('entryParts', entryParts.onChanged(listener)),
+    },
     composerParts: {
       ...composerParts,
       onChanged: (listener: () => void) =>
@@ -492,6 +499,7 @@ function mounted(
     renderers,
     sideParts,
     composerParts,
+    entryParts,
     liveSubscriptions,
     invoked,
     keyRuns,
@@ -792,6 +800,64 @@ describe('mountChatView entry renderers', () => {
 
     expect(withRenderer).toBe('plugin');
     expect(drawn()).toBe('chat-entry chat-raw');
+  });
+});
+
+describe('mountChatView entry parts', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const PERMISSION: ChatEntry = {
+    kind: 'permission',
+    id: 'p1',
+    at: 1000,
+    toolName: 'Bash',
+    input: { command: 'ls' },
+    summary: 'ls',
+    answer: null,
+    raw: [],
+  };
+
+  // A permission part that records the session id of each build.
+  const recordingPart = (id: string, sessions: string[]): ChatEntryPart => ({
+    id,
+    kinds: ['permission'],
+    build(_parent, context) {
+      sessions.push(context.sessionId);
+      return {};
+    },
+  });
+
+  it('entryParts_AddAndDispose_RedrawsEveryTabsEntries', () => {
+    const mount = mounted();
+    mount.open(stateOf([], { entries: [PERMISSION] }));
+    const wrapperIds = () =>
+      findAll(mount.tab.element!, 'chat-entry-part').map(
+        (wrapper) => wrapper.dataset.part,
+      );
+    expect(wrapperIds()).toEqual([]);
+
+    const added = mount.entryParts.add(recordingPart('review', []));
+    const withPart = wrapperIds();
+    added.dispose();
+
+    expect(withPart).toEqual(['review']);
+    expect(wrapperIds()).toEqual([]);
+  });
+
+  it('entryParts_Build_GetsEachTabsOwnSessionId', () => {
+    const mount = mounted();
+    mount.pageLoad([
+      stateOf([], { sessionId: 's1', entries: [PERMISSION] }),
+      stateOf([], { sessionId: 's2', entries: [PERMISSION] }),
+    ]);
+    const sessions: string[] = [];
+
+    mount.entryParts.add(recordingPart('review', sessions));
+
+    expect([...sessions].sort()).toEqual(['s1', 's2']);
   });
 });
 
@@ -2349,6 +2415,7 @@ describe('mountChatView dispose', () => {
   it.each([
     'layouts',
     'renderers',
+    'entryParts',
     'composerParts',
     'statusParts',
     'sideParts',

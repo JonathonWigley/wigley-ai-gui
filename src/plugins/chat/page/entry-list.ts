@@ -1550,8 +1550,9 @@ function buildSlot(
 
 // The entry's draw is picked again unless the slot draws with the bundled
 // default; a pick that changed draws the entry anew with the new one. Else a
-// view with an update runs it after the kit's own parts updated; a view with
-// none is drawn again, its new expanders opening as the old ones were. An
+// view with an update runs it after the kit's own parts updated, then the
+// entry parts' updates; a view with none is drawn again, its new expanders
+// opening as the old ones were and its entry parts built anew. An
 // update that throws from a user layout, a renderer or a live default is
 // logged under the name of what the slot drew with, and the slot is drawn with
 // the bundled default layout from then on; the bundled default's is logged and
@@ -1572,6 +1573,7 @@ function redrawSlot(
   if (view?.update !== undefined && isSameEntryDraw(picked, slot.picked)) {
     try {
       view.update(input);
+      slot.kit.updateParts(input);
       return;
     } catch (error) {
       if (slot.isBundledView) {
@@ -1673,7 +1675,7 @@ function buildEntry(
           layout === defaultLayout ? defaultKind : builderKind
         ] as AnyBuilder | undefined,
       build(builder, parent, rollback) {
-        const kit = createEntryKit(entry, deps.kit);
+        const kit = createEntryKit(entry, input, deps.kit);
         rollback.recordBox(() => kit.dispose());
         const view = builder(parent, input, kit.kit);
         return { element: view.element, view, kit };
@@ -1692,7 +1694,7 @@ function buildEntry(
   } catch (error) {
     deps.log(`default layout ${entry.kind} entry failed: ${errorText(error)}`);
     slot.append(element('div', 'chat-entry chat-raw', entry.kind));
-    const kit = createEntryKit(entry, deps.kit);
+    const kit = createEntryKit(entry, input, deps.kit);
     return {
       view: null,
       kit,

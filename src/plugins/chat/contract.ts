@@ -1005,6 +1005,9 @@ export type CompletionRowDraw = (
 // else with the latest-added renderer whose `kind` matches and whose `match`
 // passes, else with `default`; adding or disposing one redraws every Chat
 // tab's entries.
+// `addEntryPart` adds a part drawn inside entries of its `kinds` until its
+// `dispose`, wherever a layout calls `kit.entryParts`; it throws on an id
+// already added, and adding or disposing one redraws every Chat tab's entries.
 // `showHubForNow` shows the session hub in every Chat tab and expands the
 // section of side part `sectionId` until the returned handle's dispose,
 // without writing `uiState`. Holds stack: the hub stays shown while any hold
@@ -1035,6 +1038,7 @@ export interface ChatPageExports {
   addEntryRenderer<K extends AnyEntryKind>(
     renderer: ChatEntryRenderer<K>,
   ): Disposable;
+  addEntryPart<K extends AnyEntryKind>(part: ChatEntryPart<K>): Disposable;
   showHubForNow(sectionId: string): Disposable;
 }
 
@@ -1048,6 +1052,27 @@ export interface ChatEntryRenderer<K extends AnyEntryKind = AnyEntryKind> {
   kind: K;
   match?(input: EntryInput<K>): boolean;
   build: EntryBuilder<K>;
+}
+
+// What a part's `build` is handed: the session the entry belongs to, and
+// the entry's input as the layout's builder gets it.
+export interface ChatEntryPartContext<K extends AnyEntryKind> {
+  sessionId: string;
+  input: EntryInput<K>;
+}
+
+// Draws inside entries of `kinds`, a known kind or a harness's own, into
+// its own wrapper. `update`, when returned, runs with each later version of
+// the entry after the entry's view updated in place; an entry drawn again
+// builds the part again. A `build` that throws is logged and draws nothing;
+// the entry still draws.
+export interface ChatEntryPart<K extends AnyEntryKind = AnyEntryKind> {
+  id: string;
+  kinds: readonly K[];
+  build(
+    parent: HTMLElement,
+    context: ChatEntryPartContext<K>,
+  ): { update?(input: EntryInput<K>): void };
 }
 
 // A session's chat view drawn into another plugin's element by `mountChat`:
