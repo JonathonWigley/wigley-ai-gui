@@ -728,9 +728,7 @@ describe('task tools', () => {
       );
 
       if (saved === null) {
-        expect(result.content[0]?.text).toBe(
-          'attended must be true or false.',
-        );
+        expect(result.content[0]?.text).toBe('attended must be true or false.');
         expect(save).not.toHaveBeenCalled();
       } else {
         expect(save).toHaveBeenCalledExactlyOnceWith({
