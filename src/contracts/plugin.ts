@@ -520,11 +520,12 @@ export interface ModePlace {
 // the activity bar, which the `shell.activityBar` setting overrides; a mode
 // without it joins a last top group. `showCommand` is the plugin's own command
 // id (unqualified, as `id` is) that shows the mode; the bar shows its key.
-// `sideBar`, when set, shows in the window's side bar while this mode shows. `shown` runs each time this mode becomes the
-// shown one, the first mode's at its `add` included; the mode's plugin sets
-// its base key scope there, so a hidden view never keeps the scope. `hidden`
-// runs each time another mode's `show` hides this one, after its element and
-// side bar are hidden and before the other mode's `shown`.
+// `sideBar`, when set, shows in the window's side bar while this mode shows.
+// `shown` runs each time this mode becomes the shown one, the first mode's at
+// its `add` included; the mode's plugin sets its base key scope there, so a
+// hidden view never keeps the scope. `hidden` runs each time another mode's
+// `show` hides this one, after its element and side bar are hidden and before
+// the other mode's `shown`.
 // The window is narrow while the side bar has no room beside the content:
 // below 680 px wide, or with the shell's left bar crowding it (the left bar
 // would lie over a side bar beside it at its least width); it narrows and
@@ -581,17 +582,18 @@ export interface Mode {
 // is wide it hides or shows the side bar beside the content, while narrow (as
 // `Mode` defines it, the left bar's crowding included) it opens or closes it
 // over the content; each mode keeps its own choice, and a hidden mode's toggle
-// applies at its next show. It throws `Mode "<id>" has no side bar` on a mode without one. `picked` tells
-// the core the user picked something in the mode's side bar: in a narrow window
-// it closes the side bar's overlay, logging `side bar hidden`, only when the
-// shown mode's overlay was open; a hidden mode's overlay closes for its next
-// show. Otherwise it does nothing. `sideBarShown` is true while the mode shows
-// and its side bar lies beside or over the content. `dispose` takes the mode's
-// element, side bar and activity item out of the window, without calling its
-// `hidden`, and frees its id; a disposed shown mode gives way to the remaining
-// mode whose id was first added earliest, as `show` would show it, and
-// `onChanged` listeners hear its id, or `''` when no mode remains. Once disposed, every member does nothing, and `isShown` and
-// `sideBarShown` return false.
+// applies at its next show. It throws `Mode "<id>" has no side bar` on a mode
+// without one. `picked` tells the core the user picked something in the mode's
+// side bar: in a narrow window it closes the side bar's overlay, logging
+// `side bar hidden`, only when the shown mode's overlay was open; a hidden
+// mode's overlay closes for its next show. Otherwise it does nothing.
+// `sideBarShown` is true while the mode shows and its side bar lies beside or
+// over the content. `dispose` takes the mode's element, side bar and activity
+// item out of the window, without calling its `hidden`, and frees its id; a
+// disposed shown mode gives way to the remaining mode whose id was first added
+// earliest, as `show` would show it, and `onChanged` listeners hear its id, or
+// `''` when no mode remains. Once disposed, every member does nothing, and
+// `isShown` and `sideBarShown` return false.
 export interface ModeHandle extends Disposable {
   show(): void;
   isShown(): boolean;
@@ -616,13 +618,13 @@ export interface ModeHandle extends Disposable {
 // ties between modes the bar would place alike, so an `add` after a `dispose`
 // puts the item back where it was, its count null again. `shown` is the shown
 // mode's id and throws before any `add` and once every mode is disposed. A
-// `show` that changes the shown mode hides the old mode's element and side bar, calls
-// the old mode's `hidden`, unhides the new mode's element and side bar, marks
-// it in the activity bar, lays out its side bar, shows its context, calls its
-// `shown` and then `sideBarHidden` or `sideBarOpenedOver` by its side bar's
-// layout, then `onChanged` listeners hear the new id, until their `dispose`.
-// `stepTab` asks the shown mode's `stepTab` and returns its answer; false with
-// no mode shown or a shown mode without one.
+// `show` that changes the shown mode hides the old mode's element and side
+// bar, calls the old mode's `hidden`, unhides the new mode's element and side
+// bar, marks it in the activity bar, lays out its side bar, shows its context,
+// calls its `shown` and then `sideBarHidden` or `sideBarOpenedOver` by its side
+// bar's layout, then `onChanged` listeners hear the new id, until their
+// `dispose`. `stepTab` asks the shown mode's `stepTab` and returns its answer;
+// false with no mode shown or a shown mode without one.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;

@@ -145,13 +145,15 @@ export function liveKeysFor(
 // `showCommand`) are qualified by it. Its areas are the title bar, panel,
 // status bar, left bar, right bar and overlay: they leave out `main`, which
 // only the mode registry fills, and the activity bar and side bar, which the
-// core draws from the modes. Its settings are its own entry in the config's plugin settings, and its ui state
-// and `services.log` are scoped to its id. Its layout shows run under its id,
-// and each show's `draw` draws with a base kit made from this API's own
-// markdown, key hints, commands, platform, layout state and log.
+// core draws from the modes. Its settings are its own entry in the config's
+// plugin settings, and its ui state and `services.log` are scoped to its id.
+// Its layout shows run under its id, and each show's `draw` draws with a base
+// kit made from this API's own markdown, key hints, commands, platform, layout
+// state and log.
 // Every registration it makes through the API is filed in
 // `deps.registrations`. Editors, timers, pane targets and the transparency
-// override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
+// override are held per plugin and filed as one entry each, so a destroyed
+// editor or a run timer leaves nothing in the store;
 // `services.picker` builds lists under its scopes, log, editor and overlay,
 // owned by its id for the picker commands; its demo steps are filed with its
 // registrations;

@@ -187,4 +187,5 @@ Review base: c22d3488
 - The activity bar uses overflow-x: hidden so the 40px icon column shows no scrollbar — a wide item's ellipsis clips at the bar edge if wrong — group 02 · group 02
 - The page-part harness records counts and gains modeCount(id), like modeContext — the Inbox test had no mode fake of its own — group 03 · group 03
 ### Review rounds
+- Round 1: review of c22d3488..9dfcef67 — NEEDS FIXES (1 Important: peek/pin transitions untested; 8 Minor). Fixes bfbeb6bf (standard, determined docs/tests) and f2bc2e4d (hard: Pin click keeps a peek, peek-delay grammar, no bar scrollbar, transition rows). Tier: Medium — the Pin click handling and the delay grammar change behaviour; re-review correctness on the fix commits
 ### Test gate

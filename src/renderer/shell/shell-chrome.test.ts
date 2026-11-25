@@ -519,6 +519,20 @@ describe('mountShellChrome', () => {
     ).toEqual([true, true, true, false]);
   });
 
+  // Breaks if the chrome stops marking the Pin's slot, so a click on the Pin
+  // button ends a peek, or marks a mode item's slot, so its click keeps one.
+  it('addMode_WithThePin_MarksOnlyThePinSlotToKeepAPeek', () => {
+    const { chrome, activityBar } = mountChrome();
+    const bar = shownBarText();
+    chrome.setLayouts(bar.shown);
+    chrome.addMode(mode('sessions.sessions', 'Sessions'), handle());
+    const pinSlot = slotAligned(activityBar, 'end');
+    const itemSlot = slotAligned(activityBar, 'start');
+
+    expect(pinSlot.children[0]?.closest('[data-keeps-peek]')).toBe(pinSlot);
+    expect(itemSlot.children[0]?.closest('[data-keeps-peek]')).toBeNull();
+  });
+
   // Breaks if a mode added again appends its item at the end of the bar: a
   // restarted plugin's icon moves.
   it.each([

@@ -72,8 +72,9 @@ Decisions:
   - `pointerenter` on a bar that is not expanded arms the timer; after `--wg-activitybar-peek-delay` (read from the
     computed style when the timer arms, through the injected `timers`; `ms` and `s` parse, anything else falls back
     to 300, and 0 peeks at once) the bar peeks and logs `activity bar peeked`. `pointerleave` clears the timer and
-    ends the peek. A click on an item or the Pin button ends the peek, which re-arms only on a fresh `pointerenter`.
-    Hover on an applied pin does nothing.
+    ends the peek. A click on an item ends the peek, which re-arms only on a fresh `pointerenter`. A click on the Pin
+    button does not end it (its slot carries `data-keeps-peek`): in a wide window the pin applies and ends the peek
+    through `applyPin`; in a narrow window the peek stays. Hover on an applied pin does nothing.
   - The grid's first column is a width the shell sets (a root variable `shell.css` reads), `activitybar-width` while
     not pinned, so the bar's in-flow box never changes on a peek. The peeking bar is `position: absolute` in its
     cell, filling its rows, `--wg-activitybar-expanded-width` wide, overflow visible on x, above the over side bar,
