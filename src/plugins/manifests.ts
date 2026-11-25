@@ -26,6 +26,7 @@ import { keysManifest } from './keys/manifest';
 import { liveViewManifest } from './live-view/manifest';
 import { markdownBlocksManifest } from './markdown-blocks/manifest';
 import { notesManifest } from './notes/manifest';
+import { permissionReviewManifest } from './permission-review/manifest';
 import { practiceManifest } from './practice/manifest';
 import { primerManifest } from './primer/manifest';
 import { schedulingManifest } from './scheduling/manifest';
@@ -71,6 +72,7 @@ export const builtInManifests = [
   agentStripManifest,
   agentSkillsManifest,
   contextSourcesManifest,
+  permissionReviewManifest,
   liveViewManifest,
   chatroomManifest,
   keysManifest,

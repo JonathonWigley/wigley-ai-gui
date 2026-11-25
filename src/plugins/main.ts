@@ -24,6 +24,7 @@ import { galleryMainPart } from './gallery/main/start';
 import { keysMainPart } from './keys/main/start';
 import { liveViewMainPart } from './live-view/main/start';
 import { notesMainPart } from './notes/main/start';
+import { permissionReviewMainPart } from './permission-review/main/start';
 import { practiceMainPart } from './practice/main/start';
 import { primerMainPart } from './primer/main/start';
 import { schedulingMainPart } from './scheduling/main/start';
@@ -66,6 +67,7 @@ export const mainParts: readonly MainPart[] = [
   agentStripMainPart,
   agentSkillsMainPart,
   contextSourcesMainPart,
+  permissionReviewMainPart,
   liveViewMainPart,
   chatroomMainPart,
   docsMainPart,
