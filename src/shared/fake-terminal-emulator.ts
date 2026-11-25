@@ -11,7 +11,11 @@ export interface FakeTerminalScreenRecord {
   readonly options: TerminalScreenOptions;
   readonly screen: TerminalScreen;
   written: string[];
-  palettes: { palette: TerminalPalette; fontFamily: string; fontSize: number }[];
+  palettes: {
+    palette: TerminalPalette;
+    fontFamily: string;
+    fontSize: number;
+  }[];
   fits: number;
   focuses: number;
   resets: number;

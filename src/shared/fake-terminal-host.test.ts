@@ -16,7 +16,14 @@ const KILLED: TerminalExit = { code: null, signal: 1, error: null };
 const ENDED: TerminalExit = { code: 1, signal: null, error: null };
 
 function request(id: string): TerminalSpawn {
-  return { id, command: '/bin/zsh', args: ['-l'], cwd: '/work', cols: 80, rows: 24 };
+  return {
+    id,
+    command: '/bin/zsh',
+    args: ['-l'],
+    cwd: '/work',
+    cols: 80,
+    rows: 24,
+  };
 }
 
 // Events that record what they hear.
@@ -124,7 +131,10 @@ describe('createFakeTerminalHost', () => {
 
   it.each([
     { name: 'a running shell', hold: (_process: TerminalProcess) => {} },
-    { name: 'an ending shell', hold: (process: TerminalProcess) => process.kill() },
+    {
+      name: 'an ending shell',
+      hold: (process: TerminalProcess) => process.kill(),
+    },
     {
       name: 'a detached shell',
       hold: (process: TerminalProcess) => process.detach(),
@@ -140,7 +150,11 @@ describe('createFakeTerminalHost', () => {
     await afterMicrotask();
 
     expect(second.closed).toEqual([
-      { code: null, signal: null, error: 'a terminal with id s1 already exists' },
+      {
+        code: null,
+        signal: null,
+        error: 'a terminal with id s1 already exists',
+      },
     ]);
     expect(host.terminals).toHaveLength(1);
     expect(host.terminals[0].writes).toEqual([]);
@@ -244,13 +258,16 @@ describe('createFakeTerminalHost', () => {
   it.each([
     { name: 'an unknown id', id: 'zz' },
     { name: 'a shell closed by exit', id: 's1' },
-  ])('attach resolves null for an id with no open shell: $name', async ({ id }) => {
-    const { host, process } = await prompted();
-    process.write('exit\r');
-    await afterMicrotask();
+  ])(
+    'attach resolves null for an id with no open shell: $name',
+    async ({ id }) => {
+      const { host, process } = await prompted();
+      process.write('exit\r');
+      await afterMicrotask();
 
-    expect(await host.attach(id, heard().events)).toBeNull();
-  });
+      expect(await host.attach(id, heard().events)).toBeNull();
+    },
+  );
 
   it('keeps the last TERMINAL_REPLAY_LIMIT code units as the replay', () => {
     const host = setUp();
