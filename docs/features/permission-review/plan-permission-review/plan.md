@@ -216,7 +216,7 @@ Critical path: 01 → 04 → 05 → 06
 - [x] [permission-review main: watcher, ask, reviews slot](04-review-main.md) — after 01, 03
 
 ### Wave 3
-- [ ] [permission-review page: verdict part and layout](05-review-page.md) — after 02, 03, 04
+- [x] [permission-review page: verdict part and layout](05-review-page.md) — after 02, 03, 04
 
 ### Wave 4
 - [ ] [Doc re-read](06-doc-re-read.md) — after 01–05
@@ -231,6 +231,7 @@ Review base: 5665fe5c
 - 03 · deep · a4479b69, 9b8741f0 · diff read: every Produces present (ConfirmSubject, ConfirmRequest.subject, OpenConfirm, formsConfirmsSlot, ConfirmTracker, createConfirmTracker, confirmRequest subject); wave typecheck passes after the demo-steps.test literal fix on the same rung · concerns: formatted by hand without oxfmt; the failed row relies on the tool session's end() rejecting the open; design.md says 'when the round finishes' and AGENTS.md calls subject 'optional', both left for 06
 - 02 · hard · 2c084001, b4773ef2 · diff read: addEntryPart, ChatEntryPart(Context), kit.entryParts, PermissionInput.summary present; wave typecheck and lint pass after test-typing fix on the same rung · concerns: entryParts returns void though the ChatKit header says every part returns what it appended; the entry-parts onChanged keeps toastedKinds
 - 04 · deep · a61e9b8a, 2157d0b2 · diff read: permissionReviewsSlot, Review, chatReviewKey, confirmReviewKey, watcher, findReviewer present; wave typecheck and lint pass after themeTokens fix on the same rung; lead ran the repo's oxfmt --write on review-requests.ts and forms start.test.ts (tooling) · concerns: until 05 the layout setting names no layouts and the demo step has no page half; registerDemoSteps' Disposable is not kept; key parsing misreads a chat session id holding '/' or named confirm
+- 05 · deep · 151bfcaf · diff read: verdict entryPart and cardPart, VerdictInput/VerdictPart/Layout, page part registered in page.ts, layout types registered in main; typecheck and lint pass; lead ran the repo's oxfmt --write on four files (tooling) · concerns: holders are swept only on a later build of the same key; a double build before connect drops the first; layouts/design.md lists no permission-review owner (06); no Space z l preview sample; the self-test step's alsoExpect assumes page log lines carry the [permission-review] prefix
 ### Contract changes
 ### Rulings
 - 01: withStderr moved to claude-launch.ts with exitText and cliSpawnError, shared by the ask rather than copied · group 01
@@ -239,5 +240,8 @@ Review base: 5665fe5c
 - 02: entry-list's throwing-update row uses a permission entry, since the bundled default assistant builder places no parts · group 02
 - 04: the 60 s timer writes the timed-out review itself, then aborts; one isSettled flag silences any later settle · group 04
 - 04: a chat replace drops only reviews whose entry is missing from the replacement; delete changes drop nothing (sessions.ended covers it) · group 04
+- 05: setLayouts rebuilds every connected holder through the new layout rather than calling update · group 05
+- 05: a card holder reads null unless its round is in forms.confirms, so both parts share one redraw path · group 05
+- 05: manifest page dependsOn gains sessions for the demo step's activate · group 05
 ### Review rounds
 ### Test gate

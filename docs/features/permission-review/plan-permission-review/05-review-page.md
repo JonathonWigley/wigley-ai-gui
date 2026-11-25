@@ -1,6 +1,6 @@
 # 05 — permission-review page: verdict part and layout
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · its parts live through chat's and forms' redraw lifecycles with no dispose, held by connection, across two async slots
 Wave: 3 · Depends on: 02, 03, 04
@@ -126,3 +126,5 @@ Done when: `npm run typecheck` passes; `npm run lint` passes (layers, styles); t
 Commit: one commit for the group, by pathspec: `git commit -m "permission-review page: verdict part in chat's permission entries and forms' confirm card, drawn through its own layout" -- src/plugins/permission-review src/plugins/page.ts` (the folder pathspec covers 04's `main/start.ts`, `manifest.ts` and `main/selftest-script.ts` edits)
 
 ## Proof
+
+Commit 151bfcaf · proof: diff read: verdict entryPart and cardPart, VerdictInput/VerdictPart/Layout, page part registered in page.ts, layout types registered in main; typecheck and lint pass; lead ran the repo's oxfmt --write on four files (tooling) · concerns: holders are swept only on a later build of the same key; a double build before connect drops the first; layouts/design.md lists no permission-review owner (06); no Space z l preview sample; the self-test step's alsoExpect assumes page log lines carry the [permission-review] prefix
