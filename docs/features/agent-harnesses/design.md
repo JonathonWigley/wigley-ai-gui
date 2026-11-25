@@ -96,8 +96,9 @@ or output format. Every decision below serves that.
   tools, MCP servers, settings, slash commands and session saving. Each flag keeps something that is not the call
   (a project's `CLAUDE.md`, a hook, a skill) away from the model. The full list, with the reason for each, is in
   `docs/features/permission-review/design.md` § The one-shot ask.
-- The ask runs with the profile's `CLAUDE_CONFIG_DIR`, so it signs in with the session's own account, in an empty
-  folder of its own inside the OS temp folder, so no project file is near it.
+- The ask runs with the profile's `CLAUDE_CONFIG_DIR`, so it signs in with the session's own account, in a folder of
+  its own inside the OS temp folder, made per ask with a random name and holding only the instructions file it passes
+  with `--system-prompt-file`, so no project file is near it.
 - The fake harness answers `ask` with a scripted reply, `setAskReply(text)`, and fails the next one with
   `failNextAsk(message)`, so no test or demo spawns a model.
 

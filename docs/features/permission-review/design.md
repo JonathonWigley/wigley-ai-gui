@@ -36,7 +36,8 @@ off, the permission card still draws its target line and its folded full call, j
 
 - **Chat's permission entries.** The main part watches chat's `chat.entries` list slot. A `put` of a `permission`
   entry whose `answer` is null and whose id the plugin has not seen for that session starts a review. A `replace`
-  (a history restore or a clear) starts none: the entries it carries are answered or cancelled. The session's
+  (a history restore, a clear or a session opening) reviews any unanswered permission entry it holds that the plugin
+  has not seen for that session; the entries it carries are otherwise answered or cancelled. The session's
   project folder, harness and profile name come from chat's `chat.session` slot. The profile's config folder comes
   from that harness's profiles in the registry.
 - **agent-commands' confirm rounds.** A risky command that `run_command` runs opens forms' `confirm` round.
@@ -58,7 +59,8 @@ off, the permission card still draws its target line and its folded full call, j
   summary) uses the same call.
 - Model names stay inside the adapter. Claude Code reads its `claude-code.askModel` setting, default `sonnet`.
 - Claude Code runs `claude -p` with the prompt on stdin and these flags:
-  - `--system-prompt <instructions>` replaces Claude Code's own system prompt.
+  - `--system-prompt-file <path>` replaces Claude Code's own system prompt with the instructions, written to a file
+    in the ask's folder, so no argument holds a line break and a Windows `.cmd` or `.bat` `claude` launches.
   - `--tools ""` turns off every built-in tool.
   - `--strict-mcp-config`, with no `--mcp-config`, loads no MCP server.
   - `--setting-sources ""` loads no user, project or local settings, and so no hooks, plugins or `CLAUDE.md`.
@@ -67,8 +69,12 @@ off, the permission card still draws its target line and its folded full call, j
   - `--output-format json` gives one result object.
   - `--model <askModel>`.
 - The ask runs with the profile's `CLAUDE_CONFIG_DIR`, as every one-shot does, so it signs in with the session's own
-  account. It runs in an empty folder of its own, `claude-code-ask` inside the first OS temp folder, made before
-  each ask and reused, so no project file is near it. With no temp folder (the self-test), the ask rejects.
+  account. Each ask runs in a folder of its own, `claude-code-ask-<random>` inside the first OS temp folder, made
+  before the spawn and holding only the instructions file, so no project file is near it and no other user can make
+  the folder first. The instructions file is deleted once the ask settles, however it settles; a failed delete is
+  logged and leaves the outcome alone. The folder stays: the app's `Files` seam has no folder removal. With no temp
+  folder (the self-test), the ask rejects.
+- The reply is the JSON object on the last non-empty line of stdout, so a line the CLI prints before it is skipped.
 - **Checked at plan time, 2026-11-25:** with these flags and the personal profile, the model said no text mentioned
   the profile's `CLAUDE.md` content. Without `--setting-sources ""` it said yes. Subscription sign-in worked without
   user settings. One review cost about $0.006 on `sonnet`.

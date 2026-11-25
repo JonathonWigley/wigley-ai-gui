@@ -4,34 +4,46 @@ import type { SpawnExit } from '../../../contracts/processes';
 import { FakeProcesses, type FakeSpawn } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import { programNotFoundMessage } from '../../../shared/program-lookup';
+import {
+  programNotFoundMessage,
+  shimLaunch,
+} from '../../../shared/program-lookup';
 import { askClaude, type ClaudeAskDeps } from './claude-ask';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 const SUCCESS_LINE = '{"type":"result","is_error":false,"result":"hello"}';
+const SUCCESS_EXIT: SpawnExit = { code: 0, signal: null, startError: null };
+const ASK_FOLDER = '/tmp/t/claude-code-ask-u1';
+const INSTRUCTIONS_FILE = `${ASK_FOLDER}/instructions.md`;
 
 function askDeps(overrides: Partial<ClaudeAskDeps> = {}) {
   const processes = new FakeProcesses();
   const files = createMemoryFiles();
+  const logs: string[] = [];
   const deps: ClaudeAskDeps = {
     command: async () => ({ command: '/bin/claude', args: ['--lead'] }),
     askModel: () => 'sonnet',
     tempFolders: ['/tmp/t'],
+    randomUuid: () => 'u1',
     env: { HOME: '/Users/u', CLAUDECODE: '1' },
     homeDir: '/Users/u',
     paths: posixPaths,
+    log: (source, message) => logs.push(`[${source}] ${message}`),
     files,
     processes,
     ...overrides,
   };
-  return { deps, processes, files };
+  return { deps, processes, files, logs };
 }
 
-function askOf(signal: AbortSignal = new AbortController().signal): AgentAsk {
+function askOf(
+  signal: AbortSignal = new AbortController().signal,
+  instructions = 'Be brief.',
+): AgentAsk {
   return {
     profileDir: '~/.claude-personal',
-    instructions: 'Be brief.',
+    instructions,
     prompt: 'Tool: Bash',
     signal,
   };
@@ -77,8 +89,8 @@ describe('askClaude', () => {
         args: [
           '--lead',
           '-p',
-          '--system-prompt',
-          'Be brief.',
+          '--system-prompt-file',
+          INSTRUCTIONS_FILE,
           '--tools',
           '',
           '--strict-mcp-config',
@@ -90,7 +102,7 @@ describe('askClaude', () => {
           'json',
           ...modelArgs,
         ],
-        cwd: '/tmp/t/claude-code-ask',
+        cwd: ASK_FOLDER,
         env: {
           HOME: '/Users/u',
           CLAUDE_CONFIG_DIR: '/Users/u/.claude-personal',
@@ -98,23 +110,66 @@ describe('askClaude', () => {
         written: ['Tool: Bash'],
         isInputEnded: true,
       });
-      expect(await files.stat('/tmp/t/claude-code-ask')).toMatchObject({
-        isFolder: true,
-      });
+      expect(await files.read(INSTRUCTIONS_FILE)).toBe('Be brief.');
     },
   );
 
-  it('resolves with the result text', async () => {
+  it('passes multi-line instructions through a Windows .cmd shim', async () => {
+    const COM_SPEC = 'C:\\Windows\\system32\\cmd.exe';
+    const { deps, processes, files } = askDeps({
+      command: async () => ({ command: 'C:\\bin\\claude.cmd', args: [] }),
+    });
+
+    void askClaude(deps, askOf(undefined, 'Be brief.\nReply in JSON.'));
+    await settle();
+
+    const [spawn] = processes.spawns;
+    expect(() =>
+      shimLaunch(spawn.command, spawn.args, 'windows', COM_SPEC),
+    ).not.toThrow();
+    expect(await files.read(INSTRUCTIONS_FILE)).toBe(
+      'Be brief.\nReply in JSON.',
+    );
+  });
+
+  it.each([
+    {
+      name: 'SplitAcrossChunks',
+      chunks: [SUCCESS_LINE.slice(0, 20), `${SUCCESS_LINE.slice(20)}\n`],
+    },
+    {
+      name: 'LeadingExtraLine',
+      chunks: ['Loading profile…\n', `${SUCCESS_LINE}\r\n\n`],
+    },
+  ])('resolves with the result text $name', async ({ chunks }) => {
     const { deps, processes } = askDeps();
 
     const asked = askClaude(deps, askOf());
     await settle();
     const [spawn] = processes.spawns;
-    spawn.stdout(SUCCESS_LINE.slice(0, 20));
-    spawn.stdout(`${SUCCESS_LINE.slice(20)}\n`);
-    spawn.close({ code: 0, signal: null, startError: null });
+    for (const chunk of chunks) {
+      spawn.stdout(chunk);
+    }
+    spawn.close(SUCCESS_EXIT);
 
     expect(await asked).toBe('hello');
+  });
+
+  it('resolves on a close that comes during the spawn', async () => {
+    const fake = new FakeProcesses();
+    const { deps } = askDeps({
+      processes: {
+        spawn: (command, args, options) => {
+          fake.spawn(command, args, options);
+          const [spawned] = fake.spawns;
+          spawned.stdout(SUCCESS_LINE);
+          spawned.close(SUCCESS_EXIT);
+          return spawned;
+        },
+      },
+    });
+
+    expect(await askClaude(deps, askOf())).toBe('hello');
   });
 
   const SPAWN_NOT_FOUND: SpawnExit = {
@@ -155,6 +210,32 @@ describe('askClaude', () => {
       spawns: 0,
     },
     {
+      name: 'AbortedDuringMakeFolder',
+      deps: (controller) => ({
+        files: {
+          ...createMemoryFiles(),
+          makeFolder: async () => {
+            controller.abort();
+          },
+        },
+      }),
+      message: 'the ask was stopped',
+      spawns: 0,
+    },
+    {
+      name: 'AbortedDuringInstructionsWrite',
+      deps: (controller) => ({
+        files: {
+          ...createMemoryFiles(),
+          write: async () => {
+            controller.abort();
+          },
+        },
+      }),
+      message: 'the ask was stopped',
+      spawns: 0,
+    },
+    {
       name: 'CommandNotFound',
       deps: () => ({ command: async () => null }),
       message: programNotFoundMessage('claude'),
@@ -171,9 +252,23 @@ describe('askClaude', () => {
     {
       name: 'MakeFolderRejects',
       deps: () => ({
-        files: { makeFolder: () => Promise.reject(new Error('EACCES')) },
+        files: {
+          ...createMemoryFiles(),
+          makeFolder: () => Promise.reject(new Error('EACCES')),
+        },
       }),
       message: 'EACCES',
+      spawns: 0,
+    },
+    {
+      name: 'InstructionsWriteRejects',
+      deps: () => ({
+        files: {
+          ...createMemoryFiles(),
+          write: () => Promise.reject(new Error('ENOSPC')),
+        },
+      }),
+      message: 'ENOSPC',
       spawns: 0,
     },
     {
@@ -271,9 +366,52 @@ describe('askClaude', () => {
     const [spawn] = processes.spawns;
     controller.abort();
     spawn.stdout(SUCCESS_LINE);
-    spawn.close({ code: 0, signal: null, startError: null });
+    spawn.close(SUCCESS_EXIT);
 
     expect(spawn.kills).toEqual(['SIGKILL']);
     expect(await outcome).toHaveProperty('message', 'the ask was stopped');
+  });
+
+  it.each<{
+    name: string;
+    end: (spawn: FakeSpawn, controller: AbortController) => void;
+  }>([
+    { name: 'Resolves', end: exits(SUCCESS_LINE, '', 0) },
+    { name: 'Rejects', end: exits('', 'bad flag\n', 2) },
+    { name: 'IsAborted', end: (_spawn, controller) => controller.abort() },
+  ])(
+    'deletes the instructions file once the ask $name',
+    async ({ end }) => {
+      const controller = new AbortController();
+      const { deps, processes, files, logs } = askDeps();
+
+      const outcome = askClaude(deps, askOf(controller.signal)).catch(
+        () => undefined,
+      );
+      await settle();
+      end(processes.spawns[0], controller);
+      await outcome;
+
+      expect(await files.stat(INSTRUCTIONS_FILE)).toBeNull();
+      expect(logs).toEqual([]);
+    },
+  );
+
+  it('logs a failed delete of the instructions file and resolves', async () => {
+    const { deps, processes, logs } = askDeps({
+      files: {
+        ...createMemoryFiles(),
+        deleteFile: () => Promise.reject(new Error('EBUSY')),
+      },
+    });
+
+    const asked = askClaude(deps, askOf());
+    await settle();
+    exits(SUCCESS_LINE, '', 0)(processes.spawns[0]);
+
+    expect(await asked).toBe('hello');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain(INSTRUCTIONS_FILE);
+    expect(logs[0]).toContain('EBUSY');
   });
 });

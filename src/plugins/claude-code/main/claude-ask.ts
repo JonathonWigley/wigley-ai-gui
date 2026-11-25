@@ -1,5 +1,7 @@
 import type { AgentAsk } from '../../../contracts/agent';
+import type { RandomUuid } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
+import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ProgramCandidate } from '../../../contracts/platform';
 import type {
@@ -7,6 +9,7 @@ import type {
   SpawnedProcess,
   SpawnExit,
 } from '../../../contracts/processes';
+import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
 import { programNotFoundMessage } from '../../../shared/program-lookup';
 import {
@@ -17,37 +20,48 @@ import {
 } from './claude-launch';
 import { parsed } from './json-fields';
 
-// The ask's own folder inside the first temp folder, so no project file is
-// near the run.
-export const ASK_FOLDER_NAME = 'claude-code-ask';
+// Each ask's own folder inside the first temp folder is this prefix and a
+// random suffix, so no project file is near the run and no other user can
+// make the folder first.
+export const ASK_FOLDER_PREFIX = 'claude-code-ask-';
+
+// The file in the ask's folder that carries the instructions to
+// `--system-prompt-file`.
+export const ASK_INSTRUCTIONS_FILE_NAME = 'instructions.md';
 
 const STOPPED_MESSAGE = 'the ask was stopped';
 
 // `command` gives the `claude` program and its leading args, null when none
 // was found; `askModel` the model each ask runs on, read at each ask, '' for
-// the CLI's default; `tempFolders` the OS temp folders, the first holding the
-// ask's folder; `env` the environment the run starts from, with `homeDir` and
-// `paths` resolving the profile folder as every `claude` run does.
+// the CLI's default; `tempFolders` the OS temp folders, the first holding each
+// ask's folder; `randomUuid` the folder's suffix; `env` the environment the
+// run starts from, with `homeDir` and `paths` resolving the profile folder as
+// every `claude` run does; `log` takes a failure to delete the instructions
+// file.
 export interface ClaudeAskDeps {
   command(): Promise<ProgramCandidate | null>;
   askModel(): string;
   tempFolders: readonly string[];
+  randomUuid: RandomUuid;
   env: Readonly<Record<string, string>>;
   homeDir: string;
   paths: Paths;
-  files: Pick<Files, 'makeFolder'>;
+  log: Log;
+  files: Pick<Files, 'makeFolder' | 'write' | 'deleteFile'>;
   processes: Pick<ProcessRunner, 'spawn'>;
 }
 
-// The flags replace Claude Code's system prompt and turn off its tools, MCP
-// servers, settings (with their hooks, plugins and `CLAUDE.md`), slash
-// commands and session saving, so nothing but the call reaches the model.
-function askArgs(instructions: string, askModel: string): string[] {
+// The flags replace Claude Code's system prompt with the file's text and turn
+// off its tools, MCP servers, settings (with their hooks, plugins and
+// `CLAUDE.md`), slash commands and session saving, so nothing but the call
+// reaches the model. No arg holds a line break, which a `.cmd` or `.bat`
+// launch on Windows cannot pass.
+function askArgs(instructionsFile: string, askModel: string): string[] {
   const modelArgs = askModel === '' ? [] : ['--model', askModel];
   return [
     '-p',
-    '--system-prompt',
-    instructions,
+    '--system-prompt-file',
+    instructionsFile,
     '--tools',
     '',
     '--strict-mcp-config',
@@ -67,9 +81,16 @@ function throwIfStopped(signal: AbortSignal): void {
   }
 }
 
-// The reply a closed ask run gives: the `result` of its one JSON object.
-// Throws the start error, then `is_error`'s reason, then the exit, then a
-// missing result, each with stderr (trimmed) where it helps.
+// The last line of `stdout` holding more than whitespace, '' when none does.
+function lastLine(stdout: string): string {
+  const lines = stdout.split(/\r?\n/).filter((line) => line.trim() !== '');
+  return lines.at(-1)?.trim() ?? '';
+}
+
+// The reply a closed ask run gives: the `result` of the JSON object on its
+// last non-empty stdout line. Throws the start error, then `is_error`'s
+// reason, then the exit, then a missing result, each with stderr (trimmed)
+// where it helps.
 function askReply(
   exit: SpawnExit,
   stdout: string,
@@ -79,7 +100,7 @@ function askReply(
   if (exit.startError !== null) {
     throw new Error(cliSpawnError(exit.startError, command));
   }
-  const line = parsed(stdout.trim());
+  const line = parsed(lastLine(stdout));
   const reply = line.ok && isJsonObject(line.value) ? line.value : null;
   if (reply?.is_error === true) {
     const result = typeof reply.result === 'string' ? reply.result : '';
@@ -109,6 +130,7 @@ function runAsk(
   deps: ClaudeAskDeps,
   program: ProgramCandidate,
   cwd: string,
+  instructionsFile: string,
   request: AgentAsk,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -138,7 +160,7 @@ function runAsk(
     };
     child = deps.processes.spawn(
       program.command,
-      [...program.args, ...askArgs(request.instructions, deps.askModel())],
+      [...program.args, ...askArgs(instructionsFile, deps.askModel())],
       {
         cwd,
         env: claudeEnv(deps.env, request.profileDir, deps.homeDir, deps.paths),
@@ -161,13 +183,31 @@ function runAsk(
   });
 }
 
-// Runs `request` as one isolated `claude -p` in `ASK_FOLDER_NAME` inside the
-// first temp folder, made before each spawn, with the profile's environment
-// and the prompt on stdin, and resolves with the reply's `result`. Each check
-// before the spawn rejects spawning nothing: no temp folder, an abort (at the
-// call, during the lookup or during the folder make), no program found, and a
-// lookup or folder make that rejects, with its own error. The caller's
-// `signal` is the only time limit.
+async function deleteInstructionsOrLog(
+  deps: ClaudeAskDeps,
+  instructionsFile: string,
+): Promise<void> {
+  try {
+    await deps.files.deleteFile(instructionsFile);
+  } catch (error) {
+    deps.log(
+      'claude',
+      `ask instructions not deleted at ${instructionsFile}: ${errorText(error)}`,
+    );
+  }
+}
+
+// Runs `request` as one isolated `claude -p` in a folder of its own,
+// `ASK_FOLDER_PREFIX` and a random suffix inside the first temp folder, made
+// before the spawn, with the instructions in `ASK_INSTRUCTIONS_FILE_NAME`
+// there, the profile's environment and the prompt on stdin, and resolves with
+// the reply's `result`. Each check before the spawn rejects spawning nothing:
+// no temp folder, an abort (at the call, during the lookup, the folder make or
+// the instructions write), no program found, and a lookup, folder make or
+// write that rejects, with its own error. Once the folder is made, the
+// instructions file is deleted when the ask settles, however it settles; a
+// failed delete is logged and leaves the outcome alone. The folder itself
+// stays. The caller's `signal` is the only time limit.
 export async function askClaude(
   deps: ClaudeAskDeps,
   request: AgentAsk,
@@ -181,8 +221,18 @@ export async function askClaude(
   if (program === null) {
     throw new Error(programNotFoundMessage('claude'));
   }
-  const cwd = deps.paths.join(deps.tempFolders[0], ASK_FOLDER_NAME);
+  const cwd = deps.paths.join(
+    deps.tempFolders[0],
+    `${ASK_FOLDER_PREFIX}${deps.randomUuid()}`,
+  );
   await deps.files.makeFolder(cwd);
-  throwIfStopped(request.signal);
-  return runAsk(deps, program, cwd, request);
+  const instructionsFile = deps.paths.join(cwd, ASK_INSTRUCTIONS_FILE_NAME);
+  try {
+    throwIfStopped(request.signal);
+    await deps.files.write(instructionsFile, request.instructions);
+    throwIfStopped(request.signal);
+    return await runAsk(deps, program, cwd, instructionsFile, request);
+  } finally {
+    await deleteInstructionsOrLog(deps, instructionsFile);
+  }
 }

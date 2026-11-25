@@ -15,11 +15,11 @@ import {
 // against that home, or `claude` looked up on PATH, then in `~/.local/bin`,
 // when the setting is empty; its profile folders expand `~` against that home
 // too. A `.cmd` or `.bat` command set on Windows reaches the session host's
-// spawn unwrapped, so it starts the one-shots but no session. A settings
-// change refreshes the registration, so the registry re-reads the `profiles`
-// setting. An ask reads the `askModel` setting at each ask and runs in the
-// first of `services.tempFolders`. Contributes `permission_prompt` to every
-// session,
+// spawn unwrapped, so it starts the one-shots, the ask included, but no
+// session. A settings change refreshes the registration, so the registry
+// re-reads the `profiles` setting. An ask reads the `askModel` setting at each
+// ask and runs in a folder of its own inside the first of
+// `services.tempFolders`. Contributes `permission_prompt` to every session,
 // routed by the row id to the row's process, denying while the app is closed
 // (`PERMISSION_OFFLINE`); the contribution lives and dies
 // with the part, and its dispose ends every tool session, cancelling each

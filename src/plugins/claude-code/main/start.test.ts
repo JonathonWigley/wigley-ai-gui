@@ -259,6 +259,6 @@ describe('claudeCodeMainPart', () => {
 
     const [spawn] = harness.processes.spawns;
     expect(spawn.args.slice(-2)).toEqual(['--model', 'haiku']);
-    expect(spawn.cwd).toBe('/tmp/a/claude-code-ask');
+    expect(spawn.cwd.startsWith('/tmp/a/claude-code-ask-')).toBe(true);
   });
 });
