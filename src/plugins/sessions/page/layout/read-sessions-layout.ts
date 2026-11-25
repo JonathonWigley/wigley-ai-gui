@@ -14,6 +14,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   emptyText: true,
   popup: true,
   popupBar: true,
+  drawer: true,
   renameDialog: true,
   pickerRow: true,
   dialogFrame: true,

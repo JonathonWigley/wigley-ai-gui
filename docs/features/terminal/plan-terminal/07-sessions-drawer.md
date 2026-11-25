@@ -1,6 +1,6 @@
 # 07 — Sessions drawer slot
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `addDrawer` contract that 09 consumes, and a frame lifetime (open, shown, moved, dropped)
 Wave: 1 · Depends on: none

@@ -4,6 +4,7 @@ import { createRegistrations } from '../../../shared/registrations';
 import {
   NEEDS_YOU_ACTIVITY,
   type RowActivity,
+  type SessionDrawerView,
   type SessionPart,
   type SessionPopupView,
   type SessionsPageExports,
@@ -19,6 +20,7 @@ function fakeExports() {
   const disposes = {
     tab: 0,
     popup: 0,
+    drawer: 0,
     rowPart: 0,
     barPart: 0,
     section: 0,
@@ -40,6 +42,15 @@ function fakeExports() {
       isVisible: () => false,
       dispose: () => {
         disposes.popup++;
+      },
+    }),
+    addDrawer: () => ({
+      open: () => undefined,
+      close: () => undefined,
+      isOpen: () => false,
+      returnFocus: () => undefined,
+      dispose: () => {
+        disposes.drawer++;
       },
     }),
     addRowPart: () => ({
@@ -80,6 +91,7 @@ describe('sessionsPageView', () => {
 
     view.addTab('s1', { id: 'tab' } as SessionTabView);
     view.addPopup('s1', { id: 'popup' } as SessionPopupView);
+    view.addDrawer('s1', { id: 'drawer' } as SessionDrawerView);
     view.addRowPart(part);
     view.addBarPart(part);
     view.addSection({
@@ -94,6 +106,7 @@ describe('sessionsPageView', () => {
     expect(disposes).toEqual({
       tab: 1,
       popup: 1,
+      drawer: 1,
       rowPart: 1,
       barPart: 1,
       section: 1,
@@ -115,7 +128,7 @@ describe('sessionsPageView', () => {
     expect(activities.slice(setBefore)).toEqual([['s1', 'src', null]]);
   });
 
-  it("forgets a removed session's tabs and popups, keeping another session's and a tab added again", () => {
+  it("forgets a removed session's tabs, popups and drawer, keeping another session's and a tab added again", () => {
     const { exports, disposes, removed } = fakeExports();
     const consumer = createRegistrations();
     const view = sessionsPageView(exports, consumer, removed.add);
@@ -125,12 +138,14 @@ describe('sessionsPageView', () => {
     view.addPopup('s1', { id: 'popup-a' } as SessionPopupView);
     view.addTab('s2', { id: 'tab-c' } as SessionTabView);
     view.addPopup('s2', { id: 'popup-b' } as SessionPopupView);
+    view.addDrawer('s1', { id: 'drawer-a' } as SessionDrawerView);
+    view.addDrawer('s2', { id: 'drawer-b' } as SessionDrawerView);
     removed.tell('s1');
-    expect(disposes).toMatchObject({ tab: 2, popup: 1 });
+    expect(disposes).toMatchObject({ tab: 2, popup: 1, drawer: 1 });
 
     view.addTab('s1', { id: 'tab-d' } as SessionTabView);
     consumer.dispose();
-    expect(disposes).toMatchObject({ tab: 4, popup: 2 });
+    expect(disposes).toMatchObject({ tab: 4, popup: 2, drawer: 2 });
   });
 
   it("forgets a removed session's activities, keeping another session's", () => {

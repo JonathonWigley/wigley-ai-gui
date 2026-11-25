@@ -169,6 +169,7 @@ function createExports(
     },
     addPopup: (sessionId, popup, options) =>
       view.tabs.addPopup(sessionId, popup, options),
+    addDrawer: (sessionId, drawer) => view.tabs.addDrawer(sessionId, drawer),
     cutToTitleLimit: (text) =>
       cutTitle(text, titleLimit(api.settings().titleMaxLength)),
     addRowPart: (part) => rowParts.add(part),
@@ -342,6 +343,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       titleMaxLength: () => api.settings().titleMaxLength,
       recency: createSessionRecency(api.services.clock, uiState),
       favorites: createProjectFavorites(uiState),
+      uiState,
+      drawerLeft: () => keysToFocusedPane(),
       activities,
       places,
       claimed,
@@ -446,10 +449,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         model.setModeShown(true);
         api.panes.setOuterPanes(view.panes.outer);
         view.tabs.rescroll();
+        view.tabs.checkDrawers();
         model.checkVisible();
       },
       hidden() {
         model.setModeShown(false);
+        view.tabs.checkDrawers();
         view.list.leave();
         api.panes.setOuterPanes(null);
         model.checkVisible();

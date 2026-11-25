@@ -19,7 +19,8 @@
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt, split prompts and close-pane control, each tab's icon with no label, each session
 // popup's sheet around its body, the hidden popups' bar (each entry's icon and
-// status, or its title with no status, then the toggle key), and the rename
+// status, or its title with no status, then the toggle key), each session
+// drawer's frame (its handle over its body), and the rename
 // dialog's frame (its panel and title) and its title box over why a title was
 // refused and the hint, in the class names its `layout.css` styles, and each split picker row as the kit's list
 // row holding its label alone.
@@ -210,6 +211,13 @@ const layout = {
     });
     kit.toggleHint(element);
     return { element, entries };
+  },
+
+  drawer(parent, _input, kit) {
+    const element = kit.el(parent, 'div', 'session-drawer');
+    const handle = kit.el(element, 'div', 'session-drawer-handle');
+    const body = kit.el(element, 'div', 'session-drawer-body');
+    return { element, body, handle };
   },
 
   renameDialog(parent, input, kit) {

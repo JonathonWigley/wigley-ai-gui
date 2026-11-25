@@ -2,11 +2,11 @@ import type { Disposable, Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import type { SessionsPageExports } from '../contract';
 
-// One dependent's view of sessions' page exports: every tab, popup, part,
-// section and `showOnly` hold it adds is filed under its registrations, and their disposal clears
-// each activity it still holds. A session `onSessionRemoved` names leaves the
-// store: its tabs' and popups' handles and its activities, which sessions has
-// already dropped.
+// One dependent's view of sessions' page exports: every tab, popup, drawer,
+// part, section and `showOnly` hold it adds is filed under its registrations,
+// and their disposal clears each activity it still holds. A session
+// `onSessionRemoved` names leaves the store: its tabs', popups' and drawer's
+// handles and its activities, which sessions has already dropped.
 export function sessionsPageView(
   exports: SessionsPageExports,
   consumer: Registrations,
@@ -23,7 +23,8 @@ export function sessionsPageView(
       heldActivities.clear();
     },
   });
-  // One store entry per session, so its tab and popup handles leave together.
+  // One store entry per session, so its tab, popup and drawer handles leave
+  // together.
   const sessionHandles = new Map<string, Registrations & Disposable>();
   const handlesOf = (sessionId: string) => {
     const handles =
@@ -48,6 +49,8 @@ export function sessionsPageView(
       handlesOf(sessionId).track(exports.addTab(sessionId, tab)),
     addPopup: (sessionId, popup) =>
       handlesOf(sessionId).track(exports.addPopup(sessionId, popup)),
+    addDrawer: (sessionId, drawer) =>
+      handlesOf(sessionId).track(exports.addDrawer(sessionId, drawer)),
     addRowPart: (part) => consumer.track(exports.addRowPart(part)),
     addBarPart: (part) => consumer.track(exports.addBarPart(part)),
     addSection: (section) => consumer.track(exports.addSection(section)),

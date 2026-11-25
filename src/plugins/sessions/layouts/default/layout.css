@@ -1,5 +1,6 @@
 /* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, its plugin
-   sections and their claimed rows, the tab bar, the empty text, the session popup and its hidden bar. */
+   sections and their claimed rows, the tab bar, the empty text, the session popup and its hidden bar, the session
+   drawer's frame. */
 
 /* A pane fills its slot; its body shows the session's frame or the empty
    text in one cell, and its focus edges sit on its sides. */
@@ -522,6 +523,44 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A session's drawer: a thin handle, a hairline across its middle that takes
+   the focus colour while hovered or dragged, as a split handle does, over the
+   body the plugin fills, inside the frame's gutter. */
+.session-drawer {
+  display: grid;
+  grid-template-rows: var(--wg-space-1) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  margin: 0 var(--wg-sheet-gutter);
+}
+
+.session-drawer-handle {
+  position: relative;
+  cursor: row-resize;
+}
+
+.session-drawer-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--wg-border-default);
+  transition: background-color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.session-drawer-handle:hover::after,
+.session-drawer-handle.is-active::after {
+  background: var(--wg-focus-border);
+}
+
+.session-drawer-body {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
 }
 
 /* The rename dialog: why a title was refused under its box, then the hint. */

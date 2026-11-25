@@ -9,6 +9,7 @@ import {
 import type { PluginLog } from '../../../contracts/log';
 import type { KeyHints, ShownLayouts } from '../../../contracts/plugin';
 import type { KeyedSlotWriter, SlotWriter } from '../../../contracts/state';
+import type { UiState } from '../../../contracts/ui-state';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
@@ -85,7 +86,9 @@ import { rowChanges, stepSession } from './tabs';
 // last draw of main's rows;
 // `titleMaxLength` reads the setting
 // each row draw cuts a first-message title to; `recency` and `favorites` order
-// the side bar's rows; the rest is what the sessions layout's kits read.
+// the side bar's rows; `uiState` holds the one drawer height; `drawerLeft`
+// hands the keys from a session's drawer holding focus to the focused pane's
+// selected tab; the rest is what the sessions layout's kits read.
 export interface SessionsViewDeps extends Omit<
   SessionsPartsDeps,
   'keys' | 'rowParts' | 'barParts'
@@ -109,6 +112,8 @@ export interface SessionsViewDeps extends Omit<
   titleMaxLength(): number;
   recency: SessionRecency;
   favorites: ProjectFavorites;
+  uiState: UiState;
+  drawerLeft(): void;
   // Writes `sessionsActivitySlot`, which holds the rows' activities.
   activities: KeyedSlotWriter<RowActivitySource[]>;
   // Holds `sessionsPlaceSlot`, each session's place.
@@ -168,6 +173,9 @@ export interface SessionPanes {
   // Draws `tree`, each leaf showing its session in `sessions` (none when left
   // out); runs no `paneFocused`.
   restore(tree: PaneTree, sessions: PaneSessions): void;
+  // The pane tree's outer panes, with the focused pane's session's drawer
+  // first: Alt+j and Alt+k move focus into and out of it, and the resize keys
+  // move its divider while it holds focus.
   outer: OuterPanes;
 }
 
@@ -520,6 +528,10 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.tabsChanged();
     },
     popupOpenedFromBar: deps.popupOpenedFromBar,
+    uiState: deps.uiState,
+    timers: deps.timers,
+    log: deps.log,
+    drawerLeft: deps.drawerLeft,
   });
   const treeView = createPaneTreeView({
     initialId: 'pane-1',
@@ -536,6 +548,18 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   });
   assigned.set('pane-1', null);
   root.append(treeView.element, tabs.holder);
+  // Built once, so the core's outer panes stay this one object.
+  const outer: OuterPanes = {
+    focus: {
+      move: (direction) =>
+        tabs.moveDrawerFocus(direction) ||
+        treeView.outer.focus.move(direction),
+    },
+    resize: {
+      nudge: (direction) =>
+        tabs.nudgeDrawer(direction) || treeView.outer.resize.nudge(direction),
+    },
+  };
 
   // A pane id no leaf holds.
   const newPaneId = () => {
@@ -585,7 +609,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       drawPanes();
       deps.panesChanged();
     },
-    outer: treeView.outer,
+    outer,
   };
   drawPanes();
   const partChanges = [

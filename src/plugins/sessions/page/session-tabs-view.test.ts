@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PANE_FOCUS_COMMANDS } from '../../../contracts/panes';
+import {
+  PANE_FOCUS_COMMANDS,
+  PANE_RESIZE_COMMANDS,
+  type PaneDirection,
+} from '../../../contracts/panes';
+import type { UiState } from '../../../contracts/ui-state';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { installMarkdownDom } from '../../../shared/page/markdown-mount.test-support';
 import {
@@ -12,6 +17,7 @@ import {
 } from '../../../shared/page/test-dom';
 import { createSlotStore } from '../../../shared/state/slot-store';
 import {
+  type SessionDrawerHandle,
   type SessionPopupHandle,
   type SessionPopupView,
   type SessionsPlace,
@@ -20,6 +26,7 @@ import {
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
+import { fakeUiState } from './session-fakes';
 import { sessionsViewSetup, stateOf } from './sessions-view-fakes';
 
 type Setup = ReturnType<typeof sessionsViewSetup>;
@@ -45,6 +52,30 @@ function popupView(id: string): SessionPopupView {
     beforeClose: () => true,
     shown: () => undefined,
   };
+}
+
+// A drawer view whose `shown` and `focus` count their calls, `focus`
+// focusing its element.
+function drawerView(id: string) {
+  const element = new FocusFakeElement('div');
+  return {
+    id,
+    element: asHtml(element),
+    shown: vi.fn(),
+    focus: vi.fn(() => element.focus()),
+  };
+}
+
+type DrawerView = ReturnType<typeof drawerView>;
+
+// The frame holding the drawer `view`: element, body, part, host, frame.
+function drawerFrameOf(view: DrawerView): FakeElement {
+  return asFake(view.element).parentNode!.parentNode!.parentNode!.parentNode!;
+}
+
+// The drawer host holding `view`: element, body, part, host.
+function drawerHostOf(view: DrawerView): FakeElement {
+  return asFake(view.element).parentNode!.parentNode!.parentNode!;
 }
 
 // The frame holding `tab`: tab, body, sheet, frame.
@@ -854,4 +885,599 @@ describe('session popups', () => {
     expect(findAll(setup.area, 'session-popup')).toHaveLength(1);
     expect(popupsShown(setup.area).open).toEqual(['title a']);
   });
+});
+
+// A view over sessions `s` and `t`, `s` in its one pane, Sessions mode shown
+// until `setModeShown` says otherwise.
+function drawerSetup(options: { uiState?: UiState } = {}) {
+  let isModeShown = true;
+  const setup = sessionsViewSetup(undefined, undefined, undefined, {
+    ...options,
+    isModeShown: () => isModeShown,
+  });
+  setup.view.render(stateOf(['s', 't'], 's'));
+  setup.view.panes.load(setup.view.panes.focusedPaneId(), 's');
+  return {
+    ...setup,
+    setModeShown(isShown: boolean) {
+      isModeShown = isShown;
+    },
+  };
+}
+
+type DrawerSetup = ReturnType<typeof drawerSetup>;
+
+// Adds drawer `id` to `sessionId` and opens it without focus.
+function addOpenDrawer(view: Setup['view'], sessionId: string, id = 'd') {
+  const drawer = drawerView(id);
+  const handle = view.tabs.addDrawer(sessionId, drawer);
+  handle.open({ focus: false });
+  return { drawer, handle };
+}
+
+// The drawer `d` of `s`, open, with focus inside it or on a box in `s`'s tab.
+function focusedDrawerSetup(isFocusInside: boolean, isOpen = true) {
+  const doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  const setup = drawerSetup();
+  const chat = tabView('chat');
+  setup.view.tabs.add('s', chat);
+  const box = new FocusFakeElement('textarea');
+  asFake(chat.element).append(box);
+  const drawer = drawerView('d');
+  const handle = setup.view.tabs.addDrawer('s', drawer);
+  if (isOpen) {
+    handle.open({ focus: false });
+  }
+  if (isFocusInside) {
+    drawer.focus();
+  } else {
+    box.focus();
+  }
+  drawer.focus.mockClear();
+  return { ...setup, doc, box, drawer, handle };
+}
+
+const isResizeVertical = (command: string) =>
+  command.endsWith(PANE_RESIZE_COMMANDS.up) ||
+  command.endsWith(PANE_RESIZE_COMMANDS.down);
+
+describe('session drawers', () => {
+  it.each<{ case: string; run(setup: DrawerSetup): DrawerView; shown: number }>(
+    [
+      {
+        case: 'open in a shown frame',
+        run: ({ view }) => addOpenDrawer(view, 's').drawer,
+        shown: 1,
+      },
+      {
+        case: 'open while no pane shows the session',
+        run: ({ view }) => addOpenDrawer(view, 't').drawer,
+        shown: 0,
+      },
+      {
+        case: "a pane loads the open drawer's session",
+        run: ({ view }) => {
+          const { drawer } = addOpenDrawer(view, 't');
+          view.panes.load(view.panes.focusedPaneId(), 't');
+          return drawer;
+        },
+        shown: 1,
+      },
+      {
+        case: 'the pane leaves the session and comes back',
+        run: ({ view }) => {
+          const { drawer } = addOpenDrawer(view, 's');
+          view.panes.load(view.panes.focusedPaneId(), 't');
+          view.panes.load(view.panes.focusedPaneId(), 's');
+          return drawer;
+        },
+        shown: 2,
+      },
+      {
+        case: 'closed and opened again',
+        run: ({ view }) => {
+          const { drawer, handle } = addOpenDrawer(view, 's');
+          handle.close();
+          handle.open({ focus: false });
+          return drawer;
+        },
+        shown: 2,
+      },
+      {
+        case: 'a tab added while open',
+        run: ({ view }) => {
+          const { drawer } = addOpenDrawer(view, 's');
+          view.tabs.add('s', tabView('x'));
+          return drawer;
+        },
+        shown: 1,
+      },
+      {
+        case: 'a layout redraw while open',
+        run: ({ view }) => {
+          const { drawer } = addOpenDrawer(view, 's');
+          view.setLayouts(withUser<Layout>(defaultLayout, {}));
+          return drawer;
+        },
+        shown: 2,
+      },
+      {
+        case: 'open while the mode is hidden',
+        run: (setup) => {
+          setup.setModeShown(false);
+          return addOpenDrawer(setup.view, 's').drawer;
+        },
+        shown: 0,
+      },
+      {
+        case: 'the mode shows after an open while hidden',
+        run: (setup) => {
+          setup.setModeShown(false);
+          const { drawer } = addOpenDrawer(setup.view, 's');
+          setup.setModeShown(true);
+          setup.view.tabs.checkDrawers();
+          return drawer;
+        },
+        shown: 1,
+      },
+      {
+        case: 'the frame moves to the other shown pane',
+        run: ({ view }) => {
+          view.panes.restore(
+            TWO_PANES,
+            new Map([
+              ['pane-1', 'a'],
+              ['pane-2', 'c'],
+            ]),
+          );
+          const { drawer } = addOpenDrawer(view, 'a');
+          view.panes.restore(
+            TWO_PANES,
+            new Map([
+              ['pane-1', 'c'],
+              ['pane-2', 'a'],
+            ]),
+          );
+          return drawer;
+        },
+        shown: 1,
+      },
+      {
+        case: 'a bar part added while open',
+        run: ({ view, barParts }) => {
+          const { drawer } = addOpenDrawer(view, 's');
+          barParts.add({ id: 'x', build: () => ({}) });
+          return drawer;
+        },
+        shown: 1,
+      },
+    ],
+  )('a drawer runs shown each time it becomes visible ($case)', (test) => {
+    const drawer = test.run(drawerSetup());
+
+    expect(drawer.shown).toHaveBeenCalledTimes(test.shown);
+  });
+
+  it('a throwing shown is logged and skips no other drawer', () => {
+    const setup = drawerSetup();
+    const { view, logged } = setup;
+    view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'a'],
+        ['pane-2', 'c'],
+      ]),
+    );
+    setup.setModeShown(false);
+    const a = drawerView('a');
+    a.shown.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const c = drawerView('c');
+    const aHandle = view.tabs.addDrawer('a', a);
+    aHandle.open({ focus: false });
+    view.tabs.addDrawer('c', c).open({ focus: false });
+    setup.setModeShown(true);
+
+    expect(() => view.tabs.checkDrawers()).not.toThrow();
+    expect(c.shown).toHaveBeenCalledTimes(1);
+    expect(logged).toContain('drawer a shown failed: boom');
+    expect(() => aHandle.open({ focus: true })).not.toThrow();
+    expect(a.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it('the drawer row sits under the tab bodies and outside the popup layer', () => {
+    const { view } = drawerSetup();
+    view.tabs.addPopup('s', popupView('p'));
+    const { drawer } = addOpenDrawer(view, 's');
+    const frame = drawerFrameOf(drawer);
+    const rows = [
+      'session-tabs-host',
+      'session-bodies',
+      'session-drawer-host',
+      'session-popup-bar-host',
+    ];
+
+    expect(frame.classList.contains('session-area')).toBe(true);
+    expect(
+      frame.children.map((child) =>
+        rows.find((row) => child.classList.contains(row)),
+      ),
+    ).toEqual(rows);
+    expect(
+      findAll(frame, 'session-popups')[0]!.contains(asFake(drawer.element)),
+    ).toBe(false);
+  });
+
+  it.each<{
+    case: string;
+    act(handle: SessionDrawerHandle): void;
+    isOpen: boolean;
+    hidden: boolean;
+    children: number;
+  }>([
+    {
+      case: 'added',
+      act: () => undefined,
+      isOpen: false,
+      hidden: true,
+      children: 1,
+    },
+    {
+      case: 'open',
+      act: (handle) => handle.open({ focus: false }),
+      isOpen: true,
+      hidden: false,
+      children: 1,
+    },
+    {
+      case: 'open then close',
+      act: (handle) => {
+        handle.open({ focus: false });
+        handle.close();
+      },
+      isOpen: false,
+      hidden: true,
+      children: 1,
+    },
+    {
+      case: 'open then dispose',
+      act: (handle) => {
+        handle.open({ focus: false });
+        handle.dispose();
+      },
+      isOpen: false,
+      hidden: true,
+      children: 0,
+    },
+  ])(
+    'open, close and isOpen show and hide the drawer row ($case)',
+    (test) => {
+      const { view } = drawerSetup();
+      const drawer = drawerView('d');
+      const handle = view.tabs.addDrawer('s', drawer);
+      const host = drawerHostOf(drawer);
+
+      test.act(handle);
+
+      expect({
+        isOpen: handle.isOpen(),
+        hidden: host.hidden,
+        children: host.children.length,
+      }).toEqual({
+        isOpen: test.isOpen,
+        hidden: test.hidden,
+        children: test.children,
+      });
+    },
+  );
+
+  it('a second drawer for one session throws', () => {
+    const { view } = drawerSetup();
+    const first = view.tabs.addDrawer('s', drawerView('a'));
+
+    expect(() => view.tabs.addDrawer('s', drawerView('b'))).toThrow(
+      'Session s already has a drawer',
+    );
+    first.dispose();
+    expect(view.tabs.addDrawer('s', drawerView('b')).isOpen()).toBe(false);
+  });
+
+  it.each<{
+    case: string;
+    sessionId: string;
+    opens: boolean[];
+    focus: number;
+    shown: number;
+  }>([
+    {
+      case: 'with focus in a shown frame',
+      sessionId: 's',
+      opens: [true],
+      focus: 1,
+      shown: 1,
+    },
+    {
+      case: 'with focus while no pane shows the session',
+      sessionId: 't',
+      opens: [true],
+      focus: 0,
+      shown: 0,
+    },
+    {
+      case: 'without focus',
+      sessionId: 's',
+      opens: [false],
+      focus: 0,
+      shown: 1,
+    },
+    {
+      case: 'without focus, then with it',
+      sessionId: 's',
+      opens: [false, true],
+      focus: 1,
+      shown: 1,
+    },
+  ])('open with focus focuses a visible drawer only ($case)', (test) => {
+    const { view } = drawerSetup();
+    const drawer = drawerView('d');
+    const handle = view.tabs.addDrawer(test.sessionId, drawer);
+
+    for (const focus of test.opens) {
+      handle.open({ focus });
+    }
+
+    expect({
+      focus: drawer.focus.mock.calls.length,
+      shown: drawer.shown.mock.calls.length,
+    }).toEqual({ focus: test.focus, shown: test.shown });
+  });
+
+  it.each<{
+    case: string;
+    isFocusInside: boolean;
+    act(handle: SessionDrawerHandle): void;
+    drawerLefts: number;
+    isOpen: boolean;
+    keepsBoxFocus: boolean;
+  }>([
+    {
+      case: 'close with focus inside',
+      isFocusInside: true,
+      act: (handle) => handle.close(),
+      drawerLefts: 1,
+      isOpen: false,
+      keepsBoxFocus: false,
+    },
+    {
+      case: "close with a tab's element focused",
+      isFocusInside: false,
+      act: (handle) => handle.close(),
+      drawerLefts: 0,
+      isOpen: false,
+      keepsBoxFocus: true,
+    },
+    {
+      case: 'returnFocus with focus inside',
+      isFocusInside: true,
+      act: (handle) => handle.returnFocus(),
+      drawerLefts: 1,
+      isOpen: true,
+      keepsBoxFocus: false,
+    },
+    {
+      case: 'returnFocus with focus outside',
+      isFocusInside: false,
+      act: (handle) => handle.returnFocus(),
+      drawerLefts: 0,
+      isOpen: true,
+      keepsBoxFocus: true,
+    },
+    {
+      case: 'dispose with focus inside',
+      isFocusInside: true,
+      act: (handle) => handle.dispose(),
+      drawerLefts: 1,
+      isOpen: false,
+      keepsBoxFocus: false,
+    },
+  ])(
+    'a focus hand-back runs drawerLeft only while the drawer holds focus ($case)',
+    (test) => {
+      const { handle, drawerLefts, doc, box } = focusedDrawerSetup(
+        test.isFocusInside,
+      );
+
+      test.act(handle);
+
+      expect({
+        drawerLefts: drawerLefts(),
+        isOpen: handle.isOpen(),
+        keepsBoxFocus: doc.activeElement === box,
+      }).toEqual({
+        drawerLefts: test.drawerLefts,
+        isOpen: test.isOpen,
+        keepsBoxFocus: test.keepsBoxFocus,
+      });
+    },
+  );
+
+  it.each<{
+    case: string;
+    act(setup: ReturnType<typeof focusedDrawerSetup>): void;
+    drawerLefts: number;
+  }>(
+    [
+      {
+        case: 'dispose',
+        act: ({ handle }) => handle.dispose(),
+        drawerLefts: 1,
+      },
+      {
+        case: 'drop',
+        act: ({ view }) => view.tabs.drop('s'),
+        drawerLefts: 0,
+      },
+    ],
+  )(
+    'dropping the frame or disposing the handle disposes the drawer ($case)',
+    (test) => {
+      const setup = focusedDrawerSetup(true);
+      const { anchors, drawer, handle } = setup;
+      const resizeAnchors = () =>
+        anchors.filter((anchor) => isResizeVertical(anchor.command));
+      expect(resizeAnchors()).toHaveLength(2);
+
+      test.act(setup);
+      drawer.shown.mockClear();
+      handle.open({ focus: true });
+
+      expect(resizeAnchors().every((anchor) => anchor.isDisposed)).toBe(true);
+      expect(handle.isOpen()).toBe(false);
+      expect(drawer.shown).not.toHaveBeenCalled();
+      expect(drawer.focus).not.toHaveBeenCalled();
+      expect(setup.drawerLefts()).toBe(test.drawerLefts);
+    },
+  );
+
+  it('every drawer shows the stored drawer height and follows a set', () => {
+    const uiState = fakeUiState([['drawer-height', 300]]);
+    const { view } = drawerSetup({ uiState });
+    const drawers = ['s', 't'].map((sessionId) => {
+      const drawer = drawerView(`d-${sessionId}`);
+      view.tabs.addDrawer(sessionId, drawer);
+      return drawer;
+    });
+    const heights = () =>
+      drawers.map(
+        (drawer) => drawerFrameOf(drawer).style['--session-drawer-height'],
+      );
+
+    expect(heights()).toEqual(['300', '300']);
+    uiState.set('drawer-height', 320);
+    expect(heights()).toEqual(['320', '320']);
+    view.setLayouts(withUser<Layout>(defaultLayout, {}));
+    uiState.set('drawer-height', 280);
+    expect(heights()).toEqual(['280', '280']);
+  });
+
+  it.each<{
+    case: string;
+    direction: PaneDirection;
+    isOpen: boolean;
+    isFocusInside: boolean;
+    moved: boolean;
+    focus: number;
+    drawerLefts: number;
+  }>([
+    {
+      case: 'down, drawer open, focus outside',
+      direction: 'down',
+      isOpen: true,
+      isFocusInside: false,
+      moved: true,
+      focus: 1,
+      drawerLefts: 0,
+    },
+    {
+      case: 'down, drawer closed',
+      direction: 'down',
+      isOpen: false,
+      isFocusInside: false,
+      moved: false,
+      focus: 0,
+      drawerLefts: 0,
+    },
+    {
+      case: 'down, focus inside the drawer',
+      direction: 'down',
+      isOpen: true,
+      isFocusInside: true,
+      moved: false,
+      focus: 0,
+      drawerLefts: 0,
+    },
+    {
+      case: 'up, focus inside the drawer',
+      direction: 'up',
+      isOpen: true,
+      isFocusInside: true,
+      moved: true,
+      focus: 0,
+      drawerLefts: 1,
+    },
+    {
+      case: 'up, focus outside',
+      direction: 'up',
+      isOpen: true,
+      isFocusInside: false,
+      moved: false,
+      focus: 0,
+      drawerLefts: 0,
+    },
+    {
+      case: 'left, focus inside the drawer',
+      direction: 'left',
+      isOpen: true,
+      isFocusInside: true,
+      moved: false,
+      focus: 0,
+      drawerLefts: 0,
+    },
+  ])(
+    'the outer panes move focus into and out of the drawer ($case)',
+    (test) => {
+      const { view, drawer, drawerLefts } = focusedDrawerSetup(
+        test.isFocusInside,
+        test.isOpen,
+      );
+
+      const moved = view.panes.outer.focus.move(test.direction);
+
+      expect({
+        moved,
+        focus: drawer.focus.mock.calls.length,
+        drawerLefts: drawerLefts(),
+      }).toEqual({
+        moved: test.moved,
+        focus: test.focus,
+        drawerLefts: test.drawerLefts,
+      });
+    },
+  );
+
+  it.each<{
+    case: string;
+    direction: PaneDirection;
+    isFocusInside: boolean;
+    nudged: boolean;
+  }>([
+    {
+      case: 'up with focus inside',
+      direction: 'up',
+      isFocusInside: true,
+      nudged: true,
+    },
+    {
+      case: 'up with focus outside',
+      direction: 'up',
+      isFocusInside: false,
+      nudged: false,
+    },
+    {
+      case: 'left with focus inside',
+      direction: 'left',
+      isFocusInside: true,
+      nudged: false,
+    },
+  ])(
+    'the resize keys reach the drawer only while it holds focus ($case)',
+    (test) => {
+      const { view, drawer } = focusedDrawerSetup(test.isFocusInside);
+      findAll(drawerHostOf(drawer), 'session-drawer-handle')[0]!.hasLayoutBox =
+        true;
+
+      expect(view.panes.outer.resize.nudge(test.direction)).toBe(test.nudged);
+    },
+  );
 });

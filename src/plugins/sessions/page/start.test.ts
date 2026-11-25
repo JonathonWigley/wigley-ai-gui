@@ -1038,6 +1038,30 @@ describe('sessions page part', () => {
     await setup.harness.stop();
   });
 
+  it('an open drawer runs shown again when Sessions mode shows again', async () => {
+    const setup = await startApplied(['s1'], 's1', fakeUiState(), {
+      withOtherMode: true,
+    });
+    const { commands } = setup.harness.started();
+    commands.showMode({ arg: undefined });
+    const shown = vi.fn();
+    setup.exports
+      .addDrawer('s1', {
+        id: 'drawer',
+        element: document.createElement('div'),
+        shown,
+        focus: () => undefined,
+      })
+      .open({ focus: false });
+    const whileShown = shown.mock.calls.length;
+
+    setup.showOther();
+    commands.showMode({ arg: undefined });
+
+    expect([whileShown, shown.mock.calls.length]).toEqual([1, 2]);
+    await setup.harness.stop();
+  });
+
   it.each([
     { case: 'main opened it', isOpened: true, toasted: [] },
     {
@@ -1610,6 +1634,35 @@ describe('the sessions list in the page part', () => {
     expect(shownS2).toHaveBeenCalledTimes(2);
     expect(setup.linesFrom(start)).toContain('keys to pane label s2');
     expect(runs).not.toContain('chat.focusBox');
+    await setup.harness.stop();
+  });
+
+  it('Alt+j focuses the open drawer and Alt+k hands the keys back to the tab', async () => {
+    const setup = await startWithList(['s1'], 's1');
+    const shownTab = setup.addTab('s1');
+    const element = document.createElement('div');
+    const drawer = {
+      id: 'drawer',
+      element,
+      shown: () => undefined,
+      focus: vi.fn(() => element.focus()),
+    };
+    setup.exports.addDrawer('s1', drawer).open({ focus: false });
+    const outer = setup.harness.outerPanes();
+
+    const movedDown = outer?.focus.move('down');
+    const focusCalls = drawer.focus.mock.calls.length;
+    const shownBefore = shownTab.mock.calls.length;
+    const start = setup.harness.logs.length;
+    const movedUp = outer?.focus.move('up');
+
+    expect({ movedDown, focusCalls, movedUp }).toEqual({
+      movedDown: true,
+      focusCalls: 1,
+      movedUp: true,
+    });
+    expect(shownTab).toHaveBeenCalledTimes(shownBefore + 1);
+    expect(setup.linesFrom(start)).toContain('keys to pane label s1');
     await setup.harness.stop();
   });
 

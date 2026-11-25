@@ -76,7 +76,8 @@ export function sessionsPartsSetup() {
 }
 
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the
-// favorites and recency stamps, `clock` stamps them, a fixed time unless handed
+// favorites, recency stamps and drawer height, `isModeShown` reads whether
+// Sessions mode shows, true unless handed in, `clock` stamps them, a fixed time unless handed
 // in, so rows keep main's order, `timers` never runs a timer unless handed in,
 // `places` holds the sessions' places, a new empty slot unless handed in,
 // `tabsChanged` runs on each change to a session's tabs or popups, and
@@ -84,6 +85,7 @@ export function sessionsPartsSetup() {
 // handed in.
 export interface SessionsViewOptions {
   uiState?: UiState;
+  isModeShown?: () => boolean;
   clock?: Clock;
   timers?: Timers;
   places?: KeyedSlotWriter<SessionsPlace>;
@@ -98,14 +100,16 @@ export interface SessionsViewOptions {
 // `cursorMoved` reports (null for none), the row parts its rows draw
 // (`rowParts`, a new store unless one is handed in) and the bar parts its tab
 // bars draw (`barParts`,
-// likewise), and the title length `titleMaxLength` reads (40 unless one is
-// handed in). Runs under `installFakeDom`.
+// likewise), the title length `titleMaxLength` reads (40 unless one is
+// handed in), and `drawerLefts`, how many times a drawer handed the keys
+// back. Runs under `installFakeDom`.
 export function sessionsViewSetup(
   rowParts: PartStore<SessionPart> = createPartStore(),
   barParts: PartStore<SessionPart> = createPartStore(),
   titleMaxLength: () => number = () => 40,
   {
     uiState = fakeUiState(),
+    isModeShown = () => true,
     clock = { now: () => 0 },
     timers = { set: () => 0, clear: () => undefined },
     places = createSlotStore(() => undefined).publish(sessionsPlaceSlot),
@@ -117,6 +121,7 @@ export function sessionsViewSetup(
   const activated: string[] = [];
   const cursorMoves: (string | null)[] = [];
   const runs: [string, unknown][] = [];
+  let drawerLefts = 0;
   const view = mountSessionsView({
     ...services,
     harnesses: () =>
@@ -133,7 +138,7 @@ export function sessionsViewSetup(
       runs.push(['sessions.selectTab', { sessionId, tab }]);
       view.tabs.select(sessionId, tab);
     },
-    isModeShown: () => true,
+    isModeShown,
     tabsChanged,
     popupOpenedFromBar: () => undefined,
     timers,
@@ -148,6 +153,10 @@ export function sessionsViewSetup(
     titleMaxLength,
     recency: createSessionRecency(clock, uiState),
     favorites: createProjectFavorites(uiState),
+    uiState,
+    drawerLeft: () => {
+      drawerLefts++;
+    },
     activities: createSlotStore(() => undefined).publish(sessionsActivitySlot),
     places,
     claimed: createSlotStore(() => undefined).publish(sessionsClaimedSlot),
@@ -166,6 +175,7 @@ export function sessionsViewSetup(
     rowParts,
     barParts,
     sections,
+    drawerLefts: () => drawerLefts,
   };
 }
 

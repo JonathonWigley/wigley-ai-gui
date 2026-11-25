@@ -1,5 +1,8 @@
+import type { Timers } from '../../../contracts/ambient';
+import type { PluginLog } from '../../../contracts/log';
 import type { PaneDirection } from '../../../contracts/panes';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import {
   blurFocusedElement,
   element,
@@ -9,10 +12,17 @@ import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { type PlaceWrites, placeWrites } from '../../../shared/page/place-slot';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
+import {
+  createSplitDivider,
+  type SplitDivider,
+} from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeyHints } from '../../../contracts/plugin';
 import type { KeyedSlotWriter } from '../../../contracts/state';
+import type { UiState } from '../../../contracts/ui-state';
 import type {
+  SessionDrawerHandle,
+  SessionDrawerView,
   SessionPopupHandle,
   SessionPopupView,
   SessionsPlace,
@@ -21,6 +31,7 @@ import type {
   SessionTabView,
 } from '../contract';
 import type {
+  DrawerPart,
   EmptyTextInput,
   PaneInput,
   PopupBarPart,
@@ -75,9 +86,22 @@ interface Popup {
   part: DrawnPart<PopupPart>;
 }
 
+// A session's drawer: its view, its drawn `drawer` part, whose body holds the
+// view's element, the divider on the part's handle, whether it is open, and
+// whether `shown` has run and the drawer has not stopped being visible since.
+interface Drawer {
+  view: SessionDrawerView;
+  part: DrawnPart<DrawerPart>;
+  divider: SplitDivider;
+  isOpen: boolean;
+  isShown: boolean;
+}
+
 // A session's frame: its session, its tab bar over the sheet holding its
 // tabs' body, the text saying why no tab shows and the popup layer over them,
-// then the host of its hidden popups' bar; its tab ids and selection, and its
+// then the host of its drawer, hidden while the drawer is closed or absent,
+// and the host of its hidden popups' bar; its drawer, null for none; its tab
+// ids and selection, and its
 // tabs by id, both in strip order; its popups, the one opened or hidden last
 // at the end; the place the last page saved for its session, or the one its
 // selected tab left when removed, null for none; the tab that place had
@@ -104,6 +128,8 @@ interface Frame {
   scrolledTabId: string | null;
   text: DrawnPart<SessionsPart> | null;
   popupLayer: HTMLElement;
+  drawerHost: HTMLElement;
+  drawer: Drawer | null;
   popupBarHost: HTMLElement;
   popups: Popup[];
   popupBar: DrawnPart<PopupBarPart> | null;
@@ -137,8 +163,12 @@ interface DrawnPane {
 // popup's bar entry opened it, after `changed`; `keys` draws the key beside the
 // text asking for a session to be picked; `parts` draws the panes, the tab bars
 // with the bar parts other plugins added, the tabs, that text, the popups and
-// their bars; `selectTab` runs on a tab's click. `places` holds each session's
-// place: a new frame reads the last page's, and each change writes it.
+// their bars and the drawers; `selectTab` runs on a tab's click. `places`
+// holds each session's place: a new frame reads the last page's, and each
+// change writes it. `uiState` holds the one drawer height every drawer shows,
+// `timers` runs a drawer handle's prompt linger, `log` records a drawer's
+// throwing `shown`, and `drawerLeft` hands the keys from a drawer holding
+// focus to the focused pane's selected tab.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
@@ -147,6 +177,10 @@ export interface SessionTabsDeps {
   keys: Pick<KeyHints, 'anchor'>;
   parts: SessionsParts;
   places: Pick<KeyedSlotWriter<SessionsPlace>, 'get' | 'set'>;
+  uiState: UiState;
+  timers: Timers;
+  log: PluginLog;
+  drawerLeft(): void;
 }
 
 export interface SessionTabsView {
@@ -165,8 +199,9 @@ export interface SessionTabsView {
   // Moves the frames panes `paneIds` show into the holder, while their slots
   // are still in the document, ahead of those slots leaving it.
   vacate(paneIds: readonly string[]): void;
-  // Draws every pane and tab bar again with the parts' current layouts, then
-  // the tabs and the texts; the tab bodies and their elements stay as they are.
+  // Draws every pane, tab bar, popup and drawer again with the parts' current
+  // layouts, then the tabs and the texts; the tab bodies and their elements
+  // stay as they are.
   redrawPane(): void;
   // Draws every tab bar again, then the tabs and the texts, for a bar part
   // added or removed; the panes, the tab bodies and their elements stay as
@@ -183,8 +218,9 @@ export interface SessionTabsView {
     view: SessionPopupView,
     options?: { restored?: boolean },
   ): SessionPopupHandle;
-  // Drops the session's frame, its tabs, its popups and their elements; their
-  // handles then do nothing. Runs no `changed`.
+  // Drops the session's frame, its tabs, its popups, its drawer and their
+  // elements; their handles then do nothing. Runs no `changed`, and no
+  // drawer's `shown` or `drawerLeft`.
   drop(sessionId: string): void;
   // Drops every frame as `drop` does, then every pane with its part and text,
   // a throw not skipping the rest.
@@ -203,6 +239,21 @@ export interface SessionTabsView {
   togglePopup(
     sessionId: string,
   ): { popup: SessionPopupView; isOpen: boolean } | null;
+  // Adds the session's drawer, closed, as `SessionsPageExports.addDrawer`
+  // says.
+  addDrawer(sessionId: string, view: SessionDrawerView): SessionDrawerHandle;
+  // Runs `shown` on each drawer that became visible since its last `shown`,
+  // and marks each drawer no longer visible; a throwing `shown` is logged and
+  // skips no other drawer. Every draw ends with it; the owner runs it when
+  // Sessions mode shows or hides.
+  checkDrawers(): void;
+  // Moves focus into or out of the focused pane's session's drawer: `down`
+  // into a visible drawer not holding focus, `up` out of one holding it.
+  // Returns false, moving nothing, for every other case.
+  moveDrawerFocus(direction: PaneDirection): boolean;
+  // Nudges the focused pane's session's drawer divider while the drawer holds
+  // focus, returning what the divider does; false otherwise.
+  nudgeDrawer(direction: PaneDirection): boolean;
 }
 
 // Sessions mode's chat panes, drawn through the sessions layout. Each pane is
@@ -228,7 +279,12 @@ export interface SessionTabsView {
 // Under the sheet the `popupBar` lists the hidden popups, newest hidden first,
 // a click on an entry opening it; it is absent while none is hidden. A popup
 // that opens takes focus from a text box in the frame's tabs; sessions focuses
-// nothing in it. Each frame writes its place (selected tab, selection count,
+// nothing in it. Between the sheet and that bar, outside the popup layer, sits
+// the frame's drawer row: the `drawer` part, drawn on add and again on a
+// layout redraw, holds the plugin's element, shown while the drawer is open,
+// at the one height every drawer keeps in `uiState` and drags on the part's
+// handle; the drawer's `shown` runs each time it becomes visible (open, its
+// frame in a pane and the mode shown). Each frame writes its place (selected tab, selection count,
 // hidden popups) to `places` on each change, and a new frame starts from the
 // place the last page wrote: a tab added late takes back the selection it had
 // while no pick moved it since (`tabsAfterRestoredAdd`), and until then the
@@ -288,9 +344,11 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const popupLayer = element('div', 'session-popups');
     popupLayer.append(element('div', 'session-popup-scrim'));
     bodies.append(body, popupLayer);
+    const drawerHost = element('div', 'session-drawer-host');
+    drawerHost.hidden = true;
     const popupBarHost = element('div', 'session-popup-bar-host');
     popupBarHost.style.display = 'contents';
-    frameElement.append(barHost, bodies, popupBarHost);
+    frameElement.append(barHost, bodies, drawerHost, popupBarHost);
     holder.append(frameElement);
     const saved = deps.places.get(sessionId) ?? null;
     const created: Frame = {
@@ -311,6 +369,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       scrolledTabId: null,
       text: null,
       popupLayer,
+      drawerHost,
+      drawer: null,
       popupBarHost,
       popups: [],
       popupBar: null,
@@ -359,6 +419,102 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       popup.part = drawPopup(frame, popup.view);
       disposePart(old);
     }
+  };
+
+  // Draws the drawer's `drawer` part into the frame's host, the view's
+  // element moved into the part's body by a connected move.
+  const drawDrawer = (
+    frame: Frame,
+    view: SessionDrawerView,
+  ): DrawnPart<DrawerPart> => {
+    const part = parts.drawer(frame.drawerHost, { id: view.id });
+    moveConnected(part.built.body, view.element);
+    return part;
+  };
+
+  // The divider on `handle` that drags the frame's drawer row, sized from the
+  // bottom of the box the tab body and the drawer rows share; it shows the
+  // height through the frame's grid tracks.
+  const drawerDivider = (frame: Frame, handle: HTMLElement): SplitDivider =>
+    createSplitDivider({
+      ...DRAWER_SPLIT,
+      uiState: deps.uiState,
+      stateKey: DRAWER_HEIGHT_KEY,
+      axis: 'column',
+      sizedPane: 'end',
+      handle,
+      measure() {
+        const { top } = frame.bodies.getBoundingClientRect();
+        const { bottom } = frame.drawerHost.getBoundingClientRect();
+        return { left: top, span: bottom - top };
+      },
+      show(height) {
+        frame.element.style.setProperty(
+          '--session-drawer-height',
+          String(height),
+        );
+      },
+      anchor: (node, command) => deps.keys.anchor(node, command),
+      timers: deps.timers,
+    });
+
+  // Draws the frame's drawer part again, its element and a new divider moving
+  // to it, so the next check runs `shown` again while it is visible.
+  const redrawDrawer = (frame: Frame) => {
+    const { drawer } = frame;
+    if (drawer === null) {
+      return;
+    }
+    const old = drawer.part;
+    drawer.part = drawDrawer(frame, drawer.view);
+    drawer.divider.dispose();
+    drawer.divider = drawerDivider(frame, drawer.part.built.handle);
+    disposePart(old);
+    drawer.isShown = false;
+  };
+
+  const isDrawerVisible = (frame: Frame, drawer: Drawer) => {
+    const isFrameInPane = frame.element.parentNode !== holder;
+    return drawer.isOpen && isFrameInPane && deps.isModeShown();
+  };
+
+  const checkDrawers = () => {
+    for (const frame of frames.values()) {
+      const { drawer } = frame;
+      if (drawer === null) {
+        continue;
+      }
+      if (!isDrawerVisible(frame, drawer)) {
+        drawer.isShown = false;
+        continue;
+      }
+      if (drawer.isShown) {
+        continue;
+      }
+      drawer.isShown = true;
+      try {
+        drawer.view.shown();
+      } catch (error) {
+        deps.log(`drawer ${drawer.view.id} shown failed: ${errorText(error)}`);
+      }
+    }
+  };
+
+  // Hands the keys back to the focused pane's selected tab while the frame's
+  // drawer holds focus; a focus elsewhere, the Chat box's, stays.
+  const handBackDrawerFocus = (frame: Frame) => {
+    if (frame.drawerHost.contains(document.activeElement)) {
+      deps.drawerLeft();
+    }
+  };
+
+  // The focused pane's session's frame and its drawer; null while the pane is
+  // empty or the session has no drawer.
+  const focusedDrawer = (): { frame: Frame; drawer: Drawer } | null => {
+    const sessionId = focusedSessionId();
+    const frame = sessionId === null ? undefined : frames.get(sessionId);
+    const drawer = frame?.drawer ?? null;
+    return frame === undefined || drawer === null ? null : { frame, drawer };
   };
 
   // Shows the top open popup, every other popup hidden, inert and done
@@ -509,8 +665,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     drawPopupBar(frame);
   };
 
-  // Draws every frame and empty pane; every text is dropped before any draws,
-  // so the one pick hint is free for whichever text takes it.
+  // Draws every frame and empty pane, then checks the drawers; every text is
+  // dropped before any draws, so the one pick hint is free for whichever text
+  // takes it.
   const draw = () => {
     for (const frame of frames.values()) {
       disposeText(frame);
@@ -529,6 +686,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
           text === null ? null : parts.emptyText(pane.empty, text, pickHint);
       }
     }
+    checkDrawers();
   };
 
   // Updates `pane`'s part in place when `input` differs from the one it drew
@@ -750,6 +908,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
           () => frame.bar.dispose(),
           ...frame.popups.map((popup) => () => popup.part.dispose()),
           () => frame.popupBar?.dispose(),
+          () => frame.drawer?.divider.dispose(),
+          () => frame.drawer?.part.dispose(),
         ],
         (step) => step(),
       );
@@ -771,6 +931,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         redrawBar(frame);
         redrawPopups(frame);
         disposePopupBar(frame);
+        redrawDrawer(frame);
       }
       const placed = [...panes].map(([id, pane]) => {
         pane.input = null;
@@ -942,10 +1103,118 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       setPopupOpen(frame, toggled, top === undefined);
       return { popup: toggled.view, isOpen: toggled.isOpen };
     },
+    addDrawer(sessionId, view) {
+      const frame = frameOf(sessionId);
+      if (frame.drawer !== null) {
+        throw new Error(`Session ${sessionId} already has a drawer`);
+      }
+      const part = drawDrawer(frame, view);
+      frame.element.style.setProperty(
+        '--session-drawer-end-min',
+        String(DRAWER_SPLIT.endMin),
+      );
+      const drawer: Drawer = {
+        view,
+        part,
+        divider: drawerDivider(frame, part.built.handle),
+        isOpen: false,
+        isShown: false,
+      };
+      frame.drawer = drawer;
+      // The drawer's frame, or undefined once it was disposed or dropped.
+      const liveFrame = (): Frame | undefined => {
+        const live = frames.get(sessionId);
+        return live?.drawer === drawer ? live : undefined;
+      };
+      return {
+        open({ focus }) {
+          const live = liveFrame();
+          if (live === undefined) {
+            return;
+          }
+          if (!drawer.isOpen) {
+            drawer.isOpen = true;
+            live.drawerHost.hidden = false;
+            checkDrawers();
+          }
+          if (focus && isDrawerVisible(live, drawer)) {
+            drawer.view.focus();
+          }
+        },
+        close() {
+          const live = liveFrame();
+          if (live === undefined || !drawer.isOpen) {
+            return;
+          }
+          handBackDrawerFocus(live);
+          drawer.isOpen = false;
+          drawer.isShown = false;
+          live.drawerHost.hidden = true;
+        },
+        isOpen: () => liveFrame() !== undefined && drawer.isOpen,
+        returnFocus() {
+          const live = liveFrame();
+          if (live !== undefined) {
+            handBackDrawerFocus(live);
+          }
+        },
+        dispose() {
+          const live = liveFrame();
+          if (live === undefined) {
+            return;
+          }
+          handBackDrawerFocus(live);
+          live.drawer = null;
+          live.drawerHost.hidden = true;
+          callEach<() => void>(
+            [
+              () => drawer.divider.dispose(),
+              () => disposePart(drawer.part),
+              () => view.element.remove(),
+            ],
+            (step) => step(),
+          );
+        },
+      };
+    },
+    checkDrawers,
+    moveDrawerFocus(direction) {
+      const focused = focusedDrawer();
+      if (focused === null) {
+        return false;
+      }
+      const { frame, drawer } = focused;
+      const holdsFocus = frame.drawerHost.contains(document.activeElement);
+      const canFocusDrawer =
+        direction === 'down' && !holdsFocus && isDrawerVisible(frame, drawer);
+      if (canFocusDrawer) {
+        drawer.view.focus();
+        return true;
+      }
+      if (direction === 'up' && holdsFocus) {
+        deps.drawerLeft();
+        return true;
+      }
+      return false;
+    },
+    nudgeDrawer(direction) {
+      const focused = focusedDrawer();
+      const holdsFocus =
+        focused !== null &&
+        focused.frame.drawerHost.contains(document.activeElement);
+      return holdsFocus && focused.drawer.divider.nudge(direction);
+    },
   };
 }
 
 const ENTERING = 'is-entering';
+
+// The uiState key of the one height every drawer shows.
+const DRAWER_HEIGHT_KEY = 'drawer-height';
+
+// The drawer's opening and least height, and the least height it leaves the
+// tab body, in px.
+const DRAWER_SPLIT = { initial: 240, min: 160, endMin: 160 } as const;
 
 function disposePart(part: DrawnPart<SessionsPart>): void {
   part.dispose();

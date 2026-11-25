@@ -254,6 +254,23 @@ function popupShape(parts: SessionsParts) {
   };
 }
 
+// What a drawn drawer holds: `handle` and `body` for the boxes the part
+// returned as those, each other child by its text.
+function drawerShape(parts: SessionsParts) {
+  const drawn = parts.drawer(document.createElement('div'), { id: 'terminal' });
+  const body = asFake(drawn.built.body);
+  const handle = asFake(drawn.built.handle);
+  return {
+    drawnBy: drawn.layoutName,
+    holds: asFake(drawn.built.element).children.map((child) => {
+      if (child === handle) {
+        return 'handle';
+      }
+      return child === body ? 'body' : child.textContent;
+    }),
+  };
+}
+
 // What a drawn popup bar's entries show, by their text, each checked to sit in
 // the bar.
 function popupBarShape(parts: SessionsParts) {
@@ -822,6 +839,74 @@ describe('sessions parts', () => {
       parts.setLayouts(withUser<Layout>(defaultLayout, layout));
 
       expect(draw(parts)).toEqual(expected);
+
+      expect(logged).toEqual(
+        failure === null ? [] : [expect.stringContaining(failure)],
+      );
+    },
+  );
+
+  it.each<{
+    case: string;
+    layout: Layout;
+    expected: { drawnBy: string; holds: string[] };
+    failure: string | null;
+  }>([
+    {
+      case: 'default drawer',
+      layout: {},
+      expected: { drawnBy: 'default', holds: ['handle', 'body'] },
+      failure: null,
+    },
+    {
+      case: 'user drawer draws both',
+      layout: {
+        drawer: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-drawer');
+          const body = kit.el(element, 'div');
+          return { element, body, handle: kit.el(element, 'div') };
+        },
+      },
+      expected: { drawnBy: 'mine', holds: ['body', 'handle'] },
+      failure: null,
+    },
+    {
+      case: "user drawer's body outside its element",
+      layout: {
+        drawer: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-drawer');
+          return {
+            element,
+            body: document.createElement('div'),
+            handle: kit.el(element, 'div'),
+          };
+        },
+      },
+      expected: { drawnBy: 'default', holds: ['handle', 'body'] },
+      failure: 'drawer body',
+    },
+    {
+      case: "user drawer's handle outside its element",
+      layout: {
+        drawer: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-drawer');
+          return {
+            element,
+            body: kit.el(element, 'div'),
+            handle: document.createElement('div'),
+          };
+        },
+      },
+      expected: { drawnBy: 'default', holds: ['handle', 'body'] },
+      failure: 'drawer handle',
+    },
+  ])(
+    'drawerPart_Draw_KeepsTheContract ($case)',
+    ({ layout, expected, failure }) => {
+      const { parts, logged } = sessionsPartsSetup();
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
+
+      expect(drawerShape(parts)).toEqual(expected);
 
       expect(logged).toEqual(
         failure === null ? [] : [expect.stringContaining(failure)],

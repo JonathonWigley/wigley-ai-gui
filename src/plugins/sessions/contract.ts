@@ -565,6 +565,31 @@ export interface SessionPopupHandle extends Disposable {
   isVisible(): boolean;
 }
 
+// A strip under a session's tabs, outside its popup layer, that a plugin fills
+// (the terminal); the layout's `drawer` part frames `element`. One per session.
+// `shown` runs each time the drawer becomes visible: opened in a visible
+// frame, or its frame shown. `focus` runs when sessions moves focus into the
+// drawer (Alt+j, or `open({ focus: true })`).
+export interface SessionDrawerView {
+  id: string;
+  element: HTMLElement;
+  shown(): void;
+  focus(): void;
+}
+
+// A drawer starts closed. `dispose` removes it, the session then free to add
+// another. Each call on a drawer already dropped does nothing, `isOpen`
+// reading false.
+export interface SessionDrawerHandle extends Disposable {
+  open(options: { focus: boolean }): void;
+  close(): void;
+  isOpen(): boolean;
+  // When the drawer holds focus, hands the keys to the focused pane's
+  // selected tab, as Alt+k from the drawer does; otherwise does nothing. The
+  // drawer stays open.
+  returnFocus(): void;
+}
+
 // A session's place, as a page reload finds it: the selected tab, how many
 // times the user's picks changed the selection, and the ids of its hidden
 // popups.
@@ -686,6 +711,9 @@ export interface SessionsPageExports {
     popup: SessionPopupView,
     options?: { restored?: boolean },
   ): SessionPopupHandle;
+  // Adds the session's drawer, closed; throws when the session already has
+  // one, as addPopup throws on a duplicate id.
+  addDrawer(sessionId: string, drawer: SessionDrawerView): SessionDrawerHandle;
   // The text cut to `sessions.titleMaxLength` with an ellipsis when longer, for
   // another plugin's short title.
   cutToTitleLimit(text: string): string;

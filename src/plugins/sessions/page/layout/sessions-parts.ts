@@ -37,6 +37,8 @@ import { qualify } from '../../../../shared/plugin-manifests';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
+  DrawerInput,
+  DrawerPart,
   EmptyTextInput,
   EmptyTextKit,
   GroupInput,
@@ -135,6 +137,7 @@ export interface SessionsParts {
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
   popup(parent: HTMLElement, input: PopupInput): DrawnPart<PopupPart>;
   popupBar(parent: HTMLElement, input: PopupBarInput): DrawnPart<PopupBarPart>;
+  drawer(parent: HTMLElement, input: DrawerInput): DrawnPart<DrawerPart>;
   // `pickHint` is the view's own element, which `kit.pickHint` moves in.
   emptyText(
     parent: HTMLElement,
@@ -485,6 +488,17 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           requireElementIn(bar.element, entry, 'popupBar entry');
         }
         return { element: bar.element, entries: [...bar.entries] };
+      }),
+    drawer: (parent, input) =>
+      parts.draw('drawer', parent, (builder, into, rollback) => {
+        const drawer = builder(into, input, sessionsKit(rollback));
+        requireElementIn(drawer.element, drawer.body, 'drawer body');
+        requireElementIn(drawer.element, drawer.handle, 'drawer handle');
+        return {
+          element: drawer.element,
+          body: drawer.body,
+          handle: drawer.handle,
+        };
       }),
     emptyText: (parent, input, pickHint) =>
       parts.draw('emptyText', parent, (builder, into, rollback) => {

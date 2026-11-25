@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
-// its chat panes, each session's tab bar and each session's popups with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
+// its chat panes, each session's tab bar and each session's popups and drawer with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
 // returns no element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead. The
 // app sets `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being
 // the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only
@@ -52,10 +52,11 @@ import type {
 //   popup's root; `is-entering` on a popup's root from its add until its first transition on that root ends or the
 //   popup hides, so a slide up on add keyed on it runs once; the click on each `popupBar` entry, which opens its popup,
 //   set as on a tab, and the entry's `aria-label` (its popup's `title`);
+// - the drag and the resize prompt on the drawer's `handle`, and whether the drawer shows;
 // - the list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root, and appends
 //   `trailing` when the row leaves it out.
-// The tab bodies, the sheet that holds them, the popup layer over them and the elements other plugins add stay the
-// app's.
+// The tab bodies, the sheet that holds them, the popup layer over them, the drawer host under them and the elements
+// other plugins add stay the app's.
 // Every key prompt here has no scope, so it shows in every scope, except the row's cursor prompt, whose keys fire in
 // `sessions.sidebar`; a layout that leaves a kit prompt out leaves that key unprompted.
 //
@@ -65,6 +66,11 @@ import type {
 // each change to its popups, with one entry per hidden popup, newest hidden first. A `popup` whose `body`, or a
 // `popupBar` whose entries, are not children of its `element` are drawn by `default` instead, and so is a `popupBar`
 // returning another count of entries than its input holds.
+//
+// Drawers. A session's drawer is a strip under its tabs that a plugin fills (the terminal). `drawer` draws its frame
+// once when the drawer is added and again on each layout set; the app fills `body` with the plugin's element and owns
+// the drag on `handle` and the drawer's height, one height for every drawer. A `drawer` whose `body` or `handle` is not
+// inside its `element` is drawn by `default` instead.
 //
 // Dialogs. The app keeps the rename dialog's scrim, keys and focus; `dialogFrame` draws its panel and title, and
 // `renameDialog` draws its body.
@@ -162,6 +168,11 @@ export interface PopupBarInput {
   entries: { title: string; icon: string; status: string }[];
 }
 
+// One session's drawer. `id` is the id of the drawer view its plugin added.
+export interface DrawerInput {
+  id: string;
+}
+
 // The rename dialog's body, scope `sessions.rename`. `problem` is why the typed title was refused, null for none;
 // `hint` says what an empty box does.
 export interface RenameDialogInput {
@@ -238,6 +249,13 @@ export interface PopupPart extends SessionsPart {
 // `entries` holds one element per input entry, in order, each a child of `element`; the app sets each one's click.
 export interface PopupBarPart extends SessionsPart {
   entries: HTMLElement[];
+}
+
+// `body` is the box the app fills with the plugin's element and `handle` the strip the app drags the height by; each
+// inside `element`.
+export interface DrawerPart extends SessionsPart {
+  body: HTMLElement;
+  handle: HTMLElement;
 }
 
 export interface SessionsKit extends BaseKit {}
@@ -360,6 +378,12 @@ export interface Layout {
     input: PopupBarInput,
     kit: PopupBarKit,
   ): PopupBarPart;
+  // One session drawer's frame: its handle and its body.
+  drawer?(
+    parent: HTMLElement,
+    input: DrawerInput,
+    kit: SessionsKit,
+  ): DrawerPart;
   // The rename dialog's body: the title box, why a title was refused, then the hint.
   renameDialog?(
     parent: HTMLElement,

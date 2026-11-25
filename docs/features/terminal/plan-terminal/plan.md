@@ -374,6 +374,8 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 ### Groups
 - 01 · main agent: a check and a commit, no code · eff7c2fa · npm ls lists the three at the pinned versions; package.json diff adds only the three dependencies entries, exact · concerns: npm replaced the worktree's node_modules symlink with a full install, so the app clone's own node_modules lacks the three packages until it is installed there
 ### Contract changes
+- session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
+- TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
 ### Rulings
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 03 — Client terminals
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · async across the link: replies, pushes racing an attach, reconnects and a host death
 Wave: 2 · Depends on: 02

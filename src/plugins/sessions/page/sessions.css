@@ -102,14 +102,37 @@
 }
 
 /* A session's frame: the bar holding its tab strip over the sheet of its
-   tabs, then the bar of its hidden popups, in flow so it never covers a
-   popup. */
+   tabs, then its drawer's row, then the bar of its hidden popups, in flow so
+   it never covers a popup. */
 .session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
+}
+
+/* While the drawer shows, the tab body keeps at least its end-min and the
+   drawer row takes the rest up to its stored height, the box the drawer's
+   divider measures, as an end-sized column split's tracks do. Both values are
+   unitless px on the frame. */
+.session-area:has(> .session-drawer-host:not([hidden])) {
+  grid-template-rows:
+    auto
+    minmax(calc(var(--session-drawer-end-min) * 1px), 1fr)
+    minmax(0, calc(var(--session-drawer-height) * 1px))
+    auto;
+}
+
+/* The drawer's host fills its grid row with the drawer part. */
+.session-drawer-host {
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+}
+
+.session-drawer-host[hidden] {
+  display: none;
 }
 
 .session-tabs-bar > * {
