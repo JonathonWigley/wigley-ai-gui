@@ -35,6 +35,7 @@ import {
   type AnswersPayload,
   type FormBody,
   type FormsChannel,
+  formsConfirmsSlot,
   type FormsMainExports,
   type FormsService,
   type MainItemKind,
@@ -45,7 +46,11 @@ import { FINDING_ORIGIN_SPECS, findingOrigins } from '../finding-origins';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { formsManifest } from '../manifest';
 import { sampleFormOwner } from '../../../shared/agent-forms/demo-form';
-import { askConfirm } from './confirm';
+import {
+  askConfirm,
+  type ConfirmTracker,
+  createConfirmTracker,
+} from './confirm';
 import { registerDemoSteps } from './demo-steps';
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { createKindRegistry } from './kinds/registry';
@@ -86,9 +91,11 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // Both services and the preview read `kinds` for the registered item kinds
 // and `layoutNames` for the layouts a round may name; both services share
 // `roundType`. `samples` is the preview's service with the layout check, which
-// the demo step and `confirmSample` ask through too. `flushed` settles once
-// every saved-round write queued before it has. `shown` settles once the agents' service shows a round of the
-// session, by its app id, after the call, until `signal` aborts.
+// the demo step and `confirmSample` ask through too. Only the agents' service
+// shows its rounds through `tracker`, so a sample confirm publishes nothing.
+// `flushed` settles once every saved-round write queued before it has. `shown`
+// settles once the agents' service shows a round of the session, by its app
+// id, after the call, until `signal` aborts.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -96,6 +103,7 @@ function createForms(
   roundType: AgentFormType<Round, FormBody, AnswersPayload>,
   kinds: () => readonly MainItemKind[],
   layoutNames: () => readonly string[],
+  tracker: ConfirmTracker,
 ): {
   forms: FormsService;
   samples: FormsService;
@@ -126,7 +134,7 @@ function createForms(
     sessions,
   });
   const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
-  const agentsShows = withShownWaits(presenter);
+  const agentsShows = withShownWaits(tracker.presenter(presenter));
   const agentsService = createAgentFormService({
     type: roundType,
     presenter: agentsShows.presenter,
@@ -293,7 +301,8 @@ export function addDriveActions(
 // its script, and in a drive run it adds the drive actions. Its exports
 // register a dependent's item kinds and finding origins, and hand each
 // dependent `confirm`, an Allow or Deny round in a session's own forms
-// session, and `confirmSample`, the same round as a demo sample.
+// session that `forms.confirms` holds while it is open when it has a subject,
+// and `confirmSample`, the same round as a demo sample.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
@@ -333,6 +342,13 @@ function startOverOrigins(
   }
   const kinds = () => registry.kinds();
   const roundType = createRoundType(kinds);
+  const confirms = api.state.publish(formsConfirmsSlot);
+  // A confirm of an earlier start settles through that start's writer, which
+  // no longer writes.
+  for (const roundId of confirms.all().keys()) {
+    confirms.delete(roundId);
+  }
+  const tracker = createConfirmTracker(confirms);
   const { forms, samples, preview, presenter, flushed, shown } = createForms(
     api,
     sessions,
@@ -340,6 +356,7 @@ function startOverOrigins(
     roundType,
     kinds,
     layoutNames,
+    tracker,
   );
   api.channel.handle('openPreview', () => preview.open());
   registerDemoSteps(api.services, {
@@ -395,12 +412,9 @@ function startOverOrigins(
         if (formSession === undefined) {
           return Promise.reject(new Error(`no forms session for ${sessionId}`));
         }
-        return askConfirm(
-          formSession,
-          request,
-          api.services.randomHex(),
-          signal,
-          toolUseId,
+        const nonce = api.services.randomHex();
+        return tracker.track(sessionId, request.subject, nonce, () =>
+          askConfirm(formSession, request, nonce, signal, toolUseId),
         );
       },
       confirmSample: async (sessionId, request, signal) => {

@@ -34,6 +34,7 @@ import { sessionsMainPart } from '../../sessions/main/start';
 import {
   type ConfirmRequest,
   type FormBody,
+  formsConfirmsSlot,
   type FormsMainExports,
   type Round,
   SAVED_ROUNDS_FOLDER,
@@ -211,6 +212,7 @@ function startWithToolSessions() {
 const CONFIRM_REQUEST: ConfirmRequest = {
   title: 'Trash notes.md',
   detail: 'Moves docs/notes.md to the trash.',
+  subject: { toolName: 'app command docs.trash', input: 'notes.md' },
 };
 
 // The confirm round's one question answered Allow.
@@ -229,6 +231,36 @@ const ALLOW_BODY: FormBody = {
   finding_answers: [],
   notice_comments: [],
 };
+
+// The confirm round's one question answered Deny.
+const DENY_BODY: FormBody = {
+  ...ALLOW_BODY,
+  answers: ALLOW_BODY.answers.map((answer) => ({ ...answer, choice: 2 })),
+};
+
+// An agent round of one question, opened ahead of a confirm.
+const FIRST_ROUND_ARGS = {
+  heading: 'Pick a name',
+  overview: 'The file needs a name.',
+  questions: [
+    {
+      title: 'Name',
+      summary: 'Which name the file takes.',
+      context: 'Two names fit.',
+      choices: ['notes.md', 'log.md'],
+      recommend: 1,
+      rationale: 'It says what the file holds.',
+    },
+  ],
+};
+
+// What a confirmsSlot row's `end` ends the confirm's round with.
+interface ConfirmEnd {
+  harness: ReturnType<typeof startWithToolSessions>['harness'];
+  formId: string;
+  abort: AbortController;
+  toolSession: ToolSession;
+}
 
 function shownRounds(
   sent: readonly { message: string; data: unknown }[],
@@ -676,6 +708,144 @@ describe('forms main part', () => {
     expect(shown[1]?.draft?.answers[0]?.choice ?? 0).toBe(0);
     abort.abort();
     await expect(second).resolves.toBe(false);
+    await harness.stop();
+  });
+
+  // Breaks if a key outlives its round, or if the key is not the page's round
+  // id.
+  it.each([
+    {
+      case: 'submitted Allow',
+      end: ({ harness, formId }: ConfirmEnd) =>
+        harness.invoke('finish', formId, {
+          kind: 'submitted',
+          body: ALLOW_BODY,
+        }),
+    },
+    {
+      case: 'submitted Deny',
+      end: ({ harness, formId }: ConfirmEnd) =>
+        harness.invoke('finish', formId, {
+          kind: 'submitted',
+          body: DENY_BODY,
+        }),
+    },
+    {
+      case: 'cancelled',
+      end: ({ harness, formId }: ConfirmEnd) =>
+        harness.invoke('finish', formId, {
+          kind: 'cancelled',
+          body: ALLOW_BODY,
+        }),
+    },
+    { case: 'aborted', end: ({ abort }: ConfirmEnd) => abort.abort() },
+    {
+      case: 'failed',
+      end: ({ toolSession }: ConfirmEnd) => toolSession.end(),
+    },
+  ])(
+    'confirmsSlot_HoldsTheRoundWhileOpen_ThenDeletesIt: $case',
+    async ({ end }) => {
+      const { harness, sessions, forms } = startWithToolSessions();
+      const toolSession = sessions.connect('app-a');
+      const confirms = harness.state.read(formsConfirmsSlot, 'test');
+      const abort = new AbortController();
+
+      const confirmed = forms.confirm(
+        'app-a',
+        CONFIRM_REQUEST,
+        abort.signal,
+        null,
+      );
+      await flush();
+      const formId = shownRounds(harness.sent)[0]?.formId ?? '';
+      expect(confirms.get(formId)).toEqual({
+        sessionId: 'app-a',
+        subject: CONFIRM_REQUEST.subject,
+      });
+
+      end({ harness, formId, abort, toolSession });
+      await Promise.allSettled([confirmed]);
+
+      expect(confirms.all().size).toBe(0);
+      await harness.stop();
+    },
+  );
+
+  it.each([
+    {
+      case: 'a null subject',
+      ask: (forms: FormsMainExports, signal: AbortSignal) =>
+        forms.confirm(
+          'app-a',
+          { ...CONFIRM_REQUEST, subject: null },
+          signal,
+          null,
+        ),
+    },
+    {
+      case: 'confirmSample',
+      ask: (forms: FormsMainExports, signal: AbortSignal) =>
+        forms.confirmSample('app-a', CONFIRM_REQUEST, signal),
+    },
+  ])('confirmsSlot_HoldsNothing: $case', async ({ ask }) => {
+    const { harness, sessions, forms } = startWithToolSessions();
+    sessions.connect('app-a');
+    const abort = new AbortController();
+
+    const confirmed = ask(forms, abort.signal);
+    await flush();
+
+    expect(shownRounds(harness.sent)).toHaveLength(1);
+    expect(harness.state.read(formsConfirmsSlot, 'test').all().size).toBe(0);
+    abort.abort();
+    await confirmed;
+    await harness.stop();
+  });
+
+  // Breaks if the key is set when `confirm` is called rather than when its
+  // round shows, or if the tracker's presenter stops forwarding `show`.
+  it('confirmsSlot_QueuedConfirm_HoldsNoKeyUntilItShows', async () => {
+    const { harness, sessions, forms } = startWithToolSessions();
+    const toolSession = sessions.connect('app-a');
+    const confirms = harness.state.read(formsConfirmsSlot, 'test');
+    void toolSession.call('ask_round', FIRST_ROUND_ARGS, {
+      toolUseId: null,
+      signal: live(),
+    });
+    await flush();
+    const abort = new AbortController();
+
+    const confirmed = forms.confirm('app-a', CONFIRM_REQUEST, abort.signal, null);
+    await flush();
+    expect(confirms.all().size).toBe(0);
+
+    harness.invoke('finish', shownRounds(harness.sent)[0]?.formId, {
+      kind: 'cancelled',
+      body: {},
+    });
+    await flush();
+    const shown = shownRounds(harness.sent);
+    expect(shown).toHaveLength(2);
+    expect([...confirms.all()]).toEqual([
+      [
+        shown[1]?.formId,
+        { sessionId: 'app-a', subject: CONFIRM_REQUEST.subject },
+      ],
+    ]);
+
+    abort.abort();
+    await confirmed;
+    await harness.stop();
+  });
+
+  it('confirmsSlot_NoFormsSession_PublishesNothing', async () => {
+    const { harness, forms } = startWithToolSessions();
+
+    await expect(
+      forms.confirm('app-z', CONFIRM_REQUEST, live(), null),
+    ).rejects.toThrow('no forms session for app-z');
+    expect(harness.state.read(formsConfirmsSlot, 'test').all().size).toBe(0);
     await harness.stop();
   });
 });

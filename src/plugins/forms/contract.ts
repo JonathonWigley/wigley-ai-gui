@@ -585,13 +585,22 @@ export interface FormsChannel extends ChannelShape {
   messages: AgentFormMessages<Round, FormBody>;
 }
 
+// The call a confirm stands for: the tool's name and the input it runs with.
+export interface ConfirmSubject {
+  toolName: string;
+  input: unknown;
+}
+
 // What a confirm asks the user: `title` heads the round, `detail` says what
 // the action does. The round's overview shows the detail's first paragraph,
 // the text before its first blank line, so that paragraph is plain prose; the
 // question's context shows the whole detail, markdown blocks included.
+// `subject` is the call the confirm stands for, which forms publishes while
+// the round is open, or null for none.
 export interface ConfirmRequest {
   title: string;
   detail: string;
+  subject: ConfirmSubject | null;
 }
 
 // The main part's exports. `registerKind` throws, registering nothing, on a
@@ -606,14 +615,16 @@ export interface ConfirmRequest {
 // rounds already open keep reading it, and each change re-contributes the
 // tools. `confirm` asks the user Allow or Deny in a fresh round, Deny
 // recommended, in the forms session forms started for the app session
-// `sessionId`; it queues behind that session's open round. It resolves true
-// only on a submitted Allow of that round, and false on any other answer or
-// once `signal` aborts. It rejects with `no forms session for <sessionId>`
-// when that session has no live forms tool session. `confirmSample` asks the
-// same Allow or Deny round for a demo step, as a sample owned by the app
-// session `sessionId`: it saves no round and wakes no session, ends its form
-// once answered or aborted, and resolves the user's Allow (true) or Deny
-// (false), false once `signal` aborts.
+// `sessionId`; it queues behind that session's open round. A request with a
+// subject sits in `formsConfirmsSlot` from when its round shows until the
+// confirm settles. It resolves true only on a submitted Allow of that round,
+// and false on any other answer or once `signal` aborts. It rejects with
+// `no forms session for <sessionId>` when that session has no live forms tool
+// session. `confirmSample` asks the same Allow or Deny round for a demo step,
+// as a sample owned by the app session `sessionId`: it saves no round and
+// wakes no session, publishes nothing, ends its form once answered or aborted,
+// and resolves the user's Allow (true) or Deny (false), false once `signal`
+// aborts.
 export interface FormsMainExports {
   registerKind(kind: MainItemKind): Disposable;
   registerFindingOrigin(spec: FindingOriginSpec): Disposable;
@@ -633,6 +644,23 @@ export interface FormsMainExports {
 export const formsMainKey: DependencyKey<FormsMainExports, 'main', 'forms'> = {
   id: 'forms',
   process: 'main',
+};
+
+// An open confirm round's caller, by its app session id, and the call the
+// confirm stands for.
+export interface OpenConfirm {
+  sessionId: string;
+  subject: ConfirmSubject;
+}
+
+// Each open confirm round that has a subject, keyed by the round id forms gave
+// it (the page's `roundId`), holding the caller's app session id and the
+// subject; set when the round shows and deleted once its confirm settles,
+// submitted, cancelled, aborted or failed.
+export const formsConfirmsSlot: KeyedSlotKey<OpenConfirm, 'main', 'forms'> = {
+  id: 'forms.confirms',
+  process: 'main',
+  kind: 'keyed',
 };
 
 // The page part's exports and events.

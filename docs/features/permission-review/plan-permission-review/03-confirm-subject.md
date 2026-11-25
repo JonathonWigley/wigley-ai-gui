@@ -1,6 +1,6 @@
 # 03 — Confirm subject and the forms.confirms slot
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: deep · ties a slot key to an async round's lifecycle across forms and agent-commands (queued, shown, submitted, cancelled, aborted, session end), and adds `ConfirmSubject`, `OpenConfirm` and `formsConfirmsSlot`, which 04 and 05 consume
 Wave: 1 · Depends on: none

@@ -319,8 +319,10 @@ function namedSessions(
   return typeof sendToTarget === 'string' ? [...named, sendToTarget] : named;
 }
 
-// The Allow or Deny round's title and detail for a run of `info` that
+// The Allow or Deny round's title, detail and subject for a run of `info` that
 // `callerId`'s agent asks for, naming the target `session` and `arg` when set.
+// The subject's input is the argument, or the target's side-bar name with the
+// argument for a run on another session.
 export function confirmRequest(
   deps: Pick<AgentCommandToolDeps, 'senderName'>,
   callerId: string,
@@ -328,15 +330,25 @@ export function confirmRequest(
   session: string | undefined,
   arg: unknown,
 ): ConfirmRequest {
+  const targetName =
+    session === undefined ? undefined : deps.senderName(session);
   const onTarget =
-    session === undefined ? '' : ` on session "${deps.senderName(session)}"`;
+    targetName === undefined ? '' : ` on session "${targetName}"`;
   const argument =
     arg === undefined
       ? ''
       : `\n\nArgument:\n\`\`\`json\n${JSON.stringify(arg, null, 2)}\n\`\`\``;
+  const subjectArg = arg ?? null;
   return {
     title: `Run ${info.label}?`,
     detail: `The agent in session "${deps.senderName(callerId)}" asks to run ${info.id} (${info.label})${onTarget}.${argument}`,
+    subject: {
+      toolName: `app command ${info.id}`,
+      input:
+        targetName === undefined
+          ? subjectArg
+          : { session: targetName, arg: subjectArg },
+    },
   };
 }
 

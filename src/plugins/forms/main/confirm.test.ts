@@ -1,12 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  AgentFormListener,
+  PresentedAgentForm,
+} from '../../../contracts/agent-forms';
+import type {
   AnswerResult,
   AnswersPayload,
   ConfirmRequest,
+  ConfirmSubject,
+  FormBody,
   FormsSession,
+  OpenConfirm,
   Question,
+  Round,
 } from '../contract';
-import { askConfirm, confirmAllowed, confirmRoundArgs } from './confirm';
+import {
+  askConfirm,
+  confirmAllowed,
+  confirmRoundArgs,
+  createConfirmTracker,
+} from './confirm';
 import { BUILT_IN_KINDS } from './kinds/formats';
 import { createRoundType } from './round-type';
 
@@ -16,6 +29,18 @@ const REQUEST: ConfirmRequest = {
   title: 'Trash notes.md',
   detail:
     'Moves docs/notes.md to the trash.\n\nArgument:\n```json\n"notes.md"\n```',
+  subject: null,
+};
+
+const SUBJECT: ConfirmSubject = {
+  toolName: 'app command docs.trash',
+  input: 'notes.md',
+};
+
+const NO_LISTENER: AgentFormListener<FormBody> = {
+  draft: () => Promise.resolve(),
+  finish: () => undefined,
+  cancel: () => undefined,
 };
 
 // A payload of the round `Allow or deny n1` submitted with Allow; each part
@@ -218,5 +243,55 @@ describe('confirm', () => {
     expect(question.choices[question.recommend - 1]).toBe('Deny');
     expect(round.overview).toBe('Moves docs/notes.md to the trash.');
     expect(question.context).toBe(REQUEST.detail);
+  });
+
+  // Breaks if a re-show makes a second key or the set follows the show.
+  it('tracker_ReShowOfOneForm_HoldsOneKey', async () => {
+    const events: string[] = [];
+    const held = new Map<string, OpenConfirm>();
+    const tracker = createConfirmTracker({
+      set: (key, value) => {
+        events.push(`set ${key}`);
+        held.set(key, value);
+      },
+      delete: (key) => {
+        events.push(`delete ${key}`);
+        held.delete(key);
+      },
+    });
+    const presenter = tracker.presenter({
+      show: (form) => {
+        events.push(`show ${form.formId}`);
+      },
+      close: () => undefined,
+    });
+    const form: PresentedAgentForm<Round, FormBody> = {
+      formId: 'f1',
+      sessionId: 'app-a',
+      label: REQUEST.title,
+      form: roundType.parse(confirmRoundArgs(REQUEST, 'n1')),
+      draft: null,
+    };
+    let heldWhileOpen: [string, OpenConfirm][] = [];
+
+    const allowed = await tracker.track('app-a', SUBJECT, 'n1', () => {
+      presenter.show(form, NO_LISTENER);
+      presenter.show(form, NO_LISTENER);
+      heldWhileOpen = [...held];
+      return Promise.resolve(true);
+    });
+
+    expect(allowed).toBe(true);
+    expect(heldWhileOpen).toEqual([
+      ['f1', { sessionId: 'app-a', subject: SUBJECT }],
+    ]);
+    expect(events).toEqual([
+      'set f1',
+      'show f1',
+      'set f1',
+      'show f1',
+      'delete f1',
+    ]);
+    expect(held.size).toBe(0);
   });
 });

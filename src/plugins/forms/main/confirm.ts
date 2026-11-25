@@ -1,8 +1,15 @@
+import type { AgentFormPresenter } from '../../../contracts/agent-forms';
+import type { KeyedSlotWriter } from '../../../contracts/state';
 import type {
   AnswerResult,
   AnswersPayload,
   ConfirmRequest,
+  ConfirmSubject,
+  FormBody,
   FormsSession,
+  OpenConfirm,
+  Question,
+  Round,
 } from '../contract';
 
 // 1-based, as a question's `recommend` and an answer's `choice` are.
@@ -98,4 +105,74 @@ export async function askConfirm(
     }
   }
   return false;
+}
+
+// Publishes each confirm round that has a subject in `forms.confirms`.
+// `presenter` wraps a service's presenter: a shown round whose one question is
+// a tracked confirm's sets its form id's key before `inner` shows it. `track`
+// tracks the confirm `nonce` names while `ask` runs, and deletes every key its
+// rounds set once `ask` settles, however it settles; a null `subject` tracks
+// nothing.
+export interface ConfirmTracker {
+  presenter(
+    inner: AgentFormPresenter<Round, FormBody>,
+  ): AgentFormPresenter<Round, FormBody>;
+  track(
+    sessionId: string,
+    subject: ConfirmSubject | null,
+    nonce: string,
+    ask: () => Promise<boolean>,
+  ): Promise<boolean>;
+}
+
+// A tracked confirm and the form ids its rounds showed under.
+interface TrackedConfirm {
+  open: OpenConfirm;
+  formIds: Set<string>;
+}
+
+export function createConfirmTracker(
+  confirms: Pick<KeyedSlotWriter<OpenConfirm>, 'set' | 'delete'>,
+): ConfirmTracker {
+  // By the confirm's question title.
+  const tracked = new Map<string, TrackedConfirm>();
+  return {
+    presenter: (inner) => ({
+      show: (form, listener) => {
+        const title = onlyQuestionTitle(form.form);
+        const confirm = title === undefined ? undefined : tracked.get(title);
+        if (confirm !== undefined) {
+          confirms.set(form.formId, confirm.open);
+          confirm.formIds.add(form.formId);
+        }
+        inner.show(form, listener);
+      },
+      close: (formId) => inner.close(formId),
+    }),
+    track: async (sessionId, subject, nonce, ask) => {
+      if (subject === null) {
+        return ask();
+      }
+      const title = questionTitle(nonce);
+      const confirm: TrackedConfirm = {
+        open: { sessionId, subject },
+        formIds: new Set(),
+      };
+      tracked.set(title, confirm);
+      try {
+        return await ask();
+      } finally {
+        for (const formId of confirm.formIds) {
+          confirms.delete(formId);
+        }
+        tracked.delete(title);
+      }
+    },
+  };
+}
+
+// The title of the round's question when it has exactly one.
+function onlyQuestionTitle(round: Round): string | undefined {
+  const questions = (round.items.question ?? []) as readonly Question[];
+  return questions.length === 1 ? questions[0]?.title : undefined;
 }

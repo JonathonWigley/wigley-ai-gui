@@ -94,6 +94,7 @@ const SUBMIT_CONFIRM: ConfirmRequest = {
   title: 'Run send answers?',
   detail:
     'The agent in session "gamma 1" asks to run forms.submit (send answers).',
+  subject: { toolName: 'app command forms.submit', input: null },
 };
 
 const context = (signal = new AbortController().signal) => ({
@@ -325,6 +326,10 @@ describe('createAgentCommandTools', () => {
         title: 'Run close the session?',
         detail:
           'The agent in session "gamma 1" asks to run sessions.closeSession (close the session) on session "gamma 2".\n\nArgument:\n```json\n{\n  "keep": "log"\n}\n```',
+        subject: {
+          toolName: 'app command sessions.closeSession',
+          input: { session: 'gamma 2', arg: { keep: 'log' } },
+        },
       },
       result: textResult('Ran sessions.closeSession.'),
     },
