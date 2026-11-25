@@ -30,6 +30,7 @@ const STATE: WorkState = {
   suggestions: [],
   columns: ['Backlog', 'Todo', 'In Progress', 'In QA', 'Done', OTHER_COLUMN],
   job: { running: null, last: null },
+  lastSweepAt: null,
   problem: null,
 };
 

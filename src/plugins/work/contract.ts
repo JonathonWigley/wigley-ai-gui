@@ -21,6 +21,21 @@ export const WORK_SECTIONS: readonly WorkSection[] = [
   'worth_knowing',
 ];
 
+// The sections that hold the sweep's summaries of channel posts, which take no reply; the rest hold threads the user
+// is part of.
+export const DIGEST_SECTIONS: readonly WorkSection[] = [
+  'around',
+  'worth_knowing',
+];
+
+export const isDigest = (section: WorkSection): boolean =>
+  DIGEST_SECTIONS.includes(section);
+
+// Whether `item` has a message the user has not seen: never seen, or a message newer than when it was.
+export function isUnseen(item: WorkItem): boolean {
+  return item.seenAt === null || Date.parse(item.at) > Date.parse(item.seenAt);
+}
+
 // What work detection sees of a ticket's work, each suggesting the column its `work.signals` leaf names.
 export type WorkSignal =
   | 'branch'
@@ -54,7 +69,7 @@ export interface WorkItem {
   ticketKeys: string[];
   linkReason: string | null; // why the worker linked a key the conversation does not name
   why: string | null; // around and worth_knowing: one line on why it matters
-  draft: string | null; // needs_you: the drafted reply; waiting: the drafted nudge
+  seenAt: string | null; // ISO time the user last looked at it in the Inbox; null for never
   state: WorkItemState;
   snoozedUntil: string | null; // ISO; set only while state is 'snoozed'
   firstSeen: string; // ISO time the store first recorded it
@@ -135,6 +150,7 @@ export interface WorkState {
   suggestions: WorkSuggestion[];
   columns: string[]; // work.columns' names in order, then OTHER_COLUMN
   job: { running: WorkJobStatus | null; last: WorkJobStatus | null };
+  lastSweepAt: string | null; // ISO start of the last sweep that finished well; null for none
   problem: string | null; // why work.json was not read at start, so nothing saves this run; else null
 }
 
@@ -243,21 +259,6 @@ export interface WorkStatusLine {
   hasRow: boolean;
 }
 
-const KIND_WORDS: Record<WorkJobKind, string> = {
-  sweep: 'Sweep',
-  send: 'Send',
-  move: 'Move',
-  nudge: 'Nudge',
-  comment: 'Comment',
-};
-
-const TONES: Record<WorkJobStatus['state'], WorkStatusLine['tone']> = {
-  queued: 'running',
-  running: 'running',
-  done: 'success',
-  failed: 'error',
-};
-
 const MINUTE_MS = 60_000;
 
 // An age of `elapsedMs`: `<n>m` under an hour, `<n>h` under 48 hours, else `<n>d`; null under a minute. The one
@@ -274,26 +275,35 @@ export function ageText(elapsedMs: number): string | null {
   return hours < 48 ? `${hours}h` : `${Math.floor(hours / 24)}d`;
 }
 
-// The status line both views draw: it describes `job.running`, else `job.last`, aged against `now` (epoch ms).
-export function statusLine(job: WorkState['job'], now: number): WorkStatusLine {
+// `<age> ago`, or `just now` under a minute.
+function agoText(at: string, now: number): string {
+  const age = ageText(now - Date.parse(at));
+  return age === null ? 'just now' : `${age} ago`;
+}
+
+// The status line both views draw: when the work was last updated, aged against `now` (epoch ms). `Updating…` while a
+// sweep runs, `Update failed <ago>` while the last sweep failed, else `Updated <ago>` from the last good sweep.
+export function statusLine(work: WorkState, now: number): WorkStatusLine {
+  const { job, lastSweepAt } = work;
   const hasRow = job.last !== null && job.last.rowId !== null;
-  const shown = job.running ?? job.last;
-  if (shown === null) {
-    return { text: 'No job yet', tone: 'idle', hasRow };
+  if (job.running?.kind === 'sweep' && job.running.state === 'running') {
+    return { text: 'Updating…', tone: 'running', hasRow };
   }
-  const word = KIND_WORDS[shown.kind];
-  const age = ageText(now - Date.parse(shown.at));
-  const ago = age === null ? 'just now' : `${age} ago`;
-  const forms: Record<WorkJobStatus['state'], string> = {
-    queued: `${word} queued`,
-    running: `${word} running · started ${ago}`,
-    done: `${word} done ${ago}`,
-    failed: `${word} failed ${ago}`,
-  };
-  const note = shown.note === null ? '' : ` · ${shown.note}`;
+  const isSweepFailed =
+    job.last?.kind === 'sweep' && job.last.state === 'failed';
+  if (isSweepFailed && job.last !== null) {
+    return {
+      text: `Update failed ${agoText(job.last.at, now)}`,
+      tone: 'error',
+      hasRow,
+    };
+  }
+  if (lastSweepAt === null) {
+    return { text: 'Not updated yet', tone: 'idle', hasRow };
+  }
   return {
-    text: `${forms[shown.state]}${note}`,
-    tone: TONES[shown.state],
+    text: `Updated ${agoText(lastSweepAt, now)}`,
+    tone: 'idle',
     hasRow,
   };
 }
@@ -418,6 +428,7 @@ export interface WorkChannel extends ChannelShape {
     send(arg: WorkSendArg): Promise<void>;
     dismiss(itemId: string): Promise<void>;
     restore(itemId: string): Promise<void>;
+    markSeen(itemId: string): Promise<void>;
     snooze(itemId: string): Promise<void>;
     addToBoard(itemId: string): Promise<void>;
     moveCard(arg: WorkMoveArg): Promise<void>;

@@ -25,7 +25,7 @@ export function workItem(
     ticketKeys: [],
     linkReason: null,
     why: null,
-    draft: null,
+    seenAt: null,
     state: 'open',
     snoozedUntil: null,
     firstSeen: '2026-11-23T10:05:00.000Z',

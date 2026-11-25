@@ -59,7 +59,7 @@ function sampleItem(at: string): WorkItem {
     ticketKeys: [SAMPLE_SUGGESTION_CARD],
     linkReason: null,
     why: null,
-    draft: null,
+    seenAt: null,
     state: 'open',
     snoozedUntil: null,
     firstSeen: at,
@@ -124,6 +124,7 @@ export function sampleBoardState(now: number): WorkState {
         note: null,
       },
     },
+    lastSweepAt: ago(3),
     problem: null,
   };
 }

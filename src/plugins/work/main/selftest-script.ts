@@ -80,7 +80,7 @@ const press = (
 });
 
 const needsYouLine = (count: number) =>
-  new RegExp(`^\\[work\\] needs you: ${count}$`);
+  new RegExp(`^\\[work\\] unseen needs you: ${count}$`);
 
 const inboxLine = (text: string) => `[work-inbox] ${text}`;
 const boardLine = (text: string) => `[work-board] ${text}`;

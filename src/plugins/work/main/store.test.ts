@@ -192,7 +192,7 @@ describe('createWorkStore', () => {
         workItem('a', {
           ticketKeys: ['WS-1'],
           linkReason: 'Names the board',
-          draft: 'On it',
+          seenAt: '2026-11-23T10:30:00.000Z',
           state: 'snoozed',
           snoozedUntil: '2026-11-24T10:00:00.000Z',
           sending: 'On it',
@@ -315,6 +315,34 @@ describe('createWorkStore', () => {
       jiraCard('WS-1', 'To Do', { commenting: [] }),
       localCard('local-1', 'Todo'),
     ]);
+  });
+
+  it('parse_itemSavedWithoutSeenAt_readsNullAndDropsDraft', () => {
+    const { seenAt: _seenAt, ...saved } = workItem('a');
+    const text = JSON.stringify({
+      ...EMPTY_WORK_FILE,
+      items: [{ ...saved, draft: 'On it' }],
+    });
+
+    const parsed = parseWorkFile(text);
+
+    expect(text).not.toContain('seenAt');
+    expect(parsed.items).toEqual([workItem('a', { seenAt: null })]);
+  });
+
+  it('update_changeReturnsSameFile_writesAndTellsNothing', async () => {
+    const { store, writes } = storeOver();
+    const listener = vi.fn();
+    store.onChange(listener);
+    const before = await store.update(withItem('a'));
+    listener.mockClear();
+    writes.length = 0;
+
+    const after = await store.update((file) => file);
+
+    expect(after).toBe(before);
+    expect(writes).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
   });
 
   it('parse_savedWithoutDetails_readsEmptyDetails', () => {
@@ -470,11 +498,12 @@ describe('buildWorkState', () => {
       expected: { cards: [localCard('local-1', 'Other')] },
     },
     {
-      case: 'the columns end in Other, and the problem passes through',
-      file: EMPTY_WORK_FILE,
+      case: 'the columns end in Other, and the problem and the last sweep time pass through',
+      file: { ...EMPTY_WORK_FILE, lastSweepAt: '2026-11-23T11:00:00.000Z' },
       problem: 'work.json could not be read',
       expected: {
         columns: ['Todo', 'Review', 'Other'],
+        lastSweepAt: '2026-11-23T11:00:00.000Z',
         problem: 'work.json could not be read',
       },
     },

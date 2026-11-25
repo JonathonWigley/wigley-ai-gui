@@ -87,7 +87,6 @@ function recorded(
     ticketKeys: [],
     linkReason: null,
     why: null,
-    draft: null,
     thread: null,
     ...overrides,
   };
@@ -720,27 +719,31 @@ describe('mergeRecordedItems', () => {
     {
       name: 'a new item',
       stored: [],
-      items: [recorded('a', { draft: 'On it.' })],
+      items: [recorded('a')],
       clear: [],
       expected: {
         state: 'open',
         firstSeen: NOW,
-        draft: 'On it.',
+        seenAt: null,
         snoozedUntil: null,
         note: null,
         sending: null,
       },
     },
     {
-      name: 'an existing item keeps its draft on a null draft',
+      name: 'an existing item keeps its seenAt, note and firstSeen',
       stored: [
-        workItem('a', { draft: 'Sure.', note: 'failed', firstSeen: EARLIER }),
+        workItem('a', {
+          seenAt: STORED_AT,
+          note: 'failed',
+          firstSeen: EARLIER,
+        }),
       ],
-      items: [recorded('a', { summary: 'Bo joins.', draft: null })],
+      items: [recorded('a', { summary: 'Bo joins.', at: LATER_AT })],
       clear: [],
       expected: {
         summary: 'Bo joins.',
-        draft: 'Sure.',
+        seenAt: STORED_AT,
         note: 'failed',
         firstSeen: EARLIER,
       },

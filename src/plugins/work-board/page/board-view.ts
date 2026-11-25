@@ -133,6 +133,7 @@ const EMPTY_WORK: WorkState = {
   suggestions: [],
   columns: [],
   job: { running: null, last: null },
+  lastSweepAt: null,
   problem: null,
 };
 
@@ -389,7 +390,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   };
 
   const drawStatus = (work: WorkState) => {
-    const line = statusLine(work.job, deps.now());
+    const line = statusLine(work, deps.now());
     const key = JSON.stringify([line, work.problem]);
     if (key === drawnStatusKey) {
       return;
@@ -707,7 +708,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
           detailDraw =
             card === null || input === null
               ? drawDetailEmpty()
-              : drawDetailPart(input, draftText(card, state, work));
+              : drawDetailPart(input, draftText(card, state));
         });
       } finally {
         isRedrawingPane = false;
@@ -721,7 +722,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     const box = input?.box ?? null;
     const hasEditableBox = box !== null && box.sending === null;
     if (card !== null && hasEditableBox) {
-      const text = draftText(card, state, work);
+      const text = draftText(card, state);
       boxes.setText(card.id, text);
       detailPane
         .querySelector('.work-board-box')
@@ -970,9 +971,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     if (editableBoxOf(card) === null) {
       return;
     }
-    const state = store.get();
-    const work = shownWork();
-    const text = draftText(card, state, work);
+    const text = draftText(card, store.get());
     if (text.trim() === '') {
       deps.toast('Nothing to send', 'info');
       return;

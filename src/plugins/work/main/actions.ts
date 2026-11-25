@@ -1,6 +1,7 @@
 import {
   cardColumn,
   comparableName,
+  isUnseen,
   namedColumn,
   OTHER_COLUMN,
   type WorkCard,
@@ -124,6 +125,23 @@ export function restore(
   return done(withItem(file, restored), null, `restored ${itemId}`);
 }
 
+// Stamps item `itemId` seen at `now` (epoch ms); `file` itself when it is already seen at or after its `at`.
+export function markSeen(
+  file: WorkFile,
+  itemId: string,
+  now: number,
+): ActionResult | Refusal {
+  const item = file.items.find((candidate) => candidate.id === itemId);
+  if (item === undefined) {
+    return refuse(`No item ${itemId}`);
+  }
+  if (!isUnseen(item)) {
+    return done(file, null, `${itemId} already seen`);
+  }
+  const seen: WorkItem = { ...item, seenAt: isoAt(now) };
+  return done(withItem(file, seen), null, `seen ${itemId}`);
+}
+
 // Snoozes an open item until `now` (epoch ms) plus `SNOOZE_MS`.
 export function snooze(
   file: WorkFile,
@@ -194,7 +212,6 @@ export function send(file: WorkFile, arg: WorkSendArg): ActionResult | Refusal {
   }
   const sending: WorkItem = {
     ...item,
-    draft: arg.text,
     sending: arg.text,
     note: null,
   };

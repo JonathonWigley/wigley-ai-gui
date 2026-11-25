@@ -185,17 +185,9 @@ function sourceItemOf(card: WorkLocalCard, work: WorkState): WorkItem | null {
   return work.items.find((item) => item.id === card.sourceItemId) ?? null;
 }
 
-// The text a card's box holds: the user's unsent edit, else a local task's source thread draft, else empty.
-export function draftText(
-  card: WorkCard,
-  state: BoardViewState,
-  work: WorkState,
-): string {
-  const edit = state.drafts[card.id];
-  if (edit !== undefined) {
-    return edit;
-  }
-  return card.kind === 'local' ? (sourceItemOf(card, work)?.draft ?? '') : '';
+// The text a card's box holds: the user's unsent edit, else empty.
+export function draftText(card: WorkCard, state: BoardViewState): string {
+  return state.drafts[card.id] ?? '';
 }
 
 // `<age> ago`, or `just now` under a minute, for ISO time `at`.

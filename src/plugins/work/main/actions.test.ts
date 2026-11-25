@@ -24,6 +24,7 @@ import {
   type JobEnd,
   jobEnded,
   LOST_JOB_NOTE,
+  markSeen,
   moveCard,
   nextSnoozeEnd,
   notYet,
@@ -168,6 +169,38 @@ describe('restore', () => {
   });
 });
 
+describe('markSeen', () => {
+  it.each<{ name: string; item: WorkItem }>([
+    { name: 'never seen', item: p1() },
+    {
+      name: 'seen before its latest message',
+      item: p1({ seenAt: '2026-11-23T09:00:00.000Z' }),
+    },
+  ])('markSeen stamps now ($name)', ({ item }) => {
+    expect(markSeen(ofItems(item), 'p1', NOW)).toEqual(
+      result(ofItems(p1({ seenAt: NOW_ISO })), null, 'seen p1'),
+    );
+  });
+
+  it.each<{ name: string; seenAt: string }>([
+    { name: 'at its latest message', seenAt: '2026-11-23T10:00:00.000Z' },
+    { name: 'after its latest message', seenAt: '2026-11-23T11:00:00.000Z' },
+  ])('markSeen keeps the file itself when seen $name', ({ seenAt }) => {
+    const file = ofItems(p1({ seenAt }));
+
+    expect(markSeen(file, 'p1', NOW)).toEqual(
+      result(file, null, 'p1 already seen'),
+    );
+    expect((markSeen(file, 'p1', NOW) as ActionResult).file).toBe(file);
+  });
+
+  it('markSeen refuses an unknown item', () => {
+    expect(markSeen(ofItems(p1()), 'nope', NOW)).toEqual(
+      refused('No item nope'),
+    );
+  });
+});
+
 describe('snooze', () => {
   it.each<{ name: string; item: WorkItem; expected: ActionResult | Refusal }>([
     {
@@ -255,20 +288,19 @@ describe('send', () => {
       item: p1({ note: 'Send failed: x' }),
       text: '  On it',
       expected: result(
-        ofItems(p1({ draft: '  On it', sending: '  On it' })),
+        ofItems(p1({ sending: '  On it' })),
         { kind: 'send', itemId: 'p1', text: '  On it' },
         'send queued p1',
       ),
     },
     {
       name: 'a waiting item queues a nudge',
-      item: p1({ section: 'waiting', draft: 'Any news?' }),
+      item: p1({ section: 'waiting' }),
       text: 'Any news on this?',
       expected: result(
         ofItems(
           p1({
             section: 'waiting',
-            draft: 'Any news on this?',
             sending: 'Any news on this?',
           }),
         ),
@@ -846,7 +878,7 @@ describe('jobEnded', () => {
   const sendJob: WorkJob = { kind: 'send', itemId: 'p1', text: 'On it' };
   const nudgeJob: WorkJob = { kind: 'nudge', itemId: 'p1', text: 'Any news?' };
   const moveJob: WorkJob = { kind: 'move', key: 'ABC-12', column: 'In QA' };
-  const sending = p1({ draft: 'On it', sending: 'On it' });
+  const sending = p1({ sending: 'On it' });
   const moving = jiraCard('ABC-12', 'In QA', {
     movingTo: 'In QA',
     note: 'Move failed',
@@ -881,39 +913,35 @@ describe('jobEnded', () => {
       file: ofItems(sending),
       job: sendJob,
       end: { ok: true, note: null },
-      expected: ofItems(p1({ draft: 'On it', state: 'cleared' })),
+      expected: ofItems(p1({ state: 'cleared' })),
     },
     {
       name: 'send ok on an item a sweep cleared',
       file: ofItems({ ...sending, state: 'cleared' }),
       job: sendJob,
       end: { ok: true, note: null },
-      expected: ofItems(p1({ draft: 'On it', state: 'cleared' })),
+      expected: ofItems(p1({ state: 'cleared' })),
     },
     {
-      name: 'send failed keeps state and draft',
+      name: 'send failed keeps state',
       file: ofItems(sending),
       job: sendJob,
       end: { ok: false, note: 'x' },
-      expected: ofItems(p1({ draft: 'On it', note: 'Send failed: x' })),
+      expected: ofItems(p1({ note: 'Send failed: x' })),
     },
     {
       name: 'nudge failed with a null note',
       file: ofItems({ ...sending, section: 'waiting' }),
       job: nudgeJob,
       end: { ok: false, note: null },
-      expected: ofItems(
-        p1({ section: 'waiting', draft: 'On it', note: 'Send failed' }),
-      ),
+      expected: ofItems(p1({ section: 'waiting', note: 'Send failed' })),
     },
     {
       name: 'a press never queued',
       file: ofItems(sending),
       job: sendJob,
       end: { ok: false, note: 'Not queued: x' },
-      expected: ofItems(
-        p1({ draft: 'On it', note: 'Send failed: Not queued: x' }),
-      ),
+      expected: ofItems(p1({ note: 'Send failed: Not queued: x' })),
     },
     {
       name: 'move ok',
@@ -1067,7 +1095,7 @@ describe('jobEnded', () => {
 });
 
 describe('clearStaleMarks', () => {
-  const sending = p1({ draft: 'On it', sending: 'On it' });
+  const sending = p1({ sending: 'On it' });
   const moving = jiraCard('ABC-12', 'To Do', { movingTo: 'In QA' });
 
   it.each<{
@@ -1083,9 +1111,7 @@ describe('clearStaleMarks', () => {
         { kind: 'send', itemId: 'p2', text: 'On it' },
         { kind: 'sweep' },
       ],
-      expected: ofItems(
-        p1({ draft: 'On it', note: `Send failed: ${LOST_JOB_NOTE}` }),
-      ),
+      expected: ofItems(p1({ note: `Send failed: ${LOST_JOB_NOTE}` })),
     },
     {
       name: 'a moving card with no pending move',
@@ -1203,6 +1229,7 @@ describe('actions', () => {
     const presses: (() => unknown)[] = [
       () => dismiss(file, 'p1'),
       () => restore(file, 'p2'),
+      () => markSeen(file, 'p1', NOW),
       () => snooze(file, 'p1', NOW),
       () => expireSnoozes(file, NOW),
       () => send(file, { itemId: 'p1', text: 'On it' }),

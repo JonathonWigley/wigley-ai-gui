@@ -63,6 +63,7 @@ describe('workPagePart', () => {
     },
     { command: 'dismiss', arg: 'p1', args: ['p1'] },
     { command: 'restore', arg: 'p2', args: ['p2'] },
+    { command: 'markSeen', arg: 'p5', args: ['p5'] },
     { command: 'snooze', arg: 'p3', args: ['p3'] },
     { command: 'addToBoard', arg: 'p4', args: ['p4'] },
     {

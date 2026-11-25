@@ -19,6 +19,7 @@ import {
 } from '../../sessions/contract';
 import { unityPoolSnapshotSlot } from '../../unity-pool/contract';
 import {
+  isUnseen,
   readColumns,
   readProjects,
   type WorkChannel,
@@ -40,6 +41,7 @@ import {
   expireSnoozes,
   isRefusal,
   jobEnded,
+  markSeen,
   moveCard,
   nextSnoozeEnd,
   notYet,
@@ -75,8 +77,8 @@ type WorkMainApi = MainApi<
 export { JOB_ROWS_FILE } from './job-rows';
 
 const NEEDS_YOU_NOUN: AlertNoun = {
-  singular: 'Slack item that needs you',
-  plural: 'Slack items that need you',
+  singular: 'new Slack item that needs you',
+  plural: 'new Slack items that need you',
 };
 
 const STILL_RUNNING = 'The job is still running';
@@ -85,9 +87,10 @@ const NO_TRANSCRIPT = 'No transcript for that job';
 const SEED_DESCRIPTION =
   'Replaces the work store with the self-test fixture and seeds its signals.';
 
-const openNeedsYou = (file: WorkFile) =>
+const unseenNeedsYou = (file: WorkFile) =>
   file.items.filter(
-    (item) => item.section === 'needs_you' && item.state === 'open',
+    (item) =>
+      item.section === 'needs_you' && item.state === 'open' && isUnseen(item),
   ).length;
 
 // A press main refused: the rejection the page toasts, its message the refusal text.
@@ -100,8 +103,8 @@ class PressRefused extends Error {}
 // It runs the worker jobs (05) and gives the worker its tools (06), watches the work signals (07) and writes detection's
 // suggestions back to the store, and handles every `WorkChannel` method with 08's actions, logging each press's line
 // and each refusal under `[work]`. It sweeps once chat's restore settles and every `work.intervalMinutes` after a
-// sweep's end, wakes snoozed items, sets the Dock badge to the open Needs you items, and reopens the last job's row.
-// Outside a live run it seeds the self-test fixture: the self-test's script and reseed file, and the drive action
+// sweep's end, wakes snoozed items, sets the Dock badge to the unseen open Needs you items, and reopens the last job's
+// row. Outside a live run it seeds the self-test fixture: the self-test's script and reseed file, and the drive action
 // `work.seed`. A self-test run never starts the runner. Only the installed app's live run launches workers: a drive
 // run and the dev app queue jobs, the head waiting as queued, and log each job they do not launch. `dispose` stops
 // the watch and timers first, then waits for the runner, the job-row writes and the store.
@@ -267,11 +270,11 @@ export const workMainPart: MainPart<typeof workManifest> = {
       if (isStopped) {
         return;
       }
-      const count = openNeedsYou(file);
+      const count = unseenNeedsYou(file);
       services.alerts.setOpenCount('work', count, NEEDS_YOU_NOUN);
       if (count !== needsYou) {
         needsYou = count;
-        log(`needs you: ${count}`);
+        log(`unseen needs you: ${count}`);
       }
     };
 
@@ -464,6 +467,9 @@ export const workMainPart: MainPart<typeof workManifest> = {
     );
     channel.handle('restore', (itemId) =>
       press('restore', (file) => restore(file, itemId)),
+    );
+    channel.handle('markSeen', (itemId) =>
+      press('markSeen', (file) => markSeen(file, itemId, clock.now())),
     );
     channel.handle('snooze', (itemId) =>
       press('snooze', (file) => snooze(file, itemId, clock.now())),

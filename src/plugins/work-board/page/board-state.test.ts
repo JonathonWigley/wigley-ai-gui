@@ -44,6 +44,7 @@ function board(
     suggestions: [],
     columns: [...COLUMNS, OTHER_COLUMN],
     job: { running: null, last: null },
+    lastSweepAt: null,
     problem: null,
     ...overrides,
   };
