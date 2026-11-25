@@ -303,7 +303,11 @@ export const terminalPagePart: PagePart<typeof terminalManifest> = {
         }
         return;
       }
-      tell(drawer, 'write', api.channel.invoke('write', drawer.sessionId, data));
+      tell(
+        drawer,
+        'write',
+        api.channel.invoke('write', drawer.sessionId, data),
+      );
       if (sendsLine) {
         clearMark(drawer.sessionId);
         log('line sent', drawer.sessionId);

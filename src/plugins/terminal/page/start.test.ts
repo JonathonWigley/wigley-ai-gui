@@ -547,8 +547,8 @@ describe('terminalPagePart', () => {
 
     world.harness.state.publish(coreThemeSlot).set('dark');
 
-    expect(world.emulator.screens.map(({ palettes }) => palettes.length)).toEqual(
-      [1, 1],
-    );
+    expect(
+      world.emulator.screens.map(({ palettes }) => palettes.length),
+    ).toEqual([1, 1]);
   });
 });
