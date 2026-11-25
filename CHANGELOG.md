@@ -6,6 +6,11 @@ changes for the user.
 
 ## Unreleased
 
+### Added
+
+- A chatroom post reaches a session in another project by its title; the conversation goes on in that project's room,
+  and the reply, the unread line and the idle wake reach the sender there.
+
 ## 1.6.0 — 2026-11-25
 
 ### Added

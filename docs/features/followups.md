@@ -529,14 +529,6 @@ User-facing features, those other work builds on first.
   topic; the signals stay in the `wigley:orient` skill alone and the sweep reads them from there. Open: how a flagged
   item looks in the Work list. Source session: Claude Code 49101bd7-da5e-4e9a-9a9c-f8f54fe393d4 in
   /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes
-- **The chatroom skill names `chat.sendTo` for a session in another project** — *agent-ready*: `chatroom_post` reaches
-  only the room of the project the session runs in, and the `chatroom` skill names no other route, so a session whose
-  work lands in another project's repo concludes it cannot tell the session working there. Seen 2026-11-25: a New
-  Games session's post to the "Agent Docs Audit" session in the `ai` project was refused (`no participant named …`)
-  and the agent told the user to relay it. The route exists: `read_state` slot `sessions.rows` gives the target's app
-  id by title, and `run_command` `chat.sendTo` with `{ sessionId, text }` delivers the message. Add it to the skill's
-  How to post, and name it in `chatroom_post`'s no-participant refusal. Source session: Claude Code
-  49101bd7-da5e-4e9a-9a9c-f8f54fe393d4 in /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes
 
 ## Code cleanup
 
