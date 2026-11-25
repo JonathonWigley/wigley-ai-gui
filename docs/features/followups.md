@@ -863,12 +863,6 @@ because the earlier items rewrite many of these tests anyway.
   `src/renderer/markdown-it/markdown-it-renderer.ts` (`pushBlockAsText`, `:565-579`, called at `:347-349`) draws one
   paragraph per source line with no `data-md-lines`, while a block that renders carries its `map` marks. Text from a
   broken block cannot be marked or picked by line. Give each fallback paragraph its source line range.
-- **Retro lists an older file's Nit `follow_up` header pick as an override** — *needs a feature plan*: in a round
-  saved before `action_label`, a Nit's `follow_up` header pick lists as `override · … | Follow-up`, though the forms
-  README says a Nit offers no `follow_up` (`wigley-ai-marketplace/plugins/wigley/scripts/forms/README.md:96`). The
-  test `test_a_nit_follow_up_header_pick_saved_before_action_label_lists_as_an_override`
-  (`wigley-ai-marketplace/plugins/wigley/scripts/retro/tests/test_answers.py:547`) pins that reading. Decide whether
-  the listing drops such a pick or keeps the Defect word, then change the test with it.
 - **Chatroom: room names past the file-name limit** — *agent-ready*: a room's file name is its name with each unsafe
   character written as `%XX` per UTF-8 byte (`src/plugins/chatroom/main/room-store.ts:15`), so a long or non-ASCII
   name passes 255 bytes and the write fails with `ENAMETOOLONG`. Cap the encoded length where a name is accepted (a
