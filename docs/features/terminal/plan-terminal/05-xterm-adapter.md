@@ -1,6 +1,6 @@
 # 05 — xterm adapter and layer rules
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: hard · adds the `TerminalEmulator` seam that 06 and 09 consume
 Wave: 2 · Depends on: 01
