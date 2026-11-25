@@ -153,7 +153,11 @@ describe('forms demo steps', () => {
 
     const allowed = forms.confirmSample(
       'demo-1',
-      { title: 'Run close session?', detail: 'A sample confirm.' },
+      {
+        title: 'Run close session?',
+        detail: 'A sample confirm.',
+        subject: null,
+      },
       new AbortController().signal,
     );
     await flush();
