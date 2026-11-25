@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.7.0 — 2026-11-25
+
 ### Added
 
 - Inbox marks an item seen once the cursor rests on it, and shows unseen items with a dot and a bold title.
