@@ -112,6 +112,18 @@ describe('sweep message', () => {
     );
   });
 
+  it('sweep_asksForNoDraft', () => {
+    const message = messageOf({ kind: 'sweep' });
+
+    expect(message).toContain(
+      '   - needs_you: a DM to the user, or a message that mentions the user or asks the user something directly, not yet answered.\n',
+    );
+    expect(message).toContain(
+      `with no answer for more than ${SETTINGS.stallHours} hours.\n`,
+    );
+    expect(message).not.toMatch(/draft/i);
+  });
+
   it('sweep_guardsJiraAndOwnReplies', () => {
     const message = messageOf({ kind: 'sweep' });
 

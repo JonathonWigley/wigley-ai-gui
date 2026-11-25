@@ -25,7 +25,7 @@ export function workItem(
     ticketKeys: [],
     linkReason: null,
     why: null,
-    draft: null,
+    seenAt: null,
     state: 'open',
     snoozedUntil: null,
     firstSeen: '2026-11-23T10:05:00.000Z',
@@ -99,7 +99,12 @@ export function ticketDetail(
     updated: '2026-11-23T10:00:00.000Z',
     description: 'Fix the **board**.',
     comments: [
-      { author: 'Bo', at: '2026-11-23T09:00:00.000Z', text: 'Seen it.' },
+      {
+        author: 'Bo',
+        at: '2026-11-23T09:00:00.000Z',
+        text: 'Seen it.',
+        byUser: false,
+      },
     ],
     subtasks: [],
     links: [],
@@ -117,8 +122,20 @@ export function threadDetail(
     id,
     fetchedAt: '2026-11-23T10:05:00.000Z',
     stamp: '1763892000.000100',
-    root: { author: 'Ann', at: '2026-11-23T09:00:00.000Z', text: 'Any news?' },
-    replies: [{ author: 'Bo', at: '2026-11-23T10:00:00.000Z', text: 'Soon.' }],
+    root: {
+      author: 'Ann',
+      at: '2026-11-23T09:00:00.000Z',
+      text: 'Any news?',
+      byUser: false,
+    },
+    replies: [
+      {
+        author: 'Bo',
+        at: '2026-11-23T10:00:00.000Z',
+        text: 'Soon.',
+        byUser: false,
+      },
+    ],
     replyCount: 1,
     ...overrides,
   };

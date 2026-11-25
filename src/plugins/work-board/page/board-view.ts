@@ -133,6 +133,8 @@ const EMPTY_WORK: WorkState = {
   suggestions: [],
   columns: [],
   job: { running: null, last: null },
+  lastSweepAt: null,
+  sweepFailedAt: null,
   problem: null,
 };
 
@@ -389,7 +391,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   };
 
   const drawStatus = (work: WorkState) => {
-    const line = statusLine(work.job, deps.now());
+    const line = statusLine(work, deps.now());
     const key = JSON.stringify([line, work.problem]);
     if (key === drawnStatusKey) {
       return;
@@ -707,7 +709,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
           detailDraw =
             card === null || input === null
               ? drawDetailEmpty()
-              : drawDetailPart(input, draftText(card, state, work));
+              : drawDetailPart(input, draftText(card, state));
         });
       } finally {
         isRedrawingPane = false;
@@ -721,7 +723,7 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     const box = input?.box ?? null;
     const hasEditableBox = box !== null && box.sending === null;
     if (card !== null && hasEditableBox) {
-      const text = draftText(card, state, work);
+      const text = draftText(card, state);
       boxes.setText(card.id, text);
       detailPane
         .querySelector('.work-board-box')
@@ -965,14 +967,13 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
   });
 
   // Sends the cursor card's box text: a Jira card's as a comment, a local task's as a reply in its thread. The box is
-  // left at once; the text leaves the place only once main takes it, so a refusal loses nothing.
+  // left at once. A comment's text leaves the place once main takes it; a reply's stays through the send, shown
+  // read-only, and leaves once its item is cleared, so a refusal or a failed send loses nothing.
   const send = onCursor((card) => {
     if (editableBoxOf(card) === null) {
       return;
     }
-    const state = store.get();
-    const work = shownWork();
-    const text = draftText(card, state, work);
+    const text = draftText(card, store.get());
     if (text.trim() === '') {
       deps.toast('Nothing to send', 'info');
       return;
@@ -981,15 +982,17 @@ export function createBoardView(deps: BoardViewDeps): BoardView {
     if (store.get().focus === 'box') {
       returnToBoard();
     }
-    const run =
-      card.kind === 'jira'
-        ? runWork(workCommentCommand.id, { cardId: card.id, text })
-        : runWork(workSendCommand.id, { itemId: card.sourceItemId, text });
-    void run.then((isSent) => {
-      if (isSent && !isDisposed) {
-        dispatch({ type: 'draftDropped', cardId: card.id });
-      }
-    });
+    if (card.kind === 'local') {
+      void runWork(workSendCommand.id, { itemId: card.sourceItemId, text });
+      return;
+    }
+    void runWork(workCommentCommand.id, { cardId: card.id, text }).then(
+      (isSent) => {
+        if (isSent && !isDisposed) {
+          dispatch({ type: 'draftDropped', cardId: card.id });
+        }
+      },
+    );
   });
 
   const leaveBox = () => {

@@ -21,6 +21,7 @@ import {
   OTHER_COLUMN,
   type WorkCard,
   type WorkDetail,
+  type WorkItem,
   type WorkMoveArg,
   type WorkState,
   type WorkSuggestion,
@@ -78,6 +79,8 @@ function board(
     suggestions: [],
     columns: [...COLUMNS, OTHER_COLUMN],
     job: { running: null, last: null },
+    lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
     ...overrides,
   };
@@ -706,14 +709,14 @@ describe('createBoardView', () => {
     expect(each.logs).toEqual(['shown', 'no card']);
   });
 
-  // Backlog: ABC-1, ABC-2; Todo: the local task from thread t1, whose worker draft waits.
+  // Backlog: ABC-1, ABC-2; Todo: the local task from thread t1.
   const PANE_BOARD = board(
     [
       inColumn('ABC-1', 'Backlog'),
       inColumn('ABC-2', 'Backlog'),
       localCard('local-1', 'Todo', { sourceItemId: 't1' }),
     ],
-    { items: [workItem('t1', { draft: 'worker draft' })] },
+    { items: [workItem('t1')] },
   );
   const DETAILS = [
     ticketDetail('ABC-1', { fetchedAt: '2026-11-23T11:57:00.000Z' }),
@@ -938,17 +941,42 @@ describe('createBoardView', () => {
     expect(each.runs).toEqual([]);
   });
 
-  it("send on a local task runs work.send on its source item with the thread's draft", async () => {
+  it('send on a local task starts from an empty box and runs work.send on its source item with the typed text', async () => {
     const each = started(PANE_BOARD);
     each.view.selectCard('local-1');
     each.view.commands.enterBox();
+    expect(each.boxes.at(-1)?.text).toBe('');
 
+    each.boxes.at(-1)?.type('On it');
     each.view.commands.send();
     await settle();
 
-    expect(each.runs).toEqual([
-      ['work.send', { itemId: 't1', text: 'worker draft' }],
-    ]);
+    expect(each.runs).toEqual([['work.send', { itemId: 't1', text: 'On it' }]]);
+  });
+
+  it('a reply send keeps the typed text: read-only while sending, typed again after a failure, gone once cleared', async () => {
+    const withItem = (overrides: Partial<WorkItem>) =>
+      board(PANE_BOARD.cards, { items: [workItem('t1', overrides)] });
+    const each = started(PANE_BOARD);
+    each.view.selectCard('local-1');
+    each.view.commands.enterBox();
+    each.boxes.at(-1)?.type('On it');
+    each.view.commands.send();
+    await settle();
+    expect(each.places.at(-1)?.drafts).toEqual({ 'local-1': 'On it' });
+
+    each.view.stateChanged(withItem({ sending: 'On it' }));
+    expect(
+      findAll(paneOf(each), 'work-board-box-text').map(
+        (box) => box.textContent,
+      ),
+    ).toEqual(['On it']);
+
+    each.view.stateChanged(withItem({ note: 'Send failed: offline' }));
+    expect(each.boxes.at(-1)?.text).toBe('On it');
+
+    each.view.stateChanged(withItem({ state: 'cleared' }));
+    expect(each.places.at(-1)?.drafts).toEqual({});
   });
 
   it('enterBox opens the pane, sets the box scope and focuses the box', () => {

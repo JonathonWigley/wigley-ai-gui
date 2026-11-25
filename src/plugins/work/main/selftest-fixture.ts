@@ -51,7 +51,6 @@ interface ItemShape {
   author: string;
   channel: string;
   why?: string;
-  draft?: string;
 }
 
 // Newest first: each item's `at` is ten minutes before the one above it, the first ten minutes before `now`.
@@ -65,7 +64,6 @@ const ITEM_SHAPES: readonly ItemShape[] = [
     summary: 'Ann asks whether the user can look at WRK-1 today.',
     author: 'Ann',
     channel: 'DM',
-    draft: "Yes, I'll take a look today.",
   },
   {
     id: FIXTURE_ITEM_IDS.promised,
@@ -86,7 +84,6 @@ const ITEM_SHAPES: readonly ItemShape[] = [
     summary: 'The user asked Cy for a review two days ago.',
     author: 'Cy',
     channel: '#docs',
-    draft: 'Any news on this?',
   },
   {
     id: FIXTURE_ITEM_IDS.myThread,
@@ -147,7 +144,7 @@ function fixtureItem(shape: ItemShape, index: number, now: number): WorkItem {
     ticketKeys: shape.ticketKeys,
     linkReason: null,
     why: shape.why ?? null,
-    draft: shape.draft ?? null,
+    seenAt: null,
     state: shape.state,
     snoozedUntil: null,
     firstSeen: new Date(now).toISOString(),
@@ -189,6 +186,7 @@ const message = (author: string, at: string, text: string): DetailMessage => ({
   author,
   at,
   text,
+  byUser: author === 'You',
 });
 
 const issue = (
@@ -252,9 +250,10 @@ function fixtureDetails(now: number): Record<string, WorkDetail> {
       root: message('Ann', isoBefore(now, 40), 'Can you look at WRK-1?'),
       replies: [
         message('Bo', isoBefore(now, 20), 'I saw it too on the sample data.'),
+        message('You', isoBefore(now, 15), 'Looking at it now.'),
         message('Ann', isoBefore(now, 10), 'Today would be great.'),
       ],
-      replyCount: 2,
+      replyCount: 3,
     },
     {
       kind: 'thread',

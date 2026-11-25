@@ -52,6 +52,7 @@ export interface WorkFile {
   notYet: WorkNotYet[];
   job: WorkState['job'];
   lastSweepAt: string | null;
+  sweepFailedAt: string | null;
   details: Record<string, WorkDetail>;
 }
 
@@ -62,6 +63,7 @@ export const EMPTY_WORK_FILE: WorkFile = {
   notYet: [],
   job: { running: null, last: null },
   lastSweepAt: null,
+  sweepFailedAt: null,
   details: {},
 };
 
@@ -159,7 +161,21 @@ const withRowId = <T extends { rowId: string | null }>(
   record: MaybeWithoutRowId<T>,
 ): T => ({ ...record, rowId: record.rowId ?? null }) as T;
 
-function isWorkItem(value: unknown): value is WorkItem {
+// An item saved before it had `seenAt` may leave it out, and one saved while items had `draft` may hold it.
+type SavedWorkItem = Omit<WorkItem, 'seenAt'> & {
+  seenAt?: string | null;
+  draft?: unknown;
+};
+
+const isSeenAtOrAbsent = (record: JsonObject) =>
+  record.seenAt === undefined || isNullableString(record.seenAt);
+
+const withSeenAt = ({ draft: _draft, ...item }: SavedWorkItem): WorkItem => ({
+  ...item,
+  seenAt: item.seenAt ?? null,
+});
+
+function isWorkItem(value: unknown): value is SavedWorkItem {
   return (
     isJsonObject(value) &&
     areStrings(value, [
@@ -176,7 +192,6 @@ function isWorkItem(value: unknown): value is WorkItem {
     areNullableStrings(value, [
       'linkReason',
       'why',
-      'draft',
       'snoozedUntil',
       'note',
       'sending',
@@ -184,7 +199,8 @@ function isWorkItem(value: unknown): value is WorkItem {
     isOneOf(WORK_SECTIONS, value.section) &&
     isOneOf(ITEM_STATES, value.state) &&
     isStringArray(value.participants) &&
-    isStringArray(value.ticketKeys)
+    isStringArray(value.ticketKeys) &&
+    isSeenAtOrAbsent(value)
   );
 }
 
@@ -261,8 +277,30 @@ function isJobStatusOrNull(value: unknown): value is WorkJobStatus | null {
 const isListOf = (list: unknown, isEntry: (entry: unknown) => boolean) =>
   Array.isArray(list) && list.every(isEntry);
 
-function isDetailMessage(value: unknown): value is DetailMessage {
-  return isJsonObject(value) && areStrings(value, ['author', 'at', 'text']);
+// A message saved before it had `byUser` may leave it out.
+type SavedDetailMessage = Omit<DetailMessage, 'byUser'> & { byUser?: boolean };
+
+function isDetailMessage(value: unknown): value is SavedDetailMessage {
+  return (
+    isJsonObject(value) &&
+    areStrings(value, ['author', 'at', 'text']) &&
+    (value.byUser === undefined || typeof value.byUser === 'boolean')
+  );
+}
+
+const withByUser = (message: SavedDetailMessage): DetailMessage => ({
+  ...message,
+  byUser: message.byUser ?? false,
+});
+
+function withMessagesByUser(detail: WorkDetail): WorkDetail {
+  return detail.kind === 'ticket'
+    ? { ...detail, comments: detail.comments.map(withByUser) }
+    : {
+        ...detail,
+        root: withByUser(detail.root),
+        replies: detail.replies.map(withByUser),
+      };
 }
 
 function isLinkedIssue(value: unknown): value is LinkedIssue {
@@ -319,11 +357,13 @@ function isDetailsOrAbsent(value: unknown): boolean {
 
 type SavedWorkFile = Omit<
   WorkFile,
-  'cards' | 'suggestions' | 'notYet' | 'details'
+  'items' | 'cards' | 'suggestions' | 'notYet' | 'sweepFailedAt' | 'details'
 > & {
+  items: SavedWorkItem[];
   cards: SavedWorkCard[];
   suggestions: MaybeWithoutRowId<SavedSuggestion>[];
   notYet: MaybeWithoutRowId<WorkNotYet>[];
+  sweepFailedAt?: string | null;
   details?: Record<string, WorkDetail>;
 };
 
@@ -338,12 +378,16 @@ function isWorkFile(value: unknown): value is SavedWorkFile {
     isJobStatusOrNull(value.job.running) &&
     isJobStatusOrNull(value.job.last) &&
     isNullableString(value.lastSweepAt) &&
+    (value.sweepFailedAt === undefined ||
+      isNullableString(value.sweepFailedAt)) &&
     isDetailsOrAbsent(value.details)
   );
 }
 
-// The work `work.json` holds, without the top-level keys it does not read, a suggestion or mark saved with no `rowId`
-// given a null one, a Jira card saved with no `commenting` given `[]`, and a file saved with no `details` given `{}`;
+// The work `work.json` holds, without the top-level keys it does not read, an item saved with no `seenAt` given a null
+// one and its old `draft` dropped, a suggestion or mark saved with no `rowId` given a null one, a Jira card saved with
+// no `commenting` given `[]`, a file saved with no `sweepFailedAt` given a null one, a file saved with no `details`
+// given `{}`, and a detail message saved with no `byUser` given false;
 // throws `work.json is not a work file` for text that is not JSON, any key or element whose fields are not of their
 // kinds, or a detail record filed under a key other than its `id`.
 export function parseWorkFile(text: string): WorkFile {
@@ -357,16 +401,30 @@ export function parseWorkFile(text: string): WorkFile {
   if (!isWorkFile(parsed)) {
     throw notAWorkFile;
   }
-  const { items, cards, suggestions, notYet, job, lastSweepAt, details } =
-    parsed;
-  return {
+  const {
     items,
+    cards,
+    suggestions,
+    notYet,
+    job,
+    lastSweepAt,
+    sweepFailedAt,
+    details,
+  } = parsed;
+  return {
+    items: items.map(withSeenAt),
     cards: cards.map(withCommenting),
     suggestions: suggestions.map((entry) => withRowId<SavedSuggestion>(entry)),
     notYet: notYet.map((mark) => withRowId<WorkNotYet>(mark)),
     job: { running: job.running, last: job.last },
     lastSweepAt,
-    details: details ?? {},
+    sweepFailedAt: sweepFailedAt ?? null,
+    details: Object.fromEntries(
+      Object.entries(details ?? {}).map(([id, detail]) => [
+        id,
+        withMessagesByUser(detail),
+      ]),
+    ),
   };
 }
 
@@ -376,8 +434,8 @@ function shownSuggestion(saved: SavedSuggestion): WorkSuggestion {
   return { cardId, signal, column, reason, at, state };
 }
 
-// The slot's value for `file`: each card on its `cardColumn` (a stored column left as it is), and `columns`' names
-// then `OTHER_COLUMN`.
+// The slot's value for `file`: each card on its `cardColumn` (a stored column left as it is), `columns`' names then
+// `OTHER_COLUMN`, and the file's `lastSweepAt` and `sweepFailedAt`.
 export function buildWorkState(
   file: WorkFile,
   columns: readonly WorkColumnSetting[],
@@ -392,6 +450,8 @@ export function buildWorkState(
     suggestions: file.suggestions.map(shownSuggestion),
     columns: [...columns.map((column) => column.name), OTHER_COLUMN],
     job: file.job,
+    lastSweepAt: file.lastSweepAt,
+    sweepFailedAt: file.sweepFailedAt,
     problem,
   };
 }
@@ -402,8 +462,9 @@ export function buildWorkState(
 //   as it was for a hand fix. A second `load` returns the first's promise.
 // - `update` runs on one serial chain behind the load, which it starts when none has, and every earlier update: it
 //   applies `change` to the file as it is then, saves, tells each `onChange` listener and resolves to the new file.
-//   A `change` that throws rejects that update alone, changing nothing; a failed write logs `work.json not written: …`
-//   and still resolves; a listener that throws logs `work listener failed: …` and the rest still run.
+//   A `change` that returns the file it was given saves and tells nothing. A `change` that throws rejects that update
+//   alone, changing nothing; a failed write logs `work.json not written: …` and still resolves; a listener that throws
+//   logs `work listener failed: …` and the rest still run.
 // - `settled` resolves once the load and every update asked so far have settled.
 export interface WorkStore {
   load(): Promise<void>;
@@ -463,6 +524,9 @@ export function createWorkStore(data: Files, log: PluginLog): WorkStore {
   const apply = async (change: (file: WorkFile) => WorkFile) => {
     await load();
     const next = change(current);
+    if (next === current) {
+      return next;
+    }
     current = next;
     await save(next);
     tell(next);

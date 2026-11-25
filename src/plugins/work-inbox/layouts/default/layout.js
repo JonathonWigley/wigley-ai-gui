@@ -1,9 +1,11 @@
 // @ts-check
 
-// The built-in Inbox look. The side bar's root is `div.work-inbox-side-pane`, the sheet's `div.work-inbox-pane`: a
-// head (title, the filter chip, the sweep hint, then the status line), then the cards, which scroll. The detail pane's
-// root is `div.work-inbox-detail-pane`: the thread's head, its people, tickets, summary and why, the thread, the reply
-// box, then the buttons.
+// The built-in Inbox look. The side bar's root is `div.work-inbox-side-pane`: the section rows under their Threads and
+// Digest headings. The sheet's is `div.work-inbox-pane`: one head line (the list's title, the update status, the
+// filter chip, the sweep hint), then compact rows, which scroll: an unseen dot, the source and age, the title (bold
+// while unseen), then the latest message, or a digest item's why. The detail pane's root is
+// `div.work-inbox-detail-pane`: the item's head, its people, tickets, summary and why, the thread, the reply box on a
+// thread, then the buttons.
 
 const MISSING_THREAD = 'No thread detail yet: the next sweep fetches it.';
 
@@ -38,10 +40,10 @@ const ACTION_VARIANTS = {
 };
 
 /**
- * The meta line a card and the detail head share: `channel · author`, the section and state Tags, a `sending` Tag,
- * then the age at the end.
+ * The meta line a row and the detail head share: `channel · author`, a `digest` Tag on a digest item, the section and
+ * state Tags, a `sending` Tag, then the age at the end.
  * @param {HTMLElement} parent
- * @param {{ channel: string, author: string, sectionTitle: string | null, stateTag: string | null, isSending: boolean, age: string }} input
+ * @param {{ channel: string, author: string, isDigest: boolean, sectionTitle: string | null, stateTag: string | null, isSending: boolean, age: string }} input
  * @param {import('../layout').InboxKit} kit
  */
 function metaLine(parent, input, kit) {
@@ -52,6 +54,9 @@ function metaLine(parent, input, kit) {
     'work-inbox-card-source',
     `${input.channel} · ${input.author}`,
   );
+  if (input.isDigest) {
+    kit.tag(meta, 'digest', 'info');
+  }
   if (input.sectionTitle !== null) {
     kit.tag(meta, input.sectionTitle);
   }
@@ -63,6 +68,22 @@ function metaLine(parent, input, kit) {
   }
   kit.el(meta, 'span', 'work-inbox-card-age', input.age);
   return meta;
+}
+
+/**
+ * A group's heading in the nav or the list: its title in small capitals, or a bare divider with none.
+ * @param {HTMLElement} parent
+ * @param {string | null} title
+ * @param {import('../layout').InboxKit} kit
+ */
+function groupHeading(parent, title, kit) {
+  const root = kit.el(parent, 'li', 'work-inbox-group');
+  if (title === null) {
+    root.classList.add('is-divider');
+  } else {
+    kit.el(root, 'span', 'work-inbox-group-title', title);
+  }
+  return root;
 }
 
 /**
@@ -102,13 +123,26 @@ function detailButtons(parent, input, kit) {
  */
 function messageBlock(parent, message, kit) {
   const root = kit.el(parent, 'div', 'work-inbox-detail-message');
-  kit.el(
-    root,
-    'div',
-    'work-inbox-detail-message-head',
-    `${message.author} · ${message.age}`,
-  );
-  kit.markdown(root, message.text, 'work-inbox-detail-text md');
+  root.classList.toggle('is-by-user', message.byUser);
+  root.classList.toggle('is-run-start', message.startsRun);
+  if (!message.byUser) {
+    kit.el(
+      root,
+      'span',
+      `work-inbox-detail-icon is-tone-${message.tone}`,
+      message.startsRun ? message.initials : '',
+    );
+  }
+  const body = kit.el(root, 'div', 'work-inbox-detail-body');
+  if (message.startsRun) {
+    kit.el(
+      body,
+      'div',
+      'work-inbox-detail-message-head',
+      `${message.author} · ${message.age}`,
+    );
+  }
+  kit.markdown(body, message.text, 'work-inbox-detail-text md');
 }
 
 /**
@@ -145,6 +179,9 @@ const layout = {
     kit.sections(root);
     return { element: root };
   },
+  sectionGroup(parent, input, kit) {
+    return groupHeading(parent, input.title, kit);
+  },
   sectionRow(parent, input, kit) {
     const end = kit.el(parent, 'span', 'work-inbox-section-end');
     if (input.isHot) {
@@ -162,32 +199,26 @@ const layout = {
   main(parent, kit) {
     const root = kit.el(parent, 'div', 'work-inbox-pane');
     const head = kit.el(root, 'div', 'work-inbox-head');
-    const top = kit.el(head, 'div', 'work-inbox-head-top');
-    kit.el(top, 'h2', 'work-inbox-title', 'Inbox');
-    kit.filter(top);
-    kit.keyHint(top, 'sweep', {
+    kit.status(head);
+    kit.filter(head);
+    kit.keyHint(head, 'sweep', {
       label: 'sweep',
       className: 'work-inbox-box-hint',
     });
-    kit.status(head);
     kit.cards(root);
     return { element: root };
   },
   status(parent, input, kit) {
     const line = kit.el(parent, 'div', 'work-inbox-status');
-    kit.statusDot(line, input.tone);
+    kit.el(line, 'h2', 'work-inbox-title', input.title);
+    if (input.tone !== 'idle') {
+      kit.statusDot(line, input.tone);
+    }
     kit.el(line, 'span', 'work-inbox-status-text', input.text);
     if (input.hasRow) {
-      const button = kit.button(
-        line,
-        'Show transcript',
-        'work-inbox.showJobRow',
-        {
-          variant: 'ghost',
-        },
-      );
-      kit.keyHint(button, 'showJobRow', {
-        className: 'work-inbox-control-hint',
+      kit.keyHint(line, 'showJobRow', {
+        label: 'log',
+        className: 'work-inbox-status-hint',
       });
     }
     return line;
@@ -205,15 +236,20 @@ const layout = {
     chip.classList.add('work-inbox-filter');
     return chip;
   },
+  cardGroup(parent, input, kit) {
+    return groupHeading(parent, input.title, kit);
+  },
   card(parent, input, kit) {
-    const root = kit.el(parent, 'li', 'ui-card work-inbox-card');
+    const root = kit.el(parent, 'li', 'work-inbox-card');
+    root.classList.toggle('is-unseen', input.isUnseen);
+    root.classList.toggle('is-digest', input.isDigest);
+    kit.el(root, 'span', 'work-inbox-card-dot');
     metaLine(root, input, kit);
     kit.el(root, 'h3', 'work-inbox-card-title', input.title);
-    if (input.summary !== null) {
-      kit.el(root, 'p', 'work-inbox-card-summary', input.summary);
-    }
-    if (input.latest !== '') {
-      kit.el(root, 'p', 'work-inbox-card-latest', input.latest);
+    const line =
+      input.isDigest && input.why !== null ? input.why : input.latest;
+    if (line !== '') {
+      kit.el(root, 'p', 'work-inbox-card-latest', line);
     }
     if (input.prompt.length > 0) {
       const prompt = kit.el(root, 'div', 'work-inbox-card-prompt');
@@ -268,10 +304,10 @@ const layout = {
         chip.title = ticket.reason ?? '';
       }
     }
-    kit.el(root, 'p', 'work-inbox-detail-summary', input.summary);
     if (input.why !== null) {
       kit.el(root, 'p', 'work-inbox-detail-why', `Why: ${input.why}`);
     }
+    kit.el(root, 'p', 'work-inbox-detail-summary', input.summary);
     threadBlock(root, input, kit);
     if (input.draft !== null) {
       kit.draftBox(root);

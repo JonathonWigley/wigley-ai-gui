@@ -8,10 +8,14 @@ import {
   cardInput,
   detailInput,
   emptyReason,
+  groupStarts,
+  initialsOf,
   type InboxAction,
   type InboxViewState,
   inboxReducer,
   initialInboxState,
+  navGroupStart,
+  personTone,
   prunedDrafts,
   sectionCounts,
   shownItems,
@@ -27,6 +31,8 @@ function work(
     suggestions: [],
     columns: [],
     job: { running: null, last: null, ...job },
+    lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
   };
 }
@@ -44,10 +50,12 @@ function at(minutes: number): string {
   ).toISOString();
 }
 
+// ny-open was seen at its latest message, ny-new was seen before its latest one, and the rest were never seen.
 const MIXED = work([
-  workItem('ny-open', { at: at(1), ticketKeys: ['ABC-1'] }),
+  workItem('ny-open', { at: at(1), ticketKeys: ['ABC-1'], seenAt: at(1) }),
   workItem('ny-done', { at: at(2), state: 'dismissed', ticketKeys: ['ABC-1'] }),
-  workItem('ny-new', { at: at(3) }),
+  workItem('ny-new', { at: at(3), seenAt: at(2) }),
+  workItem('ny-unseen', { at: at(0) }),
   workItem('wait', {
     at: at(4),
     section: 'waiting',
@@ -62,9 +70,9 @@ describe('sectionCounts', () => {
     { section: 'waiting', count: 1 },
     { section: 'around', count: 0 },
     { section: 'promised', count: 0 },
-    { section: 'all', count: 5 },
+    { section: 'all', count: 6 },
   ] as const)(
-    'sectionCounts counts open items per section and every item under All: $section',
+    'sectionCounts counts unseen open items per section and every item under All: $section',
     ({ section, count }) => {
       expect(sectionCounts(MIXED)[section]).toBe(count);
     },
@@ -73,11 +81,15 @@ describe('sectionCounts', () => {
 
 describe('shownItems', () => {
   it.each([
-    { case: 'a section', state: view(), ids: ['ny-new', 'ny-open'] },
+    {
+      case: 'a section',
+      state: view(),
+      ids: ['ny-new', 'ny-open', 'ny-unseen'],
+    },
     {
       case: 'All',
       state: view({ section: 'all' }),
-      ids: ['around', 'wait', 'ny-new', 'ny-done', 'ny-open'],
+      ids: ['wait', 'ny-new', 'ny-done', 'ny-open', 'ny-unseen', 'around'],
     },
     {
       case: 'a ticket key across sections',
@@ -85,9 +97,38 @@ describe('shownItems', () => {
       ids: ['wait', 'ny-open'],
     },
   ])(
-    'shownItems filters by section, All and ticket key, newest first: $case',
+    'shownItems filters by section, All and ticket key, threads before the digest, newest first: $case',
     ({ state, ids }) => {
       expect(shownItems(MIXED, state).map((item) => item.id)).toEqual(ids);
+    },
+  );
+});
+
+describe('groupStarts', () => {
+  it.each([
+    { case: 'a section', state: view(), starts: [null, null, null] },
+    {
+      case: 'All',
+      state: view({ section: 'all' }),
+      starts: ['threads', null, null, null, null, 'digest'],
+    },
+  ])(
+    'groupStarts marks the first row of each group in a mixed list only: $case',
+    ({ state, starts }) => {
+      expect(groupStarts(shownItems(MIXED, state), state)).toEqual(starts);
+    },
+  );
+
+  it.each([
+    { section: 'needs_you', group: 'threads' },
+    { section: 'my_threads', group: null },
+    { section: 'around', group: 'digest' },
+    { section: 'worth_knowing', group: null },
+    { section: 'all', group: 'all' },
+  ] as const)(
+    'navGroupStart heads Needs you, Around Slack and All: $section',
+    ({ section, group }) => {
+      expect(navGroupStart(section)).toBe(group);
     },
   );
 });
@@ -107,7 +148,7 @@ describe('cardActions', () => {
     {
       case: 'Around open',
       item: workItem('a', { section: 'around' }),
-      actions: ['send', 'dismiss', 'startSession', 'addToBoard'],
+      actions: ['dismiss', 'startSession', 'addToBoard'],
     },
     {
       case: 'My threads open',
@@ -122,7 +163,7 @@ describe('cardActions', () => {
     {
       case: 'Worth knowing open',
       item: workItem('a', { section: 'worth_knowing' }),
-      actions: ['send', 'dismiss', 'startSession', 'addToBoard'],
+      actions: ['dismiss', 'startSession', 'addToBoard'],
     },
     {
       case: 'dismissed under All',
@@ -279,29 +320,117 @@ describe('inboxReducer', () => {
 describe('cardInput', () => {
   it.each([
     {
-      case: 'pane closed',
-      item: workItem('a', { summary: 'S' }),
+      case: 'a thread never seen',
+      item: workItem('a'),
       state: view(),
-      expected: { summary: 'S', isSending: false },
+      expected: { isDigest: false, isUnseen: true, isSending: false },
     },
     {
-      case: 'pane open',
-      item: workItem('a', { summary: 'S' }),
-      state: view({ paneOpen: true }),
-      expected: { summary: null, isSending: false },
+      case: 'a thread seen at its latest message',
+      item: workItem('a', { seenAt: '2026-11-23T10:00:00.000Z' }),
+      state: view(),
+      expected: { isUnseen: false },
+    },
+    {
+      case: 'a thread with a message since it was seen',
+      item: workItem('a', { seenAt: '2026-11-23T09:00:00.000Z' }),
+      state: view(),
+      expected: { isUnseen: true },
+    },
+    {
+      case: 'a digest item',
+      item: workItem('a', { section: 'worth_knowing', why: 'W' }),
+      state: view(),
+      expected: { isDigest: true, why: 'W' },
     },
     {
       case: 'a reply sending',
-      item: workItem('a', { summary: 'S', sending: 'x' }),
+      item: workItem('a', { sending: 'x' }),
       state: view(),
-      expected: { summary: 'S', isSending: true },
+      expected: { isSending: true },
     },
   ])(
-    'cardInput leaves the summary to the open pane and marks a send: $case',
+    'cardInput marks unseen, digest and sending rows: $case',
     ({ item, state, expected }) => {
       expect(cardInput(item, state, NOW)).toMatchObject(expected);
     },
   );
+});
+
+describe('the thread as a chat', () => {
+  const message = (author: string, byUser = false) => ({
+    author,
+    byUser,
+    at: '2026-11-23T11:00:00.000Z',
+    text: 'x',
+  });
+
+  it.each([
+    {
+      case: 'every reply shown: a run carries on from the root',
+      replyCount: 4,
+      runs: [true, false, true, true, false],
+    },
+    {
+      case: 'hidden replies: the count line breaks the run',
+      replyCount: 9,
+      runs: [true, true, true, true, false],
+    },
+  ])(
+    'detailInput starts a run on each change of person: $case',
+    ({ replyCount, runs }) => {
+      const detail = threadDetail('a', {
+        root: message('Ann'),
+        replies: [
+          message('Ann'),
+          message('Me', true),
+          message('Bo'),
+          message('Bo'),
+        ],
+        replyCount,
+      });
+
+      const input = detailInput(workItem('a'), view(), detail, NOW);
+
+      expect(
+        [input.root, ...input.replies].map((shown) => shown?.startsRun),
+      ).toEqual(runs);
+      expect(input.replies[1]).toMatchObject({ author: 'You', byUser: true });
+    },
+  );
+
+  it('detailInput keeps a run of the user own messages under different author names', () => {
+    const detail = threadDetail('a', {
+      root: message('Ann'),
+      replies: [message('Me', true), message('Jon W', true)],
+      replyCount: 2,
+    });
+
+    const input = detailInput(workItem('a'), view(), detail, NOW);
+
+    expect(input.replies.map((shown) => shown.startsRun)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it.each([
+    { name: 'Ann', initials: 'AN' },
+    { name: 'Ann Lee', initials: 'AL' },
+    { name: '  bo  ', initials: 'BO' },
+    { name: 'Q', initials: 'Q' },
+  ])('initialsOf takes two letters: $name', ({ name, initials }) => {
+    expect(initialsOf(name)).toBe(initials);
+  });
+
+  it('personTone gives a name the same tone each time, within the five', () => {
+    const names = ['Ann', 'Bo', 'Cy', 'Dee', 'Eli', 'Fay'];
+    const tones = names.map(personTone);
+
+    expect(names.map(personTone)).toEqual(tones);
+    expect(tones.every((tone) => tone >= 0 && tone < 5)).toBe(true);
+    expect(new Set(tones).size).toBeGreaterThan(1);
+  });
 });
 
 describe('detailInput', () => {
@@ -310,11 +439,13 @@ describe('detailInput', () => {
     replies: [
       {
         author: 'Bo',
+        byUser: false,
         at: new Date(NOW - 30 * 60_000).toISOString(),
         text: 'B',
       },
       {
         author: 'Ann',
+        byUser: false,
         at: new Date(NOW - 2 * 60_000).toISOString(),
         text: 'C',
       },
@@ -340,8 +471,24 @@ describe('detailInput', () => {
         fetched: 'Fetched 5m ago',
         replyCountText: '2 of 4 replies',
         replies: [
-          { author: 'Bo', age: '30m', text: 'B' },
-          { author: 'Ann', age: '2m', text: 'C' },
+          {
+            author: 'Bo',
+            age: '30m',
+            text: 'B',
+            byUser: false,
+            initials: 'BO',
+            tone: personTone('Bo'),
+            startsRun: true,
+          },
+          {
+            author: 'Ann',
+            age: '2m',
+            text: 'C',
+            byUser: false,
+            initials: 'AN',
+            tone: personTone('Ann'),
+            startsRun: true,
+          },
         ],
       },
     },
@@ -359,18 +506,28 @@ describe('detailInput', () => {
     },
     {
       case: 'a dismissed item',
-      item: workItem('a', { state: 'dismissed', draft: 'unused' }),
+      item: workItem('a', { state: 'dismissed' }),
       detail: null,
       expected: { draft: null, actions: ['restore'] },
     },
     {
       case: 'a sending item',
-      item: workItem('a', { draft: 'worker', sending: 'x' }),
+      item: workItem('a', { sending: 'x' }),
       detail: null,
       expected: { draft: 'x', isSending: true },
     },
     {
-      case: 'an open My threads item with no draft',
+      case: 'an open digest item',
+      item: workItem('a', { section: 'around' }),
+      detail: null,
+      expected: {
+        draft: null,
+        isDigest: true,
+        actions: ['dismiss', 'startSession', 'addToBoard'],
+      },
+    },
+    {
+      case: 'an open My threads item with no reply typed',
       item: workItem('a', { section: 'my_threads' }),
       detail: null,
       expected: {
@@ -431,9 +588,14 @@ describe('prunedDrafts', () => {
       items: [workItem('a', { state: 'dismissed' })],
       kept: { a: 'mine' },
     },
+    {
+      case: 'a cleared item, as a good send leaves it',
+      items: [workItem('a', { state: 'cleared' })],
+      kept: {},
+    },
     { case: 'an item work no longer holds', items: [workItem('b')], kept: {} },
   ])(
-    'prunedDrafts keeps edits of items in any state and drops the rest: $case',
+    'prunedDrafts keeps edits of items not cleared and drops the rest: $case',
     ({ items, kept }) => {
       expect(prunedDrafts({ a: 'mine' }, work(items))).toEqual(kept);
     },

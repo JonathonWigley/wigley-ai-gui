@@ -1166,7 +1166,9 @@ describe('createJobRunner', () => {
   });
 
   it('status_writesRunningThenLast', async () => {
-    const part = await runnerOver();
+    const part = await runnerOver({
+      workFile: { ...EMPTY_WORK_FILE, sweepFailedAt: iso(NOW - 60_000) },
+    });
     let resolveLaunch = (_rowId: string) => undefined as void;
     part.answerLaunch = () => {
       part.rows.set('row-1', workRow('row-1', 'host-1'));
@@ -1208,6 +1210,7 @@ describe('createJobRunner', () => {
       note: null,
     });
     expect(part.store.file().lastSweepAt).toBe(iso(NOW));
+    expect(part.store.file().sweepFailedAt).toBeNull();
   });
 
   it('ended_calledAfterStore', async () => {
@@ -1256,6 +1259,7 @@ describe('createJobRunner', () => {
       },
     ]);
     expect(part.store.file().lastSweepAt).toBeNull();
+    expect(part.store.file().sweepFailedAt).toBe(part.last()?.at);
   });
 
   it('restart_strayClose_skipsClaimed', async () => {

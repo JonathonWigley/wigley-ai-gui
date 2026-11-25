@@ -29,7 +29,7 @@ export function registerDemoSteps(
     order: 35,
     title: 'Inbox',
     caption:
-      'Inbox: Slack threads sorted by what needs you, each with its thread and a reply box in the detail pane.',
+      'Inbox: Slack threads sorted by what needs you, apart from the digest, unseen rows marked, each with its thread and a reply box in the detail pane.',
     files: [
       'src/plugins/work-inbox/page/inbox-view.ts',
       'src/plugins/work-inbox/page/inbox-state.ts',

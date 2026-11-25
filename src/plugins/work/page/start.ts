@@ -36,6 +36,7 @@ export const workPagePart: PagePart<typeof workManifest> = {
         send: ({ arg }) => channel.invoke('send', arg),
         dismiss: ({ arg }) => channel.invoke('dismiss', arg),
         restore: ({ arg }) => channel.invoke('restore', arg),
+        markSeen: ({ arg }) => channel.invoke('markSeen', arg),
         snooze: ({ arg }) => channel.invoke('snooze', arg),
         addToBoard: ({ arg }) => channel.invoke('addToBoard', arg),
         moveCard: ({ arg }) => channel.invoke('moveCard', arg),

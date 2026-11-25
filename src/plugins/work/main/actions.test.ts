@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  DetailMessage,
-  WorkCard,
-  WorkColumnSetting,
-  WorkItem,
-  WorkJob,
+import {
+  type DetailMessage,
+  isUnseen,
+  type WorkCard,
+  type WorkColumnSetting,
+  type WorkItem,
+  type WorkJob,
 } from '../contract';
 import {
   jiraCard,
@@ -24,6 +25,7 @@ import {
   type JobEnd,
   jobEnded,
   LOST_JOB_NOTE,
+  markSeen,
   moveCard,
   nextSnoozeEnd,
   notYet,
@@ -168,6 +170,57 @@ describe('restore', () => {
   });
 });
 
+describe('markSeen', () => {
+  const AHEAD_ISO = '2026-11-23T12:05:00.000Z';
+
+  it.each<{ name: string; item: WorkItem; seenAt: string }>([
+    { name: 'never seen', item: p1(), seenAt: NOW_ISO },
+    {
+      name: 'seen before its latest message',
+      item: p1({ seenAt: '2026-11-23T09:00:00.000Z' }),
+      seenAt: NOW_ISO,
+    },
+    {
+      name: 'dated ahead of the clock, stamped at its own time',
+      item: p1({ at: AHEAD_ISO }),
+      seenAt: AHEAD_ISO,
+    },
+    {
+      name: 'a time that does not parse, stamped now',
+      item: p1({ at: 'soon' }),
+      seenAt: NOW_ISO,
+    },
+  ])(
+    'markSeen stamps the later of now and its time ($name)',
+    ({ item, seenAt }) => {
+      const marked = markSeen(ofItems(item), 'p1', NOW);
+
+      expect(marked).toEqual(
+        result(ofItems({ ...item, seenAt }), null, 'seen p1'),
+      );
+      expect(isUnseen((marked as ActionResult).file.items[0])).toBe(false);
+    },
+  );
+
+  it.each<{ name: string; seenAt: string }>([
+    { name: 'at its latest message', seenAt: '2026-11-23T10:00:00.000Z' },
+    { name: 'after its latest message', seenAt: '2026-11-23T11:00:00.000Z' },
+  ])('markSeen keeps the file itself when seen $name', ({ seenAt }) => {
+    const file = ofItems(p1({ seenAt }));
+
+    expect(markSeen(file, 'p1', NOW)).toEqual(
+      result(file, null, 'p1 already seen'),
+    );
+    expect((markSeen(file, 'p1', NOW) as ActionResult).file).toBe(file);
+  });
+
+  it('markSeen refuses an unknown item', () => {
+    expect(markSeen(ofItems(p1()), 'nope', NOW)).toEqual(
+      refused('No item nope'),
+    );
+  });
+});
+
 describe('snooze', () => {
   it.each<{ name: string; item: WorkItem; expected: ActionResult | Refusal }>([
     {
@@ -237,6 +290,14 @@ describe('expireSnoozes', () => {
       ],
       end: Date.parse('2026-11-24T00:00:00.000Z'),
     },
+    {
+      name: 'an end that does not parse is skipped',
+      items: [
+        snoozedUntil('a', 'soon'),
+        snoozedUntil('b', '2026-11-24T00:00:00.000Z'),
+      ],
+      end: Date.parse('2026-11-24T00:00:00.000Z'),
+    },
     { name: 'none snoozed', items: [workItem('c')], end: null },
   ])('nextSnoozeEnd ($name)', ({ items, end }) => {
     expect(nextSnoozeEnd(ofItems(...items))).toBe(end);
@@ -255,20 +316,19 @@ describe('send', () => {
       item: p1({ note: 'Send failed: x' }),
       text: '  On it',
       expected: result(
-        ofItems(p1({ draft: '  On it', sending: '  On it' })),
+        ofItems(p1({ sending: '  On it' })),
         { kind: 'send', itemId: 'p1', text: '  On it' },
         'send queued p1',
       ),
     },
     {
       name: 'a waiting item queues a nudge',
-      item: p1({ section: 'waiting', draft: 'Any news?' }),
+      item: p1({ section: 'waiting' }),
       text: 'Any news on this?',
       expected: result(
         ofItems(
           p1({
             section: 'waiting',
-            draft: 'Any news on this?',
             sending: 'Any news on this?',
           }),
         ),
@@ -293,6 +353,18 @@ describe('send', () => {
       item: p1({ sending: 'On it' }),
       text: 'Again',
       expected: refused('p1 is sending'),
+    },
+    {
+      name: 'an around digest item',
+      item: p1({ section: 'around' }),
+      text: 'On it',
+      expected: refused('p1 takes no reply'),
+    },
+    {
+      name: 'a worth_knowing digest item',
+      item: p1({ section: 'worth_knowing' }),
+      text: 'On it',
+      expected: refused('p1 takes no reply'),
     },
   ])('send ($name)', ({ item, text, expected }) => {
     expect(send(ofItems(item), { itemId: 'p1', text })).toEqual(expected);
@@ -846,7 +918,7 @@ describe('jobEnded', () => {
   const sendJob: WorkJob = { kind: 'send', itemId: 'p1', text: 'On it' };
   const nudgeJob: WorkJob = { kind: 'nudge', itemId: 'p1', text: 'Any news?' };
   const moveJob: WorkJob = { kind: 'move', key: 'ABC-12', column: 'In QA' };
-  const sending = p1({ draft: 'On it', sending: 'On it' });
+  const sending = p1({ sending: 'On it' });
   const moving = jiraCard('ABC-12', 'In QA', {
     movingTo: 'In QA',
     note: 'Move failed',
@@ -860,6 +932,7 @@ describe('jobEnded', () => {
     jiraCard('ABC-12', 'To Do', { commenting: texts, note: 'Comment failed' });
   const message = (at: string, text: string): DetailMessage => ({
     author: 'Bo',
+    byUser: false,
     at,
     text,
   });
@@ -881,39 +954,35 @@ describe('jobEnded', () => {
       file: ofItems(sending),
       job: sendJob,
       end: { ok: true, note: null },
-      expected: ofItems(p1({ draft: 'On it', state: 'cleared' })),
+      expected: ofItems(p1({ state: 'cleared' })),
     },
     {
       name: 'send ok on an item a sweep cleared',
       file: ofItems({ ...sending, state: 'cleared' }),
       job: sendJob,
       end: { ok: true, note: null },
-      expected: ofItems(p1({ draft: 'On it', state: 'cleared' })),
+      expected: ofItems(p1({ state: 'cleared' })),
     },
     {
-      name: 'send failed keeps state and draft',
+      name: 'send failed keeps state',
       file: ofItems(sending),
       job: sendJob,
       end: { ok: false, note: 'x' },
-      expected: ofItems(p1({ draft: 'On it', note: 'Send failed: x' })),
+      expected: ofItems(p1({ note: 'Send failed: x' })),
     },
     {
       name: 'nudge failed with a null note',
       file: ofItems({ ...sending, section: 'waiting' }),
       job: nudgeJob,
       end: { ok: false, note: null },
-      expected: ofItems(
-        p1({ section: 'waiting', draft: 'On it', note: 'Send failed' }),
-      ),
+      expected: ofItems(p1({ section: 'waiting', note: 'Send failed' })),
     },
     {
       name: 'a press never queued',
       file: ofItems(sending),
       job: sendJob,
       end: { ok: false, note: 'Not queued: x' },
-      expected: ofItems(
-        p1({ draft: 'On it', note: 'Send failed: Not queued: x' }),
-      ),
+      expected: ofItems(p1({ note: 'Send failed: Not queued: x' })),
     },
     {
       name: 'move ok',
@@ -948,7 +1017,12 @@ describe('jobEnded', () => {
       end: { ok: true, note: null },
       expected: fileWith({
         cards: [jiraCard('ABC-12', 'To Do')],
-        details: detailOf(newer, { author: 'You', at: NOW_ISO, text: 'A' }),
+        details: detailOf(newer, {
+          author: 'You',
+          at: NOW_ISO,
+          text: 'A',
+          byUser: true,
+        }),
       }),
     },
     {
@@ -1009,7 +1083,12 @@ describe('jobEnded', () => {
       end: { ok: true, note: null },
       expected: fileWith({
         cards: [jiraCard('ABC-12', 'To Do', { commenting: ['B'] })],
-        details: detailOf(older, { author: 'You', at: NOW_ISO, text: 'A' }),
+        details: detailOf(older, {
+          author: 'You',
+          at: NOW_ISO,
+          text: 'A',
+          byUser: true,
+        }),
       }),
     },
     {
@@ -1067,7 +1146,7 @@ describe('jobEnded', () => {
 });
 
 describe('clearStaleMarks', () => {
-  const sending = p1({ draft: 'On it', sending: 'On it' });
+  const sending = p1({ sending: 'On it' });
   const moving = jiraCard('ABC-12', 'To Do', { movingTo: 'In QA' });
 
   it.each<{
@@ -1083,9 +1162,7 @@ describe('clearStaleMarks', () => {
         { kind: 'send', itemId: 'p2', text: 'On it' },
         { kind: 'sweep' },
       ],
-      expected: ofItems(
-        p1({ draft: 'On it', note: `Send failed: ${LOST_JOB_NOTE}` }),
-      ),
+      expected: ofItems(p1({ note: `Send failed: ${LOST_JOB_NOTE}` })),
     },
     {
       name: 'a moving card with no pending move',
@@ -1203,6 +1280,7 @@ describe('actions', () => {
     const presses: (() => unknown)[] = [
       () => dismiss(file, 'p1'),
       () => restore(file, 'p2'),
+      () => markSeen(file, 'p1', NOW),
       () => snooze(file, 'p1', NOW),
       () => expireSnoozes(file, NOW),
       () => send(file, { itemId: 'p1', text: 'On it' }),

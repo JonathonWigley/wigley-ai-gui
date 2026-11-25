@@ -59,7 +59,7 @@ function sampleItem(at: string): WorkItem {
     ticketKeys: [SAMPLE_SUGGESTION_CARD],
     linkReason: null,
     why: null,
-    draft: null,
+    seenAt: null,
     state: 'open',
     snoozedUntil: null,
     firstSeen: at,
@@ -124,6 +124,8 @@ export function sampleBoardState(now: number): WorkState {
         note: null,
       },
     },
+    lastSweepAt: ago(3),
+    sweepFailedAt: null,
     problem: null,
   };
 }
@@ -156,11 +158,13 @@ export function sampleBoardDetails(now: number): WorkDetail[] {
       comments: [
         {
           author: 'Sam',
+          byUser: false,
           at: ago(120),
           text: 'QA reproduced it twice this morning.',
         },
         {
           author: 'Alex',
+          byUser: false,
           at: ago(30),
           text: 'The retry reads the token before `refresh()` resolves; fix is on a branch.',
         },
@@ -191,17 +195,20 @@ export function sampleBoardDetails(now: number): WorkDetail[] {
       stamp: '1763892000.000300',
       root: {
         author: 'Sam',
+        byUser: false,
         at: ago(90),
         text: 'Login fails after the token refresh. Is ABC-12 on anyone?',
       },
       replies: [
         {
           author: 'Alex',
+          byUser: false,
           at: ago(45),
           text: 'On it: the fix is on a branch.',
         },
         {
           author: 'Sam',
+          byUser: false,
           at: ago(20),
           text: 'Any ETA on the build?',
         },

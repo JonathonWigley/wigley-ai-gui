@@ -45,6 +45,8 @@ function work(
     suggestions: [],
     columns: [],
     job: { running: null, last: null, ...job },
+    lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
   };
 }
@@ -262,7 +264,12 @@ function splitOf(setup: Setup): FakeElement {
 function fetchedDetail(id: string): ThreadDetail {
   return threadDetail(id, {
     fetchedAt: new Date(NOW - 3 * 60_000).toISOString(),
-    root: { author: 'Ann', at: '2026-11-23T11:00:00.000Z', text: 'Root text' },
+    root: {
+      author: 'Ann',
+      at: '2026-11-23T11:00:00.000Z',
+      text: 'Root text',
+      byUser: false,
+    },
   });
 }
 
@@ -322,11 +329,11 @@ describe('createInboxView', () => {
     boxText: string;
   }>([
     {
-      case: 'main takes the text: the edit is dropped',
+      case: 'main takes the text: the edit stays until the send ends',
       section: 'needs_you',
       rejects: {},
-      drafts: {},
-      boxText: 'worker text',
+      drafts: { a: 'my text' },
+      boxText: 'my text',
     },
     {
       case: 'main refuses: the edit is kept',
@@ -339,18 +346,15 @@ describe('createInboxView', () => {
       case: 'a My threads item',
       section: 'my_threads',
       rejects: {},
-      drafts: {},
-      boxText: 'worker text',
+      drafts: { a: 'my text' },
+      boxText: 'my text',
     },
   ])(
     'send runs work.send with the edited text: $case',
     async ({ section, rejects, drafts, boxText }) => {
-      const setup = inboxSetup(
-        work([workItem('a', { section, draft: 'worker text' })]),
-        {
-          rejects,
-        },
-      );
+      const setup = inboxSetup(work([workItem('a', { section })]), {
+        rejects,
+      });
       setup.view.selectSection(section);
       setup.view.commands.togglePane();
       setup.view.commands.editDraft();
@@ -367,6 +371,33 @@ describe('createInboxView', () => {
     },
   );
 
+  it.each([
+    {
+      case: 'the send failed: the typed reply comes back',
+      ended: { sending: null, note: 'Send failed' },
+      drafts: { a: 'my text' },
+    },
+    {
+      case: 'the send went through: the item clears and its edit goes',
+      ended: { sending: null, state: 'cleared' as const },
+      drafts: {},
+    },
+  ])(
+    'a send ending keeps or drops the edit: $case',
+    async ({ ended, drafts }) => {
+      const setup = inboxSetup(work([workItem('a')]));
+      setup.view.commands.editDraft();
+      setup.boxes[0].type('my text');
+      setup.view.commands.send();
+      await settle();
+      setup.view.stateChanged(work([workItem('a', { sending: 'my text' })]));
+
+      setup.view.stateChanged(work([workItem('a', ended)]));
+
+      expect(setup.places.at(-1)?.drafts).toEqual(drafts);
+    },
+  );
+
   it('blank send toasts and runs nothing', () => {
     const setup = inboxSetup(work([workItem('a')]));
 
@@ -377,9 +408,7 @@ describe('createInboxView', () => {
   });
 
   it('a sending item reads Sending…, disables Send and keeps its section', () => {
-    const setup = inboxSetup(
-      work([workItem('a', { draft: 'worker text', sending: 'on its way' })]),
-    );
+    const setup = inboxSetup(work([workItem('a', { sending: 'on its way' })]));
     setup.view.commands.togglePane();
     const pane = paneOf(setup);
 
@@ -395,9 +424,7 @@ describe('createInboxView', () => {
 
   it('a slot change keeps the focused draft box and its text', () => {
     const setup = inboxSetup(
-      work([
-        workItem('a', { at: '2026-11-23T11:00:00.000Z', draft: 'worker' }),
-      ]),
+      work([workItem('a', { at: '2026-11-23T11:00:00.000Z' })]),
     );
     setup.view.commands.togglePane();
     setup.view.commands.editDraft();
@@ -405,7 +432,7 @@ describe('createInboxView', () => {
 
     setup.view.stateChanged(
       work([
-        workItem('a', { at: '2026-11-23T11:00:00.000Z', draft: 'new draft' }),
+        workItem('a', { at: '2026-11-23T11:00:00.000Z', latest: 'Bo: new' }),
         workItem('b'),
       ]),
     );
@@ -422,7 +449,7 @@ describe('createInboxView', () => {
   it.each([
     {
       case: 'send from the box turns the card to sending',
-      next: work([workItem('a', { draft: 'worker text', sending: 'my text' })]),
+      next: work([workItem('a', { sending: 'my text' })]),
     },
     {
       case: 'the cursor item leaves',
@@ -431,7 +458,7 @@ describe('createInboxView', () => {
   ])(
     'a redraw that drops the focused draft box hands the keys to the list: $case',
     async ({ next }) => {
-      const setup = inboxSetup(work([workItem('a', { draft: 'worker text' })]));
+      const setup = inboxSetup(work([workItem('a')]));
       setup.view.commands.togglePane();
       setup.view.commands.editDraft();
       setup.boxes[0].type('my text');
@@ -504,10 +531,24 @@ describe('createInboxView', () => {
     },
     {
       case: 'i on a dismissed card',
-      item: workItem('a', { state: 'dismissed', draft: 'unused' }),
+      item: workItem('a', { state: 'dismissed' }),
       section: 'all',
       press: (view: InboxView) => view.commands.editDraft(),
       logged: 'no editDraft for a',
+    },
+    {
+      case: 'i on a digest card',
+      item: workItem('a', { section: 'around' }),
+      section: 'around',
+      press: (view: InboxView) => view.commands.editDraft(),
+      logged: 'no editDraft for a',
+    },
+    {
+      case: 'Enter on a digest card',
+      item: workItem('a', { section: 'worth_knowing' }),
+      section: 'worth_knowing',
+      press: (view: InboxView) => view.commands.send(),
+      logged: 'no send for a',
     },
     {
       case: 'd on a dismissed card',
@@ -643,17 +684,150 @@ describe('createInboxView', () => {
       draws: false,
     },
   ])(
-    'Show transcript draws only while hasRow is true: $case',
+    'the log hint draws only while hasRow is true: $case',
     ({ job, draws }) => {
       const setup = inboxSetup(work([workItem('a')], job));
 
-      const buttons = findAll(setup.sheet, 'ui-button').filter((button) =>
-        button.textContent.includes('Show transcript'),
+      expect(findAll(setup.sheet, 'work-inbox-status-hint').length > 0).toBe(
+        draws,
       );
-
-      expect(buttons.length > 0).toBe(draws);
     },
   );
+
+  it.each([
+    {
+      case: 'never updated',
+      state: work([]),
+      text: 'Not updated yet',
+    },
+    {
+      case: 'updated 7 minutes ago',
+      state: { ...work([]), lastSweepAt: '2026-11-23T11:53:00.000Z' },
+      text: 'Updated 7m ago',
+    },
+    {
+      case: 'a sweep running',
+      state: work([], { running: sweep({ state: 'running' }) }),
+      text: 'Updating…',
+    },
+  ])('the head line reads only the update time: $case', ({ state, text }) => {
+    const setup = inboxSetup(state);
+
+    expect(findAll(setup.sheet, 'work-inbox-status-text')[0]?.textContent).toBe(
+      text,
+    );
+  });
+
+  it('the nav and a mixed list draw Threads and Digest headings', () => {
+    const setup = inboxSetup(
+      work([
+        workItem('thread', { at: '2026-11-23T09:00:00.000Z' }),
+        workItem('digest', {
+          at: '2026-11-23T11:00:00.000Z',
+          section: 'worth_knowing',
+        }),
+      ]),
+    );
+    setup.view.selectSection('all');
+
+    const titles = (root: FakeElement) =>
+      findAll(root, 'work-inbox-group').map((group) => group.textContent);
+    expect(titles(setup.side)).toEqual(['Threads', 'Digest', '']);
+    expect(titles(setup.sheet)).toEqual(['Threads', 'Digest']);
+    expect(
+      cards(setup).map((card) => card.classList.contains('is-digest')),
+    ).toEqual([false, true]);
+  });
+
+  it.each([
+    {
+      case: 'an unseen item rested on',
+      items: [workItem('a')],
+      move: null,
+      runs: [['work.markSeen', 'a']],
+    },
+    {
+      case: 'an item already seen',
+      items: [workItem('a', { seenAt: '2026-11-23T10:00:00.000Z' })],
+      move: null,
+      runs: [],
+    },
+    {
+      case: 'the cursor moved on before the rest ended',
+      items: [workItem('a', { at: '2026-11-23T11:00:00.000Z' }), workItem('b')],
+      move: (setup: Setup) => setup.view.commands.listDown(),
+      runs: [['work.markSeen', 'b']],
+    },
+  ])(
+    'the cursor marks its item seen after resting on it: $case',
+    ({ items, move, runs }) => {
+      vi.useFakeTimers();
+      const setup = inboxSetup(work(items));
+
+      vi.advanceTimersByTime(1_000);
+      move?.(setup);
+      vi.advanceTimersByTime(1_500);
+
+      expect(setup.runs).toEqual(runs);
+      expect(
+        cards(setup).map((card) => card.classList.contains('is-unseen')),
+      ).toEqual(items.map((item) => item.seenAt === null));
+    },
+  );
+
+  it('a newer message makes a marked item markable again', () => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a')]));
+    vi.advanceTimersByTime(1_500);
+    setup.view.stateChanged(
+      work([workItem('a', { seenAt: '2026-11-23T10:00:00.000Z' })]),
+    );
+    vi.advanceTimersByTime(1_500);
+
+    setup.view.stateChanged(
+      work([
+        workItem('a', {
+          at: '2026-11-23T11:00:00.000Z',
+          seenAt: '2026-11-23T10:00:00.000Z',
+        }),
+      ]),
+    );
+    vi.advanceTimersByTime(1_500);
+
+    expect(setup.runs).toEqual([
+      ['work.markSeen', 'a'],
+      ['work.markSeen', 'a'],
+    ]);
+  });
+
+  it('a refused mark logs without a toast', async () => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a')]), {
+      rejects: { 'work.markSeen': 'a is gone' },
+    });
+
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(setup.logs).toContain('work.markSeen failed: a is gone');
+    expect(setup.toasts).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'a sample showing',
+      act: (setup: Setup) =>
+        setup.view.showSample(work([workItem('sample')]), []),
+    },
+    { case: 'Inbox hidden', act: (setup: Setup) => setup.view.hidden() },
+  ])('the cursor marks nothing seen: $case', ({ act }) => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a')]));
+
+    act(setup);
+    vi.advanceTimersByTime(2_000);
+
+    expect(setup.runs).toEqual([]);
+  });
 
   it.each([
     {
@@ -666,12 +840,20 @@ describe('createInboxView', () => {
       warning: ['2'],
     },
     {
+      case: 'one unseen and one seen',
+      items: [
+        workItem('a'),
+        workItem('b', { seenAt: '2026-11-23T10:00:00.000Z' }),
+      ],
+      warning: ['1'],
+    },
+    {
       case: 'none open',
       items: [workItem('c', { state: 'dismissed' })],
       warning: [],
     },
   ])(
-    'the Needs you count draws as a warning Tag while over 0: $case',
+    'the unseen Needs you count draws as a warning Tag while over 0: $case',
     ({ items, warning }) => {
       const setup = inboxSetup(work(items));
 
@@ -701,7 +883,7 @@ describe('createInboxView', () => {
   });
 
   it('each focus change sets its scope and logs it', () => {
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    const setup = inboxSetup(work([workItem('a')]));
     setup.view.commands.togglePane();
     setup.scopes.length = 0;
     setup.logs.length = 0;
@@ -840,7 +1022,7 @@ describe('createInboxView', () => {
   });
 
   it('togglePane from a focused box ends in the list with no held editor', () => {
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    const setup = inboxSetup(work([workItem('a')]));
     setup.view.commands.editDraft();
 
     setup.view.commands.togglePane();
@@ -851,7 +1033,7 @@ describe('createInboxView', () => {
   });
 
   it('Esc in the box leaves the pane open', () => {
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    const setup = inboxSetup(work([workItem('a')]));
     setup.view.commands.editDraft();
 
     setup.view.commands.leaveBox();
@@ -873,7 +1055,7 @@ describe('createInboxView', () => {
   });
 
   it('typing in the box never redraws the pane', () => {
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]));
+    const setup = inboxSetup(work([workItem('a')]));
     setup.view.commands.editDraft();
     const drawn = findAll(paneOf(setup), 'work-inbox-detail-pane')[0];
 
@@ -917,7 +1099,7 @@ describe('createInboxView', () => {
 
   it('the minute tick leaves a focused box focused, with its text and the keys', () => {
     vi.useFakeTimers();
-    const setup = inboxSetup(work([workItem('a', { draft: 'worker' })]), {
+    const setup = inboxSetup(work([workItem('a')]), {
       details: [fetchedDetail('a')],
     });
     setup.view.commands.editDraft();
