@@ -1,6 +1,6 @@
 {
   "name": "auri",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "The Auri app's agent plugin: the app's MCP tools, its hooks and the skills for its features",
   "author": { "name": "Wigley" },
   "skills": "./skills/",
