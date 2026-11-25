@@ -3,6 +3,7 @@ import {
   type AgentEvent,
   type AgentHarness,
   type AgentStart,
+  type ChatEntry,
   MAIN_AGENT_ID,
   type PermissionRequest,
   type ProcessActivity,
@@ -321,10 +322,12 @@ describe('chat drive actions', () => {
 // `preparedRuns` holds each `prepareRun` call's arguments and the spec it
 // returned; the harness declares no start controls.
 // `options.unlistedProfiles` publishes a second, unlisted harness `demo` with
-// those profiles.
+// those profiles. `options.history` is every saved session's history, [] when
+// not given.
 function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
+    history?: ChatEntry[];
     data?: Files;
     infoFails?: boolean;
     profiles?: { name: string; configDir: string }[] | null;
@@ -403,6 +406,7 @@ function startChatPart(
       return spawn;
     },
     startControls: () => [],
+    history: () => Promise.resolve(options.history ?? []),
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
     attach: (request: AgentStart) => {
       harnessAttaches.push(request);
@@ -655,8 +659,9 @@ function fakePoolProvider(
   return { folders: (pool) => (pool === 'ng' ? clones() : []) };
 }
 
-// A data folder holding one saved session whose process id is `p1`.
-async function dataWithSavedRow(): Promise<Files> {
+// A data folder holding one saved session whose process id is `p1`, with its
+// history pending when `sent`.
+async function dataWithSavedRow(sent = false): Promise<Files> {
   const data = createMemoryFiles();
   await data.write(
     OPEN_SESSIONS_FILE,
@@ -666,7 +671,7 @@ async function dataWithSavedRow(): Promise<Files> {
           hostSessionId: 'host-a',
           projectDir: '/p',
           profile: 'work',
-          sent: false,
+          sent,
           busy: false,
           titles: { user: null, agent: null, firstMessage: null },
           processId: 'p1',
@@ -1749,6 +1754,55 @@ describe('chat main part', () => {
       await expect(restored).resolves.toBeUndefined();
     },
   );
+
+  // Breaks: an export that reads before the restore reopened the row, which
+  // reads nothing, so a restored retro would close as lost.
+  it('loadHistory_Export_WaitsForTheRestore', async () => {
+    // The restore's list waits for the test; every later list resolves empty.
+    let releaseRestoreList: (hosted: HostedProcessInfo[]) => void = () =>
+      undefined;
+    let lists = 0;
+    const list = () => {
+      lists += 1;
+      if (lists > 1) {
+        return Promise.resolve([]);
+      }
+      return new Promise<HostedProcessInfo[]>((resolve) => {
+        releaseRestoreList = resolve;
+      });
+    };
+    const history: ChatEntry[] = [
+      {
+        kind: 'assistant',
+        id: 'history:host-a-assistant',
+        at: 1000,
+        agentId: MAIN_AGENT_ID,
+        text: 'an earlier reply',
+        streaming: false,
+        raw: [],
+      },
+    ];
+    const chat = startChatPart({
+      list,
+      history,
+      data: await dataWithSavedRow(true),
+    });
+    let isRead = false;
+
+    const reading = chat.exports.loadHistory('row-1').then(() => {
+      isRead = true;
+    });
+    await settle();
+
+    expect(isRead).toBe(false);
+
+    releaseRestoreList([]);
+    await reading;
+
+    expect(chat.entriesInSlots('row-1').map((entry) => entry.id)).toEqual([
+      'history:host-a-assistant',
+    ]);
+  });
 
   it('exports_Adopt_HoldsRelayConnectsAfterTheRestore', async () => {
     // The restore's list waits for the test; every later list resolves empty.

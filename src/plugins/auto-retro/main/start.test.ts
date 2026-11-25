@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { ProcessActivity } from '../../../contracts/agent';
+import {
+  type ChatEntry,
+  MAIN_AGENT_ID,
+  type ProcessActivity,
+} from '../../../contracts/agent';
 import type {
   FeatureKey,
   RetroContribution,
@@ -19,6 +23,7 @@ import {
   type ChatMainEvents,
   type ChatMainExports,
   type ChatSessionInfo,
+  chatEntriesSlot,
   chatMainKey,
   chatSessionSlot,
   type LaunchRequest,
@@ -153,12 +158,51 @@ function sessionInfo(
   };
 }
 
+// A row resting with no process: not attached yet, or its process exited.
+function restingInfo(sessionId: string): ChatSessionInfo {
+  return { ...sessionInfo(sessionId, 'idle'), running: false };
+}
+
+function processEndedEvent(
+  sessionId: string,
+  hostSessionId: string,
+): ChatMainEvents['processEnded'] {
+  return { sessionId, hostSessionId, reason: 'clean', code: 0, error: null };
+}
+
+const USER_ENTRY: ChatEntry = {
+  kind: 'user',
+  id: 'history-user',
+  at: 1000,
+  text: '/wigley:retro auto h1',
+  images: [],
+  delivery: null,
+  raw: [],
+};
+
+// A restored retro row's history once its retro ran.
+const RETRO_HISTORY: readonly ChatEntry[] = [
+  USER_ENTRY,
+  {
+    kind: 'assistant',
+    id: 'history-assistant',
+    at: 2000,
+    agentId: MAIN_AGENT_ID,
+    text: 'Retro written.',
+    streaming: false,
+    raw: [],
+  },
+];
+
 // The part on the harness, over a chat whose `launch` answers through
 // `answerLaunch` (by default: row `retro-<n>` with host `retro-host-<n>` set in
 // `sessions.rows`, then that row id) and records each launch and close, and a
 // sessions that records each title set, and a contributions that serves `strategies` (by default the wigley strategy
 // alone), holds each registered reader in `features` and tells `onChanged` listeners on `setStrategies`. Every fake
 // lives across a restart. `enterDemoStep` enters the registered `auto-retro.section` step, its demo session `row-demo`.
+// Chat's `loadHistory` puts the row's `histories` entries ahead of its `chat.entries` and resolves; while
+// `holdsHistory` is true each read waits for `settleHistory`, which writes and resolves, or rejects with its error.
+// `holdRestore` keeps the next start's `chat.restored()` pending.
 function startPart(
   options: {
     runMode?: RunMode;
@@ -175,6 +219,9 @@ function startPart(
   >();
   const settings = options.settings ?? SETTINGS;
   let strategies = options.strategies ?? [WIGLEY];
+  let restored: Promise<void> = Promise.resolve();
+  const histories = new Map<string, readonly ChatEntry[]>();
+  const heldHistories = new Map<string, (error: Error | null) => void>();
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const state = createSlotStore(() => undefined);
   state.publish(coreAgentHarnessesSlot).set(
@@ -204,7 +251,8 @@ function startPart(
               closes.push([sessionId, reason]);
               return Promise.resolve();
             },
-            restored: () => Promise.resolve(),
+            restored: () => restored,
+            loadHistory: (sessionId: string) => part.loadHistory(sessionId),
           }) as unknown as ChatMainExports,
       ),
       fakeDependency(
@@ -251,6 +299,12 @@ function startPart(
   });
   const rows = harness.state.publish(sessionsRowsSlot);
   const sessions = harness.state.publish(chatSessionSlot);
+  const entries = harness.state.publish(chatEntriesSlot);
+  const readHistory = (sessionId: string) =>
+    entries.replace(sessionId, [
+      ...(histories.get(sessionId) ?? []),
+      ...entries.get(sessionId),
+    ]);
   const part = {
     harness,
     launches,
@@ -258,6 +312,33 @@ function startPart(
     titles,
     rows,
     sessions,
+    entries,
+    histories,
+    holdsHistory: false,
+    loadHistory(sessionId: string): Promise<void> {
+      if (!part.holdsHistory) {
+        readHistory(sessionId);
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        heldHistories.set(sessionId, (error) => {
+          if (error !== null) {
+            reject(error);
+            return;
+          }
+          readHistory(sessionId);
+          resolve();
+        });
+      });
+    },
+    settleHistory(sessionId: string, error: Error | null = null) {
+      const settle = heldHistories.get(sessionId);
+      heldHistories.delete(sessionId);
+      settle?.(error);
+    },
+    holdRestore() {
+      restored = new Promise(() => undefined);
+    },
     features,
     setStrategies(next: RetroStrategy[]) {
       strategies = next;
@@ -311,11 +392,15 @@ function startPart(
 }
 
 // The part restarted over an unreadable `queue.json`, with a restored row
-// `retro-9` (host `retro-host-9`) whose first message is `firstMessage`.
-async function restartWithQueueLost(firstMessage: string) {
+// `retro-9` (host `retro-host-9`) whose first message is `firstMessage` and whose history is `history`.
+async function restartWithQueueLost(
+  firstMessage: string,
+  history: readonly ChatEntry[] = RETRO_HISTORY,
+) {
   const part = startPart();
   await settled();
   await part.harness.files.write(QUEUE_PATH, '{');
+  part.histories.set('retro-9', history);
   part.rows.set(
     'retro-9',
     sessionRow('retro-9', {
@@ -329,7 +414,7 @@ async function restartWithQueueLost(firstMessage: string) {
 }
 
 // The part restarted over an unreadable `queue.json`, then row `retro-9` (host
-// `retro-host-9`) opened as chat's restore opens one: the row joins with no
+// `retro-host-9`, history `RETRO_HISTORY`) opened as chat's restore opens one: the row joins with no
 // titles, takes `firstMessage`, and `sessionOpened` fires with `origin`.
 async function restartThenReopenWithQueueLost(
   firstMessage: string,
@@ -339,6 +424,7 @@ async function restartThenReopenWithQueueLost(
   const part = startPart(options);
   await settled();
   await part.harness.files.write(QUEUE_PATH, '{');
+  part.histories.set('retro-9', RETRO_HISTORY);
   await part.harness.restart();
   await settled();
   const row = sessionRow('retro-9', { hostSessionId: 'retro-host-9' });
@@ -528,6 +614,7 @@ describe('autoRetroMainPart', () => {
     await part.close('h1');
     part.rows.delete('retro-1');
     part.rows.set('retro-9', rowOf('retro-9', 'retro-host-1'));
+    part.histories.set('retro-9', RETRO_HISTORY);
 
     await part.harness.restart();
     await settled();
@@ -553,12 +640,13 @@ describe('autoRetroMainPart', () => {
     expect(part.state()?.queued).toBe(0);
   });
 
-  it('restart_RestoredRowAlreadyIdle_ClosesWithoutANewValue', async () => {
+  it('restart_RestoredRowWithAgentEntries_ClosesFinished', async () => {
     const part = startPart();
     await settled();
     await part.close('h1');
     part.rows.delete('retro-1');
     part.rows.set('retro-9', rowOf('retro-9', 'retro-host-1'));
+    part.histories.set('retro-9', RETRO_HISTORY);
     part.sessions.set('retro-9', sessionInfo('retro-9', 'idle'));
 
     await part.harness.restart();
@@ -690,6 +778,232 @@ describe('autoRetroMainPart', () => {
     expect(part.texts()).toEqual([
       '/wigley:retro auto h1',
       '/wigley:retro auto h2',
+    ]);
+  });
+
+  // Breaks: a row whose process ended before its first turn read busy forever, holding the queue.
+  it('processEnded_BeforeFirstTurn_ClosesStartFailedAndLaunchesTheNext', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    await part.close('h2');
+    part.sessions.set('retro-1', restingInfo('retro-1'));
+
+    part.harness.emit(
+      'chat.processEnded',
+      processEndedEvent('retro-1', 'retro-host-1'),
+    );
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-1', 'start-failed']]);
+
+    part.harness.emit('chat.sessionClosed', {
+      ...closedEvent('retro-host-1', 'start-failed'),
+      sessionId: 'retro-1',
+    });
+    await settled();
+
+    expect(part.messages()).toEqual(
+      expect.arrayContaining([
+        'retro retro-1 ended before its first turn; closing it',
+        'retro retro-1 closed before done; h1 not analyzed',
+      ]),
+    );
+    expect(part.texts()).toEqual([
+      '/wigley:retro auto h1',
+      '/wigley:retro auto h2',
+    ]);
+  });
+
+  // Breaks: the exit recorded only once the row joined, so an exit before the launch resolved was lost.
+  it('processEnded_BeforeTheLaunchResolves_StillClosesTheRow', async () => {
+    const part = startPart();
+    part.answerLaunch = () => {
+      part.rows.set('retro-1', rowOf('retro-1', 'retro-host-1'));
+      part.sessions.set('retro-1', restingInfo('retro-1'));
+      part.harness.emit(
+        'chat.processEnded',
+        processEndedEvent('retro-1', 'retro-host-1'),
+      );
+      return Promise.resolve('retro-1');
+    };
+    await settled();
+    await part.close('h1');
+
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-1', 'start-failed']]);
+  });
+
+  // Breaks: an older host's exit after a `/clear` read as the row's own.
+  it('processEnded_OfTheOldHostAfterAClear_IsIgnored', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+    part.rows.set('retro-1', rowOf('retro-1', 'retro-host-1-cleared'));
+    part.sessions.set('retro-1', sessionInfo('retro-1', 'idle'));
+
+    part.harness.emit(
+      'chat.processEnded',
+      processEndedEvent('retro-1', 'retro-host-1'),
+    );
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+  });
+
+  // Breaks: a launched row resting before its process attaches read lost.
+  it('launchedRow_NotYetAttached_IsNotClosed', async () => {
+    const part = startPart();
+    await settled();
+    await part.close('h1');
+
+    part.sessions.set('retro-1', restingInfo('retro-1'));
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+  });
+
+  // Breaks: a restored row read as started at the claim, closing a retro that never ran as finished.
+  it('restart_RestoredRowWithNoAgentEntry_ClosesStartFailed', async () => {
+    const part = await restartWithQueueLost('/wigley:retro auto h1', [
+      USER_ENTRY,
+    ]);
+
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'start-failed']]);
+    expect(part.messages()).toContain(
+      'retro retro-9 ended before its first turn; closing it',
+    );
+  });
+
+  // The part restarted with row `retro-9` (host `retro-host-9`) present, opening with the retro command, its history
+  // `RETRO_HISTORY` held until `settleHistory`.
+  async function restartWithHistoryHeld() {
+    const part = startPart();
+    await settled();
+    part.histories.set('retro-9', RETRO_HISTORY);
+    part.rows.set(
+      'retro-9',
+      sessionRow('retro-9', {
+        hostSessionId: 'retro-host-9',
+        titles: {
+          user: null,
+          agent: null,
+          firstMessage: '/wigley:retro auto h1',
+        },
+      }),
+    );
+    part.holdsHistory = true;
+    return part;
+  }
+
+  // Breaks: the entries read at the claim, before the history load wrote them.
+  it('restart_RestoredRowEntriesArriveWithTheHistory_ClosesFinished', async () => {
+    const part = await restartWithHistoryHeld();
+    await part.harness.restart();
+    await settled();
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+
+    part.settleHistory('retro-9');
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+  });
+
+  // Breaks: rule 4 applied to a live retro still attaching while chat's restore runs.
+  it('restart_RestoredRowBeforeRestoreEnds_IsNotClosed', async () => {
+    const part = await restartWithHistoryHeld();
+    part.holdRestore();
+    await part.harness.restart();
+    await settled();
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+  });
+
+  it('restart_HistoryReadRejects_LogsAndReadsTheEntriesAsTheyAre', async () => {
+    const part = await restartWithHistoryHeld();
+    await part.harness.restart();
+    await settled();
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+
+    part.settleHistory('retro-9', new Error('transcript missing'));
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.messages()).toContain(
+      'retro retro-9 history not read: transcript missing',
+    );
+    expect(part.closes).toEqual([['retro-9', 'start-failed']]);
+  });
+
+  // Breaks: a stale `endedRows` or `restoredRows` entry closing the next row with the same id before its history is
+  // read.
+  it('leaveRow_ThenTheSameIdRestored_StartsClean', async () => {
+    const part = startPart();
+    await settled();
+    const reopen = async () => {
+      part.rows.set(
+        'retro-9',
+        sessionRow('retro-9', {
+          hostSessionId: 'retro-host-9',
+          titles: {
+            user: null,
+            agent: null,
+            firstMessage: '/wigley:retro auto h1',
+          },
+        }),
+      );
+      part.harness.emit('chat.sessionOpened', {
+        sessionId: 'retro-9',
+        profileDir: '~/.claude-work',
+        hostSessionId: 'retro-host-9',
+        projectDir: '/home/me/wigley-agents',
+        profile: 'work',
+        origin: 'restored',
+      });
+      await settled();
+      part.sessions.set('retro-9', restingInfo('retro-9'));
+    };
+    part.histories.set('retro-9', [USER_ENTRY]);
+    await reopen();
+    part.harness.emit(
+      'chat.processEnded',
+      processEndedEvent('retro-9', 'retro-host-9'),
+    );
+    await settled();
+    part.harness.advance(SETTLE_MS);
+    part.rows.delete('retro-9');
+    part.sessions.delete('retro-9');
+    part.entries.delete('retro-9');
+    await settled();
+
+    part.histories.set('retro-9', RETRO_HISTORY);
+    part.holdsHistory = true;
+    await reopen();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'start-failed']]);
+
+    part.settleHistory('retro-9');
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([
+      ['retro-9', 'start-failed'],
+      ['retro-9', 'finished'],
     ]);
   });
 

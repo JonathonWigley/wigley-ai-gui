@@ -772,6 +772,9 @@ export interface ChatMainExports {
   // included, so it never rejects; until then profileOf is null for a row the
   // restore is about to reopen.
   restored(): Promise<void>;
+  // Once chat's restore ends, reads a restored session's earlier conversation into chat.entries, as the page's
+  // loadHistory does; a session with none pending, or one chat does not hold, reads nothing.
+  loadHistory(sessionId: string): Promise<void>;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
