@@ -112,6 +112,8 @@ export const chatroomPagePart: PagePart<typeof chatroomManifest> = {
       id: 'main',
       title: TITLE,
       icon: 'organization',
+      place: { group: 2, order: 4 },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {

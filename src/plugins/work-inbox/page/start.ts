@@ -14,6 +14,7 @@ import {
 import { placeWrites } from '../../../shared/page/place-slot';
 import {
   type ThreadDetail,
+  type WorkState,
   workDetailsSlot,
   workStateSlot,
 } from '../../work/contract';
@@ -23,6 +24,7 @@ import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { InboxLayout } from '../layouts/layout';
 import { workInboxManifest } from '../manifest';
 import { registerDemoSteps } from './demo-steps';
+import { sectionCounts } from './inbox-state';
 import { createInboxView } from './inbox-view';
 import { readInboxLayout } from './layout/read-layout';
 
@@ -100,6 +102,8 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
       id: 'main',
       title: 'Inbox',
       icon: 'inbox',
+      place: { group: 1, order: 2 },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {
@@ -128,8 +132,17 @@ export const workInboxPagePart: PagePart<typeof workInboxManifest> = {
     });
 
     const state = api.state.read(workStateSlot);
-    const stateListener = state.on((value) => view.stateChanged(value));
+    // The activity bar count: the Needs you items, none while the state is unread.
+    const countNeedsYou = (value: WorkState | undefined) =>
+      mode?.setCount(
+        value === undefined ? null : sectionCounts(value).needs_you,
+      );
+    const stateListener = state.on((value) => {
+      view.stateChanged(value);
+      countNeedsYou(value);
+    });
     view.stateChanged(state.get());
+    countNeedsYou(state.get());
     const detailsListener = details.on((key) => view.detailChanged(key));
     const demoStep = registerDemoSteps(services, {
       commands: api.commands,

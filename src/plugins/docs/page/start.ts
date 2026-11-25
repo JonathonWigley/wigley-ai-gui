@@ -406,6 +406,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       id: 'docs',
       title: 'Docs',
       icon: 'book',
+      place: { group: 2, order: 1 },
+      showCommand: 'showMode',
       element: docsSheet,
       sideBar: machineView.tree,
       shown() {

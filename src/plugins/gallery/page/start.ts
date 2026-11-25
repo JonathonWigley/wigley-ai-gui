@@ -77,6 +77,8 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       id: 'gallery',
       title: 'Gallery',
       icon: 'symbol-color',
+      place: { group: 3, order: 2, at: 'bottom' },
+      showCommand: 'showMode',
       element: view.element,
       shown() {
         isShown = true;

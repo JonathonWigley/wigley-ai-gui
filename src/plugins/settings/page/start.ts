@@ -94,6 +94,8 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       id: 'main',
       title: TITLE,
       icon: 'settings-gear',
+      place: { group: 3, order: 3, at: 'bottom' },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {

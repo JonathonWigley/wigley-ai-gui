@@ -76,6 +76,8 @@ export const workBoardPagePart: PagePart<typeof workBoardManifest> = {
       id: 'main',
       title: 'Board',
       icon: 'project',
+      place: { group: 1, order: 3 },
+      showCommand: 'showMode',
       element: view.sheet,
       shown() {
         isShown = true;

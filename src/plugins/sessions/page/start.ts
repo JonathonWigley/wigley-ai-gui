@@ -438,6 +438,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       id: 'sessions',
       title: 'Sessions',
       icon: 'comment-discussion',
+      place: { group: 1, order: 1 },
+      showCommand: 'showMode',
       element: view.element,
       sideBar: view.sideBar,
       shown() {

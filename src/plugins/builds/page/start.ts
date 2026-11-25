@@ -114,6 +114,8 @@ export const buildsPagePart: PagePart<typeof buildsManifest> = {
       id: 'main',
       title: TITLE,
       icon: 'package',
+      place: { group: 1, order: 4 },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {

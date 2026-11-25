@@ -12,6 +12,7 @@ changes for the user.
   place.
 - Space v p pins the activity bar open with each mode's name and key.
 - A mode can show a count on its activity bar item.
+- Inbox marks its activity bar item with its Needs you count.
 
 ### Changed
 

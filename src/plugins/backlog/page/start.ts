@@ -91,6 +91,8 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       id: 'main',
       title: TITLE,
       icon: 'checklist',
+      place: { group: 2, order: 2 },
+      showCommand: 'showMode',
       element: view.sheet,
       shown() {
         isShown = true;

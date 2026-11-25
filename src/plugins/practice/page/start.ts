@@ -77,6 +77,8 @@ export const practicePagePart: PagePart<typeof practiceManifest> = {
       id: 'main',
       title: TITLE,
       icon: 'beaker',
+      place: { group: 3, order: 1, at: 'bottom' },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {

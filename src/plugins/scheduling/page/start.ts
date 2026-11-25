@@ -83,6 +83,8 @@ export const schedulingPagePart: PagePart<typeof schedulingManifest> = {
       id: 'main',
       title: 'Schedules',
       icon: 'calendar',
+      place: { group: 2, order: 3 },
+      showCommand: 'showMode',
       element: view.sheet,
       sideBar: view.sideBar,
       shown() {

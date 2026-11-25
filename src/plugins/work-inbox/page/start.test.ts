@@ -34,12 +34,17 @@ const STATE: WorkState = {
   problem: null,
 };
 
-// The Inbox page on the harness, drawing its layout for real, with `STATE` published to `work.state` and each of
-// `details` to `work.details`.
-function startInboxPage(details: readonly WorkDetail[] = []) {
+// The Inbox page on the harness, drawing its layout for real, with `state` published to `work.state`, none when
+// null, and each of `details` to `work.details`.
+function startInboxPage(
+  details: readonly WorkDetail[] = [],
+  state: WorkState | null = STATE,
+) {
   installFocusFakeDom(vi.stubGlobal);
   const store = createSlotStore(() => undefined);
-  store.publish(workStateSlot).set(STATE);
+  if (state !== null) {
+    store.publish(workStateSlot).set(state);
+  }
   const detailsWriter = store.publish(workDetailsSlot);
   for (const detail of details) {
     detailsWriter.set(detail.id, detail);
@@ -135,4 +140,39 @@ describe('workInboxPagePart', () => {
     expect(harness.scope()).toBe('work-inbox.list');
     expect(messages(harness)).toContain('filter ABC-1');
   });
+
+  const twoNeedYou: WorkState = {
+    ...STATE,
+    items: [
+      workItem('first'),
+      workItem('second'),
+      workItem('elsewhere', { section: 'waiting' }),
+    ],
+  };
+  const noneNeedYou: WorkState = {
+    ...STATE,
+    items: [workItem('elsewhere', { section: 'waiting' })],
+  };
+
+  it.each<{ name: string; published: WorkState[]; expected: number | null }>([
+    { name: 'no work state', published: [], expected: null },
+    { name: 'two Needs you items', published: [twoNeedYou], expected: 2 },
+    {
+      name: 'the section emptied',
+      published: [twoNeedYou, noneNeedYou],
+      expected: 0,
+    },
+  ])(
+    'sets the mode count to the Needs you items: $name → $expected',
+    ({ published, expected }) => {
+      const harness = startInboxPage([], null);
+      const writer = harness.state.publish(workStateSlot);
+
+      for (const value of published) {
+        writer.set(value);
+      }
+
+      expect(harness.modeCount('work-inbox.main')).toBe(expected);
+    },
+  );
 });
