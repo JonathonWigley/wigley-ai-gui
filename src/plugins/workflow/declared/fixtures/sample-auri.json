@@ -13,13 +13,13 @@
       "stages": [
         {
           "id": "scope",
-          "label": "Scope",
+          "label": "Explore",
           "status": "busy",
           "enter": [{ "skill": "wigley:small" }]
         },
         {
           "id": "build",
-          "label": "Build",
+          "label": "Make",
           "step": "build",
           "runsTasks": true,
           "status": "busy",
@@ -28,14 +28,14 @@
         },
         {
           "id": "check",
-          "label": "Check",
+          "label": "Review",
           "step": "check",
           "status": "busy",
           "enter": [{ "step": "check" }]
         },
         {
           "id": "land",
-          "label": "Land",
+          "label": "Close",
           "step": "land",
           "slot": "land",
           "status": "busy",
@@ -43,7 +43,7 @@
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",
@@ -82,7 +82,7 @@
         },
         {
           "id": "build",
-          "label": "Build",
+          "label": "Make",
           "step": "build",
           "runsTasks": true,
           "status": "busy",
@@ -106,7 +106,7 @@
         },
         {
           "id": "land",
-          "label": "Land",
+          "label": "Close",
           "step": "land",
           "slot": "land",
           "status": "busy",
@@ -114,7 +114,7 @@
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",
@@ -355,7 +355,7 @@
         },
         {
           "id": "build",
-          "label": "Build",
+          "label": "Make",
           "step": "build",
           "runsTasks": true,
           "status": "busy",
@@ -364,14 +364,14 @@
         },
         {
           "id": "check",
-          "label": "Check",
+          "label": "Review",
           "step": "check",
           "status": "busy",
           "enter": [{ "step": "check" }]
         },
         {
           "id": "land",
-          "label": "Land",
+          "label": "Close",
           "step": "land",
           "slot": "land",
           "status": "busy",
@@ -379,7 +379,7 @@
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",

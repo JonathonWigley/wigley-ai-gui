@@ -332,12 +332,12 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
 
   // Breaks: a trail with a word lost, doubled or out of order.
   it.each([
-    { id: 'small' as const, trail: 'Scope › Build › Check › Land' },
+    { id: 'small' as const, trail: 'Explore › Make › Review › Close' },
     {
       id: 'medium' as const,
-      trail: 'Interview › Build › Review › Fix › Land',
+      trail: 'Interview › Make › Review › Fix › Close',
     },
-    { id: 'spike' as const, trail: 'Interview › Build › Check › Land' },
+    { id: 'spike' as const, trail: 'Interview › Make › Review › Close' },
   ])('$id Trail_Reads $trail', ({ id, trail }) => {
     const bySlot = new Map(
       pageOf(id)
@@ -348,7 +348,7 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
     expect({
       trail: [...bySlot.values()].join(' › '),
       done: pageStageOf(id, 'done').label,
-    }).toEqual({ trail, done: 'Land' });
+    }).toEqual({ trail, done: 'Close' });
   });
 
   it.each(

@@ -203,7 +203,7 @@ Every skill in `claims` appears in exactly one stage's `skill` trigger: that tri
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Unique in the workflow. |
-| `label` | string | The step's word: `Build`. |
+| `label` | string | The step's word: `Make`. |
 | `step` | string | The value `set_workflow_step` names this stage by. Left out, no report enters it. |
 | `inStepper` | boolean | Default `true`. |
 | `slot` | string | Stages that share a slot take one place in the stepper. |
@@ -322,12 +322,12 @@ with it. Small, Medium and Spike follow one shape. Small:
   "claims": ["wigley:small"],
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
-    { "id": "scope", "label": "Scope", "status": "busy", "enter": [{ "skill": "wigley:small" }] },
-    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+    { "id": "scope", "label": "Explore", "status": "busy", "enter": [{ "skill": "wigley:small" }] },
+    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
       "enter": [{ "step": "build" }] },
-    { "id": "check", "label": "Check", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
-    { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
-    { "id": "done", "label": "Land", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
+    { "id": "check", "label": "Review", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
+    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] },
     { "id": "answered", "label": "Answered", "step": "answered", "inStepper": false, "status": "none",
       "finishes": true, "unseenActivity": { "word": "answered", "tone": "success" },
@@ -347,13 +347,13 @@ Medium adds its counter, and its fix stage shows it:
   "sidePane": { "kind": "checklist", "title": "Checklist" },
   "stages": [
     { "id": "interview", "label": "Interview", "status": "busy", "enter": [{ "skill": "wigley:medium" }] },
-    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
       "enter": [{ "step": "build" }] },
     { "id": "review", "label": "Review", "step": "review", "status": "busy", "enter": [{ "step": "review" }] },
     { "id": "fix", "label": "Fix", "step": "fix", "status": "busy", "progress": " · cycle {counter.fix}",
       "enter": [{ "step": "fix" }] },
-    { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
-    { "id": "done", "label": "Land", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
+    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] }
   ]
 }
@@ -369,11 +369,11 @@ Spike's interview takes both triggers, so a new ask returns the flow to it:
   "stages": [
     { "id": "interview", "label": "Interview", "step": "interview", "status": "busy",
       "enter": [{ "skill": "wigley:spike" }, { "step": "interview" }] },
-    { "id": "build", "label": "Build", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
+    { "id": "build", "label": "Make", "step": "build", "runsTasks": true, "status": "busy", "progress": " {checklist}",
       "enter": [{ "step": "build" }] },
-    { "id": "check", "label": "Check", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
-    { "id": "land", "label": "Land", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
-    { "id": "done", "label": "Land", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
+    { "id": "check", "label": "Review", "step": "check", "status": "busy", "enter": [{ "step": "check" }] },
+    { "id": "land", "label": "Close", "step": "land", "slot": "land", "status": "busy", "enter": [{ "step": "land" }] },
+    { "id": "done", "label": "Close", "step": "done", "slot": "land", "status": "finishing", "finishes": true,
       "enter": [{ "step": "done" }] }
   ]
 }

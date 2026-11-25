@@ -18,9 +18,9 @@ Workflows are declared in an agent plugin's `auri.json`, which the `workflow` pl
 
 The `workflow` plugin is the engine for the user's wigley workflows. It shows each Chat-tab session's place in the
 workflow that session runs, with the next step one press away. The wigley plugin's `auri.json` declares four workflows:
-Small (Scope › Build › Check › Land), Medium (Interview › Build › Review › Fix › Land), Large
-(Primer or Explore › Interview › Plan › Cold read › Make › Review › Fix › Close) and Spike (Interview › Build ›
-Check › Land, looping per ask). The level skill a session starts picks
+Small (Explore › Make › Review › Close), Medium (Interview › Make › Review › Fix › Close), Large
+(Primer or Explore › Interview › Plan › Cold read › Make › Review › Fix › Close) and Spike (Interview › Make ›
+Review › Close, looping per ask). The level skill a session starts picks
 its workflow; skill starts and plan folders mark Large's big moves, and the agent reports the steps between them. A good
 outcome: every session row says where its run stands, and a new workflow or a changed stage is one `auri.json` edit,
 with no engine edit. This doc holds the engine and every stage; `docs/features/workflow-levels/design.md` is
@@ -49,7 +49,7 @@ and the level-skill checks from `main/level-selftest-script.ts`.
 - **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
 - **Signal** — one input the flow folds: an agent event, a clear, a reported step or checklist, or a workflow's own event
   (§ Signals).
-- **Trail** — the stepper's row of step words, each workflow's own steps: Scope to Land for Small, Interview to Land for
+- **Trail** — the stepper's row of step words, each workflow's own steps: Explore to Close for Small, Interview to Close for
   Medium and Spike, Primer or Explore to Close for Large.
 - **Checklist** — the work items the side pane shows. Large's comes from `plan.md` once a plan is read; the others',
   and Large's until then, from the agent through `set_workflow_checklist`.
@@ -126,11 +126,11 @@ reports each step as it reaches it. The status line is the label, the status and
 
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
-| scope | `wigley:small` starts, the first time or again in the session | Scope, running or paused | `Scope · running` | none | none |
-| build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
-| check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
-| land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
+| scope | `wigley:small` starts, the first time or again in the session | Explore, running or paused | `Explore · running` | none | none |
+| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| check | the agent reports `check` | Review, running or paused | `Review · running` | none | none |
+| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 | answered | the agent reports `answered` for a session that only answered and built nothing, which writes the run log line | Answered, no status: a neutral tag with no check, off the trail, so every step reads pending; a turn ending here while another session is viewed reads `answered` on the row until the user views it (Row label, below) | `Answered` | none | none |
 
 ## Medium's stages
@@ -141,11 +141,11 @@ the fix count.
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
 | interview | `wigley:medium` starts, the first time or again in the session | Interview, running or paused | `Interview · running` | none | none |
-| build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
 | review | the agent reports `review` | Review, running or paused | `Review · running` | none | none |
 | fix | the agent reports `fix`; entering fix from another stage counts one fix cycle | Fix, running or paused | `Fix · running · cycle 2` after the first cycle | none | none |
-| land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
+| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 
 ## Spike's stages
 
@@ -156,12 +156,12 @@ A second claim in the session, or a claim after done, returns the flow to interv
 | Stage | A session enters it when | Label and status | Status line | Button actions | Key-only actions |
 |---|---|---|---|---|---|
 | interview | `wigley:spike` starts, the first time or again in the session, or the agent reports `interview` | Interview, running or paused | `Interview · running` | none | none |
-| build | the agent reports `build` | Build, running or paused | `Build · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
-| check | the agent reports `check` | Check, running or paused | `Check · running` | none | none |
-| land | the agent reports `land` | Land, running or paused | `Land · running` | none | none |
-| done | the agent reports `done`, which writes the run log line | Land, running while a turn or subagent runs, then done | `Land · done` | none | none |
+| build | the agent reports `build` | Make, running or paused | `Make · running 2/5`, the checklist's `<checked>/<total>` once a checklist holds items | none | none |
+| check | the agent reports `check` | Review, running or paused | `Review · running` | none | none |
+| land | the agent reports `land` | Close, running or paused | `Close · running` | none | none |
+| done | the agent reports `done`, which writes the run log line | Close, running while a turn or subagent runs, then done | `Close · done` | none | none |
 
-Small's, Medium's and Spike's entries declare no actions, so `Space w w` logs `nothing to run` there. `done` shares its trail slot with `land`, so the trail still ends at Land.
+Small's, Medium's and Spike's entries declare no actions, so `Space w w` logs `nothing to run` there. `done` shares its trail slot with `land`, so the trail still ends at Close.
 
 A session on the Checklist flow draws nothing but the `No workflow` tag, after a live turn with agent work ends while
 no level skill has started (`flow.unclaimedWork`). The tag is the wigley plugin's choice: each of its four declarations
@@ -354,7 +354,7 @@ plugin, or a user's override in `layouts/workflow/<name>/`, set by the plugin's 
   the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and explore share the first step: the one the session is in, otherwise Explore. Plan ready and make share the
-Make step, and Small's, Medium's and Spike's `done` and `land` share Land. Spike's trail can go back: a report of an earlier step makes it the current one, and every later step reads pending again. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
+Make step, and Small's, Medium's and Spike's `done` and `land` share Close. Spike's trail can go back: a report of an earlier step makes it the current one, and every later step reads pending again. The trail is words alone: a step's weight and colour show its status (`DESIGN.md` § Workflow), and the
 current step also carries what follows the status in its status line (`Make 3/7`, `Fix · cycle 1`). On a narrow pane the
 trail wraps.
 

@@ -48,7 +48,7 @@ const SMALL: SampleLevelSpec = {
   groups: [
     {
       name: 'Small: answer only',
-      why: 'A session that only answers goes from Scope to Answered, a neutral end with no step of the trail done, with the S badge and the trail, and the No workflow tag leaves on the claim.',
+      why: 'A session that only answers goes from Explore to Answered, a neutral end with no step of the trail done, with the S badge and the trail, and the No workflow tag leaves on the claim.',
       steps: [
         {
           width: 1200,
@@ -56,7 +56,7 @@ const SMALL: SampleLevelSpec = {
           expect: small.line('shows scope'),
           alsoExpect: [
             small.anchored('level S'),
-            small.anchored('trail Scope › Build › Check › Land'),
+            small.anchored('trail Explore › Make › Review › Close'),
           ],
           screenshot: 'small-scope',
         },
@@ -69,7 +69,7 @@ const SMALL: SampleLevelSpec = {
     },
     {
       name: 'Small: full run',
-      why: 'Reports move the trail through each step, the checklist draws with its count, and a second Small ask starts at Scope. The key turns headless on and off, and the strip chip and row tag show it.',
+      why: 'Reports move the trail through each step, the checklist draws with its count, and a second Small ask starts at Explore. The key turns headless on and off, and the strip chip and row tag show it.',
       steps: [
         { keys: sendKeys(SMALL_SEND), expect: small.line('shows scope') },
         {
@@ -135,7 +135,7 @@ const MEDIUM: SampleLevelSpec = {
           expect: medium.line('shows interview'),
           alsoExpect: [
             medium.anchored('level M'),
-            medium.anchored('trail Interview › Build › Review › Fix › Land'),
+            medium.anchored('trail Interview › Make › Review › Fix › Close'),
           ],
           screenshot: 'medium-interview',
         },
@@ -216,7 +216,7 @@ const SPIKE: SampleLevelSpec = {
           expect: spike.line('shows interview'),
           alsoExpect: [
             spike.anchored('level X'),
-            spike.anchored('trail Interview › Build › Check › Land'),
+            spike.anchored('trail Interview › Make › Review › Close'),
           ],
           screenshot: 'spike-interview',
         },
@@ -229,7 +229,7 @@ const SPIKE: SampleLevelSpec = {
     },
     {
       name: 'Spike: full run',
-      why: 'Reports move the trail through each step, the checklist draws with its count, a second Spike ask starts at Interview, and a build reported after check moves the trail back to Build. The key turns headless on and off, and the strip chip and row tag show it.',
+      why: 'Reports move the trail through each step, the checklist draws with its count, a second Spike ask starts at Interview, and a build reported after check moves the trail back to Make. The key turns headless on and off, and the strip chip and row tag show it.',
       steps: [
         {
           keys: sendKeys(SPIKE_SEND),
