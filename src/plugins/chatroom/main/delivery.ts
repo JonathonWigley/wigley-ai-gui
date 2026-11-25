@@ -111,7 +111,7 @@ export function startDelivery(deps: DeliveryDeps): Disposable {
         return wakeText(message, true, ownRoom);
       }
       if (message.to.length === 0) {
-        const unread = await room.unreadAddressed(mainAgent);
+        const unread = await room.unreadAddressed(mainAgent, message.room);
         if (unread.some((each) => isMessage(each, message.room, message.id))) {
           return wakeText(message, true, ownRoom);
         }

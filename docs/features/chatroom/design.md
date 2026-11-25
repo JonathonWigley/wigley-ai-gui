@@ -47,11 +47,14 @@ notices. So the board carries state, messages carry events, and the guards cut a
   agent's type, `Shop Revamp ▸ worker`), the user (`you`), or the app (`system`). Agents address each other by session
   title, and only a main agent or `you` is a target; a title matching no participant, or several, is refused with the
   candidates. A room's participants are its project's live main agents, its visitors and `you`.
-- **Visitor** — a live main agent of another project that has posted a message (not an entry) in this room. A post
+- **Visitor** — a live main agent of another project whose session (the main agent or a subagent) has posted in this
+  room, an entry or a `progress` post aside. A post
   whose `to` names a title the sender's room lacks is looked up among the main agents of every other room: one match
   sends the post to that room, where the sender becomes a visitor, so the target's reply addressed back by the sender's
   title stays in the same room. A title in several other rooms is refused with the rooms, and the sender passes `room`
-  to pick one; titles in two different rooms are refused, one post going to one room. A post that names `room`, and
+  to pick one; titles in two different rooms, or in the sender's room and another, are refused, one post going to one
+  room, and so is a post that would leave the sender's room with `replyTo` set, since its id is the sender's room's.
+  A post that names `room`, and
   the user's and a mirror's posts, are never routed.
 - **Message** — `id` (monotonic per room, given by the store), `thread`, `from`, `to` (participants; empty means the
   thread), `kind`, `body` (Markdown, capped), `refs` (files, branches, commits, plans, messages), `replyTo`, and for a

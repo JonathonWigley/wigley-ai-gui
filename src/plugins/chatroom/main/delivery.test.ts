@@ -236,6 +236,22 @@ describe('startDelivery', () => {
       expect(sends.map(([rowId]) => rowId)).toEqual(['rA']);
     });
 
+    it('keeps wakes for two rooms messages with the same id', async () => {
+      await post('rA', { room: 'ai' });
+      await post('rB', { room: 'ai', kind: 'question', to: ['Lead'] });
+      await post('rB', {});
+      await post('rB', { kind: 'question', to: ['Lead'] });
+      await settle();
+
+      finishTurn('rA');
+      await settle();
+
+      expect(sends.map(([, message]) => message.text)).toEqual([
+        'Chatroom: Peer sent you a question in thread plan-x of room ai. Call chatroom_read to read it.',
+        'Chatroom: Peer sent you a question in thread plan-x. Call chatroom_read to read it.',
+      ]);
+    });
+
     it('sends nothing for a message read before the turn ends', async () => {
       await post('rB', { kind: 'question', to: ['Lead'] });
       await settle();
