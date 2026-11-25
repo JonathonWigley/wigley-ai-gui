@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.8.0 — 2026-11-25
+
 ### Added
 
 - A chatroom post reaches a session in another project by its title; the conversation goes on in that project's room,
