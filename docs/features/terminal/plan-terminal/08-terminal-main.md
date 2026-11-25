@@ -1,6 +1,6 @@
 # 08 — Terminal plugin main
 
-Status: not started
+Status: in progress
 Type: Task
 Rung: deep · crosses the session host's lifecycle: shells adopted after an app restart, killed on a row's close, detached on a part stop
 Wave: 4 · Depends on: 06

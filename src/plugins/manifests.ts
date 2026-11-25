@@ -36,6 +36,7 @@ import { sessionStashManifest } from './session-stash/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { systemStatsManifest } from './system-stats/manifest';
+import { terminalManifest } from './terminal/manifest';
 import { unityPoolManifest } from './unity-pool/manifest';
 import { usageManifest } from './usage/manifest';
 import { usageTabLineManifest } from './usage-tab-line/manifest';
@@ -97,6 +98,7 @@ export const builtInManifests = [
   systemStatsManifest,
   visualManifest,
   markdownBlocksManifest,
+  terminalManifest,
   // After every plugin that calls chat's `addInstructions`, so at quit it stops
   // first and never re-prepares its runs without their text.
   schedulingManifest,

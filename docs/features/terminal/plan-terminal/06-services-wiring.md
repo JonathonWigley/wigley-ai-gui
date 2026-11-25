@@ -1,6 +1,6 @@
 # 06 — Services wiring
 
-Status: in progress
+Status: done
 Type: Task
 Rung: hard · adds `services.terminals` on both sides, the fake shell host and the fake emulator that 08, 09 and 10
 consume, and a drive-run option through main, the drive CLI and its doc
@@ -330,3 +330,5 @@ Commit:    one commit: "Hand plugins services.terminals: the session host's shel
            with the platform shell program list"
 
 ## Proof
+
+Commit 02eb873f · proof: diff read: MainServices.terminals, PageServices.terminals, PlatformPrograms.shell, trackedTerminals, fake terminal host and fake emulator present; typecheck, oxlint, layers, boundary, styles clean; oxfmt applied to two files (8d tooling commit) · concerns: AGENTS.md does not name services.terminals or the two fakes yet (task 10)

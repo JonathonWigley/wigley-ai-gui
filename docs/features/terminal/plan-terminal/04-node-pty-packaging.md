@@ -1,6 +1,6 @@
 # 04 — node-pty adapter and packaging
 
-Status: in progress
+Status: done
 Type: Task
 Rung: deep · rests on low-confidence packaging claims: node-pty's runtime files, spawn-helper's executable bit, asar unpacking and Windows prebuilds are unverified
 Wave: 3 · Depends on: 01, 02, 05
@@ -148,3 +148,5 @@ Commit: one commit — "node-pty adapter behind the pty contract, wired into the
 Vite build, and copied and unpacked into the packaged app".
 
 ## Proof
+
+Commit 16718672 · proof: diff read: createNodePtySpawn and nodePtySpawn, external node-pty, packageAfterCopy copy, asar unpack glob and both layer entries present; typecheck, oxlint, oxfmt, layers clean; the bundle, unpacked files and codesign checks wait for the live session · concerns: Windows conout worker path rewrites only node_modules.asar (outside this run); AGENTS.md src map says src/session-host imports only contracts and shared; install-app's npm ci now runs the repo postinstall

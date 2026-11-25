@@ -34,6 +34,7 @@ import { sessionStashMainPart } from './session-stash/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 import { systemStatsMainPart } from './system-stats/main/start';
+import { terminalMainPart } from './terminal/main/start';
 import { unityPoolMainPart } from './unity-pool/main/start';
 import { usageMainPart } from './usage/main/start';
 import { usageTabLineMainPart } from './usage-tab-line/main/start';
@@ -88,6 +89,7 @@ export const mainParts: readonly MainPart[] = [
   buildsLocalMainPart,
   systemStatsMainPart,
   visualMainPart,
+  terminalMainPart,
   schedulingMainPart,
   galleryMainPart,
   windowMainPart,
