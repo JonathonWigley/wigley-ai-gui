@@ -149,7 +149,13 @@ describe('createEntryKit', () => {
 
   const HARNESS: KitEntry = { kind: 'fake:card', id: 'h1', at: 1000, raw: [] };
 
-  it.each([
+  it.each<{
+    case: string;
+    entry: KitEntry;
+    parts: { id: string; kinds: AnyEntryKind[]; buildThrows?: string }[];
+    wrappers: string[] | null;
+    logs: string[];
+  }>([
     {
       case: 'a permission entry draws the parts of its kind',
       entry: PERMISSION,
@@ -196,17 +202,7 @@ describe('createEntryKit', () => {
       wrappers: ['a'],
       logs: [],
     },
-  ] satisfies {
-    case: string;
-    entry: KitEntry;
-    parts: {
-      id: string;
-      kinds: AnyEntryKind[];
-      buildThrows?: string;
-    }[];
-    wrappers: string[] | null;
-    logs: string[];
-  }[])(
+  ])(
     'entryParts_PlacesPartsOfTheKindInAddOrder: $case',
     ({ entry, parts, wrappers, logs }) => {
       const { entryKit, logged } = kitOf(

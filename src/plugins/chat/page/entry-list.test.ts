@@ -1050,8 +1050,14 @@ describe('entry list', () => {
       };
     };
   const answered: ChatEntry = {
-    ...permission('p1'),
+    kind: 'permission',
+    id: 'p1',
+    at: 1000,
+    toolName: 'Bash',
+    input: {},
+    summary: '',
     answer: { allowed: true, reason: null },
+    raw: [],
   };
 
   it.each([
