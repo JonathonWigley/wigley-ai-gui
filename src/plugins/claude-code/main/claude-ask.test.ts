@@ -379,23 +379,20 @@ describe('askClaude', () => {
     { name: 'Resolves', end: exits(SUCCESS_LINE, '', 0) },
     { name: 'Rejects', end: exits('', 'bad flag\n', 2) },
     { name: 'IsAborted', end: (_spawn, controller) => controller.abort() },
-  ])(
-    'deletes the instructions file once the ask $name',
-    async ({ end }) => {
-      const controller = new AbortController();
-      const { deps, processes, files, logs } = askDeps();
+  ])('deletes the instructions file once the ask $name', async ({ end }) => {
+    const controller = new AbortController();
+    const { deps, processes, files, logs } = askDeps();
 
-      const outcome = askClaude(deps, askOf(controller.signal)).catch(
-        () => undefined,
-      );
-      await settle();
-      end(processes.spawns[0], controller);
-      await outcome;
+    const outcome = askClaude(deps, askOf(controller.signal)).catch(
+      () => undefined,
+    );
+    await settle();
+    end(processes.spawns[0], controller);
+    await outcome;
 
-      expect(await files.stat(INSTRUCTIONS_FILE)).toBeNull();
-      expect(logs).toEqual([]);
-    },
-  );
+    expect(await files.stat(INSTRUCTIONS_FILE)).toBeNull();
+    expect(logs).toEqual([]);
+  });
 
   it('logs a failed delete of the instructions file and resolves', async () => {
     const { deps, processes, logs } = askDeps({
