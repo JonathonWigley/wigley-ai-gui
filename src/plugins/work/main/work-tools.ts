@@ -56,8 +56,12 @@ const MESSAGE_SCHEMA = {
     author: { type: 'string' },
     at: { type: 'string', description: 'ISO time.' },
     text: { type: 'string', description: 'Markdown.' },
+    by_user: {
+      type: 'boolean',
+      description: "True on the user's own message, false on anyone else's.",
+    },
   },
-  required: ['author', 'at', 'text'],
+  required: ['author', 'at', 'text', 'by_user'],
   additionalProperties: false,
 };
 
@@ -696,6 +700,7 @@ function readMessage(raw: JsonObject, at: string): DetailMessage {
     author: requiredString(raw.author, `${at}.author`),
     at: isoTime(raw.at, `${at}.at`),
     text: requiredString(raw.text, `${at}.text`),
+    byUser: readBoolean(raw.by_user, `${at}.by_user`),
   };
 }
 

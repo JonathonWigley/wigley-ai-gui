@@ -32,6 +32,7 @@ const STATE: WorkState = {
   columns: [],
   job: { running: null, last: null },
   lastSweepAt: null,
+  sweepFailedAt: null,
   problem: null,
 };
 

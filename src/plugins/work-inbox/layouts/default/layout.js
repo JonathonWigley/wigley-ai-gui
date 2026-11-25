@@ -123,13 +123,26 @@ function detailButtons(parent, input, kit) {
  */
 function messageBlock(parent, message, kit) {
   const root = kit.el(parent, 'div', 'work-inbox-detail-message');
-  kit.el(
-    root,
-    'div',
-    'work-inbox-detail-message-head',
-    `${message.author} · ${message.age}`,
-  );
-  kit.markdown(root, message.text, 'work-inbox-detail-text md');
+  root.classList.toggle('is-by-user', message.byUser);
+  root.classList.toggle('is-run-start', message.startsRun);
+  if (!message.byUser) {
+    kit.el(
+      root,
+      'span',
+      `work-inbox-detail-icon is-tone-${message.tone}`,
+      message.startsRun ? message.initials : '',
+    );
+  }
+  const body = kit.el(root, 'div', 'work-inbox-detail-body');
+  if (message.startsRun) {
+    kit.el(
+      body,
+      'div',
+      'work-inbox-detail-message-head',
+      `${message.author} · ${message.age}`,
+    );
+  }
+  kit.markdown(body, message.text, 'work-inbox-detail-text md');
 }
 
 /**

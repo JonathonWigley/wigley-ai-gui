@@ -113,11 +113,18 @@ const message = (author: string, at: string, text: string): DetailMessage => ({
   author,
   at,
   text,
+  byUser: false,
+});
+
+// A stored message as the worker sends it, `byUser` as `by_user`.
+const sent = ({ byUser, ...message }: DetailMessage) => ({
+  ...message,
+  by_user: byUser,
 });
 
 // A record_work_tickets detail as the worker sends it, with `overrides` laid over it.
 function detailArg(overrides: Record<string, unknown> = {}) {
-  return {
+  const arg = {
     updated: LATER_AT,
     description: 'Fix the board.',
     comments: [message('Bo', STORED_AT, 'Seen it.')],
@@ -125,16 +132,22 @@ function detailArg(overrides: Record<string, unknown> = {}) {
     links: [],
     ...overrides,
   };
+  return { ...arg, comments: (arg.comments as DetailMessage[]).map(sent) };
 }
 
 // A record_work_items thread as the worker sends it, with `overrides` laid over it.
 function threadArg(overrides: Record<string, unknown> = {}) {
-  return {
+  const arg = {
     root: message('Ann', EARLIER, 'Any news?'),
     replies: [message('Bo', STORED_AT, 'Soon.')],
     reply_count: 1,
     latest_ts: '1763892000.000100',
     ...overrides,
+  };
+  return {
+    ...arg,
+    root: sent(arg.root as DetailMessage),
+    replies: (arg.replies as DetailMessage[]).map(sent),
   };
 }
 

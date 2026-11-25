@@ -186,6 +186,7 @@ const message = (author: string, at: string, text: string): DetailMessage => ({
   author,
   at,
   text,
+  byUser: author === 'You',
 });
 
 const issue = (
@@ -249,9 +250,10 @@ function fixtureDetails(now: number): Record<string, WorkDetail> {
       root: message('Ann', isoBefore(now, 40), 'Can you look at WRK-1?'),
       replies: [
         message('Bo', isoBefore(now, 20), 'I saw it too on the sample data.'),
+        message('You', isoBefore(now, 15), 'Looking at it now.'),
         message('Ann', isoBefore(now, 10), 'Today would be great.'),
       ],
-      replyCount: 2,
+      replyCount: 3,
     },
     {
       kind: 'thread',

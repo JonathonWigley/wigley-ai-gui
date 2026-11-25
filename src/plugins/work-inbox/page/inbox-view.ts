@@ -42,6 +42,7 @@ import { qualify } from '../../../shared/plugin-manifests';
 import {
   isUnseen,
   statusLine,
+  takesReply,
   type ThreadDetail,
   type WorkItem,
   type WorkState,
@@ -81,7 +82,6 @@ import {
   SECTION_TITLES,
   sectionCounts,
   shownItems,
-  takesReply,
 } from './inbox-state';
 import { createInboxKit } from './layout/inbox-kit';
 
@@ -126,6 +126,7 @@ const EMPTY_WORK: WorkState = {
   columns: [],
   job: { running: null, last: null },
   lastSweepAt: null,
+  sweepFailedAt: null,
   problem: null,
 };
 
@@ -904,9 +905,11 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       }
       markedAt.set(rested.id, rested.at);
       log(`seen ${rested.title}`);
-      void runWork(MARK_SEEN, rested.id).then((isMarked) => {
-        if (!isMarked) {
-          markedAt.delete(rested.id);
+      // A background mark the user never pressed: a refusal only logs.
+      deps.runFor(MARK_SEEN, rested.id, {}).catch((error: unknown) => {
+        markedAt.delete(rested.id);
+        if (!isDisposed) {
+          log(`${MARK_SEEN} failed: ${errorText(error)}`);
         }
       });
     }, SEEN_REST_MS);
@@ -1017,14 +1020,8 @@ export function createInboxView(deps: InboxViewDeps): InboxView {
       deps.toast('Nothing to send', 'info');
       return;
     }
-    // The edit is kept until main takes the text, so a refused send loses nothing.
-    void runWork(workSendCommand.id, { itemId: item.id, text }).then(
-      (isSent) => {
-        if (isSent && !isDisposed) {
-          dispatch({ type: 'draftDropped', id: item.id });
-        }
-      },
-    );
+    // The edit stays until the item leaves open on a good send, so a refused or failed send loses nothing.
+    void runWork(workSendCommand.id, { itemId: item.id, text });
   };
 
   const pressItem = (action: InboxCardAction, id: string) => {

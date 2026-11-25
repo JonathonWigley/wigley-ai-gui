@@ -21,8 +21,8 @@ import type {
 //   each newest first, or the `empty` part when none shows. While the list mixes sections (All, a ticket filter) a
 //   `cardGroup` goes before the first card of each group.
 // - `draftBox` (the detail kit) appends the cursor item's reply box to `parent` and returns it: the vim box holding
-//   the user's reply, or the sending text read-only while `isSending`, with the box's key hints. It throws `no draft box`
-//   while the detail's `draft` is null.
+//   the user's reply, or the sending text read-only while `isSending`, with the box's key hints. It throws `no draft
+//   box` while the detail's `draft` is null.
 // Each slot places once per draw: a slot called twice throws `<slot> placed twice`, which fails the part, so it draws
 // with `default`. A slot the part leaves out the app appends at the end of the part's root.
 // The detail pane: the sheet splits into the cards and the app-owned `div.work-inbox-detail` beside them, which
@@ -62,8 +62,8 @@ export interface CardGroupInput {
 }
 
 // The list's head line: `title` is the shown list's name (the section, or the filter key); `text` reads `Updated 7m
-// ago`, `Updating…` while a sweep runs, `Update failed 2m ago` or `Not updated yet`, in `tone`; `hasRow` is true while
-// the last finished job has a transcript, and the line then anchors `work-inbox.showJobRow`.
+// ago`, `Updating…` while a sweep runs, `Update queued`, `Update failed 2m ago` or `Not updated yet`, in `tone`;
+// `hasRow` is true while the last finished job has a transcript, and the line then anchors `work-inbox.showJobRow`.
 export interface InboxStatusInput {
   title: string;
   text: string;
@@ -124,11 +124,18 @@ export interface CardInput {
   prompt: PromptActionInput[];
 }
 
-// One message of a thread: `age` reads as a card's does; `text` is markdown.
+// One message of a thread: `author` reads `You` on the user's own message (`byUser`); `age` reads as a card's does;
+// `text` is markdown. `initials` (up to two capitals) and `tone` (0–4, the same for a name in every thread) draw the
+// author's icon. `startsRun` is false while the message before it is by the same person, so a run of one person's
+// messages shares one icon and name line.
 export interface DetailMessageInput {
   author: string;
   age: string;
   text: string;
+  byUser: boolean;
+  initials: string;
+  tone: number;
+  startsRun: boolean;
 }
 
 // The cursor item's detail pane. `channel`, `author`, `age`, `title`, `sectionTitle`, `stateTag` and `note` read as
@@ -137,10 +144,9 @@ export interface DetailMessageInput {
 // has no stored detail; `replies` are the shown replies, oldest first; `replyCountText` reads `2 of 4 replies` while
 // the thread holds more replies than it shows, else null. `draft` is the text the reply box shows (the user's edit,
 // else empty; the sending text while `isSending`), null when the item is not open or `isDigest`, which takes no
-// reply. `url`
-// opens the thread in Slack (`core.openLink`). `actions` are the buttons in order, each running its `work-inbox`
-// command with the item's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`, `restore`
-// `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. A ticket chip runs
+// reply. `url` opens the thread in Slack (`core.openLink`). `actions` are the buttons in order, each running its
+// `work-inbox` command with the item's id: `send` `sendItem`, `snooze` `snoozeItem`, `dismiss` `dismissItem`,
+// `restore` `restoreItem`, `startSession` `startItemSession`, `addToBoard` `addItemToBoard`. A ticket chip runs
 // `work-inbox.openTicket` with its key.
 export interface DetailInput {
   id: string;
@@ -194,11 +200,11 @@ export interface DetailKit extends InboxKit {
 }
 
 // A user layout defines only the parts it changes; `default` draws the rest. The `sideBar` and `main` panes are drawn
-// into app-owned containers once per layout set; the rows, the group headings, `status`, `problem`, `filter`, `card`, `empty`, `detail`
-// and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes: `sideBar`,
-// `sectionGroup` and `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty` included, `work-inbox.list`. Of the
-// `draftBox`'s own hints, `edit` anchors in `work-inbox.list`, where it opens the box, and `send` fires in
-// `work-inbox.box`.
+// into app-owned containers once per layout set; the rows, the group headings, `status`, `problem`, `filter`, `card`,
+// `empty`, `detail` and `detailEmpty` on every render that changes what they show, one call per item. Kit scopes:
+// `sideBar`, `sectionGroup` and `sectionRow` `work-inbox.sections`; every other part, `detail` and `detailEmpty`
+// included, `work-inbox.list`. Of the `draftBox`'s own hints, `edit` anchors in `work-inbox.list`, where it opens the
+// box, and `send` fires in `work-inbox.box`.
 export interface InboxLayout {
   sideBar?(parent: HTMLElement, kit: SideBarKit): InboxPane;
   sectionGroup?(

@@ -274,26 +274,116 @@
   overflow-wrap: anywhere;
 }
 
-[data-layout-owner='work-inbox'] .work-inbox-detail-thread,
-[data-layout-owner='work-inbox'] .work-inbox-detail-message {
+/* The thread as a chat: other people's bubbles on the left beside their icon, the user's on the right in the accent
+   tint; a run of one person's messages shares one icon and name line. */
+[data-layout-owner='work-inbox'] .work-inbox-detail-thread {
   display: grid;
   gap: var(--wg-space-1);
   min-width: 0;
 }
 
-[data-layout-owner='work-inbox'] .work-inbox-detail-thread {
-  gap: var(--wg-space-3);
+[data-layout-owner='work-inbox'] .work-inbox-detail-message {
+  align-items: start;
+  column-gap: var(--wg-space-2);
+  display: grid;
+  grid-template-columns: var(--wg-space-6) minmax(0, 1fr);
+  justify-self: start;
+  max-width: 85%;
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-message.is-run-start {
+  margin-top: var(--wg-space-2);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-message.is-by-user {
+  grid-template-columns: minmax(0, 1fr);
+  justify-self: end;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-semibold);
+  height: var(--wg-space-6);
+  justify-content: center;
+  width: var(--wg-space-6);
+}
+
+[data-layout-owner='work-inbox']
+  .work-inbox-detail-message:not(.is-run-start)
+  .work-inbox-detail-icon {
+  visibility: hidden;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon.is-tone-0 {
+  background: var(--wg-status-info-tint);
+  color: var(--wg-status-info);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon.is-tone-1 {
+  background: var(--wg-status-success-tint);
+  color: var(--wg-status-success);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon.is-tone-2 {
+  background: var(--wg-status-warning-tint);
+  color: var(--wg-status-warning);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon.is-tone-3 {
+  background: var(--wg-status-attention-tint);
+  color: var(--wg-status-attention);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-icon.is-tone-4 {
+  background: var(--wg-status-running-tint);
+  color: var(--wg-status-running);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-body {
+  display: grid;
+  gap: var(--wg-space-0_5);
+  justify-items: start;
+  min-width: 0;
+}
+
+[data-layout-owner='work-inbox'] .is-by-user .work-inbox-detail-body {
+  justify-items: end;
 }
 
 [data-layout-owner='work-inbox'] .work-inbox-detail-message-head {
-  color: var(--wg-fg);
-  font-weight: var(--wg-weight-semibold);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
   margin: 0;
 }
 
 [data-layout-owner='work-inbox'] .work-inbox-detail-text {
+  background: var(--wg-block-background);
+  border-radius: var(--wg-radius-lg);
+  max-width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
+  padding: var(--wg-space-1_5) var(--wg-space-3);
+}
+
+[data-layout-owner='work-inbox'] .is-by-user .work-inbox-detail-text {
+  background: var(--wg-accent-tint);
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-text > :first-child {
+  margin-top: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-text > :last-child {
+  margin-bottom: 0;
+}
+
+[data-layout-owner='work-inbox'] .work-inbox-detail-count {
+  justify-self: center;
+  margin-top: var(--wg-space-2);
 }
 
 [data-layout-owner='work-inbox'] .work-inbox-ticket {

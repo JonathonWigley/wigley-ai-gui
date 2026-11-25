@@ -9,11 +9,13 @@ import {
   detailInput,
   emptyReason,
   groupStarts,
+  initialsOf,
   type InboxAction,
   type InboxViewState,
   inboxReducer,
   initialInboxState,
   navGroupStart,
+  personTone,
   prunedDrafts,
   sectionCounts,
   shownItems,
@@ -30,6 +32,7 @@ function work(
     columns: [],
     job: { running: null, last: null, ...job },
     lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
   };
 }
@@ -354,17 +357,80 @@ describe('cardInput', () => {
   );
 });
 
+describe('the thread as a chat', () => {
+  const message = (author: string, byUser = false) => ({
+    author,
+    byUser,
+    at: '2026-11-23T11:00:00.000Z',
+    text: 'x',
+  });
+
+  it.each([
+    {
+      case: 'every reply shown: a run carries on from the root',
+      replyCount: 4,
+      runs: [true, false, true, true, false],
+    },
+    {
+      case: 'hidden replies: the count line breaks the run',
+      replyCount: 9,
+      runs: [true, true, true, true, false],
+    },
+  ])(
+    'detailInput starts a run on each change of person: $case',
+    ({ replyCount, runs }) => {
+      const detail = threadDetail('a', {
+        root: message('Ann'),
+        replies: [
+          message('Ann'),
+          message('Me', true),
+          message('Bo'),
+          message('Bo'),
+        ],
+        replyCount,
+      });
+
+      const input = detailInput(workItem('a'), view(), detail, NOW);
+
+      expect(
+        [input.root, ...input.replies].map((shown) => shown?.startsRun),
+      ).toEqual(runs);
+      expect(input.replies[1]).toMatchObject({ author: 'You', byUser: true });
+    },
+  );
+
+  it.each([
+    { name: 'Ann', initials: 'AN' },
+    { name: 'Ann Lee', initials: 'AL' },
+    { name: '  bo  ', initials: 'BO' },
+    { name: 'Q', initials: 'Q' },
+  ])('initialsOf takes two letters: $name', ({ name, initials }) => {
+    expect(initialsOf(name)).toBe(initials);
+  });
+
+  it('personTone gives a name the same tone each time, within the five', () => {
+    const names = ['Ann', 'Bo', 'Cy', 'Dee', 'Eli', 'Fay'];
+    const tones = names.map(personTone);
+
+    expect(names.map(personTone)).toEqual(tones);
+    expect(tones.every((tone) => tone >= 0 && tone < 5)).toBe(true);
+    expect(new Set(tones).size).toBeGreaterThan(1);
+  });
+});
+
 describe('detailInput', () => {
   const twoOfFour = threadDetail('a', {
     fetchedAt: new Date(NOW - 5 * 60_000).toISOString(),
     replies: [
       {
         author: 'Bo',
+        byUser: false,
         at: new Date(NOW - 30 * 60_000).toISOString(),
         text: 'B',
       },
       {
         author: 'Ann',
+        byUser: false,
         at: new Date(NOW - 2 * 60_000).toISOString(),
         text: 'C',
       },
@@ -390,8 +456,24 @@ describe('detailInput', () => {
         fetched: 'Fetched 5m ago',
         replyCountText: '2 of 4 replies',
         replies: [
-          { author: 'Bo', age: '30m', text: 'B' },
-          { author: 'Ann', age: '2m', text: 'C' },
+          {
+            author: 'Bo',
+            age: '30m',
+            text: 'B',
+            byUser: false,
+            initials: 'BO',
+            tone: personTone('Bo'),
+            startsRun: true,
+          },
+          {
+            author: 'Ann',
+            age: '2m',
+            text: 'C',
+            byUser: false,
+            initials: 'AN',
+            tone: personTone('Ann'),
+            startsRun: true,
+          },
         ],
       },
     },
@@ -491,9 +573,14 @@ describe('prunedDrafts', () => {
       items: [workItem('a', { state: 'dismissed' })],
       kept: { a: 'mine' },
     },
+    {
+      case: 'a cleared item, as a good send leaves it',
+      items: [workItem('a', { state: 'cleared' })],
+      kept: {},
+    },
     { case: 'an item work no longer holds', items: [workItem('b')], kept: {} },
   ])(
-    'prunedDrafts keeps edits of items in any state and drops the rest: $case',
+    'prunedDrafts keeps edits of items not cleared and drops the rest: $case',
     ({ items, kept }) => {
       expect(prunedDrafts({ a: 'mine' }, work(items))).toEqual(kept);
     },

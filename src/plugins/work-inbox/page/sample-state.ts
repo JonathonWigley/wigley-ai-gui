@@ -17,7 +17,12 @@ export function sampleInboxDetails(now: number): ThreadDetail[] {
     author: string,
     minutes: number,
     text: string,
-  ): DetailMessage => ({ author, at: ago(minutes), text });
+  ): DetailMessage => ({
+    author,
+    at: ago(minutes),
+    text,
+    byUser: author === 'You',
+  });
   const thread = (
     id: string,
     root: DetailMessage,
@@ -42,6 +47,8 @@ export function sampleInboxDetails(now: number): ThreadDetail[] {
       ),
       [
         message('Bo', 30, 'I can look tomorrow if nobody gets to it.'),
+        message('You', 20, 'I can take it after lunch.'),
+        message('Ann', 8, 'thanks!'),
         message('Ann', 6, 'any chance today?'),
       ],
       4,
@@ -186,6 +193,7 @@ export function sampleInboxState(now: number): WorkState {
       },
     },
     lastSweepAt: ago(7),
+    sweepFailedAt: null,
     problem: null,
   };
 }

@@ -611,7 +611,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   My threads) and Digest (Around Slack, Worth knowing), then a `border-subtle` hairline and All. Needs you draws its
   count in a `warning` Tag while it is over 0, and All counts every item. The sheet is one pane: one head line over a
   `border-subtle` rule (the shown list's name as a heading, the update status in `fg-tertiary` reading `Updated 7m
-  ago`, `Updating…`, `Update failed <age> ago` or `Not updated yet` with a StatusDot only while running or failed, a
+  ago`, `Updating…`, `Update queued`, `Update failed <age> ago` or `Not updated yet` with a StatusDot only while running or failed, a
   `log` key hint for `gs` while the last job has a transcript, the ticket filter chip as a `secondary` Button reading
   `<key> ✕` while a filter is set, the `sweep` hint at the end), then the rows, which scroll. A row is a compact
   mail-style row with a `border-subtle` rule under it, edge to edge: an `accent` dot in its own column while the item is
@@ -624,8 +624,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   sheet is a split (the split primitive, pane at the end and hideable): rows left and the cursor row's detail pane
   right, opened and closed by `Enter`. The pane heads with the title, the meta line and `Fetched <age> ago` (`Fetched
   just now` under a minute), then `With <participants>`, a ghost Button per ticket key, `Why:` while the worker gave
-  one (a `status-info` edge), the summary (a `border-default` edge, in `fg-secondary`), the thread (root message,
-  replies, markdown), the reply box in its vim box with the box's hints on an open thread (read-only on a sending
+  one (a `status-info` edge), the summary (a `border-default` edge, in `fg-secondary`), the thread as a chat
+  (root message then replies, markdown: other people's messages in `block-background` bubbles at `radius-lg` on the
+  left beside a `space-6` round icon of their initials, in one of five status tints picked by their name; the user's
+  own in `accent-tint` bubbles on the right with no icon; a run of one person's messages shares one icon and one
+  `Name · age` line in `text-12` `fg-secondary`; bubbles at most 85% of the pane wide), the reply box in its vim box with the box's hints on an open thread (read-only on a sending
   item; none on a digest item) and the Buttons in this order: Open in Slack (`ghost`), then Send (`primary`, threads
   only), Snooze 1 day, Dismiss (`ghost`), Start session and Add to Board, or Restore alone on an item that is not
   open, with a failed Send's note last (`docs/features/work-inbox/design.md` § Detail pane). An empty list shows one

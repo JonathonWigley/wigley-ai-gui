@@ -5,6 +5,7 @@ import {
   type DetailMessage,
   isDigest,
   isUnseen,
+  takesReply,
   type ThreadDetail,
   WORK_SECTIONS,
   type WorkItem,
@@ -106,7 +107,6 @@ export type InboxAction =
   | { type: 'select'; id: string; work: WorkState }
   | { type: 'focus'; focus: InboxFocus }
   | { type: 'draftEdited'; id: string; text: string }
-  | { type: 'draftDropped'; id: string }
   | { type: 'pane'; open: boolean }
   | { type: 'placed'; place: WorkInboxPlace; work: WorkState }
   | { type: 'reset'; state: InboxViewState };
@@ -179,14 +179,6 @@ export function inboxReducer(
       return state.drafts[action.id] === action.text
         ? state
         : { ...state, drafts: { ...state.drafts, [action.id]: action.text } };
-    case 'draftDropped': {
-      if (!Object.hasOwn(state.drafts, action.id)) {
-        return state;
-      }
-      const drafts = { ...state.drafts };
-      delete drafts[action.id];
-      return { ...state, drafts };
-    }
     case 'pane':
       return state.paneOpen === action.open
         ? state
@@ -294,8 +286,8 @@ export function sectionCounts(work: WorkState): Record<InboxSectionId, number> {
   return counts;
 }
 
-// The cards the list shows, threads before the digest and each newest `at` first: the open items holding the filter key across sections while a filter
-// is set, else every item under `all`, else the section's open items.
+// The cards the list shows, threads before the digest and each newest `at` first: the open items holding the filter
+// key across sections while a filter is set, else every item under `all`, else the section's open items.
 export function shownItems(work: WorkState, view: InboxViewState): WorkItem[] {
   const { ticketFilter, section } = view;
   const isShown = (item: WorkItem) => {
@@ -367,13 +359,18 @@ export function emptyReason(
   return view.ticketFilter === null ? 'section' : 'filter';
 }
 
-// `drafts` without the edits of items `work` no longer holds; an item in any state keeps its edit. `drafts` itself
-// when it drops none.
+// `drafts` without the edits of items `work` no longer holds or has cleared (a good send clears its item, so its
+// sent edit goes then, and a failed one keeps it); a dismissed or snoozed item keeps its edit. `drafts` itself when
+// it drops none.
 export function prunedDrafts(
   drafts: Record<string, string>,
   work: WorkState,
 ): Record<string, string> {
-  const ids = new Set(work.items.map((item) => item.id));
+  const ids = new Set(
+    work.items
+      .filter((item) => item.state !== 'cleared')
+      .map((item) => item.id),
+  );
   const kept = Object.entries(drafts).filter(([id]) => ids.has(id));
   return kept.length === Object.keys(drafts).length
     ? drafts
@@ -383,11 +380,6 @@ export function prunedDrafts(
 // The text Send sends for `item`: the user's edit, else empty.
 export function draftText(item: WorkItem, view: InboxViewState): string {
   return view.drafts[item.id] ?? '';
-}
-
-// Whether `item` takes a reply: an open thread; a digest item never does.
-export function takesReply(item: WorkItem): boolean {
-  return item.state === 'open' && !isDigest(item.section);
 }
 
 // The item the cursor is on, among the shown cards; null for none.
@@ -513,11 +505,49 @@ function fetchedText(fetchedAt: string, now: number): string {
   return age === 'now' ? 'Fetched just now' : `Fetched ${age} ago`;
 }
 
-function messageInput(message: DetailMessage, now: number): DetailMessageInput {
+// How many colours a person's icon picks from; the layout's CSS maps each tone to a status colour.
+export const PERSON_TONES = 5;
+
+// A name's icon tone: the same name lands on the same one of `PERSON_TONES` in every thread.
+export function personTone(name: string): number {
+  let hash = 0;
+  for (const char of name) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  }
+  return hash % PERSON_TONES;
+}
+
+// A name's icon letters: the first letters of its first two words, else its first two letters, in capitals.
+export function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  const letters =
+    words.length > 1
+      ? words.slice(0, 2).map((word) => [...word][0])
+      : [...(words[0] ?? '?')].slice(0, 2);
+  return letters.join('').toUpperCase();
+}
+
+// `message` as the pane draws it; it starts a run unless `previous` is by the same person.
+function messageInput(
+  message: DetailMessage,
+  previous: DetailMessage | null,
+  now: number,
+): DetailMessageInput {
+  const isSamePerson =
+    previous !== null &&
+    previous.byUser === message.byUser &&
+    previous.author === message.author;
   return {
-    author: message.author,
+    author: message.byUser ? 'You' : message.author,
     age: cardAge(message.at, now),
     text: message.text,
+    byUser: message.byUser,
+    initials: initialsOf(message.author),
+    tone: personTone(message.author),
+    startsRun: !isSamePerson,
   };
 }
 
@@ -528,12 +558,23 @@ export function detailInput(
   detail: ThreadDetail | null,
   now: number,
 ): DetailInput {
+  const hasHiddenReplies =
+    detail !== null && detail.replyCount > detail.replies.length;
+  // The reply count line between the root and the replies breaks a run.
   const replies =
     detail === null
       ? []
-      : detail.replies.map((reply) => messageInput(reply, now));
-  const hasHiddenReplies =
-    detail !== null && detail.replyCount > replies.length;
+      : detail.replies.map((reply, index) =>
+          messageInput(
+            reply,
+            index > 0
+              ? detail.replies[index - 1]
+              : hasHiddenReplies
+                ? null
+                : detail.root,
+            now,
+          ),
+        );
   return {
     id: item.id,
     channel: item.channel,
@@ -547,7 +588,7 @@ export function detailInput(
     tickets: item.ticketKeys.map((key) => ({ key, reason: item.linkReason })),
     summary: item.summary,
     why: item.why,
-    root: detail === null ? null : messageInput(detail.root, now),
+    root: detail === null ? null : messageInput(detail.root, null, now),
     replies,
     replyCountText: hasHiddenReplies
       ? `${replies.length} of ${detail.replyCount} replies`

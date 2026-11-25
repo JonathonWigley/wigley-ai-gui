@@ -46,6 +46,7 @@ function work(
     columns: [],
     job: { running: null, last: null, ...job },
     lastSweepAt: null,
+    sweepFailedAt: null,
     problem: null,
   };
 }
@@ -263,7 +264,12 @@ function splitOf(setup: Setup): FakeElement {
 function fetchedDetail(id: string): ThreadDetail {
   return threadDetail(id, {
     fetchedAt: new Date(NOW - 3 * 60_000).toISOString(),
-    root: { author: 'Ann', at: '2026-11-23T11:00:00.000Z', text: 'Root text' },
+    root: {
+      author: 'Ann',
+      at: '2026-11-23T11:00:00.000Z',
+      text: 'Root text',
+      byUser: false,
+    },
   });
 }
 
@@ -323,11 +329,11 @@ describe('createInboxView', () => {
     boxText: string;
   }>([
     {
-      case: 'main takes the text: the edit is dropped',
+      case: 'main takes the text: the edit stays until the send ends',
       section: 'needs_you',
       rejects: {},
-      drafts: {},
-      boxText: '',
+      drafts: { a: 'my text' },
+      boxText: 'my text',
     },
     {
       case: 'main refuses: the edit is kept',
@@ -340,8 +346,8 @@ describe('createInboxView', () => {
       case: 'a My threads item',
       section: 'my_threads',
       rejects: {},
-      drafts: {},
-      boxText: '',
+      drafts: { a: 'my text' },
+      boxText: 'my text',
     },
   ])(
     'send runs work.send with the edited text: $case',
@@ -362,6 +368,33 @@ describe('createInboxView', () => {
       ]);
       expect(setup.places.at(-1)?.drafts).toEqual(drafts);
       expect(setup.boxes[0].text).toBe(boxText);
+    },
+  );
+
+  it.each([
+    {
+      case: 'the send failed: the typed reply comes back',
+      ended: { sending: null, note: 'Send failed' },
+      drafts: { a: 'my text' },
+    },
+    {
+      case: 'the send went through: the item clears and its edit goes',
+      ended: { sending: null, state: 'cleared' as const },
+      drafts: {},
+    },
+  ])(
+    'a send ending keeps or drops the edit: $case',
+    async ({ ended, drafts }) => {
+      const setup = inboxSetup(work([workItem('a')]));
+      setup.view.commands.editDraft();
+      setup.boxes[0].type('my text');
+      setup.view.commands.send();
+      await settle();
+      setup.view.stateChanged(work([workItem('a', { sending: 'my text' })]));
+
+      setup.view.stateChanged(work([workItem('a', ended)]));
+
+      expect(setup.places.at(-1)?.drafts).toEqual(drafts);
     },
   );
 
@@ -741,6 +774,43 @@ describe('createInboxView', () => {
       ).toEqual(items.map((item) => item.seenAt === null));
     },
   );
+
+  it('a newer message makes a marked item markable again', () => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a')]));
+    vi.advanceTimersByTime(1_500);
+    setup.view.stateChanged(
+      work([workItem('a', { seenAt: '2026-11-23T10:00:00.000Z' })]),
+    );
+    vi.advanceTimersByTime(1_500);
+
+    setup.view.stateChanged(
+      work([
+        workItem('a', {
+          at: '2026-11-23T11:00:00.000Z',
+          seenAt: '2026-11-23T10:00:00.000Z',
+        }),
+      ]),
+    );
+    vi.advanceTimersByTime(1_500);
+
+    expect(setup.runs).toEqual([
+      ['work.markSeen', 'a'],
+      ['work.markSeen', 'a'],
+    ]);
+  });
+
+  it('a refused mark logs without a toast', async () => {
+    vi.useFakeTimers();
+    const setup = inboxSetup(work([workItem('a')]), {
+      rejects: { 'work.markSeen': 'a is gone' },
+    });
+
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(setup.logs).toContain('work.markSeen failed: a is gone');
+    expect(setup.toasts).toEqual([]);
+  });
 
   it.each([
     {

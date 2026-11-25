@@ -29,7 +29,7 @@ The spike's record of the settled result is [`spike.md`](spike.md).
 
 | Plugin | Role |
 |---|---|
-| `work` | Data: the store, the job queue, the worker sessions, the worker's tools, work detection, spin-up, every card action as a command, and every `work.*` setting. Publishes the `work.state` slot (items, cards, suggestions, job) and the keyed `work.details` slot (each ticket's and thread's stored detail, read only by the panes). |
+| `work` | Data: the store, the job queue, the worker sessions, the worker's tools, work detection, spin-up, every card action as a command, and every `work.*` setting. Publishes the `work.state` slot (items, cards, suggestions, job, `lastSweepAt`, `sweepFailedAt`) and the keyed `work.details` slot (each ticket's and thread's stored detail, read only by the panes). |
 | `work-inbox` | View: Inbox mode (`<Leader>ki`), drawn through its layouts from `work.state`. |
 | `work-board` | View: Board mode (`<Leader>kj`), drawn through its layouts from `work.state`. |
 
@@ -85,8 +85,9 @@ Auri sessions (chat.session, sessions.rows) ─┘
   harness's tool names.
 - **Status.** The status line in both views (the Board's layout also has an optional `problem` part, drawn in the status
   slot under it while `work.json` was not read at start) shows only when the work was last updated: `Updated 7m ago`
-  from the last finished sweep (`lastSweepAt` in `work.state`), `Updating…` while a sweep runs, `Update failed <age>
-  ago` when the last sweep failed, or `Not updated yet`. `gs` opens the last finished job's transcript: a `log` hint in
+  from the last good sweep (`lastSweepAt` in `work.state`), `Updating…` while a sweep runs, `Update queued` while one
+  waits behind another job, `Update failed <age> ago` while the last sweep failed (`sweepFailedAt`, kept until a sweep
+  ends well, so a later send or move does not hide it), or `Not updated yet`. `gs` opens the last finished job's transcript: a `log` hint in
   the Inbox, a Show transcript Button on the Board. A running job's row is hidden and owned, so it has no link until it
   ends.
 - **When.** Only while the app runs: one sweep at start, then a one-shot timer re-armed after each sweep. Interval 0
@@ -165,8 +166,11 @@ same card, and the minute age refresh waits while the box is focused or text in 
   comment`). The open ticket pane lists its Inbox threads before its detail is fetched.
 - **A thread's pane** (the Inbox, and a local task on the Board): channel, participants, ticket chips, the worker's
   why on a digest item, the summary, the root message and the `work.threadReplies` most recent replies (author, time,
-  text), then an empty reply box on every open thread (none on a digest item); a local task whose thread is not open in the
-  Inbox shows a line saying it takes no reply from the Board. `Cmd+Enter` sends through the Send job, as before. A
+  text), then an empty reply box on every open thread (none on a digest item); a local task whose thread is not open in
+  the Inbox shows a line saying it takes no reply from the Board. The Inbox draws the thread as a chat: other people
+  on the left beside an icon of their initials in a colour their name picks, the user on the right (the worker marks
+  each message the user wrote, `byUser`), and a run of one person's messages under one icon and name line. A typed
+  reply stays in its box until the send clears the item, so a refused or failed send keeps it. `Cmd+Enter` sends through the Send job, as before. A
   Board task whose Slack thread left the Inbox reads `Its Slack thread is no longer in the Inbox.`
 - **Inbox rows stay one line each** whether or not the pane is open: meta line, title and one line. The summary,
   reply box, people, ticket chips, thread and Buttons draw in the pane, not on the row.
