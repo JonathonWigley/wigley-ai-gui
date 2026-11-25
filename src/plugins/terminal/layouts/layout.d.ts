@@ -1,6 +1,6 @@
 // The terminal layout contract: what a layout in `layouts/terminal/<name>/layout.js` draws a session's terminal drawer
-// with. The app draws one `drawerHeader` above each session's terminal screen, while that session's drawer is open. The
-// app sets `data-layout-owner="terminal"` and `data-layout="<name>"` on the element the header returns, `<name>` being
+// with. The app draws one `drawerHeader` above each session's terminal screen when it makes the drawer, and again on
+// each change it shows, open or closed; it is seen only while the drawer is open. The app sets `data-layout-owner="terminal"` and `data-layout="<name>"` on the element the header returns, `<name>` being
 // the layout that drew it, so `[data-layout-owner="terminal"][data-layout="<name>"] …` in a layout's CSS selects only
 // its own header.
 //

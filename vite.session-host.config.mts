@@ -10,7 +10,7 @@ export default defineConfig({
       fileName: () => 'session-host.js',
     },
     // Joins the Vite plugin's own `rollupOptions.external`; `forge.config.mts`
-    // copies node-pty into the package beside the bundle.
+    // copies node-pty into the package's `node_modules`, which the bundle's `require` finds up its folders.
     rollupOptions: { external: ['node-pty'] },
   },
 });

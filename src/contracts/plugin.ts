@@ -1226,7 +1226,8 @@ export interface MainServices {
   agentEnvironment: Readonly<Record<string, string>>;
   agentHomeDir: string;
   sessionHost: SessionHost;
-  // The session's shells: the session host's terminal table, or a fake shell in the self-test and a drive run.
+  // The session's shells: the session host's terminal table, or a fake shell in the self-test and, by default, a
+  // drive run.
   terminals: TerminalHost;
   loginStart: LoginStart;
   window: {

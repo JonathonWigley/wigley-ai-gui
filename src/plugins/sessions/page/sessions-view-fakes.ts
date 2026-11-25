@@ -77,8 +77,8 @@ export function sessionsPartsSetup() {
 
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the
 // favorites, recency stamps and drawer height, `isModeShown` reads whether
-// Sessions mode shows, true unless handed in, `clock` stamps them, a fixed time unless handed
-// in, so rows keep main's order, `timers` never runs a timer unless handed in,
+// Sessions mode shows, true unless handed in, `clock` makes the recency
+// stamps, a fixed time unless handed in, so rows keep main's order, `timers` never runs a timer unless handed in,
 // `places` holds the sessions' places, a new empty slot unless handed in,
 // `tabsChanged` runs on each change to a session's tabs or popups, and
 // `sections` holds the side bar's registered sections, a new store unless

@@ -5,7 +5,7 @@ import type { TerminalExit } from '../../contracts/terminals';
 // What main holds of a session's shell, as `open` and `restart` answer it.
 export interface TerminalOpened {
   shell: string; // this shell's id: new for each spawn or adoption by main
-  buffer: string; // main's last 256 KB of the shell's output
+  buffer: string; // main's last `TERMINAL_REPLAY_LIMIT` UTF-16 code units of the shell's output
   seq: number; // the seq of the last chunk in `buffer`; 0 when empty
   folder: string; // the shell's cwd
   exit: TerminalExit | null; // null while the shell runs

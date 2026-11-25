@@ -101,8 +101,7 @@ interface Drawer {
 // tabs' body, the text saying why no tab shows and the popup layer over them,
 // then the host of its drawer, hidden while the drawer is closed or absent,
 // and the host of its hidden popups' bar; its drawer, null for none; its tab
-// ids and selection, and its
-// tabs by id, both in strip order; its popups, the one opened or hidden last
+// ids and selection, and its tabs by id, both in strip order; its popups, the one opened or hidden last
 // at the end; the place the last page saved for its session, or the one its
 // selected tab left when removed, null for none; the tab that place had
 // selected while that tab has not come back and no pick moved the selection
@@ -284,8 +283,8 @@ export interface SessionTabsView {
 // layout redraw, holds the plugin's element, shown while the drawer is open,
 // at the one height every drawer keeps in `uiState` and drags on the part's
 // handle; the drawer's `shown` runs each time it becomes visible (open, its
-// frame in a pane and the mode shown). Each frame writes its place (selected tab, selection count,
-// hidden popups) to `places` on each change, and a new frame starts from the
+// frame in a pane and the mode shown). Each frame writes its place (selected
+// tab, selection count, hidden popups) to `places` on each change, and a new frame starts from the
 // place the last page wrote: a tab added late takes back the selection it had
 // while no pick moved it since (`tabsAfterRestoredAdd`), and until then the
 // place keeps naming that tab as the selected one. A selected tab removed

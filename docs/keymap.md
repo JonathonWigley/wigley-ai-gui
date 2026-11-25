@@ -154,7 +154,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   **Alt+w** closes the focused chat pane and leaves its session in the side bar
   (`docs/features/chat-panes/design.md`).
 - **Ctrl+backtick** also opens or closes the session's terminal, as `<Leader>bt` does. In the terminal, keys go to
-  the shell; Esc leaves the terminal for the session, and the `Space` leader does not work there.
+  the shell except the app's chords (Alt+hjkl and the other Alt and Ctrl+Alt chords here, Cmd+W, Ctrl+backtick),
+  which still act; Esc leaves the terminal for the session, and the `Space` leader does not work there.
 - **Alt+o / Alt+i** next and previous tab: the shown mode's own tabs when it has them (Practice's problem pane or
   console, through the mode's `stepTab`), else the session tabs in Sessions mode; **Alt+Shift+o / Alt+Shift+i** next
   and previous session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the

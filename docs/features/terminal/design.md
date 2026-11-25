@@ -23,7 +23,8 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 - The default shell is the user's login shell (`$SHELL -l`, else `/bin/zsh -l`) on macOS and Linux and PowerShell
   (`pwsh -NoLogo`, else `powershell.exe -NoLogo`) on Windows: the platform record's `shell` program candidates, so no
   feature code checks the OS.
-- A drawer starts closed after an app restart; the shell behind it reattaches when the drawer next opens.
+- A drawer starts closed after an app restart; terminal main reattaches the shell at its own start, and the drawer
+  shows its screen again when it next opens.
 - The terminal draws in a **drawer**: a strip at the bottom of the session's own frame, under its tabs, which moves
   with the session between panes as a session popup does. Sessions owns the drawer slot (`addDrawer`); the terminal
   plugin fills it. Two panes side by side each show their own session's drawer.
@@ -38,11 +39,13 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 - In the host, the pty sits behind a contract (`src/contracts/pty.ts`) with a node-pty adapter. In the app, main plugins
   reach shells through the `TerminalHost` service: the host's terminal table, or a fake shell host in the self-test and
   in a drive run (`WIGLEY_DRIVE_TERMINALS=live` runs real shells there). The emulator sits behind its own contract with
-  an xterm.js adapter, handed to plugins as a page service; the self-test and the fake host use a fake emulator.
+  an xterm.js adapter, handed to plugins as a page service; the page part's tests use a fake emulator, while the
+  self-test draws the real one.
 - The session host runs each shell in a terminal table of its own, outside the idle rules that end agent processes
   (`docs/features/session-host/design.md` § Terminals). So a shell survives an app restart and reattaches. The host
-  keeps the last 256 KB of each shell's raw output; on reattach the drawer writes it into a fresh emulator, so the
-  screen comes back.
+  keeps the last 256 K UTF-16 code units of each shell's raw output (`TERMINAL_REPLAY_LIMIT`); terminal main seeds its
+  buffer from that replay when it adopts the shell, and the drawer writes main's buffer into a fresh emulator when it
+  opens, so the screen comes back.
 - The pty messages raise the host protocol to 5. An update that changes the host protocol ends every shell
   in the older host when it drains, since the newer app cannot reach them.
 - The shell inherits the host's environment, less `ELECTRON_RUN_AS_NODE`, with `TERM=xterm-256color` and

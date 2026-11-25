@@ -109,8 +109,8 @@ function headerInputOf(drawer: Drawer): DrawerHeaderInput {
 // input goes to the shell, and Enter after an exit starts a new one. Main's
 // `typed` opens the drawer without focus and marks the row as needing the user
 // until a line is sent or the drawer closes. It registers the Terminal demo
-// step. The header draws through the
-// `terminal.layout` layout, and the screens take the theme's colours and font.
+// step. The header draws through the `terminal.layout` layout, and the
+// screens take the theme's colours and font.
 export const terminalPagePart: PagePart<typeof terminalManifest> = {
   manifest: terminalManifest,
   start(api: TerminalApi) {
