@@ -361,7 +361,7 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 - [x] [Terminal plugin page](09-terminal-page.md) — after 06, 07, 08
 
 ### Wave 6
-- [ ] [Demo, self-test, skill and docs](10-demo-selftest-docs.md) — after 08, 09
+- [x] [Demo, self-test, skill and docs](10-demo-selftest-docs.md) — after 08, 09
 
 ### Wave 7
 - [ ] [Doc re-read](11-doc-re-read.md) — after 10
@@ -381,6 +381,7 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - 06 · hard · 02eb873f · diff read: MainServices.terminals, PageServices.terminals, PlatformPrograms.shell, trackedTerminals, fake terminal host and fake emulator present; typecheck, oxlint, layers, boundary, styles clean; oxfmt applied to two files (8d tooling commit) · concerns: AGENTS.md does not name services.terminals or the two fakes yet (task 10)
 - 08 · deep · 59f1e38d · diff read: TerminalOpened, TerminalChannel, terminalOutputSlot match plan.md; manifest registered in manifests.ts and main.ts; wave 4 typecheck, layers, boundary, styles clean; oxfmt commit 759901e2 · concerns: no layouts/default until 09; page commands toggle/back/restart declared before 09's page part; demo self-test fails until 10 adds a demo step; README Settings row, CHANGELOG and AGENTS.md src map wait for 10; oxlint no-useless-spread warning at shells.ts killAll (the copy guards deletion while iterating, harmless)
 - 09 · deep · 8da257e4 · diff read: terminalPagePart with toggle/back/restart, readTerminalLook, default drawerHeader layout, page.ts entry after visualPagePart, the three binds after <Leader>bh, keymap.md rows; wave 5 typecheck, oxlint, layers, boundary, styles clean; oxfmt commit 5acfe63b · concerns: <C-`> is a chord in scope any with no key-hint anchor, so the self-test's placement check fails until one is placed (main-agent ruling: task 10 adds it); layouts design.md owner list lacks terminal's drawerHeader (task 10/11); typed for a session with no row reaches addDrawer unchecked; the view's shown closure reads drawer before it is set, safe only because a drawer starts closed
+- 10 · standard · 5ee04d7a · diff read: demo step terminal.drawer (sessions, 200) both halves, self-test script with the four drawer steps, auri:terminal SKILL.md, README/CHANGELOG/AGENTS.md/layouts design rows, follow-up removed; wave 6 typecheck, oxfmt, oxlint, layers, styles, boundary, changelog clean · concerns: self-test step 2 needs focus on the screen after the chord opens the drawer (open focus:true, checked live); toggle key hint lives in the drawer header, present only while the drawer is open; page start.ts top comment rewrapped unevenly
 ### Contract changes
 - session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
 - TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
@@ -401,5 +402,6 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - page test runs on startDrawingPagePart so headers draw through the real default layout.js · group 09
 - a rejected write or resize logs '<write|resize> failed in <label>: <error>', outside the pinned log list · group 09
 - main agent: task 10 places the Ctrl+backtick key-hint anchor (a kit.keyHint for terminal.toggle in the default drawer header, or wherever AGENTS.md § Key hints puts a chord with no other home) · group 09
+- toggle key-hint anchor: kit.keyHint(element, 'toggle', { label: 'close' }) at the end of the default drawerHeader (main-agent ruling carried out) · group 10
 ### Review rounds
 ### Test gate

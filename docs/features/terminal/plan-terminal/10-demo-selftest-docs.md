@@ -1,6 +1,6 @@
 # 10 — Demo, self-test, skill and docs
 
-Status: in progress
+Status: done
 Type: Task
 Rung: standard · follows agent-skills' demo step and self-test pattern and the docs' existing tables
 Wave: 6 · Depends on: 08, 09
@@ -94,3 +94,5 @@ Done when: `npm run typecheck` passes; the README coverage test passes; the foll
 Commit:    one commit: "terminal: demo step, self-test, auri:terminal skill and docs"
 
 ## Proof
+
+Commit 5ee04d7a · proof: diff read: demo step terminal.drawer (sessions, 200) both halves, self-test script with the four drawer steps, auri:terminal SKILL.md, README/CHANGELOG/AGENTS.md/layouts design rows, follow-up removed; wave 6 typecheck, oxfmt, oxlint, layers, styles, boundary, changelog clean · concerns: self-test step 2 needs focus on the screen after the chord opens the drawer (open focus:true, checked live); toggle key hint lives in the drawer header, present only while the drawer is open; page start.ts top comment rewrapped unevenly

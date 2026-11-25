@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: not started
+Status: in progress
 Type: Batch
 Rung: standard · doc-only: prose checked against settled code
 Wave: 7 · Depends on: 10 (it reads every code task's landed result; 10 is the last of them)

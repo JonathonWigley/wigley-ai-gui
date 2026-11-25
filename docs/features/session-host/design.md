@@ -195,16 +195,13 @@ harness.
 
 ### Terminals
 
-> Planned in `docs/features/terminal/plan-terminal/`, not built yet. The plan's doc re-read task checks this
-> section against the landed code and drops this note.
-
 The host also runs the terminal plugin's shells (`docs/features/terminal/design.md`), one per app session, each in a
 pseudo-terminal behind the pty contract (`src/contracts/pty.ts`, adapter `src/session-host/node-pty/`).
 
 - **Their own table.** Shells live in a terminal table beside the process table, never in it. A shell prints no JSON,
   so the idle rule would read it idle forever, and the keep window and `drain` end idle processes. No keep window,
   idle rule or pipe log applies to a shell: it runs until the app ends it, its process exits, or the host drains.
-- **Replay.** The table keeps the last 256 KB of each shell's raw output in memory, cut at a character boundary.
+- **Replay.** The table keeps the last 256 K UTF-16 code units of each shell's raw output in memory, cut so no character is split.
   `termAttach` answers with that buffer and subscribes the connection; live `termData` follows it. A shell's output is
   pushed only to the connection subscribed to it, as a hosted process's lines are.
 - **Lifetime.** The host's exit rule counts shells as it counts hosted processes, so a host with a running shell stays

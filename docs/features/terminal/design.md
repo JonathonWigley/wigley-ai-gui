@@ -9,9 +9,6 @@
 - **The agent's hand-off** — `terminal.type`, the row mark, and reading output back.
 - **Rejected** — the options the interview turned down, with the reason.
 
-> Planned in `docs/features/terminal/plan-terminal/`, not built yet. This doc describes the design the plan
-> builds; the plan's doc re-read task checks every line against the landed code and drops this note.
-
 ## Intent
 
 The user runs short commands an agent cannot run for them — a sign-in such as `gcloud auth login`, a command print
@@ -23,27 +20,30 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 - Each session gets its own shell, started on first use: the first time its drawer opens, or the first time an agent
   types into it. A session that never uses it has no shell.
 - The shell starts in the session's folder (`sessions.rows[id].projectDir`), or the home folder when the row has none.
-- The default shell is the user's login shell (`$SHELL -l`, else `/bin/zsh -l`) on macOS and PowerShell (`pwsh`, else
-  `powershell.exe`) on Windows: the platform record's `shell` program candidates, so no feature code checks the OS.
+- The default shell is the user's login shell (`$SHELL -l`, else `/bin/zsh -l`) on macOS and Linux and PowerShell
+  (`pwsh -NoLogo`, else `powershell.exe -NoLogo`) on Windows: the platform record's `shell` program candidates, so no
+  feature code checks the OS.
 - A drawer starts closed after an app restart; the shell behind it reattaches when the drawer next opens.
 - The terminal draws in a **drawer**: a strip at the bottom of the session's own frame, under its tabs, which moves
   with the session between panes as a session popup does. Sessions owns the drawer slot (`addDrawer`); the terminal
   plugin fills it. Two panes side by side each show their own session's drawer.
 - `Space b t` and `Ctrl+backtick` open and close the focused session's drawer. The drawer's height is dragged and kept
-  in the UI state.
+  in the UI state, one height for every drawer.
 - The layout draws the drawer's frame (header with the folder, the running or exited state, and restart); the
   emulator draws the grid. The emulator's colours and font come from theme tokens.
 - A shell that exits shows its exit line; Enter in the drawer starts a new shell.
 
 ## Where the shell runs
 
-- The pty sits behind a contract with a node-pty adapter and a fake adapter for the self-test and drive runs. The
-  emulator sits behind its own contract with an xterm.js adapter, handed to plugins as a page service.
+- In the host, the pty sits behind a contract (`src/contracts/pty.ts`) with a node-pty adapter. In the app, main plugins
+  reach shells through the `TerminalHost` service: the host's terminal table, or a fake shell host in the self-test and
+  in a drive run (`WIGLEY_DRIVE_TERMINALS=live` runs real shells there). The emulator sits behind its own contract with
+  an xterm.js adapter, handed to plugins as a page service; the self-test and the fake host use a fake emulator.
 - The session host runs each shell in a terminal table of its own, outside the idle rules that end agent processes
   (`docs/features/session-host/design.md` § Terminals). So a shell survives an app restart and reattaches. The host
   keeps the last 256 KB of each shell's raw output; on reattach the drawer writes it into a fresh emulator, so the
   screen comes back.
-- The pty messages raise the host protocol by one version. An update that changes the host protocol ends every shell
+- The pty messages raise the host protocol to 5. An update that changes the host protocol ends every shell
   in the older host when it drains, since the newer app cannot reach them.
 - The shell inherits the host's environment, less `ELECTRON_RUN_AS_NODE`, with `TERM=xterm-256color` and
   `COLORTERM=truecolor` set.
@@ -52,13 +52,16 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 
 ## Keys
 
-- App chords (Alt+hjkl, Option+o/i, Cmd+W and the rest bound in scope `any`) fire inside the terminal as everywhere.
-  The shell gets every other key, Enter, Tab and Space included: the drawer stops their keydown from reaching the
-  page's key matcher, as a text box does. So a leader sequence cannot start inside the terminal; the chord
+- App chords (Alt+hjkl, Option+o/i, Cmd+W and the rest bound in scope `any`) fire inside the terminal as everywhere,
+  since the page matches chords in the capture phase, before the screen sees the key. The shell gets every other key,
+  Enter, Tab and Space included: the screen stops their keydown from bubbling to the page's plain-key matcher, as a
+  text box does. So a leader sequence cannot start inside the terminal; the chord
   `Ctrl+backtick` closes the drawer from inside it.
-- Esc backs out of the terminal to the session's chat, as Esc backs out of a box elsewhere. So the shell never
-  receives Esc; the terminal is not for full-screen programs.
-- Alt+j and Alt+k move focus between the chat and its drawer: the drawer joins the session pane's focus moves.
+- Esc backs out of the terminal to the session's selected tab (`terminal.back`, bound `<Esc>` in scope
+  `terminal.terminal`), as Esc backs out of a box elsewhere. The screen passes Esc to the page and xterm ignores it, so
+  the shell never receives Esc; the terminal is not for full-screen programs.
+- Alt+j moves focus down from the pane's tab into a visible drawer, and Alt+k moves it back out: the drawer joins the
+  session pane's focus moves.
 
 ## The agent's hand-off
 
