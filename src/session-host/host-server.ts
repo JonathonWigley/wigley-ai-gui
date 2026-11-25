@@ -30,10 +30,7 @@ import {
   type ProcessTable,
 } from './process-table';
 import { replaceFile } from './replace-file';
-import {
-  createTerminalTable,
-  type TerminalSubscriber,
-} from './terminal-table';
+import { createTerminalTable, type TerminalSubscriber } from './terminal-table';
 
 const HELLO_WAIT_MS = 2000;
 const FIRST_CLIENT_WAIT_MS = 30_000;

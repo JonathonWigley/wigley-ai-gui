@@ -5,11 +5,7 @@ import type {
   PendingSpawn,
   PipeLine,
 } from './session-host';
-import type {
-  TerminalExit,
-  TerminalInfo,
-  TerminalSpawn,
-} from './terminals';
+import type { TerminalExit, TerminalInfo, TerminalSpawn } from './terminals';
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.

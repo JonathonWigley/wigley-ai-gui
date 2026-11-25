@@ -552,8 +552,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const outer: OuterPanes = {
     focus: {
       move: (direction) =>
-        tabs.moveDrawerFocus(direction) ||
-        treeView.outer.focus.move(direction),
+        tabs.moveDrawerFocus(direction) || treeView.outer.focus.move(direction),
     },
     resize: {
       nudge: (direction) =>

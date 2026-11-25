@@ -1150,27 +1150,24 @@ describe('session drawers', () => {
       hidden: true,
       children: 0,
     },
-  ])(
-    'open, close and isOpen show and hide the drawer row ($case)',
-    (test) => {
-      const { view } = drawerSetup();
-      const drawer = drawerView('d');
-      const handle = view.tabs.addDrawer('s', drawer);
-      const host = drawerHostOf(drawer);
+  ])('open, close and isOpen show and hide the drawer row ($case)', (test) => {
+    const { view } = drawerSetup();
+    const drawer = drawerView('d');
+    const handle = view.tabs.addDrawer('s', drawer);
+    const host = drawerHostOf(drawer);
 
-      test.act(handle);
+    test.act(handle);
 
-      expect({
-        isOpen: handle.isOpen(),
-        hidden: host.hidden,
-        children: host.children.length,
-      }).toEqual({
-        isOpen: test.isOpen,
-        hidden: test.hidden,
-        children: test.children,
-      });
-    },
-  );
+    expect({
+      isOpen: handle.isOpen(),
+      hidden: host.hidden,
+      children: host.children.length,
+    }).toEqual({
+      isOpen: test.isOpen,
+      hidden: test.hidden,
+      children: test.children,
+    });
+  });
 
   it('a second drawer for one session throws', () => {
     const { view } = drawerSetup();
@@ -1306,20 +1303,18 @@ describe('session drawers', () => {
     case: string;
     act(setup: ReturnType<typeof focusedDrawerSetup>): void;
     drawerLefts: number;
-  }>(
-    [
-      {
-        case: 'dispose',
-        act: ({ handle }) => handle.dispose(),
-        drawerLefts: 1,
-      },
-      {
-        case: 'drop',
-        act: ({ view }) => view.tabs.drop('s'),
-        drawerLefts: 0,
-      },
-    ],
-  )(
+  }>([
+    {
+      case: 'dispose',
+      act: ({ handle }) => handle.dispose(),
+      drawerLefts: 1,
+    },
+    {
+      case: 'drop',
+      act: ({ view }) => view.tabs.drop('s'),
+      drawerLefts: 0,
+    },
+  ])(
     'dropping the frame or disposing the handle disposes the drawer ($case)',
     (test) => {
       const setup = focusedDrawerSetup(true);
