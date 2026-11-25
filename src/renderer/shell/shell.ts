@@ -278,12 +278,22 @@ function peekDelayToken(root: HTMLElement): number {
   const token = getComputedStyle(root)
     .getPropertyValue('--wg-activitybar-peek-delay')
     .trim();
-  const match = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(token);
+  const match = /^((?:\d+(?:\.\d+)?|\.\d+))(ms|s)$/.exec(token);
   if (match === null) {
     return PEEK_FALLBACK_DELAY;
   }
   const amount = parseFloat(match[1]);
   return match[2] === 's' ? amount * 1000 : amount;
+}
+
+// The mark `keepPeekOnClick` sets: a click inside a marked element leaves the
+// activity bar's peek as it is.
+const PEEK_KEEPER = '[data-keeps-peek]';
+
+// Marks `element`, an app-owned part of the activity bar, so a click inside it
+// does not end the bar's peek.
+export function keepPeekOnClick(element: HTMLElement): void {
+  element.dataset.keepsPeek = '';
 }
 
 // `uiState` with a missing or non-finite stored width read as `openWidth()`,
@@ -460,8 +470,9 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // peeks, and `is-expanded` while either holds. The pointer entering a bar that
 // is not expanded peeks it after the `activitybar-peek-delay` token, read as
 // the wait starts through `timers` (at once for 0), logging `activity bar
-// peeked`; leaving it, or a click in it, ends the wait or the peek. A peek
-// never changes the column, so nothing beside the bar moves.
+// peeked`; leaving it, or a click in it outside an element marked by
+// `keepPeekOnClick`, ends the wait or the peek. A peek never changes the
+// column, so nothing beside the bar moves.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
@@ -582,10 +593,17 @@ export function mountShell(
     }
   };
 
+  const endPeekOnClick = (event: Event) => {
+    const isInKeeper = (event.target as Element).closest(PEEK_KEEPER) !== null;
+    if (!isInKeeper) {
+      endPeek();
+    }
+  };
+
   const unlistenToBar = () => {
     listenedBar?.removeEventListener('pointerenter', armPeek);
     listenedBar?.removeEventListener('pointerleave', endPeek);
-    listenedBar?.removeEventListener('click', endPeek);
+    listenedBar?.removeEventListener('click', endPeekOnClick);
     listenedBar = null;
   };
 
@@ -595,7 +613,7 @@ export function mountShell(
     listenedBar = mounted.activityBar.element;
     listenedBar.addEventListener('pointerenter', armPeek);
     listenedBar.addEventListener('pointerleave', endPeek);
-    listenedBar.addEventListener('click', endPeek);
+    listenedBar.addEventListener('click', endPeekOnClick);
   };
 
   const fillElements = () => {

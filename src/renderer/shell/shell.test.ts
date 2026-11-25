@@ -17,6 +17,7 @@ import type { SideBarLayout } from './modes';
 import {
   comparePlacements,
   insertionIndex,
+  keepPeekOnClick,
   mountShell,
   nextInTrack,
   type Placement,
@@ -1084,6 +1085,25 @@ describe('mountShell', () => {
       drawn: '280',
     },
     {
+      row: 'beside, then the pin applies at main ending at 600 with no resize seen',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.edges.mainRight = 600;
+        shell.shell.togglePin();
+      },
+      drawn: '280',
+    },
+    {
+      row: 'beside and pinned, then the pin lifts at main ending at 600 with no resize seen',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.shell.togglePin();
+        shell.edges.mainRight = 600;
+        shell.shell.togglePin();
+      },
+      drawn: '280',
+    },
+    {
       row: 'beside, then the right bar shows at a right edge of 900 and no resize seen',
       steps: (shell: NarrowingShell) => {
         shell.shell.layOutSideBar('beside');
@@ -1675,45 +1695,76 @@ describe('mountShell', () => {
     expect(barState(mounted)).toEqual(PINNED);
   });
 
-  // `steps` drive the bar; `state` and `logs` follow. Breaks if a peek fires
-  // at once or never, a leave leaves its wait running, a click or leave keeps
-  // the peek, a peek moves the column, or a pinned bar peeks.
+  // `steps` drive the bar, which holds an item and a Pin button in a slot
+  // marked by `keepPeekOnClick`: `enter`, `leave` and the clicks go to the
+  // mounted bar, `enter old` to the bar of the first mount, `toggle` pins or
+  // unpins, `wide` widens the window and `swap` swaps in a layout. `state`,
+  // `waits` and `logs` follow. Breaks if a peek fires at once or never, a leave
+  // leaves its wait running, a click on an item keeps the peek or one on the
+  // Pin button ends it, a peek moves the column, a pinned bar peeks, a pin
+  // applying keeps the peek or its wait or one that does not apply ends the
+  // peek, a swap keeps the peek or its wait or leaves the old bar listened to,
+  // or a dispose leaves the wait running.
   it.each<{
     row: string;
     pinned?: boolean;
     narrow?: boolean;
-    steps: ('enter' | 'leave' | 'click' | 'wait')[];
+    steps: (
+      | 'enter'
+      | 'enter old'
+      | 'leave'
+      | 'click'
+      | 'click pin'
+      | 'wait'
+      | 'toggle'
+      | 'wide'
+      | 'swap'
+      | 'dispose'
+    )[];
     state: ReturnType<typeof barState>;
+    waits: number[];
     logs: string[];
   }>([
     {
       row: 'entered, before the delay',
       steps: ['enter'],
       state: COLLAPSED,
+      waits: [300],
       logs: [],
     },
     {
       row: 'entered, after the delay',
       steps: ['enter', 'wait'],
       state: PEEKING,
+      waits: [],
       logs: ['activity bar peeked'],
     },
     {
       row: 'left before the delay',
       steps: ['enter', 'leave', 'wait'],
       state: COLLAPSED,
+      waits: [],
       logs: [],
     },
     {
       row: 'left while peeking',
       steps: ['enter', 'wait', 'leave'],
       state: COLLAPSED,
+      waits: [],
       logs: ['activity bar peeked'],
     },
     {
-      row: 'clicked while peeking',
+      row: 'an item clicked while peeking',
       steps: ['enter', 'wait', 'click'],
       state: COLLAPSED,
+      waits: [],
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'the Pin button clicked while peeking',
+      steps: ['enter', 'wait', 'click pin'],
+      state: PEEKING,
+      waits: [],
       logs: ['activity bar peeked'],
     },
     {
@@ -1721,6 +1772,7 @@ describe('mountShell', () => {
       pinned: true,
       steps: ['enter', 'wait'],
       state: PINNED,
+      waits: [],
       logs: [],
     },
     {
@@ -1729,40 +1781,133 @@ describe('mountShell', () => {
       narrow: true,
       steps: ['enter', 'wait'],
       state: PEEKING,
+      waits: [],
       logs: ['activity bar peeked'],
+    },
+    {
+      row: 'pinned while peeking',
+      steps: ['enter', 'wait', 'toggle'],
+      state: PINNED,
+      waits: [],
+      logs: ['activity bar peeked', 'activity bar pinned'],
+    },
+    {
+      row: 'pinned while peeking in a narrow window',
+      narrow: true,
+      steps: ['enter', 'wait', 'toggle'],
+      state: PEEKING,
+      waits: [],
+      logs: ['activity bar peeked', 'activity bar pinned'],
+    },
+    {
+      row: 'a pinned bar widened while peeking',
+      pinned: true,
+      narrow: true,
+      steps: ['enter', 'wait', 'wide'],
+      state: PINNED,
+      waits: [],
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'a pinned bar widened before the delay',
+      pinned: true,
+      narrow: true,
+      steps: ['enter', 'wide'],
+      state: PINNED,
+      waits: [],
+      logs: [],
+    },
+    {
+      row: 'swapped before the delay',
+      steps: ['enter', 'swap'],
+      state: COLLAPSED,
+      waits: [],
+      logs: [],
+    },
+    {
+      row: 'swapped while peeking',
+      steps: ['enter', 'wait', 'swap'],
+      state: COLLAPSED,
+      waits: [],
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'the swapped-in bar entered after the delay',
+      steps: ['enter', 'wait', 'swap', 'enter', 'wait'],
+      state: PEEKING,
+      waits: [],
+      logs: ['activity bar peeked', 'activity bar peeked'],
+    },
+    {
+      row: 'the swapped-out bar entered',
+      steps: ['swap', 'enter old'],
+      state: COLLAPSED,
+      waits: [],
+      logs: [],
+    },
+    {
+      row: 'disposed before the delay',
+      steps: ['enter', 'dispose'],
+      state: COLLAPSED,
+      waits: [],
+      logs: [],
     },
   ])(
     'mountShell_PointerOverTheActivityBar_PeeksAfterTheDelay: $row',
-    ({ pinned, narrow, steps, state, logs }) => {
+    ({ pinned, narrow, steps, state, waits, logs }) => {
       const mounted = mountMeasuredShell({ pinned });
       if (narrow === true) {
         mounted.shell.activityBarNarrowChanged(true);
       }
-      const bar = mounted.activityBar();
+      const item = new FakeElement('button');
+      mounted.shell.areas.activityBar.contribute(asHtml(item));
+      const pinSlot = new FakeElement('span');
+      const pinButton = new FakeElement('button');
+      pinSlot.append(pinButton);
+      keepPeekOnClick(asHtml(pinSlot));
+      mounted.shell.areas.activityBar.contribute(asHtml(pinSlot), {
+        align: 'end',
+      });
+      const firstBar = mounted.activityBar();
 
       for (const step of steps) {
+        const bar = mounted.activityBar();
         if (step === 'enter') {
           bar.fire('pointerenter', {});
+        } else if (step === 'enter old') {
+          firstBar.fire('pointerenter', {});
         } else if (step === 'leave') {
           bar.fire('pointerleave', {});
         } else if (step === 'click') {
-          bar.fire('click', {});
+          bar.fire('click', { target: item });
+        } else if (step === 'click pin') {
+          bar.fire('click', { target: pinButton });
+        } else if (step === 'toggle') {
+          mounted.shell.togglePin();
+        } else if (step === 'wide') {
+          mounted.shell.activityBarNarrowChanged(false);
+        } else if (step === 'swap') {
+          mounted.shell.setLayout(defaultShellLayout);
+        } else if (step === 'dispose') {
+          mounted.shell.dispose();
         } else {
           mounted.timers.runAll();
         }
       }
 
       expect(barState(mounted)).toEqual(state);
+      expect(mounted.timers.waits()).toEqual(waits);
       expect(mounted.logs).toEqual(logs);
     },
   );
 
   // `waits`: the timers the enter sets; `state`: the bar right after it.
-  // Breaks if seconds read as ms, 0 waits on a timer, or a bad token peeks
-  // at once.
+  // Breaks if seconds read as ms, a number with no leading digit reads as no
+  // duration, 0 waits on a timer, or a bad token peeks at once.
   it.each([
     { token: '450ms', waits: [450], state: COLLAPSED },
     { token: '0.25s', waits: [250], state: COLLAPSED },
+    { token: '.25s', waits: [250], state: COLLAPSED },
     { token: '0ms', waits: [], state: PEEKING },
     { token: 'soon', waits: [300], state: COLLAPSED },
   ])(

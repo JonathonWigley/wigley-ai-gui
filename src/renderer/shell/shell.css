@@ -121,7 +121,8 @@
 
 /* Each chrome bar draws one hairline, on its edge toward the content. The
    activity bar fills its column; its items' icon column keeps the collapsed
-   width, so it scrolls only down. */
+   width, so it scrolls only down, with no scrollbar drawn, since a classic
+   one would narrow the icon column; the wheel still scrolls it. */
 .shell-activity-bar {
   border-right: 1px solid var(--wg-material-chrome-edge);
   display: flex;
@@ -129,6 +130,7 @@
   grid-area: activity;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-width: none;
 }
 
 /* A peek lies over the side bar, the left bar, their handles and the content,

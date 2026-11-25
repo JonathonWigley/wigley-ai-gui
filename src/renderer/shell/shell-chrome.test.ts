@@ -91,8 +91,9 @@ function shownMine(hinted = REGISTERED) {
 }
 
 // A user layout drawing each bar part as one line of text: an item as its
-// title, a divider as `|` and the Pin button as `pin`; `items` and `pins`
-// hold every input drawn, in order.
+// title, a divider as `|` and the Pin button as `pin`, hinting
+// `activityBar.togglePin`; `items` and `pins` hold every input drawn, in
+// order.
 function shownBarText() {
   const items: ActivityItemInput[] = [];
   const pins: ActivityPinInput[] = [];
@@ -104,7 +105,9 @@ function shownBarText() {
     activityDivider: (parent, kit) => kit.el(parent, 'span', '', '|'),
     activityPin(parent, input, kit) {
       pins.push(input);
-      return kit.el(parent, 'span', '', 'pin');
+      const pin = kit.el(parent, 'span', '', 'pin');
+      kit.keyHint(pin, TOGGLE_PIN);
+      return pin;
     },
   };
   return { shown: withUser(defaultLayout, mine), items, pins };
@@ -496,8 +499,10 @@ describe('mountShellChrome', () => {
     ]);
   });
 
+  // Breaks if a redrawn Pin button leaks the key anchor of an earlier draw.
   it('setActivityPinned_Pinned_DrawsThePinAgainWithIt', () => {
-    const { chrome, activityBar } = mountChrome();
+    const recorded = recordingAnchors();
+    const { chrome, activityBar } = mountChrome(recorded.keys);
     const bar = shownBarText();
     chrome.setLayouts(bar.shown);
     bar.pins.length = 0;
@@ -507,6 +512,11 @@ describe('mountShellChrome', () => {
 
     expect(bar.pins).toEqual([{ pinned: true }, { pinned: false }]);
     expect(barSlots(activityBar)).toEqual(['end 0 pin']);
+    expect(
+      recorded.anchors
+        .filter((anchor) => anchor.command === TOGGLE_PIN)
+        .map((anchor) => anchor.isDisposed),
+    ).toEqual([true, true, true, false]);
   });
 
   // Breaks if a mode added again appends its item at the end of the bar: a

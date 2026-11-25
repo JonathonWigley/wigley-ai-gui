@@ -31,6 +31,7 @@ import type {
   ShellKit,
   ToastInput,
 } from './layouts/layout';
+import { keepPeekOnClick } from './shell';
 
 // `services` are what the shell kit reads, the keys fixed for the mount.
 export interface ShellChromeDeps {
@@ -120,7 +121,8 @@ const SUGGESTED_PLACES: ActivityBarSetting = { groups: [], hidden: [] };
 // disposal, so a mode added again (its plugin restarted or switched back on)
 // takes its item's earlier place. The bar's top groups fill its `start` track
 // and its bottom groups its `end` track, a divider between neighbouring groups
-// of one track, and the Pin button last in the `end` track. An add, a
+// of one track, and the Pin button last in the `end` track, its slot marked
+// by `keepPeekOnClick` so a click on it leaves a peek open. An add, a
 // dispose, a setting and a layout change contribute every bar slot again in
 // one pass, each slot's `order` its index in its track; a hidden mode's item
 // is out of the bar, undrawn. Every part draws with `default` until the first
@@ -240,7 +242,10 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     );
   };
 
+  // A click on the Pin button keeps a peek, so `Pin open` in a narrow window,
+  // where the pin does not apply, leaves the bar open.
   const pinSlot = emptySlot();
+  keepPeekOnClick(pinSlot.element);
   const drawPin = () => {
     const input = { pinned: isPinned };
     drawSlot(pinSlot, 'activityPin', (builder, parent, kit) =>
