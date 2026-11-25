@@ -484,29 +484,29 @@ User-facing features, those other work builds on first.
   scope. Add a count of the sessions waiting on the user (an open form round, a pending approval), and a bounce when
   one starts waiting while the app is hidden. What counts as waiting needs settling against session-titles'
   activities. Reference: OpenCode 2.4.0 taskbar status (https://github.com/anomalyco/opencode/pull/65317). Accepted
-  in harness watch 2026-11-23 (`~/harness-watch/decisions.md`).
+  in harness watch 2026-11-23 (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Sidebar marks a session whose last turn was cut off** — *needs a feature plan*: a machine reboot or a dead host
   ends a turn and the row just rests (`docs/features/session-host/design.md` § Intent), so nothing shows that the work
   stopped partway. Mark such a row and offer a Continue action that resumes it. Reference: Qwen Code 0.28.4
   "Continue" badge (https://github.com/QwenLM/qwen-code/pull/18044). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Edits made through the shell or by another session are attributed** — *needs a feature plan*: a session's
   changed files miss files changed by a shell command (`sed -i`, a heredoc, a script), and sessions share clones and
   worktrees, so two sessions editing one file go unseen. Count shell edits as the session's own, and mark an edit that
   overlaps another session's instead of crediting it to the wrong one. Reference: Nimbalyst 0.84.3
   (https://github.com/nimbalyst/nimbalyst/releases/tag/v0.84.3). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Scheduled tasks start on events** — *needs a feature plan*: scheduled tasks start only by clock or cron. Add
   event triggers — a chatroom post, a land on `main`, a CI result, an MCP server event — and settle which events the
   app can observe and how a run receives the event's details. Reference: OpenCode 2.4.0 Automations
   (https://github.com/anomalyco/opencode/pull/65296), OpenHands 1.43.0. Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Side questions on a running session** — *needs a feature plan*: the user cannot ask about a running session
   without interrupting its turn. Fork the session's context into a short background session with read-only tools,
   answer there, and leave the main turn untouched. Claude Code's `/btw` does this in its terminal UI only. Reference:
   OpenClaw 2026.11.10-beta.2 side questions
   (https://github.com/openclaw/openclaw/releases/tag/v2026.11.10-beta.2). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Work continues while a forms round waits** — *needs a feature plan*: an agent that sends a round waits on it.
   An exploration. `ask_round` blocks until its deadline, and `auri:forms` § Outcomes tells the agent to call
   `collect_last_round` again after every `draft`, so the session sits idle while the user answers, even when part
@@ -519,7 +519,7 @@ User-facing features, those other work builds on first.
   answer could undo. The wake already tells the session when the user submits. Test: run three Medium sessions
   whose rounds leave independent work, and compare their wall time and any work an answer undid against runs that
   wait. Adopt it when the time saved holds and nothing needs redoing. Accepted in planning-execution watch
-  2026-11-24 (`~/planning-execution-watch/decisions.md`).
+  2026-11-24 (`~/wigley-agents/factories/planning-execution-watch/ledger/INDEX.md`).
 - **Slack sweep flags a thread where the user is out of their own area** — *needs a feature plan*: the Work plugin's
   Slack sweep (`sweepMessage` in `src/plugins/work/main/job-text.ts`) reads the user's threads but says nothing when
   one shows the user is lost: the other person reverses or corrects something already built, is guessing themselves,
