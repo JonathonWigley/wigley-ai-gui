@@ -33,8 +33,8 @@ export interface VerdictPartsDeps {
 
 // `entryPart` draws the verdict inside chat's permission entries and
 // `cardPart` on the question card of a confirm round. `reviewChanged` redraws
-// every part of a review key, `confirmChanged` every card of a round whose
-// `forms.confirms` key changed, and `setLayouts` every part on screen.
+// every built part of a review key, `confirmChanged` every card of a round
+// whose `forms.confirms` key changed, and `setLayouts` every built part.
 export interface VerdictParts {
   entryPart: ChatEntryPart<'permission'>;
   cardPart: FormsCardPart;
@@ -52,11 +52,10 @@ interface Holder {
   drawn: DrawnPart<VerdictPart> | null;
 }
 
-// Neither chat's nor forms' part `build` returns a dispose, so every wrapper
-// is held by its review key until a later build of that key finds it out of
-// the page, which disposes its draw and drops it. A change redraws every
-// holder of its key, in the page or not, so a view put back shows the current
-// verdict. A wrapper with no review stays empty. After a draw it logs
+// Each build holds its wrapper by its review key until chat or forms disposes
+// the build, which disposes its draw and drops it; the last holder of a key to
+// go forgets the key's logged heading. A change redraws every holder of its
+// key. A wrapper with no review stays empty. After a draw it logs
 // `verdict <key>: <heading>` when the heading differs from the last logged for
 // that key; an empty draw forgets the key's heading.
 export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
@@ -126,18 +125,36 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
     callEach([...(held.get(key) ?? [])], redraw);
   };
 
-  // Drops the key's holders out of the page, disposing their draws, then
-  // holds `holder` and draws it.
+  // Drops `holder` and disposes its draw; its key's logged heading goes with
+  // the key's last holder. Nothing for a holder already dropped.
+  const release = (holder: Holder) => {
+    const holders = held.get(holder.key);
+    if (holders === undefined || !holders.delete(holder)) {
+      return;
+    }
+    if (holders.size === 0) {
+      held.delete(holder.key);
+      loggedHeadings.delete(holder.key);
+    }
+    disposeDrawn(holder);
+  };
+
+  // Holds `holder` and draws it, dropping it again when the draw throws; the
+  // build's result redraws it on `update` and drops it on `dispose`.
   const hold = (holder: Holder) => {
     const holders = held.get(holder.key) ?? new Set<Holder>();
     held.set(holder.key, holders);
-    const stale = [...holders].filter(({ parent }) => !parent.isConnected);
-    for (const gone of stale) {
-      holders.delete(gone);
-    }
     holders.add(holder);
-    callEach(stale, disposeDrawn);
-    redraw(holder);
+    try {
+      redraw(holder);
+    } catch (error) {
+      release(holder);
+      throw error;
+    }
+    return {
+      update: () => redraw(holder),
+      dispose: () => release(holder),
+    };
   };
 
   return {
@@ -146,14 +163,12 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
       kinds: ['permission'],
       build(parent, { sessionId, input }) {
         const key = chatReviewKey(sessionId, input.id);
-        const holder: Holder = {
+        return hold({
           key,
           parent,
           review: () => deps.review(key) ?? null,
           drawn: null,
-        };
-        hold(holder);
-        return { update: () => redraw(holder) };
+        });
       },
     },
     cardPart: {
@@ -161,15 +176,13 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
       kinds: ['question'],
       build(parent, { roundId }) {
         const key = confirmReviewKey(roundId);
-        const holder: Holder = {
+        return hold({
           key,
           parent,
           review: () =>
             deps.isConfirmRound(roundId) ? (deps.review(key) ?? null) : null,
           drawn: null,
-        };
-        hold(holder);
-        return { update: () => redraw(holder) };
+        });
       },
     },
     reviewChanged(key) {
@@ -180,10 +193,8 @@ export function createVerdictParts(deps: VerdictPartsDeps): VerdictParts {
     },
     setLayouts(shown) {
       layoutParts.setLayouts(shown);
-      const connected = [...held.values()].flatMap((holders) =>
-        [...holders].filter(({ parent }) => parent.isConnected),
-      );
-      callEach(connected, (holder) =>
+      const holders = [...held.values()].flatMap((each) => [...each]);
+      callEach(holders, (holder) =>
         rebuild(holder, verdictInput(holder.review())),
       );
     },

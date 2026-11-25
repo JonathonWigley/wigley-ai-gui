@@ -720,12 +720,18 @@ export interface FormsCardPartItem {
 
 // A part another plugin adds to every card of `kinds`. `build` draws into
 // `parent`, its own wrapper on the card; `update`, when returned, runs on each
-// update of a question or finding card, after the card's own. A part that
-// throws is logged and draws nothing; the card still draws.
+// update of a question or finding card, after the card's own; `dispose`, when
+// returned, runs once forms drops the build: before a card drawn again builds
+// the part again, and when the round's view rebuilds or goes. A part that
+// throws is logged and draws nothing; the card still draws. A `dispose` that
+// throws is logged.
 export interface FormsCardPart {
   id: string;
   kinds: readonly ItemKind[];
-  build(parent: HTMLElement, item: FormsCardPartItem): { update?(): void };
+  build(
+    parent: HTMLElement,
+    item: FormsCardPartItem,
+  ): { update?(): void; dispose?(): void };
 }
 
 // A column another plugin adds to every review row: `cell` is the text drawn

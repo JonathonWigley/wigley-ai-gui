@@ -1071,6 +1071,7 @@ describe('entry list', () => {
       second: assistant('two'),
       builds: [assistant('one')],
       updates: [assistant('two')],
+      steps: ['build', 'update'],
     },
     {
       case: 'the default permission view builds the parts again',
@@ -1079,6 +1080,7 @@ describe('entry list', () => {
       second: answered,
       builds: [permission('p1'), answered],
       updates: [],
+      steps: ['build', 'dispose', 'build'],
     },
     {
       case: 'a view whose update throws builds the parts again',
@@ -1090,18 +1092,27 @@ describe('entry list', () => {
       second: answered,
       builds: [permission('p1'), answered],
       updates: [],
+      steps: ['build', 'dispose', 'build'],
     },
   ])(
-    'redraw_EntryParts_UpdateInPlaceOrBuildAgain: $case',
-    ({ shown, first, second, builds, updates }) => {
+    'redraw_EntryParts_UpdateInPlaceOrDisposeAndBuildAgain: $case',
+    ({ shown, first, second, builds, updates, steps }) => {
       const built: EntryInput<AnyEntryKind>[] = [];
       const updated: EntryInput<AnyEntryKind>[] = [];
+      const ran: string[] = [];
       const part: ChatEntryPart = {
         id: 'counts',
         kinds: [first.kind],
         build(_parent, context) {
           built.push(context.input);
-          return { update: (input) => updated.push(input) };
+          ran.push('build');
+          return {
+            update: (input) => {
+              updated.push(input);
+              ran.push('update');
+            },
+            dispose: () => ran.push('dispose'),
+          };
         },
       };
       const { list, put } = setUpList(shown, undefined, [part]);
@@ -1111,6 +1122,7 @@ describe('entry list', () => {
 
       expect(built).toEqual(builds);
       expect(updated).toEqual(updates);
+      expect(ran).toEqual(steps);
       expect(findAll(asFake(list.element), 'chat-entry-part')).toHaveLength(1);
     },
   );

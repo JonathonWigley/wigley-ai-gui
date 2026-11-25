@@ -105,16 +105,22 @@ describe('createEntryKit', () => {
     return { entryKit, disposed, opened, expanderClicks, logged };
   }
 
-  // A part of `kinds` that records each build's context in `builds` and each
-  // update's input in `updates`; its build throws `buildThrows` and its update
-  // `updateThrows` when given.
+  // A part of `kinds` that records each build's context in `builds`, each
+  // update's input in `updates` and each dispose's build index in `disposed`;
+  // its build throws `buildThrows`, its update `updateThrows` and its dispose
+  // `disposeThrows` when given.
   function recordingPart(
     id: string,
     kinds: readonly AnyEntryKind[],
-    throws: { buildThrows?: string; updateThrows?: string } = {},
+    throws: {
+      buildThrows?: string;
+      updateThrows?: string;
+      disposeThrows?: string;
+    } = {},
   ) {
     const builds: ChatEntryPartContext<AnyEntryKind>[] = [];
     const updates: EntryInput<AnyEntryKind>[] = [];
+    const disposed: number[] = [];
     const part: ChatEntryPart = {
       id,
       kinds,
@@ -123,6 +129,7 @@ describe('createEntryKit', () => {
           throw new Error(throws.buildThrows);
         }
         builds.push(context);
+        const build = builds.length - 1;
         return {
           update(input) {
             if (throws.updateThrows !== undefined) {
@@ -130,10 +137,16 @@ describe('createEntryKit', () => {
             }
             updates.push(input);
           },
+          dispose() {
+            disposed.push(build);
+            if (throws.disposeThrows !== undefined) {
+              throw new Error(throws.disposeThrows);
+            }
+          },
         };
       },
     };
-    return { part, builds, updates };
+    return { part, builds, updates, disposed };
   }
 
   // The `data-part` ids of the wrappers in `parent`'s holder, null for none.
@@ -260,6 +273,26 @@ describe('createEntryKit', () => {
 
     expect(b.updates).toEqual([next, next]);
     expect(logged).toEqual(['entry part a update failed: boom']);
+  });
+
+  it('dispose_DisposesEachPlacedPart_LogsAThrowAndSkipsNone', () => {
+    const a = recordingPart('a', ['permission'], { disposeThrows: 'boom' });
+    const b = recordingPart('b', ['permission']);
+    const { entryKit, logged, disposed } = kitOf(PERMISSION, undefined, [
+      a.part,
+      b.part,
+    ]);
+    entryKit.kit.entryParts(asHtml(new FakeElement('div')));
+    entryKit.kit.permissionActions(asHtml(new FakeElement('div')));
+
+    entryKit.dispose();
+
+    expect([a.disposed, b.disposed]).toEqual([[0], [0]]);
+    expect(logged).toEqual(['entry part a dispose failed: boom']);
+    expect(disposed).toEqual([
+      chatCommand('allowOrCopy'),
+      chatCommand('denyPermission'),
+    ]);
   });
 
   const body = () => asHtml(new FakeElement('div'));

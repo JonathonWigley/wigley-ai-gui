@@ -342,7 +342,8 @@ export interface ChatKit extends BaseKit {
   // for this entry's kind, in the order they were added, each built for the entry and its session; appends nothing
   // when no part draws in the kind. Call it once, where the parts go: a layout that leaves it out shows no parts. A
   // part that throws is logged and draws nothing. A second call throws `<kind> entry placed entry parts twice`, so
-  // the entry draws with `default`. A view's `update` updates the parts after it; a view drawn again builds them again.
+  // the entry draws with `default`. A view's `update` updates the parts after it; a view drawn again disposes them and
+  // builds them again.
   entryParts(parent: HTMLElement): void;
   // A user entry's images as thumbnails; clicking one opens the image viewer at it. Throws for any other entry kind.
   // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.

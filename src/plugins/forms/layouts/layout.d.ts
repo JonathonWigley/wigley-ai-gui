@@ -123,7 +123,8 @@ export interface Kit extends FormsBaseKit {
   // kind, in the order they were added; returns the `div.card-parts`. Call it once, where the parts go: a card that
   // leaves it out gets the parts appended at the end of its element, after the boxes it left out. A part that
   // throws is logged and draws nothing. On the card of a kind that takes an answer, each part updates after the
-  // card's own `update`; on any other card (a notice's included), the parts never update.
+  // card's own `update`; on any other card (a notice's included), the parts never update. A card drawn again or
+  // dropped disposes its parts.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
 export interface AnswerKit extends Kit {

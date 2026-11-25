@@ -60,9 +60,10 @@ export interface Expanders {
 // One built entry's kit: the parts the layout drew from it, kept up to date by
 // `update` with each later version of the entry. `updateParts` runs each
 // placed entry part's `update` with the entry's later input, in place order;
-// only a part's first update failure is logged. `dispose` disposes the key
-// anchors the base kit's parts named and those a waiting permission entry's
-// actions still hold; its owner calls it when it drops the kit.
+// only a part's first update failure is logged. `dispose` runs each placed
+// entry part's `dispose`, a throw logged and the rest still run, and disposes
+// the key anchors the base kit's parts named and those a waiting permission
+// entry's actions still hold; its owner calls it when it drops the kit.
 export interface EntryKit {
   kit: ChatKit;
   update(entry: ChatEntry): void;
@@ -158,6 +159,9 @@ export function createEntryKit(
     dispose() {
       callEach<() => void>(
         [
+          ...(placedParts ?? []).map(
+            (part) => () => disposeEntryPart(part, deps.log),
+          ),
           () => disposeAnchors(anchors),
           ...[...permissionParts].map((part) => () => part.dispose()),
         ],
@@ -195,10 +199,11 @@ export function createEntryKit(
   };
 }
 
-// An entry part built in the entry, with the update it returned.
+// An entry part built in the entry, with the update and dispose it returned.
 interface PlacedPart {
   id: string;
   update: ((input: EntryInput<AnyEntryKind>) => void) | undefined;
+  dispose: (() => void) | undefined;
   isUpdateFailureLogged: boolean;
 }
 
@@ -228,6 +233,7 @@ function placeEntryParts(
       placed.push({
         id: part.id,
         update: built.update?.bind(built),
+        dispose: built.dispose?.bind(built),
         isUpdateFailureLogged: false,
       });
     } catch (error) {
@@ -251,6 +257,15 @@ function updateEntryPart(
       part.isUpdateFailureLogged = true;
       log(`entry part ${part.id} update failed: ${errorText(error)}`);
     }
+  }
+}
+
+// Runs the part's dispose; a throw is logged.
+function disposeEntryPart(part: PlacedPart, log: PluginLog) {
+  try {
+    part.dispose?.();
+  } catch (error) {
+    log(`entry part ${part.id} dispose failed: ${errorText(error)}`);
   }
 }
 

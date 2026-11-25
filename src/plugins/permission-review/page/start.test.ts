@@ -15,23 +15,35 @@ import {
   type ChatPageExports,
   chatPageKey,
 } from '../../chat/contract';
-import { type FormsPageExports, formsPageKey } from '../../forms/contract';
+import {
+  type FormsCardPart,
+  formsConfirmsSlot,
+  type FormsPageExports,
+  formsPageKey,
+} from '../../forms/contract';
 import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import { chatReviewKey, permissionReviewsSlot } from '../contract';
+import {
+  chatReviewKey,
+  confirmReviewKey,
+  permissionReviewsSlot,
+} from '../contract';
 import { permissionReviewPagePart } from './start';
 
 const SESSION = 's1';
 const ENTRY = 'e3';
 const KEY = chatReviewKey(SESSION, ENTRY);
+const ROUND = 'round-7';
 
 // The part on the harness, over fakes that file each handle with
 // `consumer.track` as the real views do; chat's builds the entry part into a
-// new wrapper at once, for a permission entry of the session.
+// new wrapper at once, for a permission entry of the session, and forms' the
+// card part, for the first question of round `ROUND`.
 function startOnHarness() {
   const wrappers: FakeElement[] = [];
+  const cardWrappers: FakeElement[] = [];
   const harness = startPagePart(permissionReviewPagePart, {
     dependencies: [
       fakeDependency(
@@ -61,7 +73,16 @@ function startOnHarness() {
         formsPageKey,
         (consumer) =>
           ({
-            addCardPart: () => consumer.track({ dispose: () => undefined }),
+            addCardPart(part: FormsCardPart) {
+              const wrapper = new FakeElement('div');
+              cardWrappers.push(wrapper);
+              part.build(asHtml(wrapper), {
+                roundId: ROUND,
+                kind: 'question',
+                index: 1,
+              });
+              return consumer.track({ dispose: () => undefined });
+            },
           }) as unknown as FormsPageExports,
       ),
       fakeDependency(
@@ -70,13 +91,17 @@ function startOnHarness() {
       ),
     ],
   });
-  // The heading the latest wrapper shows, undefined while it is empty.
-  const heading = () => {
-    const wrapper = wrappers.at(-1) ?? new FakeElement('div');
+  // The heading the latest of `drawn` shows, undefined while it is empty.
+  const headingOf = (drawn: FakeElement[]) => {
+    const wrapper = drawn.at(-1) ?? new FakeElement('div');
     return findAll(wrapper, 'permission-review-verdict-heading')[0]
       ?.textContent;
   };
-  return { harness, heading };
+  return {
+    harness,
+    heading: () => headingOf(wrappers),
+    cardHeading: () => headingOf(cardWrappers),
+  };
 }
 
 type Harness = ReturnType<typeof startOnHarness>['harness'];
@@ -147,4 +172,50 @@ describe('permissionReviewPagePart', () => {
       ]);
     },
   );
+
+  it.each<{
+    case: string;
+    confirmOpens: 'beforeReady' | 'afterReady' | 'never';
+    expected: string | undefined;
+  }>([
+    {
+      case: 'OpenBeforeReady_DrawsAtReady',
+      confirmOpens: 'beforeReady',
+      expected: 'Approve · low risk',
+    },
+    {
+      case: 'OpensAfterReady_DrawsOnTheConfirm',
+      confirmOpens: 'afterReady',
+      expected: 'Approve · low risk',
+    },
+    {
+      case: 'NotAConfirmRound_StaysEmpty',
+      confirmOpens: 'never',
+      expected: undefined,
+    },
+  ])('confirmCard_$case', ({ confirmOpens, expected }) => {
+    const { harness, cardHeading } = startOnHarness();
+    harness.state.publish(permissionReviewsSlot).set(confirmReviewKey(ROUND), {
+      state: 'done',
+      summary: 'Pushes the branch.',
+      verdict: 'approve',
+      risk: 'low',
+    });
+    const confirms = harness.state.publish(formsConfirmsSlot);
+    const openConfirm = () =>
+      confirms.set(ROUND, {
+        sessionId: SESSION,
+        subject: { toolName: 'Bash', input: { command: 'git push' } },
+      });
+
+    if (confirmOpens === 'beforeReady') {
+      openConfirm();
+    }
+    harness.ready();
+    if (confirmOpens === 'afterReady') {
+      openConfirm();
+    }
+
+    expect(cardHeading()).toBe(expected);
+  });
 });

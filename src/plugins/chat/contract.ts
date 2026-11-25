@@ -1063,16 +1063,18 @@ export interface ChatEntryPartContext<K extends AnyEntryKind> {
 
 // Draws inside entries of `kinds`, a known kind or a harness's own, into
 // its own wrapper. `update`, when returned, runs with each later version of
-// the entry after the entry's view updated in place; an entry drawn again
-// builds the part again. A `build` that throws is logged and draws nothing;
-// the entry still draws.
+// the entry after the entry's view updated in place; `dispose`, when
+// returned, runs once chat drops the build: before an entry drawn again builds
+// the part again, and when the entry leaves or its view goes. A `build` that
+// throws is logged and draws nothing; the entry still draws. A `dispose` that
+// throws is logged.
 export interface ChatEntryPart<K extends AnyEntryKind = AnyEntryKind> {
   id: string;
   kinds: readonly K[];
   build(
     parent: HTMLElement,
     context: ChatEntryPartContext<K>,
-  ): { update?(input: EntryInput<K>): void };
+  ): { update?(input: EntryInput<K>): void; dispose?(): void };
 }
 
 // A session's chat view drawn into another plugin's element by `mountChat`:

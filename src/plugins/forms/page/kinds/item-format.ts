@@ -24,9 +24,9 @@ export interface ItemCard {
 // view's), the platform key hints are drawn for, the log, the registered
 // commands `kit.command` checks and runs, which every control of the card
 // runs through, the card parts other plugins added, the slots `kit.state`
-// reads, where each anchor the kit names and each slot subscription the card
-// makes is recorded, and where each markdown mount it makes is recorded for
-// disposal.
+// reads, where each anchor the kit names, each slot subscription the card
+// makes and each contributed part's dispose is recorded, and where each
+// markdown mount it makes is recorded for disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   placeBox(parent: HTMLElement, target: TextTarget, text: string): HTMLElement;

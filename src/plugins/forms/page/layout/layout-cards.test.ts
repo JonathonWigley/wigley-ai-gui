@@ -257,6 +257,40 @@ describe('buildLayoutCard', () => {
     expect(parent.children).toEqual([asFake(card.element)]);
     expect(card.element.dataset.layout).toBe('default');
   });
+
+  it('buildLayoutCard_Dispose_DisposesEachContributedPart_LogsAThrow', () => {
+    const disposed: string[] = [];
+    const disposingPart = (id: string, throws = false): FormsCardPart => ({
+      id,
+      kinds: ['finding'],
+      build: () => ({
+        dispose() {
+          disposed.push(id);
+          if (throws) {
+            throw new Error('boom');
+          }
+        },
+      }),
+    });
+    const contributions = createFormsContributions();
+    contributions.addCardPart(disposingPart('p1', true));
+    contributions.addCardPart(disposingPart('p2'));
+    const deps = fakeCardDeps(contributions);
+    const drawn = buildLayoutCard(
+      { name: 'bare', layout: bareFindingLayout([]) },
+      asHtml(new FakeElement('div')),
+      findingRound(),
+      { kind: 'finding', index: 1 },
+      0,
+      deps,
+    );
+    const disposedAtBuild = [...disposed];
+
+    drawn.dispose();
+
+    expect([disposedAtBuild, disposed]).toEqual([[], ['p1', 'p2']]);
+    expect(deps.log).toHaveBeenCalledWith('card part p1 dispose failed: boom');
+  });
 });
 
 // A round of one poll item, `Lunch`, after one finding, its poll kind

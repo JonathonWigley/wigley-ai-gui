@@ -227,36 +227,40 @@ describe('createVerdictParts', () => {
     expect(headings(parent)).toEqual(['Deny · high risk']);
   });
 
-  it('sweeps a detached holder of a key when chat builds that key again, disposing its draw', () => {
+  it('disposes the draw of a disposed build, and redraws only the builds left when its review changes', () => {
     const { attached, buildEntry, setReview, records, anchors } = setUp();
     setReview(REVIEWING);
-    const detached = new FakeElement('div');
-    buildEntry(detached);
+    const dropped = buildEntry(attached());
     const current = attached();
     buildEntry(current);
     const before = records.length;
 
+    dropped.dispose?.();
+    const isDisposedAtDispose = anchors[0]?.isDisposed;
     setReview(APPROVE_LOW);
 
+    expect(isDisposedAtDispose).toBe(true);
     expect(records.slice(before).map(({ parent }) => parent)).toEqual([
       current,
     ]);
-    expect(anchors[0]?.isDisposed).toBe(true);
   });
 
-  it('redraws a detached holder, so a view put back shows the current verdict', () => {
-    const { attached, buildEntry, setReview, headings } = setUp();
-    setReview(REVIEWING);
-    const view = attached();
-    const parent = new FakeElement('div');
-    view.append(parent);
-    buildEntry(parent);
-    view.remove();
+  it('forgets the logged heading of a key once its last build is disposed', () => {
+    const { attached, buildEntry, setReview, logged } = setUp();
+    setReview(APPROVE_LOW);
+    const first = buildEntry(attached());
+    const second = buildEntry(attached());
 
-    setReview(DENY_HIGH);
-    attached().append(view);
+    first.dispose?.();
+    const third = buildEntry(attached());
+    second.dispose?.();
+    third.dispose?.();
+    buildEntry(attached());
 
-    expect(headings(parent)).toEqual(['Deny · high risk']);
+    expect(logged).toEqual([
+      'verdict s1/e3: Approve · low risk',
+      'verdict s1/e3: Approve · low risk',
+    ]);
   });
 
   it('empties every holder when its review is deleted, and logs nothing', () => {

@@ -558,8 +558,9 @@ interview on 2026-10-23; this file is the record of both.
   draw through the same export: the description in a dim column after the name: most names fit one width, so their descriptions line up, a longer name pushes only its own, and each is cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Entry parts**: chat's page exports `addEntryPart(part)`, returning a `Disposable`. A part has an `id`, the `kinds` it
-  draws in, and `build(parent, { sessionId, input })`, which returns an optional `update(input)`. A layout places the
-  parts with `kit.entryParts(parent)`; a user layout that leaves the call out shows none.
+  draws in, and `build(parent, { sessionId, input })`, which returns an optional `update(input)` and an optional
+  `dispose()`, run when chat drops the build. A layout places the parts with `kit.entryParts(parent)`; a user layout
+  that leaves the call out shows none.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).

@@ -361,7 +361,8 @@ function cardKitOver<T extends Kit>(card: CardContext, kit: T): CardKit<T> {
 
 // `div.card-parts` at the end of `parent`, holding one `div.card-part`
 // (`data-part="<id>"`) per contributed part of the card's kind, in add order,
-// each built into its wrapper. A part that throws is logged and its wrapper
+// each built into its wrapper, its dispose recorded through `recordAnchor`,
+// where a throw is logged. A part that throws is logged and its wrapper
 // removed; the rest still draw. Throws when the card places them twice.
 function placeContributedParts(
   card: CardContext,
@@ -386,12 +387,28 @@ function placeContributedParts(
         update: built.update?.bind(built),
         isUpdateFailureLogged: false,
       });
+      card.deps.recordAnchor({
+        dispose: () => disposeContributedPart(part.id, built, card.deps),
+      });
     } catch (error) {
       wrapper.remove();
       card.deps.log(`card part ${part.id} failed: ${errorText(error)}`);
     }
   }
   return holder;
+}
+
+// Runs the dispose part `id`'s build returned; a throw is logged.
+function disposeContributedPart(
+  id: string,
+  built: { dispose?(): void },
+  deps: CardDeps,
+) {
+  try {
+    built.dispose?.();
+  } catch (error) {
+    deps.log(`card part ${id} dispose failed: ${errorText(error)}`);
+  }
 }
 
 // Runs the part's update; only its first throw is logged.
