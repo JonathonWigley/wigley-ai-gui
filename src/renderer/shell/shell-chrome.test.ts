@@ -7,8 +7,17 @@ import {
   type Mock,
   vi,
 } from 'vitest';
-import type { Area, KeyHints, Mode, ModeHandle } from '../../contracts/plugin';
-import type { ConfigProblem } from '../../contracts/settings';
+import type {
+  Area,
+  KeyHints,
+  Mode,
+  ModeHandle,
+  ModePlace,
+} from '../../contracts/plugin';
+import type {
+  ActivityBarSetting,
+  ConfigProblem,
+} from '../../contracts/settings';
 import {
   recordingAnchors,
   withUser,
@@ -22,25 +31,35 @@ import {
   installFocusFakeDom,
 } from '../../shared/page/test-dom';
 import defaultLayout from './layouts/default/layout.js';
-import type { Layout, ToastTone } from './layouts/layout';
+import type {
+  ActivityItemInput,
+  ActivityPinInput,
+  Layout,
+  ToastTone,
+} from './layouts/layout';
 import { mountShellChrome } from './shell-chrome';
 import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
 import { noLayoutState } from '../../shared/page/layout-host/fake-layout-state.test-support';
 
+const ALIGN_RANKS: Record<string, number> = { start: 0, center: 1, end: 2 };
+
 // An area that puts each contribution in `root`, its alignment as
-// `data-align`, by its `order` (default 0), a tie keeping the order
-// contributed.
+// `data-align` and its `order` (default 0) as `data-order`, sorted by
+// alignment then order, a tie keeping the order contributed.
 function fakeArea() {
   const root = new FakeElement('div');
-  const orders = new Map<FakeElement, number>();
+  const ranks = new Map<FakeElement, number>();
   const area: Area = {
     contribute(element, options) {
       const fake = asFake(element);
+      const align = options?.align ?? 'start';
       const order = options?.order ?? 0;
-      element.dataset.align = options?.align ?? 'start';
-      orders.set(fake, order);
+      element.dataset.align = align;
+      element.dataset.order = String(order);
+      const rank = ALIGN_RANKS[align] * 1000 + order;
+      ranks.set(fake, rank);
       const following = root.children.find(
-        (child) => (orders.get(child) ?? 0) > order,
+        (child) => (ranks.get(child) ?? 0) > rank,
       );
       if (following === undefined) {
         root.append(fake);
@@ -53,9 +72,10 @@ function fakeArea() {
   return { area, root };
 }
 
-// The command the chrome's commands register, which `mine` hints unless told
+// The commands the chrome's commands register, which `mine` hints unless told
 // otherwise.
 const REGISTERED = 'docs.openDoc';
+const TOGGLE_PIN = 'activityBar.togglePin';
 
 // A user layout `mine` that defines only `activityItem`, ending each item
 // with a hint for `hinted`.
@@ -70,7 +90,31 @@ function shownMine(hinted = REGISTERED) {
   return withUser(defaultLayout, mine);
 }
 
-function mode(id: string, title: string): Mode {
+// A user layout drawing each bar part as one line of text: an item as its
+// title, a divider as `|` and the Pin button as `pin`; `items` and `pins`
+// hold every input drawn, in order.
+function shownBarText() {
+  const items: ActivityItemInput[] = [];
+  const pins: ActivityPinInput[] = [];
+  const mine: Layout = {
+    activityItem(parent, input, kit) {
+      items.push(input);
+      return kit.el(parent, 'span', '', input.title);
+    },
+    activityDivider: (parent, kit) => kit.el(parent, 'span', '', '|'),
+    activityPin(parent, input, kit) {
+      pins.push(input);
+      return kit.el(parent, 'span', '', 'pin');
+    },
+  };
+  return { shown: withUser(defaultLayout, mine), items, pins };
+}
+
+function mode(
+  id: string,
+  title: string,
+  extra: { place?: ModePlace; showCommand?: string } = {},
+): Mode {
   return {
     id,
     title,
@@ -79,6 +123,7 @@ function mode(id: string, title: string): Mode {
     shown: () => undefined,
     hidden: () => undefined,
     focusMain: () => undefined,
+    ...extra,
   };
 }
 
@@ -87,6 +132,7 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
     show: vi.fn<() => void>(),
     isShown: () => false,
     setContext: () => undefined,
+    setCount: () => undefined,
     toggleSideBar: () => undefined,
     picked: () => undefined,
     sideBarShown: () => false,
@@ -112,7 +158,7 @@ function mountChrome(keys: KeyHints = recordingAnchors().keys) {
       },
       keys,
       commands: {
-        exists: (id) => id === REGISTERED,
+        exists: (id) => id === REGISTERED || id === TOGGLE_PIN,
         argShape: () => undefined,
         run: (id, arg) => {
           runs.push([id, arg]);
@@ -138,6 +184,22 @@ function parts(area: FakeElement): (FakeElement | undefined)[] {
   return area.children.map((slot) => slot.children[0]);
 }
 
+// The part drawn in each `start` slot of the activity bar: the top groups'
+// items, which hold every mode added with no place.
+function topParts(area: FakeElement): (FakeElement | undefined)[] {
+  return area.children
+    .filter((slot) => slot.dataset.align === 'start')
+    .map((slot) => slot.children[0]);
+}
+
+// Each activity bar slot as `<align> <order> <text>`, in slot order.
+function barSlots(area: FakeElement): string[] {
+  return area.children.map(
+    (slot) =>
+      `${slot.dataset.align} ${slot.dataset.order} ${slot.children[0]?.textContent}`,
+  );
+}
+
 function slotAligned(area: FakeElement, align: string): FakeElement {
   return area.children.find((slot) => slot.dataset.align === align)!;
 }
@@ -159,7 +221,7 @@ describe('mountShellChrome', () => {
 
     chrome.setLayouts(shownMine());
 
-    const items = parts(activityBar).map((item) => [
+    const items = topParts(activityBar).map((item) => [
       item?.className,
       item?.dataset.layout,
       item?.dataset.layoutOwner,
@@ -186,13 +248,13 @@ describe('mountShellChrome', () => {
     chrome.markMode('sessions');
     const titleChildren = [...titleBarRoot.children];
     const activitySlots = [...activityBar.children];
-    const itemsBefore = parts(activityBar);
+    const itemsBefore = topParts(activityBar);
 
     chrome.setLayouts(shownMine());
 
     expect(titleBarRoot.children).toEqual(titleChildren);
     expect(activityBar.children).toEqual(activitySlots);
-    const items = parts(activityBar);
+    const items = topParts(activityBar);
     expect(items[0]).not.toBe(itemsBefore[0]);
     expect(
       items.map((item) => [
@@ -235,11 +297,34 @@ describe('mountShellChrome', () => {
       chrome.setLayouts(shownMine(hinted));
 
       expect(
-        recorded.anchors.map((anchor) => [
-          anchor.command,
-          anchor.scope,
-          anchor.isDisposed,
-        ]),
+        recorded.anchors
+          .filter((anchor) => anchor.command === hinted)
+          .map((anchor) => [anchor.command, anchor.scope, anchor.isDisposed]),
+      ).toEqual(anchors);
+    },
+  );
+
+  // Breaks if the default item anchors a key for a mode with no show command,
+  // or anchors the unqualified or no id for one with it.
+  it.each([
+    {
+      row: 'a show command',
+      showCommand: 'docs.showMode',
+      anchors: ['docs.showMode'],
+    },
+    { row: 'no show command', showCommand: undefined, anchors: [] },
+  ])(
+    'activityItem_ShowCommand_DefaultAnchorsItsKey: $row',
+    ({ showCommand, anchors }) => {
+      const recorded = recordingAnchors();
+      const { chrome } = mountChrome(recorded.keys);
+
+      chrome.addMode(mode('docs.docs', 'Docs', { showCommand }), handle());
+
+      expect(
+        recorded.anchors
+          .filter((anchor) => anchor.command !== TOGGLE_PIN)
+          .map((anchor) => anchor.command),
       ).toEqual(anchors);
     },
   );
@@ -251,10 +336,177 @@ describe('mountShellChrome', () => {
     chrome.addMode(mode('docs.docs', 'Docs'), docs);
     chrome.setLayouts(shownMine());
 
-    parts(activityBar)[1]?.click();
+    topParts(activityBar)[1]?.click();
 
     expect(runs).toEqual([['modes.show', 'docs.docs']]);
     expect(docs.show).not.toHaveBeenCalled();
+  });
+
+  // The default layout's bar parts. Breaks if the Pin button runs its command
+  // outside the kit, or the divider draws nothing.
+  it('activityPinAndDivider_Default_PinRunsTogglePinAndDividerDraws', () => {
+    const { chrome, runs, activityBar } = mountChrome();
+    chrome.addMode(
+      mode('sessions.sessions', 'Sessions', { place: { group: 1, order: 1 } }),
+      handle(),
+    );
+    chrome.addMode(
+      mode('docs.docs', 'Docs', { place: { group: 2, order: 1 } }),
+      handle(),
+    );
+
+    parts(activityBar).at(-1)?.click();
+
+    expect(runs).toEqual([[TOGGLE_PIN, undefined]]);
+    expect(
+      parts(activityBar).map((part) =>
+        part?.classList.contains('activity-divider'),
+      ),
+    ).toEqual([false, true, false, false]);
+  });
+
+  // `slots`: each slot as `<align> <order> <text>`. Breaks if a group lands on
+  // the wrong edge, a divider goes missing or sits before the pin, an order
+  // skips the dividers or the pin, the setting fails to redraw the bar, or a
+  // hidden mode keeps its item.
+  it.each<{
+    row: string;
+    setting: ActivityBarSetting;
+    slots: string[];
+  }>([
+    {
+      row: 'the suggested places',
+      setting: { groups: [], hidden: [] },
+      slots: [
+        'start 0 Sessions',
+        'start 1 Inbox',
+        'start 2 |',
+        'start 3 Docs',
+        'start 4 |',
+        'start 5 Notes',
+        'end 0 Gallery',
+        'end 1 Settings',
+        'end 2 pin',
+      ],
+    },
+    {
+      row: 'a setting that lists groups',
+      setting: {
+        groups: [
+          { modes: ['docs.docs', 'sessions.sessions'] },
+          { modes: ['settings.settings'], at: 'bottom' },
+        ],
+        hidden: [],
+      },
+      slots: [
+        'start 0 Docs',
+        'start 1 Sessions',
+        'start 2 |',
+        'start 3 Inbox',
+        'start 4 Gallery',
+        'start 5 Notes',
+        'end 0 Settings',
+        'end 1 pin',
+      ],
+    },
+    {
+      row: 'a hidden mode',
+      setting: { groups: [], hidden: ['docs.docs', 'settings.settings'] },
+      slots: [
+        'start 0 Sessions',
+        'start 1 Inbox',
+        'start 2 |',
+        'start 3 Notes',
+        'end 0 Gallery',
+        'end 1 pin',
+      ],
+    },
+  ])(
+    'setActivityBar_Setting_DrawsTheBarInOrder: $row',
+    ({ setting, slots }) => {
+      const { chrome, activityBar } = mountChrome();
+      const bar = shownBarText();
+      chrome.setLayouts(bar.shown);
+      const added: [string, string, ModePlace | undefined][] = [
+        ['settings.settings', 'Settings', { group: 3, order: 2, at: 'bottom' }],
+        ['notes.notes', 'Notes', undefined],
+        ['docs.docs', 'Docs', { group: 2, order: 1 }],
+        ['work-inbox.main', 'Inbox', { group: 1, order: 2 }],
+        ['gallery.gallery', 'Gallery', { group: 3, order: 1, at: 'bottom' }],
+        ['sessions.sessions', 'Sessions', { group: 1, order: 1 }],
+      ];
+      for (const [id, title, place] of added) {
+        chrome.addMode(mode(id, title, { place }), handle());
+      }
+
+      chrome.setActivityBar(setting);
+
+      expect(barSlots(activityBar)).toEqual(slots);
+    },
+  );
+
+  // `drawn`: the docs item's count on each draw the sets cause. Breaks if 0 or
+  // a negative shows, a cleared count stays, or a count redraws other items.
+  it.each<{
+    row: string;
+    sets: (number | null)[];
+    drawn: (number | null)[];
+  }>([
+    { row: 'two', sets: [2], drawn: [2] },
+    { row: 'zero', sets: [0], drawn: [null] },
+    { row: 'a negative', sets: [-3], drawn: [null] },
+    { row: 'null', sets: [null], drawn: [null] },
+    { row: 'set then cleared', sets: [4, null], drawn: [4, null] },
+  ])('setCount_Count_ItemShowsACountAboveZero: $row', ({ sets, drawn }) => {
+    const { chrome, activityBar } = mountChrome();
+    const bar = shownBarText();
+    chrome.setLayouts(bar.shown);
+    chrome.addMode(mode('sessions.sessions', 'Sessions'), handle());
+    chrome.addMode(mode('docs.docs', 'Docs'), handle());
+    const sessionsItem = topParts(activityBar)[0];
+    bar.items.length = 0;
+
+    for (const set of sets) {
+      chrome.setCount('docs.docs', set);
+    }
+
+    expect(bar.items.map((input) => [input.id, input.count])).toEqual(
+      drawn.map((count) => ['docs.docs', count]),
+    );
+    expect(topParts(activityBar)[0]).toBe(sessionsItem);
+  });
+
+  // Breaks if a mode added again keeps the count its last add set.
+  it('addMode_AfterADispose_DrawsWithNoCount', () => {
+    const { chrome } = mountChrome();
+    const bar = shownBarText();
+    chrome.setLayouts(bar.shown);
+    const sessions = chrome.addMode(
+      mode('sessions.sessions', 'Sessions'),
+      handle(),
+    );
+    chrome.setCount('sessions.sessions', 5);
+    sessions.dispose();
+    bar.items.length = 0;
+
+    chrome.addMode(mode('sessions.sessions', 'Sessions'), handle());
+
+    expect(bar.items.map((input) => [input.id, input.count])).toEqual([
+      ['sessions.sessions', null],
+    ]);
+  });
+
+  it('setActivityPinned_Pinned_DrawsThePinAgainWithIt', () => {
+    const { chrome, activityBar } = mountChrome();
+    const bar = shownBarText();
+    chrome.setLayouts(bar.shown);
+    bar.pins.length = 0;
+
+    chrome.setActivityPinned(true);
+    chrome.setActivityPinned(false);
+
+    expect(bar.pins).toEqual([{ pinned: true }, { pinned: false }]);
+    expect(barSlots(activityBar)).toEqual(['end 0 pin']);
   });
 
   // Breaks if a mode added again appends its item at the end of the bar: a
@@ -284,7 +536,7 @@ describe('mountShellChrome', () => {
 
       chrome.addMode(mode(id, title), handle());
 
-      expect(parts(activityBar).map((item) => item?.textContent)).toEqual(
+      expect(topParts(activityBar).map((item) => item?.textContent)).toEqual(
         items,
       );
     },
@@ -323,8 +575,8 @@ describe('mountShellChrome', () => {
 
     added.dispose();
 
-    expect(parts(activityBar).length).toBe(1);
-    parts(activityBar)[0]?.click();
+    expect(topParts(activityBar).length).toBe(1);
+    topParts(activityBar)[0]?.click();
     expect(runs).toEqual([['modes.show', 'docs.docs']]);
   });
 

@@ -19,6 +19,26 @@ const TOAST_DOTS = {
   error: 'error',
 };
 
+/**
+ * An activity bar button labelled and titled `label` that never takes focus,
+ * so page keys still drive the page after a click.
+ * @param {HTMLElement} parent
+ * @param {string} className
+ * @param {string} label
+ * @param {import('../layout').ShellKit} kit
+ */
+function barButton(parent, className, label, kit) {
+  const button = /** @type {HTMLButtonElement} */ (
+    kit.el(parent, 'button', className)
+  );
+  button.type = 'button';
+  button.tabIndex = -1;
+  button.addEventListener('mousedown', (event) => event.preventDefault());
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  return button;
+}
+
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
   // The title then the detail, on one line cut short; the full detail, or the
@@ -52,19 +72,44 @@ const layout = {
     badge.title = problems.map(problemText).join('\n');
     return badge;
   },
-  // An icon button that never takes focus, so page keys still drive the page
-  // after a click.
+  // The icon in its column, a dot on it while the mode has a count, then the
+  // title, the count and the show command's key, which the CSS shows only
+  // while the bar is expanded.
   activityItem(parent, input, kit) {
-    const item = /** @type {HTMLButtonElement} */ (
-      kit.el(parent, 'button', 'activity-item')
-    );
-    item.type = 'button';
-    item.tabIndex = -1;
-    item.addEventListener('mousedown', (event) => event.preventDefault());
-    kit.icon(item, input.icon);
-    item.title = input.title;
-    item.setAttribute('aria-label', input.title);
+    const item = barButton(parent, 'activity-item', input.title, kit);
+    const icon = kit.el(item, 'span', 'activity-item-icon');
+    kit.icon(icon, input.icon);
+    if (input.count !== null) {
+      kit.el(icon, 'span', 'activity-item-dot');
+    }
+    kit.el(item, 'span', 'activity-item-title', input.title);
+    if (input.count !== null) {
+      kit.el(item, 'span', 'activity-item-count', String(input.count));
+    }
+    if (input.showCommand !== null) {
+      kit.keyHint(item, input.showCommand, { className: 'activity-item-key' });
+    }
     return item;
+  },
+  // A hairline across the bar's width.
+  activityDivider(parent, kit) {
+    const divider = kit.el(parent, 'div', 'activity-divider');
+    divider.setAttribute('role', 'separator');
+    return divider;
+  },
+  // Laid out as an item: the pin in the icon column, then its label and key.
+  activityPin(parent, input, kit) {
+    const togglePin = kit.command('activityBar.togglePin');
+    const label = input.pinned ? 'Unpin' : 'Pin open';
+    const pin = barButton(parent, 'activity-item activity-pin', label, kit);
+    const icon = kit.el(pin, 'span', 'activity-item-icon');
+    kit.icon(icon, input.pinned ? 'pinned' : 'pin');
+    kit.el(pin, 'span', 'activity-item-title', label);
+    kit.keyHint(pin, 'activityBar.togglePin', {
+      className: 'activity-item-key',
+    });
+    pin.addEventListener('click', () => togglePin());
+    return pin;
   },
   // A glass panel: the tone's dot, if it has one, then the text.
   toast(parent, input, kit) {

@@ -139,8 +139,14 @@ function isBarName(name: AreaName): name is BarName {
 // holds it, and a stop has `keepsTurn` only when its contribution passed one.
 // A stop's contribution `dispose` takes it out of that list, then tells each
 // `onBarStopRemoved` listener once. `barHolding` is the bar whose element
-// holds `node`, or null when neither does. `dispose` disposes every bar
-// divider, stops watching the root's width and removes every handle.
+// holds `node`, or null when neither does. `togglePin` pins the activity bar
+// open or unpins it, logging `activity bar pinned` or `activity bar unpinned`
+// and keeping the pin in `uiState`, then tells each `onPinnedChanged`
+// listener; `isPinned` is the pin, set or not. `activityBarNarrowChanged`
+// hears the window cross the 680 px breakpoint (`SIDE_BAR_OVER_QUERY`): while
+// narrow the pin stays set but does not apply, the bar lying collapsed and
+// peeking on hover. `dispose` disposes every bar divider, stops watching the
+// root's width, removes every handle and stops the activity bar's peek.
 export interface Shell {
   areas: ShellAreas;
   barStops(bar: BarName): readonly BarStop[];
@@ -153,6 +159,10 @@ export interface Shell {
   onSideBarCrowdedChanged(listener: (isCrowded: boolean) => void): Disposable;
   sideBarDivider: ResizeTarget;
   reloadBarOpenWidths(): void;
+  togglePin(): void;
+  isPinned(): boolean;
+  onPinnedChanged(listener: (pinned: boolean) => void): Disposable;
+  activityBarNarrowChanged(isNarrow: boolean): void;
   dispose(): void;
 }
 
@@ -163,6 +173,12 @@ const MAIN_MIN = 320;
 
 // The side bar's open width when its width token is no pixel length.
 const SIDE_BAR_FALLBACK_WIDTH = 256;
+
+// The `uiState` key the activity bar's pin is kept under.
+const PINNED_KEY = 'activity-bar-pinned';
+
+// The activity bar's peek delay in ms when its token is no duration.
+const PEEK_FALLBACK_DELAY = 300;
 
 // What sets a left or right bar's width: its least width `min`, its open
 // width `token` and the `fallback` taken when that token is no pixel length,
@@ -254,6 +270,20 @@ function openWidthToken(
 ): number {
   const token = getComputedStyle(root).getPropertyValue(property).trim();
   return /^\d+(\.\d+)?px$/.test(token) ? parseFloat(token) : fallback;
+}
+
+// The ms of the `activitybar-peek-delay` token as `root` computes it, written
+// in `ms` or `s`; any other value takes the fallback.
+function peekDelayToken(root: HTMLElement): number {
+  const token = getComputedStyle(root)
+    .getPropertyValue('--wg-activitybar-peek-delay')
+    .trim();
+  const match = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(token);
+  if (match === null) {
+    return PEEK_FALLBACK_DELAY;
+  }
+  const amount = parseFloat(match[1]);
+  return match[2] === 's' ? amount * 1000 : amount;
 }
 
 // `uiState` with a missing or non-finite stored width read as `openWidth()`,
@@ -422,12 +452,23 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // least width beside the other bars, each taking its least width while over
 // main; over the content, no wider than reaches them. Each bar's drawn width
 // is kept as `root` resizes, while `uiState` keeps the user's width.
+// The activity bar's column is `--shell-activity-bar-width` on `root`, its
+// `activitybar-width` token, or `activitybar-expanded-width` while its pin
+// applies: set (`activity-bar-pinned` in `uiState`, read at the mount) and
+// the window not narrow. The app keeps the bar's state on its area element,
+// across every mount: `is-pinned` while the pin applies, `is-peeking` while it
+// peeks, and `is-expanded` while either holds. The pointer entering a bar that
+// is not expanded peeks it after the `activitybar-peek-delay` token, read as
+// the wait starts through `timers` (at once for 0), logging `activity bar
+// peeked`; leaving it, or a click in it, ends the wait or the peek. A peek
+// never changes the column, so nothing beside the bar moves.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
   uiState: UiState,
   timers: Timers,
   keys: KeyHints,
+  log: (message: string) => void,
 ): Shell {
   const initialLayout = layout;
   let currentLayout = layout;
@@ -482,6 +523,81 @@ export function mountShell(
     }
   };
 
+  // The activity bar's pin, whether the window is narrow, whether the bar
+  // peeks, and the wait before a peek, null while none runs.
+  let isPinned = uiState.get(PINNED_KEY) === true;
+  let isBarNarrow = false;
+  let isPeeking = false;
+  let peekWait: number | null = null;
+  let listenedBar: HTMLElement | null = null;
+  const pinnedChanged = createListeners<boolean>();
+  const isPinApplied = () => isPinned && !isBarNarrow;
+
+  const applyActivityBar = () => {
+    const pinApplied = isPinApplied();
+    const { classList } = mounted.activityBar.element;
+    classList.toggle('is-pinned', pinApplied);
+    classList.toggle('is-peeking', isPeeking);
+    classList.toggle('is-expanded', pinApplied || isPeeking);
+    root.style.setProperty(
+      '--shell-activity-bar-width',
+      pinApplied
+        ? 'var(--wg-activitybar-expanded-width)'
+        : 'var(--wg-activitybar-width)',
+    );
+  };
+
+  const clearPeekWait = () => {
+    if (peekWait !== null) {
+      timers.clear(peekWait);
+      peekWait = null;
+    }
+  };
+
+  const peek = () => {
+    peekWait = null;
+    isPeeking = true;
+    applyActivityBar();
+    log('activity bar peeked');
+  };
+
+  const endPeek = () => {
+    clearPeekWait();
+    if (isPeeking) {
+      isPeeking = false;
+      applyActivityBar();
+    }
+  };
+
+  const armPeek = () => {
+    if (isPinApplied() || isPeeking) {
+      return;
+    }
+    clearPeekWait();
+    const delay = peekDelayToken(root);
+    if (delay === 0) {
+      peek();
+    } else {
+      peekWait = timers.set(peek, delay);
+    }
+  };
+
+  const unlistenToBar = () => {
+    listenedBar?.removeEventListener('pointerenter', armPeek);
+    listenedBar?.removeEventListener('pointerleave', endPeek);
+    listenedBar?.removeEventListener('click', endPeek);
+    listenedBar = null;
+  };
+
+  // Moves the pointer listeners to the mounted bar element.
+  const listenToBar = () => {
+    unlistenToBar();
+    listenedBar = mounted.activityBar.element;
+    listenedBar.addEventListener('pointerenter', armPeek);
+    listenedBar.addEventListener('pointerleave', endPeek);
+    listenedBar.addEventListener('click', endPeek);
+  };
+
   const fillElements = () => {
     for (const name of AREA_NAMES) {
       for (const contribution of contributions[name]) {
@@ -494,6 +610,10 @@ export function mountShell(
     root.append(sideBarHandle, ...BAR_NAMES.map((name) => bars[name].handle));
     applySideBar();
     applyChromeLayout();
+    clearPeekWait();
+    isPeeking = false;
+    listenToBar();
+    applyActivityBar();
     statusBarHeight.observe(mounted.statusBar.element);
   };
 
@@ -742,6 +862,17 @@ export function mountShell(
   const rootWidth = new ResizeObserver(() => drawBarWidths());
   rootWidth.observe(root);
 
+  // The root's observer does not see the activity bar's column change, so a
+  // pin applying or lifting draws every bar again. An applied pin ends a peek.
+  const applyPin = () => {
+    if (isPinApplied()) {
+      endPeek();
+    }
+    applyActivityBar();
+    drawBarWidths();
+  };
+  applyPin();
+
   // Each area's scroll is read before the remount detaches its element, and
   // set on the new element once its contributions are back in it, an area at
   // its end kept at the end; every bar is measured again in the new layout.
@@ -804,7 +935,22 @@ export function mountShell(
         barDividers[name].reloadWidth();
       }
     },
+    togglePin() {
+      isPinned = !isPinned;
+      uiState.set(PINNED_KEY, isPinned);
+      log(isPinned ? 'activity bar pinned' : 'activity bar unpinned');
+      applyPin();
+      pinnedChanged.tell(isPinned);
+    },
+    isPinned: () => isPinned,
+    onPinnedChanged: (listener) => pinnedChanged.add(listener),
+    activityBarNarrowChanged(next) {
+      isBarNarrow = next;
+      applyPin();
+    },
     dispose() {
+      clearPeekWait();
+      unlistenToBar();
       sideBarDivider.dispose();
       rootWidth.disconnect();
       sideBarHandle.remove();

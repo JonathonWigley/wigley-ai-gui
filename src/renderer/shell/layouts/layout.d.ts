@@ -2,7 +2,9 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
 // The shell chrome's layout contract: what the core puts in the title bar and the activity bar, and each toast. The
 // app keeps the areas and their arrangement, the side bar's contents and state, every plugin's contribution, the click
-// that shows a mode, and the shown mode's mark (`is-shown`, `aria-current`) on its activity item. For a toast it keeps
+// that shows a mode, the shown mode's mark (`is-shown`, `aria-current`) on its activity item, the activity bar's
+// groups and order, and the bar's state on its area element: `is-expanded` while it peeks or its pin applies,
+// `is-peeking` and `is-pinned`, so a layout's CSS shows the expanded look under `.is-expanded`. For a toast it keeps
 // the toasts layer, `data-tone` and `role="status"` on the toast's root, the fade in, the 4000 ms it shows for and its
 // removal.
 
@@ -27,11 +29,18 @@ export interface ProblemInput {
 export interface ProblemsInput {
   problems: readonly ProblemInput[];
 }
-// A mode: its id, its title, and its Codicon name.
+// A mode: its id, its title, its Codicon name, its count when above 0 (else null), and the qualified id of the command
+// that shows it, whose key the item shows, or null.
 export interface ActivityItemInput {
   id: string;
   title: string;
   icon: string;
+  count: number | null;
+  showCommand: string | null;
+}
+// Whether the activity bar is pinned open; the pin stays set while a narrow window keeps the bar collapsed.
+export interface ActivityPinInput {
+  pinned: boolean;
 }
 
 // The shell's kit. The shell owns no command, so `keys`, `keyHint` and `edge` take any plugin's command by its
@@ -62,10 +71,20 @@ export interface Layout {
     input: ProblemsInput,
     kit: ShellKit,
   ): HTMLElement;
-  // One per mode in the activity bar. The app shows the mode on a click and marks the shown mode's item.
+  // One per mode in the activity bar. The app shows the mode on a click and marks the shown mode's item. Drawn again
+  // when its count changes.
   activityItem?(
     parent: HTMLElement,
     input: ActivityItemInput,
+    kit: ShellKit,
+  ): HTMLElement;
+  // Between two neighbouring groups of the activity bar's top or bottom edge.
+  activityDivider?(parent: HTMLElement, kit: ShellKit): HTMLElement;
+  // Last at the activity bar's end: the button that runs `activityBar.togglePin` (`kit.command`). Drawn again when
+  // the pin changes.
+  activityPin?(
+    parent: HTMLElement,
+    input: ActivityPinInput,
     kit: ShellKit,
   ): HTMLElement;
   // A toast's whole look, drawn once per toast into the toasts layer. A shown toast keeps the layout it drew with; a

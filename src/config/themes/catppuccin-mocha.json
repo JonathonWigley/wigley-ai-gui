@@ -137,6 +137,8 @@
     "toolbar-height": "40px",
     "statusbar-height": "24px",
     "activitybar-width": "40px",
+    "activitybar-expanded-width": "200px",
+    "activitybar-peek-delay": "300ms",
     "icon-button-sm": "24px",
     "icon-button": "28px",
     "icon-size": "16px",

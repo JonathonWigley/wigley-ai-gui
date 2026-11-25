@@ -141,8 +141,8 @@ export function liveKeysFor(
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
-// id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it. Its areas are the title bar, panel, status bar, left bar, right bar and
+// id, and the scopes it sets and pushes and the modes it adds (their `id` and
+// `showCommand`) are qualified by it. Its areas are the title bar, panel, status bar, left bar, right bar and
 // overlay:
 // they leave out `main`, which only the mode registry fills, and the activity
 // bar and side bar, which the core draws from the modes. Its
@@ -227,7 +227,13 @@ export function createPageApi(
     modes: {
       add: (mode) =>
         registrations.track(
-          deps.modes.add({ ...mode, id: qualify(manifest.id, mode.id) }),
+          deps.modes.add({
+            ...mode,
+            id: qualify(manifest.id, mode.id),
+            ...(mode.showCommand === undefined
+              ? {}
+              : { showCommand: qualify(manifest.id, mode.showCommand) }),
+          }),
         ),
       shown: () => deps.modes.shown(),
       stepTab: (by) => deps.modes.stepTab(by),

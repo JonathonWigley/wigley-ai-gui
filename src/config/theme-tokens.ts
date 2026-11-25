@@ -140,6 +140,8 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'toolbar-height': 'length',
   'statusbar-height': 'length',
   'activitybar-width': 'length',
+  'activitybar-expanded-width': 'length',
+  'activitybar-peek-delay': 'duration',
   'icon-button-sm': 'length',
   'icon-button': 'length',
   'icon-size': 'length',

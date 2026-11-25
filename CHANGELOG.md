@@ -10,6 +10,13 @@ changes for the user.
 
 - The shell.activityBar setting orders, groups and hides the activity bar's modes, overriding each plugin's suggested
   place.
+- Space v p pins the activity bar open with each mode's name and key.
+- A mode can show a count on its activity bar item.
+
+### Changed
+
+- The activity bar groups its modes with dividers, puts Practice, Gallery and Settings at its bottom, and peeks each
+  mode's name on hover.
 
 ## 1.5.0 — 2026-11-24
 

@@ -4,8 +4,11 @@
    name so a hidden area leaves its track empty instead of shifting the
    others: the left and right bars' columns are empty while no plugin
    contributes to them, and while either bar lies over main in a window too
-   narrow for it. The main column never grows past the window, so content
-   wraps to fit it; long unbroken words break anywhere. */
+   narrow for it. The activity bar's column is `--shell-activity-bar-width`,
+   a width the shell sets: the collapsed width, or the expanded one while the
+   bar's pin applies, never a peek's. The main column never grows past the
+   window, so content wraps to fit it; long unbroken words break anywhere.
+   The grid is positioned, so a peeking activity bar lies in its own cell. */
 .shell {
   display: grid;
   grid-template-areas:
@@ -13,10 +16,13 @@
     'activity left side main right'
     'activity left side panel right'
     'status status status status status';
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  grid-template-columns:
+    var(--shell-activity-bar-width) auto auto minmax(0, 1fr)
+    auto;
   grid-template-rows: var(--wg-toolbar-height) minmax(0, 1fr) auto auto;
   height: 100vh;
   overflow-wrap: anywhere;
+  position: relative;
 }
 
 /* The title bar drags the window; its controls take clicks. Its padding
@@ -113,14 +119,29 @@
   display: none;
 }
 
-/* Each chrome bar draws one hairline, on its edge toward the content. */
+/* Each chrome bar draws one hairline, on its edge toward the content. The
+   activity bar fills its column; its items' icon column keeps the collapsed
+   width, so it scrolls only down. */
 .shell-activity-bar {
   border-right: 1px solid var(--wg-material-chrome-edge);
   display: flex;
   flex-direction: column;
   grid-area: activity;
+  overflow-x: hidden;
   overflow-y: auto;
-  width: var(--wg-activitybar-width);
+}
+
+/* A peek lies over the side bar, the left bar, their handles and the content,
+   filling the bar's rows from its column's start while the column keeps its
+   width, on the side bar's dense glass with the floating shadow. */
+.shell-activity-bar.is-peeking {
+  background: var(--wg-material-chrome-bg-dense);
+  box-shadow: var(--wg-material-floating-shadow);
+  inset-block: 0;
+  inset-inline-start: 0;
+  position: absolute;
+  width: var(--wg-activitybar-expanded-width);
+  z-index: var(--wg-z-chrome);
 }
 
 /* Its padding insets the rounded hover and selection fills of the list in

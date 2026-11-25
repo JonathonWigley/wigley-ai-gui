@@ -18,6 +18,13 @@ describe('readShellLayout', () => {
       throws: 'activityItem is not a function',
     },
     { case: 'only devTag', module: { default: { devTag } }, throws: null },
+    {
+      case: 'the activity bar divider and pin',
+      module: {
+        default: { devTag, activityDivider: devTag, activityPin: devTag },
+      },
+      throws: null,
+    },
   ])(
     'readShellLayout_Shapes_AcceptsOrNamesTheFirstBadKey: $case',
     ({ module, throws }) => {

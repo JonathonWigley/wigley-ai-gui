@@ -1404,6 +1404,7 @@ function fakeModes(
         setContext(context) {
           entry.context = context;
         },
+        setCount() {},
         toggleSideBar() {
           if (mode.sideBar === undefined && !isDisposed()) {
             throw new Error(`Mode "${id}" has no side bar`);

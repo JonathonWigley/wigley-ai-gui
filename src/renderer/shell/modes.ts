@@ -96,7 +96,8 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 
 // What the mode registry drives outside itself. `place` puts a mode's element
 // and side bar in the window, and its item in the activity bar, once at its
-// `add`, and the `Disposable` it returns takes them out; `marked` marks the shown mode in the activity bar; `layOutSideBar`
+// `add`, and the `Disposable` it returns takes them out; `marked` marks the shown mode in the activity bar; `counted`
+// sets a placed mode's count on its activity item; `layOutSideBar`
 // lays out the side bar area; `showContext` shows the title bar's context;
 // `isNarrow` is whether the side bar starts with no room beside the content
 // (`SIDE_BAR_OVER_QUERY`, or crowded by the left bar);
@@ -106,6 +107,7 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 export interface ModesDeps {
   place(mode: Mode, handle: ModeHandle): Disposable;
   marked(modeId: string): void;
+  counted(modeId: string, count: number | null): void;
   layOutSideBar(layout: SideBarLayout): void;
   showContext(context: ModeContext | null): void;
   sideBarOpened(): void;
@@ -140,7 +142,8 @@ interface AddedMode {
 // toggles `hidden`, so a hidden mode keeps its DOM and state. Each mode keeps
 // its own side bar choice and title bar context, applied while it shows. A
 // disposed shown mode gives way to the remaining mode whose id was first added
-// earliest, the activity bar's order. With no mode left, the title bar context
+// earliest. A count passes straight to `counted`, which the activity bar keeps.
+// With no mode left, the title bar context
 // and the side bar clear.
 export function createModes(deps: ModesDeps): CoreModes {
   const { log } = deps;
@@ -255,6 +258,11 @@ export function createModes(deps: ModesDeps): CoreModes {
           entry.context = context;
           if (shownMode === entry) {
             deps.showContext(context);
+          }
+        },
+        setCount(count) {
+          if (!isDisposed()) {
+            deps.counted(mode.id, count);
           }
         },
         toggleSideBar() {

@@ -89,6 +89,7 @@ function setup(isNarrow = false) {
       return { dispose: () => calls.push(`unplace ${mode.id}`) };
     },
     marked: (modeId) => calls.push(`marked ${modeId}`),
+    counted: (modeId, count) => calls.push(`counted ${modeId} ${count}`),
     layOutSideBar: (layout) => calls.push(`side bar ${layout}`),
     showContext: (context) => calls.push(`context ${context?.title ?? null}`),
     sideBarOpened: () => told.push('side bar opened'),
@@ -412,6 +413,23 @@ describe('createModes', () => {
     one.handle.setContext(null);
     expect(calls).toEqual(['context null']);
   });
+
+  it("hands a shown or hidden mode's count to the activity bar", () => {
+    const { calls, add } = setup();
+    const one = add('a.one', 'One');
+    const two = add('b.two', 'Two');
+    calls.length = 0;
+
+    one.handle.setCount(3);
+    two.handle.setCount(5);
+    two.handle.setCount(null);
+
+    expect(calls).toEqual([
+      'counted a.one 3',
+      'counted b.two 5',
+      'counted b.two null',
+    ]);
+  });
 });
 
 describe('disposing a mode', () => {
@@ -595,6 +613,7 @@ describe('disposing a mode', () => {
     a.handle.dispose();
     a.handle.show();
     a.handle.setContext({ title: 'late', detail: null });
+    a.handle.setCount(2);
     a.handle.toggleSideBar();
     a.handle.picked();
 
@@ -733,6 +752,7 @@ describe('side bar callbacks', () => {
     const modes = createModes({
       place: () => ({ dispose: () => undefined }),
       marked: () => undefined,
+      counted: () => undefined,
       layOutSideBar: () => undefined,
       showContext: () => undefined,
       sideBarOpened: () => undefined,

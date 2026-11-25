@@ -1,5 +1,5 @@
 /* The default shell layout's look: the title bar's context, the activity bar's
-   items, the config problem badge and the toast. */
+   items, dividers and Pin button, the config problem badge and the toast. */
 
 /* The shown mode's context: one line, cut short with an ellipsis, draggable
    like the bar under it. */
@@ -18,8 +18,10 @@
   margin-inline-start: var(--wg-space-2);
 }
 
-/* A mode's icon button; the shown mode's carries the accent mark along its
-   window-side edge. Hover is a plain fill, as for any control on glass. */
+/* A mode's button, and the Pin button laid out as one; the shown mode's
+   carries the accent mark along its window-side edge. Hover is a plain fill,
+   as for any control on glass. The icon keeps a column of the collapsed
+   bar's width, so no icon moves as the bar expands. */
 .activity-item {
   align-items: center;
   background: transparent;
@@ -28,9 +30,91 @@
   cursor: pointer;
   display: flex;
   flex: none;
+  gap: var(--wg-space-1);
   height: var(--wg-activitybar-width);
-  justify-content: center;
   padding: 0;
+  text-align: start;
+  width: 100%;
+}
+
+.activity-item-icon {
+  align-items: center;
+  display: flex;
+  flex: none;
+  height: 100%;
+  justify-content: center;
+  position: relative;
+  width: var(--wg-activitybar-width);
+}
+
+/* A count above zero on the collapsed bar: a dot on the icon's corner. */
+.activity-item-dot {
+  background: var(--wg-accent);
+  border-radius: 50%;
+  height: var(--wg-space-1_5);
+  inset-block-start: var(--wg-space-2);
+  inset-inline-end: var(--wg-space-2);
+  position: absolute;
+  width: var(--wg-space-1_5);
+}
+
+.activity-item-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The count on the expanded bar: an accent pill. */
+.activity-item-count {
+  background: var(--wg-accent);
+  border-radius: var(--wg-radius-lg);
+  color: var(--wg-fg-on-accent);
+  flex: none;
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-semibold);
+  line-height: var(--wg-leading-tight);
+  padding: 0 var(--wg-space-1_5);
+}
+
+/* The title, count, key and Pin button show only while the bar is expanded,
+   and the dot only while it is collapsed; an expanded item's key prompt lays
+   out as the item's own child. */
+.activity-item-title,
+.activity-item-count,
+.activity-item-key,
+.activity-item.activity-pin {
+  display: none;
+}
+
+.shell-activity-bar.is-expanded
+  :is(.activity-item-title, .activity-item-count) {
+  display: block;
+}
+
+.shell-activity-bar.is-expanded .activity-item-key {
+  display: contents;
+}
+
+.shell-activity-bar.is-expanded .activity-item.activity-pin {
+  display: flex;
+}
+
+.shell-activity-bar.is-expanded .activity-item {
+  padding-inline-end: var(--wg-space-2);
+}
+
+.shell-activity-bar.is-expanded .activity-item-dot {
+  display: none;
+}
+
+/* A hairline across the bar between two groups. */
+.activity-divider {
+  background: var(--wg-border-default);
+  flex: none;
+  height: 1px;
+  margin-block: var(--wg-space-1);
   width: 100%;
 }
 

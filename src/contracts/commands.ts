@@ -49,6 +49,13 @@ export const MODES_SHOW: CommandKey<string, 'modes.show'> = {
   id: 'modes.show',
 };
 
+// Pins the activity bar open at its expanded width, or lets a pinned bar
+// collapse, as its Pin button does.
+export const ACTIVITY_BAR_TOGGLE_PIN: CommandKey<
+  void,
+  'activityBar.togglePin'
+> = { id: 'activityBar.togglePin' };
+
 // Opens the http or https URL its arg names in the default browser, as a
 // click on a rendered link does; toasts the refusal of any other URL.
 export const CORE_OPEN_LINK: CommandKey<string, 'core.openLink'> = {

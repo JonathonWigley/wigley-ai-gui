@@ -528,7 +528,19 @@ describe('createPageApi', () => {
     ]);
   });
 
-  it("qualifies a mode's id by the plugin", () => {
+  // `qualified` is what the registry gets beside the mode's own members.
+  it.each([
+    {
+      case: 'the id',
+      own: { id: 'browse' },
+      qualified: { id: 'p.browse' },
+    },
+    {
+      case: 'the id and the show command',
+      own: { id: 'browse', showCommand: 'showBrowse' },
+      qualified: { id: 'p.browse', showCommand: 'p.showBrowse' },
+    },
+  ])("qualifies a mode's ids by the plugin: $case", ({ own, qualified }) => {
     const added: Mode[] = [];
     const modes = {
       add: (mode) => {
@@ -541,28 +553,11 @@ describe('createPageApi', () => {
     const shown = () => {};
     const hidden = () => {};
     const focusMain = () => {};
+    const members = { title: 'Browse', icon: 'x', element, shown, hidden };
 
-    api.modes.add({
-      id: 'browse',
-      title: 'Browse',
-      icon: 'x',
-      element,
-      shown,
-      hidden,
-      focusMain,
-    });
+    api.modes.add({ ...own, ...members, focusMain });
 
-    expect(added).toEqual([
-      {
-        id: 'p.browse',
-        title: 'Browse',
-        icon: 'x',
-        element,
-        shown,
-        hidden,
-        focusMain,
-      },
-    ]);
+    expect(added).toEqual([{ ...qualified, ...members, focusMain }]);
   });
 
   it('settings() reads the current config', () => {

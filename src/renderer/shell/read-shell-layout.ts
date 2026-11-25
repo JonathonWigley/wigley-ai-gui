@@ -7,6 +7,8 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   devTag: true,
   configProblems: true,
   activityItem: true,
+  activityDivider: true,
+  activityPin: true,
   toast: true,
 };
 

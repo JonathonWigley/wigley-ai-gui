@@ -1,4 +1,5 @@
 import {
+  ACTIVITY_BAR_TOGGLE_PIN,
   type CommandId,
   CORE_COPY_CODE,
   CORE_OPEN_LINK,
@@ -70,6 +71,11 @@ export const coreCommands: Record<CommandId, CommandDecl> = {
     group: 'modes',
     runsIn: 'page',
     arg: 'string',
+  },
+  [ACTIVITY_BAR_TOGGLE_PIN.id]: {
+    label: 'pin the activity bar open',
+    group: 'modes',
+    runsIn: 'page',
   },
   [CORE_OPEN_LINK.id]: {
     label: 'open the link',

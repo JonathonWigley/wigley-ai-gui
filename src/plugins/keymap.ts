@@ -1,5 +1,6 @@
 // Every default key of the app and its built-in plugins. The rule for picking
 // a key is docs/keymap.md; the user's keymap.json takes entries in this shape.
+import type { ACTIVITY_BAR_TOGGLE_PIN } from '../contracts/commands';
 import type {
   AcceleratorBind,
   DefaultKeymap,
@@ -19,7 +20,8 @@ type BuiltInManifest = (typeof builtInManifests)[number];
 // A page command of the core's own.
 type CorePageCommand =
   | (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS]
-  | (typeof PANE_FOCUS_COMMANDS)[keyof typeof PANE_FOCUS_COMMANDS];
+  | (typeof PANE_FOCUS_COMMANDS)[keyof typeof PANE_FOCUS_COMMANDS]
+  | (typeof ACTIVITY_BAR_TOGGLE_PIN)['id'];
 
 // A main-process command of a built-in plugin.
 type BuiltInMainCommand = QualifiedCommandId<BuiltInManifest, 'main'>;
@@ -328,6 +330,7 @@ export const defaultKeymap = {
     },
     { keys: '<Leader>vs', scope: 'any', command: 'backlog.toggleStaleFirst' },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
+    { keys: '<Leader>vp', scope: 'any', command: 'activityBar.togglePin' },
     { keys: '<Leader>vy', scope: 'any', command: 'system-stats.togglePanel' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────

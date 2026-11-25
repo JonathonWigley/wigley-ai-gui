@@ -131,20 +131,24 @@ interface FakeObserver {
 }
 
 // Stubs the computed `--wg-sidebar-width` token as `side`,
-// `--wg-leftbar-width` as `left` and `--wg-rightbar-width` as `right`.
+// `--wg-leftbar-width` as `left`, `--wg-rightbar-width` as `right` and
+// `--wg-activitybar-peek-delay` as `peek`.
 function stubBarTokens({
   side = '256px',
   left = '300px',
   right = '300px',
+  peek = '300ms',
 }: {
   side?: string;
   left?: string;
   right?: string;
+  peek?: string;
 } = {}): void {
   const tokens: Record<string, string> = {
     '--wg-sidebar-width': side,
     '--wg-leftbar-width': left,
     '--wg-rightbar-width': right,
+    '--wg-activitybar-peek-delay': peek,
   };
   vi.stubGlobal('getComputedStyle', () => ({
     getPropertyValue: (name: string) => tokens[name] ?? '',
@@ -155,7 +159,7 @@ function stubBarTokens({
 // tokens, `tokens`, and ResizeObservers that report only when a test runs
 // their callback; returns every observer made.
 function stubShellGlobals(
-  tokens: { side?: string; left?: string; right?: string } = {},
+  tokens: { side?: string; left?: string; right?: string; peek?: string } = {},
 ): FakeObserver[] {
   const observers: FakeObserver[] = [];
   stubBarTokens(tokens);
@@ -240,20 +244,51 @@ function measuredLayout(
 
 const NO_TIMERS: Timers = { set: () => 0, clear: () => undefined };
 
+// Timers a test runs by hand: `waits` holds the ms of each timer set and not
+// yet run or cleared, and `runAll` runs those timers.
+function manualTimers() {
+  const pending = new Map<number, { run: () => void; ms: number }>();
+  let nextHandle = 1;
+  const timers: Timers = {
+    set(run, ms) {
+      const handle = nextHandle++;
+      pending.set(handle, { run, ms });
+      return handle;
+    },
+    clear: (handle) => pending.delete(handle),
+  };
+  return {
+    timers,
+    waits: () => [...pending.values()].map((timer) => timer.ms),
+    runAll() {
+      const due = [...pending.values()];
+      pending.clear();
+      for (const timer of due) {
+        timer.run();
+      }
+    },
+  };
+}
+
 // A shell mounted on the default layout over a fake DOM, at `DEFAULT_EDGES`
 // unless given, `stored` under `side-bar-width`, `leftStored` under
-// `left-bar-width` and `rightStored` under `right-bar-width` when given.
-// `resizeRoot` runs the observers watching the root, as a window resize does;
-// `showLeftBar` and `showRightBar` contribute to their bar; `dragLeftBar` and
-// `dragRightBar` drag its handle `by` pixels from where it is drawn.
+// `left-bar-width` and `rightStored` under `right-bar-width` when given, and
+// `pinned` under `activity-bar-pinned`; `peekToken` is the activity bar's
+// peek delay token. `logs` holds each line the shell logs, and `timers` runs
+// its timers. `resizeRoot` runs the observers watching the root, as a window
+// resize does; `showLeftBar` and `showRightBar` contribute to their bar;
+// `dragLeftBar` and `dragRightBar` drag its handle `by` pixels from where it
+// is drawn. `activityBar` is the mounted activity bar's element.
 function mountMeasuredShell(
   options: {
     token?: string;
     leftToken?: string;
     rightToken?: string;
+    peekToken?: string;
     stored?: number;
     leftStored?: number;
     rightStored?: number;
+    pinned?: boolean;
     edges?: Partial<Edges>;
     keys?: KeyHints;
   } = {},
@@ -271,8 +306,12 @@ function mountMeasuredShell(
     side: options.token,
     left: options.leftToken,
     right: options.rightToken,
+    peek: options.peekToken,
   });
   const values = new Map<string, unknown>();
+  if (options.pinned !== undefined) {
+    values.set('activity-bar-pinned', options.pinned);
+  }
   if (options.stored !== undefined) {
     values.set('side-bar-width', options.stored);
   }
@@ -284,12 +323,15 @@ function mountMeasuredShell(
   }
   const edges = { ...DEFAULT_EDGES, ...options.edges };
   const root = new FakeElement('div');
+  const logs: string[] = [];
+  const timers = manualTimers();
   const shell = mountShell(
     asHtml(root),
     measuredLayout(edges),
     uiStateOver(values),
-    NO_TIMERS,
+    timers.timers,
     options.keys ?? recordingAnchors().keys,
+    (message) => logs.push(message),
   );
   const leftHandle = () => root.querySelector('.shell-left-bar-handle');
   const rightHandle = () => root.querySelector('.shell-right-bar-handle');
@@ -312,6 +354,9 @@ function mountMeasuredShell(
     root,
     values,
     edges,
+    logs,
+    timers,
+    activityBar: () => root.querySelector('.shell-activity-bar')!,
     handle: () => root.querySelector('.shell-side-bar-handle'),
     leftHandle,
     rightHandle,
@@ -372,6 +417,7 @@ describe('mountShell', () => {
       uiStateOver(new Map()),
       NO_TIMERS,
       recordingAnchors().keys,
+      () => undefined,
     );
     shell.setChromeLayout('mine');
     const mine = Array(6).fill(['mine', 'shell']);
@@ -501,6 +547,7 @@ describe('mountShell', () => {
         uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
+        () => undefined,
       );
       shell.setChromeLayout('mine');
       const mainContribution = new FakeElement('div');
@@ -614,6 +661,7 @@ describe('mountShell', () => {
         uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
+        () => undefined,
       );
       const scrollTops = () =>
         ['shell-side-bar', 'shell-main'].map(
@@ -733,6 +781,7 @@ describe('mountShell', () => {
         uiStateOver(new Map()),
         NO_TIMERS,
         recordingAnchors().keys,
+        () => undefined,
       );
       const panel = new FocusFakeElement('div');
       const row = new FocusFakeElement('div');
@@ -1545,5 +1594,202 @@ describe('mountShell', () => {
 
     expect(anchored(recorded)).toEqual(sidePrompts(true));
     expect([handle(), leftHandle(), rightHandle()]).toEqual([null, null, null]);
+  });
+
+  // The activity bar's state classes on its element, and its drawn column.
+  function barState(mounted: ReturnType<typeof mountMeasuredShell>) {
+    const { classList } = mounted.activityBar();
+    return {
+      pinned: classList.contains('is-pinned'),
+      peeking: classList.contains('is-peeking'),
+      expanded: classList.contains('is-expanded'),
+      column: mounted.root.style['--shell-activity-bar-width'],
+    };
+  }
+
+  const COLLAPSED = {
+    pinned: false,
+    peeking: false,
+    expanded: false,
+    column: 'var(--wg-activitybar-width)',
+  };
+  const PINNED = {
+    pinned: true,
+    peeking: false,
+    expanded: true,
+    column: 'var(--wg-activitybar-expanded-width)',
+  };
+  const PEEKING = {
+    pinned: false,
+    peeking: true,
+    expanded: true,
+    column: 'var(--wg-activitybar-width)',
+  };
+
+  // Breaks if the pin misses a class or the column, goes unlogged or unkept,
+  // or tells no listener.
+  it('mountShell_TogglePin_PinsThenUnpinsTheActivityBar', () => {
+    const mounted = mountMeasuredShell();
+    const told: boolean[] = [];
+    mounted.shell.onPinnedChanged((pinned) => told.push(pinned));
+    const states = [barState(mounted)];
+
+    mounted.shell.togglePin();
+    states.push(barState(mounted));
+    const keptPinned = mounted.values.get('activity-bar-pinned');
+    mounted.shell.togglePin();
+    states.push(barState(mounted));
+
+    expect(states).toEqual([COLLAPSED, PINNED, COLLAPSED]);
+    expect(keptPinned).toBe(true);
+    expect(mounted.values.get('activity-bar-pinned')).toBe(false);
+    expect(mounted.logs).toEqual([
+      'activity bar pinned',
+      'activity bar unpinned',
+    ]);
+    expect(told).toEqual([true, false]);
+  });
+
+  // Breaks if the mount ignores the kept pin.
+  it.each([
+    { row: 'kept pinned', pinned: true, state: PINNED },
+    { row: 'kept unpinned', pinned: false, state: COLLAPSED },
+    { row: 'nothing kept', pinned: undefined, state: COLLAPSED },
+  ])('mountShell_KeptPin_ReadAtTheMount: $row', ({ pinned, state }) => {
+    const mounted = mountMeasuredShell({ pinned });
+
+    expect(barState(mounted)).toEqual(state);
+    expect(mounted.shell.isPinned()).toBe(pinned === true);
+  });
+
+  // Breaks if a narrow window leaves the bar pinned open, drops the pin
+  // itself, or never restores it.
+  it('mountShell_NarrowWindow_LiftsThePinUntilWideAgain', () => {
+    const mounted = mountMeasuredShell({ pinned: true });
+
+    mounted.shell.activityBarNarrowChanged(true);
+    const narrow = [barState(mounted), mounted.shell.isPinned()];
+    mounted.shell.activityBarNarrowChanged(false);
+
+    expect(narrow).toEqual([COLLAPSED, true]);
+    expect(barState(mounted)).toEqual(PINNED);
+  });
+
+  // `steps` drive the bar; `state` and `logs` follow. Breaks if a peek fires
+  // at once or never, a leave leaves its wait running, a click or leave keeps
+  // the peek, a peek moves the column, or a pinned bar peeks.
+  it.each<{
+    row: string;
+    pinned?: boolean;
+    narrow?: boolean;
+    steps: ('enter' | 'leave' | 'click' | 'wait')[];
+    state: ReturnType<typeof barState>;
+    logs: string[];
+  }>([
+    {
+      row: 'entered, before the delay',
+      steps: ['enter'],
+      state: COLLAPSED,
+      logs: [],
+    },
+    {
+      row: 'entered, after the delay',
+      steps: ['enter', 'wait'],
+      state: PEEKING,
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'left before the delay',
+      steps: ['enter', 'leave', 'wait'],
+      state: COLLAPSED,
+      logs: [],
+    },
+    {
+      row: 'left while peeking',
+      steps: ['enter', 'wait', 'leave'],
+      state: COLLAPSED,
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'clicked while peeking',
+      steps: ['enter', 'wait', 'click'],
+      state: COLLAPSED,
+      logs: ['activity bar peeked'],
+    },
+    {
+      row: 'a pinned bar',
+      pinned: true,
+      steps: ['enter', 'wait'],
+      state: PINNED,
+      logs: [],
+    },
+    {
+      row: 'a pinned bar in a narrow window',
+      pinned: true,
+      narrow: true,
+      steps: ['enter', 'wait'],
+      state: PEEKING,
+      logs: ['activity bar peeked'],
+    },
+  ])(
+    'mountShell_PointerOverTheActivityBar_PeeksAfterTheDelay: $row',
+    ({ pinned, narrow, steps, state, logs }) => {
+      const mounted = mountMeasuredShell({ pinned });
+      if (narrow === true) {
+        mounted.shell.activityBarNarrowChanged(true);
+      }
+      const bar = mounted.activityBar();
+
+      for (const step of steps) {
+        if (step === 'enter') {
+          bar.fire('pointerenter', {});
+        } else if (step === 'leave') {
+          bar.fire('pointerleave', {});
+        } else if (step === 'click') {
+          bar.fire('click', {});
+        } else {
+          mounted.timers.runAll();
+        }
+      }
+
+      expect(barState(mounted)).toEqual(state);
+      expect(mounted.logs).toEqual(logs);
+    },
+  );
+
+  // `waits`: the timers the enter sets; `state`: the bar right after it.
+  // Breaks if seconds read as ms, 0 waits on a timer, or a bad token peeks
+  // at once.
+  it.each([
+    { token: '450ms', waits: [450], state: COLLAPSED },
+    { token: '0.25s', waits: [250], state: COLLAPSED },
+    { token: '0ms', waits: [], state: PEEKING },
+    { token: 'soon', waits: [300], state: COLLAPSED },
+  ])(
+    'mountShell_PeekDelayToken_SetsTheWait: $token',
+    ({ token, waits, state }) => {
+      const mounted = mountMeasuredShell({ peekToken: token });
+
+      mounted.activityBar().fire('pointerenter', {});
+
+      expect(mounted.timers.waits()).toEqual(waits);
+      expect(barState(mounted)).toEqual(state);
+    },
+  );
+
+  // Breaks if a swapped-in activity bar element loses the pin's classes, or
+  // the restored one does.
+  it('mountShell_LayoutSwap_KeepsThePinOnTheNewBar', () => {
+    const mounted = mountMeasuredShell({ pinned: true });
+    const before = mounted.activityBar();
+
+    const swap = mounted.shell.setLayout(defaultShellLayout);
+    const swappedBar = mounted.activityBar();
+    const swapped = barState(mounted);
+    swap.dispose();
+
+    expect(swappedBar).not.toBe(before);
+    expect(swapped).toEqual(PINNED);
+    expect(barState(mounted)).toEqual(PINNED);
   });
 });

@@ -8,6 +8,7 @@ import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
 import {
+  ACTIVITY_BAR_TOGGLE_PIN,
   CORE_COPY_CODE,
   CORE_OPEN_LINK,
   MODES_SHOW,
@@ -264,6 +265,7 @@ async function start() {
     uiState.scoped('shell'),
     timers,
     keyHints,
+    (message) => log('page', message),
   );
   const { areas } = shell;
   const markdown = createMarkdownItRenderer(
@@ -283,7 +285,18 @@ async function start() {
     instance: config.appInstance,
     log,
   });
+  chrome.setActivityBar(live.current().settings.shell.activityBar);
+  onChangedPart(
+    live,
+    (served) => served.settings.shell.activityBar,
+    (setting) => chrome.setActivityBar(setting),
+  );
+  chrome.setActivityPinned(shell.isPinned());
+  shell.onPinnedChanged((pinned) => chrome.setActivityPinned(pinned));
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
+  // Only the window's width lifts the activity bar's pin, never the left
+  // bar's crowding.
+  shell.activityBarNarrowChanged(narrow.matches);
   // A side bar crowded by the left bar lays out as in a narrow window, so it
   // never lies beside under the left bar.
   const sideBarRoom = watchSideBarRoom(
@@ -302,6 +315,7 @@ async function start() {
       return placement;
     },
     marked: (modeId) => chrome.markMode(modeId),
+    counted: (modeId, count) => chrome.setCount(modeId, count),
     layOutSideBar: (layout) => shell.layOutSideBar(layout),
     showContext: (context) => chrome.showContext(context),
     // `paneTargets` is made below; no mode is added before it.
@@ -309,7 +323,10 @@ async function start() {
     isNarrow: sideBarRoom.isNarrow(),
     log,
   });
-  narrow.addEventListener('change', () => sideBarRoom.update());
+  narrow.addEventListener('change', () => {
+    sideBarRoom.update();
+    shell.activityBarNarrowChanged(narrow.matches);
+  });
   shell.onSideBarCrowdedChanged(() => sideBarRoom.update());
   const toastLayer = document.createElement('div');
   toastLayer.className = 'toasts';
@@ -369,6 +386,11 @@ async function start() {
   registry.register(
     MODES_SHOW.id,
     ({ arg }: PageCommandContext<string>) => chrome.showMode(arg),
+    'core',
+  );
+  registry.register(
+    ACTIVITY_BAR_TOGGLE_PIN.id,
+    () => shell.togglePin(),
     'core',
   );
   const pickerCommands = registerPickerCommands(registry);

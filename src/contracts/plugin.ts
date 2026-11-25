@@ -575,7 +575,10 @@ export interface Mode {
 
 // `show` hides the shown mode and shows this one; on the shown mode it does
 // nothing. `setContext` keeps the mode's title bar context, starting null, and
-// shows it while the mode shows. `toggleSideBar` flips the mode's side bar
+// shows it while the mode shows. `setCount` sets the count on the mode's
+// activity item, starting null, shown or hidden: null, 0 or less shows none,
+// more than 0 a dot on the collapsed bar and the whole number while the bar is
+// expanded. `toggleSideBar` flips the mode's side bar
 // choice: while the window is wide it hides or shows the side bar beside the
 // content, while narrow (as `Mode` defines it, the left bar's crowding
 // included) it opens or closes it over the content; each mode keeps
@@ -588,14 +591,14 @@ export interface Mode {
 // and its side bar lies beside or over the content. `dispose` takes the mode's
 // element, side bar and activity item out of the window, without calling its
 // `hidden`, and frees its id; a disposed shown mode gives way to the remaining
-// mode whose id was first added earliest (the activity bar's order), as `show`
-// would show it, and `onChanged` listeners hear its id, or `''` when no mode
+// mode whose id was first added earliest, as `show` would show it, and `onChanged` listeners hear its id, or `''` when no mode
 // remains. Once disposed, every member does nothing, and `isShown` and
 // `sideBarShown` return false.
 export interface ModeHandle extends Disposable {
   show(): void;
   isShown(): boolean;
   setContext(context: ModeContext | null): void;
+  setCount(count: number | null): void;
   toggleSideBar(): void;
   picked(): void;
   sideBarShown(): boolean;
@@ -611,8 +614,9 @@ export interface ModeHandle extends Disposable {
 // the registry forgets the id; so does a `show` that changes the shown mode.
 // So the mode shown before a plugin's stop shows again at its start, for a
 // restart and for a switch-off then switch-on with no other mode picked in
-// between. A mode's activity item keeps the place of its id's first add, so an
-// `add` after a `dispose` puts the item back where it was. `shown` is the shown mode's id and throws
+// between. A mode's activity item keeps its id's first-add rank, which breaks
+// ties between modes the bar would place alike, so an `add` after a `dispose`
+// puts the item back where it was, its count null again. `shown` is the shown mode's id and throws
 // before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
