@@ -8,7 +8,7 @@ import type {
 
 // The version of the wire between an app and its session host, newline JSON. Any
 // shape change below that an app and a host both read needs a bump, once one has shipped.
-export const SESSION_HOST_PROTOCOL = 4;
+export const SESSION_HOST_PROTOCOL = 5;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
 export interface HelloMessage {

@@ -120,6 +120,7 @@ function task(change: Partial<ScheduledTask> = {}): ScheduledTask {
     schedule: { kind: 'daily', time: '09:00' },
     controls: { mode: 'plan' },
     paused: false,
+    attended: false,
     updatedAt: TODAY_10,
     ...change,
   };
@@ -593,6 +594,25 @@ describe('schedulingMainPart', () => {
     expect(part.loginStart.calls).toEqual([true]);
     expect(part.messages()).toContain('queued 1 runs');
   });
+
+  it.each<{
+    attended: boolean;
+    headless: boolean;
+    env: Readonly<Record<string, string>>;
+  }>([
+    { attended: true, headless: false, env: {} },
+    { attended: false, headless: true, env: OFFLINE_ENV },
+  ])(
+    'queueRuns_AttendedTask_PreparesHeadlessOffAndNeedsClient: attended $attended',
+    async ({ attended, headless, env }) => {
+      const part = startPart({ tasks: [task({ attended })] });
+      await settle();
+
+      expect(part.prepares).toMatchObject([{ request: { headless } }]);
+      expect(part.prepares[0]?.env).toEqual(env);
+      expect(part.lastPending()?.[0]?.needsClient).toBe(attended);
+    },
+  );
 
   it('start_HostRanWhileClosed_RecordsBeforeTheFirstPlan', async () => {
     const part = startPart({

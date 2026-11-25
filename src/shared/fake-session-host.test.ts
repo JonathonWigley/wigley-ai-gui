@@ -43,6 +43,7 @@ function pendingSpawn(id: string, at: number): PendingSpawn {
     spawn: spawnRequest(id),
     record: { task: id },
     skipWhileBusy: null,
+    needsClient: false,
   };
 }
 

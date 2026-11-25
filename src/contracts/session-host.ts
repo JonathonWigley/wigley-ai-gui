@@ -77,12 +77,14 @@ export interface HostedExit {
 }
 // A spawn the host starts at `at` (epoch ms; at or before now starts at once). `record` is the app's JSON, handed back
 // untouched on the run. `skipWhileBusy` is a hosted process id: when that process runs and its idle rule reads it
-// busy at `at`, the host skips the spawn and records a skipped run.
+// busy at `at`, the host skips the spawn and records a skipped run. With `needsClient`, an entry that comes due while no
+// app is connected leaves the table with no run recorded; an entry read without it reads as false.
 export interface PendingSpawn {
   at: number;
   spawn: HostedSpawn;
   record: unknown;
   skipWhileBusy: string | null;
+  needsClient: boolean;
 }
 // Frozen: never change this shape; a newer host imports an older host's `runsFile`. A run the host started or skipped
 // from a pending entry. `id` is the entry's `spawn.id`; `startedAt` is when the host spawned or skipped it; `exit` is

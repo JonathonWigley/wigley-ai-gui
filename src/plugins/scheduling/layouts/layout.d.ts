@@ -60,7 +60,8 @@ export interface NoticeInput {
   tone: 'neutral' | 'warning' | 'error';
 }
 // The selected task. `project` is the folder with the home folder as `~`, or the pool project's name; `next` as in
-// `TaskRowInput`; `controls` one entry per harness control the task sets, labelled as the harness labels it.
+// `TaskRowInput`; `controls` one entry per harness control the task sets, labelled as the harness labels it;
+// `attended` true when each run starts with headless off, only while the app is open.
 export interface TaskDetailInput {
   name: string;
   project: string;
@@ -70,6 +71,7 @@ export interface TaskDetailInput {
   controls: { label: string; value: string }[];
   prompt: string;
   paused: boolean;
+  attended: boolean;
 }
 // One run, newest first. `when` is the run's planned time as local `YYYY-MM-DD HH:MM`; `text` reads `Running`,
 // `Finished`, `Skipped, previous run still going` or `Failed to start: <reason>`; `linked` is true while the run's row

@@ -39,13 +39,14 @@ const NEW_TASK_TIME = '09:00';
 export type SchedulesFocus = 'list' | 'detail' | 'editor';
 
 // The editor's rows as text: `profile` a profile name, `controls` each harness control's value by id, `''` for
-// Default.
+// Default, `attended` `true` or `false`.
 export interface EditorFields {
   name: string;
   project: string;
   profile: string;
   schedule: ScheduleFields;
   controls: Readonly<Record<string, string>>;
+  attended: string;
   prompt: string;
 }
 
@@ -132,6 +133,11 @@ const DAY_NAMES = [
 ];
 
 const CONTROL_FIELD = 'control:';
+
+const ATTENDED_CHOICES: readonly { label: string; value: string }[] = [
+  { label: 'No', value: 'false' },
+  { label: 'Yes', value: 'true' },
+];
 
 export function emptySchedulingState(): SchedulingState {
   return {
@@ -372,6 +378,7 @@ export function taskDetailInput(
     controls,
     prompt: task.prompt,
     paused: task.paused,
+    attended: task.attended,
   };
 }
 
@@ -412,7 +419,8 @@ export function confirmBody(confirm: SchedulesConfirm): string {
 
 // ── The editor ────────────────────────────────────────────────────────────
 
-// A new task's editor: empty name, project and prompt, the first profile, `Daily` at 09:00, every control Default.
+// A new task's editor: empty name, project and prompt, the first profile, `Daily` at 09:00, every control Default,
+// not attended.
 export function newTaskEditor(
   choices: EditorChoices,
   opener: TaskEditor['opener'],
@@ -425,6 +433,7 @@ export function newTaskEditor(
     controls: Object.fromEntries(
       choices.controls.map((control) => [control.id, '']),
     ),
+    attended: 'false',
     prompt: '',
   };
   return {
@@ -462,6 +471,7 @@ export function taskEditor(
         task.controls[control.id] ?? '',
       ]),
     ),
+    attended: String(task.attended),
     prompt: task.prompt,
   };
   return {
@@ -487,7 +497,7 @@ export function editorHeading(editor: TaskEditor): string {
 }
 
 // The editor's rows in order: Name, Project, Profile, Schedule, the schedule kind's rows, one per harness control,
-// Prompt.
+// Attended, Prompt.
 export function editorRows(editor: TaskEditor): EditorRow[] {
   const { fields, choices } = editor;
   const schedule = fields.schedule;
@@ -519,6 +529,10 @@ export function editorRows(editor: TaskEditor): EditorRow[] {
         value: shown?.label ?? value,
       };
     }),
+    {
+      ...choiceRow('attended', 'Attended', fields.attended, ATTENDED_CHOICES),
+      value: fields.attended === 'true' ? 'Yes' : 'No',
+    },
     { ...boxRow('prompt', 'Prompt', fields.prompt, null), kind: 'multiline' },
   ];
 }
@@ -597,6 +611,7 @@ function fieldsWith(
     case 'name':
     case 'project':
     case 'profile':
+    case 'attended':
     case 'prompt':
       return { ...fields, [field]: value };
     case 'schedule':
@@ -657,6 +672,7 @@ export function draftOf(editor: TaskEditor): TaskDraft | string {
       Object.entries(fields.controls).filter(([, value]) => value !== ''),
     ),
     paused: editor.paused,
+    attended: fields.attended === 'true',
   };
 }
 

@@ -22,7 +22,7 @@ session under it.
 
 The host also starts the runs the app queues for later, so a scheduled task fires while the app is quit
 (`docs/features/scheduled-tasks/design.md`). It keeps a pending queue of deferred spawns and a runs record of what it
-started from that queue, persisted in `pending-v4.json` and `runs-v4.json` in its folder. It still knows no harness
+started from that queue, persisted in `pending-v5.json` and `runs-v5.json` in its folder. It still knows no harness
 and no MCP: every harness fact a queued run needs arrives in its spawn.
 
 ## Vocabulary
@@ -51,7 +51,8 @@ and no MCP: every harness fact a queued run needs arrives in its spawn.
  quit / install-app ──▶ app disconnects; host keeps every process running
  chat switched off live ──▶ chat's stop detaches its processes as a quit does; the app stays connected and the host keeps them
  process turns idle while no app is connected ──▶ idle timer (chat.keepIdleMinutes) ──▶ host ends the process
- pending entry's `at` comes ──▶ host spawns it, or skips it while its task's last run is busy ──▶ runStarted to every app
+ pending entry's `at` comes ──▶ host drops it when it needs an app and none is connected (no run)
+                            ──▶ else spawns it, or skips it while its task's last run is busy ──▶ runStarted to every app
  host has no process, no pending entry, no run and no app ──▶ host exits
  host dies ──▶ rows rest; next host ends what its record left ──▶ only then serves a spawn
 ```
@@ -169,7 +170,8 @@ run needs — args, carried env, unset names, opening stdin lines, idle rule —
 harness.
 
 - **`setPending`** replaces every pending entry the app sent before with the list it carries. An entry is
-  `{ at, spawn, record, skipWhileBusy }`: `at` in epoch ms, `record` the app's JSON, handed back untouched on the run.
+  `{ at, spawn, record, skipWhileBusy, needsClient }`: `at` in epoch ms, `record` the app's JSON, handed back
+  untouched on the run; an entry read without `needsClient` reads it as false.
   The client keeps the last list, less each entry a `runStarted` or `forgetRuns` named, and sends it again on each
   connect, once every older host has served its `drain` (§ Older hosts), so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
   scheduling plugin reads `listRuns` again.
@@ -181,6 +183,10 @@ harness.
 - **The skip rule.** `skipWhileBusy` names a hosted process id, or null. At `at`, when that process runs and its idle
   rule reads it busy, the host skips the spawn and records a run with `skipped: true` and `exit` null. An idle
   process that stays alive does not block the entry.
+- **The drop rule.** An entry with `needsClient` true that comes due while no app is connected leaves the table with no
+  run recorded and no `runStarted`; the host logs `pending <id>: dropped, no app connected` and then checks its exit
+  rule, so a host left with nothing exits. It is checked before the skip rule. The scheduling plugin sets it on an
+  attended task's entry, whose missed time the planner catches up at the app's next start.
 - **A run** is `{ id, record, startedAt, skipped, exit }`: `id` is the entry's `spawn.id`, `startedAt` when the host
   spawned or skipped it, `exit` null while it runs and filled when it closes. A spawn that fails is a run whose `exit`
   holds `error`. A run with `exit` null that a starting host loads, or imports from an older file, is recorded as
@@ -231,6 +237,7 @@ any older one fired.
   protocol version.
 - `setPending`, `listRuns`, `forgetRuns`, and the pushed `runStarted` — the pending queue (§ Pending runs), since
   protocol 4. The client sends its pending list again on each connect.
+- `needsClient` on a pending entry, and its drop rule (§ Pending runs) — since protocol 5.
 
 Each hosted process's OS pid reaches the app: `subscribe`'s reply carries `pid` (null when it has none), and the host
 sends the connection that spawned a process `{ type: 'spawned', id, pid }` once the OS reports it (both since

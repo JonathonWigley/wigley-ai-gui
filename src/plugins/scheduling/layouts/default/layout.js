@@ -126,6 +126,7 @@ const layout = {
     for (const control of input.controls) {
       detailRow(rows, control.label, control.value, kit);
     }
+    detailRow(rows, 'Attended', input.attended ? 'Yes' : 'No', kit);
     const prompt = kit.el(rows, 'div', 'scheduling-detail-row');
     kit.el(prompt, 'span', 'scheduling-detail-label', 'Prompt');
     kit.el(prompt, 'pre', 'scheduling-prompt', input.prompt);

@@ -27,6 +27,7 @@ function view(
       schedule: DAILY_AT_NINE,
       controls: {},
       paused: false,
+      attended: false,
       updatedAt: NOW,
       ...change,
     },

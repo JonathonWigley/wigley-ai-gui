@@ -31,6 +31,10 @@ export interface PendingQueueDeps {
   isBusy(id: string): boolean;
   // Called once for each run the queue starts or skips, after its record is saved.
   runStarted(run: HostedRun): void;
+  // Whether an app is connected, read as an entry with `needsClient` comes due.
+  hasClient(): boolean;
+  // Called once after a pass over the due entries that dropped at least one, since a drop can empty the queue.
+  entriesDropped(): void;
 }
 
 export interface PendingQueue {
@@ -40,7 +44,8 @@ export interface PendingQueue {
   // Adds the records of every older protocol's runs file in the folder that this record lacks, ending each one still
   // running, saves, and deletes the older file (Decisions, Import).
   importOlder(): void;
-  // Arms the timer and starts each entry already due. Before `start`, nothing spawns.
+  // Arms the timer and starts each entry already due, dropping one with `needsClient` while no app is connected.
+  // Before `start`, nothing spawns.
   start(): void;
   setPending(entries: readonly PendingSpawn[]): void;
   runs(): HostedRun[]; // oldest first
@@ -212,10 +217,14 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
     timer = timers.set(startDueEntries, Math.min(delay, PENDING_TICK_MS));
   }
 
-  // Removes `entry` from the table and records its run before any spawn, so a refusal that closes at once finds it.
-  function recordRun(entry: PendingSpawn): HostedRun {
+  function removeEntry(entry: PendingSpawn) {
     pending = pending.filter((candidate) => candidate !== entry);
     savePending();
+  }
+
+  // Removes `entry` from the table and records its run before any spawn, so a refusal that closes at once finds it.
+  function recordRun(entry: PendingSpawn): HostedRun {
+    removeEntry(entry);
     const skipped =
       entry.skipWhileBusy !== null && deps.isBusy(entry.skipWhileBusy);
     const run: HostedRun = {
@@ -269,16 +278,32 @@ export function createPendingQueue(deps: PendingQueueDeps): PendingQueue {
     }
   }
 
+  // Leaves `entry` with no run record and no `runStarted`, so the app plans it again as a missed run.
+  function dropEntry(entry: PendingSpawn) {
+    removeEntry(entry);
+    diagnostics.append(`pending ${entry.spawn.id}: dropped, no app connected`);
+  }
+
   function startDueEntries() {
     timer = null;
     const now = clock.now();
     const due = pending
       .filter(({ at }) => at <= now)
       .sort((a, b) => a.at - b.at);
+    let hasDropped = false;
     for (const entry of due) {
-      fireEntry(entry);
+      const waitsForAnApp = entry.needsClient === true && !deps.hasClient();
+      if (waitsForAnApp) {
+        dropEntry(entry);
+        hasDropped = true;
+      } else {
+        fireEntry(entry);
+      }
     }
     armTimer();
+    if (hasDropped) {
+      deps.entriesDropped();
+    }
   }
 
   function importOlder() {

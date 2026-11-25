@@ -46,6 +46,7 @@ export function demoTaskViews({
     schedule,
     controls: {},
     paused,
+    attended: false,
     updatedAt: now,
   });
   const viewOf = (

@@ -44,6 +44,7 @@ function dailyTask(change: Partial<ScheduledTask> = {}): ScheduledTask {
     schedule: { kind: 'daily', time: '09:00' },
     controls: {},
     paused: false,
+    attended: false,
     updatedAt: YESTERDAY_10,
     ...change,
   };

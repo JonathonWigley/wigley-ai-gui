@@ -12,6 +12,7 @@ import {
   DISCARD_BODY,
   confirmBody,
   draftOf,
+  editorRows,
   emptyReason,
   emptySchedulingState,
   historyRowInput,
@@ -22,6 +23,7 @@ import {
   type SchedulesState,
   schedulesReducer,
   type TaskEditor,
+  taskDetailInput,
   taskEditor,
   taskRowInput,
 } from './schedules-state';
@@ -66,6 +68,7 @@ function task(changes: Partial<ScheduledTask> = {}): ScheduledTask {
     schedule: { kind: 'daily', time: '09:00' },
     controls: {},
     paused: false,
+    attended: false,
     updatedAt: 0,
     ...changes,
   };
@@ -216,9 +219,57 @@ describe('newTaskEditor', () => {
         line: '',
       },
       controls: { model: '' },
+      attended: 'false',
       prompt: '',
     });
   });
+});
+
+describe('attended', () => {
+  it.each([true, false])('taskDetailInput_Attended: %s', (attended) => {
+    const tilde = (path: string) => path;
+
+    const input = taskDetailInput(view({ attended }), true, CHOICES, tilde);
+
+    expect(input.attended).toBe(attended);
+  });
+
+  it.each<{ name: string; editor: () => TaskEditor; shown: string }>([
+    { name: 'a new task opens on No', editor: validEditor, shown: 'No' },
+    {
+      name: 'Yes picked',
+      editor: () => edited('attended', 'true'),
+      shown: 'Yes',
+    },
+    {
+      name: 'an attended task opens on Yes',
+      editor: () => taskEditor(view({ attended: true }), CHOICES, 'detail'),
+      shown: 'Yes',
+    },
+    {
+      name: 'No picked on an attended task',
+      editor: () =>
+        reduce([{ type: 'fieldChanged', field: 'attended', value: 'false' }], {
+          ...initialSchedulesState(),
+          editor: taskEditor(view({ attended: true }), CHOICES, 'detail'),
+        }).editor!,
+      shown: 'No',
+    },
+  ])(
+    'editorRows_AttendedRow_RoundTripsToTheDraft: $name',
+    ({ editor, shown }) => {
+      const opened = editor();
+      const rows = editorRows(opened);
+
+      expect(rows.map(({ field }) => field).slice(-3)).toEqual([
+        'control:model',
+        'attended',
+        'prompt',
+      ]);
+      expect(rows.find(({ field }) => field === 'attended')?.value).toBe(shown);
+      expect(draftOf(opened)).toMatchObject({ attended: shown === 'Yes' });
+    },
+  );
 });
 
 describe('the editor across a state change', () => {

@@ -344,7 +344,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         ...target,
         profile: task.profile,
         message: { text: task.prompt, images: [] },
-        headless: true,
+        headless: !task.attended,
         controls: task.controls,
       };
     };
@@ -405,9 +405,10 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
         let launch = prepares.get(key) ?? kept.get(key);
         if (launch === undefined) {
           try {
+            // With no offline env, an attended run's relay never answers a call from `offline.json`.
             launch = await chat.prepareLaunch(
               launchRequest(task),
-              sessions.offlineEnv(),
+              task.attended ? {} : sessions.offlineEnv(),
             );
           } catch (error) {
             prepareFailed(task, run, errorText(error), now, queue);
@@ -426,6 +427,7 @@ export const schedulingMainPart: MainPart<typeof schedulingManifest> = {
           spawn: launch.spawn,
           record,
           skipWhileBusy: run.skipWhileBusy,
+          needsClient: task.attended,
         });
       }
       return queue;

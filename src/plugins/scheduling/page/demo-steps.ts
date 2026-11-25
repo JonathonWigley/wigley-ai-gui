@@ -28,7 +28,7 @@ export function registerDemoSteps(
     order: 50,
     title: 'Scheduled tasks',
     caption:
-      'Scheduled tasks: agent prompts that run on a schedule as new headless sessions.',
+      'Scheduled tasks: agent prompts that run on a schedule as new sessions, headless unless a task is attended.',
     files: [
       'src/plugins/scheduling/page/schedules-view.ts',
       'src/plugins/scheduling/page/run-rows.ts',

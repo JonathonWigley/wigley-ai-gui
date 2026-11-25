@@ -9,6 +9,7 @@ changes for the user.
 ### Added
 
 - `docs_index.py loads-check <session id>` lists each file the session's folder loads at launch that a main, subagent or post-compaction instructions load left out.
+- A scheduled task can be attended: its runs start with headless off, so a form waits for you, and run only while the app is open; a time missed while it is closed runs when the app next opens.
 
 ## 1.10.0 — 2026-11-25
 

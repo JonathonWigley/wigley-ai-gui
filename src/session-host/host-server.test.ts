@@ -221,12 +221,17 @@ async function spawned(
   return running.spawned[before];
 }
 
-function pendingEntry(id: string, at: number): PendingSpawn {
+function pendingEntry(
+  id: string,
+  at: number,
+  needsClient = false,
+): PendingSpawn {
   return {
     at,
     spawn: spawnRequest(id),
     record: { task: id },
     skipWhileBusy: null,
+    needsClient,
   };
 }
 
@@ -706,6 +711,58 @@ describe('host queue', () => {
       { ...hostedRun('b'), exit: null },
     ]);
   });
+
+  it('hostQueue_NeedsClient: a fresh connection sends an attended entry due now', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+
+    connection.send({
+      type: 'setPending',
+      entries: [pendingEntry('attended', 0, true)],
+    });
+
+    await vi.waitFor(() =>
+      expect(connection.received).toContainEqual({
+        type: 'runStarted',
+        run: { ...hostedRun('attended'), exit: null },
+      }),
+    );
+    expect(running.spawned).toHaveLength(1);
+  });
+
+  it.each<{ label: string; later: PendingSpawn[]; exits: number[] }>([
+    { label: 'alone', later: [], exits: [0] },
+    {
+      label: 'beside a later unattended entry',
+      later: [pendingEntry('later', 1e12)],
+      exits: [],
+    },
+  ])(
+    'hostQueue_NeedsClient: an attended entry comes due after the app left, $label',
+    async ({ later, exits }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
+      connection.send({
+        type: 'setPending',
+        entries: [pendingEntry('attended', 10, true), ...later],
+      });
+      await settled(connection);
+      connection.socket.destroy();
+      await vi.waitFor(() => expect(hostSockets[0].destroyed).toBe(true));
+
+      running.time.advanceTo(10);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(running.spawned).toEqual([]);
+      expect(
+        readFileSync(
+          path.join(running.folder, hostLogFile(SESSION_HOST_PROTOCOL)),
+          'utf8',
+        ),
+      ).toContain('pending attended: dropped, no app connected');
+      await vi.waitFor(() => expect(running.exits).toEqual(exits));
+    },
+  );
 
   it.each([
     { label: 'before a listRuns reply', sendsPending: false },
