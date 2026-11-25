@@ -13,6 +13,7 @@ changes for the user.
 
 ### Fixed
 
+- A restored retro row whose process ended before its history was read no longer closes as start-failed.
 - A retro whose session ends before its first turn, or a restored retro row that never ran, closes with a log line naming the lost retro, and the next queued retro starts; before, the queue waited forever or the row read finished.
 
 ## 1.10.0 — 2026-11-25

@@ -920,6 +920,29 @@ describe('autoRetroMainPart', () => {
     expect(part.closes).toEqual([['retro-9', 'finished']]);
   });
 
+  // Breaks: a restored row whose process ended before its history was read reading lost, closing it start-failed.
+  it('restart_ProcessEndedWhileHistoryIsUnread_ClosesFinishedOnceRead', async () => {
+    const part = await restartWithHistoryHeld();
+    await part.harness.restart();
+    await settled();
+    part.sessions.set('retro-9', restingInfo('retro-9'));
+    part.harness.emit(
+      'chat.processEnded',
+      processEndedEvent('retro-9', 'retro-host-9'),
+    );
+    await settled();
+
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([]);
+
+    part.settleHistory('retro-9');
+    await settled();
+    part.harness.advance(SETTLE_MS);
+
+    expect(part.closes).toEqual([['retro-9', 'finished']]);
+  });
+
   // Breaks: rule 4 applied to a live retro still attaching while chat's restore runs.
   it('restart_RestoredRowBeforeRestoreEnds_IsNotClosed', async () => {
     const part = await restartWithHistoryHeld();

@@ -4239,7 +4239,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   async function loadHistorySettled(sessionId: string): Promise<void> {
     const session = held.get(sessionId);
-    if (session === undefined || !session.historyPending) {
+    if (session === undefined) {
+      return;
+    }
+    if (!session.historyPending) {
+      // Another caller's read may still be running: the export resolves once its entries land.
+      await session.historyRead;
       return;
     }
     // A row waiting on its harness, or with a missing harness or profile, reads

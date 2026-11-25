@@ -78,13 +78,15 @@ class MissingLoadsTests(unittest.TestCase):
             ("nested workflow subagent", main_ok, {"workflows/run-1/agent-a8.jsonl": [_instructions(u)]}, {},
              [(a, "subagent:a8")]),
         ]
-        launch = [_entry(a), _entry(u), _entry(self.hook, kind="hook")]
+        launch = [_entry(a), _entry(u)]
+        # Only this row's launch list holds a hook entry, which no transcript row loads and no row reports missing.
+        launch_extras = {"unloaded kind": [_entry(self.hook, kind="hook")]}
 
         for case, main_rows, subagents, metas, expected in cases:
             with self.subTest(case):
                 self._write_session(main_rows, subagents, metas)
 
-                missing = missing_loads(check_points(self.transcript), launch)
+                missing = missing_loads(check_points(self.transcript), launch + launch_extras.get(case, []))
 
                 self.assertEqual(missing, [{"id": str(path), "path": str(path), "where": where}
                                            for path, where in expected])

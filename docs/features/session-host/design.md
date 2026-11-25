@@ -218,7 +218,7 @@ pseudo-terminal behind the pty contract (`src/contracts/pty.ts`, adapter `src/se
   left. `stopAll` and a drive run's or self-test's teardown end shells with the processes.
 - **Drain.** `drain` ends every shell at once: a newer app cannot reach an older host's shells, since it speaks only
   its own protocol. So a shell survives an app restart, but not an update that changes the host protocol.
-- **Messages**, since protocol 5: `termSpawn`, `termWrite`, `termResize`, `termKill`, `termAttach` (its reply carries
+- **Messages**, since protocol 6: `termSpawn`, `termWrite`, `termResize`, `termKill`, `termAttach` (its reply carries
   the replay), `termDetach`, `termList`, and the pushed `termData` and `termClosed`.
 
 ## Protocol

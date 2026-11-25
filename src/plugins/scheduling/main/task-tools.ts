@@ -78,7 +78,7 @@ const FIELD_SCHEMAS = {
   attended: {
     type: 'boolean',
     description:
-      'true: each run starts with headless off, so a forms round waits for the user, and runs only while the Auri app is open; a time missed while it is closed runs when the app next opens. false (the default): each run is headless.',
+      'true: each run starts with headless off, so a form waits for the user, and runs only while the Auri app is open; a time missed while it is closed runs when the app next opens. false (the default): each run is headless.',
   },
 };
 

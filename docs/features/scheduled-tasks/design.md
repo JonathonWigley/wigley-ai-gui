@@ -211,14 +211,15 @@ variable a run needs beyond these goes in the Claude profile's settings `env`, a
 
 An attended run starts only while the app is open. Its pending entry carries `needsClient: true`, and the host drops
 an entry that comes due while no app is connected, recording no run (session-host design § Pending runs). The
-dropped time has no history entry, so the planner catches it up at the app's next start, at once, with the app open;
-an edit of the task before then moves the catch-up window past it, as for any missed run. An attended run is also
+dropped time has no history entry, so the planner catches it up at the app's next start, at once, with the app open.
+An app still running that reconnects to the host resends its pending list, so the host fires the dropped entry then,
+under the same spawn id; the host's `setPending` drops an id that has a run record, so it runs once. An edit of the task before then moves the catch-up window past it, as for any missed run. An attended run is also
 prepared without the offline env, so its relay has no offline mode and works as a live session's: a call waiting when
 the user quits mid-run is held for the reconnect, then the relay starts the app and sends it again, so a waiting form
 reopens; when the app cannot start, the call answers that it did not run, never with a pick. Nothing below applies
 to it.
 
-An unattended run starts headless: a forms round answers itself with its recommendations, and the session's
+An unattended run starts headless: a form answers itself with its recommendations, and the session's
 instructions carry `HEADLESS_NOTE`. While the app is open, a permission prompt that the task's mode does not allow waits, with the
 row marked needing you. While the app is closed, the relay answers each call from the table the app writes,
 `offline.json` beside `tools.json` in the endpoint folder (forms README § The relay, in wigley-ai-marketplace). Each

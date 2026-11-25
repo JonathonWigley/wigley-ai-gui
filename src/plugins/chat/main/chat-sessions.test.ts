@@ -4800,6 +4800,32 @@ describe('createChatSessions saved sessions', () => {
     },
   );
 
+  // Breaks: the export resolving while another caller's read is still in flight, before its entries land.
+  it('loadHistory_ReadAlreadyRunning_ResolvesAfterTheEntriesLand', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.chat.restore(
+      {
+        sessions: [record(hostId, { sent: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+    await flush();
+
+    const firstRead = test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
+    const idsAfterSecond = test.chat
+      .sessions()[0]
+      .entries.map((entry) => entry.id);
+    await firstRead;
+
+    expect(idsAfterSecond).toEqual([
+      `history:${PAST_ONE.sessionId}-user`,
+      `history:${PAST_ONE.sessionId}-assistant`,
+    ]);
+  });
+
   it('loadHistory_ProfileMissing_ReadsOnceItIsBack', async () => {
     const test = setUp();
     test.chat.restore(

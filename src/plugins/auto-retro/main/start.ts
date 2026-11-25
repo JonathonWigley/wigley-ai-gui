@@ -36,6 +36,7 @@ import { createQueueFile } from './queue-file';
 import {
   DEFAULT_SETTLE_SECONDS,
   RESTORE_WAIT_MS,
+  type RetroRowState,
   retroRowState,
 } from './retro-done';
 import {
@@ -92,8 +93,9 @@ const EVERY_ENDING: RetroPolicy['on'] = ['close', 'clear'];
 // and closes it `settleSeconds` after it reads done (`finished`) or lost, resting with no first turn run
 // (`start-failed`). With no pick it queues nothing and logs why once per pick; a queued retro waits at the head until
 // a pick returns. Every event, launch result and change of pick applies in one serial chain that starts once the queue
-// is loaded and the strategies are read. Writes the retro rows and the queued count to `auto-retro.state`. A `queue.json` it cannot read is never written during that start. In the self-test it
-// registers its layouts and reader and queues nothing.
+// is loaded and the strategies are read. Writes the retro rows and the queued count to `auto-retro.state`. A
+// `queue.json` it cannot read is never written during that start. In the self-test it registers its layouts and
+// reader and queues nothing.
 // A demo session (`ephemeral` on chat's event) queues no retro. While the demo step is entered, the slot shows its
 // row after the real rows and its queued count in place of the real one; the queue and `queue.json` never hold it.
 export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
@@ -159,6 +161,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const endedRows = new Set<string>();
     // Restored row ids whose history was read once chat's restore ended, kept until the row leaves the side bar.
     const restoredRows = new Set<string>();
+    // Restored row ids whose history read is pending, from the claim to the read's end; such a row reads busy, since
+    // its entries cannot yet say whether its retro ran.
+    const pendingHistoryRows = new Set<string>();
     // Each claimed row in its settle wait, to its timer.
     const settles = new Map<string, number>();
 
@@ -206,12 +211,17 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       startedRows.has(rowId) ||
       (restoredRows.has(rowId) && entriesSlot.get(rowId).some(isAgentEntry));
 
-    const rowState = (rowId: string, info: ChatSessionInfo | undefined) =>
-      retroRowState(info, {
-        hasStarted: hasStarted(rowId),
-        hasEnded: endedRows.has(rowId),
-        isRestored: restoredRows.has(rowId),
-      });
+    const rowState = (
+      rowId: string,
+      info: ChatSessionInfo | undefined,
+    ): RetroRowState =>
+      pendingHistoryRows.has(rowId)
+        ? 'busy'
+        : retroRowState(info, {
+            hasStarted: hasStarted(rowId),
+            hasEnded: endedRows.has(rowId),
+            isRestored: restoredRows.has(rowId),
+          });
 
     const closeIfStillSettled = (rowId: string) => {
       settles.delete(rowId);
@@ -269,6 +279,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
 
     // Reads a claimed restored row again once its history is read: its entries now say whether its retro ran.
     const historyRead = (rowId: string) => {
+      pendingHistoryRows.delete(rowId);
       if (!rows.includes(rowId)) {
         return;
       }
@@ -283,6 +294,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         return;
       }
       rows.push(rowId);
+      pendingHistoryRows.add(rowId);
       publish();
       checkDone(rowId, sessionSlot.get(rowId));
       chat.loadHistory(rowId).then(
@@ -299,6 +311,7 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       startedRows.delete(rowId);
       endedRows.delete(rowId);
       restoredRows.delete(rowId);
+      pendingHistoryRows.delete(rowId);
       clearSettle(rowId);
       const index = rows.indexOf(rowId);
       if (index !== -1) {
@@ -470,8 +483,8 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       }
       // Claims a retro row present at start or restored before chat's restore ends — one `launched` holds, or one
       // the queue lost that opens with an installed strategy's command. A row that joins later, a resumed or
-      // hand-started retro included, is left alone; a launch claims its own row in `launched`. A row chat restores joins
-      // before its titles are set, so its first message is read at its `sessionOpened` instead.
+      // hand-started retro included, is left alone; a launch claims its own row in `launched`. A row chat restores
+      // joins before its titles are set, so its first message is read at its `sessionOpened` instead.
       followRows(rowsSlot, {
         added(row) {
           if (!isRestoring) {
