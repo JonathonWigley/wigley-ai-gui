@@ -844,6 +844,31 @@ describe('forms main part', () => {
     await harness.stop();
   });
 
+  // Breaks if start stops clearing the keys an earlier start left: that start's
+  // writer no longer writes, so nothing else would delete them and the page
+  // would draw a verdict for a round that is gone.
+  it('confirmsSlot_OpenConfirmAcrossARestart_StartClearsItsKey', async () => {
+    const { harness, sessions, forms } = startWithToolSessions();
+    sessions.connect('app-a');
+    const confirms = harness.state.read(formsConfirmsSlot, 'test');
+    const confirmed = forms.confirm(
+      'app-a',
+      CONFIRM_REQUEST,
+      new AbortController().signal,
+      null,
+    );
+    await flush();
+    expect(confirms.all().size).toBe(1);
+
+    await harness.stop();
+    await Promise.allSettled([confirmed]);
+    expect(confirms.all().size).toBe(1);
+
+    await harness.restart();
+    expect(confirms.all().size).toBe(0);
+    await harness.stop();
+  });
+
   it('confirmsSlot_NoFormsSession_PublishesNothing', async () => {
     const { harness, forms } = startWithToolSessions();
 
