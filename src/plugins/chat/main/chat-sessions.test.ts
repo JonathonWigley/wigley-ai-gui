@@ -36,6 +36,7 @@ import {
   fakeUsageEvent,
 } from '../../../shared/fake-agent-harness';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -76,6 +77,7 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
+  HOST_LIST_RETRY_MS,
   PERMISSION_CANCELLED_REASON,
   UNATTENDED_REASON,
 } from './chat-sessions';
@@ -447,6 +449,7 @@ function setUp(
   );
   const harnesses = options.harnesses ?? [harness];
   const sessionHost = createFakeSessionHost(clock);
+  const retryTimers = fakeTimers();
   const data = createMemoryFiles();
   const logged: string[] = [];
   const log = (message: string) => logged.push(message);
@@ -603,6 +606,7 @@ function setUp(
     },
     log,
     clock,
+    timers: retryTimers.timers,
     sessionHost: {
       list: () => (options.sessionHost ?? sessionHost).list(),
       onConnected: (listener) => sessionHost.onConnected(listener),
@@ -639,6 +643,8 @@ function setUp(
     setNow: (now: number) => {
       clockNow = now;
     },
+    // Chat's timers: the history retry after a refused host list.
+    retryTimers,
     hostIdChanges,
     ownedEnds: () => ownedEnds,
     keptRows,
@@ -4889,6 +4895,18 @@ describe('createChatSessions saved sessions', () => {
         test.sessionHost.failList(null);
         test.sessionHost.setList([hostedP1({ running: false })]);
         test.sessionHost.connectAgain();
+      },
+    },
+    {
+      given: 'the session host let its list time out on a link that stays up',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord({ sent: true }), null);
+        test.sessionHost.failList('the session host did not answer its list');
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.sessionHost.failList(null);
+        test.sessionHost.setList([hostedP1({ running: false })]);
+        test.retryTimers.runAfter(HOST_LIST_RETRY_MS);
       },
     },
   ])(

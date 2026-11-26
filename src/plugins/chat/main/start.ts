@@ -416,6 +416,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       toolCallers,
       log: services.log,
       clock: services.clock,
+      timers: services.timers,
       randomUuid: services.randomUuid,
       sessionHost: services.sessionHost,
       projects: () => projects,

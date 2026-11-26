@@ -150,7 +150,10 @@ export interface SessionHost {
   forgetRuns(ids: readonly string[]): void;
   // Hears each run the host starts or skips while this app is connected.
   onRunStarted(listener: (run: HostedRun) => void): Disposable;
-  // Hears each time the client connects to a host after its first connect: a new host after a host death, an update
-  // or a login start. Runs the host started while no app was connected reach the app only through `listRuns`.
+  // Hears every connect but the one the client's first connect attempt makes, once each older host has served its
+  // drain: a new host after a host death, an update or a login start, and the host answering after an earlier attempt
+  // failed. A caller whose call was refused for want of a host can wait on it; a reply that timed out on a link that
+  // stays up is followed by no connect. Runs the host started while no app was connected reach the app only through
+  // `listRuns`.
   onConnected(listener: () => void): Disposable;
 }

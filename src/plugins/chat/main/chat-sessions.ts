@@ -16,7 +16,7 @@ import {
   type UserDelivery,
   type UserMessage,
 } from '../../../contracts/agent';
-import type { Clock, RandomUuid } from '../../../contracts/ambient';
+import type { Clock, RandomUuid, Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
@@ -141,13 +141,16 @@ export interface ChatSessionsDeps {
   // Stamps the `at` of the notices chat makes itself, and times each
   // session's active time.
   clock: Clock;
+  // Times the retry of a history read the host's list refused.
+  timers: Timers;
   // Mints a prepared launch's host session and row ids: the run starts
   // later, without the app, so no harness reports an id first.
   randomUuid: RandomUuid;
   // Lists the host's processes before a resume, and before a send or history
-  // read on an unheld row. Each connect after the first sends every waiting
+  // read on an unheld row. Each `onConnected` sends every waiting
   // `loadHistoryWhenReadable` call round again, since a list refused before
-  // it may answer now.
+  // it may answer now; a refusal also retries after `HOST_LIST_RETRY_MS`,
+  // since a reply that timed out on a link that stays up brings no connect.
   sessionHost: Pick<SessionHost, 'list' | 'onConnected'>;
 }
 
@@ -709,6 +712,10 @@ type HistoryTry = HistoryLoad | { kind: 'pending' };
 // in another app version, whose end this app cannot see.
 const RUNS_ELSEWHERE_REASON = 'its process runs in another app version';
 
+// How long a history try the host's list refused waits before the waiting
+// `loadHistoryWhenReadable` calls try again, when no host connect comes first.
+export const HOST_LIST_RETRY_MS = 5_000;
+
 const QUIT_DURING_TURN_TEXT =
   'The app quit during this turn. Your next message resumes this session.';
 
@@ -1074,11 +1081,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // readable; a `loadHistoryWhenReadable` call takes it before each try, so a
   // change that lands while the try runs still sends it round again.
   let historyChance = Promise.withResolvers<void>();
-  // A list the host refused (not started, a reply timeout, a dropped link) may
-  // answer once the host connects again.
+  // A list the host refused (not started, a dropped link) may answer once the
+  // host connects again.
   const hostConnection = deps.sessionHost.onConnected(() =>
     historyMayBeReadable(),
   );
+  // The one timer that wakes the waiting history reads after a refused list,
+  // since a reply timeout on a link that stays up brings no connect; null while
+  // no try saw a refusal since it last fired.
+  let hostListRetry: number | null = null;
   // Records the restore skipped that hold queued or returned messages, saved
   // unchanged so the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
@@ -2919,6 +2930,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     historyChance = Promise.withResolvers<void>();
   }
 
+  // Arms the retry after a refused list unless one is armed or chat stopped.
+  function retryAfterRefusedList() {
+    if (hostListRetry !== null || isDetached) {
+      return;
+    }
+    hostListRetry = deps.timers.set(() => {
+      hostListRetry = null;
+      historyMayBeReadable();
+    }, HOST_LIST_RETRY_MS);
+  }
+
   // Throws `send`'s refusal while the row waits on its harness.
   function refuseWhileWaiting(session: HeldSession) {
     if (session.waiting !== null) {
@@ -4352,8 +4374,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         return { kind: 'unreadable', reason: RUNS_ELSEWHERE_REASON };
       }
       // A refused list, or a guard step that found the row changed while it
-      // listed, tries again at the next wake: a host connect, a clear.
+      // listed, tries again at the next wake: a host connect, a clear, and for
+      // a refused list the retry timer.
       if (!settled.readsHistory) {
+        if (settled.refusal !== null) {
+          retryAfterRefusedList();
+        }
         return { kind: 'pending' };
       }
     }
@@ -4869,6 +4895,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       const lastSave = writeSaved();
       isDetached = true;
       hostConnection.dispose();
+      if (hostListRetry !== null) {
+        deps.timers.clear(hostListRetry);
+        hostListRetry = null;
+      }
       historyMayBeReadable();
       const heldSessions = [...held.values()];
       const heldProcesses = new Set(

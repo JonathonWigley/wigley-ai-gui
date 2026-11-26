@@ -258,7 +258,7 @@ skipped, with no wait, so a subagent's call is never applied as a main agent's.
 ## Adoption
 
 The app learns of a run from the host's `runStarted` push while it is connected, or from `listRuns` when the plugin
-starts and each time the host client connects to a new host (`sessionHost.onConnected`). Each `listRuns` read runs
+starts and each time the host client connects again: a new host, or the host answering after a failed attempt (`sessionHost.onConnected`). Each `listRuns` read runs
 inside `sessions.holdConnects`, so a run's relay hello waits for its row. For each run whose record is a
 `ScheduledRunRecord`:
 

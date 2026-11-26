@@ -20,6 +20,7 @@ changes for the user.
 
 - A restored retro row whose process ended before its history was read no longer closes as start-failed.
 - A restored retro row whose history cannot be read yet (its harness or profile missing, or the session host not yet answering its list) stays open until chat reads it, and closes as soon as it can; one whose history this app can never read (its process runs in another app version) stays open without holding the retro queue, so the next retro starts.
+- A restored row's history waiting on the session host is read once the host answers, also when the host first failed to start or let a list go unanswered; before, it could wait until the host restarted.
 - A retro whose session ends before its first turn, or a restored retro row that never ran, closes with a log line naming the lost retro, and the next queued retro starts; before, the queue waited forever or the row read finished.
 
 ## 1.10.0 — 2026-11-25

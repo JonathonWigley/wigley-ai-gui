@@ -77,6 +77,9 @@ interface ProcessEntry {
 interface ConnectAttempt {
   ended: boolean;
   wake: (() => void) | null; // ends the wait for the next poll
+  // True for the client's first attempt: only its connect tells no `onConnected` listener, since no call was
+  // refused before it.
+  isFirst: boolean;
 }
 
 // Called with the link once connected; with null and the reason when the attempt failed.
@@ -168,7 +171,7 @@ export function createSessionHostClient(
   // The link whose older hosts have served their drain and which got the pending list; `setPending` and `listRuns` go
   // straight to it.
   let queueLink: HostLink | null = null;
-  let connects = 0;
+  let hasAttempted = false;
   const runStartedListeners = new Set<(run: HostedRun) => void>();
   const connectedListeners = new Set<() => void>();
 
@@ -317,8 +320,6 @@ export function createSessionHostClient(
   // The pending list, `listRuns` and `onConnected` wait until each older host has served its drain, so no older host
   // fires a run once this host holds the queue, and no run is read before.
   const adopt = async (started: ConnectAttempt, link: HostLink) => {
-    connects += 1;
-    const isReconnect = connects > 1;
     endAttempt(started);
     current = link;
     link.send({ type: 'setKeepIdle', minutes: keepIdleMinutes });
@@ -336,7 +337,7 @@ export function createSessionHostClient(
       link.send({ type: 'setPending', entries: [...pending] });
     }
     runQueued(waitingForQueue, link, '');
-    if (isReconnect) {
+    if (!started.isFirst) {
       // A copy, so a listener added during the loop is not told this connect.
       // oxlint-disable-next-line unicorn/no-useless-spread
       for (const listener of [...connectedListeners]) {
@@ -374,7 +375,8 @@ export function createSessionHostClient(
 
   const startConnecting = () => {
     if (attempt === null) {
-      attempt = { ended: false, wake: null };
+      attempt = { ended: false, wake: null, isFirst: !hasAttempted };
+      hasAttempted = true;
       void runAttempt(attempt);
     }
   };

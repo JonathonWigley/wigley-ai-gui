@@ -173,7 +173,7 @@ harness.
   `{ at, spawn, record, skipWhileBusy, needsClient }`: `at` in epoch ms, `record` the app's JSON, handed back
   untouched on the run; an entry read without `needsClient` reads it as false.
   The client keeps the last list, less each entry a `runStarted` or `forgetRuns` named, and sends it again on each
-  connect, once every older host has served its `drain` (§ Older hosts), so a new host takes it over and fires no forgotten run again. On each connect after its first, the client tells its `onConnected` listeners, and the
+  connect, once every older host has served its `drain` (§ Older hosts), so a new host takes it over and fires no forgotten run again. On each connect but the one its first connect attempt makes (a new host, or the host answering after a failed attempt), the client tells its `onConnected` listeners, and the
   scheduling plugin reads `listRuns` again.
 - **The timer.** The host starts each entry at `at`; an entry at or before now starts at once. The timer waits at
   most 30 s before it reads the wall clock again, since Node's timers do not advance while a Mac sleeps; an entry
