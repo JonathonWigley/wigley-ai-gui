@@ -1,11 +1,11 @@
-import type { Disposable } from '../contracts/disposable';
+import type { Disposable } from '../../contracts/disposable';
 import type {
   TerminalEmulator,
   TerminalPalette,
   TerminalScreen,
   TerminalScreenOptions,
   TerminalSize,
-} from '../contracts/terminal-emulator';
+} from '../../contracts/terminal-emulator';
 
 export interface FakeTerminalScreenRecord {
   readonly options: TerminalScreenOptions;
@@ -96,13 +96,13 @@ export function createFakeTerminalEmulator(): FakeTerminalEmulator {
         disposed: false,
         size: { ...START_SIZE },
         type: (data) => {
-          for (const listener of [...inputListeners]) {
+          for (const listener of inputListeners) {
             listener(data);
           }
         },
         resizeTo: (size) => {
           record.size = size;
-          for (const listener of [...resizeListeners]) {
+          for (const listener of resizeListeners) {
             listener(size);
           }
         },

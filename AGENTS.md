@@ -107,7 +107,7 @@ src/config/      core commands and scopes, default settings, the core token regi
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
                  theme variables, `plugin-url.ts`: the `wigley-plugin:` URLs of a user plugin's files and the path each
                  serves from, `errorText`, `formatTokens` (`182k`), the fake agent harness, `fake-login-start.ts`: the
-                 login start's test double, `fake-terminal-host.ts`: the `TerminalHost`'s double, the self-test's shells and a drive run's unless started with `--terminals live`, `fake-terminal-emulator.ts`: the `TerminalEmulator`'s test double, `keep-tail.ts`: `keepTail`, the cut of a shell's replay the host, the fake host and terminal main share, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
+                 login start's test double, `fake-terminal-host.ts`: the `TerminalHost`'s double, the self-test's shells and a drive run's unless started with `--terminals live`, `keep-tail.ts`: `keepTail`, the cut of a shell's replay the host, the fake host and terminal main share, `permission-cap.ts`: `capPermission`, which lowers a permission control to a cap over a harness's order, `fake-fuzzy-matcher.test-support.ts`: the fuzzy matcher's test double, `active-time.ts`: the functions over an `ActiveTime`,
                  `platform.ts`: one builder of the `Platform` record per OS,
                  `program-lookup.ts`: the PATH × PATHEXT program search and the `cmd.exe` quoting of a `.cmd` start
                  (pure, so both OSes' rules are tested anywhere),
@@ -177,7 +177,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged,
                  disposes the rest, and puts a copy button in each plain code block, whose click the core's
                  `src/renderer/code-copy-commands.ts` turns into `core.copyCode`; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
-                 frames fake plugin tests open visuals through), `layout-parts.ts`
+                 frames fake plugin tests open visuals through), `fake-terminal-emulator.ts` (the `TerminalEmulator`'s test double), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
                  reader skeleton), `test-layouts.ts` (the test helpers owners share),

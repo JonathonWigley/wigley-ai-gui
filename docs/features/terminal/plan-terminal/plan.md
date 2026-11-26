@@ -406,4 +406,5 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - toggle key-hint anchor: kit.keyHint(element, 'toggle', { label: 'close' }) at the end of the default drawerHeader (main-agent ruling carried out) · group 10
 ### Review rounds
 - Review 1 (pinned 3eddc580): NEEDS FIXES — 0 Critical, 5 Important, 18 Minor, 1 pre-existing. Lead-applied 25c628c0 (prose, None). Fix cycle 1: 3a7f0126..d3e9bb5b — risk Medium (focus timing in the xterm adapter and the adoption stop path in terminal main are lifecycle changes; the rest is tests and a spawn guard) → correctness re-review.
+- Re-review 1 (25c628c0..d3e9bb5b): NEEDS FIXES — 1 Important repeat (row closed during an adoption attach leaves its terminal.output key; stacked on R1#3), 3 Minor. Lead-applied 60356964 (design doc refusal line, no-control-regex comment; None). Repeat goes to the user; R1#18 duplicate already in triage.
 ### Test gate

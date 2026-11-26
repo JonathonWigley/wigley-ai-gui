@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { coreThemeSlot } from '../../../contracts/core-state';
 import type { TerminalExit } from '../../../contracts/terminals';
-import { createFakeTerminalEmulator } from '../../../shared/fake-terminal-emulator';
+import { createFakeTerminalEmulator } from '../../../shared/page/fake-terminal-emulator';
 import { startDrawingPagePart } from '../../../shared/page/layout-host/page-part-harness.test-support';
 import {
   asFake,
