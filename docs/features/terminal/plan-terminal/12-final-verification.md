@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 7 · Depends on: none (`wigley:make` runs it after its test gate)
 Plan: [plan.md](plan.md)
@@ -137,3 +137,5 @@ Windows (ConPTY, PowerShell), and a physical keyboard's Ctrl+backtick on a non-U
 its `Not checked:` line.
 
 ## Proof
+
+Commit c406706a · proof: drive walk of checks 1-13 (fake, live shell, packaged): 3, 6, 5a fixed in c406706a and re-run live (Alt+j order, 160px tab row at 480 high); 6a matches the chat box's switch behaviour (design.md); 12 packaged arm64 prebuild, +x spawn-helper, no hardened runtime, live spawn; 13 self-test terminal group passes, 11 others fail on main too; dropped: Windows, physical non-US keyboard · concerns: self-test 11 failures and chat.start hang after restart reproduce on main: follow-ups fa3b4e1e

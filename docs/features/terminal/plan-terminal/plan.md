@@ -365,7 +365,7 @@ Critical path: 02 → 03 → 06 → 08 → 09 → 10 → 11
 
 ### Wave 7
 - [x] [Doc re-read](11-doc-re-read.md) — after 10
-- [ ] [Final verification](12-final-verification.md)
+- [x] [Final verification](12-final-verification.md)
 
 ## Run log
 
@@ -383,6 +383,7 @@ Review base: 23cbed36e5c4423e609f17f04a9b027a96ead67f
 - 09 · deep · 8da257e4 · diff read: terminalPagePart with toggle/back/restart, readTerminalLook, default drawerHeader layout, page.ts entry after visualPagePart, the three binds after <Leader>bh, keymap.md rows; wave 5 typecheck, oxlint, layers, boundary, styles clean; oxfmt commit 5acfe63b · concerns: <C-`> is a chord in scope any with no key-hint anchor, so the self-test's placement check fails until one is placed (main-agent ruling: task 10 adds it); layouts design.md owner list lacks terminal's drawerHeader (task 10/11); typed for a session with no row reaches addDrawer unchecked; the view's shown closure reads drawer before it is set, safe only because a drawer starts closed
 - 10 · standard · 5ee04d7a · diff read: demo step terminal.drawer (sessions, 200) both halves, self-test script with the four drawer steps, auri:terminal SKILL.md, README/CHANGELOG/AGENTS.md/layouts design rows, follow-up removed; wave 6 typecheck, oxfmt, oxlint, layers, styles, boundary, changelog clean · concerns: self-test step 2 needs focus on the screen after the chord opens the drawer (open focus:true, checked live); toggle key hint lives in the drawer header, present only while the drawer is open; page start.ts top comment rewrapped unevenly
 - 11 · standard · d6d5fb72 · diff read: planned notes gone from both design docs, stale lines fixed against the code; grep plan-terminal finds nothing in both docs and in ai wigley-agents/AGENTS.md (ai commit 36fefed32 on terminal-type-rule-done); oxfmt clean · concerns: Alt+j/k wording follows the code's focus moves, not the plan's 'between chat and drawer'
+- 12 · live (opus-low); fixes hard (opus-medium) · c406706a · drive walk of checks 1-13 (fake, live shell, packaged): 3, 6, 5a fixed in c406706a and re-run live (Alt+j order, 160px tab row at 480 high); 6a matches the chat box's switch behaviour (design.md); 12 packaged arm64 prebuild, +x spawn-helper, no hardened runtime, live spawn; 13 self-test terminal group passes, 11 others fail on main too; dropped: Windows, physical non-US keyboard · concerns: self-test 11 failures and chat.start hang after restart reproduce on main: follow-ups fa3b4e1e
 ### Contract changes
 - session-host-test-doubles: — → also exports terminalRequest(id): TerminalSpawn (/bin/zsh -l, /work, 80×24); fakePty().exit fires once, as node-pty's onExit does · why: tests and stopHost exiting every pty · consumers: none · group 02
 - TerminalScreen and the other emulator contracts: one-line interfaces → one member per line · why: oxfmt printWidth 80; members word for word · consumers: 06, 09 · group 05
