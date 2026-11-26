@@ -48,12 +48,16 @@ export interface ShellsDeps {
 // has a row, and kills the rest; an attach that fails is logged and adoption
 // goes on. A shell adoption did not settle (its attach failed, or the list
 // itself did) is attached by its session's next start, which spawns only when
-// the host holds no shell for the id or that attach fails too. Once the part
-// stopped, adoption attaches no more shells, and a shell attached meanwhile is
-// detached after `detachAll` and killed after `killAll`. `detachAll` leaves
-// every shell running in the host for the next start to adopt; `killAll` ends
-// every shell. After either, every `open`, `restart` and `type` rejects;
-// `write`, `resize` and `kill` do nothing.
+// the host holds no shell for the id or that attach fails too; a `kill` of its
+// session with no live shell in the table attaches it to kill it and delete
+// its `terminal.output` key, and a start meanwhile waits for that end. Once
+// the part stopped, adoption attaches no more shells, and a shell attached
+// meanwhile is detached after `detachAll` and killed after `killAll`.
+// `detachAll` leaves every shell running in the host for the next start to
+// adopt; `killAll` ends every shell, those adoption did not settle included
+// (listing the host again when the first list failed), save one whose attach
+// fails again, which is logged. After either, every `open`, `restart` and
+// `type` rejects; `write`, `resize` and `kill` do nothing.
 export interface Shells {
   open(sessionId: string, cols: number, rows: number): Promise<TerminalOpened>;
   write(sessionId: string, data: string): void;
@@ -125,6 +129,8 @@ function isMeasured(cols: number, rows: number): boolean {
 export function createShells(deps: ShellsDeps): Shells {
   const table = new Map<string, Entry>();
   const starts = new Map<string, Start>();
+  // The kills of unreached ids whose attach is still resolving.
+  const ends = new Map<string, Promise<void>>();
   // How the part stopped, null while it runs.
   let stopped: 'detached' | 'killed' | null = null;
   let markAdopted: () => void = () => undefined;
@@ -301,24 +307,34 @@ export function createShells(deps: ShellsDeps): Shells {
     return entry;
   };
 
-  // The shell adoption did not settle for the id, attached; null when the host
-  // holds none, or when the attach failed, which leaves the id unreached for
-  // its next start. A shell attached after `kill` cancelled the start is
-  // killed.
-  const reattach = async (
+  // Runs `attach` for an id adoption did not settle, and marks the id reached
+  // once the host answered. A rejected attach is logged and answers null,
+  // leaving the id unreached for its next start or kill.
+  const reachUnreached = async <T>(
     sessionId: string,
-    start: Start,
-  ): Promise<Entry | null> => {
-    let entry: Entry | null;
+    attach: () => Promise<T | null>,
+  ): Promise<T | null> => {
     try {
-      entry = await attachEntry(sessionId);
+      const attached = await attach();
+      markReached(sessionId);
+      return attached;
     } catch (error) {
       logAttachFailure(sessionId, error);
       return null;
     }
-    markReached(sessionId);
+  };
+
+  // The shell adoption did not settle for the id, attached; null when the host
+  // holds none or the attach failed. A shell attached after `kill` cancelled
+  // the start is killed and its output key deleted.
+  const reattach = async (
+    sessionId: string,
+    start: Start,
+  ): Promise<Entry | null> => {
+    const entry = await reachUnreached(sessionId, () => attachEntry(sessionId));
     if (entry !== null && start.cancelled) {
       entry.process?.kill();
+      deps.output.delete(sessionId);
       throw cancelledError(sessionId);
     }
     return entry;
@@ -360,10 +376,10 @@ export function createShells(deps: ShellsDeps): Shells {
     return start.promise;
   };
 
-  // The id's entry once adoption and any start in flight settle. With no
-  // entry, or an exited one `replacesExited` lets go, it starts one (a spawn
-  // at cols×rows, or the attach `startShell` makes first), reading `starts`
-  // and the table and calling `spawnFor` in one step after
+  // The id's entry once adoption and any start or end in flight settle. With
+  // no entry, or an exited one `replacesExited` lets go, it starts one (a spawn
+  // at cols×rows, or the attach `startShell` makes first), reading `starts`,
+  // `ends` and the table and calling `spawnFor` in one step after
   // its last wait, so concurrent calls make one shell.
   const readyEntry = async (
     sessionId: string,
@@ -379,6 +395,11 @@ export function createShells(deps: ShellsDeps): Shells {
       const start = starts.get(sessionId);
       if (start !== undefined) {
         await start.promise;
+        continue;
+      }
+      const end = ends.get(sessionId);
+      if (end !== undefined) {
+        await end;
         continue;
       }
       const entry = table.get(sessionId);
@@ -473,20 +494,84 @@ export function createShells(deps: ShellsDeps): Shells {
     }
   };
 
-  const kill = (sessionId: string): void => {
+  // Kills the host's shell for an id adoption did not settle, once any start
+  // for it settled, and deletes its output key; nothing when the id is reached
+  // or already ending. The end sits in `ends` until its attach answers.
+  const endUnreached = (sessionId: string): void => {
+    if (!isUnreached(sessionId) || ends.has(sessionId)) {
+      return;
+    }
     const start = starts.get(sessionId);
     if (start !== undefined) {
-      start.cancelled = true;
+      void start.promise
+        .catch(() => undefined)
+        .then(() => endUnreached(sessionId));
+      return;
     }
+    const end = reachUnreached(sessionId, () =>
+      deps.terminals.attach(sessionId, IGNORED_EVENTS),
+    )
+      .then((attached) => {
+        deps.output.delete(sessionId);
+        if (attached !== null) {
+          attached.process.kill();
+          deps.log(`shell killed for ${deps.labelOf(sessionId)}`);
+        }
+      })
+      .finally(() => ends.delete(sessionId));
+    ends.set(sessionId, end);
+  };
+
+  // Removes the id's entry, killing its shell and deleting its output key;
+  // true when the entry's shell was live, so the host's shell for the id was
+  // this entry's.
+  const killEntry = (sessionId: string): boolean => {
     const entry = table.get(sessionId);
     if (entry === undefined) {
-      return;
+      return false;
     }
     table.delete(sessionId);
     entry.process?.kill();
     clearOutputTimer(entry);
     deps.output.delete(sessionId);
     deps.log(`shell killed for ${deps.labelOf(sessionId)}`);
+    return entry.process !== null;
+  };
+
+  const kill = (sessionId: string): void => {
+    if (stopped !== null) {
+      return;
+    }
+    const start = starts.get(sessionId);
+    if (start !== undefined) {
+      start.cancelled = true;
+    }
+    if (!killEntry(sessionId)) {
+      endUnreached(sessionId);
+    }
+  };
+
+  // Ends every unreached id but those whose live shell `killAll` just killed;
+  // lists the host for them when the first list failed.
+  const endAllUnreached = (killedLive: ReadonlySet<string>): void => {
+    if (!isListUnread) {
+      for (const sessionId of [...unreached]) {
+        endUnreached(sessionId);
+      }
+      return;
+    }
+    void deps.terminals
+      .list()
+      .then((listed) => {
+        for (const { id, running } of listed) {
+          if (running && !killedLive.has(id)) {
+            endUnreached(id);
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        deps.log(`could not list the shells to end: ${errorText(error)}`);
+      });
   };
 
   return {
@@ -539,9 +624,13 @@ export function createShells(deps: ShellsDeps): Shells {
     killAll() {
       stopped = 'killed';
       cancelStarts();
-      for (const sessionId of table.keys()) {
-        kill(sessionId);
+      const killedLive = new Set<string>();
+      for (const sessionId of [...table.keys()]) {
+        if (killEntry(sessionId)) {
+          killedLive.add(sessionId);
+        }
       }
+      endAllUnreached(killedLive);
       markAdopted();
     },
   };

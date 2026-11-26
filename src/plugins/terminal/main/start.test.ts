@@ -68,6 +68,34 @@ function writeCountingTerminals(
   };
 }
 
+// The host with its first `call` rejecting "host gone"; `attached` lists the
+// ids its attach was asked for.
+function firstRejects(call: 'list' | 'attach', attached: string[] = []) {
+  return (host: FakeTerminalHost): TerminalHost => {
+    let isFirst = true;
+    const rejectsNow = (asked: 'list' | 'attach'): boolean => {
+      if (asked !== call || !isFirst) {
+        return false;
+      }
+      isFirst = false;
+      return true;
+    };
+    return {
+      spawn: (request, events) => host.spawn(request, events),
+      attach: (id, events) => {
+        attached.push(id);
+        return rejectsNow('attach')
+          ? Promise.reject(new Error('host gone'))
+          : host.attach(id, events);
+      },
+      list: () =>
+        rejectsNow('list')
+          ? Promise.reject(new Error('host gone'))
+          : host.list(),
+    };
+  };
+}
+
 interface StartOptions {
   rows?: readonly SessionRow[];
   // The shells the host runs before the part starts.
@@ -573,11 +601,7 @@ describe('terminalMainPart', () => {
     async ({ running, buffer, spawnCols }) => {
       const part = startOnHarness({
         running,
-        terminals: (host) => ({
-          spawn: (request, events) => host.spawn(request, events),
-          attach: (id, events) => host.attach(id, events),
-          list: () => Promise.reject(new Error('host gone')),
-        }),
+        terminals: firstRejects('list'),
       });
 
       const opening = part.open('s1', 100, 30);
@@ -596,8 +620,8 @@ describe('terminalMainPart', () => {
   );
 
   // The host's attach answers only once the test opens the gate; `attached`
-  // lists the ids it was asked for.
-  function gatedAttach(attached: string[]) {
+  // lists the ids it was asked for. With `isListFailing` its list rejects.
+  function gatedAttach(attached: string[], isListFailing = false) {
     const gate = deferred<undefined>();
     return {
       gate,
@@ -608,7 +632,10 @@ describe('terminalMainPart', () => {
           await gate.promise;
           return host.attach(id, events);
         },
-        list: () => host.list(),
+        list: () =>
+          isListFailing
+            ? Promise.reject(new Error('host gone'))
+            : host.list(),
       }),
     };
   }
@@ -677,16 +704,7 @@ describe('terminalMainPart', () => {
         { id: 's1', output: 'one' },
         { id: 's2', output: 'two' },
       ],
-      terminals: (host) => ({
-        spawn: (request, events) => host.spawn(request, events),
-        attach: (id, events) => {
-          attached.push(id);
-          return attached.length === 1
-            ? Promise.reject(new Error('host gone'))
-            : host.attach(id, events);
-        },
-        list: () => host.list(),
-      }),
+      terminals: firstRejects('attach', attached),
     });
     await part.ready();
 
@@ -702,6 +720,67 @@ describe('terminalMainPart', () => {
     expect(openedOne).toMatchObject({ buffer: 'one', seq: 1 });
     expect(part.record(0).resizes).toEqual([{ cols: 100, rows: 30 }]);
     expect(part.host.terminals).toHaveLength(2);
+  });
+
+  it('unreached_RowClosed_KillsTheShellAndDeletesItsOutput', async () => {
+    const part = startOnHarness({
+      running: [{ id: 's1', output: 'one' }],
+      output: { s1: 'one' },
+      terminals: firstRejects('attach'),
+    });
+    await part.ready();
+
+    part.rows.delete('s1');
+    part.harness.emit('sessions.closed', { sessionId: 's1' });
+    await flush();
+
+    expect(part.record(0).kills).toBe(1);
+    expect(part.output('s1')).toBeUndefined();
+    expect(part.host.terminals).toHaveLength(1);
+  });
+
+  it.each([
+    { case: 'AttachFailed', fails: 'attach' },
+    { case: 'ListFailed', fails: 'list' },
+  ] satisfies { case: string; fails: 'list' | 'attach' }[])(
+    'unreached_PartEnded_KillsTheShell_$case',
+    async ({ fails }) => {
+      const part = startOnHarness({
+        running: [{ id: 's1', output: 'one' }],
+        terminals: firstRejects(fails),
+      });
+      await part.ready();
+
+      await part.harness.stop('end');
+      await flush();
+
+      expect(part.record(0)).toMatchObject({ kills: 1, detaches: 0 });
+      expect(part.host.terminals).toHaveLength(1);
+    },
+  );
+
+  it('reattach_RowClosedDuringAttach_KillsTheShellAndDeletesItsOutput', async () => {
+    const { gate, terminals } = gatedAttach([], true);
+    const part = startOnHarness({
+      running: [{ id: 's1', output: 'one' }],
+      output: { s1: 'one' },
+      terminals,
+    });
+    await part.ready();
+    const opening = part.open('s1', 100, 30);
+    await flush();
+
+    part.rows.delete('s1');
+    part.harness.emit('sessions.closed', { sessionId: 's1' });
+    gate.resolve(undefined);
+
+    await expect(opening).rejects.toThrow(
+      'terminal: the shell start for s1 was cancelled',
+    );
+    await flush();
+    expect(part.record(0).kills).toBe(1);
+    expect(part.output('s1')).toBeUndefined();
+    expect(part.host.terminals).toHaveLength(1);
   });
 
   it('outputSlot_CoalescesWithin250Ms', async () => {
