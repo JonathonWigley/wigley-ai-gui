@@ -600,7 +600,21 @@ because the earlier items rewrite many of these tests anyway.
 - **A second `chat.start` hangs the drive run** — *agent-ready*: in a drive run (fake harness), after the first
   session ran `fake: agents`, a second `npm run drive -- do chat.start` never returned and every later drive command,
   `eval 1+1` included, hung until `restart`; a retry after the restart hung the same way. Seen in the builds plan's
-  task 10 drive (check 11's hidden-hub case). Cause not checked: find what `chat.start` waits on.
+  task 10 drive (check 11's hidden-hub case). The terminal plan's live session hit it on `main` too, after a drive
+  `restart` with a restored session, and found a cause: the fake harness mints `fake-session-${++mintedSessionIds}`
+  (`src/shared/fake-agent-harness.ts:2231`), a counter that restarts at 1 in each app process, so the new session
+  gets the restored row's id; `setHostSessionId` throws on the duplicate and `adoptHostId`'s catch
+  (`src/plugins/chat/main/chat-sessions.ts:2182`) logs `not moved to host` without settling or rejecting the row's
+  `hostIdWaiters`, so the drive `chat.start` action's `hostSessionIdSettled` wait (`src/plugins/chat/main/start.ts`
+  ~195) never ends and the drive queue holds every later command. Fix: mint fake ids unique across restarts, and make
+  the catch reject the waiters as `rejectHostIdWaiters` does. Unchecked: whether the builds-plan case (no restart)
+  has the same cause.
+- **`npm run selftest` fails 11 steps on `main`** — *agent-ready*: 7 chatroom steps, from `j ×4 -> [chatroom] list
+  cursor on chatroom-selftest/plan-demo not reached in 4 presses` on (the side bar now lists `chatroom lead (session)`
+  above `plan-demo`, so the presses stop on the session thread), and 4 `[keys] unplaced` scheduling binds (`a`
+  `scheduling.newTask` in `scheduling.list`; `i`, `<Tab>`, `<S-Tab>` in `scheduling.editor`, `src/plugins/keymap.ts`
+  ~1205–1250), which the scheduling layout gives no anchor. Fix: make the chatroom step follow the list's order, and
+  anchor or re-scope the scheduling binds. Found by the terminal plan's live session, run on `main` to compare.
 
 - **The hosted busy rule lacks the adapter's interrupt rescues** — *needs a feature plan*: the host's busy reading
   (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE` in `src/plugins/claude-code/main/claude-launch.ts`) now has
