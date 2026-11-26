@@ -90,37 +90,42 @@ describe('nativeBuildFolder', () => {
 });
 
 // Windows keeps no POSIX mode bits, so the execute bit is checked elsewhere.
-describe.skipIf(process.platform === 'win32')('the spawn-helper execute bit', () => {
-  it('GIVEN a prebuild and build/Release WHEN copyNodePty runs THEN it copies package.json, lib and the prebuild alone, with spawn-helper at 0o755', () => {
-    const nodePtyDir = fakeNodePty([PREBUILD, BUILD_RELEASE]);
-    const buildPath = newFolder();
+describe.skipIf(process.platform === 'win32')(
+  'the spawn-helper execute bit',
+  () => {
+    it('GIVEN a prebuild and build/Release WHEN copyNodePty runs THEN it copies package.json, lib and the prebuild alone, with spawn-helper at 0o755', () => {
+      const nodePtyDir = fakeNodePty([PREBUILD, BUILD_RELEASE]);
+      const buildPath = newFolder();
 
-    copyNodePty(nodePtyDir, buildPath, 'darwin', 'arm64');
+      copyNodePty(nodePtyDir, buildPath, 'darwin', 'arm64');
 
-    const targetDir = path.join(buildPath, 'node_modules', 'node-pty');
-    expect(existsSync(path.join(targetDir, 'package.json'))).toBe(true);
-    expect(existsSync(path.join(targetDir, 'lib', 'index.js'))).toBe(true);
-    expect(existsSync(path.join(targetDir, BUILD_RELEASE))).toBe(false);
-    expect(modeOf(path.join(targetDir, PREBUILD, 'spawn-helper'))).toBe(0o755);
-  });
+      const targetDir = path.join(buildPath, 'node_modules', 'node-pty');
+      expect(existsSync(path.join(targetDir, 'package.json'))).toBe(true);
+      expect(existsSync(path.join(targetDir, 'lib', 'index.js'))).toBe(true);
+      expect(existsSync(path.join(targetDir, BUILD_RELEASE))).toBe(false);
+      expect(modeOf(path.join(targetDir, PREBUILD, 'spawn-helper'))).toBe(
+        0o755,
+      );
+    });
 
-  it('GIVEN a folder with a spawn-helper WHEN makeSpawnHelperExecutable runs THEN the helper is 0o755', () => {
-    const nodePtyDir = fakeNodePty([PREBUILD]);
-    const folder = path.join(nodePtyDir, PREBUILD);
+    it('GIVEN a folder with a spawn-helper WHEN makeSpawnHelperExecutable runs THEN the helper is 0o755', () => {
+      const nodePtyDir = fakeNodePty([PREBUILD]);
+      const folder = path.join(nodePtyDir, PREBUILD);
 
-    makeSpawnHelperExecutable(folder);
+      makeSpawnHelperExecutable(folder);
 
-    expect(modeOf(path.join(folder, 'spawn-helper'))).toBe(0o755);
-  });
+      expect(modeOf(path.join(folder, 'spawn-helper'))).toBe(0o755);
+    });
 
-  it('GIVEN a folder without a spawn-helper WHEN makeSpawnHelperExecutable runs THEN it adds none and does not throw', () => {
-    const folder = newFolder();
+    it('GIVEN a folder without a spawn-helper WHEN makeSpawnHelperExecutable runs THEN it adds none and does not throw', () => {
+      const folder = newFolder();
 
-    makeSpawnHelperExecutable(folder);
+      makeSpawnHelperExecutable(folder);
 
-    expect(existsSync(path.join(folder, 'spawn-helper'))).toBe(false);
-  });
-});
+      expect(existsSync(path.join(folder, 'spawn-helper'))).toBe(false);
+    });
+  },
+);
 
 describe('darwinPrebuildFolders', () => {
   it('GIVEN darwin and other prebuilds WHEN darwinPrebuildFolders runs THEN it lists only the darwin ones', () => {

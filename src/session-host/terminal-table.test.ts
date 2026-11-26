@@ -267,22 +267,25 @@ describe('createTerminalTable', () => {
       request: terminalRequest('a'),
       error: 'no such file',
     },
-  ])('spawn_Refusals_CloseWithTheReason: $name', ({ prepare, request, error, closedId }) => {
-    const s = setUp();
-    s.spawnShell('held');
-    prepare(s);
-    const killsBefore = s.ptys.map((pty) => pty.kills());
-    const ptyCount = s.ptys.length;
-    const refused = recordingTerminal();
+  ])(
+    'spawn_Refusals_CloseWithTheReason: $name',
+    ({ prepare, request, error, closedId }) => {
+      const s = setUp();
+      s.spawnShell('held');
+      prepare(s);
+      const killsBefore = s.ptys.map((pty) => pty.kills());
+      const ptyCount = s.ptys.length;
+      const refused = recordingTerminal();
 
-    s.table.spawn(request, refused.subscriber);
+      s.table.spawn(request, refused.subscriber);
 
-    expect(refused.closed).toEqual([
-      { id: closedId ?? 'a', exit: { code: null, signal: null, error } },
-    ]);
-    expect(s.ptys).toHaveLength(ptyCount);
-    expect(s.ptys.map((pty) => pty.kills())).toEqual(killsBefore);
-  });
+      expect(refused.closed).toEqual([
+        { id: closedId ?? 'a', exit: { code: null, signal: null, error } },
+      ]);
+      expect(s.ptys).toHaveLength(ptyCount);
+      expect(s.ptys.map((pty) => pty.kills())).toEqual(killsBefore);
+    },
+  );
 
   it('writeResizeKill_HeldAndUnheldIds_ReachTheHeldShellOnly', () => {
     const { table, spawnShell } = setUp();
