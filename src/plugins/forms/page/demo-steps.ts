@@ -36,9 +36,9 @@ export function registerDemoSteps(
     id: 'forms.round',
     section: 'forms',
     order: 10,
-    title: 'Review rounds',
+    title: 'Forms',
     caption:
-      'Review rounds: an agent asks its questions, findings and notices in one form',
+      'Forms: an agent asks its questions, findings and notices in one form',
     files: [
       'src/plugins/forms/main/start.ts',
       'src/plugins/forms/main/round-type.ts',
@@ -51,7 +51,7 @@ export function registerDemoSteps(
     enter: (context) => {
       const sessionId = context.sessions.session;
       return Promise.resolve({
-        beats: [demoFormBeat(deps, sessionId, 'Round', onFirstQuestion)],
+        beats: [demoFormBeat(deps, sessionId, 'Form', onFirstQuestion)],
         dispose() {
           if (isDemoFormActive(deps.store, sessionId)) {
             void commands.run('forms.dismissConfirm');

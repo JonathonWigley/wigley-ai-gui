@@ -299,21 +299,21 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
       id: 'small' as const,
       order: 10,
       firstStage: 'scope',
-      reported: ['build', 'check', 'land', 'done', 'answered'],
+      reported: ['make', 'review', 'close', 'done', 'answered'],
       finishing: ['done', 'answered'],
     },
     {
       id: 'medium' as const,
       order: 20,
       firstStage: 'interview',
-      reported: ['build', 'review', 'fix', 'land', 'done'],
+      reported: ['make', 'review', 'fix', 'close', 'done'],
       finishing: ['done'],
     },
     {
       id: 'spike' as const,
       order: 40,
       firstStage: 'interview',
-      reported: ['interview', 'build', 'check', 'land', 'done'],
+      reported: ['interview', 'make', 'review', 'close', 'done'],
       finishing: ['done'],
     },
   ])('$id_Values', ({ id, order, firstStage, reported, finishing }) => {
@@ -332,12 +332,12 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
 
   // Breaks: a trail with a word lost, doubled or out of order.
   it.each([
-    { id: 'small' as const, trail: 'Scope › Build › Check › Land' },
+    { id: 'small' as const, trail: 'Explore › Make › Review › Close' },
     {
       id: 'medium' as const,
-      trail: 'Interview › Build › Review › Fix › Land',
+      trail: 'Interview › Make › Review › Fix › Close',
     },
-    { id: 'spike' as const, trail: 'Interview › Build › Check › Land' },
+    { id: 'spike' as const, trail: 'Interview › Make › Review › Close' },
   ])('$id Trail_Reads $trail', ({ id, trail }) => {
     const bySlot = new Map(
       pageOf(id)
@@ -348,7 +348,7 @@ describe('sample workflows › Small, Medium and Spike stages', () => {
     expect({
       trail: [...bySlot.values()].join(' › '),
       done: pageStageOf(id, 'done').label,
-    }).toEqual({ trail, done: 'Land' });
+    }).toEqual({ trail, done: 'Close' });
   });
 
   it.each(

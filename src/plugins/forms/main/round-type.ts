@@ -67,7 +67,7 @@ export function createRoundType(
   return {
     openTool: ROUND_OPEN_TOOL,
     collectTool: ROUND_COLLECT_TOOL,
-    noun: 'round',
+    noun: 'form',
     argsErrorText: (error) => {
       const roundError = roundErrorOf(error);
       return roundError === null ? null : roundErrorText(kinds(), roundError);

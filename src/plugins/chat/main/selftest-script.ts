@@ -132,7 +132,7 @@ interface ChatSelfTestResult {
   harnessReturn: HarnessReturnRun;
 }
 
-const ROUND_HEADING = 'Chat self-test round';
+const ROUND_HEADING = 'Chat self-test form';
 
 const PERMISSION_INPUT = { command: 'rm selftest.txt' };
 
@@ -1223,7 +1223,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'permission card',
-    why: "y allows the fixture's permission, whose answer asks a round that opens a popup over the Chat tab, hides for a chat key and opens again, until Cmd+Enter submits it from its review.",
+    why: "y allows the fixture's permission, whose answer asks a form that opens a popup over the Chat tab, hides for a chat key and opens again, until Cmd+Enter submits it from its review.",
     steps: PERMISSION_CARD_STEPS,
   },
   {
@@ -1500,7 +1500,7 @@ function fixtureProblems(
   if (round.isError === true) {
     problems.push(`ask_round failed: ${round.content[0]?.text}`);
   } else if (outcome !== 'submitted') {
-    problems.push(`round outcome ${String(outcome)}`);
+    problems.push(`form outcome ${String(outcome)}`);
   }
   const calls = JSON.stringify(process.calls);
   if (calls !== JSON.stringify(EXPECTED_CALLS)) {

@@ -48,8 +48,8 @@ describe('watchRoundKinds', () => {
     show();
 
     expect(lines).toEqual([
-      'round r1 holds 1 poll item with no page kind',
-      'round r1 holds 2 vote items with no page kind',
+      'form r1 holds 1 poll item with no page kind',
+      'form r1 holds 2 vote items with no page kind',
     ]);
   });
 

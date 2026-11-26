@@ -807,7 +807,7 @@ describe('formsCommandHandlers', () => {
       command: 'halfPageUp',
       result: null,
       scrolls: [['halfPage', -1]],
-      logs: ['no round to scroll'],
+      logs: ['no form to scroll'],
     },
   ])(
     '$command with scroll result $result scrolls $scrolls and logs $logs',

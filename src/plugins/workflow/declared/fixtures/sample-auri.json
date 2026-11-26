@@ -13,37 +13,37 @@
       "stages": [
         {
           "id": "scope",
-          "label": "Scope",
+          "label": "Explore",
           "status": "busy",
           "enter": [{ "skill": "wigley:small" }]
         },
         {
           "id": "build",
-          "label": "Build",
-          "step": "build",
+          "label": "Make",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "check",
-          "label": "Check",
-          "step": "check",
+          "label": "Review",
+          "step": "review",
           "status": "busy",
-          "enter": [{ "step": "check" }]
+          "enter": [{ "step": "review" }]
         },
         {
           "id": "land",
-          "label": "Land",
-          "step": "land",
+          "label": "Close",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",
@@ -82,12 +82,12 @@
         },
         {
           "id": "build",
-          "label": "Build",
-          "step": "build",
+          "label": "Make",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "review",
@@ -106,15 +106,15 @@
         },
         {
           "id": "land",
-          "label": "Land",
-          "step": "land",
+          "label": "Close",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",
@@ -355,31 +355,31 @@
         },
         {
           "id": "build",
-          "label": "Build",
-          "step": "build",
+          "label": "Make",
+          "step": "make",
           "runsTasks": true,
           "status": "busy",
           "progress": " {checklist}",
-          "enter": [{ "step": "build" }]
+          "enter": [{ "step": "make" }]
         },
         {
           "id": "check",
-          "label": "Check",
-          "step": "check",
+          "label": "Review",
+          "step": "review",
           "status": "busy",
-          "enter": [{ "step": "check" }]
+          "enter": [{ "step": "review" }]
         },
         {
           "id": "land",
-          "label": "Land",
-          "step": "land",
+          "label": "Close",
+          "step": "close",
           "slot": "land",
           "status": "busy",
-          "enter": [{ "step": "land" }]
+          "enter": [{ "step": "close" }]
         },
         {
           "id": "done",
-          "label": "Land",
+          "label": "Close",
           "step": "done",
           "slot": "land",
           "status": "finishing",

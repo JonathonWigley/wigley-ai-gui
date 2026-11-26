@@ -11,8 +11,7 @@ const CHOICE_LABEL = 'pick the numbered choice or action (again clears)';
 export const formsManifest = definePlugin({
   id: 'forms',
   label: 'Forms',
-  description:
-    'Shows each review round an agent asks in a Form tab, to answer it.',
+  description: 'Shows each form an agent asks in a Form tab, to answer it.',
   dependsOn: {
     main: ['sessions', 'chat'],
     page: ['sessions', 'markdown-blocks'],
@@ -137,7 +136,7 @@ export const formsManifest = definePlugin({
       arg: 'number',
     },
     editNotes: { label: 'notes box', group: 'boxes', runsIn: 'page' },
-    editNote: { label: 'round note', group: 'boxes', runsIn: 'page' },
+    editNote: { label: 'form note', group: 'boxes', runsIn: 'page' },
     nextBox: { label: 'next box', group: 'boxes', runsIn: 'page' },
     prevBox: { label: 'previous box', group: 'boxes', runsIn: 'page' },
     leaveBox: { label: 'leave the box', group: 'boxes', runsIn: 'page' },
@@ -174,20 +173,20 @@ export const formsManifest = definePlugin({
       runsIn: 'page',
       risky: true,
     },
-    askCancel: { label: 'cancel the round', group: 'review', runsIn: 'page' },
+    askCancel: { label: 'cancel the form', group: 'review', runsIn: 'page' },
     confirmCancel: {
-      label: 'yes, cancel the round',
+      label: 'yes, cancel the form',
       group: 'confirm',
       runsIn: 'page',
       risky: true,
     },
     dismissConfirm: {
-      label: 'keep the round',
+      label: 'keep the form',
       group: 'confirm',
       runsIn: 'page',
     },
     openPreview: {
-      label: 'open the layout preview round',
+      label: 'open the layout preview form',
       group: 'debug',
       runsIn: 'page',
     },
@@ -196,7 +195,7 @@ export const formsManifest = definePlugin({
     forms: 'In the form',
     review: 'In the review',
     confirm: 'In the cancel confirmation',
-    idle: 'With no round open',
+    idle: 'With no form open',
   },
   settings: { autosaveDelayMs: 400, deadlineSeconds: 240, layout: 'default' },
   settingControls: { layout: 'layout' },
@@ -204,17 +203,17 @@ export const formsManifest = definePlugin({
     autosaveDelayMs: {
       label: 'Autosave delay',
       description:
-        "How long after a change a round's draft is saved, in milliseconds.",
+        "How long after a change a form's draft is saved, in milliseconds.",
     },
     deadlineSeconds: {
-      label: 'Round deadline',
+      label: 'Form deadline',
       description:
-        'How long an agent waits on a round before it gets a draft back, in seconds, when its session names no deadline.',
+        'How long an agent waits on a form before it gets a draft back, in seconds, when its session names no deadline.',
     },
     layout: {
       label: 'Layout',
       description:
-        "The forms layout that draws what a round and its items do not name a layout for: a folder name in forms' layouts folder, or default.",
+        "The forms layout that draws what a form and its items do not name a layout for: a folder name in forms' layouts folder, or default.",
     },
   },
   themeTokens: {

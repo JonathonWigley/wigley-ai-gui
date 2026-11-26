@@ -6,7 +6,7 @@
 export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
   heading: 'Layout preview',
   overview:
-    'A sample round that shows every card the layout draws; nothing you answer here reaches an agent.',
+    'A sample form that shows every card the layout draws; nothing you answer here reaches an agent.',
   notices: [
     {
       title: 'Rail entries show their full title on hover',
@@ -29,24 +29,24 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
   ],
   findings: [
     {
-      title: 'A closed session can still receive a round',
+      title: 'A closed session can still receive a form',
       origin: 'caused',
       severity: 'critical',
       impact:
-        'An agent whose row the user closed sends a round that never shows, so the agent waits until its deadline.',
+        'An agent whose row the user closed sends a form that never shows, so the agent waits until its deadline.',
       finding:
-        'The router looks the session up by `sessionId` after the row is gone, and drops the round without a reply.',
+        'The router looks the session up by `sessionId` after the row is gone, and drops the form without a reply.',
       choices: [
         {
-          text: 'Bring the row back at the end of the list when a round arrives for it.',
-          reason: 'The user sees the round where new sessions appear.',
+          text: 'Bring the row back at the end of the list when a form arrives for it.',
+          reason: 'The user sees the form where new sessions appear.',
         },
         {
-          text: 'Refuse the round with an error naming the closed row, so the agent stops waiting at once and can tell the user why nothing showed.',
+          text: 'Refuse the form with an error naming the closed row, so the agent stops waiting at once and can tell the user why nothing showed.',
           reason: 'The agent learns of the problem without a deadline passing.',
         },
         {
-          text: 'Keep the round queued until the user reopens the row.',
+          text: 'Keep the form queued until the user reopens the row.',
           reason: 'Nothing is lost, but nothing shows either.',
           action: 'follow_up',
         },
@@ -109,17 +109,17 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
     },
     {
       title:
-        'What the form popup shows when a session has several rounds waiting and the user switches away and back mid-answer',
+        'What the form popup shows when a session has several forms waiting and the user switches away and back mid-answer',
       summary:
-        'Choose which round the form popup shows when the user comes back to a session that has several rounds waiting.',
+        'Choose which form the popup shows when the user comes back to a session that has several forms waiting.',
       context:
-        'Each session keeps at most one open round. A round waiting behind it opens only once the open one finishes, so ' +
-        'the form popup never holds two rounds of one session. The user can still switch to another session halfway ' +
+        'Each session keeps at most one open form. A form waiting behind it opens only once the open one finishes, so ' +
+        'the form popup never holds two forms of one session. The user can still switch to another session halfway ' +
         'through an answer and come back.\n\n' +
-        'Switching sessions keeps every answer typed so far, and a re-sent round is pre-filled from its saved answers. So ' +
-        'nothing is lost either way; the choice is only which round greets the user on the way back.\n\n' +
+        'Switching sessions keeps every answer typed so far, and a re-sent form is pre-filled from its saved answers. So ' +
+        'nothing is lost either way; the choice is only which form greets the user on the way back.\n\n' +
         ':::details Sources\n' +
-        '- the rail lists every item of the open round\n' +
+        '- the rail lists every item of the open form\n' +
         '- `FormsSession.open`:\n\n' +
         '```ts\n' +
         'interface FormsSession {\n' +
@@ -128,12 +128,12 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         '```\n' +
         ':::',
       choices: [
-        'The round the user left, with every answer kept.',
-        'The newest round, with the earlier one one key away.',
-        'A list of the waiting rounds to pick from.',
-        'The oldest round still waiting.',
-        'Whichever round has the nearest deadline.',
-        'The round the user left, scrolled back to the top so the overview shows again before the item the user was on.',
+        'The form the user left, with every answer kept.',
+        'The newest form, with the earlier one one key away.',
+        'A list of the waiting forms to pick from.',
+        'The oldest form still waiting.',
+        'Whichever form has the nearest deadline.',
+        'The form the user left, scrolled back to the top so the overview shows again before the item the user was on.',
       ],
       recommend: 1,
       rationale: 'Nothing moves under the user, and nothing typed is lost.',

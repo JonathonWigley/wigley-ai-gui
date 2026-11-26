@@ -90,7 +90,7 @@ describe('workflow sample demo steps', () => {
   it.each([
     {
       id: 'small',
-      name: 'Build',
+      name: 'Make',
       stage: 'build',
       done: 1,
       counters: {},
@@ -106,7 +106,7 @@ describe('workflow sample demo steps', () => {
     },
     {
       id: 'medium',
-      name: 'Build',
+      name: 'Make',
       stage: 'build',
       done: 1,
       counters: { fix: 0 },
@@ -122,7 +122,7 @@ describe('workflow sample demo steps', () => {
     },
     {
       id: 'spike',
-      name: 'Build',
+      name: 'Make',
       stage: 'build',
       done: 1,
       counters: {},

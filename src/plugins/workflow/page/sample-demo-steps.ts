@@ -176,7 +176,7 @@ function sampleSteps(paths: PageServices['paths']): readonly SampleStep[] {
       caption:
         'Small workflow: a clear change scoped, built, checked and landed in one go',
       beats: [
-        checklistBeat('Build', SMALL_ITEMS, {
+        checklistBeat('Make', SMALL_ITEMS, {
           stage: 'build',
           done: 1,
           turnRunning: true,
@@ -195,7 +195,7 @@ function sampleSteps(paths: PageServices['paths']): readonly SampleStep[] {
       caption:
         'Medium workflow: an interview, a build, one review and its fixes, then land',
       beats: [
-        checklistBeat('Build', MEDIUM_ITEMS, {
+        checklistBeat('Make', MEDIUM_ITEMS, {
           stage: 'build',
           done: 1,
           counters: { fix: 0 },
@@ -216,7 +216,7 @@ function sampleSteps(paths: PageServices['paths']): readonly SampleStep[] {
       caption:
         'Spike workflow: a throwaway prototype, built and checked fast for the user to try',
       beats: [
-        checklistBeat('Build', SPIKE_ITEMS, {
+        checklistBeat('Make', SPIKE_ITEMS, {
           stage: 'build',
           done: 1,
           turnRunning: true,

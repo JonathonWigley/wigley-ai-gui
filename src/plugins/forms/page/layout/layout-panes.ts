@@ -698,8 +698,8 @@ function drawReview(
       const note = buildField(
         noteParent,
         'field-note',
-        'Round note',
-        'Optional. Anything about the round as a whole.',
+        'Form note',
+        'Optional. Anything about the form as a whole.',
         { command: formsCommand('editNote'), anchor },
         (field) => deps.placeBox(field, { field: 'note' }, round.note),
       );
@@ -718,7 +718,7 @@ function drawReview(
     cancelButton: (buttonParent) =>
       appendReviewButton(
         buttonParent,
-        'Cancel round',
+        'Cancel form',
         'askCancel',
         'secondary',
         deps,

@@ -51,7 +51,7 @@ export function kindAnswer(round: RoundState, item: RoundItem): unknown {
   const isItem =
     answers !== undefined && item.index >= 1 && item.index <= answers.length;
   if (!isItem) {
-    throw new Error(`round ${round.formId} has no ${item.kind} ${item.index}`);
+    throw new Error(`form ${round.formId} has no ${item.kind} ${item.index}`);
   }
   return answers[item.index - 1];
 }
@@ -82,7 +82,7 @@ function answerableKindOf(
   const kind = requireKind(round.kinds, item);
   const pick = kind.reduce.pick;
   if (pick === undefined) {
-    throw new Error(`round ${round.formId}: ${item.kind} takes no answer`);
+    throw new Error(`form ${round.formId}: ${item.kind} takes no answer`);
   }
   return { kind, pick };
 }

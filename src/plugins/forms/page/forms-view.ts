@@ -187,10 +187,10 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   };
   const confirmDraws: ConfirmDraws = { frame: null, body: null };
   const confirm = createConfirmPrompt({
-    title: 'Cancel this round?',
-    body: 'The agent is told the round was cancelled. Your answers stay saved.',
+    title: 'Cancel this form?',
+    body: 'The agent is told the form was cancelled. Your answers stay saved.',
     keep: { label: 'Keep answering', command: formsCommand('dismissConfirm') },
-    confirm: { label: 'Cancel round', command: formsCommand('confirmCancel') },
+    confirm: { label: 'Cancel form', command: formsCommand('confirmCancel') },
     scope: formsScope('confirm'),
     keys: deps.keys,
     run: (command) => deps.run(command),

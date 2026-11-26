@@ -56,7 +56,7 @@ function registrationProblem(
   if (spec.fingerprintJoinsWhenEmpty && !isBuiltInId(spec.id)) {
     return (
       'only a built-in kind joins the fingerprint when empty; a registered ' +
-      "one would change every saved round's fingerprint"
+      "one would change every saved form's fingerprint"
     );
   }
   return null;
@@ -69,7 +69,7 @@ function wireKeyProblem(
 ): string | null {
   const value = spec[key];
   if (RESERVED_KEYS[key].includes(value)) {
-    return `${key} '${value}' is a round field`;
+    return `${key} '${value}' is a form field`;
   }
   const holder = registered.find((other) => other.spec[key] === value);
   if (holder !== undefined) {
