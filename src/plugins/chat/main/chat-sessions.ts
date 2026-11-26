@@ -2802,8 +2802,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     waiting.noticeId = notice.id;
   }
 
-  function removeWaitingNotice(session: HeldSession) {
+  // Lifts the row's wait and removes its waiting notice. The wait lifts before
+  // the entries write, so a reader woken by that write finds the row no longer
+  // waiting.
+  function liftWait(session: HeldSession) {
     const noticeId = session.waiting?.noticeId ?? null;
+    session.waiting = null;
     if (noticeId === null) {
       return;
     }
@@ -2856,10 +2860,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (!isStillWaiting) {
       return;
     }
-    // The wait lifts before the notice's entries write, so a reader woken by
-    // that write finds the row no longer waiting.
-    session.waiting = null;
-    removeWaitingNotice(session);
+    liftWait(session);
     const { profile: profileName } = session.slots.info();
     const profile = deps.harnesses
       .profilesOf(harness.id)

@@ -897,7 +897,7 @@ describe('schedulingMainPart', () => {
     },
     {
       case: 'an attended and an unattended task',
-      tasks: [task({ attended: true }), task({ id: 'task-2' })],
+      tasks: [task({ attended: true }), task({ id: OTHER_ID })],
       expected: [true],
     },
     {
