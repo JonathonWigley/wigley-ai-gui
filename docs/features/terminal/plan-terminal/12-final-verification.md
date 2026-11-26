@@ -46,10 +46,12 @@ Expected paths:
    shows `a b`, focus is in the drawer, and screenshot `terminal-keys` shows no leader menu.
 3. **Esc and focus moves** (low-confidence: the focus wrapper has no live coverage). With focus in the drawer, run
    `npm run drive -- key Escape`: it logs `[terminal] back to the session in L`, focus is outside the drawer, and
-   `npm run drive -- query '.session-drawer-host'` shows the host not hidden. Run `npm run drive -- key '<A-j>'`:
-   focus is in the drawer. Run `npm run drive -- key '<A-k>'`: focus is outside the drawer. Run
-   `npm run drive -- key '<A-j>'`, then `npm run drive -- key '<C-`>'`: it logs `drawer closed in L` (a scope `any`
-   chord fires inside the drawer). Run `npm run drive -- key '<C-`>'` to open it again.
+   `npm run drive -- query '.session-drawer-host'` shows the host not hidden. Esc leaves the keys on the chat
+   transcript, and Alt+j steps down transcript, box, drawer: run `npm run drive -- key '<A-j>'`: it logs
+   `[chat] focused the box`, focus is outside the drawer; run it again: focus is in the drawer. Run
+   `npm run drive -- key '<A-k>'`: focus is outside the drawer, back on the transcript. Run
+   `npm run drive -- key '<A-j>' '<A-j>'`, then `npm run drive -- key '<C-`>'`: it logs `drawer closed in L` (a scope
+   `any` chord fires inside the drawer). Run `npm run drive -- key '<C-`>'` to open it again.
 4. **Agent hand-off** (expected). Run
    `npm run drive -- do agent-commands.call '{"sessionId":"S","tool":"run_command","args":{"command":"terminal.type","arg":"gcloud auth login"}}'`,
    then `npm run drive -- do agent-commands.result '{"callId":"<the callId it returned>"}'`: the result reads
@@ -64,7 +66,8 @@ Expected paths:
    and read its result the same way. The result is a JSON string (read_state returns JSON) that holds
    `ran: echo hi` and `ran: gcloud auth login`, and holds no `\u001b`.
 5a. **Theme** (low-confidence: the palette reads tokens at runtime). Run
-   `npm run drive -- query '.terminal-drawer-screen .xterm-viewport' background-color`, then switch the theme with
+   `npm run drive -- query '.terminal-drawer-screen .xterm-scrollable-element' background-color` (xterm 6 paints the
+   theme's background there; `.xterm-viewport` under it keeps xterm.css's black), then switch the theme with
    `npm run drive -- setting theme '"<another built-in theme>"'`, then run the same query: the colour changed and
    equals `npm run drive -- query -- :root --wg-transcript-background` as resolved. Screenshot `terminal-theme`.
 5b. **Demo step** (expected). Run
@@ -83,8 +86,9 @@ Expected paths:
    with the drawers open: nothing is cut off at the minimum width. Drag the drawer's handle to its highest
    (`npm run drive -- drag '.session-drawer-handle' 0 -2000`), then run `npm run drive -- resize 1200 480`: the
    drawer row shrinks, and
-   `npm run drive -- eval "[...document.querySelectorAll('.session-bodies')].map((e) => e.getBoundingClientRect().height)"`
-   gives only values of 160 or more. Screenshot `terminal-two-panes`.
+   `npm run drive -- eval "[...document.querySelectorAll('.session-area')].filter((e) => e.offsetParent).map((e) => parseFloat(getComputedStyle(e).gridTemplateRows.split(' ')[1]))"`
+   gives only values of 160 or more: the tab body row, which holds the `.session-bodies` sheet and its gutter (the
+   sheet itself measures the row less two gutters). Screenshot `terminal-two-panes`.
 7. **Exit and restart** (low-confidence: exit path). With focus in the drawer, run `npm run drive -- type exit`, then
    `npm run drive -- key Enter`: it logs `[terminal] shell exited in L: code 0`, the screen shows
    `[shell exited: code 0] Press Enter to start a new shell.`, and screenshot `terminal-exited` shows the header's

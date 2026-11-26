@@ -915,10 +915,18 @@ function addOpenDrawer(view: Setup['view'], sessionId: string, id = 'd') {
   return { drawer, handle };
 }
 
-// The drawer `d` of `s`, open, with focus inside it or on a box in `s`'s tab.
-function focusedDrawerSetup(isFocusInside: boolean, isOpen = true) {
+// The drawer `d` of `s`, open, with focus inside it or on a box in `s`'s tab;
+// every element's computed top margin is `sheetGutter` px.
+function focusedDrawerSetup(
+  isFocusInside: boolean,
+  isOpen = true,
+  options: { uiState?: UiState; sheetGutter?: number } = {},
+) {
   const doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
-  const setup = drawerSetup();
+  vi.stubGlobal('getComputedStyle', () => ({
+    marginTop: `${options.sheetGutter ?? 0}px`,
+  }));
+  const setup = drawerSetup({ uiState: options.uiState });
   const chat = tabView('chat');
   setup.view.tabs.add('s', chat);
   const box = new FocusFakeElement('textarea');
@@ -1475,4 +1483,27 @@ describe('session drawers', () => {
       expect(view.panes.outer.resize.nudge(test.direction)).toBe(test.nudged);
     },
   );
+
+  it('the drawer grows only to where the tab body row, its sheet gutter included, keeps its least height', () => {
+    const uiState = fakeUiState([['drawer-height', 200]]);
+    const { view, drawer } = focusedDrawerSetup(true, true, {
+      uiState,
+      sheetGutter: 6,
+    });
+    const frame = drawerFrameOf(drawer);
+    const host = drawerHostOf(drawer);
+    const rect = { left: 0, right: 0, width: 0, height: 0 };
+    findAll(frame, 'session-bodies')[0]!.getBoundingClientRect = () => ({
+      ...rect,
+      top: 36,
+      bottom: 0,
+    });
+    host.getBoundingClientRect = () => ({ ...rect, top: 0, bottom: 400 });
+    findAll(host, 'session-drawer-handle')[0]!.hasLayoutBox = true;
+
+    view.panes.outer.resize.nudge('up');
+
+    // The row starts at 30, the sheet's 36 less its gutter: 400 - 30 - 160.
+    expect(frame.style['--session-drawer-height']).toBe('210');
+  });
 });

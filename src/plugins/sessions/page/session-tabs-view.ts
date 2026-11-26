@@ -432,8 +432,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   // The divider on `handle` that drags the frame's drawer row, sized from the
-  // bottom of the box the tab body and the drawer rows share; it shows the
-  // height through the frame's grid tracks.
+  // bottom of the box the tab body and the drawer rows share, the tab body
+  // row's top being the sheet's less its gutter; it shows the height through
+  // the frame's grid tracks.
   const drawerDivider = (frame: Frame, handle: HTMLElement): SplitDivider =>
     createSplitDivider({
       ...DRAWER_SPLIT,
@@ -443,7 +444,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       sizedPane: 'end',
       handle,
       measure() {
-        const { top } = frame.bodies.getBoundingClientRect();
+        const gutter =
+          Number.parseFloat(getComputedStyle(frame.bodies).marginTop) || 0;
+        const top = frame.bodies.getBoundingClientRect().top - gutter;
         const { bottom } = frame.drawerHost.getBoundingClientRect();
         return { left: top, span: bottom - top };
       },

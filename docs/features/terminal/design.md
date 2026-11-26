@@ -29,7 +29,8 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
   with the session between panes as a session popup does. Sessions owns the drawer slot (`addDrawer`); the terminal
   plugin fills it. Two panes side by side each show their own session's drawer.
 - `Space b t` and `Ctrl+backtick` open and close the focused session's drawer. The drawer's height is dragged and kept
-  in the UI state, one height for every drawer.
+  in the UI state, one height for every drawer. It leaves the tab body row (the tab's sheet and its gutter) at least
+  160 px: in a short window the drawer gives way.
 - The layout draws the drawer's frame (header with the folder, the running or exited state, and restart); the
   emulator draws the grid. The emulator's colours and font come from theme tokens.
 - A shell that exits shows its exit line; Enter in the drawer starts a new shell.
@@ -66,8 +67,11 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 - Esc backs out of the terminal to the session's selected tab (`terminal.back`, bound `<Esc>` in scope
   `terminal.terminal`), as Esc backs out of a box elsewhere. The screen passes Esc to the page and xterm ignores it, so
   the shell never receives Esc; the terminal is not for full-screen programs.
-- Alt+j moves focus down from the pane's tab into a visible drawer, and Alt+k moves it back out: the drawer joins the
-  session pane's focus moves.
+- Alt+j moves focus down into a visible drawer from the bottom of the pane's tab, after the tab's own moves (Chat's
+  transcript, then its box), and Alt+k moves it back out to the tab's keys, Chat's transcript: the drawer joins the
+  session pane's focus moves below the tab.
+- A session switch hands the keys to the shown session's tab, as it does from Chat's box: the drawer, like the box,
+  does not take focus back when its session shows again.
 
 ## The agent's hand-off
 
