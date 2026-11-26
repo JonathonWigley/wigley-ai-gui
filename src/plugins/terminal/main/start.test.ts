@@ -633,9 +633,7 @@ describe('terminalMainPart', () => {
           return host.attach(id, events);
         },
         list: () =>
-          isListFailing
-            ? Promise.reject(new Error('host gone'))
-            : host.list(),
+          isListFailing ? Promise.reject(new Error('host gone')) : host.list(),
       }),
     };
   }

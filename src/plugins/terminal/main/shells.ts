@@ -555,7 +555,7 @@ export function createShells(deps: ShellsDeps): Shells {
   // lists the host for them when the first list failed.
   const endAllUnreached = (killedLive: ReadonlySet<string>): void => {
     if (!isListUnread) {
-      for (const sessionId of [...unreached]) {
+      for (const sessionId of unreached) {
         endUnreached(sessionId);
       }
       return;
@@ -625,7 +625,7 @@ export function createShells(deps: ShellsDeps): Shells {
       stopped = 'killed';
       cancelStarts();
       const killedLive = new Set<string>();
-      for (const sessionId of [...table.keys()]) {
+      for (const sessionId of table.keys()) {
         if (killEntry(sessionId)) {
           killedLive.add(sessionId);
         }
