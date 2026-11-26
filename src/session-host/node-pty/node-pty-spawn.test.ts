@@ -45,7 +45,7 @@ function fakeNodePty(): {
 
 describe('nodePtySpawn', () => {
   it.skipIf(process.platform === 'win32')(
-    'runs a program in a pty and reports its output and exit',
+    'spawn_Echo_ReportsItsOutputAndExit',
     async () => {
       const pty = nodePtySpawn('/bin/echo', ['hi'], {
         cwd: tmpdir(),

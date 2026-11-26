@@ -90,7 +90,7 @@ function setUp(env: NodeJS.ProcessEnv = {}) {
 type SetUp = ReturnType<typeof setUp>;
 
 describe('createTerminalTable', () => {
-  it('spawns the pty with the request and the shell environment', () => {
+  it('spawn_HostEnv_SpawnsThePtyWithTheShellEnvironment', () => {
     const { table, spawns, recorded } = setUp({
       PATH: '/bin',
       ELECTRON_RUN_AS_NODE: '1',
@@ -130,7 +130,7 @@ describe('createTerminalTable', () => {
     expect(recorded.map(({ pid }) => pid)).toEqual([5151]);
   });
 
-  it('cuts the replay with keepTail at TERMINAL_REPLAY_LIMIT', () => {
+  it('attach_OutputPastTheReplayLimit_ReplaysTheKeptTail', () => {
     const { table, spawnShell } = setUp();
     const shell = spawnShell('a');
 
@@ -142,7 +142,7 @@ describe('createTerminalTable', () => {
     );
   });
 
-  it('sends output only to the live subscriber', () => {
+  it('output_AttachThenDetach_GoesToTheLiveSubscriberOnly', () => {
     const { table, spawnShell } = setUp();
     const first = recordingTerminal();
     const second = recordingTerminal();
@@ -202,7 +202,7 @@ describe('createTerminalTable', () => {
       closed: { code: null, signal: 1, error: null },
     },
   ])(
-    'removes an exited shell and tells its subscriber once: $name',
+    'exit_Cases_RemovesTheShellAndTellsItsSubscriberOnce: $name',
     ({ exit, closed }) => {
       const { table, spawnShell, closedIds, recorded } = setUp();
       const subscriber = recordingTerminal();
@@ -224,6 +224,12 @@ describe('createTerminalTable', () => {
       prepare: (s: SetUp) => s.table.endAll(),
       request: terminalRequest('a'),
       error: 'the session host is draining',
+    },
+    {
+      name: 'while a stopAll waits',
+      prepare: (s: SetUp) => s.table.stopAll(() => {}),
+      request: terminalRequest('a'),
+      error: 'the session host is stopping',
     },
     {
       name: 'a held id',
@@ -261,7 +267,7 @@ describe('createTerminalTable', () => {
       request: terminalRequest('a'),
       error: 'no such file',
     },
-  ])('refuses a spawn: $name', ({ prepare, request, error, closedId }) => {
+  ])('spawn_Refusals_CloseWithTheReason: $name', ({ prepare, request, error, closedId }) => {
     const s = setUp();
     s.spawnShell('held');
     prepare(s);
@@ -278,7 +284,7 @@ describe('createTerminalTable', () => {
     expect(s.ptys.map((pty) => pty.kills())).toEqual(killsBefore);
   });
 
-  it('writes, resizes and kills the held shell only', () => {
+  it('writeResizeKill_HeldAndUnheldIds_ReachTheHeldShellOnly', () => {
     const { table, spawnShell } = setUp();
     const shell = spawnShell('a');
 
@@ -302,7 +308,7 @@ describe('createTerminalTable', () => {
     });
   });
 
-  it('ends every shell at once on endAll', () => {
+  it('endAll_TwoShells_KillsEachAtOnce', () => {
     const { table, spawnShell } = setUp();
     const shells = [spawnShell('a'), spawnShell('b')];
 
@@ -318,7 +324,7 @@ describe('createTerminalTable', () => {
   it.each([
     { name: 'an empty table', ids: [] as string[] },
     { name: 'two shells', ids: ['a', 'b'] },
-  ])('stopAll calls done once the table is empty: $name', ({ ids }) => {
+  ])('stopAll_Cases_CallsDoneOnceTheTableIsEmpty: $name', ({ ids }) => {
     const { table, spawnShell } = setUp();
     const shells = ids.map((id) => spawnShell(id));
     let doneCount = 0;
@@ -345,7 +351,7 @@ describe('createTerminalTable', () => {
       name: 'stopAll',
       end: (table: TerminalTable) => table.stopAll(() => {}),
     },
-  ])('kill escalates to SIGKILL after HOST_END_GRACE_MS: $name', ({ end }) => {
+  ])('end_Cases_SendsSigkillAfterTheGrace: $name', ({ end }) => {
     const { table, time, spawnShell, recorded } = setUp();
     const shell = spawnShell('a');
 
@@ -362,7 +368,7 @@ describe('createTerminalTable', () => {
     expect(recorded[0].kills).toBe(1);
   });
 
-  it('kill escalates to SIGKILL after HOST_END_GRACE_MS: not for a shell that exits first', () => {
+  it('kill_ShellExitsFirst_SendsNoSigkill', () => {
     const { table, time, spawnShell, recorded } = setUp();
     const shell = spawnShell('a');
 

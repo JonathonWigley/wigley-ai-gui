@@ -1081,21 +1081,24 @@ describe('process table', () => {
   it.each([
     {
       label: 'duplicate id',
-      draining: false,
+      prepare: () => {},
       error: 'a process with id a already exists',
     },
     {
       label: 'draining',
-      draining: true,
+      prepare: (table: ProcessTable) => table.drain(),
       error: 'the session host is draining',
     },
-  ])('spawn_Refusals_CloseWithTheReason: $label', ({ draining, error }) => {
+    {
+      label: 'while a stopAll waits',
+      prepare: (table: ProcessTable) => table.stopAll(() => {}),
+      error: 'the session host is stopping',
+    },
+  ])('spawn_Refusals_CloseWithTheReason: $label', ({ prepare, error }) => {
     const { table, children } = setUp();
     const first = recordingSubscriber();
     table.spawn(spawnRequest('a'), first.subscriber);
-    if (draining) {
-      table.drain();
-    }
+    prepare(table);
     const second = recordingSubscriber();
 
     table.spawn(spawnRequest('a'), second.subscriber);

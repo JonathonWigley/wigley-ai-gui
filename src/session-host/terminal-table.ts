@@ -10,6 +10,7 @@ import {
 import { keepTail } from '../shared/keep-tail';
 import type { DiagnosticLog } from './diagnostic-log';
 import type { RecordedPty } from './host-children';
+import { inheritedEnvOf } from './inherited-env';
 
 // The one receiver of a shell's live output and its close.
 export interface TerminalSubscriber {
@@ -53,7 +54,8 @@ export interface TerminalTable {
   list(): TerminalInfo[];
   // The drain: kills every shell now, as `kill` does, and refuses every later spawn.
   endAll(): void;
-  // Kills every shell as `kill` does, and calls `done` once the table is empty, at once when it already is.
+  // Kills every shell as `kill` does, and calls `done` once the table is empty, at once when it already is. Every
+  // spawn until then is refused.
   stopAll(done: () => void): void;
 }
 
@@ -97,18 +99,6 @@ function isWellFormedSpawn({
   );
 }
 
-function shellEnvOf(hostEnv: NodeJS.ProcessEnv): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(hostEnv)) {
-    if (value !== undefined) {
-      env[name] = value;
-    }
-  }
-  // The host runs as Node through this name; an Electron binary the shell starts would too.
-  delete env.ELECTRON_RUN_AS_NODE;
-  return { ...env, ...SHELL_TERMINAL_ENV };
-}
-
 // node-pty reports `exitCode` 0 for a shell a signal ended.
 function terminalExitOf({ exitCode, signal }: PtyExit): TerminalExit {
   return signal === null
@@ -125,6 +115,9 @@ export function createTerminalTable(deps: TerminalTableDeps): TerminalTable {
   function refusalOf(request: TerminalSpawn): string | null {
     if (draining) {
       return 'the session host is draining';
+    }
+    if (stopWaiters.length > 0) {
+      return 'the session host is stopping';
     }
     if (shells.has(request.id)) {
       return `a terminal with id ${request.id} already exists`;
@@ -186,7 +179,7 @@ export function createTerminalTable(deps: TerminalTableDeps): TerminalTable {
       try {
         pty = deps.spawn(request.command, request.args, {
           cwd: request.cwd,
-          env: shellEnvOf(deps.env),
+          env: { ...inheritedEnvOf(deps.env), ...SHELL_TERMINAL_ENV },
           cols: request.cols,
           rows: request.rows,
         });

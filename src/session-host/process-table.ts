@@ -15,6 +15,7 @@ import {
 import { readLines } from '../shared/local-channel/line-framing';
 import { MAX_TIMER_MS } from '../shared/tracked-timers';
 import type { DiagnosticLog } from './diagnostic-log';
+import { inheritedEnvOf } from './inherited-env';
 import { createPipeLog, type PipeLog } from './pipe-log';
 
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
@@ -78,7 +79,7 @@ export interface ProcessTable {
   // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first;
   // each main stdout line in that time starts the grace over.
   drain(): void;
-  // Calls `done` once the table is empty, at once when it already is.
+  // Calls `done` once the table is empty, at once when it already is. Every spawn until then is refused.
   stopAll(done: () => void): void;
 }
 
@@ -346,14 +347,7 @@ function childEnvOf(
   if (!inheritEnv) {
     return { ...env };
   }
-  const childEnv: NodeJS.ProcessEnv = {};
-  for (const [name, value] of Object.entries(hostEnv)) {
-    if (value !== undefined) {
-      childEnv[name] = value;
-    }
-  }
-  // The host runs as Node through this name; a child Electron binary would too.
-  delete childEnv.ELECTRON_RUN_AS_NODE;
+  const childEnv = inheritedEnvOf(hostEnv);
   for (const name of unsetEnv) {
     delete childEnv[name];
   }
@@ -620,6 +614,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   function refusalOf(id: string): string | null {
     if (draining) {
       return 'the session host is draining';
+    }
+    if (stopWaiters.length > 0) {
+      return 'the session host is stopping';
     }
     return processes.has(id) ? `a process with id ${id} already exists` : null;
   }
