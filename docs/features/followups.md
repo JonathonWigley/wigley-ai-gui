@@ -584,6 +584,15 @@ Duplication and drift with no user-visible defect.
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
 
+- **A restored retro row's history readability needs one design** — *needs a feature plan*: whether a chat row
+  restored at app start can read its session's history has been patched four times in the factory-loop run (D14, O7,
+  6c19cc55, then 8fe6b7f7 and 75ed3c06), each fix in `loadHistoryWhenReadable` and its wakes in
+  `src/plugins/chat/main/chat-sessions.ts`. Today a refused session-host list waits (`pending`), woken by the host
+  client's `onConnected` and a 5s retry (`HOST_LIST_RETRY_MS`), and only a process running in another app version
+  resolves `unreadable`. That last row never becomes readable once that process ends, so auto-retro leaves it open.
+  Plan one model of readability (polling older hosts, auto-retro asking again, or the host announcing an ended
+  process) in place of more wakes. Source: the factory-loop plan's review, fix cycle 2 (F2, a repeat).
+
 - **The build offer card clips in a short window** — *agent-ready*: at a 900x700 window the Builds offer card (a chat
   composer part, `builds.offer` in `src/plugins/builds/page/session-parts.ts`) is clipped inside the scrolling area
   above the composer and its Dismiss button is partly hidden. Seen in the builds plan's live-fix drive run; screenshots
