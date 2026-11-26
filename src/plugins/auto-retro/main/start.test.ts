@@ -202,9 +202,10 @@ const RETRO_HISTORY: readonly ChatEntry[] = [
 // alone), holds each registered reader in `features` and tells `onChanged` listeners on `setStrategies`. Every fake
 // lives across a restart. `enterDemoStep` enters the registered `auto-retro.section` step, its demo session `row-demo`.
 // Chat's `loadHistory` puts the row's `histories` entries ahead of its `chat.entries` and resolves `read`; while
-// `holdsHistory` is true each read waits for `settleHistory`, which writes and resolves `read`, or rejects with its
-// error, as chat holds a row that cannot read yet until its cause clears; while `unreadableReason` is set a read
-// writes nothing and resolves `unreadable` with it, as chat does for a row it can never read.
+// `holdsHistory` is true each read waits for `settleHistory`, which settles the row's oldest held read: it writes and
+// resolves `read`, or rejects with its error, as chat holds a row that cannot read yet until its cause clears (a
+// harness wait, a missing profile, a refused host list); while `resolvesWith` is set a read writes nothing and
+// resolves it, as chat does for a row it can never read (`unreadable`) or no longer holds (`gone`).
 // `holdRestore` keeps the next start's `chat.restored()` pending.
 function startPart(
   options: {
@@ -224,7 +225,7 @@ function startPart(
   let strategies = options.strategies ?? [WIGLEY];
   let restored: Promise<void> = Promise.resolve();
   const histories = new Map<string, readonly ChatEntry[]>();
-  const heldHistories = new Map<string, (error: Error | null) => void>();
+  const heldHistories = new Map<string, ((error: Error | null) => void)[]>();
   const demoSteps = createDemoStepRegistry<DemoMainStep>();
   const state = createSlotStore(() => undefined);
   state.publish(coreAgentHarnessesSlot).set(
@@ -318,20 +319,19 @@ function startPart(
     entries,
     histories,
     holdsHistory: false,
-    unreadableReason: null as string | null,
+    resolvesWith: null as HistoryLoad | null,
     loadHistory(sessionId: string): Promise<HistoryLoad> {
-      if (part.unreadableReason !== null) {
-        return Promise.resolve({
-          kind: 'unreadable',
-          reason: part.unreadableReason,
-        });
+      if (part.resolvesWith !== null) {
+        return Promise.resolve(part.resolvesWith);
       }
       if (!part.holdsHistory) {
         readHistory(sessionId);
         return Promise.resolve({ kind: 'read' });
       }
       return new Promise((resolve, reject) => {
-        heldHistories.set(sessionId, (error) => {
+        const held = heldHistories.get(sessionId) ?? [];
+        heldHistories.set(sessionId, held);
+        held.push((error) => {
           if (error !== null) {
             reject(error);
             return;
@@ -342,8 +342,7 @@ function startPart(
       });
     },
     settleHistory(sessionId: string, error: Error | null = null) {
-      const settle = heldHistories.get(sessionId);
-      heldHistories.delete(sessionId);
+      const settle = heldHistories.get(sessionId)?.shift();
       settle?.(error);
     },
     holdRestore() {
@@ -953,29 +952,125 @@ describe('autoRetroMainPart', () => {
     expect(part.closes).toEqual([['retro-9', 'finished']]);
   });
 
-  // Breaks: a running retro whose history chat can never read (its process runs in another app version) holding the
-  // queue forever, or closed under a guess.
-  it('restart_RunningRowHistoryNeverReadable_LeavesItOpenAndLaunchesTheNext', async () => {
+  // The part with retro `retro-1` (host `retro-host-1`) running for h1 and h2 queued, before a restart.
+  async function runningRetroBeforeRestart() {
     const part = startPart();
     await settled();
     await part.close('h1');
     await part.close('h2');
-    part.unreadableReason = 'its process runs in another app version';
+    return part;
+  }
 
-    await part.harness.restart();
-    await settled();
-    part.sessions.set('retro-1', restingInfo('retro-1'));
-    part.harness.advance(SETTLE_MS);
+  const RUNS_ELSEWHERE: HistoryLoad = {
+    kind: 'unreadable',
+    reason: 'its process runs in another app version',
+  };
 
-    expect(part.messages()).toContain(
-      'dropped retro retro-host-1: its history cannot be read (its process runs in another app version); row retro-1 left open',
-    );
-    expect(part.texts()).toEqual([
-      '/wigley:retro auto h1',
-      '/wigley:retro auto h2',
-    ]);
-    expect(part.closes).toEqual([]);
-  });
+  // Breaks: a running retro whose history chat can never read holding the queue forever, or closed under a guess; a
+  // running retro whose host listing failed (transient: chat keeps waiting) dropped, so the next retro launches beside
+  // it; a row chat can never read, or no longer holds, closed; a stale claim's load acting on the row claimed again.
+  // `start` builds the part before the restart, `act` runs after it; every row's history load leaves it unclosed.
+  it.each([
+    {
+      given: 'a running row chat can never read',
+      start: async () => {
+        const part = await runningRetroBeforeRestart();
+        part.resolvesWith = RUNS_ELSEWHERE;
+        return part;
+      },
+      act: (part: ReturnType<typeof startPart>) =>
+        part.sessions.set('retro-1', restingInfo('retro-1')),
+      historyLogs: [
+        'dropped retro retro-host-1: its history cannot be read (its process runs in another app version); row retro-1 left open',
+      ],
+      texts: ['/wigley:retro auto h1', '/wigley:retro auto h2'],
+    },
+    {
+      given: 'a running row whose host listing failed',
+      start: async () => {
+        const part = await runningRetroBeforeRestart();
+        part.holdsHistory = true;
+        return part;
+      },
+      act: (part: ReturnType<typeof startPart>) =>
+        part.sessions.set('retro-1', restingInfo('retro-1')),
+      historyLogs: [],
+      texts: ['/wigley:retro auto h1'],
+    },
+    {
+      given: 'a row that is not running and chat can never read',
+      start: async () => {
+        const part = await restartWithHistoryHeld();
+        part.holdsHistory = false;
+        part.resolvesWith = RUNS_ELSEWHERE;
+        return part;
+      },
+      act: (part: ReturnType<typeof startPart>) =>
+        part.sessions.set('retro-9', restingInfo('retro-9')),
+      historyLogs: [
+        'retro retro-9 left open: its history cannot be read (its process runs in another app version)',
+      ],
+      texts: [],
+    },
+    {
+      given: 'a row chat no longer holds',
+      start: async () => {
+        const part = await restartWithHistoryHeld();
+        part.holdsHistory = false;
+        part.resolvesWith = { kind: 'gone' };
+        return part;
+      },
+      act: (part: ReturnType<typeof startPart>) =>
+        part.sessions.set('retro-9', restingInfo('retro-9')),
+      historyLogs: [],
+      texts: [],
+    },
+    {
+      given: 'a row left and claimed again, whose first claim then reads',
+      start: restartWithHistoryHeld,
+      act: async (part: ReturnType<typeof startPart>) => {
+        const row = part.rows.get('retro-9');
+        part.rows.delete('retro-9');
+        part.sessions.delete('retro-9');
+        part.entries.delete('retro-9');
+        await settled();
+        if (row !== undefined) {
+          part.rows.set('retro-9', row);
+        }
+        part.harness.emit('chat.sessionOpened', {
+          sessionId: 'retro-9',
+          profileDir: '~/.claude-work',
+          hostSessionId: 'retro-host-9',
+          projectDir: '/home/me/wigley-agents',
+          profile: 'work',
+          origin: 'restored',
+        });
+        await settled();
+        part.sessions.set('retro-9', restingInfo('retro-9'));
+        part.settleHistory('retro-9');
+        await settled();
+      },
+      historyLogs: [],
+      texts: [],
+    },
+  ])(
+    'restart_RestoredRowHistoryLoad_LeavesTheRowOpen given $given',
+    async ({ start, act, historyLogs, texts }) => {
+      const part = await start();
+
+      await part.harness.restart();
+      await settled();
+      await act(part);
+      part.harness.advance(SETTLE_MS);
+      await settled();
+
+      expect(
+        part.messages().filter((message) => message.includes('left open')),
+      ).toEqual(historyLogs);
+      expect(part.texts()).toEqual(texts);
+      expect(part.closes).toEqual([]);
+    },
+  );
 
   // Breaks: rule 4 applied to a live retro still attaching while chat's restore runs.
   it('restart_RestoredRowBeforeRestoreEnds_IsNotClosed', async () => {

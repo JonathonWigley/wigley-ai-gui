@@ -414,8 +414,9 @@ interview on 2026-10-23; this file is the record of both.
   send reads it before starting the process, so the read never holds the new turn. A plugin that needs the history
   read (auto-retro, for a restored retro row) waits on chat's `loadHistory` export, which resolves `read` only once
   chat has read it, trying again after each read, harness return, harness refresh (a profile coming back), row close
-  and chat stop; `unreadable`, with the reason, while the row's unheld process runs in another app version or the
-  host cannot be listed, since chat cannot see either end; and `gone` once chat no longer holds the row. The first message sent in a resting
+  or clear, session host connect (a list the host refused, for a host not started, a reply timeout or a dropped link,
+  may answer then) and chat stop; `unreadable`, with the reason, while the row's unheld process runs in another app
+  version, since chat cannot see it end; and `gone` once chat no longer holds the row. The first message sent in a resting
   row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
   one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
   once it runs. Every process start in a row passes, in `AgentStart.controls`, the `mode` the row holds now as

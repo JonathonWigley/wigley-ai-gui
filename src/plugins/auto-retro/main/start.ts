@@ -289,8 +289,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       checkDone(rowId, sessionSlot.get(rowId));
     };
 
-    // A row whose history chat can never read stays busy and open, never closed under a guess; when it is the running
-    // retro, the queue drops the run as a missed restore does, and the next queued item launches.
+    // A row whose history chat can never read (its process runs in another app version) stays busy and open, never
+    // closed under a guess; when it is the running retro, the queue drops the run as a missed restore does, and the
+    // next queued item launches.
     const historyUnreadable = (rowId: string, reason: string) => {
       const host = rowsSlot.get(rowId)?.hostSessionId ?? null;
       const isRunningRow =
@@ -322,9 +323,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     };
 
     // Asks chat for a pending row's history, outside the serial chain so a slow read holds no other event. Chat
-    // resolves once it has read the history, waiting through chat's restore, the row's attach, a harness wait and a
-    // missing harness or profile; or once it never can (`historyUnreadable`); or once the row is gone. A rejected read
-    // reads the entries as they are.
+    // resolves once it has read the history, waiting through chat's restore, the row's attach, a harness wait, a
+    // missing harness or profile and a host list the session host refused; or once it never can
+    // (`historyUnreadable`); or once the row is gone. A rejected read reads the entries as they are.
     const readHistory = (rowId: string) => {
       const token = {};
       pendingHistoryRows.set(rowId, token);

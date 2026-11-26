@@ -429,7 +429,8 @@ function setUp(
     clockNow?: number;
     git?: ChatSessionsDeps['git'];
     files?: ChatSessionsDeps['files'];
-    sessionHost?: ChatSessionsDeps['sessionHost'];
+    // Replaces the fake host's `list`; its `onConnected` still serves.
+    sessionHost?: Pick<ChatSessionsDeps['sessionHost'], 'list'>;
     // Row ids an earlier run of chat left in the session slot.
     keptRowIds?: string[];
     projects?: ChatProject[];
@@ -602,7 +603,10 @@ function setUp(
     },
     log,
     clock,
-    sessionHost: options.sessionHost ?? sessionHost,
+    sessionHost: {
+      list: () => (options.sessionHost ?? sessionHost).list(),
+      onConnected: (listener) => sessionHost.onConnected(listener),
+    },
     projects: () => options.projects ?? [],
     poolProvider: () => options.poolProvider ?? null,
     homeDir: '/home/me',
@@ -4875,6 +4879,18 @@ describe('createChatSessions saved sessions', () => {
         test.chat.harnessRefreshed(FAKE_HARNESS_ID);
       },
     },
+    {
+      given: 'the session host refused its list',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord({ sent: true }), null);
+        test.sessionHost.failList('no host');
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.sessionHost.failList(null);
+        test.sessionHost.setList([hostedP1({ running: false })]);
+        test.sessionHost.connectAgain();
+      },
+    },
   ])(
     'loadHistoryWhenReadable_RowThatCannotReadYet_ResolvesReadOnceItsCauseClears given $given',
     async ({ arrange, clear }) => {
@@ -7697,43 +7713,30 @@ describe('createChatSessions unheld processes', () => {
     expect(startsOf(test).map((start) => start.request.resume)).toEqual([true]);
   });
 
-  // Breaks: an unheld row that read nothing resolving `read`, so auto-retro reads a restored retro lost, or never
-  // resolving, so a running retro holds the queue forever.
-  it.each([
-    {
-      given: 'its process runs in another app version',
-      arrange: (test: ReturnType<typeof setUp>) =>
-        test.sessionHost.setList([hostedP1({ current: false })]),
+  // Breaks: a row running in another app version resolving `read`, so auto-retro reads a restored retro lost, or
+  // never resolving, so a running retro holds the queue forever. A refused host list is transient and waits instead
+  // (`loadHistoryWhenReadable_RowThatCannotReadYet_ResolvesReadOnceItsCauseClears`).
+  it('loadHistoryWhenReadable_RunsInAnotherAppVersion_ResolvesUnreadableAndALaterReadReads', async () => {
+    const test = setUp();
+    restoreOne(test, hostedRecord({ sent: true }), [
+      hostedP1({ current: false }),
+    ]);
+
+    test.sessionHost.setList([hostedP1({ current: false })]);
+    const whileUnheld = await test.chat.loadHistoryWhenReadable(ROW_ID);
+    expect(whileUnheld).toEqual({
+      kind: 'unreadable',
       reason: 'its process runs in another app version',
-    },
-    {
-      given: 'the host cannot be listed',
-      arrange: (test: ReturnType<typeof setUp>) =>
-        test.sessionHost.failList('no host'),
-      reason: 'the session host cannot be listed: no host',
-    },
-  ])(
-    'loadHistoryWhenReadable_UnheldRow_ResolvesUnreadableAndALaterReadReads given $given',
-    async ({ arrange, reason }) => {
-      const test = setUp();
-      restoreOne(test, hostedRecord({ sent: true }), [
-        hostedP1({ current: false }),
-      ]);
+    });
+    expect(test.harness.pastSessionCalls).toEqual([]);
 
-      arrange(test);
-      const whileUnheld = await test.chat.loadHistoryWhenReadable(ROW_ID);
-      expect(whileUnheld).toEqual({ kind: 'unreadable', reason });
-      expect(test.harness.pastSessionCalls).toEqual([]);
+    test.sessionHost.setList([hostedP1({ running: false })]);
+    await test.chat.loadHistory(ROW_ID);
 
-      test.sessionHost.failList(null);
-      test.sessionHost.setList([hostedP1({ running: false })]);
-      await test.chat.loadHistory(ROW_ID);
-
-      expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual([
-        null,
-      ]);
-    },
-  );
+    expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual([
+      null,
+    ]);
+  });
 
   it('send_RestingRowWithSavedQueued_WritesTheSavedFirst', async () => {
     const test = setUp();

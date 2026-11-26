@@ -782,11 +782,12 @@ export interface ChatMainExports {
   restored(): Promise<void>;
   // Once chat's restore ends, reads a restored session's earlier conversation into chat.entries, as the page's
   // loadHistory does, and resolves only once the history is read or can never be read in this app. A row that cannot
-  // read yet (it waits on its harness, or its harness or profile is missing) is read as soon as that cause clears,
-  // and the call resolves then. Resolves `read` once the history pends no more: read now or by an earlier call (a
-  // failed read's notice included), or none pending. Resolves `unreadable`, with the reason, when the row's unheld
-  // process runs in another app version or the session host cannot be listed: chat cannot see either clear. Resolves
-  // `gone` for a session chat does not hold, one it stops holding while the call waits, and once chat stops.
+  // read yet (it waits on its harness, its harness or profile is missing, or the session host refused its list: not
+  // started, a reply timeout, a dropped link) is read as soon as that cause clears, a host connect included, and the
+  // call resolves then. Resolves `read` once the history pends no more: read now or by an earlier call (a failed
+  // read's notice included), or none pending. Resolves `unreadable`, with the reason, when the row's unheld process
+  // runs in another app version: chat cannot see it end. Resolves `gone` for a session chat does not hold, one it
+  // stops holding while the call waits, and once chat stops.
   loadHistory(sessionId: string): Promise<HistoryLoad>;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.

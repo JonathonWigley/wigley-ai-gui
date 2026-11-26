@@ -92,12 +92,13 @@ the analysts still run. A process that ended (clean or crash) after its first tu
 counts as started once its history holds an agent entry (a reply, thinking or a tool call): chat opens a restored row
 with no entries and reads its transcript only later, so the plugin asks chat's `loadHistory` for it once, and reads
 the entries after that read. Chat owns when a history turns readable, so the call resolves only once chat has read
-it: it waits for chat's restore to end and the row's attach, and through a harness wait or a missing harness or
-profile, reading as soon as that cause clears. Until then the row is busy. The transcript holds the turns run while
-the app was closed, so a retro that finished then reads done.
+it: it waits for chat's restore to end and the row's attach, and through a harness wait, a missing harness or
+profile, or a session host that refused its list (not started, a reply timeout, a dropped link: transient, and
+likeliest right at app start), reading as soon as that cause clears. Until then the row is busy. The transcript holds
+the turns run while the app was closed, so a retro that finished then reads done.
 
-Two causes never clear in this app: the row's process runs in another app version, or the session host cannot be
-listed. Chat resolves `unreadable` with the reason, and the row stays open and busy, never closed under a guess.
+One cause never clears in this app: the row's process runs in another app version. Chat resolves `unreadable` with
+the reason, and the row stays open and busy, never closed under a guess.
 When it is the running retro, the queue drops the run, as for a row that did not come back, logging `dropped retro
 <host id>: its history cannot be read (<reason>); row <row id> left open`, and the next queued item launches; any
 other such row logs `retro <row id> left open: its history cannot be read (<reason>)`. The user closes it by hand,

@@ -145,8 +145,10 @@ export interface ChatSessionsDeps {
   // later, without the app, so no harness reports an id first.
   randomUuid: RandomUuid;
   // Lists the host's processes before a resume, and before a send or history
-  // read on an unheld row.
-  sessionHost: Pick<SessionHost, 'list'>;
+  // read on an unheld row. Each connect after the first sends every waiting
+  // `loadHistoryWhenReadable` call round again, since a list refused before
+  // it may answer now.
+  sessionHost: Pick<SessionHost, 'list' | 'onConnected'>;
 }
 
 export interface ChatSessions {
@@ -261,14 +263,15 @@ export interface ChatSessions {
   loadHistory(sessionId: string): Promise<void>;
   // `loadHistory`, tried again each time the history may have turned readable
   // (a read ended, a harness returned or published new profiles, a row
-  // closed, chat stopped) until it resolves: `read` once the history pends no
-  // more (read now or earlier, a failed read's notice included, or none
-  // pending); `unreadable`, with the reason, while the row's unheld process
-  // runs in another app version or the host cannot be listed, since chat
-  // cannot see either end; `gone` for a session chat does not hold, one it
-  // stops holding while the call waits, and after `detachAll`. A row waiting
-  // on its harness, or whose harness or profile is missing, keeps the call
-  // waiting until that cause clears.
+  // closed or was cleared, the session host connected again, chat stopped)
+  // until it resolves: `read` once the history pends no more (read now or
+  // earlier, a failed read's notice included, or none pending); `unreadable`,
+  // with the reason, while the row's unheld process runs in another app
+  // version, since chat cannot see it end; `gone` for a session chat does not
+  // hold, one it stops holding while the call waits, and after `detachAll`. A
+  // row waiting on its harness, whose harness or profile is missing, or whose
+  // host list was refused (the host not started, a reply timeout, a dropped
+  // link) keeps the call waiting until that cause clears.
   loadHistoryWhenReadable(sessionId: string): Promise<HistoryLoad>;
   // The sessions plugin's `titleChanged` event: a row chat holds is saved with
   // its new titles; any other row is left alone.
@@ -698,22 +701,13 @@ interface UnheldSettled {
 }
 
 // One try at a restored row's history: a `HistoryLoad`, or `pending` while a
-// cause this app can see clear (a harness wait, a missing harness or profile)
-// keeps it unread.
+// cause this app can see clear (a harness wait, a missing harness or profile,
+// a refused host list) keeps it unread.
 type HistoryTry = HistoryLoad | { kind: 'pending' };
 
-// Why an unheld row's guard step leaves its history unreadable in this app:
-// its process runs in another app version, or the host cannot be listed; null
-// otherwise.
-function unheldUnreadableReason(settled: UnheldSettled): string | null {
-  if (settled.runsElsewhere) {
-    return 'its process runs in another app version';
-  }
-  if (!settled.readsHistory && settled.refusal !== null) {
-    return `the session host cannot be listed: ${settled.refusal}`;
-  }
-  return null;
-}
+// Why an unheld row's history stays unreadable in this app: its process runs
+// in another app version, whose end this app cannot see.
+const RUNS_ELSEWHERE_REASON = 'its process runs in another app version';
 
 const QUIT_DURING_TURN_TEXT =
   'The app quit during this turn. Your next message resumes this session.';
@@ -1080,6 +1074,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // readable; a `loadHistoryWhenReadable` call takes it before each try, so a
   // change that lands while the try runs still sends it round again.
   let historyChance = Promise.withResolvers<void>();
+  // A list the host refused (not started, a reply timeout, a dropped link) may
+  // answer once the host connects again.
+  const hostConnection = deps.sessionHost.onConnected(() =>
+    historyMayBeReadable(),
+  );
   // Records the restore skipped that hold queued or returned messages, saved
   // unchanged so the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
@@ -2891,14 +2890,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const waitingRows = [...held.values()].filter(
       (session) => session.waiting?.harnessId === harnessId,
     );
-    await Promise.all(
-      waitingRows.map((session) =>
-        afterAttach(session, () => resumeOnHarness(session, harness)),
-      ),
-    );
-    // A row that rested on the harness with no unheld process, or one whose
-    // harness was missing, reads its history only once asked again.
-    historyMayBeReadable();
+    try {
+      await Promise.all(
+        waitingRows.map((session) =>
+          afterAttach(session, () => resumeOnHarness(session, harness)),
+        ),
+      );
+    } finally {
+      // A row that rested on the harness with no unheld process, or one whose
+      // harness was missing, reads its history only once asked again; a row
+      // whose resume rejected strands none of the others.
+      historyMayBeReadable();
+    }
   }
 
   function harnessRefreshed(harnessId: string) {
@@ -4345,10 +4348,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (held.get(sessionId) !== session) {
         return { kind: 'gone' };
       }
-      const unreadable = unheldUnreadableReason(settled);
-      if (unreadable !== null) {
-        return { kind: 'unreadable', reason: unreadable };
+      if (settled.runsElsewhere) {
+        return { kind: 'unreadable', reason: RUNS_ELSEWHERE_REASON };
       }
+      // A refused list, or a guard step that found the row changed while it
+      // listed, tries again at the next wake: a host connect, a clear.
       if (!settled.readsHistory) {
         return { kind: 'pending' };
       }
@@ -4578,6 +4582,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.sent = false;
     session.historyPending = false;
     session.historyBefore = null;
+    // A history try that listed the host while the clear dropped the row's
+    // unheld process returned pending: the cleared row pends no more.
+    historyMayBeReadable();
     session.slots.replaceEntries([
       nextNotice(session, 'Conversation cleared', 'info'),
     ]);
@@ -4861,6 +4868,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
+      hostConnection.dispose();
       historyMayBeReadable();
       const heldSessions = [...held.values()];
       const heldProcesses = new Set(
