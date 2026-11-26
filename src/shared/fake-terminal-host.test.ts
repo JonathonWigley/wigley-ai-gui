@@ -118,13 +118,14 @@ describe('createFakeTerminalHost', () => {
     process.kill();
     expect(record.kills).toBe(1);
     expect(listener.closed).toEqual([]);
-    expect(await host.list()).toEqual([
-      { id: 's1', startedAt: 0, running: false },
-    ]);
+    const listedDuring = host.list();
     process.kill();
     expect(record.kills).toBe(2);
     await afterMicrotask();
 
+    expect(await listedDuring).toEqual([
+      { id: 's1', startedAt: 0, running: false },
+    ]);
     expect(listener.closed).toEqual([KILLED]);
     expect(await host.list()).toEqual([]);
   });
