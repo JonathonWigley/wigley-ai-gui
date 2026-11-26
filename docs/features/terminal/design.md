@@ -52,7 +52,8 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
   `COLORTERM=truecolor` set.
 - A shell ends when its session's row closes. On app start the terminal plugin lists the host's shells, adopts the ones
   whose row still exists, and ends the rest. A shell whose attach failed, or every shell when the list itself failed, is
-  attached by its session's first open, restart or type, which spawns a new shell only when the host holds none.
+  attached by its session's first open, restart or type, which spawns a new shell only when the host holds none or
+  that attach fails too.
 
 ## Keys
 

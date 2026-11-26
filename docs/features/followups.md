@@ -321,6 +321,12 @@ What Windows support and installers need.
   the theory, unchecked, is that it matters only when a setting or a bare name resolves to an npm `.cmd` shim and an
   argument holds cmd metacharacters. Options: escape twice for every `.cmd` shim, or refuse `"` in arguments as the
   line-break refusal does. Check cmd's parse rules first.
+- **Packaged Windows terminals may fail to start** — *agent-ready*: node-pty 1.1.0's
+  `lib/windowsConoutConnection.js:75` rewrites the conout worker's path from `node_modules.asar` to
+  `node_modules.asar.unpacked`, but the app packs into `app.asar` (`forge.config.mts` unpacks node-pty under
+  `app.asar.unpacked`), so the packaged Windows worker path may point inside `app.asar`. Unchecked theory: whether
+  `worker_threads` loads a worker from inside an asar. macOS is unaffected. Fix: check a packaged Windows spawn, then
+  rewrite the path in the session-host bundle or unpack the worker beside it.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers).
 - **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
