@@ -14,11 +14,12 @@ changes for the user.
 ### Changed
 
 - The session host starts at login only while an unattended scheduled task is active; attended tasks alone no longer turn it on.
+- The headless note and the `set_headless` and `open_audio_picker` tool descriptions say form where they said forms round.
 
 ### Fixed
 
 - A restored retro row whose process ended before its history was read no longer closes as start-failed.
-- A restored retro row whose history could not be read yet (its harness or profile missing, or its process running in another app version) stays open until the history is read, instead of closing as start-failed.
+- A restored retro row whose history cannot be read yet (its harness or profile missing) stays open until chat reads it, and closes as soon as it can; one whose history this app can never read (its process runs in another app version, or the session host cannot be listed) stays open without holding the retro queue, so the next retro starts.
 - A retro whose session ends before its first turn, or a restored retro row that never ran, closes with a log line naming the lost retro, and the next queued retro starts; before, the queue waited forever or the row read finished.
 
 ## 1.10.0 — 2026-11-25

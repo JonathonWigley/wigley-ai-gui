@@ -2258,7 +2258,8 @@ describe('chat main part on the harness', () => {
 });
 
 // A follower over a `core.agentHarnesses` slot that holds `claude` labelled
-// `Claude Code`, following a chat double that records each leave and return.
+// `Claude Code`, following a chat double that records each leave, return and
+// refresh.
 function followedHarnesses() {
   const store = createSlotStore(() => undefined);
   const writer = store.publish(coreAgentHarnessesSlot);
@@ -2276,6 +2277,9 @@ function followedHarnesses() {
     harnessReturned: (harnessId) => {
       heard.push(`returned ${harnessId}`);
       return Promise.resolve();
+    },
+    harnessRefreshed: (harnessId) => {
+      heard.push(`refreshed ${harnessId}`);
     },
   });
   return { writer, follower, heard, logged };
@@ -2310,12 +2314,13 @@ describe('createHarnessFollower', () => {
     },
   );
 
-  it('start_PresentHarnessSetAgain_ChatHearsNeither', () => {
+  // Breaks: a profile coming back unheard, so a restored row's history waits on it forever.
+  it('start_PresentHarnessSetAgain_ChatHearsTheRefresh', () => {
     const test = followedHarnesses();
 
     test.writer.set('claude', harnessInfo({ label: 'Claude Code 2' }));
 
-    expect(test.heard).toEqual([]);
+    expect(test.heard).toEqual(['refreshed claude']);
     expect(test.follower.labelOf('claude')).toBe('Claude Code 2');
     expect(test.follower.labelOf('unknown')).toBe('unknown');
   });
@@ -2329,6 +2334,7 @@ describe('createHarnessFollower', () => {
     ).follow({
       harnessLeft: () => undefined,
       harnessReturned: () => Promise.reject(new Error('boom')),
+      harnessRefreshed: () => undefined,
     });
 
     writer.set('claude', harnessInfo());

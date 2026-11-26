@@ -56,6 +56,7 @@ import {
   type ChatProject,
   type ChatSessionState,
   HEADLESS_NOTE,
+  type HistoryLoad,
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
@@ -252,14 +253,23 @@ export interface ChatSessions {
   // Reads a restored session's earlier conversation once and puts it before
   // the entries held so far, up to its process's start on a re-attached row,
   // noting the agent of each tool call it holds; does nothing for a session
-  // with none pending. It waits out a running attach. It reads nothing, leaving
-  // the history pending, while the row waits on its harness, while its harness
-  // or profile is missing, and while its unheld process runs in another app
-  // version or the host cannot be listed. Resolves true once the history pends
-  // no more (read now or earlier, a failed read's notice included, or none
-  // pending); false when it read nothing: in each case above, and for a
-  // session chat does not hold.
-  loadHistory(sessionId: string): Promise<boolean>;
+  // with none pending. It waits out a running attach, and resolves once any
+  // read already running has landed. It reads nothing, leaving the history
+  // pending for a later call, while the row waits on its harness, while its
+  // harness or profile is missing, and while its unheld process runs in
+  // another app version or the host cannot be listed.
+  loadHistory(sessionId: string): Promise<void>;
+  // `loadHistory`, tried again each time the history may have turned readable
+  // (a read ended, a harness returned or published new profiles, a row
+  // closed, chat stopped) until it resolves: `read` once the history pends no
+  // more (read now or earlier, a failed read's notice included, or none
+  // pending); `unreadable`, with the reason, while the row's unheld process
+  // runs in another app version or the host cannot be listed, since chat
+  // cannot see either end; `gone` for a session chat does not hold, one it
+  // stops holding while the call waits, and after `detachAll`. A row waiting
+  // on its harness, or whose harness or profile is missing, keeps the call
+  // waiting until that cause clears.
+  loadHistoryWhenReadable(sessionId: string): Promise<HistoryLoad>;
   // The sessions plugin's `titleChanged` event: a row chat holds is saved with
   // its new titles; any other row is left alone.
   titleChanged(sessionId: string): void;
@@ -487,6 +497,11 @@ export interface ChatSessions {
   // row's step has settled; logs and changes nothing when the registry holds no
   // such harness, and after `detachAll`.
   harnessReturned(harnessId: string): Promise<void>;
+  // The harness `harnessId`, still registered, published its declarations
+  // again, its profiles among them: each `loadHistoryWhenReadable` call still
+  // waiting tries its row again, so a row whose profile came back reads.
+  // Does nothing after `detachAll`.
+  harnessRefreshed(harnessId: string): void;
 }
 
 export const UNATTENDED_REASON =
@@ -680,6 +695,24 @@ interface UnheldSettled {
   readsHistory: boolean;
   refusal: string | null;
   runsElsewhere: boolean;
+}
+
+// One try at a restored row's history: a `HistoryLoad`, or `pending` while a
+// cause this app can see clear (a harness wait, a missing harness or profile)
+// keeps it unread.
+type HistoryTry = HistoryLoad | { kind: 'pending' };
+
+// Why an unheld row's guard step leaves its history unreadable in this app:
+// its process runs in another app version, or the host cannot be listed; null
+// otherwise.
+function unheldUnreadableReason(settled: UnheldSettled): string | null {
+  if (settled.runsElsewhere) {
+    return 'its process runs in another app version';
+  }
+  if (!settled.readsHistory && settled.refusal !== null) {
+    return `the session host cannot be listed: ${settled.refusal}`;
+  }
+  return null;
 }
 
 const QUIT_DURING_TURN_TEXT =
@@ -1043,6 +1076,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
   let isDetached = false;
+  // Resolved, then replaced, each time a pending history may have turned
+  // readable; a `loadHistoryWhenReadable` call takes it before each try, so a
+  // change that lands while the try runs still sends it round again.
+  let historyChance = Promise.withResolvers<void>();
   // Records the restore skipped that hold queued or returned messages, saved
   // unchanged so the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
@@ -1657,6 +1694,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function drop(session: HeldSession) {
     session.slots.close();
     held.delete(session.sessionId);
+    historyMayBeReadable();
     session.pending.clear();
     settleEveryIntoTurn(session);
     rejectHostIdWaiters(
@@ -2808,8 +2846,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (!isStillWaiting) {
       return;
     }
-    removeWaitingNotice(session);
+    // The wait lifts before the notice's entries write, so a reader woken by
+    // that write finds the row no longer waiting.
     session.waiting = null;
+    removeWaitingNotice(session);
     const { profile: profileName } = session.slots.info();
     const profile = deps.harnesses
       .profilesOf(harness.id)
@@ -2856,6 +2896,24 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         afterAttach(session, () => resumeOnHarness(session, harness)),
       ),
     );
+    // A row that rested on the harness with no unheld process, or one whose
+    // harness was missing, reads its history only once asked again.
+    historyMayBeReadable();
+  }
+
+  function harnessRefreshed(harnessId: string) {
+    if (isDetached) {
+      log(`harness ${harnessId} refreshed; chat is stopping`);
+      return;
+    }
+    historyMayBeReadable();
+  }
+
+  // Wakes every `loadHistoryWhenReadable` call waiting, so each tries its row
+  // again.
+  function historyMayBeReadable() {
+    historyChance.resolve();
+    historyChance = Promise.withResolvers<void>();
   }
 
   // Throws `send`'s refusal while the row waits on its harness.
@@ -4186,6 +4244,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.historyRead = prependHistory(session, profile, harness).finally(
         () => {
           session.historyRead = null;
+          historyMayBeReadable();
         },
       );
     }
@@ -4234,43 +4293,68 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.slots.replaceEntries([...history, ...session.slots.entries()]);
   }
 
+  async function loadHistory(sessionId: string): Promise<void> {
+    await tryHistory(sessionId);
+  }
+
+  async function loadHistoryWhenReadable(
+    sessionId: string,
+  ): Promise<HistoryLoad> {
+    while (!isDetached) {
+      const chance = historyChance.promise;
+      const tried = await tryHistory(sessionId);
+      if (tried.kind !== 'pending') {
+        return tried;
+      }
+      await chance;
+    }
+    return { kind: 'gone' };
+  }
+
   // An attach that finds no process drops the history's cut, so the read waits
   // for its result.
-  async function loadHistory(sessionId: string): Promise<boolean> {
-    return afterAttach(held.get(sessionId), () =>
-      loadHistorySettled(sessionId),
+  function tryHistory(sessionId: string): Promise<HistoryTry> {
+    return Promise.resolve(
+      afterAttach(held.get(sessionId), () => tryHistorySettled(sessionId)),
     );
   }
 
-  async function loadHistorySettled(sessionId: string): Promise<boolean> {
+  async function tryHistorySettled(sessionId: string): Promise<HistoryTry> {
     const session = held.get(sessionId);
     if (session === undefined) {
-      return false;
+      return { kind: 'gone' };
     }
     if (!session.historyPending) {
-      // Another caller's read may still be running: the export resolves once its entries land.
+      // Another caller's read may still be running: resolve once its entries land.
       await session.historyRead;
-      return true;
+      return { kind: 'read' };
     }
     // A row waiting on its harness, or with a missing harness or profile, reads
     // nothing and leaves the history pending: its notice says why.
     if (session.waiting !== null) {
-      return false;
+      return { kind: 'pending' };
     }
     const { harness: harnessId, profile: profileName } = session.slots.info();
     const harness = deps.harnesses.get(harnessId);
     const profile = registeredProfile(harnessId, profileName);
     if (harness === null || profile === undefined) {
-      return false;
+      return { kind: 'pending' };
     }
     if (isUnheld(session)) {
       const settled = await settleUnheld(session, harness, profile);
-      if (!settled.readsHistory || held.get(sessionId) !== session) {
-        return false;
+      if (held.get(sessionId) !== session) {
+        return { kind: 'gone' };
+      }
+      const unreadable = unheldUnreadableReason(settled);
+      if (unreadable !== null) {
+        return { kind: 'unreadable', reason: unreadable };
+      }
+      if (!settled.readsHistory) {
+        return { kind: 'pending' };
       }
     }
     await historyReadOf(session, profile, harness);
-    return true;
+    return { kind: 'read' };
   }
 
   // A file that cannot be read marks no row archived, so every saved session
@@ -4609,6 +4693,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     projectPastSessions,
     restore,
     loadHistory,
+    loadHistoryWhenReadable,
     titleChanged(sessionId) {
       if (held.has(sessionId)) {
         save();
@@ -4776,6 +4861,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     detachAll() {
       const lastSave = writeSaved();
       isDetached = true;
+      historyMayBeReadable();
       const heldSessions = [...held.values()];
       const heldProcesses = new Set(
         heldSessions.flatMap((session) =>
@@ -4871,5 +4957,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     harnessLeft,
     harnessReturned,
+    harnessRefreshed,
   };
 }

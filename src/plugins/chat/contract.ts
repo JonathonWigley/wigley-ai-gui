@@ -39,7 +39,7 @@ export const AUTO_ANSWER_GATE_CLAUSE =
 // row is headless no longer.
 export const HEADLESS_NOTE =
   'This session is headless until a tool result says the session is no ' +
-  'longer headless: nobody answers forms rounds. Build no round: take each ' +
+  'longer headless: nobody answers forms. Build no round: take each ' +
   "item's recommended pick and list every pick as a Decided notice in your " +
   `reply. ${AUTO_ANSWER_GATE_CLAUSE}`;
 export const HEADLESS_OFF_NOTE =
@@ -602,6 +602,14 @@ export function isUserClose(reason: SessionCloseReason): boolean {
 }
 export type ProcessEndReason = 'stopped' | 'clean' | 'crash';
 
+// What a wait for a restored session's history came to (`ChatMainExports.loadHistory`): `read` once it pends no
+// more, `unreadable` when this app can never read it, with the reason in words a log line reads, and `gone` once
+// chat no longer holds the session or chat stopped.
+export type HistoryLoad =
+  | { kind: 'read' }
+  | { kind: 'unreadable'; reason: string }
+  | { kind: 'gone' };
+
 // `agentEvent`: one agent event of a session chat owns, still sent after the
 // row closes for its process's `sessionEnded`; also a restored or resumed
 // row's saved usage, read from its transcript rather than sent by a process,
@@ -773,12 +781,13 @@ export interface ChatMainExports {
   // restore is about to reopen.
   restored(): Promise<void>;
   // Once chat's restore ends, reads a restored session's earlier conversation into chat.entries, as the page's
-  // loadHistory does. Resolves true once the history pends no more: read now or by an earlier call (a failed read's
-  // notice included), or none pending. Resolves false when it read nothing and the history stays pending: while the
-  // row waits on its harness, while its harness or profile is missing, while its unheld process runs in another app
-  // version or the host cannot be listed; and false for a session chat does not hold. After a false a later call
-  // tries again.
-  loadHistory(sessionId: string): Promise<boolean>;
+  // loadHistory does, and resolves only once the history is read or can never be read in this app. A row that cannot
+  // read yet (it waits on its harness, or its harness or profile is missing) is read as soon as that cause clears,
+  // and the call resolves then. Resolves `read` once the history pends no more: read now or by an earlier call (a
+  // failed read's notice included), or none pending. Resolves `unreadable`, with the reason, when the row's unheld
+  // process runs in another app version or the session host cannot be listed: chat cannot see either clear. Resolves
+  // `gone` for a session chat does not hold, one it stops holding while the call waits, and once chat stops.
+  loadHistory(sessionId: string): Promise<HistoryLoad>;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.

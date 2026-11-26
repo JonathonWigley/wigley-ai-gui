@@ -270,12 +270,16 @@ export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
 // Chat's view of `core.agentHarnesses`: the ids present when it was made and
 // the last label read for each id. `follow` tells `chat` of each later change:
 // a present id's key deleted is a leave, a key set for an id not present (a
-// first registration included) a return, and a present id's key set again (a
-// refresh) neither. `labelOf` is the last label read for an id, else the id.
+// first registration included) a return, and a present id's key set again a
+// refresh, which may carry new profiles. `labelOf` is the last label read for
+// an id, else the id.
 export interface HarnessFollower {
   labelOf(harnessId: string): string;
   follow(
-    chat: Pick<ChatSessions, 'harnessLeft' | 'harnessReturned'>,
+    chat: Pick<
+      ChatSessions,
+      'harnessLeft' | 'harnessReturned' | 'harnessRefreshed'
+    >,
   ): Disposable;
 }
 
@@ -299,6 +303,7 @@ export function createHarnessFollower(
         }
         labels.set(harnessId, info.label);
         if (present.has(harnessId)) {
+          chat.harnessRefreshed(harnessId);
           return;
         }
         present.add(harnessId);
@@ -696,7 +701,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       defaultProfile,
       restored: () => restored,
       loadHistory: (sessionId) =>
-        restored.then(() => chat.loadHistory(sessionId)),
+        restored.then(() => chat.loadHistoryWhenReadable(sessionId)),
       send: async (sessionId, message) => {
         requireHeld(sessionId);
         return chat.send(sessionId, message);

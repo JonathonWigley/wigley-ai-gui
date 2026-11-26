@@ -12,6 +12,7 @@ import { registeredProfiles } from '../../../shared/harness-profiles';
 import {
   type ChatMainEvents,
   type ChatSessionInfo,
+  type HistoryLoad,
   chatEntriesSlot,
   chatMainKey,
   chatSessionSlot,
@@ -161,11 +162,10 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
     const endedRows = new Set<string>();
     // Restored row ids whose history was read once chat's restore ended, kept until the row leaves the side bar.
     const restoredRows = new Set<string>();
-    // Restored row ids whose history is not yet read, from the claim until a read reads it; such a row reads busy,
-    // since its entries cannot yet say whether its retro ran.
-    const pendingHistoryRows = new Set<string>();
-    // The pending rows whose `loadHistory` call is in flight.
-    const readingHistoryRows = new Set<string>();
+    // Restored row ids whose history is not yet read, from the claim until chat reads it, to the token of the claim's
+    // `loadHistory` call, so a call from an earlier claim of the same id acts on nothing. Such a row reads busy, since
+    // its entries cannot yet say whether its retro ran; one chat can never read stays here, left open.
+    const pendingHistoryRows = new Map<string, object>();
     // Each claimed row in its settle wait, to its timer.
     const settles = new Map<string, number>();
 
@@ -289,36 +289,56 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       checkDone(rowId, sessionSlot.get(rowId));
     };
 
-    // Asks chat for a pending row's history, which waits for chat's restore to end and then for the row's attach,
-    // outside the serial chain so a slow attach holds no other event. A call that read nothing (the row waits on its
-    // harness, its profile is missing, or its process runs in another app version) leaves the row pending and busy;
-    // `retryHistory` asks again when the row's session info or entries next change. A rejected read reads the entries
-    // as they are.
+    // A row whose history chat can never read stays busy and open, never closed under a guess; when it is the running
+    // retro, the queue drops the run as a missed restore does, and the next queued item launches.
+    const historyUnreadable = (rowId: string, reason: string) => {
+      const host = rowsSlot.get(rowId)?.hostSessionId ?? null;
+      const isRunningRow =
+        host !== null && queue.running?.hostSessionId === host;
+      if (!isRunningRow) {
+        log(`retro ${rowId} left open: its history cannot be read (${reason})`);
+        return;
+      }
+      log(
+        `dropped retro ${host}: its history cannot be read (${reason}); row ${rowId} left open`,
+      );
+      return apply({ kind: 'restoreMissed' });
+    };
+
+    // What chat's wait for a pending row's history came to, unless the row left or was claimed again since the call.
+    const historyLoaded = (rowId: string, token: object, load: HistoryLoad) => {
+      if (pendingHistoryRows.get(rowId) !== token) {
+        return;
+      }
+      switch (load.kind) {
+        case 'read':
+          historyRead(rowId);
+          return;
+        case 'unreadable':
+          return historyUnreadable(rowId, load.reason);
+        case 'gone':
+          return;
+      }
+    };
+
+    // Asks chat for a pending row's history, outside the serial chain so a slow read holds no other event. Chat
+    // resolves once it has read the history, waiting through chat's restore, the row's attach, a harness wait and a
+    // missing harness or profile; or once it never can (`historyUnreadable`); or once the row is gone. A rejected read
+    // reads the entries as they are.
     const readHistory = (rowId: string) => {
-      readingHistoryRows.add(rowId);
+      const token = {};
+      pendingHistoryRows.set(rowId, token);
       chat.loadHistory(rowId).then(
-        (isRead) =>
-          serial(() => {
-            readingHistoryRows.delete(rowId);
-            if (isRead) {
-              historyRead(rowId);
-            }
-          }),
+        (load) => serial(() => historyLoaded(rowId, token, load)),
         (error: unknown) =>
           serial(() => {
-            readingHistoryRows.delete(rowId);
+            if (pendingHistoryRows.get(rowId) !== token) {
+              return;
+            }
             log(`retro ${rowId} history not read: ${errorText(error)}`);
             historyRead(rowId);
           }),
       );
-    };
-
-    // Chat sends no event when a row's history becomes readable, so a pending row asks again at its next change: the
-    // harness returning drops its waiting notice, and a read the page asks for prepends the history.
-    const retryHistory = (rowId: string) => {
-      if (pendingHistoryRows.has(rowId) && !readingHistoryRows.has(rowId)) {
-        readHistory(rowId);
-      }
     };
 
     // Claims a restored retro row and reads its history.
@@ -327,10 +347,9 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         return;
       }
       rows.push(rowId);
-      pendingHistoryRows.add(rowId);
+      readHistory(rowId);
       publish();
       checkDone(rowId, sessionSlot.get(rowId));
-      readHistory(rowId);
     };
 
     const leaveRow = (rowId: string) => {
@@ -338,7 +357,6 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
       endedRows.delete(rowId);
       restoredRows.delete(rowId);
       pendingHistoryRows.delete(rowId);
-      readingHistoryRows.delete(rowId);
       clearSettle(rowId);
       const index = rows.indexOf(rowId);
       if (index !== -1) {
@@ -615,12 +633,6 @@ export const autoRetroMainPart: MainPart<typeof autoRetroManifest> = {
         startedRows.add(sessionId);
       }
       checkDone(sessionId, info);
-      retryHistory(sessionId);
-    });
-    entriesSlot.on((sessionId) => {
-      if (rows.includes(sessionId)) {
-        retryHistory(sessionId);
-      }
     });
     // A change of strategies or of a setting may change the pick; `commit` then launches a retro queued while none
     // was picked. A pick that binds again lets the next unbound pick log.

@@ -59,6 +59,7 @@ import {
   type ChatSessionState,
   chatSessionSlot,
   HEADLESS_NOTE,
+  type HistoryLoad,
   type PoolProvider,
   type QueuedMessage,
   type ReturnedMessage,
@@ -4801,7 +4802,7 @@ describe('createChatSessions saved sessions', () => {
   );
 
   // Breaks: the export resolving while another caller's read is still in flight, before its entries land.
-  it('loadHistory_ReadAlreadyRunning_ResolvesAfterTheEntriesLand', async () => {
+  it('loadHistoryWhenReadable_ReadAlreadyRunning_ResolvesAfterTheEntriesLand', async () => {
     const test = setUp();
     const hostId = PAST_ONE.sessionId;
     test.chat.restore(
@@ -4812,18 +4813,107 @@ describe('createChatSessions saved sessions', () => {
       [],
     );
     await flush();
+    const gate = Promise.withResolvers<void>();
+    const history = test.harness.history;
+    test.harness.history = async (...args) => {
+      await gate.promise;
+      return history(...args);
+    };
 
     const firstRead = test.chat.loadHistory(ROW_ID);
-    await test.chat.loadHistory(ROW_ID);
+    let secondLoad: HistoryLoad | null = null;
+    const secondRead = test.chat
+      .loadHistoryWhenReadable(ROW_ID)
+      .then((load) => {
+        secondLoad = load;
+      });
+    await flush();
+
+    expect(secondLoad).toBeNull();
+
+    gate.resolve();
+    await secondRead;
     const idsAfterSecond = test.chat
       .sessions()[0]
       .entries.map((entry) => entry.id);
     await firstRead;
 
+    expect(secondLoad).toEqual({ kind: 'read' });
     expect(idsAfterSecond).toEqual([
       `history:${PAST_ONE.sessionId}-user`,
       `history:${PAST_ONE.sessionId}-assistant`,
     ]);
+  });
+
+  // Breaks: a wait for a row that cannot read yet resolving before its cause clears, or never once it has, so
+  // auto-retro holds the restored retro row busy forever.
+  it.each([
+    {
+      given: 'its harness left',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, record(PAST_ONE.sessionId, { sent: true }), []);
+        test.leave(FAKE_HARNESS_ID);
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.register(test.harness);
+        return test.chat.harnessReturned(FAKE_HARNESS_ID);
+      },
+    },
+    {
+      given: 'its profile is missing',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        restoreOne(
+          test,
+          record(PAST_ONE.sessionId, { sent: true, profile: 'gone' }),
+          [],
+        ),
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.setProfiles([
+          ...PROFILES,
+          { name: 'gone', configDir: '/Users/u/.claude-gone' },
+        ]);
+        test.chat.harnessRefreshed(FAKE_HARNESS_ID);
+      },
+    },
+  ])(
+    'loadHistoryWhenReadable_RowThatCannotReadYet_ResolvesReadOnceItsCauseClears given $given',
+    async ({ arrange, clear }) => {
+      const test = setUp();
+      arrange(test);
+      let load: HistoryLoad | null = null;
+      const waiting = test.chat
+        .loadHistoryWhenReadable(ROW_ID)
+        .then((loaded) => {
+          load = loaded;
+        });
+      await flush();
+
+      expect(load).toBeNull();
+      expect(historyCallsOf(test)).toEqual([]);
+
+      await clear(test);
+      await waiting;
+
+      expect(load).toEqual({ kind: 'read' });
+      expect(historyCallsOf(test)).toHaveLength(1);
+    },
+  );
+
+  // Breaks: a wait for a row the user closed never resolving.
+  it('loadHistoryWhenReadable_RowClosedWhileWaiting_ResolvesGone', async () => {
+    const test = setUp();
+    restoreOne(
+      test,
+      record(PAST_ONE.sessionId, { sent: true, profile: 'gone' }),
+      [],
+    );
+    const waiting = test.chat.loadHistoryWhenReadable(ROW_ID);
+    await flush();
+
+    test.chat.closed(ROW_ID, 'user');
+
+    expect(await waiting).toEqual({ kind: 'gone' });
+    expect(historyCallsOf(test)).toEqual([]);
   });
 
   it('loadHistory_ProfileMissing_ReadsOnceItIsBack', async () => {
@@ -4838,15 +4928,14 @@ describe('createChatSessions saved sessions', () => {
     const historyCalls = () =>
       test.harness.pastSessionCalls.filter((call) => call.method === 'history');
 
-    const whileMissing = await test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
     const callsWhileMissing = historyCalls().length;
     test.setProfiles([
       ...PROFILES,
       { name: 'gone', configDir: '/Users/u/.claude-gone' },
     ]);
-    const onceBack = await test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
 
-    expect([whileMissing, onceBack]).toEqual([false, true]);
     expect(callsWhileMissing).toBe(0);
     expect(historyCalls()).toHaveLength(1);
     expect(
@@ -7608,36 +7697,38 @@ describe('createChatSessions unheld processes', () => {
     expect(startsOf(test).map((start) => start.request.resume)).toEqual([true]);
   });
 
-  // Breaks: an unheld row's read that read nothing resolving true, so auto-retro reads a restored retro lost.
+  // Breaks: an unheld row that read nothing resolving `read`, so auto-retro reads a restored retro lost, or never
+  // resolving, so a running retro holds the queue forever.
   it.each([
     {
       given: 'its process runs in another app version',
       arrange: (test: ReturnType<typeof setUp>) =>
         test.sessionHost.setList([hostedP1({ current: false })]),
+      reason: 'its process runs in another app version',
     },
     {
       given: 'the host cannot be listed',
       arrange: (test: ReturnType<typeof setUp>) =>
         test.sessionHost.failList('no host'),
+      reason: 'the session host cannot be listed: no host',
     },
   ])(
-    'loadHistory_UnheldRow_ReadsNothingAndResolvesFalse given $given',
-    async ({ arrange }) => {
+    'loadHistoryWhenReadable_UnheldRow_ResolvesUnreadableAndALaterReadReads given $given',
+    async ({ arrange, reason }) => {
       const test = setUp();
       restoreOne(test, hostedRecord({ sent: true }), [
         hostedP1({ current: false }),
       ]);
 
       arrange(test);
-      const whileUnheld = await test.chat.loadHistory(ROW_ID);
-      expect(whileUnheld).toBe(false);
+      const whileUnheld = await test.chat.loadHistoryWhenReadable(ROW_ID);
+      expect(whileUnheld).toEqual({ kind: 'unreadable', reason });
       expect(test.harness.pastSessionCalls).toEqual([]);
 
       test.sessionHost.failList(null);
       test.sessionHost.setList([hostedP1({ running: false })]);
-      const onceEnded = await test.chat.loadHistory(ROW_ID);
+      await test.chat.loadHistory(ROW_ID);
 
-      expect(onceEnded).toBe(true);
       expect(test.harness.pastSessionCalls.map((call) => call.before)).toEqual([
         null,
       ]);
@@ -10657,16 +10748,14 @@ describe('createChatSessions harness leave and return', () => {
     const test = restoredResting();
     test.leave(FAKE_HARNESS_ID);
 
-    const whileWaiting = await test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
 
-    expect(whileWaiting).toBe(false);
     expect(historyCallsOf(test)).toEqual([]);
 
     test.register(test.harness);
     await test.chat.harnessReturned(FAKE_HARNESS_ID);
-    const onceBack = await test.chat.loadHistory(ROW_ID);
+    await test.chat.loadHistory(ROW_ID);
 
-    expect(onceBack).toBe(true);
     expect(historyCallsOf(test)).toHaveLength(1);
   });
 
