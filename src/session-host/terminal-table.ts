@@ -54,8 +54,7 @@ export interface TerminalTable {
   list(): TerminalInfo[];
   // The drain: kills every shell now, as `kill` does, and refuses every later spawn.
   endAll(): void;
-  // Kills every shell as `kill` does, and calls `done` once the table is empty, at once when it already is. Every
-  // spawn until then is refused.
+  // Kills every shell as `kill` does, and calls `done` once the table is empty, at once when it already is.
   stopAll(done: () => void): void;
 }
 
@@ -115,9 +114,6 @@ export function createTerminalTable(deps: TerminalTableDeps): TerminalTable {
   function refusalOf(request: TerminalSpawn): string | null {
     if (draining) {
       return 'the session host is draining';
-    }
-    if (stopWaiters.length > 0) {
-      return 'the session host is stopping';
     }
     if (shells.has(request.id)) {
       return `a terminal with id ${request.id} already exists`;

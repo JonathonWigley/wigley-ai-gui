@@ -226,12 +226,6 @@ describe('createTerminalTable', () => {
       error: 'the session host is draining',
     },
     {
-      name: 'while a stopAll waits',
-      prepare: (s: SetUp) => s.table.stopAll(() => {}),
-      request: terminalRequest('a'),
-      error: 'the session host is stopping',
-    },
-    {
       name: 'a held id',
       prepare: (s: SetUp) => s.spawnShell('a'),
       request: terminalRequest('a'),

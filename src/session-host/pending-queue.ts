@@ -25,7 +25,7 @@ export interface PendingQueueDeps {
   clock: Clock;
   timers: Timers;
   diagnostics: DiagnosticLog;
-  // The process table's `spawn`.
+  // The process table's `spawn`, refused while a `stopAll` waits (host-server.ts).
   spawn(request: HostedSpawn, subscriber: ProcessSubscriber): void;
   // The process table's `isBusy`.
   isBusy(id: string): boolean;

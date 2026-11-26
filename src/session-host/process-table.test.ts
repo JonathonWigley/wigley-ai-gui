@@ -1089,11 +1089,6 @@ describe('process table', () => {
       prepare: (table: ProcessTable) => table.drain(),
       error: 'the session host is draining',
     },
-    {
-      label: 'while a stopAll waits',
-      prepare: (table: ProcessTable) => table.stopAll(() => {}),
-      error: 'the session host is stopping',
-    },
   ])('spawn_Refusals_CloseWithTheReason: $label', ({ prepare, error }) => {
     const { table, children } = setUp();
     const first = recordingSubscriber();

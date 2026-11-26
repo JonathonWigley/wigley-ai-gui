@@ -572,6 +572,85 @@ describe('host protocol', () => {
     expect(reply).toEqual({ type: 'stopAll', requestId: 1 });
   });
 
+  it.each([
+    {
+      name: 'a spawn, the process table empty',
+      route: 'spawn',
+      routeTableHeld: false,
+    },
+    {
+      name: 'a termSpawn, the terminal table empty',
+      route: 'termSpawn',
+      routeTableHeld: false,
+    },
+    {
+      name: 'a spawn, the process table emptied first',
+      route: 'spawn',
+      routeTableHeld: true,
+    },
+    {
+      name: 'a termSpawn, the terminal table emptied first',
+      route: 'termSpawn',
+      routeTableHeld: true,
+    },
+  ] as const)(
+    'stopAll_SpawnWhileTheOtherTableEnds_IsRefusedUntilTheReply: $name',
+    async ({ route, routeTableHeld }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
+      const holdsProcess = route === 'termSpawn' || routeTableHeld;
+      const holdsShell = route === 'spawn' || routeTableHeld;
+      const child = holdsProcess
+        ? await spawned(running, connection, 'a')
+        : null;
+      const shell = holdsShell
+        ? await spawnedShell(running, connection, 't')
+        : null;
+      const endProcess = () => child?.close();
+      const endShell = () => shell?.exit();
+      const [endRouteTable, endOtherTable] =
+        route === 'spawn' ? [endProcess, endShell] : [endShell, endProcess];
+
+      connection.send({ type: 'stopAll', requestId: 1 });
+      await settled(connection);
+      endRouteTable();
+      await settled(connection);
+      const childrenBefore = running.spawned.length;
+      const ptysBefore = running.ptys.length;
+      connection.send({
+        type: route,
+        request: route === 'spawn' ? spawnRequest('n') : terminalRequest('n'),
+      });
+      await settled(connection);
+
+      expect(connection.received).toContainEqual({
+        type: route === 'spawn' ? 'closed' : 'termClosed',
+        id: 'n',
+        exit: {
+          code: null,
+          signal: null,
+          error: 'the session host is stopping',
+        },
+      });
+      expect(running.spawned).toHaveLength(childrenBefore);
+      expect(running.ptys).toHaveLength(ptysBefore);
+
+      endOtherTable();
+      await vi.waitFor(() =>
+        expect(connection.received).toContainEqual({
+          type: 'stopAll',
+          requestId: 1,
+        }),
+      );
+      // Once the reply is out, the same route spawns again.
+      if (route === 'spawn') {
+        await spawned(running, connection, 'm');
+      } else {
+        await spawnedShell(running, connection, 'm');
+      }
+    },
+  );
+
   it('closed_SubscribedClient_GetsClosedThenLogGone', async () => {
     const running = await runningHost();
     const connection = await client(running.channel);

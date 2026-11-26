@@ -79,7 +79,7 @@ export interface ProcessTable {
   // its background work turned idle ends `DRAIN_REPORT_GRACE_MS` after that moment, unless a busy line comes first;
   // each main stdout line in that time starts the grace over.
   drain(): void;
-  // Calls `done` once the table is empty, at once when it already is. Every spawn until then is refused.
+  // Calls `done` once the table is empty, at once when it already is.
   stopAll(done: () => void): void;
 }
 
@@ -614,9 +614,6 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   function refusalOf(id: string): string | null {
     if (draining) {
       return 'the session host is draining';
-    }
-    if (stopWaiters.length > 0) {
-      return 'the session host is stopping';
     }
     return processes.has(id) ? `a process with id ${id} already exists` : null;
   }

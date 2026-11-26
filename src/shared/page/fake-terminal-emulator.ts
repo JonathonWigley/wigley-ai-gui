@@ -96,13 +96,17 @@ export function createFakeTerminalEmulator(): FakeTerminalEmulator {
         disposed: false,
         size: { ...START_SIZE },
         type: (data) => {
-          for (const listener of inputListeners) {
+          // A copy: a listener added or removed during the loop stays out of this pass.
+          // oxlint-disable-next-line unicorn/no-useless-spread
+          for (const listener of [...inputListeners]) {
             listener(data);
           }
         },
         resizeTo: (size) => {
           record.size = size;
-          for (const listener of resizeListeners) {
+          // A copy: a listener added or removed during the loop stays out of this pass.
+          // oxlint-disable-next-line unicorn/no-useless-spread
+          for (const listener of [...resizeListeners]) {
             listener(size);
           }
         },

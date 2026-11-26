@@ -3,6 +3,7 @@ import type { Socket } from 'node:net';
 import path from 'node:path';
 import type { Clock, Timers } from '../contracts/ambient';
 import type { PtySpawn } from '../contracts/pty';
+import type { HostedSpawn } from '../contracts/session-host';
 import {
   type ClientMessage,
   type HelloMessage,
@@ -14,6 +15,7 @@ import {
   SESSION_HOST_PROTOCOL,
   type SessionHostRecord,
 } from '../contracts/session-host-protocol';
+import type { TerminalSpawn } from '../contracts/terminals';
 import { jsonLine, readLines } from '../shared/local-channel/line-framing';
 import {
   connectFoundNoListener,
@@ -34,6 +36,7 @@ import { createTerminalTable, type TerminalSubscriber } from './terminal-table';
 
 const HELLO_WAIT_MS = 2000;
 const FIRST_CLIENT_WAIT_MS = 30_000;
+const STOPPING_REFUSAL = 'the session host is stopping';
 
 const CLIENT_MESSAGE_TYPES: ReadonlySet<unknown> = new Set<
   ClientMessage['type']
@@ -240,6 +243,8 @@ function createConnections(deps: ConnectionsDeps) {
   let draining = false;
   let isEndingLeftovers = true;
   let exitRuleWaits = false;
+  // The `stopAll`s whose two tables have not both reported done; every spawn, on either route, is refused meanwhile.
+  let stopsWaiting = 0;
   const heldMessages: (() => void)[] = [];
   const table = createProcessTable({
     spawn: deps.spawn,
@@ -268,7 +273,7 @@ function createConnections(deps: ConnectionsDeps) {
     clock: deps.clock,
     timers: deps.timers,
     diagnostics,
-    spawn: (request, subscriber) => table.spawn(request, subscriber),
+    spawn: spawnProcess,
     isBusy: (id) => table.isBusy(id),
     runStarted(run) {
       for (const socket of clients) {
@@ -276,6 +281,33 @@ function createConnections(deps: ConnectionsDeps) {
       }
     },
   });
+
+  function spawnProcess(request: HostedSpawn, subscriber: ProcessSubscriber) {
+    if (stopsWaiting > 0) {
+      subscriber.closed(request.id, {
+        code: null,
+        signal: null,
+        error: STOPPING_REFUSAL,
+      });
+      return;
+    }
+    table.spawn(request, subscriber);
+  }
+
+  function spawnTerminal(
+    request: TerminalSpawn,
+    subscriber: TerminalSubscriber,
+  ) {
+    if (stopsWaiting > 0) {
+      subscriber.closed(request.id, {
+        code: null,
+        signal: null,
+        error: STOPPING_REFUSAL,
+      });
+      return;
+    }
+    terminals.spawn(request, subscriber);
+  }
 
   function checkExitRule() {
     if (isEndingLeftovers) {
@@ -356,7 +388,7 @@ function createConnections(deps: ConnectionsDeps) {
         checkExitRule();
         break;
       case 'spawn':
-        table.spawn(message.request, subscriber);
+        spawnProcess(message.request, subscriber);
         break;
       case 'write':
         table.write(message.id, message.text);
@@ -383,9 +415,11 @@ function createConnections(deps: ConnectionsDeps) {
         break;
       case 'stopAll': {
         let tablesStillStopping = 2;
+        stopsWaiting += 1;
         const oneTableStopped = () => {
           tablesStillStopping -= 1;
           if (tablesStillStopping === 0) {
+            stopsWaiting -= 1;
             push({ type: 'stopAll', requestId: message.requestId });
           }
         };
@@ -412,7 +446,7 @@ function createConnections(deps: ConnectionsDeps) {
         checkExitRule();
         break;
       case 'termSpawn':
-        terminals.spawn(message.request, terminalSubscriber);
+        spawnTerminal(message.request, terminalSubscriber);
         break;
       case 'termWrite':
         terminals.write(message.id, message.data);
