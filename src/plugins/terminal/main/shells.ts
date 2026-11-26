@@ -38,18 +38,22 @@ export interface ShellsDeps {
 
 // Each session's one shell, keyed by app session id. `open`, `restart` and
 // `type` wait for `adopt` to settle first, and calls for one session while its
-// shell program resolves share one start. `open` starts a shell when the
+// start resolves share one start. `open` starts a shell when the
 // session has none and resizes a running one; `restart` and `type` also
 // replace an exited one, and never kill a running one. `type` starts a shell
-// at 80×24, writes the text with no Enter and sends `typed`. `kill` ends a
-// session's shell and deletes its `terminal.output` key, and cancels a start
-// still resolving, whose callers then reject. `adopt` subscribes to the host's
-// shells whose session has a row, and kills the rest; once the part stopped it
-// attaches no more shells, and a shell it attached meanwhile is detached after
-// `detachAll` and killed after `killAll`. `detachAll` leaves every shell running
-// in the host for the next start to adopt; `killAll` ends every shell. After
-// either, every `open`, `restart` and `type` rejects; `write`, `resize` and
-// `kill` do nothing.
+// at 80×24, writes the text with no Enter and sends `typed`, then rejects when
+// the shell had exited before the write. `kill` ends a session's shell and
+// deletes its `terminal.output` key, and cancels a start still resolving, whose
+// callers then reject. `adopt` subscribes to the host's shells whose session
+// has a row, and kills the rest; an attach that fails is logged and adoption
+// goes on. A shell adoption did not settle (its attach failed, or the list
+// itself did) is attached by its session's next start, which spawns only when
+// the host holds no shell for the id or that attach fails too. Once the part
+// stopped, adoption attaches no more shells, and a shell attached meanwhile is
+// detached after `detachAll` and killed after `killAll`. `detachAll` leaves
+// every shell running in the host for the next start to adopt; `killAll` ends
+// every shell. After either, every `open`, `restart` and `type` rejects;
+// `write`, `resize` and `kill` do nothing.
 export interface Shells {
   open(sessionId: string, cols: number, rows: number): Promise<TerminalOpened>;
   write(sessionId: string, data: string): void;
@@ -81,20 +85,15 @@ interface Entry {
   outputTimer: number | null;
 }
 
-// A start whose shell program is still resolving.
+// A start whose host attach or shell program is still resolving.
 interface Start {
   cancelled: boolean;
-  promise: Promise<Spawned>;
+  promise: Promise<Ready>;
 }
 
-// A spawned entry, and what it held at the spawn, before any output arrived.
-interface Spawned {
-  entry: Entry;
-  opened: TerminalOpened;
-}
-
-// The id's entry once its start settled; `spawned` is set when this call
-// started the shell.
+// The id's entry once its start settled; `spawned` is what the entry held at
+// its spawn, before any output arrived, when the start spawned the shell, and
+// null when it found one.
 interface Ready {
   entry: Entry;
   spawned: TerminalOpened | null;
@@ -111,6 +110,9 @@ function openedOf(entry: Entry): TerminalOpened {
     exit: entry.exit,
   };
 }
+
+const EXITED_BEFORE_TYPED =
+  'terminal: the shell exited before the text was typed';
 
 function cancelledError(sessionId: string): Error {
   return new Error(`terminal: the shell start for ${sessionId} was cancelled`);
@@ -129,6 +131,20 @@ export function createShells(deps: ShellsDeps): Shells {
   const adopted = new Promise<void>((resolve) => {
     markAdopted = resolve;
   });
+  // The listed ids adoption did not settle. `isListUnread` is set when the
+  // list itself failed, so any id may be one; `reached` then holds the ids
+  // whose attach has since answered.
+  const unreached = new Set<string>();
+  let isListUnread = false;
+  const reached = new Set<string>();
+
+  const isUnreached = (sessionId: string): boolean =>
+    isListUnread ? !reached.has(sessionId) : unreached.has(sessionId);
+
+  const markReached = (sessionId: string): void => {
+    unreached.delete(sessionId);
+    reached.add(sessionId);
+  };
 
   const currentEntry = (
     sessionId: string,
@@ -208,7 +224,7 @@ export function createShells(deps: ShellsDeps): Shells {
     cols: number,
     rows: number,
     start: Start,
-  ): Spawned => {
+  ): Ready => {
     if (start.cancelled) {
       throw cancelledError(sessionId);
     }
@@ -242,7 +258,89 @@ export function createShells(deps: ShellsDeps): Shells {
     };
     setEntry(sessionId, entry);
     deps.log(`shell started for ${deps.labelOf(sessionId)} in ${folder}`);
-    return { entry, opened: openedOf(entry) };
+    return { entry, spawned: openedOf(entry) };
+  };
+
+  const logAttachFailure = (sessionId: string, error: unknown): void => {
+    deps.log(
+      `could not attach the shell for ${deps.labelOf(sessionId)}: ${errorText(error)}`,
+    );
+  };
+
+  // Attaches the host's shell for the id as an entry not yet in the table;
+  // null when the host holds none, or when the part stopped while it attached,
+  // which then detaches or kills the shell as the stop did.
+  const attachEntry = async (sessionId: string): Promise<Entry | null> => {
+    const events = eventsOf(sessionId);
+    const attached = await deps.terminals.attach(sessionId, events);
+    if (attached === null) {
+      return null;
+    }
+    if (stopped === 'killed') {
+      attached.process.kill();
+      deps.output.delete(sessionId);
+      return null;
+    }
+    if (stopped === 'detached') {
+      attached.process.detach();
+      return null;
+    }
+    const { process, replay } = attached;
+    const entry: Entry = {
+      shell: deps.newShellId(),
+      process,
+      buffer: keepTail(replay, TERMINAL_REPLAY_LIMIT),
+      seq: replay === '' ? 0 : 1,
+      folder: deps.folderOf(sessionId),
+      exit: null,
+      plain: createPlainText(PLAIN_LINE_LIMIT),
+      events,
+      outputTimer: null,
+    };
+    entry.plain.write(replay);
+    return entry;
+  };
+
+  // The shell adoption did not settle for the id, attached; null when the host
+  // holds none, or when the attach failed, which leaves the id unreached for
+  // its next start. A shell attached after `kill` cancelled the start is
+  // killed.
+  const reattach = async (
+    sessionId: string,
+    start: Start,
+  ): Promise<Entry | null> => {
+    let entry: Entry | null;
+    try {
+      entry = await attachEntry(sessionId);
+    } catch (error) {
+      logAttachFailure(sessionId, error);
+      return null;
+    }
+    markReached(sessionId);
+    if (entry !== null && start.cancelled) {
+      entry.process?.kill();
+      throw cancelledError(sessionId);
+    }
+    return entry;
+  };
+
+  // Reaches the id's shell in the host when adoption did not, else spawns one.
+  const startShell = async (
+    sessionId: string,
+    cols: number,
+    rows: number,
+    start: Start,
+  ): Promise<Ready> => {
+    if (isUnreached(sessionId)) {
+      const entry = await reattach(sessionId, start);
+      if (entry !== null) {
+        setEntry(sessionId, entry);
+        deps.log(`shell reattached for ${deps.labelOf(sessionId)}`);
+        return { entry, spawned: null };
+      }
+    }
+    const program = await deps.resolveShell();
+    return spawnResolved(sessionId, program, cols, rows, start);
   };
 
   // Files the start in `starts` before its first wait, and removes it once it
@@ -251,12 +349,11 @@ export function createShells(deps: ShellsDeps): Shells {
     sessionId: string,
     cols: number,
     rows: number,
-  ): Promise<Spawned> => {
+  ): Promise<Ready> => {
     const start: Start = {
       cancelled: false,
-      promise: deps
-        .resolveShell()
-        .then((program) => spawnResolved(sessionId, program, cols, rows, start))
+      promise: Promise.resolve()
+        .then(() => startShell(sessionId, cols, rows, start))
         .finally(() => starts.delete(sessionId)),
     };
     starts.set(sessionId, start);
@@ -264,8 +361,9 @@ export function createShells(deps: ShellsDeps): Shells {
   };
 
   // The id's entry once adoption and any start in flight settle. With no
-  // entry, or an exited one `replacesExited` lets go, it spawns at cols×rows,
-  // reading `starts` and the table and calling `spawnFor` in one step after
+  // entry, or an exited one `replacesExited` lets go, it starts one (a spawn
+  // at cols×rows, or the attach `startShell` makes first), reading `starts`
+  // and the table and calling `spawnFor` in one step after
   // its last wait, so concurrent calls make one shell.
   const readyEntry = async (
     sessionId: string,
@@ -290,12 +388,7 @@ export function createShells(deps: ShellsDeps): Shells {
           return { entry, spawned: null };
         }
       }
-      const { entry: spawnedEntry, opened } = await spawnFor(
-        sessionId,
-        cols,
-        rows,
-      );
-      return { entry: spawnedEntry, spawned: opened };
+      return spawnFor(sessionId, cols, rows);
     }
   };
 
@@ -326,38 +419,17 @@ export function createShells(deps: ShellsDeps): Shells {
 
   // Subscribes to a listed shell whose session has a row; false when the host
   // no longer holds it, the part stopped while it attached, or the row closed
-  // while it attached (its shell is then killed).
+  // while it attached (its shell is then killed and its output key deleted).
   const adoptOne = async (sessionId: string): Promise<boolean> => {
-    const events = eventsOf(sessionId);
-    const attached = await deps.terminals.attach(sessionId, events);
-    if (attached === null) {
-      return false;
-    }
-    if (stopped !== null) {
-      if (stopped === 'killed') {
-        attached.process.kill();
-      } else {
-        attached.process.detach();
-      }
+    const entry = await attachEntry(sessionId);
+    if (entry === null) {
       return false;
     }
     if (!deps.hasRow(sessionId)) {
-      attached.process.kill();
+      entry.process?.kill();
+      deps.output.delete(sessionId);
       return false;
     }
-    const { process, replay } = attached;
-    const entry: Entry = {
-      shell: deps.newShellId(),
-      process,
-      buffer: keepTail(replay, TERMINAL_REPLAY_LIMIT),
-      seq: replay === '' ? 0 : 1,
-      folder: deps.folderOf(sessionId),
-      exit: null,
-      plain: createPlainText(PLAIN_LINE_LIMIT),
-      events,
-      outputTimer: null,
-    };
-    entry.plain.write(replay);
     setEntry(sessionId, entry);
     return true;
   };
@@ -379,10 +451,15 @@ export function createShells(deps: ShellsDeps): Shells {
       if (stopped !== null) {
         break;
       }
-      if (deps.hasRow(id)) {
-        adoptedCount += (await adoptOne(id)) ? 1 : 0;
-      } else {
-        endedCount += (await endUnclaimed(id)) ? 1 : 0;
+      try {
+        if (deps.hasRow(id)) {
+          adoptedCount += (await adoptOne(id)) ? 1 : 0;
+        } else {
+          endedCount += (await endUnclaimed(id)) ? 1 : 0;
+        }
+      } catch (error) {
+        unreached.add(id);
+        logAttachFailure(id, error);
       }
     }
     if (listed.length > 0) {
@@ -431,14 +508,19 @@ export function createShells(deps: ShellsDeps): Shells {
         START_ROWS,
         true,
       );
-      entry.process?.write(text);
+      const { process } = entry;
+      process?.write(text);
       deps.send('typed', { sessionId, shell: entry.shell, text });
+      if (process === null) {
+        throw new Error(EXITED_BEFORE_TYPED);
+      }
     },
     kill,
     async adopt() {
       try {
         await adoptListed();
       } catch (error) {
+        isListUnread = true;
         deps.log(`adoption failed: ${errorText(error)}`);
       } finally {
         markAdopted();

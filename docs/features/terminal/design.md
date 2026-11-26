@@ -51,7 +51,8 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
 - The shell inherits the host's environment, less `ELECTRON_RUN_AS_NODE`, with `TERM=xterm-256color` and
   `COLORTERM=truecolor` set.
 - A shell ends when its session's row closes. On app start the terminal plugin lists the host's shells, adopts the ones
-  whose row still exists, and ends the rest.
+  whose row still exists, and ends the rest. A shell whose attach failed, or every shell when the list itself failed, is
+  attached by its session's first open, restart or type, which spawns a new shell only when the host holds none.
 
 ## Keys
 
@@ -72,7 +73,9 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
   argument. It acts on the calling session's own terminal. It is not risky: it refuses text holding a line break or any
   other control character, so nothing runs until the user presses Enter.
 - `terminal.type` starts the shell when none runs, writes the text at the prompt, opens the drawer without moving focus,
-  and marks the row "needs you" until the user presses Enter in that terminal or closes the drawer.
+  and marks the row "needs you" until the user presses Enter in that terminal or closes the drawer. When the shell exits
+  before the text reaches it, the drawer still opens and the command fails with "the shell exited before the text was
+  typed", so the agent knows the hand-off did not land.
 - The agent reads the last 200 lines of each shell's output, as plain text with escape sequences stripped, from the
   `terminal.output` slot through `read_state`. App commands return no value to an agent, so published state is the
   route.

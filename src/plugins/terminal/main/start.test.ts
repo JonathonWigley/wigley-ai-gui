@@ -17,6 +17,7 @@ import {
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import { type ChatMainExports, chatMainKey } from '../../chat/contract';
 import {
   type SessionRow,
@@ -71,6 +72,8 @@ interface StartOptions {
   rows?: readonly SessionRow[];
   // The shells the host runs before the part starts.
   running?: readonly { id: string; output: string }[];
+  // The `terminal.output` keys an earlier start left, by session id.
+  output?: Readonly<Record<string, string>>;
   // The terminals the part gets, over the fake host; the host itself when left out.
   terminals?(host: FakeTerminalHost): TerminalHost;
 }
@@ -83,8 +86,15 @@ function startOnHarness(options: StartOptions = {}) {
   for (const { id, output } of options.running ?? []) {
     host.addRunning({ id, startedAt: 0, output });
   }
+  const state = createSlotStore(() => undefined);
+  const leftOutput = state.publish(terminalOutputSlot);
+  for (const [sessionId, text] of Object.entries(options.output ?? {})) {
+    leftOutput.set(sessionId, text);
+  }
+  leftOutput.dispose();
   const notes = new Set<string>();
   const harness = startMainPart(terminalMainPart, {
+    state,
     services: { terminals: options.terminals?.(host) ?? host },
     dependencies: [
       fakeDependency(
@@ -318,7 +328,7 @@ describe('terminalMainPart', () => {
     expect(writes).toEqual([]);
   });
 
-  it('type_ShellClosedBeforeTheWrite_SendsTypedAndWritesNothing', async () => {
+  it('type_ShellClosedBeforeTheWrite_SendsTypedAndRejects', async () => {
     const writes: string[] = [];
     const part = startOnHarness({
       terminals: (host) =>
@@ -328,7 +338,9 @@ describe('terminalMainPart', () => {
     });
     await part.ready();
 
-    await part.type('ls');
+    await expect(part.type('ls')).rejects.toThrow(
+      'the shell exited before the text was typed',
+    );
 
     expect(writes).toEqual([]);
     expect(part.sentOf('typed')).toEqual([
@@ -548,26 +560,40 @@ describe('terminalMainPart', () => {
     expect(part.host.terminals).toHaveLength(1);
   });
 
-  it('ready_ListRejects_LogsAndOpenSpawns', async () => {
-    const part = startOnHarness({
-      terminals: (host) => ({
-        spawn: (request, events) => host.spawn(request, events),
-        attach: (id, events) => host.attach(id, events),
-        list: () => Promise.reject(new Error('host gone')),
-      }),
-    });
+  it.each([
+    { case: 'NoShellInTheHost', running: [], buffer: '$ ', spawnCols: 100 },
+    {
+      case: 'ShellInTheHost',
+      running: [{ id: 's1', output: 'hello' }],
+      buffer: 'hello',
+      spawnCols: undefined,
+    },
+  ])(
+    'ready_ListRejects_LogsAndOpenAttachesBeforeSpawning_$case',
+    async ({ running, buffer, spawnCols }) => {
+      const part = startOnHarness({
+        running,
+        terminals: (host) => ({
+          spawn: (request, events) => host.spawn(request, events),
+          attach: (id, events) => host.attach(id, events),
+          list: () => Promise.reject(new Error('host gone')),
+        }),
+      });
 
-    const opening = part.open('s1', 100, 30);
-    await part.ready();
-    await opening;
+      const opening = part.open('s1', 100, 30);
+      await part.ready();
+      await opening;
+      const opened = await part.open('s1', 100, 30);
 
-    expect(part.harness.logs).toContainEqual({
-      source: 'terminal',
-      message: 'adoption failed: host gone',
-    });
-    expect(part.host.terminals).toHaveLength(1);
-    expect(part.record(0).request).toMatchObject({ cols: 100, rows: 30 });
-  });
+      expect(part.harness.logs).toContainEqual({
+        source: 'terminal',
+        message: 'adoption failed: host gone',
+      });
+      expect(part.host.terminals).toHaveLength(1);
+      expect(part.record(0).request?.cols).toBe(spawnCols);
+      expect(opened.buffer).toBe(buffer);
+    },
+  );
 
   // The host's attach answers only once the test opens the gate; `attached`
   // lists the ids it was asked for.
@@ -588,12 +614,17 @@ describe('terminalMainPart', () => {
   }
 
   it.each([
-    { stop: 'restart', detaches: 1, kills: 0 },
-    { stop: 'quit', detaches: 1, kills: 0 },
-    { stop: 'end', detaches: 0, kills: 1 },
-  ] satisfies { stop: PartStop; detaches: number; kills: number }[])(
+    { stop: 'restart', detaches: 1, kills: 0, keepsOutput: true },
+    { stop: 'quit', detaches: 1, kills: 0, keepsOutput: true },
+    { stop: 'end', detaches: 0, kills: 1, keepsOutput: false },
+  ] satisfies {
+    stop: PartStop;
+    detaches: number;
+    kills: number;
+    keepsOutput: boolean;
+  }[])(
     'adopt_AttachResolvesAfterStop_$stop_ReleasesItAndAttachesNoMore',
-    async ({ stop, detaches, kills }) => {
+    async ({ stop, detaches, kills, keepsOutput }) => {
       const attached: string[] = [];
       const { gate, terminals } = gatedAttach(attached);
       const part = startOnHarness({
@@ -602,6 +633,7 @@ describe('terminalMainPart', () => {
           { id: 's1', output: 'one' },
           { id: 's2', output: 'two' },
         ],
+        output: { s1: 'one' },
         terminals,
       });
       await part.ready();
@@ -615,13 +647,15 @@ describe('terminalMainPart', () => {
       expect(part.record(0).kills).toBe(kills);
       expect(part.record(1)).toMatchObject({ detaches: 0, kills: 0 });
       expect(part.sentOf('data')).toEqual([]);
+      expect(part.output('s1') !== undefined).toBe(keepsOutput);
     },
   );
 
-  it('adopt_RowClosedDuringAttach_KillsTheShell', async () => {
+  it('adopt_RowClosedDuringAttach_KillsTheShellAndDeletesItsOutput', async () => {
     const { gate, terminals } = gatedAttach([]);
     const part = startOnHarness({
       running: [{ id: 's1', output: 'one' }],
+      output: { s1: 'one' },
       terminals,
     });
     await part.ready();
@@ -632,9 +666,10 @@ describe('terminalMainPart', () => {
     await flush();
 
     expect(part.record(0).kills).toBe(1);
+    expect(part.output('s1')).toBeUndefined();
   });
 
-  it('ready_AttachRejects_LogsAndAttachesNoMore', async () => {
+  it('adopt_AttachRejects_AdoptsTheRestAndOpenReattaches', async () => {
     const attached: string[] = [];
     const part = startOnHarness({
       rows: [ALPHA, sessionRow('s2')],
@@ -644,21 +679,29 @@ describe('terminalMainPart', () => {
       ],
       terminals: (host) => ({
         spawn: (request, events) => host.spawn(request, events),
-        attach: (id) => {
+        attach: (id, events) => {
           attached.push(id);
-          return Promise.reject(new Error('host gone'));
+          return attached.length === 1
+            ? Promise.reject(new Error('host gone'))
+            : host.attach(id, events);
         },
         list: () => host.list(),
       }),
     });
-
     await part.ready();
 
-    expect(attached).toEqual(['s1']);
+    const openedTwo = await part.open('s2', 100, 30);
+    const openedOne = await part.open('s1', 100, 30);
+
+    expect(attached).toEqual(['s1', 's2', 's1']);
     expect(part.harness.logs).toContainEqual({
       source: 'terminal',
-      message: 'adoption failed: host gone',
+      message: 'could not attach the shell for alpha: host gone',
     });
+    expect(openedTwo).toMatchObject({ buffer: 'two', seq: 1 });
+    expect(openedOne).toMatchObject({ buffer: 'one', seq: 1 });
+    expect(part.record(0).resizes).toEqual([{ cols: 100, rows: 30 }]);
+    expect(part.host.terminals).toHaveLength(2);
   });
 
   it('outputSlot_CoalescesWithin250Ms', async () => {
