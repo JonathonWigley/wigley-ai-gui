@@ -88,9 +88,37 @@ in chat, not in the Claude adapter.
 
 A retro row is done when its main turn has ended and no subagent or task still runs: chat's `chat.session` slot reads
 `activity` idle, `background` 0 and no compaction, after its first turn started. `chat.turnFinished` alone fires while
-the analysts still run. A process that ended (clean or crash) is done too. A short settle wait (the `settleSeconds` setting, 5 s by default) keeps a task that ends and wakes the agent from
-closing the row under a new turn. A retro row raises no Turn finished mark. A running retro whose row does not come
-back within 30 s of a start is dropped, and the next queued item launches.
+the analysts still run. A process that ended (clean or crash) after its first turn started is done too. A restored row
+counts as started once its history holds an agent entry (a reply, thinking or a tool call): chat opens a restored row
+with no entries and reads its transcript only later, so the plugin asks chat's `loadHistory` for it once, and reads
+the entries after that read. Chat owns when a history turns readable, so the call resolves only once chat has read
+it: it waits for chat's restore to end and the row's attach, and through a harness wait, a missing harness or
+profile, or a session host that refused its list (not started, a reply timeout, a dropped link: transient, and
+likeliest right at app start), reading as soon as that cause clears. Until then the row is busy. The transcript holds
+the turns run while the app was closed, so a retro that finished then reads done.
+
+One cause never clears in this app: the row's process runs in another app version. Chat resolves `unreadable` with
+the reason, and the row stays open and busy, never closed under a guess.
+When it is the running retro, the queue drops the run, as for a row that did not come back, logging `dropped retro
+<host id>: its history cannot be read (<reason>); row <row id> left open`, and the next queued item launches; any
+other such row logs `retro <row id> left open: its history cannot be read (<reason>)`. The user closes it by hand,
+which queues no retro. Each claim's call carries its own token, so a call from an earlier claim of the same row id
+acts on nothing.
+
+A retro row that never ran its first turn is lost, for one of two causes: its process exited before any turn
+(`chat.processEnded` for the row's current host id, recorded at the emit so an exit before the launch resolves still
+counts, and an older host's exit after a `/clear` does not), or it is a restored row resting once its history was read
+with no agent entry in it. A launched row waiting for its process to attach or for its first turn is not lost, and nor
+is a restored row while chat's restore runs or its history is unread. A lost row logs `retro <row id> ended before its
+first turn; closing it` and closes with `close(rowId, 'start-failed')`, which queues no retro; its close then logs
+`retro <row id> closed before done; <host ids> not analyzed`, and the next queued item launches. A lost retro is not
+launched again, since a launch that ends before its first turn would likely end the same way; the user reruns it by
+hand.
+
+A short settle wait (the `settleSeconds` setting, 5 s by default) comes before either close, and the state is read
+again when it ends: it keeps a task that ends and wakes the agent from closing the row under a new turn, and a
+re-attach's first idle read from closing a row that is about to start. A retro row raises no Turn finished mark. A
+running retro whose row does not come back within 30 s of a start is dropped, and the next queued item launches.
 
 The user can still cancel a running retro: closing its row before it is done ends the run, logs `retro <row id>
 closed before done; <host ids> not analyzed`, and launches the next queued item. The closed session goes unanalyzed

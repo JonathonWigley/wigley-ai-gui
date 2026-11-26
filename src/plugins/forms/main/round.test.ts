@@ -1737,7 +1737,7 @@ describe('autoAnsweredPayload', () => {
       expect(payload.next).toBe(
         'This session is headless until a tool result says the session is ' +
           'no longer headless: the app showed no form and answered every ' +
-          'item with its recommendation. Build no more rounds, and list ' +
+          'item with its recommendation. Build no more forms, and list ' +
           'every pick as a Decided notice in your reply. An auto-answered ' +
           "pick never approves an action that needs the user's own yes (an " +
           "install, a step that deletes the user's data, a push, or any " +

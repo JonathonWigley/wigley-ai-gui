@@ -280,6 +280,9 @@ function createConnections(deps: ConnectionsDeps) {
         sendTo(socket, { type: 'runStarted', run });
       }
     },
+    hasClient: () => clients.size > 0,
+    // A drop can leave nothing to hold the host, and no other event would run the exit rule.
+    entriesDropped: () => checkExitRule(),
   });
 
   function spawnProcess(request: HostedSpawn, subscriber: ProcessSubscriber) {

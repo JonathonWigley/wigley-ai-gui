@@ -13,14 +13,14 @@
 - **MCP tools** — every tool the `auri` server offers.
 - **Skills** — the `auri` plugin's skills.
 - **Hooks** — the `auri` plugin's hooks.
-- **Data folders** — where the app keeps rounds, primers and its endpoint.
+- **Data folders** — where the app keeps forms, primers and its endpoint.
 - **License**
 
 ## What Auri is
 
 Auri is a desktop app (Electron, macOS and Windows) for running and answering coding-agent sessions. It starts Claude
 Code sessions and chats with them, shows each session's workflow, step and checklist, and opens a popup over a session
-whenever its agent asks the user something: a forms round of questions and review findings, a primer, an audio
+whenever its agent asks the user something: a form of questions and review findings, a primer, an audio
 picker. It also browses every agent doc on the machine, runs scheduled tasks, keeps a backlog of follow-ups across
 repos, and hosts a chatroom per project where sessions and the user talk.
 
@@ -40,9 +40,9 @@ app's test harness, so their messages are sample text.
 
 Sessions mode: each session's row in the side bar, its chat and composer, its hub, and system stats on the right.
 
-![A forms round open over a session, with its items on the left and a finding's choices on the right](docs/images/forms-round.png)
+![A form open over a session, with its items on the left and a finding's choices on the right](docs/images/forms-round.png)
 
-A forms round an agent sent, open over its session; the row shows Needs you until it is answered.
+A form an agent sent, open over its session; the row shows Needs you until it is answered.
 
 ![The Space key menu open at the bottom of the window](docs/images/key-menu.png)
 
@@ -83,8 +83,8 @@ Settings mode: every setting, grouped by plugin, each with its description.
 4. `npm run install-app`. It builds `main` (`-- --ref <ref>` builds another committed ref) in a build-only worktree,
    installs it as `/Applications/wigley-ai-gui.app` on macOS or under `%LOCALAPPDATA%\Programs\wigley-ai-gui\` on
    Windows, and restarts the app when it was running. Running sessions keep going.
-5. Check that it works. Start Auri, start a session in any project folder, and ask its agent to send a forms round
-   with one notice: the round opens as a popup over the session and returns when submitted. Settings lists each
+5. Check that it works. Start Auri, start a session in any project folder, and ask its agent to send a form
+   with one notice: the form opens as a popup over the session and returns when submitted. Settings lists each
    feature an `auri.json` can bind, and each shows its empty state until an installed plugin binds it.
 
 `npm start` runs the dev app beside the stable one, shown as Auri Dev, with its own user data and relay endpoint
@@ -110,7 +110,7 @@ manifests.
   `marketplace add` reads `.claude-plugin/marketplace.json` at the clone's root: the marketplace `auri`, which lists
   the plugin `auri` at `./agent-plugin`. The plugin's version, in both its manifests, is the app's `package.json`
   version. A terminal session reaches the stable app through the relay, which starts the app when it is not
-  running. Rounds work; the checklist gate does not apply outside the app. The install goes into the profile
+  running. Forms work; the checklist gate does not apply outside the app. The install goes into the profile
   `CLAUDE_CONFIG_DIR` names (default `~/.claude`): run both commands once more with `CLAUDE_CONFIG_DIR` set for each
   other profile, unless that profile's `plugins` folder links to one that already has it.
 
@@ -123,7 +123,7 @@ manifests.
   skills name each tool by server and bare name ("the `auri` server's `ask_round` tool"). To pre-approve every tool
   in Claude Code, add `"mcp__plugin_auri_auri__*"` under `permissions.allow` in the profile's `settings.json`. That
   also approves `start_session` and `run_command`, which start sessions and run app commands; the app's own
-  Allow or Deny round still gates a risky command.
+  Allow or Deny form still gates a risky command.
 
 The relay, endpoint and start scripts and their full contract are in `agent-plugin/scripts/relay/` and its
 `README.md`. To start or restart the app by hand: `python3 agent-plugin/scripts/relay/start_app.py` (`--restart`,
@@ -235,7 +235,7 @@ Every feature is a plugin in `src/plugins/<id>/`. Settings mode's Plugins sectio
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sessions`          | Sessions mode, with a side bar row for each agent session beside its panes and tabs.                                                                                                                                                                |
 | `claude-code`       | Runs agent sessions on the Claude Code CLI.                                                                                                                                                                                                         |
-| `forms`             | Shows each forms round an agent asks in a popup, to answer it.                                                                                                                                                                                      |
+| `forms`             | Shows each form an agent asks in a popup, to answer it.                                                                                                                                                                                             |
 | `agent-commands`    | Lets an agent list and run the app's commands and read its state, asking before a risky one.                                                                                                                                                        |
 | `primer`            | Shows each primer an agent opens, to tick and edit its tasks.                                                                                                                                                                                       |
 | `audio-picker`      | Shows each audio picker an agent opens, to play candidate sounds and choose one per moment.                                                                                                                                                         |
@@ -273,7 +273,7 @@ Every feature is a plugin in `src/plugins/<id>/`. Settings mode's Plugins sectio
 | `system-stats`      | CPU, GPU, RAM, network and disk use in the right bar.                                                                                                                                                                                               |
 | `visual`            | Draws the html code blocks an agent writes as live visuals.                                                                                                                                                                                         |
 | `markdown-blocks`   | Draws the `:::changes`, `:::tree` and `:::details` blocks agents write.                                                                                                                                                                             |
-| `scheduling`        | Runs agent tasks on a schedule as new headless sessions, also while the app is closed.                                                                                                                                                              |
+| `scheduling`        | Runs agent tasks on a schedule as new sessions, headless unless a task is attended; an unattended task also runs while the app is closed.                                                                                                           |
 | `builds`            | Builds mode: the CI and local builds of the tracked games, queued in one press, with each build's jobs as a graph and its logs and files saved to Downloads; each session's builds on its row and in its hub, and a build offer above its composer. |
 | `builds-teamcity`   | The `teamcity` build backend, over the TeamCity CLI.                                                                                                                                                                                                |
 | `builds-local`      | The `local` build backend: a command per build kind, run in the game's clone.                                                                                                                                                                       |
@@ -291,8 +291,8 @@ The `auri` server offers these tools to every session, unless the row says other
 | `permission_prompt`         | Answers Claude Code's permission prompts for a session the app started.                                                                                                                            |
 | `start_session`             | Starts a new, independent chat session with a first message.                                                                                                                                       |
 | `set_headless`              | Turns the session's headless mode on or off.                                                                                                                                                       |
-| `ask_round`                 | Sends a forms round and waits for the answers.                                                                                                                                                     |
-| `collect_last_round`        | Re-attaches to the open round, or returns the last finished round's answers.                                                                                                                       |
+| `ask_round`                 | Sends a form and waits for the answers.                                                                                                                                                            |
+| `collect_last_round`        | Re-attaches to the open form, or returns the last finished form's answers.                                                                                                                         |
 | `list_commands`             | Lists the app's commands.                                                                                                                                                                          |
 | `run_command`               | Runs one app command by id, asking the user first when it is risky.                                                                                                                                |
 | `read_state`                | Reads the app's state slots as JSON.                                                                                                                                                               |
@@ -329,8 +329,8 @@ The `auri` plugin's skills, in `agent-plugin/skills/<name>/`:
 
 | Skill                          | What it teaches                                                                                    |
 | ------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `auri:forms`                   | Asking the user in a forms round: wording, outcomes, headless, the written fallback.               |
-| `auri:visuals`                 | Live html visuals, images and videos in replies and rounds; mocks of a look decision.              |
+| `auri:forms`                   | Asking the user in a form: wording, outcomes, headless, the written fallback.                      |
+| `auri:visuals`                 | Live html visuals, images and videos in replies and forms; mocks of a look decision.               |
 | `auri:chatroom`                | What to post in the chatroom, when, and to whom; reading the board; claims.                        |
 | `auri:workflows-and-checklist` | Session title, checklist, steps and plans; the Checklist flow and the edit gate.                   |
 | `auri:backlog-format`          | The follow-up file format, and the Backlog assistant's tools.                                      |
@@ -361,7 +361,7 @@ An app session is one whose environment holds `WIGLEY_SESSION_ROW`, which the ap
 
 - `~/.agents/wigley-ai-gui/` — the stable app's relay endpoint and tool list (`~/.agents/wigley-ai-gui-dev/` for the
   dev app).
-- `~/.agents/wigley-forms/rounds/` — one JSON file per forms round, pruned after 90 days.
+- `~/.agents/wigley-forms/rounds/` — one JSON file per form, pruned after 90 days.
 - `~/.agents/wigley-primer/primers/` — one JSON file per primer.
 - `~/.agents/wigley-docs/` — the docs index and its config.
 - `~/.config/wigley-ai-gui/` — settings, keymap, themes, layouts and user plugins.

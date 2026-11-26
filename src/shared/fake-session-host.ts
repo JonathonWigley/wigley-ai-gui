@@ -58,7 +58,7 @@ export interface FakeSessionHost extends SessionHost {
   failList(error: string | null): void;
   // Adds `run` to what `listRuns` resolves, then tells every `onRunStarted` listener.
   startRun(run: HostedRun): void;
-  // Tells every `onConnected` listener, as a reconnect to a new host does.
+  // Tells every `onConnected` listener, as any connect after the client's first attempt does.
   connectAgain(): void;
 }
 

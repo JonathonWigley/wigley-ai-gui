@@ -20,6 +20,7 @@ const TASK_A: ScheduledTask = {
   schedule: { kind: 'weekdays', time: '09:00' },
   controls: { mode: 'plan' },
   paused: false,
+  attended: false,
   updatedAt: 1794297600000,
 };
 
@@ -32,6 +33,7 @@ const TASK_B: ScheduledTask = {
   schedule: { kind: 'cron', line: '30 2 * * 1-5' },
   controls: {},
   paused: true,
+  attended: false,
   updatedAt: 1794200000000,
 };
 

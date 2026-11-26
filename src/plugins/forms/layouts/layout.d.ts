@@ -279,9 +279,9 @@ export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   // The round note's field with its text box; returns the field. It places once per pane: a pane that leaves it out
   // gets it appended at the end of its element, so the note keys always reach a box.
   roundNote(parent: HTMLElement): HTMLElement;
-  // `Send answers`, the primary button, with its keys; a click sends the round.
+  // `Send answers`, the primary button, with its keys; a click sends the form.
   sendButton(parent: HTMLElement): HTMLButtonElement;
-  // `Cancel round`, with its keys; a click opens the round's cancel prompt.
+  // `Cancel form`, with its keys; a click opens the form's cancel prompt.
   cancelButton(parent: HTMLElement): HTMLButtonElement;
 }
 

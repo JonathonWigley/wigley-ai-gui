@@ -186,7 +186,7 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/preview skipped a saved round/);
+    expect(logLines[0]).toMatch(/preview skipped a saved form/);
   });
 
   it('open_SavedArgsNameMissingLayout_SkipsAndLogsItsLocation', () => {
@@ -200,7 +200,7 @@ describe('open', () => {
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
     expect(logLines[0]).toMatch(
-      /^preview skipped a saved round: Notice 1: layout 'gone'/,
+      /^preview skipped a saved form: Notice 1: layout 'gone'/,
     );
   });
 

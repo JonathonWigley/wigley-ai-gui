@@ -23,6 +23,8 @@ export interface ScheduledTask {
   schedule: TaskSchedule;
   controls: Readonly<Record<string, string>>; // harness control id → value, the permission mode included
   paused: boolean;
+  // True: each run starts with headless off, and only while an app is connected to the session host.
+  attended: boolean;
   updatedAt: number; // epoch ms of the app's last write of this task
 }
 

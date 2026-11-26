@@ -18,8 +18,11 @@ const TASK_KEYS = [
   'schedule',
   'controls',
   'paused',
+  'attended',
   'updatedAt',
 ];
+// The `TASK_KEYS` a task may leave out, each read as its default.
+const OPTIONAL_TASK_KEYS = ['attended'];
 const TARGET_KEYS = ['projectDir', 'project'];
 const TASK_ID = /^[0-9a-f]{8}$/;
 
@@ -62,6 +65,7 @@ export function taskFileText(file: TaskFile): string {
     schedule: orderedSchedule(task.schedule),
     controls: task.controls,
     paused: task.paused,
+    attended: task.attended,
     updatedAt: task.updatedAt,
   }));
   return `${JSON.stringify({ tasks }, null, 2)}\n`;
@@ -103,11 +107,14 @@ function readTaskFields(
   if (unknownKey !== undefined) {
     return `unknown key ${shown(unknownKey)}; a task holds ${TASK_KEYS.join(', ')}`;
   }
-  const missingKey = TASK_KEYS.find((key) => !(key in value));
+  const missingKey = TASK_KEYS.find(
+    (key) => !OPTIONAL_TASK_KEYS.includes(key) && !(key in value),
+  );
   if (missingKey !== undefined) {
     return `${missingKey} is missing`;
   }
   const { id, name, profile, prompt, controls, paused, updatedAt } = value;
+  const attended = 'attended' in value ? value.attended : false;
   if (typeof id !== 'string' || !TASK_ID.test(id)) {
     return `id must be 8 lowercase hex characters, got ${shown(id)}`;
   }
@@ -144,6 +151,9 @@ function readTaskFields(
   if (typeof paused !== 'boolean') {
     return `paused must be true or false, got ${shown(paused)}`;
   }
+  if (typeof attended !== 'boolean') {
+    return `attended must be true or false, got ${shown(attended)}`;
+  }
   const isUpdatedAtValid =
     typeof updatedAt === 'number' &&
     Number.isInteger(updatedAt) &&
@@ -160,6 +170,7 @@ function readTaskFields(
     schedule,
     controls: { ...(controls as Record<string, string>) },
     paused,
+    attended,
     updatedAt: updatedAt as number,
   };
 }

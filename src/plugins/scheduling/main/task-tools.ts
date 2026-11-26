@@ -18,7 +18,7 @@ import type {
 import { readSchedule, scheduleText } from '../schedule';
 
 const RUN_NOTE =
-  "A scheduled task starts a new, headless chat session in its folder at each scheduled time, with the task's prompt as its first message, also while the Auri app is closed. Each run is a full agent session running the user's whole agent setup: even a one-word prompt spends tens of thousands of tokens of the user's plan at every run, so schedule only work that needs a session of its own at those times.";
+  "A scheduled task starts a new chat session in its folder at each scheduled time, headless unless the task is attended, with the task's prompt as its first message, also while the Auri app is closed unless the task is attended. Each run is a full agent session running the user's whole agent setup: even a one-word prompt spends tens of thousands of tokens of the user's plan at every run, so schedule only work that needs a session of its own at those times.";
 
 const SCHEDULE_NOTE =
   'Times are local. `schedule` takes one of six shapes: hourly at a minute, `{"kind": "hourly", "minute": 15}`; daily at a time, `{"kind": "daily", "time": "09:00"}`; Monday to Friday at a time, `{"kind": "weekdays", "time": "09:00"}`; weekly on a day (0 is Sunday … 6 Saturday) at a time, `{"kind": "weekly", "day": 1, "time": "09:00"}`; once at a date and time, `{"kind": "once", "at": "2026-11-20T14:30"}`; a five-field cron line, `{"kind": "cron", "line": "0 9 * * 1-5"}`.';
@@ -75,6 +75,11 @@ const FIELD_SCHEMAS = {
     description:
       "Session control id → value for each run, capped at this session's own.",
   },
+  attended: {
+    type: 'boolean',
+    description:
+      'true: each run starts with headless off, so a form waits for the user, and runs only while the Auri app is open; a time missed while it is closed runs when the app next opens. false (the default): each run is headless.',
+  },
 };
 
 export const SCHEDULE_TASK_TOOL: ToolDefinition = {
@@ -90,7 +95,7 @@ export const SCHEDULE_TASK_TOOL: ToolDefinition = {
 
 export const LIST_SCHEDULED_TASKS_TOOL: ToolDefinition = {
   name: 'list_scheduled_tasks',
-  description: `List the Auri app's scheduled tasks, one line each: the task's id, name, schedule, next run (local \`YYYY-MM-DDTHH:MM\`, \`paused\`, or \`none\` when no run comes) and the outcome of its last run. ${RUN_NOTE}`,
+  description: `List the Auri app's scheduled tasks, one line each: the task's id, name, schedule, next run (local \`YYYY-MM-DDTHH:MM\`, \`paused\`, or \`none\` when no run comes) and the outcome of its last run, then \`attended\` on an attended task's line. ${RUN_NOTE}`,
   inputSchema: {
     type: 'object',
     properties: {},
@@ -169,6 +174,7 @@ interface TaskArgs {
   profile?: unknown;
   controls?: unknown;
   paused?: unknown;
+  attended?: unknown;
 }
 
 // The fields `update_scheduled_task` changes, `id` aside.
@@ -181,6 +187,7 @@ const UPDATE_FIELDS = [
   'profile',
   'controls',
   'paused',
+  'attended',
 ] as const satisfies readonly (keyof TaskArgs)[];
 
 // A value an argument settled on, or the problem that stops the call.
@@ -213,6 +220,16 @@ function readText(field: string, value: unknown): Choice<string> {
   return isNonBlankString(value)
     ? { value }
     : { problem: `${field} must be a non-empty string.` };
+}
+
+// The given `attended`, null when absent.
+function readAttended(value: unknown): Choice<boolean | null> {
+  if (isAbsent(value)) {
+    return { value: null };
+  }
+  return typeof value === 'boolean'
+    ? { value }
+    : { problem: 'attended must be true or false.' };
 }
 
 function readScheduleArg(value: unknown): Choice<TaskSchedule> {
@@ -420,6 +437,10 @@ async function scheduleTask(
   if ('problem' in controls) {
     return errorResult(controls.problem);
   }
+  const attended = readAttended(args.attended);
+  if ('problem' in attended) {
+    return errorResult(attended.problem);
+  }
   const draft: TaskDraft = {
     id: null,
     name: name.value,
@@ -432,6 +453,7 @@ async function scheduleTask(
       deps.sessionControls(session.id),
     ),
     paused: false,
+    attended: attended.value ?? false,
   };
   return saveDraft(
     deps,
@@ -464,6 +486,7 @@ function listScheduledTasks(deps: TaskToolsDeps): Promise<ToolResult> {
     nextRun: nextRunText(view),
     lastOutcome: view.history[0]?.outcome ?? null,
     paused: view.task.paused,
+    attended: view.task.attended,
   }));
   const text =
     tasks.length === 0
@@ -471,7 +494,7 @@ function listScheduledTasks(deps: TaskToolsDeps): Promise<ToolResult> {
       : tasks
           .map(
             (each) =>
-              `${each.id}  ${each.name}  ${each.schedule}  next ${each.nextRun}  last ${each.lastOutcome ?? 'none'}`,
+              `${each.id}  ${each.name}  ${each.schedule}  next ${each.nextRun}  last ${each.lastOutcome ?? 'none'}${each.attended ? '  attended' : ''}`,
           )
           .join('\n');
   return Promise.resolve({
@@ -550,6 +573,10 @@ async function updateScheduledTask(
     return errorResult('paused must be true or false.');
   }
   const paused = typeof args.paused === 'boolean' ? args.paused : task.paused;
+  const attended = readAttended(args.attended);
+  if ('problem' in attended) {
+    return errorResult(attended.problem);
+  }
   // A pause grants nothing, so it alone leaves the controls uncapped.
   const isPauseOnly = given.length === 1 && args.paused === true;
   const kept = controls.value ?? task.controls;
@@ -564,6 +591,7 @@ async function updateScheduledTask(
       ? kept
       : deps.capControls(kept, deps.sessionControls(session.id)),
     paused,
+    attended: attended.value ?? task.attended,
   };
   return saveDraft(
     deps,

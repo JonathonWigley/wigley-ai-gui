@@ -21,7 +21,7 @@ export const DEMO_ROUND_ARGS: Record<string, unknown> = {
   ...PREVIEW_ROUND_ARGS,
   heading: 'Daily quests: first pass',
   overview:
-    'A sample round for the demo; nothing answered here reaches an agent.',
+    'A sample form for the demo; nothing answered here reaches an agent.',
 };
 
 // The main half of `forms.round`: a demo session holding the sample round.
@@ -41,7 +41,7 @@ export function registerDemoSteps(
           forms: deps.samples,
           activate: deps.activate,
           log: deps.log,
-          noun: 'round',
+          noun: 'form',
         },
         sampleFormOwner(sessionId),
         DEMO_ROUND_ARGS,

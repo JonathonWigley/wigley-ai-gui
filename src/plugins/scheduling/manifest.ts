@@ -2,8 +2,9 @@ import { definePlugin } from '../../shared/define-plugin';
 import { LIST_PICKER_COMMANDS } from '../../shared/list-picker-commands';
 
 // Scheduling: holds the user's scheduled tasks in the shared task file, plans each active task's next run, prepares
-// it through chat's launch and hands it to the session host, which starts it as a new headless session at its time,
-// also while the app is closed; each run the host started opens as a row in the side bar's Scheduled runs section.
+// it through chat's launch and hands it to the session host, which starts it as a new session at its time, headless
+// unless the task is attended, and, for an unattended task, also while the app is closed; each run the host started
+// opens as a row in the side bar's Scheduled runs section.
 // It names `chat` for preparing and adopting a run, the profiles and projects, and the turn and row events, and
 // `sessions` for the rows, the Scheduled runs section, the offline tool answers and the row selection; its page
 // names `sessions` to open a run's row from Schedules mode. `layout` names the layout Schedules mode draws with.
@@ -13,7 +14,7 @@ export const schedulingManifest = definePlugin({
   id: 'scheduling',
   label: 'Scheduled tasks',
   description:
-    'Runs agent tasks on a schedule as new headless sessions, also while the app is closed.',
+    'Runs agent tasks on a schedule as new sessions, headless unless a task is attended; an unattended task also runs while the app is closed.',
   dependsOn: { main: ['chat', 'sessions'], page: ['sessions'] },
   reads: { main: [], page: [] },
   commands: {

@@ -2,8 +2,8 @@
 
 **Contents**
 
-- **Commands** — `build`, `context <dir>` and `session <id>`, the `--contributions` option, and
-  what each prints or writes.
+- **Commands** — `build`, `context <dir>`, `session <id>` and `loads-check <id>`, the
+  `--contributions` option, and what each prints or writes.
 - **Config** — the machine-local file that picks the repos.
 - **Contributions file** — the global folders, skill link prefixes and features homes the app hands
   the index.
@@ -13,6 +13,8 @@
 - **Load states** — the five states and the Claude Code and Codex rules behind them.
 - **Last loaded** — when a session last loaded each entry, read from Claude Code transcripts, and
   the cache that keeps the read incremental.
+- **Loads check** — `loads-check <id>`: the predicted launch files a session's main, subagent or
+  post-compaction instructions load left out, its check points, exit codes and installed path.
 - **Local commands** — the test suite.
 
 `docs_index.py` finds every agent doc on the machine — instruction files and their imports, rules,
@@ -25,12 +27,13 @@ Standard library only, Python 3.11 or later (`tomllib`).
 
 ## Commands
 
-| Command                                | Writes                                                                          | Prints                                        |
-| -------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
-| `python3 docs_index.py build`          | `~/.agents/wigley-docs/index.json` (temp file, then rename) and the loads cache | nothing                                       |
-| `python3 docs_index.py build --stdout` | the same files                                                                  | the same JSON                                 |
-| `python3 docs_index.py context <dir>`  | the loads cache                                                                 | an index document for `<dir>` alone           |
-| `python3 docs_index.py session <id>`   | nothing                                                                         | an index document for one Claude Code session |
+| Command                                  | Writes                                                                          | Prints                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `python3 docs_index.py build`            | `~/.agents/wigley-docs/index.json` (temp file, then rename) and the loads cache | nothing                                          |
+| `python3 docs_index.py build --stdout`   | the same files                                                                  | the same JSON                                    |
+| `python3 docs_index.py context <dir>`    | the loads cache                                                                 | an index document for `<dir>` alone              |
+| `python3 docs_index.py session <id>`     | nothing                                                                         | an index document for one Claude Code session    |
+| `python3 docs_index.py loads-check <id>` | nothing                                                                         | the session's missing launch files (Loads check) |
 
 Each command takes `--contributions <file>` before the command name
 (`docs_index.py --contributions <file> build`): the file the app writes with the global folders,
@@ -54,6 +57,9 @@ folder, resolves no skill link and finds no feature home.
   the transcript shows (Last loaded). The id
   is the Claude Code session id, which the forms relay sends to wigley-ai-gui as `session_id`. An
   id with no transcript, or a transcript with no `cwd`, exits 1 with the reason on stderr.
+- `loads-check <id>` finds the transcript as `session` does and prints each file Claude Code's
+  rules predict at launch for the session's folder that the session's instructions loads left out
+  (Loads check).
 
 A Claude Code settings file, `installed_plugins.json` or `~/.codex/config.toml` that is unreadable
 reads as empty, and a value in one of the wrong shape reads as its default; each prints one stderr
@@ -610,6 +616,58 @@ cache that is unreadable, not a JSON object, of another `version`, lacks `transc
 `names` as an object, holds an offset that is not a non-negative integer, or holds a time that is not
 a string with a UTC offset is rebuilt from every transcript, whole: one bad value drops the entire
 cache. `session` reads and writes no cache.
+
+## Loads check
+
+`python3 docs_index.py [--contributions <file>] loads-check <session id>` checks that a session
+loaded every file its folder is predicted to load at launch. It prints, as two-space JSON:
+
+```json
+{
+  "session": "<id>",
+  "folder": "<cwd>",
+  "missing": [{ "id": "<entry id>", "path": "<real path>", "where": "main" }]
+}
+```
+
+- **Folder and prediction.** `folder` is the real path of the main transcript's first `cwd`, as
+  `session` reads it. The predicted launch files are the entries reaching that folder whose Claude
+  Code state is `launch` (Load states), judged by the Claude config folder holding the transcript.
+  `hook` and `plugin` entries are skipped: an `instructions` row never lists them.
+- **Check points.** Each check point is one `instructions` attachment row, in this order, and
+  `where` names it:
+  - `main`: the main transcript's first `instructions` row.
+  - `compact:<n>`: the first `instructions` row after the n-th `compact_boundary` row (type `system`,
+    subtype `compact_boundary`, counted from 1) and before the next, in the main transcript only.
+  - `subagent:<agent id>`: the first `instructions` row of each subagent transcript, the ones
+    `session` reads for times (`<id>/subagents/**/*.jsonl`, `journal.jsonl` left out), in sorted
+    path order. The agent id is the file name without `agent-` and `.jsonl`.
+- **Rows.** Rows are matched as Last loaded matches them: a line is parsed only when it holds
+  `"attachment":{"type":"instructions"` or `compact_boundary`.
+- **No check point.** A transcript or a boundary with no `instructions` row gives none: built-in
+  `Explore` and `web-fetch` subagents write none, and a boundary at the end of a live transcript has
+  none until the next turn. A subagent whose `agent-<id>.meta.json` beside it holds
+  `"agentType": "Explore"` is skipped too, since Explore loads no instruction files by design; a
+  missing or unreadable meta file reads as not Explore.
+- **One folder.** Every point, each subagent's included, is checked against the session's folder;
+  a subagent's own `cwd` and its meta file's `worktreePath` are not read. Measured 2026-11-25 over
+  the local transcripts: of 11,991 subagent transcripts with an `instructions` row, 11,626 list
+  exactly the main transcript's first list — 7,289 whose first `cwd` is the session folder, 3,771
+  in a subfolder of it, 566 outside it, and all 12 spawned with a worktree. The 365 that differ
+  follow files added or removed during the session, or a main session that moved into a worktree.
+  A subagent loads its parent's list, so a prediction from its own `cwd` would report files Claude
+  Code never loads.
+- **Present or missing.** An entry is present at a point when the real path of any of its
+  locations (own path, `walked`, `installed`) is among the real paths the row lists. Each absent
+  entry gives one `missing` item, in point order, then the entries' discovery order.
+- **Exit codes.** 0 whenever the transcript is read, whatever `missing` holds. 1 when the id has no
+  transcript or the transcript has no `cwd`, with the reason on stderr and nothing on stdout.
+- **`--contributions`.** Without the file the app writes (Contributions file), no global folder is
+  walked, so a launch file the global layer holds is never predicted and never reported missing.
+  A caller outside the app passes that file when it exists.
+- **Installed path.** A caller outside this repo runs
+  `<installPath>/scripts/docs-index/docs_index.py`, where `installPath` is the `auri@auri`
+  install's in the Claude config folder's `plugins/installed_plugins.json`.
 
 ## Local commands
 

@@ -10,6 +10,42 @@ changes for the user.
 
 - Each session has a terminal in a drawer under its tabs: `Space b t` or Ctrl+backtick opens it, and an agent types a command there for you to run with Enter.
 
+## 1.14.0 — 2026-11-26
+
+### Added
+
+- `docs_index.py loads-check <session id>` lists each file the session's folder loads at launch that a main, subagent or post-compaction instructions load left out.
+- A scheduled task can be attended: its runs start with headless off, so a form waits for you, and run only while the app is open; a time missed while it is closed runs when the app next opens.
+
+### Changed
+
+- The session host starts at login only while an unattended scheduled task is active; attended tasks alone no longer turn it on.
+
+### Fixed
+
+- A restored retro row whose process ended before its history was read no longer closes as start-failed.
+- A restored retro row whose history cannot be read yet (its harness or profile missing, or the session host not yet answering its list) stays open until chat reads it, and closes as soon as it can; one whose history this app can never read (its process runs in another app version) stays open without holding the retro queue, so the next retro starts.
+- A restored row's history waiting on the session host is read once the host answers, also when the host first failed to start or let a list go unanswered; before, it could wait until the host restarted.
+- A retro whose session ends before its first turn, or a restored retro row that never ran, closes with a log line naming the lost retro, and the next queued retro starts; before, the queue waited forever or the row read finished.
+
+## 1.13.0 — 2026-11-25
+
+### Changed
+
+- The app's own tool descriptions, tool results, wake message and UI (labels, buttons, prompts, toasts, settings and the layout preview's sample) call a batch of questions a form rather than a round, so an agent and the user see one word; tool names, outcome values, saved files and command ids are unchanged.
+
+## 1.12.0 — 2026-11-25
+
+### Changed
+
+- The sample Small, Medium and Spike workflows take the reported steps `make`, `review` and `close` in place of `build`, `check` and `land`, matching their stepper words; stage ids and slots are unchanged, so saved flows keep their place.
+
+## 1.11.0 — 2026-11-25
+
+### Changed
+
+- The sample workflows' stepper words follow the sample plugin's renamed steps: Small reads Explore › Make › Review › Close, Medium Interview › Make › Review › Fix › Close, and Spike Interview › Make › Review › Close; the reported step values stay `build`, `check` and `land`.
+
 ## 1.10.0 — 2026-11-25
 
 ### Changed

@@ -37,7 +37,7 @@ export function boxKey(box: BoxRef): string {
 export function boxDescription(box: BoxRef): string {
   const { target } = box;
   if (!('item' in target)) {
-    return 'note on the round';
+    return 'note on the form';
   }
   return `${target.field} on ${target.item.kind} ${target.item.index}`;
 }

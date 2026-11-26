@@ -77,12 +77,14 @@ export interface HostedExit {
 }
 // A spawn the host starts at `at` (epoch ms; at or before now starts at once). `record` is the app's JSON, handed back
 // untouched on the run. `skipWhileBusy` is a hosted process id: when that process runs and its idle rule reads it
-// busy at `at`, the host skips the spawn and records a skipped run.
+// busy at `at`, the host skips the spawn and records a skipped run. With `needsClient`, an entry that comes due while no
+// app is connected leaves the table with no run recorded; an entry read without it reads as false.
 export interface PendingSpawn {
   at: number;
   spawn: HostedSpawn;
   record: unknown;
   skipWhileBusy: string | null;
+  needsClient: boolean;
 }
 // Frozen: never change this shape; a newer host imports an older host's `runsFile`. A run the host started or skipped
 // from a pending entry. `id` is the entry's `spawn.id`; `startedAt` is when the host spawned or skipped it; `exit` is
@@ -148,7 +150,10 @@ export interface SessionHost {
   forgetRuns(ids: readonly string[]): void;
   // Hears each run the host starts or skips while this app is connected.
   onRunStarted(listener: (run: HostedRun) => void): Disposable;
-  // Hears each time the client connects to a host after its first connect: a new host after a host death, an update
-  // or a login start. Runs the host started while no app was connected reach the app only through `listRuns`.
+  // Hears every connect but the one the client's first connect attempt makes, once each older host has served its
+  // drain: a new host after a host death, an update or a login start, and the host answering after an earlier attempt
+  // failed. A caller whose call was refused for want of a host can wait on it; a reply that timed out on a link that
+  // stays up is followed by no connect. Runs the host started while no app was connected reach the app only through
+  // `listRuns`.
   onConnected(listener: () => void): Disposable;
 }

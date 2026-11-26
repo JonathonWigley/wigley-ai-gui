@@ -73,7 +73,7 @@ const APPROVES_DESCRIPTION =
   'your settings or hooks, start_session in another project — with that ' +
   'exact action in plain words, such as "push `main` of ' +
   'my-repo to origin past PR protection". When the user ' +
-  'submits the round with a tagged choice picked, the app first posts ' +
+  'submits the form with a tagged choice picked, the app first posts ' +
   '"Approved in form: <action>" into the running turn as the user\'s own ' +
   'message, one line per action, then returns the answers, each tagged ' +
   'pick with approval_posted. True: that message is the yes, so ask for no ' +

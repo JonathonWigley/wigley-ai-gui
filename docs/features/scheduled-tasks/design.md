@@ -2,16 +2,18 @@
 
 **Contents**
 
-- **Intent** — agent tasks that run on a schedule as new headless sessions, also while the app is quit.
+- **Intent** — agent tasks that run on a schedule as new sessions, headless unless the task is attended; an unattended
+  task also runs while the app is quit.
 - **Vocabulary** — task, schedule, occurrence, run, run row, pending run, catch-up, skip.
 - **Flow** — from a task to a run row, through the session host.
 - **A task** — its fields, the task file and its shape, a file that fails to parse.
 - **Schedules** — the six kinds, local time, the cron dialect, daylight saving.
 - **Firing** — which app fires, what is queued and when it is re-planned, catch-up, overlap, a failed start.
 - **The environment of a run** — the variables a prepared run carries, and where the rest go.
-- **With the app closed** — what each tool answers, and what replays when the app opens.
+- **With the app closed** — an attended run waits for the app; for the rest, what each tool answers, and what replays
+  when the app opens.
 - **Adoption** — how a run the host started becomes a row.
-- **Login start** — the host starting at login while any task is active.
+- **Login start** — the host starting at login while any unattended task is active.
 - **Schedules mode and Scheduled runs** — the mode, its keys and history lines, the section, the finished mark.
 - **MCP tools** — the four tools main agents manage tasks with.
 - **History** — where each task's runs are kept.
@@ -19,9 +21,10 @@
 
 ## Intent
 
-The user schedules agent tasks: a prompt that runs in a project folder at set times. Each run is a new headless
-session, started by the session host at its time, also while the app is quit and, on macOS, after a restart with no
-app open. Every run stays a row until the user closes it, so the user reads each one when ready, the runs that ran
+The user schedules agent tasks: a prompt that runs in a project folder at set times. Each run is a new session,
+headless unless the task is attended, started by the session host at its time. An unattended task's run starts also
+while the app is quit and, on macOS, after a restart with no app open; an attended task's starts only while the app is
+open, so the user answers its forms. Every run stays a row until the user closes it, so the user reads each one when ready, the runs that ran
 in the background included. The `scheduling` plugin holds the tasks, plans each task's next run and hands it to the
 host; chat starts and adopts the run, and sessions answers its tool calls while the app is closed.
 
@@ -46,21 +49,23 @@ host; chat starts and adopts the run, and sessions answers its tool calls while 
    │   reads/writes ~/.config/wigley-ai-gui/scheduled-tasks.json (watched)
    │   history.json in plugin data (stable instance)
    │   planRuns(tasks, history, runNow, now) → one PlannedRun per active task
-   │   chat.prepareLaunch(request, sessions.offlineEnv()) → { spawn, adopt }
-   │   services.sessionHost.setPending([{ at, spawn, record, skipWhileBusy }])
-   │   services.loginStart.set(any task active)
+   │   chat.prepareLaunch(request, attended ? {} : sessions.offlineEnv()) → { spawn, adopt }
+   │   services.sessionHost.setPending([{ at, spawn, record, skipWhileBusy, needsClient: attended }])
+   │   services.loginStart.set(any unattended task active)
    ▼
  session host (detached; started by the app, or at login through the app's --start-session-host entry)
-   │ pending-v<protocol>.json ── timer at `at` ──► skip when `skipWhileBusy` is busy, else spawn
+   │ pending-v<protocol>.json ── timer at `at` ──► drop when `needsClient` and no app is connected,
+   │                                               else skip when `skipWhileBusy` is busy, else spawn
    │   env = own env − ELECTRON_RUN_AS_NODE − unsetEnv + overlay; then writes stdin lines
    │ runs-v<protocol>.json ◄── { id, record, startedAt, skipped, exit }
    │ pushes runStarted to connected apps; stays alive while pending or runs is non-empty
    ▼
- claude -p … (headless note, task controls)
-   │ relay.py with WIGLEY_FORMS_OFFLINE=<endpoint dir>/offline-calls
+ claude -p … (headless note unless attended, task controls)
+   │ relay.py, for an unattended run with WIGLEY_FORMS_OFFLINE=<endpoint dir>/offline-calls
    │   app reachable → forwards as today
    │   app closed    → answers from <endpoint dir>/offline.json, appends each call to
    │                   <endpoint dir>/offline-calls/<session id>.jsonl, never starts the app
+   │ an attended run's relay has no offline mode: it works as a live session's
    ▼
  app open: runStarted push, or listRuns at plugin start and after each reconnect to a new host
    scheduling → chat.adopt(record.adopt) inside sessions.holdConnects
@@ -85,6 +90,8 @@ A task (`ScheduledTask` in `src/plugins/scheduling/contract.ts`) holds:
 - `schedule` — a `TaskSchedule` (§ Schedules).
 - `controls` — the run's harness controls by control id, the permission mode included; model and effort are optional.
 - `paused` — a paused task queues nothing until it is resumed.
+- `attended` — true: each run starts with headless off and only while the app is open (§ With the app closed). A task
+  with no `attended` key reads as false.
 - `updatedAt` — epoch ms of the app's last write of this task; the catch-up window starts there (§ Firing).
 
 Every task lives in one file, `~/.config/wigley-ai-gui/scheduled-tasks.json` (`TASK_FILE_NAME`), in the user config
@@ -103,6 +110,7 @@ trailing newline (`taskFileText`). One task:
       "schedule": { "kind": "weekdays", "time": "09:00" },
       "controls": { "mode": "plan", "effort": "medium" },
       "paused": false,
+      "attended": false,
       "updatedAt": 1794297600000
     }
   ]
@@ -115,8 +123,8 @@ parse, the app writes nothing to it (an edit, a pause or a tool call answers tha
 write never erases the user's unsaved hand edit. A deleted file reads as no tasks. A hand edit keeps the `updatedAt`
 the file holds; the app does not stamp it. Tasks never expire: a task stays until the user or an agent removes it.
 
-Each run is a new headless session in the task's folder, with the prompt as its first message and the task's
-controls as its first process's. A pool project's run starts in the pool's lowest-numbered clone with no claim; the
+Each run is a new session in the task's folder, headless unless the task is attended, with the prompt as its first
+message and the task's controls as its first process's. A pool project's run starts in the pool's lowest-numbered clone with no claim; the
 agent claims a clone before it writes, as in every pool session. A run uses the folder as it is, with no worktree.
 
 ## Schedules
@@ -156,8 +164,9 @@ schedule is read, since it would never fire.
   self-test and drive runs fire in their own temp homes, so their checks reach a real queue.
 - **One run per task.** The planner (`planRuns` in `main/planner.ts`) gives each active task one `PlannedRun`: a Run
   now press at once, else a catch-up at once, else the next occurrence. A paused task and a spent one-time task get
-  none. The app sends the whole list with `setPending`, which replaces what it sent before. With the app closed, a
-  task fires once and then waits until the app opens and plans again.
+  none. The app sends the whole list with `setPending`, which replaces what it sent before. With the app closed, an
+  unattended task fires once and then waits until the app opens and plans again; an attended one does not fire
+  (§ With the app closed).
 - **Re-plans** happen on app start, on each task edit, on each task-file change, on each Run now press, on a plugin
   reload, after each run is adopted, after the app connects to a new host, and when chat's session instructions change (`chat.onInstructionsChanged`), which also prepares
   every pending run again. The `claude.command` path and chat's profiles and projects, which a prepared run also
@@ -189,7 +198,7 @@ schedule is read, since it would never fire.
 
 A prepared run stores only the app's own variables plus PATH, never the app's whole environment:
 `WIGLEY_AI_GUI_ENDPOINT_DIR`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, `WIGLEY_SESSION_ROW`,
-`WIGLEY_FORMS_OFFLINE` (from sessions' `offlineEnv`), and `PATH` as the app's login PATH when the run was prepared.
+`WIGLEY_FORMS_OFFLINE` (from sessions' `offlineEnv`, for an unattended run only), and `PATH` as the app's login PATH when the run was prepared.
 The Claude adapter carries `PATH`, `WIGLEY_AI_GUI_ENDPOINT_DIR` and `CLAUDE_CONFIG_DIR` from the app's environment
 into the run (`CLAUDE_CARRIED_ENV`, `prepareRun`), so no plugin reads that environment. `CLAUDE_CONFIG_DIR` rides
 along because a profile with no folder of its own keeps the inherited value, and the run must write its transcript
@@ -200,8 +209,18 @@ variable a run needs beyond these goes in the Claude profile's settings `env`, a
 
 ## With the app closed
 
-Every run starts headless: a forms round answers itself with its recommendations, and the session's instructions
-carry `HEADLESS_NOTE`. While the app is open, a permission prompt that the task's mode does not allow waits, with the
+An attended run starts only while the app is open. Its pending entry carries `needsClient: true`, and the host drops
+an entry that comes due while no app is connected, recording no run (session-host design § Pending runs). The
+dropped time has no history entry, so the planner catches it up at the app's next start, at once, with the app open.
+An app still running that reconnects to the host resends its pending list, so the host fires the dropped entry then,
+under the same spawn id; the host's `setPending` drops an id that has a run record, so it runs once. An edit of the task before then moves the catch-up window past it, as for any missed run. An attended run is also
+prepared without the offline env, so its relay has no offline mode and works as a live session's: a call waiting when
+the user quits mid-run is held for the reconnect, then the relay starts the app and sends it again, so a waiting form
+reopens; when the app cannot start, the call answers that it did not run, never with a pick. Nothing below applies
+to it.
+
+An unattended run starts headless: a form answers itself with its recommendations, and the session's
+instructions carry `HEADLESS_NOTE`. While the app is open, a permission prompt that the task's mode does not allow waits, with the
 row marked needing you. While the app is closed, the relay answers each call from the table the app writes,
 `offline.json` beside `tools.json` in the endpoint folder (forms README § The relay, in wigley-ai-marketplace). Each
 tool's contribution declares its answer and whether it replays, through `contributeTools(…, { offline })`:
@@ -239,7 +258,7 @@ skipped, with no wait, so a subagent's call is never applied as a main agent's.
 ## Adoption
 
 The app learns of a run from the host's `runStarted` push while it is connected, or from `listRuns` when the plugin
-starts and each time the host client connects to a new host (`sessionHost.onConnected`). Each `listRuns` read runs
+starts and each time the host client connects again: a new host, or the host answering after a failed attempt (`sessionHost.onConnected`). Each `listRuns` read runs
 inside `sessions.holdConnects`, so a run's relay hello waits for its row. For each run whose record is a
 `ScheduledRunRecord`:
 
@@ -272,8 +291,9 @@ session does.
 
 ## Login start
 
-While any task is active (`services.loginStart.set(any task active)`; active means not paused with a planned run,
-so a spent one-time task does not count), the session host starts when the user logs in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
+While any unattended task is active (`services.loginStart.set(any unattended task active)`; active means not paused
+with a planned run, so a spent one-time task does not count; an attended task does not count either, since the host
+drops its runs while no app is open), the session host starts when the user logs in, so pending runs fire after a restart with no app open. Both macOS login starts run the app executable with the
 flag `--start-session-host` (`LOGIN_START_FLAG`). `main.ts` checks the flag before the single-instance lock, sets the
 accessory activation policy so no Dock icon shows, starts the host detached through `sessionHostLaunch` as the app
 would, and exits; so the host's folder and channel are worked out in one place and no plist holds them. A host
@@ -298,8 +318,9 @@ started this way reads its pending table and runs record at start. `LoginStart` 
 
 - **Schedules mode** opens on `<Leader>kt`, drawn through the scheduling plugin's layout like every mode. The left
   side lists the tasks, under a "+ New task" row; each row shows its schedule and its next run, or Paused. The right
-  side shows the selected task: project, schedule, permission mode and prompt, with Edit, Pause or Resume, Run now and
-  Remove. The editor offers chat's profiles and projects and the harness's start controls (`editorChoices`).
+  side shows the selected task: project, schedule, permission mode, whether it is attended and prompt, with Edit, Pause
+  or Resume, Run now and Remove. The editor offers chat's profiles and projects, the harness's start controls
+  (`editorChoices`) and an Attended row (No or Yes, No for a new task).
 - **The mode's keys**: `j`/`k` move, `a` makes a task, `i` edits the selected one, `p` pauses or resumes it, `r` runs
   it now, `d` removes it after a confirm; in the details, `j`/`k` move through the history and `<CR>` or `l` opens a run's
   row. `src/plugins/keymap.ts` holds the full list.
@@ -327,14 +348,17 @@ Main agents manage tasks through four tools, contributed with `{ mainAgentOnly: 
 
 - `schedule_task` — makes a task, active at once; the calling session's folder by default, and the named
   project's own profile, else the calling session's, as `start_session` defaults. A project with its own profile
-  refuses any other.
-- `list_scheduled_tasks` — each task's id, name, schedule, next run and last outcome.
-- `update_scheduled_task` — changes any field; `paused` pauses and resumes.
+  refuses any other. `attended` is saved as given, false when absent.
+- `list_scheduled_tasks` — each task's id, name, schedule, next run and last outcome, then `attended` on an attended
+  task's line; each `structuredContent.tasks` item carries `attended`.
+- `update_scheduled_task` — changes any field; `paused` pauses and resumes, `attended` sets whether runs are attended.
+  A non-boolean `attended` is refused by both tools.
 - `remove_scheduled_task` — removes a task.
 
 `schedule_task` and `update_scheduled_task` cap the task's controls at the calling session's, through the harness's
 `capControls`, so an agent cannot schedule a run with more permission than it has. An update caps the controls the
-task ends with, kept ones included, unless its only change is a pause. An unknown control id is refused at save. A call from a run row answers `A
+task ends with, kept ones included, unless its only change is a pause; `attended` grants no permission, so an update
+of it alone is capped like any other change. An unknown control id is refused at save. A call from a run row answers `A
 scheduled run cannot manage scheduled tasks.`, so a run cannot reschedule itself. An agent's task shows in Schedules
 mode like any other. With the app closed, the four tools did not run.
 
@@ -360,6 +384,9 @@ until the user views a finished run's row.
   so they may fire and can be checked.
 - **Calls file keyed by session id.** The offline env stays the same for every run, so chat picks the session id after
   the scheduler builds the env, and sessions finds the file from the host session id alone.
+- **An attended run needs the app.** An offline answer takes each item's recommended pick, so an attended run, such
+  as a review the user answers, would act on picks the user never saw. So it starts only while an app is connected,
+  its missed time runs at the next app start, and it carries no offline env, which also covers a quit mid-run.
 - **Offline answers per tool name.** One contribution holds tools with different answers (`ask_round`,
   `collect_last_round`). A tool left out answers that it did not run and does not replay.
 - **Permission cap in the harness.** The Claude order, least to most permissive: `plan` (writes nothing), `dontAsk`

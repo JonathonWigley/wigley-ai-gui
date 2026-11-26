@@ -36,6 +36,7 @@ import {
   fakeUsageEvent,
 } from '../../../shared/fake-agent-harness';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
+import { fakeTimers } from '../../../shared/fake-timers.test-support';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
@@ -59,6 +60,7 @@ import {
   type ChatSessionState,
   chatSessionSlot,
   HEADLESS_NOTE,
+  type HistoryLoad,
   type PoolProvider,
   type QueuedMessage,
   type ReturnedMessage,
@@ -75,6 +77,7 @@ import {
   type ChatSessions,
   type ChatSessionsDeps,
   createChatSessions,
+  HOST_LIST_RETRY_MS,
   PERMISSION_CANCELLED_REASON,
   UNATTENDED_REASON,
 } from './chat-sessions';
@@ -428,7 +431,8 @@ function setUp(
     clockNow?: number;
     git?: ChatSessionsDeps['git'];
     files?: ChatSessionsDeps['files'];
-    sessionHost?: ChatSessionsDeps['sessionHost'];
+    // Replaces the fake host's `list`; its `onConnected` still serves.
+    sessionHost?: Pick<ChatSessionsDeps['sessionHost'], 'list'>;
     // Row ids an earlier run of chat left in the session slot.
     keptRowIds?: string[];
     projects?: ChatProject[];
@@ -445,6 +449,7 @@ function setUp(
   );
   const harnesses = options.harnesses ?? [harness];
   const sessionHost = createFakeSessionHost(clock);
+  const retryTimers = fakeTimers();
   const data = createMemoryFiles();
   const logged: string[] = [];
   const log = (message: string) => logged.push(message);
@@ -601,7 +606,11 @@ function setUp(
     },
     log,
     clock,
-    sessionHost: options.sessionHost ?? sessionHost,
+    timers: retryTimers.timers,
+    sessionHost: {
+      list: () => (options.sessionHost ?? sessionHost).list(),
+      onConnected: (listener) => sessionHost.onConnected(listener),
+    },
     projects: () => options.projects ?? [],
     poolProvider: () => options.poolProvider ?? null,
     homeDir: '/home/me',
@@ -634,6 +643,8 @@ function setUp(
     setNow: (now: number) => {
       clockNow = now;
     },
+    // Chat's timers: the history retry after a refused host list.
+    retryTimers,
     hostIdChanges,
     ownedEnds: () => ownedEnds,
     keptRows,
@@ -4800,6 +4811,145 @@ describe('createChatSessions saved sessions', () => {
     },
   );
 
+  // Breaks: the export resolving while another caller's read is still in flight, before its entries land.
+  it('loadHistoryWhenReadable_ReadAlreadyRunning_ResolvesAfterTheEntriesLand', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.chat.restore(
+      {
+        sessions: [record(hostId, { sent: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+    await flush();
+    const gate = Promise.withResolvers<void>();
+    const history = test.harness.history;
+    test.harness.history = async (...args) => {
+      await gate.promise;
+      return history(...args);
+    };
+
+    const firstRead = test.chat.loadHistory(ROW_ID);
+    let secondLoad: HistoryLoad | null = null;
+    const secondRead = test.chat
+      .loadHistoryWhenReadable(ROW_ID)
+      .then((load) => {
+        secondLoad = load;
+      });
+    await flush();
+
+    expect(secondLoad).toBeNull();
+
+    gate.resolve();
+    await secondRead;
+    const idsAfterSecond = test.chat
+      .sessions()[0]
+      .entries.map((entry) => entry.id);
+    await firstRead;
+
+    expect(secondLoad).toEqual({ kind: 'read' });
+    expect(idsAfterSecond).toEqual([
+      `history:${PAST_ONE.sessionId}-user`,
+      `history:${PAST_ONE.sessionId}-assistant`,
+    ]);
+  });
+
+  // Breaks: a wait for a row that cannot read yet resolving before its cause clears, or never once it has, so
+  // auto-retro holds the restored retro row busy forever.
+  it.each([
+    {
+      given: 'its harness left',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, record(PAST_ONE.sessionId, { sent: true }), []);
+        test.leave(FAKE_HARNESS_ID);
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.register(test.harness);
+        return test.chat.harnessReturned(FAKE_HARNESS_ID);
+      },
+    },
+    {
+      given: 'its profile is missing',
+      arrange: (test: ReturnType<typeof setUp>) =>
+        restoreOne(
+          test,
+          record(PAST_ONE.sessionId, { sent: true, profile: 'gone' }),
+          [],
+        ),
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.setProfiles([
+          ...PROFILES,
+          { name: 'gone', configDir: '/Users/u/.claude-gone' },
+        ]);
+        test.chat.harnessRefreshed(FAKE_HARNESS_ID);
+      },
+    },
+    {
+      given: 'the session host refused its list',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord({ sent: true }), null);
+        test.sessionHost.failList('no host');
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.sessionHost.failList(null);
+        test.sessionHost.setList([hostedP1({ running: false })]);
+        test.sessionHost.connectAgain();
+      },
+    },
+    {
+      given: 'the session host let its list time out on a link that stays up',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        restoreOne(test, hostedRecord({ sent: true }), null);
+        test.sessionHost.failList('the session host did not answer its list');
+      },
+      clear: (test: ReturnType<typeof setUp>) => {
+        test.sessionHost.failList(null);
+        test.sessionHost.setList([hostedP1({ running: false })]);
+        test.retryTimers.runAfter(HOST_LIST_RETRY_MS);
+      },
+    },
+  ])(
+    'loadHistoryWhenReadable_RowThatCannotReadYet_ResolvesReadOnceItsCauseClears given $given',
+    async ({ arrange, clear }) => {
+      const test = setUp();
+      arrange(test);
+      let load: HistoryLoad | null = null;
+      const waiting = test.chat
+        .loadHistoryWhenReadable(ROW_ID)
+        .then((loaded) => {
+          load = loaded;
+        });
+      await flush();
+
+      expect(load).toBeNull();
+      expect(historyCallsOf(test)).toEqual([]);
+
+      await clear(test);
+      await waiting;
+
+      expect(load).toEqual({ kind: 'read' });
+      expect(historyCallsOf(test)).toHaveLength(1);
+    },
+  );
+
+  // Breaks: a wait for a row the user closed never resolving.
+  it('loadHistoryWhenReadable_RowClosedWhileWaiting_ResolvesGone', async () => {
+    const test = setUp();
+    restoreOne(
+      test,
+      record(PAST_ONE.sessionId, { sent: true, profile: 'gone' }),
+      [],
+    );
+    const waiting = test.chat.loadHistoryWhenReadable(ROW_ID);
+    await flush();
+
+    test.chat.closed(ROW_ID, 'user');
+
+    expect(await waiting).toEqual({ kind: 'gone' });
+    expect(historyCallsOf(test)).toEqual([]);
+  });
+
   it('loadHistory_ProfileMissing_ReadsOnceItIsBack', async () => {
     const test = setUp();
     test.chat.restore(
@@ -7581,13 +7731,21 @@ describe('createChatSessions unheld processes', () => {
     expect(startsOf(test).map((start) => start.request.resume)).toEqual([true]);
   });
 
-  it('loadHistory_OlderHostRow_ReadsNothing', async () => {
+  // Breaks: a row running in another app version resolving `read`, so auto-retro reads a restored retro lost, or
+  // never resolving, so a running retro holds the queue forever. A refused host list is transient and waits instead
+  // (`loadHistoryWhenReadable_RowThatCannotReadYet_ResolvesReadOnceItsCauseClears`).
+  it('loadHistoryWhenReadable_RunsInAnotherAppVersion_ResolvesUnreadableAndALaterReadReads', async () => {
     const test = setUp();
-    const older = [hostedP1({ current: false })];
-    restoreOne(test, hostedRecord({ sent: true }), older);
+    restoreOne(test, hostedRecord({ sent: true }), [
+      hostedP1({ current: false }),
+    ]);
 
-    test.sessionHost.setList(older);
-    await test.chat.loadHistory(ROW_ID);
+    test.sessionHost.setList([hostedP1({ current: false })]);
+    const whileUnheld = await test.chat.loadHistoryWhenReadable(ROW_ID);
+    expect(whileUnheld).toEqual({
+      kind: 'unreadable',
+      reason: 'its process runs in another app version',
+    });
     expect(test.harness.pastSessionCalls).toEqual([]);
 
     test.sessionHost.setList([hostedP1({ running: false })]);

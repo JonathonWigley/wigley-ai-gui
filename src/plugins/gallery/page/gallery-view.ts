@@ -419,9 +419,9 @@ function buttonCells(platform: OsName): SampleCell[][] {
   };
   return [
     variantRow('primary', 'Primary', 'Submit', false),
-    variantRow('secondary', 'Secondary', 'Cancel round', true),
+    variantRow('secondary', 'Secondary', 'Cancel form', true),
     variantRow('ghost', 'Ghost', 'Close', true),
-    variantRow('danger', 'Danger', 'Cancel the round', false),
+    variantRow('danger', 'Danger', 'Cancel the form', false),
   ];
 }
 
@@ -829,11 +829,11 @@ function floatingPanelSample(platform: OsName): HTMLElement {
 }
 
 function dialogSample(drawFrame: DrawDialogFrame): HTMLElement {
-  const dialog = createDialog('Cancel the round?', { drawFrame });
+  const dialog = createDialog('Cancel the form?', { drawFrame });
   dialog.body.append(element('p', '', 'The agent gets no answers.'));
   dialog.actions.append(
     textButton('Keep it', ignore),
-    textButton('Cancel the round', ignore, { variant: 'danger' }),
+    textButton('Cancel the form', ignore, { variant: 'danger' }),
   );
   dialog.show();
   return dialog.element;

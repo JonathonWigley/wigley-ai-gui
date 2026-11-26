@@ -47,7 +47,7 @@ Enter. The terminal is for running commands, not for editing in a shell: it keep
   keeps the last 256 K UTF-16 code units of each shell's raw output (`TERMINAL_REPLAY_LIMIT`); terminal main seeds its
   buffer from that replay when it adopts the shell, and the drawer writes main's buffer into a fresh emulator when it
   opens, so the screen comes back.
-- The pty messages raise the host protocol to 5. An update that changes the host protocol ends every shell
+- The pty messages raise the host protocol to 6. An update that changes the host protocol ends every shell
   in the older host when it drains, since the newer app cannot reach them.
 - The shell inherits the host's environment, less `ELECTRON_RUN_AS_NODE`, with `TERM=xterm-256color` and
   `COLORTERM=truecolor` set.

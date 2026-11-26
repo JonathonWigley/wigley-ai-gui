@@ -25,7 +25,7 @@ export const permissionReviewManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The permission-review layout the verdict on a permission card and a confirm round draws in: a folder name in permission-review's layouts folder, or default.",
+        "The permission-review layout the verdict on a permission card and a confirm form draws in: a folder name in permission-review's layouts folder, or default.",
     },
   },
   themeTokens: {},

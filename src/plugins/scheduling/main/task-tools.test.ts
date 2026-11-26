@@ -42,6 +42,7 @@ const NIGHTLY: ScheduledTask = {
   schedule: { kind: 'daily', time: '02:00' },
   controls: { mode: 'auto' },
   paused: false,
+  attended: false,
   updatedAt: 5,
 };
 const WEEKLY: ScheduledTask = {
@@ -53,6 +54,7 @@ const WEEKLY: ScheduledTask = {
   schedule: { kind: 'weekly', day: 1, time: '09:00' },
   controls: { mode: 'acceptEdits' },
   paused: true,
+  attended: false,
   updatedAt: 6,
 };
 
@@ -90,6 +92,7 @@ function draftOf(task: ScheduledTask): TaskDraft {
     schedule: task.schedule,
     controls: task.controls,
     paused: task.paused,
+    attended: task.attended,
   };
 }
 
@@ -214,6 +217,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -229,6 +233,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -244,6 +249,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -258,6 +264,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -272,6 +279,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -286,6 +294,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({}),
         paused: false,
+        attended: false,
       },
     },
     {
@@ -300,6 +309,7 @@ describe('task tools', () => {
         schedule: { kind: 'daily', time: '09:00' },
         controls: capped({ mode: 'auto', model: 'opus' }),
         paused: false,
+        attended: false,
       },
     },
   ])(
@@ -448,6 +458,7 @@ describe('task tools', () => {
           nextRun: 'paused',
           lastOutcome: 'finished',
           paused: true,
+          attended: false,
         },
         {
           id: 'a1b2c3d4',
@@ -456,6 +467,7 @@ describe('task tools', () => {
           nextRun: '2026-11-20T14:30',
           lastOutcome: 'skipped',
           paused: false,
+          attended: false,
         },
         {
           id: 'c3d4e5f6',
@@ -464,8 +476,51 @@ describe('task tools', () => {
           nextRun: 'none',
           lastOutcome: 'failed',
           paused: false,
+          attended: false,
         },
       ],
+    });
+  });
+
+  it.each<{ case: string; attended: unknown; saved: boolean | null }>([
+    { case: 'absent', attended: undefined, saved: false },
+    { case: 'true', attended: true, saved: true },
+    { case: 'not a boolean', attended: 1, saved: null },
+  ])('scheduleTask_Attended: $case', async ({ attended, saved }) => {
+    const { save, session } = harness();
+
+    const result = await session.call(
+      'schedule_task',
+      { ...SCHEDULE_ARGS, attended },
+      CONTEXT,
+    );
+
+    if (saved === null) {
+      expect(result).toMatchObject({
+        isError: true,
+        content: [{ text: 'attended must be true or false.' }],
+      });
+      expect(save).not.toHaveBeenCalled();
+    } else {
+      expect(save.mock.calls[0]?.[0].attended).toBe(saved);
+    }
+  });
+
+  it('listScheduledTasks_AttendedTask_EndsItsLineAndSetsTheField', async () => {
+    const { session } = harness({
+      views: [view({ ...NIGHTLY, attended: true }), view(WEEKLY)],
+    });
+
+    const result = await session.call('list_scheduled_tasks', {}, CONTEXT);
+
+    expect(result.content[0]?.text).toBe(
+      [
+        'a1b2c3d4  Nightly  Daily at 02:00  next none  last none  attended',
+        'b2c3d4e5  Weekly  Mondays at 09:00  next paused  last none',
+      ].join('\n'),
+    );
+    expect(result.structuredContent).toMatchObject({
+      tasks: [{ attended: true }, { attended: false }],
     });
   });
 
@@ -652,6 +707,36 @@ describe('task tools', () => {
       expect(result.isError).toBe(true);
       expect(result.content[0]?.text).toContain(error);
       expect(save).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each<{ case: string; attended: unknown; saved: boolean | null }>([
+    { case: 'true', attended: true, saved: true },
+    { case: 'false', attended: false, saved: false },
+    { case: 'not a boolean', attended: 'yes', saved: null },
+  ])(
+    'updateScheduledTask_Attended_ReplacesOnlyIt: $case',
+    async ({ attended, saved }) => {
+      const { save, session } = harness({
+        views: [view({ ...NIGHTLY, attended: !saved })],
+      });
+
+      const result = await session.call(
+        'update_scheduled_task',
+        { id: NIGHTLY.id, attended },
+        CONTEXT,
+      );
+
+      if (saved === null) {
+        expect(result.content[0]?.text).toBe('attended must be true or false.');
+        expect(save).not.toHaveBeenCalled();
+      } else {
+        expect(save).toHaveBeenCalledExactlyOnceWith({
+          ...draftOf(NIGHTLY),
+          controls: capped({ mode: 'auto' }),
+          attended: saved,
+        });
+      }
     },
   );
 

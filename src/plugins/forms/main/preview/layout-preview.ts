@@ -48,7 +48,7 @@ function nextRound(
         roundError === null
           ? errorText(error)
           : roundErrorText(kinds, roundError);
-      log(`preview skipped a saved round: ${text}`);
+      log(`preview skipped a saved form: ${text}`);
     }
   }
   return { cursor: SAMPLE, args: PREVIEW_ROUND_ARGS };
@@ -73,7 +73,7 @@ export function createLayoutPreview(deps: {
     sessions: deps.sessions,
     forms: deps.forms,
     log: deps.log,
-    noun: 'round',
+    noun: 'form',
   });
   let cursor = SAMPLE;
   return {

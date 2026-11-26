@@ -480,29 +480,29 @@ User-facing features, those other work builds on first.
   scope. Add a count of the sessions waiting on the user (an open form round, a pending approval), and a bounce when
   one starts waiting while the app is hidden. What counts as waiting needs settling against session-titles'
   activities. Reference: OpenCode 2.4.0 taskbar status (https://github.com/anomalyco/opencode/pull/65317). Accepted
-  in harness watch 2026-11-23 (`~/harness-watch/decisions.md`).
+  in harness watch 2026-11-23 (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Sidebar marks a session whose last turn was cut off** — *needs a feature plan*: a machine reboot or a dead host
   ends a turn and the row just rests (`docs/features/session-host/design.md` § Intent), so nothing shows that the work
   stopped partway. Mark such a row and offer a Continue action that resumes it. Reference: Qwen Code 0.28.4
   "Continue" badge (https://github.com/QwenLM/qwen-code/pull/18044). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Edits made through the shell or by another session are attributed** — *needs a feature plan*: a session's
   changed files miss files changed by a shell command (`sed -i`, a heredoc, a script), and sessions share clones and
   worktrees, so two sessions editing one file go unseen. Count shell edits as the session's own, and mark an edit that
   overlaps another session's instead of crediting it to the wrong one. Reference: Nimbalyst 0.84.3
   (https://github.com/nimbalyst/nimbalyst/releases/tag/v0.84.3). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Scheduled tasks start on events** — *needs a feature plan*: scheduled tasks start only by clock or cron. Add
   event triggers — a chatroom post, a land on `main`, a CI result, an MCP server event — and settle which events the
   app can observe and how a run receives the event's details. Reference: OpenCode 2.4.0 Automations
   (https://github.com/anomalyco/opencode/pull/65296), OpenHands 1.43.0. Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Side questions on a running session** — *needs a feature plan*: the user cannot ask about a running session
   without interrupting its turn. Fork the session's context into a short background session with read-only tools,
   answer there, and leave the main turn untouched. Claude Code's `/btw` does this in its terminal UI only. Reference:
   OpenClaw 2026.11.10-beta.2 side questions
   (https://github.com/openclaw/openclaw/releases/tag/v2026.11.10-beta.2). Accepted in harness watch 2026-11-23
-  (`~/harness-watch/decisions.md`).
+  (`~/wigley-agents/factories/harness-watch/ledger/INDEX.md`).
 - **Work continues while a forms round waits** — *needs a feature plan*: an agent that sends a round waits on it.
   An exploration. `ask_round` blocks until its deadline, and `auri:forms` § Outcomes tells the agent to call
   `collect_last_round` again after every `draft`, so the session sits idle while the user answers, even when part
@@ -515,7 +515,7 @@ User-facing features, those other work builds on first.
   answer could undo. The wake already tells the session when the user submits. Test: run three Medium sessions
   whose rounds leave independent work, and compare their wall time and any work an answer undid against runs that
   wait. Adopt it when the time saved holds and nothing needs redoing. Accepted in planning-execution watch
-  2026-11-24 (`~/planning-execution-watch/decisions.md`).
+  2026-11-24 (`~/wigley-agents/factories/planning-execution-watch/ledger/INDEX.md`).
 - **Slack sweep flags a thread where the user is out of their own area** — *needs a feature plan*: the Work plugin's
   Slack sweep (`sweepMessage` in `src/plugins/work/main/job-text.ts`) reads the user's threads but says nothing when
   one shows the user is lost: the other person reverses or corrects something already built, is guessing themselves,
@@ -579,6 +579,15 @@ Duplication and drift with no user-visible defect.
 
 Defects with no path to the user today, checks waiting on a live window, and test cleanup. Test cleanup goes last
 because the earlier items rewrite many of these tests anyway.
+
+- **A restored retro row's history readability needs one design** — *needs a feature plan*: whether a chat row
+  restored at app start can read its session's history has been patched four times in the factory-loop run (D14, O7,
+  6c19cc55, then 8fe6b7f7 and 75ed3c06), each fix in `loadHistoryWhenReadable` and its wakes in
+  `src/plugins/chat/main/chat-sessions.ts`. Today a refused session-host list waits (`pending`), woken by the host
+  client's `onConnected` and a 5s retry (`HOST_LIST_RETRY_MS`), and only a process running in another app version
+  resolves `unreadable`. That last row never becomes readable once that process ends, so auto-retro leaves it open.
+  Plan one model of readability (polling older hosts, auto-retro asking again, or the host announcing an ended
+  process) in place of more wakes. Source: the factory-loop plan's review, fix cycle 2 (F2, a repeat).
 
 - **The build offer card clips in a short window** — *agent-ready*: at a 900x700 window the Builds offer card (a chat
   composer part, `builds.offer` in `src/plugins/builds/page/session-parts.ts`) is clipped inside the scrolling area
@@ -769,18 +778,6 @@ because the earlier items rewrite many of these tests anyway.
   roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
   usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
   wigley-ai-gui.
-- **A retro row whose process ends before its first turn never reads done** — *needs a feature plan*: `isRetroDone`
-  (`src/plugins/auto-retro/main/retro-done.ts`) returns false while `hasStarted` is false, even when `info.running` is
-  false, and `closeIfStillDone` / `checkDone` (`src/plugins/auto-retro/main/start.ts`) only run for a done row. A retro
-  row whose process dies before its first turn (a failed launch, a crash) therefore never settles, and the queue waits
-  on it forever. To decide: treat a row whose process ended with no turn as done (closed `finished`), or as failed
-  (closed with a log naming the lost retro), and move the queue on either way. Check that a row not yet attached
-  (`running` false before the process starts) is not read as ended.
-- **A restored retro row resting idle reads done** — *needs a feature plan*: on restore, `begin` in
-  `src/plugins/auto-retro/main/start.ts` (the `followRows` `added` callback) adds the row to `startedRows` so a retro
-  that finished while the app was down closes. A restored row resting idle also reads done, so it is closed `finished`
-  though the retro never ran (an app stop before its first turn). To decide: settle a restored row only after a turn
-  seen in this app run, or relaunch the retro when the restored row has no turn.
 - **One rule for returning a dropped message once** — *needs a feature plan*: `clear` silently loses a message a replay
   left held, since the row has moved to a new process when the harness reports it at close (`chat-sessions.ts` `clear`,
   `claude-code-harness.ts` close). A resume that attaches has no `returnedDrops`, so its replay returns placed messages
@@ -873,12 +870,6 @@ because the earlier items rewrite many of these tests anyway.
   `src/renderer/markdown-it/markdown-it-renderer.ts` (`pushBlockAsText`, `:565-579`, called at `:347-349`) draws one
   paragraph per source line with no `data-md-lines`, while a block that renders carries its `map` marks. Text from a
   broken block cannot be marked or picked by line. Give each fallback paragraph its source line range.
-- **Retro lists an older file's Nit `follow_up` header pick as an override** — *needs a feature plan*: in a round
-  saved before `action_label`, a Nit's `follow_up` header pick lists as `override · … | Follow-up`, though the forms
-  README says a Nit offers no `follow_up` (`wigley-ai-marketplace/plugins/wigley/scripts/forms/README.md:96`). The
-  test `test_a_nit_follow_up_header_pick_saved_before_action_label_lists_as_an_override`
-  (`wigley-ai-marketplace/plugins/wigley/scripts/retro/tests/test_answers.py:547`) pins that reading. Decide whether
-  the listing drops such a pick or keeps the Defect word, then change the test with it.
 - **Chatroom: room names past the file-name limit** — *agent-ready*: a room's file name is its name with each unsafe
   character written as `%XX` per UTF-8 byte (`src/plugins/chatroom/main/room-store.ts:15`), so a long or non-ASCII
   name passes 255 bytes and the write fails with `ENAMETOOLONG`. Cap the encoded length where a name is accepted (a

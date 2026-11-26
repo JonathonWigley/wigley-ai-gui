@@ -75,7 +75,7 @@ export interface FormsCommandDeps {
 
 // How the forms page's log and toasts name a round.
 const ROUND_WORDS: SessionFormWords = {
-  noun: 'round',
+  noun: 'form',
   sent: 'Answers sent',
 };
 
@@ -513,7 +513,7 @@ function scrollForm(
   const scroll = deps.scrollForm(step, direction);
   deps.log(
     scroll === null
-      ? 'no round to scroll'
+      ? 'no form to scroll'
       : scrollText('the form', step, direction, scroll),
   );
 }

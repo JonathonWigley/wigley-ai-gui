@@ -262,7 +262,7 @@ export function addDriveActions(
   });
   host.add('open', {
     description:
-      'Opens an owned agent session with no form and selects its row; forms.openRound and primer.openPrimer join it under its sessionId, so a round and a primer share the row.',
+      'Opens an owned agent session with no form and selects its row; forms.openRound and primer.openPrimer join it under its sessionId, so a form and a primer share the row.',
     args: sessionArgs,
     run: async (rawArgs) =>
       startSession(rawArgs, (info) => sessions.open(info)),

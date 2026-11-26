@@ -128,7 +128,7 @@ function createForms(
     source: 'forms',
     alertNoun: { singular: 'open agent form', plural: 'open agent forms' },
     noun: roundType.noun,
-    markText: (label) => `Round from ${label}`,
+    markText: (label) => `Form from ${label}`,
     markAction: 'answer',
     log: services.log,
     sessions,
@@ -283,9 +283,9 @@ export function addDriveActions(
       defaultForm: PREVIEW_ROUND_ARGS,
       openTool: ROUND_OPEN_TOOL,
       openDescription:
-        'Asks a round in the session sessionId names without waiting for its answers: the live one forms opened before under that id, else the owned session holding it (one sessions.open opened), else a new one; the default round shows every card kind.',
+        'Asks a form in the session sessionId names without waiting for its answers: the live one forms opened before under that id, else the owned session holding it (one sessions.open opened), else a new one; the default form shows every card kind.',
       answersDescription:
-        "The latest round's tool result once submit or cancel resolved it, else { pending: true }.",
+        "The latest form's tool result once submit or cancel resolved it, else { pending: true }.",
     },
   });
 }

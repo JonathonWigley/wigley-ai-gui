@@ -10,7 +10,7 @@ import { errorText } from '../error-text';
 import { isJsonObject } from '../json';
 import { createSerialQueue } from '../serial-queue';
 
-// retro's backfill reaches back 90 days (scripts/retro/ledger.py STALE_DAYS).
+// retro's backfill reaches back 90 days (scripts/factory/ledger.py STALE_DAYS).
 export const RETENTION_SECONDS = 90 * 24 * 60 * 60;
 
 export type SavedOutcome = 'open' | AgentFormEndKind;

@@ -26,6 +26,7 @@ const FOLDER_TASK: ScheduledTask = {
   schedule: { kind: 'weekly', day: 1, time: '09:00' },
   controls: { mode: 'plan', effort: 'medium' },
   paused: false,
+  attended: false,
   updatedAt: 1794297600000,
 };
 
@@ -38,6 +39,7 @@ const PROJECT_TASK: ScheduledTask = {
   schedule: { kind: 'cron', line: '30 2 * * 1-5' },
   controls: {},
   paused: true,
+  attended: true,
   updatedAt: 0,
 };
 
@@ -54,6 +56,8 @@ describe('taskFileText', () => {
 
     expect(text.endsWith('}\n')).toBe(true);
     expect(readTaskFile(text)).toEqual(file);
+    const keys = Object.keys((JSON.parse(text) as TaskFile).tasks[0]);
+    expect(keys[keys.indexOf('paused') + 1]).toBe('attended');
   });
 });
 
@@ -110,5 +114,24 @@ describe('readTaskFile', () => {
     for (const name of names) {
       expect(read).toContain(name);
     }
+  });
+
+  it.each<{ case: string; attended?: unknown; read: boolean | string }>([
+    { case: 'no key', read: false },
+    { case: 'true', attended: true, read: true },
+    {
+      case: 'not a boolean',
+      attended: 'yes',
+      read: `task 1 (${FOLDER_TASK.id}): attended must be true or false, got "yes"`,
+    },
+  ])('readTaskFile_Attended: $case', ({ attended, read }) => {
+    const { attended: _attended, ...task } = FOLDER_TASK;
+    const written = attended === undefined ? task : { ...task, attended };
+
+    const file = readTaskFile(JSON.stringify({ tasks: [written] }));
+
+    expect(typeof file === 'string' ? file : file.tasks[0].attended).toEqual(
+      read,
+    );
   });
 });

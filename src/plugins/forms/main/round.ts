@@ -104,7 +104,7 @@ export function parseRound(
     throw new RoundError({
       path: { at: 'call' },
       problem: `takes an object with ${quotedList(fields)}.`,
-      detail: 'Each list is optional, but the round needs at least one item.',
+      detail: 'Each list is optional, but the form needs at least one item.',
     });
   }
   const unknownFields = fieldsOutside(args, fields);

@@ -173,6 +173,7 @@ export function schedulingSelfTestScript(
       schedule: { kind: 'daily', time: '09:00' },
       controls: {},
       paused: true,
+      attended: false,
     });
     const startedAt = now();
     for (const fixture of FIXTURE_RUNS) {

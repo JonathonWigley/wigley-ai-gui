@@ -151,7 +151,7 @@ export interface AgentFormType<Form, Body, Payload> {
   // The tool names the tool session serves and the service's texts name.
   openTool: string;
   collectTool: string;
-  // The word for one form in texts and logs: 'round', 'primer'.
+  // The word for one form in texts and logs: 'form', 'primer'.
   noun: string;
   // The model-facing text of an error `parse` threw for a malformed call, or
   // null when `error` is not one; the tool session returns the text as the

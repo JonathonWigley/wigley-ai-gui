@@ -456,6 +456,7 @@ function pendingSpawns(...ids: string[]): PendingSpawn[] {
     spawn: spawnRequest(id),
     record: { task: id },
     skipWhileBusy: null,
+    needsClient: false,
   }));
 }
 
@@ -1930,4 +1931,26 @@ describe('createSessionHostClient', () => {
       ]);
     },
   );
+
+  // Breaks: a list refused because the host did not start never getting a wake once a later attempt connects.
+  it('onConnected_ConnectAfterAFailedFirstAttempt_Fires', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const rig = clientRig(dir, channel);
+    rig.fake.failDetachedStarts(new Error('spawn failed'));
+    const client = rig.create();
+    let calls = 0;
+    client.onConnected(() => {
+      calls += 1;
+    });
+
+    await expect(client.list()).rejects.toThrow('did not start');
+    expect(calls).toBe(0);
+
+    const host = await startScriptedHost(channel);
+    await client.listRuns();
+
+    expect(calls).toBe(1);
+    expect(sentOfType(host, 'hello')).toHaveLength(1);
+  });
 });

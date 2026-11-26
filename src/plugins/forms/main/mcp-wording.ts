@@ -17,18 +17,18 @@ export const ROUND_COLLECT_TOOL = 'collect_last_round';
 
 const NEXT_ON_DRAFT =
   `The user has not submitted yet. Call ${ROUND_COLLECT_TOOL} to keep ` +
-  'waiting. Do not re-ask these questions and do not open a second round.';
+  'waiting. Do not re-ask these questions and do not open a second form.';
 
 const NEXT_ON_AUTO_ANSWERED =
   'This session is headless until a tool result says the session is no ' +
   'longer headless: the app showed no form and answered every item with its ' +
-  'recommendation. Build no more rounds, and list every pick as a Decided ' +
+  'recommendation. Build no more forms, and list every pick as a Decided ' +
   `notice in your reply. ${AUTO_ANSWER_GATE_CLAUSE}`;
 
 const NEXT_ON_NO_ROUND =
-  'No round is open for this session, and no finished answers are waiting ' +
-  'for it. If you sent a round whose answers you never received, send the ' +
-  `same round again with ${ROUND_OPEN_TOOL}: the user's saved answers fill ` +
+  'No form is open for this session, and no finished answers are waiting ' +
+  'for it. If you sent a form whose answers you never received, send the ' +
+  `same form again with ${ROUND_OPEN_TOOL}: the user's saved answers fill ` +
   'in. Do not move the questions into the reply.';
 
 // The noun the count names when no answerable kind has items.
@@ -106,11 +106,11 @@ function summarise(
   return stillOpen ? `${line} The form is still open.` : line;
 }
 
-// The round a notShown result waits behind, as its texts name it.
+// The form a notShown result waits behind, as its texts name it.
 function blockingRound(blockingHeading: string | null): string {
   return blockingHeading === null
-    ? 'another round'
-    : `the round '${blockingHeading}'`;
+    ? 'another form'
+    : `the form '${blockingHeading}'`;
 }
 
 function summaryOf(
@@ -127,11 +127,11 @@ function summaryOf(
       return summarise(kinds, result, false);
     case 'notShown':
       return (
-        `This round, '${reason.heading}', was not shown: ` +
+        `This form, '${reason.heading}', was not shown: ` +
         `${blockingRound(reason.blockingHeading)} is still open in the app.`
       );
     case 'noRound':
-      return 'No round is open.';
+      return 'No form is open.';
   }
 }
 
@@ -145,21 +145,21 @@ function nextOf(reason: RoundReason): string {
       return NEXT_ON_AUTO_ANSWERED;
     case 'handedBack':
       return (
-        `These answers are for an earlier round, '${reason.heading}', that ` +
-        `you never received. Read them as that round's answers. The round ` +
+        `These answers are for an earlier form, '${reason.heading}', that ` +
+        `you never received. Read them as that form's answers. The form ` +
         `you just sent was not opened: send it again with ${ROUND_OPEN_TOOL}.`
       );
     case 'notShown': {
       const other = blockingRound(reason.blockingHeading);
       return (
-        `The user has not finished ${other} in the app, so this round was ` +
-        `not opened and has no answers. Send this round again with ` +
+        `The user has not finished ${other} in the app, so this form was ` +
+        `not opened and has no answers. Send this form again with ` +
         `${ROUND_OPEN_TOOL}, and again after every draft like this one. ` +
-        `Once the user finishes ${other}, a send may return that round's ` +
+        `Once the user finishes ${other}, a send may return that form's ` +
         `answers instead, marked with earlier_heading: act on them, then ` +
-        `send this round again. If ${other} is no longer needed, ask the ` +
+        `send this form again. If ${other} is no longer needed, ask the ` +
         `user to cancel it in the app. Do not call ${ROUND_COLLECT_TOOL} for ` +
-        `this round: that returns the other round's answers.`
+        `this form: that returns the other form's answers.`
       );
     }
     case 'noRound':

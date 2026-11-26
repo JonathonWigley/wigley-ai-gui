@@ -38,8 +38,15 @@ function entry(
   id: string,
   at: number,
   skipWhileBusy: string | null = null,
+  needsClient = false,
 ): PendingSpawn {
-  return { at, spawn: spawnRequest(id), record: { task: id }, skipWhileBusy };
+  return {
+    at,
+    spawn: spawnRequest(id),
+    record: { task: id },
+    skipWhileBusy,
+    needsClient,
+  };
 }
 
 function run(id: string, overrides: Partial<HostedRun> = {}): HostedRun {
@@ -58,6 +65,7 @@ function setUp(
     start?: number;
     clock?: (time: ReturnType<typeof manualTime>) => Clock;
     spawn?: (request: HostedSpawn, subscriber: ProcessSubscriber) => void;
+    hasClient?: boolean;
   } = {},
 ) {
   const folder = mkdtempSync(path.join(tmpdir(), 'pending-queue-'));
@@ -67,6 +75,7 @@ function setUp(
   const busyIds = new Set<string>();
   const started: HostedRun[] = [];
   const diagnosticLines: string[] = [];
+  let dropCalls = 0;
   const queue = createPendingQueue({
     folder,
     clock: options.clock?.(time) ?? time.clock,
@@ -82,6 +91,10 @@ function setUp(
     isBusy: (id) => busyIds.has(id),
     // A copy, so a later change to the run does not rewrite what was pushed.
     runStarted: (startedRun) => started.push(structuredClone(startedRun)),
+    hasClient: () => options.hasClient ?? false,
+    entriesDropped: () => {
+      dropCalls += 1;
+    },
   });
   const filePath = (name: string) => path.join(folder, name);
   const pendingPath = filePath(pendingFile(SESSION_HOST_PROTOCOL));
@@ -106,6 +119,7 @@ function setUp(
     busyIds,
     started,
     diagnosticLines,
+    dropCalls: () => dropCalls,
     filePath,
     pendingPath,
     runsPath,
@@ -189,6 +203,63 @@ describe('pending queue', () => {
     expect(started).toEqual([expected]);
     expect(savedRuns()).toEqual([expected]);
   });
+
+  it.each<{
+    label: string;
+    needsClient: boolean | undefined;
+    hasClient: boolean;
+    starts: boolean;
+  }>([
+    {
+      label: 'needs a client, none connected',
+      needsClient: true,
+      hasClient: false,
+      starts: false,
+    },
+    {
+      label: 'needs a client, one connected',
+      needsClient: true,
+      hasClient: true,
+      starts: true,
+    },
+    {
+      label: 'needs none, none connected',
+      needsClient: false,
+      hasClient: false,
+      starts: true,
+    },
+    {
+      label: 'no needsClient in the pending file, none connected',
+      needsClient: undefined,
+      hasClient: false,
+      starts: true,
+    },
+  ])(
+    'startDueEntries_NeedsClient: $label',
+    ({ needsClient, hasClient, starts }) => {
+      const setup = setUp({ hasClient });
+      const { needsClient: _needsClient, ...written } = entry('a', 1000);
+      writeFileSync(
+        setup.pendingPath,
+        JSON.stringify([
+          needsClient === undefined ? written : { ...written, needsClient },
+        ]),
+      );
+      setup.queue.load();
+
+      setup.queue.start();
+
+      const ids = starts ? ['a'] : [];
+      expect(setup.spawnedIds).toEqual(ids);
+      expect(setup.started.map(({ id }) => id)).toEqual(ids);
+      expect(setup.queue.runs().map(({ id }) => id)).toEqual(ids);
+      expect(setup.savedPending()).toEqual([]);
+      expect(setup.diagnosticLines).toEqual(
+        starts ? [] : ['pending a: dropped, no app connected'],
+      );
+      expect(setup.dropCalls()).toBe(starts ? 0 : 1);
+    },
+  );
 
   it('fire_SpawnRefused_RunHoldsTheError', () => {
     const refused: HostedExit = { code: null, signal: null, error: 'refused' };
