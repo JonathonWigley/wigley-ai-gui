@@ -6,6 +6,8 @@ changes for the user.
 
 ## Unreleased
 
+## 1.15.0 — 2026-11-26
+
 ### Added
 
 - Each session has a terminal in a drawer under its tabs: `Space b t` or Ctrl+backtick opens it, and an agent types a command there for you to run with Enter.
